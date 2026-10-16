@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gte_frontend/core/app_feedback.dart';
+import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/ui_gtex/theme/gtex_colors.dart';
 
@@ -262,7 +263,16 @@ class _Gtex22LoginScreenState extends State<Gtex22LoginScreen> {
       );
       if (mounted && widget.controller.isAuthenticated) context.go('/app/home');
     } catch (e) {
-      if (mounted) setState(() => _error = AppFeedback.messageFor(e));
+      if (mounted) {
+        final bool invalidCredentials =
+            e is GteApiException &&
+            (e.type == GteApiErrorType.unauthorized || e.statusCode == 401);
+        setState(
+          () => _error = invalidCredentials
+              ? 'Email or password is incorrect.'
+              : AppFeedback.messageFor(e),
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

@@ -165,17 +165,17 @@ Future<GtexCommunityPulse> loadGtexCommunityPulse({
   );
 
   final Map<String, int?> holderCountByPlayerId = <String, int?>{};
-  final Map<String, GtexPlayerForm> formByPlayerId = <String, GtexPlayerForm>{};
+  final Map<String, GtexPlayerForm> formByPlayerId =
+      <String, GtexPlayerForm>{};
   await Future.wait<void>(
     lookupPlayerIds.map((String playerId) async {
-      final List<Object?> results =
-          await Future.wait<Object?>(<Future<Object?>>[
-            sources.loadHolderCount(playerId).catchError((Object _) => null),
-            sources
-                .loadPlayerForm(playerId)
-                .then<GtexPlayerForm?>((GtexPlayerForm form) => form)
-                .catchError((Object _) => null),
-          ]);
+      final List<Object?> results = await Future.wait<Object?>(<Future<Object?>>[
+        sources.loadHolderCount(playerId).catchError((Object _) => null),
+        sources
+            .loadPlayerForm(playerId)
+            .then<GtexPlayerForm?>((GtexPlayerForm form) => form)
+            .catchError((Object _) => null),
+      ]);
       final Object? holderCount = results[0];
       if (holderCount is int) {
         holderCountByPlayerId[playerId] = holderCount;
@@ -191,9 +191,7 @@ Future<GtexCommunityPulse> loadGtexCommunityPulse({
   final List<List<GtexClubChallengeCard>> challengeResults =
       await Future.wait<List<GtexClubChallengeCard>>(
         clubHoldings.map(
-          (
-            GtexClubShareHolding holding,
-          ) => guarded<List<GtexClubChallengeCard>>(
+          (GtexClubShareHolding holding) => guarded<List<GtexClubChallengeCard>>(
             () => sources.loadClubChallenges(holding.clubId),
             const <GtexClubChallengeCard>[],
             'Challenge activity for ${holding.clubName} could not be loaded',
@@ -238,7 +236,8 @@ Future<GtexCommunityPulse> loadGtexCommunityPulse({
 Set<GtexCommunityFollowTarget> gtexCommunityFollowTargetsFrom(
   List<GtexSocialFollow> follows,
 ) {
-  final Set<GtexCommunityFollowTarget> targets = <GtexCommunityFollowTarget>{};
+  final Set<GtexCommunityFollowTarget> targets =
+      <GtexCommunityFollowTarget>{};
   for (final GtexSocialFollow follow in follows) {
     final String? playerId = follow.playerId;
     final String? clubId = follow.clubId;
@@ -278,11 +277,11 @@ List<String> gtexCommunityPlayerLookupIds({
   ]) {
     deduped.putIfAbsent(item.playerId, () => item);
   }
-  final List<GteMarketMoverItem> ordered =
-      deduped.values.toList()..sort(
-        (GteMarketMoverItem a, GteMarketMoverItem b) =>
-            b.dayChangePercent.abs().compareTo(a.dayChangePercent.abs()),
-      );
+  final List<GteMarketMoverItem> ordered = deduped.values.toList()
+    ..sort(
+      (GteMarketMoverItem a, GteMarketMoverItem b) =>
+          b.dayChangePercent.abs().compareTo(a.dayChangePercent.abs()),
+    );
 
   bool isMine(String playerId) =>
       ownership.owns(playerId) ||
@@ -304,38 +303,40 @@ List<String> gtexCommunityPlayerLookupIds({
 }
 
 /// The live community surface for the current session.
-final FutureProvider<GtexCommunityPulse>
-communityPulseProvider = FutureProvider<GtexCommunityPulse>((Ref ref) {
-  final bool authenticated = ref.watch(isAuthenticatedProvider);
-  final GteExchangeApiClient exchange = ref.watch(exchangeApiClientProvider);
-  final GtexCommunitySocialApi social = ref.watch(communitySocialApiProvider);
-  final GtexClubOwnershipApi clubApi = GtexClubOwnershipApi(
-    client: ref.watch(authedApiProvider),
-  );
-  final GtexRegenWorldApi regenApi = GtexRegenWorldApi(
-    client: ref.watch(authedApiProvider),
-  );
+final FutureProvider<GtexCommunityPulse> communityPulseProvider =
+    FutureProvider<GtexCommunityPulse>((Ref ref) {
+      final bool authenticated = ref.watch(isAuthenticatedProvider);
+      final GteExchangeApiClient exchange = ref.watch(exchangeApiClientProvider);
+      final GtexCommunitySocialApi social = ref.watch(
+        communitySocialApiProvider,
+      );
+      final GtexClubOwnershipApi clubApi = GtexClubOwnershipApi(
+        client: ref.watch(authedApiProvider),
+      );
+      final GtexRegenWorldApi regenApi = GtexRegenWorldApi(
+        client: ref.watch(authedApiProvider),
+      );
 
-  return loadGtexCommunityPulse(
-    authenticated: authenticated,
-    sources: GtexCommunitySources(
-      loadMarketMovers: () => exchange.fetchMarketMovers(limit: 20),
-      loadPortfolio: exchange.fetchPortfolio,
-      loadClubPortfolio: clubApi.fetchMyClubPortfolio,
-      loadRegenRankings:
-          () => regenApi.listRankings(limit: _regenRankingLookupLimit),
-      loadOrders: () => exchange.listOrders(limit: 20),
-      loadFollows: social.listMyFollows,
-      loadClubChallenges: social.listClubChallenges,
-      loadHolderCount: (String playerId) async {
-        final GteMarketPlayerDetailView detail = await exchange
-            .fetchPlayerDetail(playerId);
-        return detail.marketProfile.holderCount;
-      },
-      loadPlayerForm: exchange.fetchPlayerForm,
-    ),
-  );
-});
+      return loadGtexCommunityPulse(
+        authenticated: authenticated,
+        sources: GtexCommunitySources(
+          loadMarketMovers: () => exchange.fetchMarketMovers(limit: 20),
+          loadPortfolio: exchange.fetchPortfolio,
+          loadClubPortfolio: clubApi.fetchMyClubPortfolio,
+          loadRegenRankings: () =>
+              regenApi.listRankings(limit: _regenRankingLookupLimit),
+          loadOrders: () => exchange.listOrders(limit: 20),
+          loadFollows: social.listMyFollows,
+          loadClubChallenges: social.listClubChallenges,
+          loadHolderCount: (String playerId) async {
+            final GteMarketPlayerDetailView detail = await exchange
+                .fetchPlayerDetail(playerId);
+            return detail.marketProfile.holderCount;
+          },
+          loadPlayerForm: exchange.fetchPlayerForm,
+        ),
+      );
+    });
 
 final Provider<GtexCommunitySocialApi> communitySocialApiProvider =
     Provider<GtexCommunitySocialApi>((Ref ref) {

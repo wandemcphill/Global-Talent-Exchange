@@ -65,22 +65,25 @@ class _GtexEmpireClubWorkspaceState extends State<GtexEmpireClubWorkspace> {
     });
     try {
       final List<dynamic> clubPayload = await api.getList('/api/clubs/owned');
-      final List<GtexOwnedClubOption> clubs = clubPayload
-          .map(GtexOwnedClubOption.fromJson)
-          .where((GtexOwnedClubOption club) => club.id.isNotEmpty)
-          .toList(growable: false);
+      final List<GtexOwnedClubOption> clubs =
+          clubPayload
+              .map(GtexOwnedClubOption.fromJson)
+              .where((GtexOwnedClubOption club) => club.id.isNotEmpty)
+              .toList(growable: false);
       List<GtexEmpireGroupSummary> groups = const <GtexEmpireGroupSummary>[];
       String? groupError;
       try {
         final List<dynamic> groupPayload = await api.getList(
           '/api/ownership-groups',
         );
-        groups = groupPayload
-            .map(GtexEmpireGroupSummary.fromJson)
-            .where((GtexEmpireGroupSummary group) => group.id.isNotEmpty)
-            .toList(growable: false);
+        groups =
+            groupPayload
+                .map(GtexEmpireGroupSummary.fromJson)
+                .where((GtexEmpireGroupSummary group) => group.id.isNotEmpty)
+                .toList(growable: false);
       } catch (error) {
-        groupError = 'Could not load ownership groups: $error';
+        debugPrint('Could not load ownership groups: $error');
+        groupError = 'Ownership groups could not be loaded right now.';
       }
       if (!mounted) {
         return;

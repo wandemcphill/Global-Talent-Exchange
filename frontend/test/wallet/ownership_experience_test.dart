@@ -44,7 +44,10 @@ Future<void> _pump(
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
-    MaterialApp(theme: GteShellTheme.build(), home: Scaffold(body: child)),
+    MaterialApp(
+      theme: GteShellTheme.build(),
+      home: Scaffold(body: child),
+    ),
   );
   await tester.pump(const Duration(milliseconds: 50));
 }
@@ -63,21 +66,20 @@ void main() {
     expect(find.text('MY SQUAD'), findsNothing);
   });
 
-  testWidgets(
-    'load error shows a blocked state with retry, not a spreadsheet',
-    (WidgetTester tester) async {
-      await _pump(
-        tester,
-        GtexOwnershipExperience(
-          book: GtexOwnershipBook.empty(),
-          portfolioError: 'Network unreachable',
-          onRetry: () async {},
-        ),
-      );
-      expect(find.text('Squad could not be loaded'), findsOneWidget);
-      expect(find.text('Retry'), findsOneWidget);
-    },
-  );
+  testWidgets('load error shows a blocked state with retry, not a spreadsheet', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      GtexOwnershipExperience(
+        book: GtexOwnershipBook.empty(),
+        portfolioError: 'Network unreachable',
+        onRetry: () async {},
+      ),
+    );
+    expect(find.text('Squad could not be loaded'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+  });
 
   testWidgets('one holding renders as a player identity with its stake', (
     WidgetTester tester,
@@ -241,38 +243,37 @@ void main() {
     expect(find.textContaining('40 shares'), findsOneWidget);
   });
 
-  testWidgets(
-    'club-share performance signal is honest when there is no history',
-    (WidgetTester tester) async {
-      const GtexClubShareHolding flat = GtexClubShareHolding(
-        clubId: 'club-x',
-        clubName: 'Kano Pillars',
-        sharesOwned: 10,
-        averagePriceCoin: 1,
-        sharePriceCoin: 1,
-        marketValueCoin: 10,
-        costBasisCoin: 10,
-        unrealizedPlCoin: 0,
-      );
-      await _pump(
-        tester,
-        GtexOwnershipExperience(
-          book: GtexOwnershipBook.empty(),
-          clubOwnership: const GtexClubOwnershipPortfolio(
-            clubCount: 1,
-            totalMarketValueCoin: 10,
-            totalCostBasisCoin: 10,
-            totalUnrealizedPlCoin: 0,
-            holdings: <GtexClubShareHolding>[flat],
-          ),
+  testWidgets('club-share performance signal is honest when there is no history', (
+    WidgetTester tester,
+  ) async {
+    const GtexClubShareHolding flat = GtexClubShareHolding(
+      clubId: 'club-x',
+      clubName: 'Kano Pillars',
+      sharesOwned: 10,
+      averagePriceCoin: 1,
+      sharePriceCoin: 1,
+      marketValueCoin: 10,
+      costBasisCoin: 10,
+      unrealizedPlCoin: 0,
+    );
+    await _pump(
+      tester,
+      GtexOwnershipExperience(
+        book: GtexOwnershipBook.empty(),
+        clubOwnership: const GtexClubOwnershipPortfolio(
+          clubCount: 1,
+          totalMarketValueCoin: 10,
+          totalCostBasisCoin: 10,
+          totalUnrealizedPlCoin: 0,
+          holdings: <GtexClubShareHolding>[flat],
         ),
-      );
-      expect(
-        find.text('No settled GTEX matches behind this price yet.'),
-        findsOneWidget,
-      );
-    },
-  );
+      ),
+    );
+    expect(
+      find.text('No settled GTEX matches behind this price yet.'),
+      findsOneWidget,
+    );
+  });
 
   testWidgets('club-share sync failure is surfaced without hiding the squad', (
     WidgetTester tester,
@@ -299,12 +300,7 @@ void main() {
         GtexOwnershipExperience(
           book: _book(<GtePortfolioHolding>[
             _holding(id: 'a', name: 'Ada Obi', club: 'Enyimba FC', value: 40),
-            _holding(
-              id: 'b',
-              name: 'Bala Sule',
-              club: 'Rangers Intl',
-              value: 20,
-            ),
+            _holding(id: 'b', name: 'Bala Sule', club: 'Rangers Intl', value: 20),
           ]),
           clubOwnership: const GtexClubOwnershipPortfolio(
             clubCount: 1,

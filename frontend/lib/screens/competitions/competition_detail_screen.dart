@@ -472,10 +472,11 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder:
-            (BuildContext context) => CompetitionJoinScreen(
-              controller: widget.controller,
-              competitionId: widget.competitionId,
-            ),
+            (BuildContext context) =>
+                CompetitionJoinScreen(
+                  controller: widget.controller,
+                  competitionId: widget.competitionId,
+                ),
       ),
     );
   }

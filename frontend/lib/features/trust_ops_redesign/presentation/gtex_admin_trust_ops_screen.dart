@@ -254,9 +254,11 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
         return;
       }
       setState(() => _kycReviewBusy = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('KYC review failed: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('KYC review failed: ${AppFeedback.messageFor(error)}'),
+        ),
+      );
     }
   }
 
@@ -328,9 +330,13 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
         return;
       }
       setState(() => _disputeReplyBusy = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Dispute reply failed: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Dispute reply failed: ${AppFeedback.messageFor(error)}',
+          ),
+        ),
+      );
     }
   }
 
@@ -376,9 +382,11 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
         return;
       }
       setState(() => _orderReviewBusy = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Order review failed: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Order review failed: ${AppFeedback.messageFor(error)}'),
+        ),
+      );
     }
   }
 

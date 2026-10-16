@@ -107,7 +107,9 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ThemeData.dark(useMaterial3: true),
-        home: Scaffold(body: GtexAdminTrustOpsScreen(repository: repository)),
+        home: Scaffold(
+          body: GtexAdminTrustOpsScreen(repository: repository),
+        ),
       ),
     );
 
@@ -131,7 +133,9 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ThemeData.dark(useMaterial3: true),
-        home: Scaffold(body: GtexAdminTrustOpsScreen(repository: repository)),
+        home: Scaffold(
+          body: GtexAdminTrustOpsScreen(repository: repository),
+        ),
       ),
     );
 
@@ -160,7 +164,9 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ThemeData.dark(useMaterial3: true),
-        home: Scaffold(body: GtexAdminTrustOpsScreen(repository: repository)),
+        home: Scaffold(
+          body: GtexAdminTrustOpsScreen(repository: repository),
+        ),
       ),
     );
 

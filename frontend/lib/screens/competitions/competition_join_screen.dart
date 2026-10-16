@@ -30,11 +30,14 @@ class _CompetitionJoinScreenState extends State<CompetitionJoinScreen> {
   @override
   void initState() {
     super.initState();
-    final String? competitionId = widget.competitionId;
-    if (competitionId != null &&
-        widget.controller.selectedCompetition?.id != competitionId) {
-      widget.controller.openCompetition(competitionId);
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final String? competitionId = widget.competitionId;
+      if (competitionId != null &&
+          widget.controller.selectedCompetition?.id != competitionId) {
+        widget.controller.openCompetition(competitionId);
+      }
+    });
   }
 
   @override

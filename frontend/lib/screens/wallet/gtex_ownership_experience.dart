@@ -160,8 +160,8 @@ class GtexOwnershipExperience extends StatelessWidget {
     for (final GtexOwnershipStake stake in book.stakes) {
       final GteMarketPlayerListItem? id = identityLookup?.call(stake.playerId);
       final String club = (id?.currentClubName?.trim().isNotEmpty ?? false)
-              ? id!.currentClubName!.trim()
-              : (stake.clubName?.trim().isNotEmpty ?? false)
+          ? id!.currentClubName!.trim()
+          : (stake.clubName?.trim().isNotEmpty ?? false)
               ? stake.clubName!.trim()
               : 'Club unknown';
       byClub.putIfAbsent(club, () => <GtexOwnershipStake>[]).add(stake);
@@ -313,12 +313,18 @@ class _PositionHeader extends StatelessWidget {
               'Not calculated',
               Icons.savings_outlined,
               GtexColors.textMuted,
-          ),
+            ),
           if (available != null)
-            _tile(balanceLabel, formatBalance(available), Icons.account_balance_wallet_outlined,
+            _tile(
+                balanceLabel,
+                formatBalance(available),
+                Icons.account_balance_wallet_outlined,
                 GtexColors.gold),
           if (reserved != null && reserved > 0)
-            _tile('Held by orders', formatBalance(reserved), Icons.lock_clock_outlined,
+            _tile(
+                'Held by orders',
+                formatBalance(reserved),
+                Icons.lock_clock_outlined,
                 GtexColors.gold),
           if (clubValue > 0)
             _tile('Club interests', gteFormatGtc(clubValue), Icons.apartment_outlined,
@@ -365,9 +371,9 @@ class _ClubGroupHeader extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: GtexColors.text,
-                fontWeight: FontWeight.w900,
-              ),
+                    color: GtexColors.text,
+                    fontWeight: FontWeight.w900,
+                  ),
             ),
           ),
           const SizedBox(width: GtexSpacing.sm),
@@ -375,9 +381,9 @@ class _ClubGroupHeader extends StatelessWidget {
             '${group.stakes.length} · ${gteFormatGtc(group.value)}'
             ' · ${(weight * 100).toStringAsFixed(0)}%',
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: plColor,
-              fontWeight: FontWeight.w800,
-            ),
+                  color: plColor,
+                  fontWeight: FontWeight.w800,
+                ),
           ),
         ],
       ),
@@ -402,15 +408,15 @@ class _SquadMemberCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final GteMarketPlayerListItem? id = identity;
     final String name = (id?.playerName.trim().isNotEmpty ?? false)
-            ? id!.playerName.trim()
-            : (stake.playerName?.trim().isNotEmpty ?? false)
+        ? id!.playerName.trim()
+        : (stake.playerName?.trim().isNotEmpty ?? false)
             ? stake.playerName!.trim()
             : stake.playerId;
     final String position =
         (id?.position?.trim().isNotEmpty ?? false) ? id!.position!.trim() : '—';
     final String club = (id?.currentClubName?.trim().isNotEmpty ?? false)
-            ? id!.currentClubName!.trim()
-            : (stake.clubName?.trim().isNotEmpty ?? false)
+        ? id!.currentClubName!.trim()
+        : (stake.clubName?.trim().isNotEmpty ?? false)
             ? stake.clubName!.trim()
             : 'Club unknown';
     final double? movement = id?.movementPct;
@@ -527,10 +533,10 @@ class _StakeStat extends StatelessWidget {
         Text(
           label.toUpperCase(),
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: GtexColors.textMuted,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.4,
-          ),
+                color: GtexColors.textMuted,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.4,
+              ),
         ),
         const SizedBox(height: 2),
         Text(
@@ -538,9 +544,9 @@ class _StakeStat extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            color: valueColor ?? GtexColors.text,
-            fontWeight: FontWeight.w900,
-          ),
+                color: valueColor ?? GtexColors.text,
+                fontWeight: FontWeight.w900,
+              ),
         ),
       ],
     );
@@ -603,9 +609,9 @@ class _ClubShareSection extends StatelessWidget {
             'Unrealized P/L '
             '${book.totalUnrealizedPlCoin >= 0 ? '+' : ''}${gteFormatGtc(book.totalUnrealizedPlCoin)}',
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: totalPl,
-              fontWeight: FontWeight.w800,
-            ),
+                  color: totalPl,
+                  fontWeight: FontWeight.w800,
+                ),
           ),
           const SizedBox(height: GtexSpacing.sm),
           for (final GtexClubShareHolding h in book.holdings)
@@ -646,17 +652,17 @@ class _ClubShareTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: GtexColors.text,
-                    fontWeight: FontWeight.w900,
-                  ),
+                        color: GtexColors.text,
+                        fontWeight: FontWeight.w900,
+                      ),
                 ),
               ),
               Text(
                 gteFormatGtc(holding.marketValueCoin),
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: GtexColors.text,
-                  fontWeight: FontWeight.w900,
-                ),
+                      color: GtexColors.text,
+                      fontWeight: FontWeight.w900,
+                    ),
               ),
             ],
           ),
@@ -679,9 +685,9 @@ class _ClubShareTile extends StatelessWidget {
             '${holding.unrealizedPlCoin >= 0 ? '+' : ''}${gteFormatGtc(holding.unrealizedPlCoin)}'
             '${holding.unrealizedPlPercent == null ? '' : '  (${holding.unrealizedPlPercent! >= 0 ? '+' : ''}${holding.unrealizedPlPercent!.toStringAsFixed(1)}%)'}',
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: plColor,
-              fontWeight: FontWeight.w800,
-            ),
+                  color: plColor,
+                  fontWeight: FontWeight.w800,
+                ),
           ),
           const SizedBox(height: GtexSpacing.xxs),
           Text(
@@ -689,9 +695,9 @@ class _ClubShareTile extends StatelessWidget {
                 ? 'Share price is tracking settled-match performance.'
                 : 'No settled GTEX matches behind this price yet.',
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: GtexColors.textMuted,
-              fontStyle: FontStyle.italic,
-            ),
+                  color: GtexColors.textMuted,
+                  fontStyle: FontStyle.italic,
+                ),
           ),
         ],
       ),

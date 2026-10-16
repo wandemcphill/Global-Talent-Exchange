@@ -108,12 +108,9 @@ Widget _host({
     overrides: [
       communityPulseProvider.overrideWith(
         (Ref ref) => pulse.when(
-          data:
-              (GtexCommunityPulse value) =>
-                  Future<GtexCommunityPulse>.value(value),
-          error:
-              (Object error, StackTrace stack) =>
-                  Future<GtexCommunityPulse>.error(error, stack),
+          data: (GtexCommunityPulse value) => Future<GtexCommunityPulse>.value(value),
+          error: (Object error, StackTrace stack) =>
+              Future<GtexCommunityPulse>.error(error, stack),
           loading: () => Completer<GtexCommunityPulse>().future,
         ),
       ),
@@ -150,22 +147,21 @@ void main() {
     expect(find.text('Reading the football economy'), findsOneWidget);
   });
 
-  testWidgets(
-    'surfaces a hard failure with a retry rather than fake activity',
-    (WidgetTester tester) async {
-      await tester.pumpWidget(
-        _host(
-          pulse: AsyncValue<GtexCommunityPulse>.error(
-            StateError('down'),
-            StackTrace.empty,
-          ),
+  testWidgets('surfaces a hard failure with a retry rather than fake activity', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        pulse: AsyncValue<GtexCommunityPulse>.error(
+          StateError('down'),
+          StackTrace.empty,
         ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('Community unavailable'), findsOneWidget);
-      expect(find.text('Retry'), findsOneWidget);
-    },
-  );
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Community unavailable'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+  });
 
   testWidgets('an empty community says so instead of inventing rows', (
     WidgetTester tester,
@@ -252,7 +248,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Some community sources did not answer'), findsOneWidget);
+    expect(
+      find.text('Some community sources did not answer'),
+      findsOneWidget,
+    );
     expect(find.text('Ada Obi moved +4.2%'), findsOneWidget);
   });
 
@@ -406,7 +405,10 @@ void main() {
             GtexCommunityPulse(
               access: GtexCommunityAccess.authenticated,
               headline: '3 things happened around your football.',
-              yourSignals: const <GtexCommunitySignal>[_ownedMove, _clubSignal],
+              yourSignals: const <GtexCommunitySignal>[
+                _ownedMove,
+                _clubSignal,
+              ],
               worldSignals: const <GtexCommunitySignal>[_unknownProof],
             ),
           ),
