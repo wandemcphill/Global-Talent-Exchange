@@ -277,9 +277,12 @@ class ApiRateLimiter:
 
     @staticmethod
     def _is_share_event_path(path: str) -> bool:
-        if path.startswith("/api/challenges/") and path.endswith("/share-events"):
-            return True
-        return path.startswith("/api/match-share-links/") and path.endswith("/events")
+        for prefix in ("/api/", "/api/v2/"):
+            if path.startswith(f"{prefix}challenges/") and path.endswith("/share-events"):
+                return True
+            if path.startswith(f"{prefix}match-share-links/") and path.endswith("/events"):
+                return True
+        return False
 
     @classmethod
     def _is_auth_path(cls, path: str) -> bool:

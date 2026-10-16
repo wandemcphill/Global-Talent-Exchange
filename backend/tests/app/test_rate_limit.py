@@ -231,6 +231,8 @@ def test_share_event_paths_use_sensitive_rate_limit_bucket() -> None:
     for path in (
         "/api/challenges/challenge-1/share-events",
         "/api/match-share-links/abc123/events",
+        "/api/v2/challenges/challenge-1/share-events",
+        "/api/v2/match-share-links/abc123/events",
     ):
         rule = limiter._rule_for_request(_request(path))
         assert rule.scope == "sensitive", path
