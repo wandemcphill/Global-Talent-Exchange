@@ -69,7 +69,7 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
             const owned = signedRefs.includes(p.player_id);
             return (
               <PlayerCard key={p.player_id} testid={`market-card-${p.player_id}`} name={p.player_name} rating={p.quote?.rating} position={p.position} age={p.age} nationality={p.nationality} club={p.current_club_name} image={p.image_url} onClick={() => setOpen(p.player_id)}
-                stats={[{ k: "Fee", v: fmt(p.quote?.price) }, { k: "Value", v: fmt(p.current_value_credits, 1) }, { k: "Form", v: p.average_rating ?? "-" }]}
+                stats={[{ k: "Fee", v: p.quote?.price ? `${(p.quote.price / 1000).toFixed(1)}k` : "-" }, { k: "Value", v: fmt(p.current_value_credits, 1) }, { k: "Form", v: p.average_rating ?? "-" }]}
                 footer={<Btn className="w-full justify-center" variant={owned ? "ghost" : "secondary"} disabled={owned || busy === p.player_id || !clubId} onClick={() => sign(p)} data-testid={`sign-player-${p.player_id}`}>{owned ? "In squad" : busy === p.player_id ? "Signing…" : <>Sign · <Coin amount={p.quote?.price} /></>}</Btn>} />
             );
           })}

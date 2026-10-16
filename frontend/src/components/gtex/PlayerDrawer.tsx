@@ -40,6 +40,7 @@ function ShareBox({ playerId }: { playerId: string }) {
 export function PlayerDrawer({ playerId, onClose, extra }: { playerId: string | null; onClose: () => void; extra?: React.ReactNode }) {
   const { data: p, isLoading } = useQuery({ queryKey: ["real-player", playerId], queryFn: async () => (await api.get(`/v2/players/real-universe/${playerId}`)).data, enabled: !!playerId });
   const { data: form } = useQuery({ queryKey: ["player-form", playerId], queryFn: async () => (await api.get(`/v2/players/${playerId}/form`, { params: { include_performances: false } })).data, enabled: !!playerId });
+  const { data: quote } = useQuery({ queryKey: ["player-quote", playerId], queryFn: async () => (await api.get("/owner/market/quote", { params: { player_ids: playerId } })).data.quotes[playerId as string], enabled: !!playerId });
   if (!playerId) return null;
   const signals = p?.normalized_signals || {};
   return (
@@ -52,8 +53,8 @@ export function PlayerDrawer({ playerId, onClose, extra }: { playerId: string | 
         {isLoading || !p ? <Loading label="Pulling the dossier" /> : (
           <div className="space-y-5">
             <div className="mx-auto max-w-[240px]">
-              <PlayerCard name={p.player_name} rating={Math.round(Number(signals.real_life_performance_score ?? 0) / 2 + 45)} position={p.position} age={p.age} nationality={p.nationality} club={p.current_club_name} image={p.image_url}
-                stats={[{ k: "Value", v: fmt(p.current_value_credits, 1) }, { k: "Move", v: `${fmt(p.movement_pct, 0)}%` }, { k: "Interest", v: p.market_interest_score ?? "-" }]} />
+              <PlayerCard name={p.player_name} rating={quote?.rating} position={p.position} age={p.age} nationality={p.nationality} club={p.current_club_name} image={p.image_url}
+                stats={[{ k: "Fee", v: fmt(quote?.price) }, { k: "Value", v: fmt(p.current_value_credits, 1) }, { k: "Interest", v: p.market_interest_score ?? "-" }]} />
             </div>
             <div className="flex flex-wrap gap-2">
               <Chip tone="cyan">{p.primary_position || p.position}</Chip>

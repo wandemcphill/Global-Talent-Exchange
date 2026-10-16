@@ -30,7 +30,17 @@ User choices: work inside the existing repo (github.com/wandemcphill/Global-Tale
 - The repo's Flutter web app is built (`/root/flutter`, `cd /app/gtex/frontend && flutter build web --release --dart-define=GTE_API_BASE_URL=<preview url> --dart-define=GTE_BACKEND_MODE=strict_live`) and served on port 3000 by `/app/frontend/flutter-server.js` (`yarn start`). The React console is no longer served (`yarn start:react-console`).
 - Fixes in repo: gtex_universe dataclass super() TypeError (jackpot/world pulse), /api/v2/auth/* aliases for the Flutter contract, POSIX-locale boot crash in web/index.html.
 - Parity audit: /app/gtex/docs/EMERGENT_PARITY_AUDIT_2026-10-16.md
-- Open: /api/v2/players/markets returns 503 (API v1 demo facade); lineup AI auto-draft fallback; owner_console module removal pending the user's decision.
+- Open (resolved in iteration 4): /api/v2/players/markets 503; lineup AI auto-draft fallback.
+
+## Iteration 4 (2026-10-16): live DB + React blended onto existing backend
+- User choices: serve the React UI wired to the existing backend; keep the owner_console features (mounted on the existing modules and wallet ledger); allow Alembic migrations on the live Supabase DB; improve player/regen cards; national team player rental.
+- Backend now on the LIVE Supabase Postgres (DATABASE_URL in /app/backend/.env) with Cloudinary, Korapay and the user's auth/JWT/media secrets; GTE_BACKEND_MODE=live; root admin vidvimedialtd@gmail.com. Boot takes about 3-4 min (110ms DB round-trip).
+- Migrations 0130 (owner_console) and 0131 (lowercase wallet/projection/transaction enum values) applied. ledger_entries is append-only, so the model reads legacy uppercase values via _LegacyCaseEnum.
+- Market 503 fix: the api_v1 module is now registered last in modules.py, so /api/v2/players/{player_id} no longer shadows /players/markets (40,352 live markets).
+- AI Coach fallback: team_factory._ai_coach_auto_draft picks the best-fit XI out of position when no formation can be satisfied (unit-checked).
+- Owner quotes use the repo valuation (player_summary_read_models.current_value_credits); position normalization (GK to goalkeeper).
+- React (yarn start = craco): the api.ts interceptor unwraps the /api/v2 envelope; auth via /api/v2/auth/*; FUT-style PlayerCard (tiers, plus a Regen tier); PlayerDrawer scouting report (real-universe signals, form, share market buy); world market on /api/v2/players; Share Market panel on /api/v2/players/markets; Squad card view; Academy regen cards; new /app/national page (repo national-team-engine: enter as a nation, rental pool, rent, free-player claim, AI auto-build squad, admin seed defaults).
+- Verification: self-tested (curl and screenshots, read-only on the live DB). The testing agent timed out.
 
 ## Backlog
 - P0: Bridge the owner-console ledger with the repo's existing wallet ledger: DONE (iteration 2).
@@ -38,3 +48,6 @@ User choices: work inside the existing repo (github.com/wandemcphill/Global-Tale
 - P1: KYC submission UI (/api/kyc); Paystack transfer payouts if processor mode changes; remove the demo trader and its 2,000 GTX demo float before launch.
 - P1: Fix the pre-existing GtexUniverseService super() TypeError in the repo's gtex runtime hook.
 - P2: Club identity editor (crest/colours), supporter-only competitions, 3D/season passes.
+- P1: Admin must click 'Seed default tournaments' on /app/national to open rentals (none exist in the live DB).
+- P1: /api/market/players is slow (about 60s) on the live DB; React uses /api/v2/players instead.
+- Future: Phase 3 manager requests and regen pressure; Phase 4 unified ledger and anti-collusion hardening; Phase 5 gifting and sponsor inventory.

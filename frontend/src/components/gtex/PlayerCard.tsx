@@ -52,8 +52,8 @@ export function PlayerCard({ name, rating, potential, position, age, nationality
       {stats.length > 0 && (
         <div className="relative grid grid-cols-3 gap-px bg-white/5">
           {stats.slice(0, 6).map((s: any) => (
-            <div key={s.k} className="bg-black/20 px-2 py-1.5 text-center">
-              <p className="gx-mono text-sm font-bold text-white">{s.v}</p>
+            <div key={s.k} className="bg-black/20 px-1 py-1.5 text-center sm:px-2">
+              <p className="gx-mono truncate text-[11px] font-bold text-white sm:text-sm">{s.v}</p>
               <p className="text-[9px] uppercase tracking-wider text-white/50">{s.k}</p>
             </div>
           ))}
