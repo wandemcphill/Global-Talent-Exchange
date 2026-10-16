@@ -6,8 +6,9 @@ from enum import StrEnum
 from typing import Any, TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, JSON, Numeric, String, UniqueConstraint, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
+from app.core.field_encryption import EncryptedString, blind_index
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.models.user import KycStatus
 from app.models.wallet import LedgerUnit
@@ -217,12 +218,13 @@ class UserBankAccount(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     currency_code: Mapped[str] = mapped_column(String(8), nullable=False, default="NGN", server_default="NGN")
     bank_name: Mapped[str] = mapped_column(String(120), nullable=False)
-    account_number: Mapped[str] = mapped_column(String(32), nullable=False)
+    account_number: Mapped[str] = mapped_column(EncryptedString(512), nullable=False)
     account_name: Mapped[str] = mapped_column(String(120), nullable=False)
     bank_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
 
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+
 
 
 class KycProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -248,8 +250,10 @@ class KycProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=KycStatus.UNVERIFIED,
         index=True,
     )
-    nin: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
-    bvn: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    nin: Mapped[str | None] = mapped_column(EncryptedString(512), nullable=True)
+    nin_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    bvn: Mapped[str | None] = mapped_column(EncryptedString(512), nullable=True)
+    bvn_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     address_line1: Mapped[str | None] = mapped_column(String(255), nullable=True)
     address_line2: Mapped[str | None] = mapped_column(String(255), nullable=True)
     city: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -275,6 +279,16 @@ class KycProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
     reviewer: Mapped["User | None"] = relationship("User", foreign_keys=[reviewer_user_id])
+
+    @validates("nin")
+    def _sync_nin_hash(self, _key: str, value: str | None) -> str | None:
+        self.nin_hash = blind_index(value)
+        return value
+
+    @validates("bvn")
+    def _sync_bvn_hash(self, _key: str, value: str | None) -> str | None:
+        self.bvn_hash = blind_index(value)
+        return value
 
 
 class TreasuryWithdrawalRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -320,7 +334,8 @@ class TreasuryWithdrawalRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
     )
     bank_name: Mapped[str] = mapped_column(String(120), nullable=False)
-    bank_account_number: Mapped[str] = mapped_column(String(32), nullable=False)
+    bank_account_number: Mapped[str] = mapped_column(EncryptedString(512), nullable=False)
+    bank_account_number_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     bank_account_name: Mapped[str] = mapped_column(String(120), nullable=False)
     bank_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
     bank_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
@@ -348,6 +363,11 @@ class TreasuryWithdrawalRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
     admin_user: Mapped["User | None"] = relationship("User", foreign_keys=[admin_user_id])
+
+    @validates("bank_account_number")
+    def _sync_bank_account_number_hash(self, _key: str, value: str | None) -> str | None:
+        self.bank_account_number_hash = blind_index(value)
+        return value
 
 
 class TreasuryAuditEvent(UUIDPrimaryKeyMixin, Base):

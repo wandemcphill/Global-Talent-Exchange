@@ -227,6 +227,28 @@ Raw Alembic:
 python -m alembic -c backend/migrations/alembic.ini upgrade head
 ```
 
+## Field encryption for KYC/bank identifiers
+
+`KycProfile.nin`/`bvn`, `UserBankAccount.account_number`, and
+`TreasuryWithdrawalRequest.bank_account_number` are encrypted at rest
+(`enc:v1:` Fernet ciphertext) with `*_hash` HMAC blind indexes for exact-match
+admin search. Production-like environments must set
+`GTE_FIELD_ENCRYPTION_KEY` (comma-separated Fernet keys; first encrypts, all
+decrypt for rotation):
+
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Development/test derive a deterministic key from `GTE_AUTH_SECRET`
+automatically. After deploying the migration on a database with existing
+plaintext rows, run the idempotent backfill:
+
+```bash
+python backend/scripts/encrypt_sensitive_fields.py --dry-run   # count legacy rows
+python backend/scripts/encrypt_sensitive_fields.py             # encrypt + index
+```
+
 ## Run tests
 
 Targeted demo/bootstrap/simulation checks:

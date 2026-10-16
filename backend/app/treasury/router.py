@@ -14,6 +14,7 @@ from app.core.cloudinary_upload import (
     upload_kyc_document,
 )
 from app.auth.dependencies import get_current_admin, get_current_user, get_current_wallet_user, get_session
+from app.core.field_encryption import blind_index
 from app.models.dispute import Dispute, DisputeMessage
 from app.models.treasury import (
     DepositRequest,
@@ -715,7 +716,7 @@ def list_admin_withdrawals(
                 func.lower(User.full_name).ilike(like),
                 func.lower(User.phone_number).ilike(like),
                 func.lower(TreasuryWithdrawalRequest.bank_name).ilike(like),
-                func.lower(TreasuryWithdrawalRequest.bank_account_number).ilike(like),
+                TreasuryWithdrawalRequest.bank_account_number_hash == blind_index(q.strip()),
                 func.lower(TreasuryWithdrawalRequest.bank_account_name).ilike(like),
             )
         )
@@ -859,8 +860,8 @@ def list_admin_kyc(
                 func.lower(User.email).ilike(like),
                 func.lower(User.full_name).ilike(like),
                 func.lower(User.phone_number).ilike(like),
-                func.lower(KycProfile.nin).ilike(like),
-                func.lower(KycProfile.bvn).ilike(like),
+                KycProfile.nin_hash == blind_index(q.strip()),
+                KycProfile.bvn_hash == blind_index(q.strip()),
             )
         )
     total = session.scalar(select(func.count()).select_from(query.subquery()))

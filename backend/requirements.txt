@@ -4,6 +4,7 @@ PyYAML>=6.0,<7.0
 gunicorn>=23.0,<24.0
 sqlalchemy>=2.0,<3.0
 pydantic>=2.7,<3.0
+cryptography>=43,<47
 pydantic-settings>=2.3,<3.0
 requests>=2.31,<3.0
 Pillow>=12.2,<13.0
