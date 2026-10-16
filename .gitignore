@@ -58,3 +58,10 @@ Gtex_Test_Migration/tmp/
 
 # Genesis runtime secrets (N55)
 .runtime/
+
+# Tracked artifacts removed in repo hygiene cleanup (PR 3)
+gte_ingestion.db
+backend/admin_god_mode.json
+frontend/.codex-bin/
+ops/tmp/
+GTEX_*_PACK.zip
