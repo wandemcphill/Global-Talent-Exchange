@@ -68,8 +68,7 @@ def _js_json_stringify(value: object) -> str:
         return str(int(value)) if value.is_integer() else repr(value)
     if isinstance(value, dict):
         items = (
-            json.dumps(str(key), ensure_ascii=False) + ":" + _js_json_stringify(item)
-            for key, item in value.items()
+            json.dumps(str(key), ensure_ascii=False) + ":" + _js_json_stringify(item) for key, item in value.items()
         )
         return "{" + ",".join(items) + "}"
     if isinstance(value, (list, tuple)):

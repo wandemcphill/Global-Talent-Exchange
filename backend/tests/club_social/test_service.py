@@ -266,7 +266,6 @@ def test_reactions_and_rivalry_accumulate_from_match_flow(session: Session, serv
 
 def test_match_completion_with_legacy_club_ids_does_not_break(session: Session) -> None:
     match = _seed_legacy_match_context(session)
-    match_service = CompetitionMatchService(session)
     rule_set = session.get(CompetitionRuleSet, "rules-legacy")
     assert rule_set is not None
 
@@ -391,16 +390,17 @@ def test_share_event_dedupes_same_actor_within_window(session: Session, service:
     second = service.record_share_event(**kwargs)
 
     assert second.id == first.id
-    assert session.scalar(
-        select(func.count()).select_from(ChallengeShareEvent).where(
-            ChallengeShareEvent.challenge_id == challenge.id
+    assert (
+        session.scalar(
+            select(func.count())
+            .select_from(ChallengeShareEvent)
+            .where(ChallengeShareEvent.challenge_id == challenge.id)
         )
-    ) == 1
+        == 1
+    )
 
 
-def test_share_event_distinct_fingerprints_insert_separate_rows(
-    session: Session, service: ClubSocialService
-) -> None:
+def test_share_event_distinct_fingerprints_insert_separate_rows(session: Session, service: ClubSocialService) -> None:
     challenge = _make_open_challenge(session, service)
 
     for fingerprint in ("fp-ip-1", "fp-ip-2"):
@@ -416,11 +416,14 @@ def test_share_event_distinct_fingerprints_insert_separate_rows(
             metadata_json={},
         )
 
-    assert session.scalar(
-        select(func.count()).select_from(ChallengeShareEvent).where(
-            ChallengeShareEvent.challenge_id == challenge.id
+    assert (
+        session.scalar(
+            select(func.count())
+            .select_from(ChallengeShareEvent)
+            .where(ChallengeShareEvent.challenge_id == challenge.id)
         )
-    ) == 2
+        == 2
+    )
 
 
 def test_share_event_authenticated_actor_dedupes_and_stores_user_id(
@@ -456,9 +459,7 @@ def test_share_event_authenticated_actor_dedupes_and_stores_user_id(
     assert first.actor_fingerprint is None
 
 
-def test_share_event_inserts_again_after_dedupe_window(
-    session: Session, service: ClubSocialService
-) -> None:
+def test_share_event_inserts_again_after_dedupe_window(session: Session, service: ClubSocialService) -> None:
     challenge = _make_open_challenge(session, service)
 
     first = service.record_share_event(

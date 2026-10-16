@@ -181,7 +181,7 @@ def test_korapay_webhook_verifies_js_canonical_signature_over_raw_body(
 
     from app.admin_finance.service import _js_json_stringify
 
-    secret = "korapay-secret"
+    secret = "korapay-secret"  # pragma: allowlist secret
     monkeypatch.setenv("GTE_KORAPAY_WEBHOOK_SECRET", secret)
 
     # KoraPay signs JSON.stringify(data) on the wire. The raw body carries a
@@ -262,7 +262,7 @@ def test_korapay_secret_key_env_is_accepted_as_webhook_secret(
 
     from app.admin_finance.service import _js_json_stringify
 
-    secret = "korapay-merchant-secret"
+    secret = "korapay-merchant-secret"  # pragma: allowlist secret
     monkeypatch.delenv("GTE_KORAPAY_WEBHOOK_SECRET", raising=False)
     monkeypatch.delenv("KORAPAY_WEBHOOK_SECRET", raising=False)
     monkeypatch.setenv("GTE_KORAPAY_SECRET_KEY", secret)

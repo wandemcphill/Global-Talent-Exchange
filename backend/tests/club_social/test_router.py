@@ -188,8 +188,6 @@ def test_social_follow_match_share_and_live_match_surfaces(
     assert chat_response.json()["messages"][0]["body"] == "That goal was insane!"
 
 
-
-
 def test_identity_metrics_refresh_allows_owner(client, user_state) -> None:
     response = client.post("/api/clubs/club-alpha/identity/metrics/refresh")
     assert response.status_code == 200
@@ -232,9 +230,7 @@ def test_match_share_event_dedupes_anonymous_actor_by_client_ip(
     assert first.status_code == 201
     assert second.status_code == 201
 
-    count_same_ip = session.scalar(
-        select(func.count()).select_from(MatchShareEvent)
-    )
+    count_same_ip = session.scalar(select(func.count()).select_from(MatchShareEvent))
     assert count_same_ip == 1
 
     other_ip = client.post(

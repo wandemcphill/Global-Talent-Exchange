@@ -92,9 +92,7 @@ def test_redis_rate_limit_store_uses_memory_fallback_on_increment_errors() -> No
     assert store.snapshot()["redis_error_fallback"]["backend"] == "memory"
 
 
-def test_resilient_store_falls_back_to_memory_and_recovers_after_backoff(
-    monkeypatch, caplog
-) -> None:
+def test_resilient_store_falls_back_to_memory_and_recovers_after_backoff(monkeypatch, caplog) -> None:
     import logging
 
     from app.core import rate_limit as rate_limit_module
@@ -145,9 +143,7 @@ def test_resilient_store_falls_back_to_memory_and_recovers_after_backoff(
     assert "rate_limit.redis_recovered" in caplog.text
 
 
-def test_resilient_store_retries_redis_after_backoff_and_stays_degraded_on_failure(
-    monkeypatch, caplog
-) -> None:
+def test_resilient_store_retries_redis_after_backoff_and_stays_degraded_on_failure(monkeypatch, caplog) -> None:
     import logging
 
     from app.core import rate_limit as rate_limit_module

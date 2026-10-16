@@ -60,7 +60,9 @@ def list_provider_keys(*, live_only: bool = False) -> list[str]:
 
 
 def list_provider_registrations(*, live_only: bool = False) -> dict[str, ProviderRegistration]:
-    return {key: registration for key, registration in sorted(_REGISTRY.items()) if not live_only or registration.is_live}
+    return {
+        key: registration for key, registration in sorted(_REGISTRY.items()) if not live_only or registration.is_live
+    }
 
 
 def provider_secret_configured(provider_key: str) -> bool:
@@ -75,8 +77,18 @@ def provider_secret_configured(provider_key: str) -> bool:
 def provider_webhook_secret_configured(provider_key: str) -> bool:
     normalized = provider_key.strip().lower()
     env_names = {
-        "paystack": ("GTE_PAYSTACK_WEBHOOK_SECRET", "PAYSTACK_WEBHOOK_SECRET", "GTE_PAYSTACK_SECRET_KEY", "PAYSTACK_SECRET_KEY"),
-        "korapay": ("GTE_KORAPAY_WEBHOOK_SECRET", "KORAPAY_WEBHOOK_SECRET", "GTE_KORAPAY_SECRET_KEY", "KORAPAY_SECRET_KEY"),
+        "paystack": (
+            "GTE_PAYSTACK_WEBHOOK_SECRET",
+            "PAYSTACK_WEBHOOK_SECRET",
+            "GTE_PAYSTACK_SECRET_KEY",
+            "PAYSTACK_SECRET_KEY",
+        ),
+        "korapay": (
+            "GTE_KORAPAY_WEBHOOK_SECRET",
+            "KORAPAY_WEBHOOK_SECRET",
+            "GTE_KORAPAY_SECRET_KEY",
+            "KORAPAY_SECRET_KEY",
+        ),
     }.get(normalized, (f"GTE_{normalized.upper()}_WEBHOOK_SECRET",))
     return any((os.getenv(name) or "").strip() for name in env_names)
 
@@ -99,8 +111,12 @@ def is_production_environment() -> bool:
 
 
 def paystack_enabled() -> bool:
-    secret_configured = any((os.getenv(name) or "").strip() for name in ("GTE_PAYSTACK_SECRET_KEY", "PAYSTACK_SECRET_KEY"))
-    webhook_configured = any((os.getenv(name) or "").strip() for name in ("GTE_PAYSTACK_WEBHOOK_SECRET", "PAYSTACK_WEBHOOK_SECRET"))
+    secret_configured = any(
+        (os.getenv(name) or "").strip() for name in ("GTE_PAYSTACK_SECRET_KEY", "PAYSTACK_SECRET_KEY")
+    )
+    webhook_configured = any(
+        (os.getenv(name) or "").strip() for name in ("GTE_PAYSTACK_WEBHOOK_SECRET", "PAYSTACK_WEBHOOK_SECRET")
+    )
     return _env_flag_enabled("GTE_ENABLE_PAYSTACK") and secret_configured and webhook_configured
 
 
@@ -108,7 +124,9 @@ def _env_flag_enabled(name: str) -> bool:
     return str(os.getenv(name, "")).strip().lower() in {"1", "true", "yes", "on"}
 
 
-def provider_runtime_status(provider_key: str, *, gateway_enabled: bool = True, enabled_providers: set[str] | None = None) -> str:
+def provider_runtime_status(
+    provider_key: str, *, gateway_enabled: bool = True, enabled_providers: set[str] | None = None
+) -> str:
     normalized = provider_key.strip().lower()
     registration = get_provider_registration(normalized)
     if not registration.is_live:
@@ -124,8 +142,28 @@ def provider_runtime_status(provider_key: str, *, gateway_enabled: bool = True, 
     return "unavailable"
 
 
-def provider_runtime_statuses(*, gateway_enabled: bool = True, enabled_providers: set[str] | None = None, include_stubbed: bool = True) -> dict[str, str]:
-    return {key: provider_runtime_status(key, gateway_enabled=gateway_enabled, enabled_providers=enabled_providers) for key, registration in list_provider_registrations().items() if include_stubbed or registration.is_live}
+def provider_runtime_statuses(
+    *, gateway_enabled: bool = True, enabled_providers: set[str] | None = None, include_stubbed: bool = True
+) -> dict[str, str]:
+    return {
+        key: provider_runtime_status(key, gateway_enabled=gateway_enabled, enabled_providers=enabled_providers)
+        for key, registration in list_provider_registrations().items()
+        if include_stubbed or registration.is_live
+    }
 
 
-__all__ = ["ProviderRegistration", "get_provider_adapter", "get_live_provider_adapter", "paystack_enabled", "get_provider_registration", "is_production_environment", "list_provider_keys", "list_provider_registrations", "provider_live_deposit_ready", "provider_runtime_status", "provider_runtime_statuses", "provider_secret_configured", "provider_webhook_secret_configured"]
+__all__ = [
+    "ProviderRegistration",
+    "get_provider_adapter",
+    "get_live_provider_adapter",
+    "paystack_enabled",
+    "get_provider_registration",
+    "is_production_environment",
+    "list_provider_keys",
+    "list_provider_registrations",
+    "provider_live_deposit_ready",
+    "provider_runtime_status",
+    "provider_runtime_statuses",
+    "provider_secret_configured",
+    "provider_webhook_secret_configured",
+]

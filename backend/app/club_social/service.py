@@ -1809,9 +1809,7 @@ class ClubSocialService:
             conditions.append(model.actor_fingerprint == actor_fingerprint)
         else:
             return None
-        return self.session.scalars(
-            select(model).where(*conditions).order_by(model.created_at.desc()).limit(1)
-        ).first()
+        return self.session.scalars(select(model).where(*conditions).order_by(model.created_at.desc()).limit(1)).first()
 
     def _now(self) -> datetime:
         return datetime.now(UTC)

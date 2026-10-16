@@ -875,7 +875,9 @@ def login_user(
         telemetry.mark("db.refresh_user_ms", refresh_started_at)
     except InvalidCredentialsError as exc:
         analytics_failure_started_at = perf_counter()
-        analytics.track_event(session, name="login_failure", user_id=None, metadata={"email_hash": _email_fingerprint(payload.email)})
+        analytics.track_event(
+            session, name="login_failure", user_id=None, metadata={"email_hash": _email_fingerprint(payload.email)}
+        )
         telemetry.mark("analytics.login_failure_ms", analytics_failure_started_at)
         _rollback_with_telemetry(session, telemetry)
         _record_login_attempt(
@@ -890,7 +892,9 @@ def login_user(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
     except AuthError as exc:
         analytics_failure_started_at = perf_counter()
-        analytics.track_event(session, name="login_failure", user_id=None, metadata={"email_hash": _email_fingerprint(payload.email)})
+        analytics.track_event(
+            session, name="login_failure", user_id=None, metadata={"email_hash": _email_fingerprint(payload.email)}
+        )
         telemetry.mark("analytics.login_failure_ms", analytics_failure_started_at)
         _rollback_with_telemetry(session, telemetry)
         _record_login_attempt(
@@ -1070,7 +1074,9 @@ def request_account_recovery(
         user, recovery_code = service.prepare_account_recovery(session, email=payload.email)
         session.commit()
     except AuthError as exc:
-        analytics.track_event(session, name="login_failure", user_id=None, metadata={"email_hash": _email_fingerprint(payload.email)})
+        analytics.track_event(
+            session, name="login_failure", user_id=None, metadata={"email_hash": _email_fingerprint(payload.email)}
+        )
         session.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 

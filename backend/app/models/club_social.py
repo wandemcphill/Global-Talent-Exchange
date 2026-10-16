@@ -59,7 +59,9 @@ class ClubChallenge(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     slug: Mapped[str] = mapped_column(String(180), nullable=False, index=True)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     stakes_text: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    visibility: Mapped[str] = mapped_column(String(24), nullable=False, default="public", server_default="public", index=True)
+    visibility: Mapped[str] = mapped_column(
+        String(24), nullable=False, default="public", server_default="public", index=True
+    )
     country_code: Mapped[str | None] = mapped_column(String(8), nullable=True, index=True)
     region_name: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
     city_name: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
@@ -97,7 +99,9 @@ class ClubChallengeResponse(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         index=True,
     )
     response_type: Mapped[str] = mapped_column(String(24), nullable=False, default="accept", server_default="accept")
-    response_status: Mapped[str] = mapped_column(String(24), nullable=False, default="recorded", server_default="recorded")
+    response_status: Mapped[str] = mapped_column(
+        String(24), nullable=False, default="recorded", server_default="recorded"
+    )
     message: Mapped[str | None] = mapped_column(Text, nullable=True)
     scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
@@ -208,9 +212,7 @@ class MatchReactionEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 
 class RivalryProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "rivalry_profiles"
-    __table_args__ = (
-        UniqueConstraint("club_a_id", "club_b_id", name="uq_rivalry_profiles_pair"),
-    )
+    __table_args__ = (UniqueConstraint("club_a_id", "club_b_id", name="uq_rivalry_profiles_pair"),)
 
     club_a_id: Mapped[str] = mapped_column(
         String(36),
@@ -224,7 +226,9 @@ class RivalryProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         index=True,
     )
-    label: Mapped[str] = mapped_column(String(80), nullable=False, default="Emerging rivalry", server_default="Emerging rivalry")
+    label: Mapped[str] = mapped_column(
+        String(80), nullable=False, default="Emerging rivalry", server_default="Emerging rivalry"
+    )
     intensity_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     regional_derby: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     giant_killer_flag: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
@@ -253,9 +257,7 @@ class RivalryProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class RivalryMatchHistory(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "rivalry_match_history"
-    __table_args__ = (
-        UniqueConstraint("rivalry_id", "match_id", name="uq_rivalry_match_history_rivalry_match"),
-    )
+    __table_args__ = (UniqueConstraint("rivalry_id", "match_id", name="uq_rivalry_match_history_rivalry_match"),)
 
     rivalry_id: Mapped[str] = mapped_column(
         String(36),
@@ -341,9 +343,7 @@ class ChallengeShareEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 
 class SocialFollow(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "social_follows"
-    __table_args__ = (
-        UniqueConstraint("user_id", "target_key", name="uq_social_follows_user_target"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "target_key", name="uq_social_follows_user_target"),)
 
     user_id: Mapped[str] = mapped_column(
         String(36),
@@ -370,9 +370,7 @@ class SocialFollow(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class MatchShareLink(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "match_share_links"
-    __table_args__ = (
-        UniqueConstraint("share_code", name="uq_match_share_links_share_code"),
-    )
+    __table_args__ = (UniqueConstraint("share_code", name="uq_match_share_links_share_code"),)
 
     match_id: Mapped[str] = mapped_column(
         String(36),
@@ -471,7 +469,9 @@ class MatchChatMessage(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         index=True,
     )
     body: Mapped[str] = mapped_column(Text, nullable=False)
-    visibility: Mapped[str] = mapped_column(String(24), nullable=False, default="public", server_default="public", index=True)
+    visibility: Mapped[str] = mapped_column(
+        String(24), nullable=False, default="public", server_default="public", index=True
+    )
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
 
