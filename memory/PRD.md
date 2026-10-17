@@ -68,6 +68,14 @@ User choices: work inside the existing repo (github.com/wandemcphill/Global-Tale
 - The gtex_regen lane (12,000 older tradeable regens, 9,256 with numbered names like 'Harry Robinson 48', no photos) was repaired by scripts/repair_gtex_regen_lane.py: unique country-true names (unique across both lanes), Cloudinary face-bank portrait rows, previous name kept in dna_profile.previous_full_name. The /markets/nations result is cached in memory for 15 min.
 - Known gap: about 16k real (sportmonks) players have no portrait row in the source data, so they show initials thumbnails.
 
+## Iteration 9 (2026-10-17): Wonderkid spotlight + price history chart
+- User choices: a wonderkid is a regen aged 21 or under, ranked by potential (regens only). Price history uses real share events plus a new daily price snapshot from now on.
+- GET /api/v2/players/markets?sort=wonderkid: regens only (source is pinned to regen), DOB within 21 years, ordered by potential desc, then headroom (potential minus rating) desc. Rating and potential come from dna_profile (current_rating/potential_rating for national seeds, overall/potential for the gtex_regen lane). List items now carry rating and potential (null for real players).
+- New table player_share_price_snapshots (migration 20261017_0133; unique player_id+snapshot_date). PlayerTokenMarketService.snapshot_share_prices does one INSERT…SELECT with ON CONFLICT DO NOTHING. The cron is POST /api/v2/players/markets/price-snapshots/cron (Bearer WEBHOOK_CRON_SECRET, returns 202 and runs in the background), scheduled daily at 00:05 UTC in /app/.emergent/crons.yml. The first snapshot was written on 2026-10-17.
+- GET /api/v2/players/{id}/shares/price-history?range=7d|30d|all merges share events (an issue event shows as "listed" at the repriced initial_share_price_coin), daily closes, a carry-forward point and the current price, and returns open/current/high/low/change_pct/trade_count.
+- React: the ShareMarket sort select (Name/Wonderkid), an OVR → POT column, and a Wonderkid spotlight strip (top 5) when a nation is picked. PriceHistoryChart (recharts, 7D/30D/ALL) sits in the drawer share box and is refreshed after a buy.
+- Testing: iteration_8, backend 13/13 and frontend 100%.
+
 ## Backlog
 - P0: Bridge the owner-console ledger with the repo's existing wallet ledger: DONE (iteration 2).
 - P0: Register the Paystack webhook URL in the dashboard for the production domain.

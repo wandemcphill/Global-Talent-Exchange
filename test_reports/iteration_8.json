@@ -1,0 +1,36 @@
+{
+  "summary": "Wonderkid Spotlight + Price History Chart release tested end-to-end on LIVE Supabase. Backend: 13/13 pytest green (/app/backend/tests/test_wonderkid_and_price_history.py). GET /api/v2/players/markets?sort=wonderkid returns only regens, every item age<=21 and potential-not-null, ordered by potential desc; nation=Nigeria returned total=643 with every item nationality=Nigeria; sort=wonderkid+source=real still returned regens only (server pins source=regen when sort=wonderkid). Default sort still orders by name and real items carry rating=null/potential=null while regen items carry integer rating/potential. Price-history: 7d/30d/all each return points[], open_price, current_price, high_price, low_price, change_pct, trade_count; range=xx -> 422; unknown player -> 404. Cron: no auth -> 401, bogus bearer -> 401, correct WEBHOOK_CRON_SECRET -> 202 both first and second same-day call (ON CONFLICT DO NOTHING keeps idempotency). Frontend @1920: /app/market Issued Player Markets panel -> share-market-sort-select='wonderkid' flips OVR/POT column on (15 share-row-potential cells), regen toggle visually active (gx-btn-primary); share-market-nation-select='Nigeria (643)' renders wonderkid-spotlight strip with 5 cards (Tunde Olawale 80->99, Ademola Odukoya 82->99, Bayo Afolabi 82->99, Ebuka Iwobi 82->99, Haruna Maikano 82->99) all ages<=21 and position shown; clicking card opens player-drawer with drawer-price-history + price-history-chart + change (0.00%) and 7d/30d/all range buttons (7d click fetches). Real-player drawer (regen toggle off, sort=Name) also renders drawer-price-history, price-history-chart and price-history-untraded (0-trade case). Mobile @390x844: no horizontal overflow (sw=cw=390), spotlight visible with wrapped grid. No console errors; only a benign recharts warning when the container momentarily measured -1 before layout settled.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "PlayerDrawer price history (0-trade regen)", "issues": ["price-history-meta hidden when trade_count=0 (spec implies meta always rendered; untraded note also False here even though 0 trades/0 circulating). Not blocking; UX decision."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wonderkid_and_price_history.py",
+    "/app/test_reports/pytest/iter8_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "legacy_token_service.PlayerTokenMarketService._wonderkid_dob_cutoff uses date.today() in local tz; for a global customer base an explicit UTC date would be more deterministic. Not a bug (dob is a date, not timestamp).",
+    "list_markets() couples sort=wonderkid to source='regen' at the router level (router.py line 239). Fine, but if a future caller passes sort=wonderkid&source=real they get regens silently; consider a 400 or a response hint rather than override.",
+    "snapshot_share_prices() scans every active market in one SQL on Postgres (good). On SQLite path (tests only) it loads all markets to Python; acceptable for dev.",
+    "PriceHistoryChart: recharts emits 'width(-1)/height(-1)' warning when drawer slides in before layout settles — purely cosmetic.",
+    "WONDERKID_MAX_AGE=21 is hard-coded in the service; moving it to settings would make the business rule discoverable."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_wonderkid_and_price_history.py (new, 13 tests, ~13s warm)"
+  ],
+  "success_rate": {"backend": "100% (13/13 pytest)", "frontend": "100% (sort, spotlight, drawer chart & range buttons, real-player chart, mobile wrap all verified)"},
+  "test_credentials": "Admin: vidvimedialtd@gmail.com / Desolamcphill89. — READ-ONLY. WEBHOOK_CRON_SECRET read from /app/backend/.env.",
+  "seed_data_creation": "None. READ-ONLY except the idempotent cron endpoint (ON CONFLICT DO NOTHING). Today's snapshot row already existed from a prior invocation; a second call returned 202 without duplicating.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Cold queries on LIVE Supabase can time out via Cloudflare at ~60s on the very first call (we saw 502s on first wonderkid pass). Warm up by calling the endpoint once with a long timeout before asserting; after warm, wonderkid list + price-history + nations are all <2s. Wonderkid sample Nigerian regens all map POT=99 (ceiling), so ordering ties are broken by (potential - rating) desc then full_name — ordering assertion must only check the primary key (potential desc). WONDERKID_MAX_AGE=21 is defined in PlayerTokenMarketService. For the real-player drawer price-history test, the share-row test ids are share-row-<uuid> (not nested under share-market-regen-toggle), so filter out testids containing 'potential' or 'regen' when picking a row.",
+  "rca_of_the_issue": "N/A — no regressions found. Features behave per spec; only observation is that when trade_count=0 the drawer currently hides the price-history-meta line and does not render the price-history-untraded note (chart still renders with carry/current points). Flagged as a design nit for main agent; not a bug."
+}
