@@ -134,6 +134,52 @@ class _GtexWonderkidBoardState extends State<GtexWonderkidBoard> {
   }
 }
 
+class _PriceChangeBadge extends StatelessWidget {
+  const _PriceChangeBadge({super.key, required this.change});
+
+  final double change;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool up = change > 0;
+    final bool down = change < 0;
+    final Color color =
+        up
+            ? GtexColors.pitch
+            : down
+            ? GtexColors.red
+            : GtexColors.textMuted;
+    final IconData icon =
+        up
+            ? Icons.arrow_drop_up_rounded
+            : down
+            ? Icons.arrow_drop_down_rounded
+            : Icons.remove_rounded;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.45)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 14, color: color),
+          Text(
+            '${up ? '+' : ''}${change.toStringAsFixed(1)}% 7D',
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _WonderkidRow extends StatelessWidget {
   const _WonderkidRow({required this.rank, required this.kid});
 
@@ -208,6 +254,11 @@ class _WonderkidRow extends StatelessWidget {
                     label: '+$headroom',
                     color: GtexColors.pitch,
                     compact: true,
+                  ),
+                if (kid.priceChange7dPct != null)
+                  _PriceChangeBadge(
+                    key: Key('gtex-wonderkid-price-badge-${kid.playerId}'),
+                    change: kid.priceChange7dPct!,
                   ),
               ],
             ),

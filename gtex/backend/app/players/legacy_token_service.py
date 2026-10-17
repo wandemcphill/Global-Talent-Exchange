@@ -227,6 +227,10 @@ class PlayerTokenMarketService:
             for player_id in player_ids
             if player_id in markets_by_player_id
         ]
+        if sort == "wonderkid":
+            changes = self._price_change_7d(markets_by_player_id)
+            for item in items:
+                item["price_change_7d_pct"] = changes.get(item["player_id"])
         return {
             "items": items,
             "limit": limit,
@@ -273,32 +277,64 @@ class PlayerTokenMarketService:
         self.session.flush()
         return len(markets)
 
+    def _price_series(
+        self, markets_by_player_id: dict[str, PlayerShareMarket]
+    ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, int]]:
+        player_ids = list(markets_by_player_id)
+        series: dict[str, list[dict[str, Any]]] = {player_id: [] for player_id in player_ids}
+        trades: dict[str, int] = {player_id: 0 for player_id in player_ids}
+        if not player_ids:
+            return series, trades
+        for pid, at, price, kind in self.session.execute(
+            select(
+                PlayerShareEvent.player_id,
+                PlayerShareEvent.created_at,
+                PlayerShareEvent.price_per_share_coin,
+                PlayerShareEvent.event_type,
+            ).where(PlayerShareEvent.player_id.in_(player_ids))
+        ):
+            if kind == "issue":
+                # A repriced listing opens at its model price, not the pre-launch placeholder.
+                listed = (markets_by_player_id[pid].metadata_json or {}).get("initial_share_price_coin")
+                series[pid].append({"at": self._aware(at), "price": self._amount(listed or price), "kind": "listed"})
+            elif self._amount(price) > 0:
+                trades[pid] += kind in {"buy", "sell"}
+                series[pid].append({"at": self._aware(at), "price": self._amount(price), "kind": kind})
+        for pid, day, price in self.session.execute(
+            select(
+                PlayerSharePriceSnapshot.player_id,
+                PlayerSharePriceSnapshot.snapshot_date,
+                PlayerSharePriceSnapshot.share_price_coin,
+            ).where(PlayerSharePriceSnapshot.player_id.in_(player_ids))
+        ):
+            series[pid].append(
+                {"at": datetime(day.year, day.month, day.day, tzinfo=timezone.utc), "price": self._amount(price), "kind": "daily_close"}
+            )
+        for points in series.values():
+            points.sort(key=lambda point: point["at"])
+        return series, trades
+
+    def _price_change_7d(self, markets_by_player_id: dict[str, PlayerShareMarket]) -> dict[str, Decimal]:
+        series_by_player, _ = self._price_series(markets_by_player_id)
+        since = datetime.now(timezone.utc) - timedelta(days=7)
+        changes: dict[str, Decimal] = {}
+        for player_id, market in markets_by_player_id.items():
+            points = series_by_player.get(player_id) or []
+            current = self._amount(market.share_price_coin)
+            before = [point for point in points if point["at"] <= since]
+            baseline = (before[-1] if before else points[0])["price"] if points else current
+            change = (current - baseline) / baseline * 100 if baseline > 0 else Decimal("0")
+            changes[player_id] = change.quantize(Decimal("0.01"))
+        return changes
+
     PRICE_HISTORY_RANGES = {"7d": 7, "30d": 30, "all": None}
 
     def get_price_history(self, *, player_id: str, range_key: str = "30d") -> dict[str, Any]:
         market = self.get_market(player_id=player_id)
-        listed_price = (market.metadata_json or {}).get("initial_share_price_coin")
-        series: list[dict[str, Any]] = []
-        trade_count = 0
-        for at, price, kind in self.session.execute(
-            select(PlayerShareEvent.created_at, PlayerShareEvent.price_per_share_coin, PlayerShareEvent.event_type).where(
-                PlayerShareEvent.player_id == player_id
-            )
-        ):
-            if kind == "issue":
-                # A repriced listing opens at its model price, not the pre-launch placeholder.
-                series.append({"at": self._aware(at), "price": self._amount(listed_price or price), "kind": "listed"})
-            elif self._amount(price) > 0:
-                trade_count += kind in {"buy", "sell"}
-                series.append({"at": self._aware(at), "price": self._amount(price), "kind": kind})
-        for day, price in self.session.execute(
-            select(PlayerSharePriceSnapshot.snapshot_date, PlayerSharePriceSnapshot.share_price_coin).where(
-                PlayerSharePriceSnapshot.player_id == player_id
-            )
-        ):
-            series.append({"at": datetime(day.year, day.month, day.day, tzinfo=timezone.utc), "price": self._amount(price), "kind": "daily_close"})
+        series_by_player, trades_by_player = self._price_series({player_id: market})
+        series = series_by_player.get(player_id, [])
+        trade_count = trades_by_player.get(player_id, 0)
         now = datetime.now(timezone.utc)
-        series.sort(key=lambda point: point["at"])
         days = self.PRICE_HISTORY_RANGES.get(range_key, 30)
         if days is not None:
             since = now - timedelta(days=days)

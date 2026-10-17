@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 import logging
+from threading import Lock
+import time
 from typing import Any, Protocol
 
 from redis import Redis
@@ -43,6 +45,59 @@ class NullCacheBackend:
 
     def ping(self) -> bool:
         return False
+
+
+class MemoryCacheBackend:
+    """Process-local TTL cache used for API response caching when Redis is not
+    configured. Per-process, so multi-worker deploys may serve a response up to
+    its TTL after another worker invalidated it."""
+
+    enabled = True
+
+    def __init__(self, max_entries: int = 2048):
+        self.max_entries = max_entries
+        self._items: dict[str, tuple[float | None, str]] = {}
+        self._lock = Lock()
+
+    def get(self, key: str) -> str | None:
+        with self._lock:
+            item = self._items.get(key)
+            if item is None:
+                return None
+            expires_at, value = item
+            if expires_at is not None and expires_at <= time.monotonic():
+                self._items.pop(key, None)
+                return None
+            return value
+
+    def set(self, key: str, value: str, ttl_seconds: int) -> None:
+        if ttl_seconds <= 0:
+            return
+        with self._lock:
+            if len(self._items) >= self.max_entries:
+                now = time.monotonic()
+                for stale in [k for k, (exp, _) in self._items.items() if exp is not None and exp <= now]:
+                    self._items.pop(stale, None)
+                while len(self._items) >= self.max_entries:
+                    self._items.pop(next(iter(self._items)))
+            self._items[key] = (time.monotonic() + ttl_seconds, value)
+
+    def delete_many(self, keys: list[str]) -> None:
+        with self._lock:
+            for key in keys:
+                self._items.pop(key, None)
+
+    def increment(self, key: str, amount: int = 1, ttl_seconds: int | None = None) -> int:
+        with self._lock:
+            item = self._items.get(key)
+            current = int(item[1]) if item is not None else 0
+            value = current + amount
+            expires_at = time.monotonic() + ttl_seconds if ttl_seconds is not None else (item[0] if item else None)
+            self._items[key] = (expires_at, str(value))
+            return value
+
+    def ping(self) -> bool:
+        return True
 
 
 class RedisCacheBackend:

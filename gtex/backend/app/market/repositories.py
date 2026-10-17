@@ -5,7 +5,7 @@ from datetime import datetime
 import json
 import os
 import time
-from threading import RLock
+from threading import RLock, Thread
 from typing import Protocol
 from weakref import WeakKeyDictionary
 
@@ -77,6 +77,46 @@ def _records_cache_ttl_seconds() -> float:
         return max(0.0, float(raw))
     except (TypeError, ValueError):
         return 0.0
+
+
+_REFRESHING: set[int] = set()
+
+
+def _refresh_records_cache(cache, lock, bind: Engine, loader_name: str) -> None:
+    try:
+        with Session(bind=bind) as session:
+            records = getattr(SqlAlchemyMarketPlayerRepository(session=session), loader_name)()
+        with lock:
+            cache[bind] = (time.monotonic(), records)
+    except Exception:
+        logger.exception("market.records_cache.refresh_failed loader=%s", loader_name)
+    finally:
+        with lock:
+            _REFRESHING.discard(id(cache))
+
+
+def _serve_records_cache(cache, lock, bind: Engine, ttl: float, load, loader_name: str) -> list[MarketPlayerRecord]:
+    # Single-flight on a cold miss; once populated, an expired entry is served
+    # stale while one background thread refreshes it (stale-while-revalidate),
+    # so no request ever waits on the full tradable-player scan after warm-up.
+    with lock:
+        cached = cache.get(bind)
+        if cached is not None:
+            if (time.monotonic() - cached[0]) >= ttl and id(cache) not in _REFRESHING:
+                _REFRESHING.add(id(cache))
+                Thread(target=_refresh_records_cache, args=(cache, lock, bind, loader_name), daemon=True).start()
+            return cached[1]
+        records = load()
+        cache[bind] = (time.monotonic(), records)
+        return records
+
+
+def warm_market_records_cache(engine: Engine) -> None:
+    """Pre-load the candidates cache so the first market request is served hot."""
+    if _records_cache_ttl_seconds() <= 0:
+        return
+    with Session(bind=engine) as session:
+        SqlAlchemyMarketPlayerRepository(session=session).list_player_candidates()
 
 
 def clear_market_records_cache() -> None:
@@ -437,15 +477,9 @@ class SqlAlchemyMarketPlayerRepository:
         # cache miss, concurrent callers queue behind the first instead of
         # each independently re-running the full scan in parallel, which is
         # what turned a slow query into a memory-spike/crash under load.
-        with _RECORDS_CACHE_LOCK:
-            now = time.monotonic()
-            cached = _RECORDS_CACHE.get(bind)
-            if cached is not None and (now - cached[0]) < ttl:
-                return cached[1]
-
-            records = self._load_player_records()
-            _RECORDS_CACHE[bind] = (time.monotonic(), records)
-            return records
+        return _serve_records_cache(
+            _RECORDS_CACHE, _RECORDS_CACHE_LOCK, bind, ttl, self._load_player_records, "_load_player_records"
+        )
 
     def _load_player_records(self) -> list[MarketPlayerRecord]:
         players = list(
@@ -483,15 +517,9 @@ class SqlAlchemyMarketPlayerRepository:
             return self._load_player_candidates()
 
         # Single-flight: see the matching comment in list_player_records().
-        with _CANDIDATES_CACHE_LOCK:
-            now = time.monotonic()
-            cached = _CANDIDATES_CACHE.get(bind)
-            if cached is not None and (now - cached[0]) < ttl:
-                return cached[1]
-
-            records = self._load_player_candidates()
-            _CANDIDATES_CACHE[bind] = (time.monotonic(), records)
-            return records
+        return _serve_records_cache(
+            _CANDIDATES_CACHE, _CANDIDATES_CACHE_LOCK, bind, ttl, self._load_player_candidates, "_load_player_candidates"
+        )
 
     def _load_player_candidates(self) -> list[MarketPlayerRecord]:
         players = list(

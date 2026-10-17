@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 
 from fastapi import FastAPI, Request
 
-from app.core.cache import CacheBackend, NullCacheBackend
+from app.core.cache import CacheBackend, MemoryCacheBackend, NullCacheBackend
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +95,11 @@ def get_response_cache(app: FastAPI) -> NamespacedResponseCache:
     cached = getattr(app.state, "response_cache", None)
     if cached is None:
         backend = getattr(app.state, "cache_backend", None)
-        cached = NamespacedResponseCache(backend=backend or NullCacheBackend())
+        if backend is None or isinstance(backend, NullCacheBackend):
+            # Without Redis, fall back to a process-local cache instead of
+            # silently disabling every response cache.
+            backend = MemoryCacheBackend()
+        cached = NamespacedResponseCache(backend=backend)
         app.state.response_cache = cached
     return cached
 

@@ -174,6 +174,8 @@ async def _startup_app(app: FastAPI) -> None:
             _record_startup_step(app, "metrics.refresh", 0.0, status="skipped")
         else:
             _run_startup_step(app, "metrics.refresh", runtime_context.metrics.refresh_from_database)
+        if not app.state.settings.fast_test_startup_enabled:
+            _run_startup_step(app, "market.records_warm", lambda: _start_market_records_warm(app))
         if not app.state.settings.deferred_startup_enabled or app.state.settings.fast_test_startup_enabled:
             app.state.deferred_startup_thread = None
             app.state.deferred_startup_skipped = True
@@ -183,6 +185,18 @@ async def _startup_app(app: FastAPI) -> None:
     except Exception:
         logger.exception("app.startup.failed")
         raise
+
+def _start_market_records_warm(app: FastAPI) -> None:
+    from app.market.repositories import warm_market_records_cache
+
+    def _warm() -> None:
+        try:
+            warm_market_records_cache(app.state.db_engine)
+            logger.info("market.records_warm.complete")
+        except Exception:
+            logger.exception("market.records_warm.failed")
+
+    Thread(target=_warm, name="market-records-warm", daemon=True).start()
 
 async def _shutdown_app(app: FastAPI) -> None:
     runtime_context: Container = app.state.container

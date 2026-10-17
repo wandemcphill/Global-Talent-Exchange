@@ -2271,8 +2271,22 @@ class RegenUniverseExpansionService:
         return [self._national_seed_view(item) for item in seeds]
 
     def build_regen_tracking(self) -> dict[str, Any]:
-        seeds = list(self.session.scalars(select(NationalRegenSeed)).all())
-        profiles = list(self.session.scalars(select(RegenProfile)).all())
+        # Column-only reads: hydrating ~11k full seed rows (with metadata JSON)
+        # over the remote pooler took 18-27s and held a pooled connection.
+        seeds = self.session.execute(
+            select(
+                NationalRegenSeed.seed_type,
+                NationalRegenSeed.rarity_tier,
+                NationalRegenSeed.country_name,
+                NationalRegenSeed.country_code,
+                NationalRegenSeed.current_rating,
+                NationalRegenSeed.potential_rating,
+                NationalRegenSeed.metadata_json["peak_rating"].as_string(),
+            )
+        ).all()
+        profiles = self.session.execute(
+            select(RegenProfile.generation_source, RegenProfile.current_gsi, RegenProfile.potential_range_json)
+        ).all()
         award_winners = list(self.session.scalars(select(RegenAwardWinner)).all())
         legacy_records = list(self.session.scalars(select(RegenLegacyRecord)).all())
 
@@ -2293,23 +2307,19 @@ class RegenUniverseExpansionService:
             lambda: {"count": 0, "peak_rating": 0, "achievements": set(), "metadata": {}}
         )
 
-        for seed in seeds:
-            peak_rating = max(seed.current_rating, seed.potential_rating, int(seed.metadata_json.get("peak_rating", 0)))
-            by_seed_type[seed.seed_type]["count"] += 1
-            by_seed_type[seed.seed_type]["peak_rating"] = max(by_seed_type[seed.seed_type]["peak_rating"], peak_rating)
-            by_rarity[seed.rarity_tier]["count"] += 1
-            by_rarity[seed.rarity_tier]["peak_rating"] = max(by_rarity[seed.rarity_tier]["peak_rating"], peak_rating)
-            by_country[seed.country_name]["count"] += 1
-            by_country[seed.country_name]["peak_rating"] = max(
-                by_country[seed.country_name]["peak_rating"], peak_rating
-            )
-            by_country[seed.country_name]["metadata"] = {"country_code": seed.country_code}
+        for seed_type, rarity_tier, country_name, country_code, current_rating, potential_rating, meta_peak in seeds:
+            peak_rating = max(current_rating, potential_rating, int(float(meta_peak)) if meta_peak not in (None, "") else 0)
+            by_seed_type[seed_type]["count"] += 1
+            by_seed_type[seed_type]["peak_rating"] = max(by_seed_type[seed_type]["peak_rating"], peak_rating)
+            by_rarity[rarity_tier]["count"] += 1
+            by_rarity[rarity_tier]["peak_rating"] = max(by_rarity[rarity_tier]["peak_rating"], peak_rating)
+            by_country[country_name]["count"] += 1
+            by_country[country_name]["peak_rating"] = max(by_country[country_name]["peak_rating"], peak_rating)
+            by_country[country_name]["metadata"] = {"country_code": country_code}
 
-        for profile in profiles:
-            source = profile.generation_source or "academy"
-            peak_rating = max(
-                profile.current_gsi, int((profile.potential_range_json or {}).get("maximum", profile.current_gsi))
-            )
+        for generation_source, current_gsi, potential_range_json in profiles:
+            source = generation_source or "academy"
+            peak_rating = max(current_gsi, int((potential_range_json or {}).get("maximum", current_gsi)))
             by_seed_type[source]["count"] += 1
             by_seed_type[source]["peak_rating"] = max(by_seed_type[source]["peak_rating"], peak_rating)
 

@@ -37,6 +37,7 @@ class _FakeShareMarket implements GtexShareMarketReader {
         age: 19,
         rating: 80,
         potential: 99 - i,
+        priceChange7dPct: i == 0 ? 2.4 : (i == 1 ? -1.15 : 0),
       ),
     );
   }
@@ -79,7 +80,10 @@ class _FakeShareMarket implements GtexShareMarketReader {
   }
 }
 
-Widget _host(Widget child) => MaterialApp(home: Scaffold(body: child));
+Widget _host(Widget child) => MaterialApp(
+  theme: ThemeData(splashFactory: InkRipple.splashFactory),
+  home: Scaffold(body: child),
+);
 
 void main() {
   test('wonderkid and history models parse the backend payloads', () {
@@ -93,6 +97,15 @@ void main() {
       'potential': 99,
     });
     expect(kid.growthHeadroom, 19);
+    expect(kid.priceChange7dPct, isNull);
+    expect(
+      GtexWonderkid.fromJson(<String, dynamic>{
+        'player_id': 'p2',
+        'share_price_coin': '0.0100',
+        'price_change_7d_pct': '-3.50',
+      }).priceChange7dPct,
+      -3.5,
+    );
     expect(kid.sharePriceCoin, closeTo(0.0268, 1e-9));
   });
 
@@ -116,6 +129,9 @@ void main() {
     expect(find.text('Kid 0'), findsOneWidget);
     expect(find.text('80 → 99'), findsOneWidget);
     expect(find.text('+19'), findsOneWidget);
+    expect(find.text('+2.4% 7D'), findsOneWidget);
+    expect(find.text('-1.1% 7D'), findsOneWidget);
+    expect(find.byKey(const Key('gtex-wonderkid-price-badge-wk-2')), findsOneWidget);
     expect(market.wonderkidNations, <String?>[null]);
 
     await tester.tap(find.byKey(const Key('gtex-wonderkid-nation-picker')));

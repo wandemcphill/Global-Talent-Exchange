@@ -148,6 +148,7 @@ class PlayerShareMarketListItemView(BaseModel):
     age: int | None = None
     rating: int | None = None
     potential: int | None = None
+    price_change_7d_pct: Decimal | None = None
     share_price_coin: Decimal
     liquidity_coin: Decimal
     total_shares: int

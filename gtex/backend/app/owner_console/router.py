@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.owner_console import competitions as comps
-from app.owner_console import engine, ledger, money, service
+from app.owner_console import ledger, money, service
 from app.owner_console.models import IntegrityFlag, LedgerEvent, OwnerCompetition, OwnerCompetitionEntry, OwnerInboxItem, OwnerMatch, OwnerWithdrawal
 from app.owner_console.service import OwnerError
 
@@ -245,7 +245,9 @@ def control_center(user=Depends(get_current_user), session: Session = Depends(ge
             for m in session.scalars(select(OwnerMatch).where(OwnerMatch.competition_id.in_(comp_ids)).order_by(OwnerMatch.round_number.asc())).all():
                 if m.home_club_id in club_ids or m.away_club_id in club_ids:
                     (upcoming if m.status == "scheduled" else recent).append(comps.match_dict(m))
-        my_comps = [comps.comp_dict(session, c, user.id) for c in session.scalars(select(OwnerCompetition).where(OwnerCompetition.id.in_(comp_ids))).all()] if comp_ids else []
+        my_comp_rows = session.scalars(select(OwnerCompetition).where(OwnerCompetition.id.in_(comp_ids))).all() if comp_ids else []
+        my_comps = [comps.comp_dict(session, c, user.id) for c in my_comp_rows]
+        board = [{"competition": comp, "standings": comps.standings(session, row)} for comp, row in zip(my_comps, my_comp_rows)]
         open_comps = [comps.comp_dict(session, c, user.id) for c in session.scalars(select(OwnerCompetition).where(OwnerCompetition.status == "open", OwnerCompetition.host_type == "gtex")).all()]
         economy_by_club = {s.club_id: ledger.club_economy(session, s.club_id) for s in states}
         totals: dict[str, float] = {}
@@ -261,6 +263,7 @@ def control_center(user=Depends(get_current_user), session: Session = Depends(ge
             "inbox_open_count": len(items),
             "decisions": [service.inbox_dict(i) for i in items if i.is_decision][:6],
             "health": [service.club_health(session, s) for s in states],
+            "board": board,
             "fixtures": {"upcoming": upcoming[:6], "recent": list(reversed(recent))[:6], "my_competitions": my_comps, "open_competitions": open_comps, "hosted": [c for c in my_comps if c["host_type"] == "user"]},
             "economy": {
                 "wallet": ledger.wallet_classes(session, user.id),

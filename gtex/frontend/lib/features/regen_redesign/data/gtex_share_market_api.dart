@@ -23,6 +23,7 @@ class GtexWonderkid {
     this.rating,
     this.potential,
     this.imageUrl,
+    this.priceChange7dPct,
   });
 
   factory GtexWonderkid.fromJson(Map<String, dynamic> json) => GtexWonderkid(
@@ -35,6 +36,10 @@ class GtexWonderkid {
     rating: _toInt(json['rating']),
     potential: _toInt(json['potential']),
     imageUrl: _toText(json['image_url']),
+    priceChange7dPct:
+        json['price_change_7d_pct'] == null
+            ? null
+            : _toDouble(json['price_change_7d_pct']),
   );
 
   final String playerId;
@@ -46,6 +51,9 @@ class GtexWonderkid {
   final int? rating;
   final int? potential;
   final String? imageUrl;
+
+  /// Share price change versus 7 days ago (or since listing when younger).
+  final double? priceChange7dPct;
 
   int? get growthHeadroom =>
       rating == null || potential == null ? null : potential! - rating!;
