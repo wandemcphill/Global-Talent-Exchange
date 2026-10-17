@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.ingestion.models import Player, PlayerImageMetadata
 from app.models.regen import RegenProfile, RegenVisualProfile
 from app.models.regen_ecosystem import NationalRegenSeed
+from app.services.regen_culture_name_pools import face_groups_for
 
 FACE_RECIPE_VERSION = "gtex_regen_portrait_assignment_v4"
 PORTRAIT_SIZE = 256
@@ -152,7 +153,7 @@ class RegenPortraitService:
             )
 
         storage_key = str(bank_asset["storage_key"])
-        portrait_url = self._generated_media_url(storage_key)
+        portrait_url = self._face_bank_asset_url(bank_asset)
         checksum = str(bank_asset.get("sha256") or "")
         file_size_bytes = self._optional_int(bank_asset.get("bytes"))
         mime_type = self._mime_type_for_storage_key(storage_key)
@@ -275,7 +276,7 @@ class RegenPortraitService:
             return dict(seed.metadata_json or {})
 
         storage_key = str(bank_asset["storage_key"])
-        portrait_url = self._generated_media_url(storage_key)
+        portrait_url = self._face_bank_asset_url(bank_asset)
         portrait_status = self._asset_status(bank_asset)
         source_provider = self._asset_source_provider(bank_asset)
         seed.metadata_json = {
@@ -1070,6 +1071,9 @@ class RegenPortraitService:
     @classmethod
     def _portrait_ethnicity_groups(cls, country_code: str | None) -> tuple[str, ...]:
         code = (country_code or "").strip().upper()
+        explicit = face_groups_for(code)
+        if explicit:
+            return explicit
         african = {
             "AGO",
             "AO",
@@ -1507,6 +1511,10 @@ class RegenPortraitService:
         if configured:
             return Path(configured)
         return self._media_root() / FACE_BANK_MANIFEST
+
+    def _face_bank_asset_url(self, asset: dict[str, Any]) -> str:
+        """Public CDN copy of a face-bank asset; local generated-media route only as a fallback."""
+        return str(asset.get("cloudinary_secure_url") or "") or self._generated_media_url(str(asset["storage_key"]))
 
     def _generated_media_url(self, storage_key: str) -> str:
         # Percent-encode each path segment but keep "/" as a separator: most of

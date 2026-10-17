@@ -314,7 +314,8 @@ class SyntheticSquadFactory:
         manager_profile: dict[str, object] | None,
     ) -> tuple[list[tuple[Player, PlayerRole]], list[tuple[Player, PlayerRole]], str]:
         """Resolve starters/bench/formation with layered, always-safe fallback:
-        owner-saved exact XI -> owner-saved formation -> coach formation -> 4-3-3."""
+        owner-saved exact XI -> owner-saved formation -> coach formation -> 4-3-3
+        -> AI Coach auto-draft (best available XI, out-of-position if needed)."""
         plan = self._saved_match_plan(session, team_id)
         eligible_by_id = {player.id: player for player in eligible}
 
@@ -330,17 +331,36 @@ class SyntheticSquadFactory:
         if "4-3-3" not in candidates:
             candidates.append("4-3-3")
 
-        last_error: PlayerLifecycleValidationError | None = None
         for formation in candidates:
             try:
                 starters, bench = self._select_managed_squad(eligible, formation)
                 return starters, bench, formation
-            except PlayerLifecycleValidationError as exc:
-                last_error = exc
+            except PlayerLifecycleValidationError:
                 continue
-        raise last_error or PlayerLifecycleValidationError(
-            "Managed squad cannot satisfy any formation role requirements"
-        )
+        return self._ai_coach_auto_draft(eligible, candidates[0])
+
+    def _ai_coach_auto_draft(
+        self,
+        players: list[Player],
+        formation: str,
+    ) -> tuple[list[tuple[Player, PlayerRole]], list[tuple[Player, PlayerRole]], str]:
+        """AI Coach: fill every slot with the best-fitting available player, even out of position."""
+        if len(players) < 11:
+            raise PlayerLifecycleValidationError("AI Coach needs at least 11 eligible players to pick a lineup")
+        remaining = list(players)
+        starters: list[tuple[Player, PlayerRole]] = []
+        for role in self._starter_roles(formation):
+            candidate = max(
+                remaining,
+                key=lambda player: (self._role_fit_score(player, role), *self._managed_player_sort_key(player)),
+            )
+            starters.append((candidate, role))
+            remaining.remove(candidate)
+        bench = [
+            (player, self._resolve_player_role(player))
+            for player in sorted(remaining, key=self._managed_player_sort_key, reverse=True)[:7]
+        ]
+        return starters, bench, formation
 
     @staticmethod
     def _saved_match_plan(session: Session | None, team_id: str) -> ClubMatchPlan | None:

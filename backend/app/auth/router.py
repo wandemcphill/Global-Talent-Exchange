@@ -1235,3 +1235,10 @@ def change_current_user_password(
 router.include_router(legacy_router)
 router.include_router(api_router)
 router.include_router(api_v2_router)
+
+# The Flutter client's generated contract canonicalises /api/auth/* to /api/v2/auth/*; mirror any missing v2 aliases.
+_V2_EXISTING = {(r.path, frozenset(r.methods)) for r in api_v2_router.routes}
+for _route in list(api_router.routes):
+    _v2_path = _route.path.replace("/api/auth", "/api/v2/auth", 1)
+    if (_v2_path, frozenset(_route.methods)) not in _V2_EXISTING:
+        router.add_api_route(_v2_path, _route.endpoint, methods=list(_route.methods), response_model=_route.response_model, status_code=_route.status_code, include_in_schema=False)

@@ -129,7 +129,8 @@ class GtexUniverseService(GtexBaseService):
         event_publisher: "EventPublisher | None" = None,
         realtime_channel: str = "gtex.realtime",
     ) -> None:
-        super().__init__(
+        GtexBaseService.__init__(
+            self,
             settings=settings,
             wallet_service=wallet_service,
             state_store=state_store,

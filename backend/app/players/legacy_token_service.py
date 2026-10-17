@@ -1,27 +1,29 @@
 from __future__ import annotations
 
-from datetime import date
+import time
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import Integer, cast, func, or_, select, text
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.event_backbone import defer_event_publish_until_commit
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from app.economy.governor_service import EconomyGovernorService
-from app.ingestion.models import Player
+from app.ingestion.models import Country, Player
 from app.market.player_eligibility_policy import is_preseeded_national_regen, is_share_market_eligible
 from app.models.admin_rules import AdminRewardRule
 from app.models.base import generate_uuid
 from app.models.regen_ecosystem import NationalRegenSeed
-from app.models.player_token_market import PlayerShareEvent, PlayerShareHolding, PlayerShareMarket
+from app.models.player_token_market import PlayerShareEvent, PlayerShareHolding, PlayerShareMarket, PlayerSharePriceSnapshot
 from app.models.user import User, UserRole
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
 from app.players.token_market_defaults import MIN_SHARE_PRICE_COIN, resolve_player_share_market_config
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
+_NATIONS_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 MAX_PRICE_IMPACT_PCT = Decimal("0.0500")
 MIN_PRICE_IMPACT_PCT = Decimal("0.0050")
 PRICE_IMPACT_MULTIPLIER = Decimal("2.5000")
@@ -146,9 +148,21 @@ class PlayerTokenMarketService:
         limit: int = 50,
         offset: int = 0,
         search: str | None = None,
+        source: str | None = None,
+        nation: str | None = None,
+        sort: str | None = None,
     ) -> dict[str, Any]:
         normalized_search = (search or "").strip()
-        filters = [Player.is_tradable.is_(True)]
+        filters = [Player.is_tradable.is_(True), *self._source_nation_filters(source=source, nation=nation)]
+        order_by: tuple[Any, ...] = (Player.full_name.asc(), Player.id.asc())
+        if sort == "wonderkid":
+            rating, potential = self._regen_rating_expr(), self._regen_potential_expr()
+            filters += [
+                Player.source_provider.in_(self.REGEN_PROVIDERS),
+                Player.date_of_birth > self._wonderkid_dob_cutoff(),
+                potential.is_not(None),
+            ]
+            order_by = (potential.desc(), (potential - func.coalesce(rating, potential)).desc(), Player.full_name.asc(), Player.id.asc())
         if normalized_search:
             search_pattern = f"%{normalized_search}%"
             filters.append(
@@ -171,6 +185,7 @@ class PlayerTokenMarketService:
             self.session.scalar(
                 select(func.count(Player.id))
                 .join(PlayerShareMarket, PlayerShareMarket.player_id == Player.id)
+                .outerjoin(Country, Country.id == Player.country_id)
                 .where(*filters, listable)
             )
             or 0
@@ -182,8 +197,9 @@ class PlayerTokenMarketService:
             self.session.scalars(
                 select(Player.id)
                 .join(PlayerShareMarket, PlayerShareMarket.player_id == Player.id)
+                .outerjoin(Country, Country.id == Player.country_id)
                 .where(*filters, listable)
-                .order_by(Player.full_name.asc(), Player.id.asc())
+                .order_by(*order_by)
                 .offset(offset)
                 .limit(limit)
             )
@@ -202,6 +218,7 @@ class PlayerTokenMarketService:
                 .options(
                     selectinload(PlayerShareMarket.player).selectinload(Player.current_club),
                     selectinload(PlayerShareMarket.player).selectinload(Player.country),
+                    selectinload(PlayerShareMarket.player).selectinload(Player.image_metadata),
                 )
             )
         }
@@ -227,6 +244,84 @@ class PlayerTokenMarketService:
                 .limit(limit)
             ).all()
         )
+
+    def snapshot_share_prices(self, *, snapshot_date: date | None = None) -> int:
+        day = snapshot_date or datetime.now(timezone.utc).date()
+        if self.session.get_bind().dialect.name == "postgresql":
+            result = self.session.execute(
+                text(
+                    "insert into player_share_price_snapshots (id, player_id, market_id, snapshot_date, share_price_coin, circulating_shares, created_at) "
+                    "select gen_random_uuid()::text, m.player_id, m.id, :day, m.share_price_coin, m.circulating_shares, now() "
+                    "from player_share_markets m where m.status = 'active' "
+                    "on conflict (player_id, snapshot_date) do nothing"
+                ),
+                {"day": day},
+            )
+            return int(result.rowcount or 0)
+        taken = set(self.session.scalars(select(PlayerSharePriceSnapshot.player_id).where(PlayerSharePriceSnapshot.snapshot_date == day)))
+        markets = [m for m in self.session.scalars(select(PlayerShareMarket).where(PlayerShareMarket.status == "active")) if m.player_id not in taken]
+        for market in markets:
+            self.session.add(
+                PlayerSharePriceSnapshot(
+                    player_id=market.player_id,
+                    market_id=market.id,
+                    snapshot_date=day,
+                    share_price_coin=self._amount(market.share_price_coin),
+                    circulating_shares=int(market.circulating_shares or 0),
+                )
+            )
+        self.session.flush()
+        return len(markets)
+
+    PRICE_HISTORY_RANGES = {"7d": 7, "30d": 30, "all": None}
+
+    def get_price_history(self, *, player_id: str, range_key: str = "30d") -> dict[str, Any]:
+        market = self.get_market(player_id=player_id)
+        listed_price = (market.metadata_json or {}).get("initial_share_price_coin")
+        series: list[dict[str, Any]] = []
+        trade_count = 0
+        for at, price, kind in self.session.execute(
+            select(PlayerShareEvent.created_at, PlayerShareEvent.price_per_share_coin, PlayerShareEvent.event_type).where(
+                PlayerShareEvent.player_id == player_id
+            )
+        ):
+            if kind == "issue":
+                # A repriced listing opens at its model price, not the pre-launch placeholder.
+                series.append({"at": self._aware(at), "price": self._amount(listed_price or price), "kind": "listed"})
+            elif self._amount(price) > 0:
+                trade_count += kind in {"buy", "sell"}
+                series.append({"at": self._aware(at), "price": self._amount(price), "kind": kind})
+        for day, price in self.session.execute(
+            select(PlayerSharePriceSnapshot.snapshot_date, PlayerSharePriceSnapshot.share_price_coin).where(
+                PlayerSharePriceSnapshot.player_id == player_id
+            )
+        ):
+            series.append({"at": datetime(day.year, day.month, day.day, tzinfo=timezone.utc), "price": self._amount(price), "kind": "daily_close"})
+        now = datetime.now(timezone.utc)
+        series.sort(key=lambda point: point["at"])
+        days = self.PRICE_HISTORY_RANGES.get(range_key, 30)
+        if days is not None:
+            since = now - timedelta(days=days)
+            before = [point for point in series if point["at"] < since]
+            series = [point for point in series if point["at"] >= since]
+            if before:
+                series.insert(0, {"at": since, "price": before[-1]["price"], "kind": "carry"})
+        current = self._amount(market.share_price_coin)
+        series.append({"at": now, "price": current, "kind": "current"})
+        prices = [point["price"] for point in series]
+        open_price = prices[0]
+        change = ((current - open_price) / open_price * 100) if open_price > 0 else Decimal("0")
+        return {
+            "player_id": player_id,
+            "range": range_key,
+            "points": series,
+            "open_price": open_price,
+            "current_price": current,
+            "high_price": max(prices),
+            "low_price": min(prices),
+            "change_pct": change.quantize(Decimal("0.01")),
+            "trade_count": trade_count,
+        }
 
     def list_holdings(self, *, user_id: str, limit: int = 50) -> list[PlayerShareHolding]:
         return list(
@@ -893,19 +988,87 @@ class PlayerTokenMarketService:
             "updated_at": market.updated_at,
         }
 
+    REGEN_PROVIDERS = ("gtex_national_seed", "gtex_regen")
+
+    def _source_nation_filters(self, *, source: str | None, nation: str | None) -> list[Any]:
+        filters: list[Any] = []
+        if source == "regen":
+            filters.append(Player.source_provider.in_(self.REGEN_PROVIDERS))
+        elif source == "real":
+            filters.append(Player.source_provider.not_in(self.REGEN_PROVIDERS))
+        if nation and nation.strip():
+            value = nation.strip()
+            filters.append(or_(func.lower(Country.name) == value.lower(), Country.alpha2_code == value.upper()))
+        return filters
+
+    @staticmethod
+    def _regen_rating_expr():
+        dna = Player.dna_profile
+        return func.coalesce(cast(dna["current_rating"].as_string(), Integer), cast(dna["overall"].as_string(), Integer))
+
+    @staticmethod
+    def _regen_potential_expr():
+        dna = Player.dna_profile
+        return func.coalesce(cast(dna["potential_rating"].as_string(), Integer), cast(dna["potential"].as_string(), Integer))
+
+    WONDERKID_MAX_AGE = 21
+
+    def _wonderkid_dob_cutoff(self) -> date:
+        today = date.today()
+        years = self.WONDERKID_MAX_AGE + 1
+        try:
+            return today.replace(year=today.year - years)
+        except ValueError:
+            return date(today.year - years, 3, 1)
+
+    @staticmethod
+    def _aware(value: datetime) -> datetime:
+        return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+
+    @staticmethod
+    def _dna_int(dna: dict[str, Any], *keys: str) -> int | None:
+        for key in keys:
+            if dna.get(key) is not None:
+                return int(float(dna[key]))
+        return None
+
+    def list_market_nations(self, *, source: str | None = None) -> list[dict[str, Any]]:
+        cached = _NATIONS_CACHE.get(source or "all")
+        if cached is not None and cached[0] > time.monotonic():
+            return cached[1]
+        rows = self.session.execute(
+            select(Country.name, Country.alpha2_code, func.count(Player.id))
+            .join(Player, Player.country_id == Country.id)
+            .join(PlayerShareMarket, PlayerShareMarket.player_id == Player.id)
+            .where(Player.is_tradable.is_(True), PlayerShareMarket.status == "active", *self._source_nation_filters(source=source, nation=None))
+            .group_by(Country.name, Country.alpha2_code)
+            .order_by(Country.name.asc())
+        ).all()
+        result = [{"name": name, "code": code, "count": int(count)} for name, code, count in rows]
+        _NATIONS_CACHE[source or "all"] = (time.monotonic() + 900, result)
+        return result
+
     def _serialize_market_list_item(self, market: PlayerShareMarket) -> dict[str, Any]:
         player = market.player or self._get_player(market.player_id)
+        portrait = next((image.source_url for image in (player.image_metadata or []) if image.is_primary and image.source_url), None)
         if player.current_club is not None:
             current_club_name = player.current_club.name
         else:
             current_club_name = player.real_world_club_name
+        is_regen = player.source_provider in self.REGEN_PROVIDERS
+        dna = (player.dna_profile or {}) if is_regen else {}
         return {
             "player_id": player.id,
             "player_name": player.canonical_display_name or player.full_name,
             "position": player.normalized_position or player.position,
             "nationality": player.country.name if player.country is not None else None,
+            "nationality_code": player.country.alpha2_code if player.country is not None else None,
+            "image_url": portrait,
+            "is_regen": is_regen,
             "current_club_name": current_club_name,
             "age": self._player_age(player),
+            "rating": self._dna_int(dna, "current_rating", "overall"),
+            "potential": self._dna_int(dna, "potential_rating", "potential"),
             "share_price_coin": self._amount(market.share_price_coin),
             "liquidity_coin": self._amount((market.metadata_json or {}).get("liquidity_coin")),
             "total_shares": int(market.total_shares or 0),
