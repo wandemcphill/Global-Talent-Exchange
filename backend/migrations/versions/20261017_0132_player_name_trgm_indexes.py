@@ -1,7 +1,7 @@
 """Trigram indexes so player-name ILIKE search stays fast with the national regen cohort.
 
 Revision ID: 20261017_0132_player_name_trgm_indexes
-Revises: 20261016_0131_normalize_wallet_enum_values
+Revises: 20261013_0129_open_default_launch_flags
 """
 
 from __future__ import annotations
