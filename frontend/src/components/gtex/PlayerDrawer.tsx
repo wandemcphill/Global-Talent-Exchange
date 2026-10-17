@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { X } from "lucide-react";
@@ -63,7 +64,7 @@ export function PlayerDrawer({ playerId, onClose, extra }: { playerId: string | 
   const { data: quote } = useQuery({ queryKey: ["player-quote", playerId], queryFn: async () => (await api.get("/owner/market/quote", { params: { player_ids: playerId } })).data.quotes[playerId as string], enabled: !!playerId });
   if (!playerId) return null;
   const signals = p?.normalized_signals || {};
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm" onClick={onClose} data-testid="player-drawer">
       <aside className="gx-scroll h-full w-full max-w-md overflow-y-auto border-l border-white/10 bg-[#070B11] p-6" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
@@ -95,6 +96,7 @@ export function PlayerDrawer({ playerId, onClose, extra }: { playerId: string | 
           </div>
         )}
       </aside>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -1,0 +1,39 @@
+{
+  "summary": "Pre-seeded national regen rollout verified end-to-end on LIVE DB. Backend pytest suite 26/26 green (DB structure, cultural naming, portrait fetches, tradeability joins, market APIs, rental-pool regression). UI flow on /app/market with real admin login: 'Nathan Molumby' search returns the Republic of Ireland regen row at 0.001 GTX, clicking opens player-drawer with drawer-regen-dossier + drawer-regen-card + drawer-regen-attributes + drawer-share-market, rating 72, POT 92, Cloudinary North-European face, Buy shares button present (not clicked). Japanese regen 'Ritsu Hatate' pulled from DB opens an East-Asian Cloudinary face, REGEN badge, rating 77 / POT 89, 'Japan National Regen Pool' club, dossier rendered. Rental-pool warm call still 200 and fast.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "ShareMarket search on /app/market -> 'Issued player markets'",
+        "issue": "Search in /app/frontend/src/components/gtex/ShareMarket.tsx (data-testid=share-market-search) only submits on form Enter, and the queryFn hits GET /api/v2/players/markets?search=... which takes 20-50s to respond because the LIVE DB ILIKE scan over 14,163 players + ~11,200 regens is unindexed. During that window the panel just shows 'Loading share markets...' with no spinner progress. Not broken (eventually returns the right row), but UX feels frozen. Consider: debounce setQ on change (currently requires Enter), add a trgm index on player_name, or at least show the search text as 'Searching \u201cNathan Molumby\u201d\u2026' plus a cancel.",
+        "affected_selectors": ["[data-testid=\"share-market-search\"]", "[data-testid=\"share-market\"]"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_national_regen_seeds.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Optional UX: in ShareMarket.tsx, debounce setQ on input change (300-500 ms) and/or show the search string in the loading label while the backend scan is running (20-50 s). Users typing 'Nathan Molumby' into the share-market-search field currently see no feedback until the response lands.",
+    "Perf: add a pg_trgm index on ingestion_players(player_name) (or whichever column backs /api/v2/players/markets?search) so the regen cohort doesn't force a 50 s full-table ILIKE scan."
+  ],
+  "critical_code_review_comments": [
+    "regen_culture_name_pools / portrait_service wiring is correct: 11,200 seeds all have display_name unique, no digit suffixes, metadata_json->>'naming_country_code' == country_code everywhere, 100% of portraitUrl values are on res.cloudinary.com, and ethnicities match the country (East asian for JP/KR, North european for IE/SC, African for NG). IE/CZ/TR each have exactly 140 after the merge.",
+    "Every seed is tradeable: every national_regen_seeds row has a matching ingestion_players row (source_provider='gtex_national_seed', is_tradable=true) AND an active player_share_markets row. Verified by LEFT JOIN counts == 0 missing on both.",
+    "GET /api/v2/players/0c2fa2ac-9be8-5657-9205-5c6e0e33e91d/shares/market now returns 200 (previously 500 on uppercase enum wallets). Fix is holding.",
+    "GET /api/market/players/{nathan} returns identity.image_url on https://res.cloudinary.com and attributes.overall=72 / attributes.potential=92 straight from the seed rating.",
+    "PlayerDrawer fallback for regens: on the UI the drawer-regen-dossier renders exactly as spec'd, Cloudinary face loads, rating/pot visible, Buy button available but not clicked."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_national_regen_seeds.py (new)"
+  ],
+  "success_rate": {"backend": "100% (26/26 pytest)", "frontend": "100% (both regen drawers render correctly; only slow-search UX nit)"},
+  "test_credentials": "Admin: vidvimedialtd@gmail.com / Desolamcphill89.",
+  "seed_data_creation": "None. Suite is strict READ-ONLY: psycopg DATABASE_URL used only for SELECT; all API calls were GET; no Buy / rent / signup clicks performed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Share-market search in the UI only triggers on Enter (not on change). Also the search request against /api/v2/players/markets?search=X takes 20-50 s against the LIVE DB; wait with wait_for_function on panel text not containing 'loading share markets' with a 60 s timeout rather than a plain sleep. Row test-id is 'share-row-{player_id}', NOT 'share-market-row-...'. Known regen player ids: Nathan Molumby = 0c2fa2ac-9be8-5657-9205-5c6e0e33e91d (IE, 72/92). Example JP regen: 'Ritsu Hatate' (77/89). Full pytest file at /app/backend/tests/test_national_regen_seeds.py (26 tests, all green, 33 s)."
+}

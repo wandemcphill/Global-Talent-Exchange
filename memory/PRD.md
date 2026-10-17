@@ -54,6 +54,12 @@ User choices: work inside the existing repo (github.com/wandemcphill/Global-Tale
 - Admin wallet funded with no real money (user's instruction): scripts/admin_credit_wallet.py posts a balanced ADMIN_ADJUSTMENT from the platform COIN account (metadata real_money=false). 150 GTX credited to vidvimedialtd@gmail.com.
 - Fixed a pre-existing repo bug: the paid national rental idempotency key was 163 chars, over the varchar(128) column, so every paid rental returned 500. It's now a sha256-based key.
 
+## Iteration 7 (2026-10-17): pre-seeded national regens repaired + tradeable
+- New app/services/regen_culture_name_pools.py: about 60 naming cultures (given and surname kept together) plus COUNTRY_PROFILES for all 157 nations (cultures, face-bank ethnicity groups, capital) and COUNTRY_CODE_REPAIRS. regen_country_name_pools installs culture pools for countries without a hand pool (the previous fallback was Nigerian names). RegenPortraitService uses the explicit face groups and serves face-bank assets via their Cloudinary URL (the old URL was http://127.0.0.1:8000).
+- scripts/repair_national_regen_seeds.py ran on the live DB. 11,200 seeds now have unique, country-correct names (no numeric suffixes; 3,290 had Nigerian names in foreign pools). Codes repaired: BEL/ENG/ESP/FRA/GER/ITA/NED/ETH/hash codes to ISO; EN/SC/NI for the home nations; IE/CZ/TR duplicate pools merged to 140. Every seed has a Cloudinary face (7,009 distinct, dealt per ethnicity group), trade flags on, and minted_player_id.
+- Tradeable: 11,200 ingestion_players (source_provider gtex_national_seed, deterministic uuid5 ids) plus approved portrait image rows. scripts/bulk_issue_regen_markets.py --provider gtex_national_seed issued 11,200 share markets (25 GTX platform liquidity each, 280k total; repo policy). The script now writes lowercase enum values (it used to write COIN/SYSTEM, which broke reads; the rows it wrote were normalized).
+- The market detail uses the seed rating/potential for regens. The React PlayerDrawer falls back to a Regen dossier (/api/market/players/{id}) when the player isn't real.
+
 ## Backlog
 - P0: Bridge the owner-console ledger with the repo's existing wallet ledger: DONE (iteration 2).
 - P0: Register the Paystack webhook URL in the dashboard for the production domain.
@@ -63,5 +69,6 @@ User choices: work inside the existing repo (github.com/wandemcphill/Global-Tale
 - P1: Admin must click 'Seed default tournaments' on /app/national to open rentals: DONE.
 - P1: Fund the wallet to complete a paid national rental: DONE via admin adjustment (no real money). Eligibility batching: DONE.
 - P2: Other ledger idempotency keys that may exceed 128 chars, e.g. fast-cup-entry:{cup}:{club}:{actor} in app/fast_cups/services/finance.py; audit them.
+- P2: Regen share price is the repo's discovery minimum (0.001 GTX) because seeds lack valuation bands. Consider a seed-rating-based price. The share market list items carry no image field.
 - P1: /api/market/players is slow (about 60s) on the live DB; React uses /api/v2/players instead.
 - Future: Phase 3 manager requests and regen pressure; Phase 4 unified ledger and anti-collusion hardening; Phase 5 gifting and sponsor inventory.

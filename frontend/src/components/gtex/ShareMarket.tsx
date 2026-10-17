@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import { api } from "@/lib/api";
@@ -12,7 +12,14 @@ export function ShareMarket() {
   const [search, setSearch] = useState("");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<string | null>(null);
-  const { data, isLoading } = useQuery({
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setPage(1);
+      setQ(search.trim());
+    }, 450);
+    return () => clearTimeout(t);
+  }, [search]);
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: ["share-markets", page, q],
     queryFn: async () => (await api.get("/v2/players/markets", { params: { page, per_page: 15, ...(q ? { search: q } : {}) } })).data,
   });
@@ -23,8 +30,8 @@ export function ShareMarket() {
         <Search size={14} className="absolute left-3 top-3 text-slate-500" />
         <input data-testid="share-market-search" className="gx-input pl-9" placeholder="Search issued player markets" value={search} onChange={(e) => setSearch(e.target.value)} />
       </form>
-      {isLoading ? <Loading label="Loading share markets" /> : (
-        <div className="gx-scroll overflow-x-auto">
+      {isLoading ? <Loading label={q ? `Searching “${q}”…` : "Loading share markets"} /> : (
+        <div className={`gx-scroll overflow-x-auto transition-opacity ${isFetching ? "opacity-50" : ""}`} data-testid="share-market-results">
           <table className="gx-table w-full min-w-[640px]">
             <thead><tr><th>Player</th><th>Pos</th><th>Club</th><th>Share price</th><th>Circulating</th><th>Liquidity</th></tr></thead>
             <tbody>
