@@ -92,7 +92,15 @@ User choices: work inside the existing repo (github.com/wandemcphill/Global-Tale
 - Backend: /owner/control-center now also returns `board` (standings for the owner's competitions).
 - Tests: test/owner_console passes 7/7; regen, player-market and owner suites pass 98/98; flutter analyze is clean. Checked live after logging in as admin: the console shows 50 GTX and SUPER_ADMIN, and the Nigeria squad loads.
 - Flutter SDK lives at /root/flutter (persistent). After an SDK change, run `flutter clean`, otherwise tests fail with an ink_sparkle shader error.
-- Phase 2 still to do: Admin Review (Trust & Payouts) section and inline decision actions. Phase 3: parity check against the React preview, then retire the React frontend.
+- Phase 2 still to do: Admin Review (Trust & Payouts) section and inline decision actions (DONE in iteration 12). Phase 3: parity check against the React preview, then retire the React frontend.
+
+## Iteration 12 (2026-10-17): Owner Console phase 2 (Flutter)
+- User choices: inline buttons for every decision type the backend supports; "renew contract" is the existing regen_breakthrough "Offer improved academy contract (1,000)"; Admin Review is for admin and super_admin only; testing stays read-only on live data.
+- No new backend endpoints. The console uses POST /owner/inbox/{id}/decide plus the /owner/admin/review-queue, withdrawals/{id}/review, flags/{id}/{clear|action} and payouts/{id}/release endpoints, which already have the get_current_admin guard.
+- Flutter: OwnerDecisionRow renders each decision's own actions. decisionMovesMoney (transfer_bid accept, facility approve, regen contract, competition enter, sponsor/endorsement accept) asks for confirmation first. Rows show busy and error states, and after an action an outcome banner appears and the Control Center refreshes. New widgets/owner_admin_review_section.dart (AdminReviewSection plus the confirmOwnerAction dialog, with an optional note for withdrawals). The OwnerConsoleSection.admin menu item is hidden for non-admins.
+- Preview: built with `--base-href /flutter-preview/` and copied to /app/frontend/public/flutter-preview (CRA serves it at /flutter-preview/index.html).
+- Tests: test/owner_console passes 14/14; regen and market suites green; analyze clean; the API contract check is clean. Testing agent iteration_9: 100%, read-only (the live review queue is empty and the admin owns 0 clubs).
+- Known minor issue (pre-existing): the /signin deep link shows "Route unavailable". Sign-in works from the header button.
 
 ## Backlog
 - P0: Bridge the owner-console ledger with the repo's existing wallet ledger: DONE (iteration 2).
