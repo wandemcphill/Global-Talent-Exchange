@@ -57,6 +57,48 @@ void main() {
       expect(find.text('Instant payment'), findsOneWidget);
     },
   );
+
+  testWidgets('blocked KoraPay copy directs users to manual transfer', (
+    WidgetTester tester,
+  ) async {
+    _setLargeViewport(tester);
+    final GteExchangeController controller = GteExchangeController(
+      api: _fixtureClient(_BlockedProviderApi()),
+    );
+    controller.session = _authenticatedSession(
+      userId: 'fixture-user',
+      userName: 'Ayo Martins',
+      clubId: 'ibadan-lions',
+      clubName: 'Ibadan Lions FC',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: GteFundWalletScreen(controller: controller),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue to KoraPay'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'KoraPay is not available for live wallet deposits. Use manual bank transfer below.',
+      ),
+      findsWidgets,
+    );
+    expect(
+      find.text('Add live wallet value through manual bank transfer review.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'Deposits are available through manual bank transfer review below.',
+      ),
+      findsOneWidget,
+    );
+  });
 }
 
 class _BlockedComplianceApi extends GteMockApi {
@@ -94,6 +136,23 @@ class _BlockedComplianceApi extends GteMockApi {
   Future<List<GtePolicyRequirementSummary>> fetchPolicyRequirements() async {
     await Future<void>.delayed(latency);
     return _missingRequirements;
+  }
+}
+
+class _BlockedProviderApi extends GteMockApi {
+  @override
+  Future<GteWalletOverview> fetchWalletOverview() async {
+    return const GteWalletOverview(
+      availableBalance: 0,
+      pendingDeposits: 0,
+      pendingWithdrawals: 0,
+      totalInflow: 0,
+      totalOutflow: 0,
+      withdrawableNow: 0,
+      currency: GteLedgerUnit.coin,
+      depositMode: 'gateway',
+      paymentProviderStatus: <String, String>{'korapay': 'blocked'},
+    );
   }
 }
 

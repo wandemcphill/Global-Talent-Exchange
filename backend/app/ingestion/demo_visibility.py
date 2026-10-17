@@ -20,6 +20,8 @@ from app.marketplace.service import AgentAskingType
 from app.models.agent_marketplace import AgentMarketplaceListing
 from app.models.club_profile import ClubProfile
 from app.models.competition import UserCompetition
+from app.models.competition_prize_rule import CompetitionPrizeRule
+from app.models.competition_rule_set import CompetitionRuleSet
 from app.models.federation import (
     Federation,
     FederationLeague,
@@ -864,6 +866,47 @@ class DemoWorldVisibilitySeeder:
         competition.net_prize_pool_minor = 1_800_000
         competition.metadata_json = {"seed_source": DEMO_WORLD_VISIBILITY_SOURCE, "federation_id": federation.id}
         self.session.flush()
+
+        rule_set = self.session.scalar(
+            select(CompetitionRuleSet).where(CompetitionRuleSet.competition_id == competition.id)
+        )
+        if rule_set is None:
+            rule_set = CompetitionRuleSet(
+                competition_id=competition.id,
+                format="league",
+                min_participants=2,
+                max_participants=len(member_clubs),
+                league_win_points=3,
+                league_draw_points=1,
+                league_loss_points=0,
+                league_tie_break_order=[
+                    "points",
+                    "goal_diff",
+                    "goals_for",
+                    "head_to_head",
+                    "fair_play",
+                ],
+                league_home_away=True,
+                cup_single_elimination=None,
+                cup_two_leg_tie=None,
+                cup_extra_time=None,
+                cup_penalties=None,
+                cup_allowed_participant_sizes=[],
+            )
+            self.session.add(rule_set)
+
+        prize_rule = self.session.scalar(
+            select(CompetitionPrizeRule).where(CompetitionPrizeRule.competition_id == competition.id)
+        )
+        if prize_rule is None:
+            self.session.add(
+                CompetitionPrizeRule(
+                    competition_id=competition.id,
+                    payout_mode="winner_take_all",
+                    top_n=None,
+                    payout_percentages=[100],
+                )
+            )
 
         self.session.add(
             FederationLeague(

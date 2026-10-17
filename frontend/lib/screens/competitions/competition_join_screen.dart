@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/controllers/competition_controller.dart';
+import 'package:gte_frontend/core/app_feedback.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/widgets/competitions/competition_financial_breakdown_card.dart';
 import 'package:gte_frontend/widgets/competitions/competition_payout_card.dart';
@@ -8,9 +9,14 @@ import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
 
 class CompetitionJoinScreen extends StatefulWidget {
-  const CompetitionJoinScreen({super.key, required this.controller});
+  const CompetitionJoinScreen({
+    super.key,
+    required this.controller,
+    this.competitionId,
+  });
 
   final CompetitionController controller;
+  final String? competitionId;
 
   @override
   State<CompetitionJoinScreen> createState() => _CompetitionJoinScreenState();
@@ -20,6 +26,19 @@ class _CompetitionJoinScreenState extends State<CompetitionJoinScreen> {
   bool _agreed = false;
   final TextEditingController _inviteCodeController = TextEditingController();
   final TextEditingController _passcodeController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final String? competitionId = widget.competitionId;
+      if (competitionId != null &&
+          widget.controller.selectedCompetition?.id != competitionId) {
+        widget.controller.openCompetition(competitionId);
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -43,6 +62,19 @@ class _CompetitionJoinScreenState extends State<CompetitionJoinScreen> {
             final CompetitionFinancialSummary? financials =
                 widget.controller.selectedFinancials;
             if (competition == null || financials == null) {
+              if (widget.competitionId != null &&
+                  widget.controller.detailError != null) {
+                return GteStatePanel(
+                  title: "We couldn't load this competition.",
+                  message: AppFeedback.messageFor(
+                    widget.controller.detailError!,
+                  ),
+                  actionLabel: 'Retry',
+                  onAction: () {
+                    widget.controller.openCompetition(widget.competitionId!);
+                  },
+                );
+              }
               return const SizedBox.shrink();
             }
             return ListView(

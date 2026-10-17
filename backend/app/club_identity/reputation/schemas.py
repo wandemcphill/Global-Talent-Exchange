@@ -91,6 +91,7 @@ class SeasonReputationSnapshotView(BaseModel):
 
 class ClubReputationView(BaseModel):
     club_id: str
+    club_name: str | None = None
     current_score: int
     current_prestige_tier: PrestigeTier
     highest_score: int

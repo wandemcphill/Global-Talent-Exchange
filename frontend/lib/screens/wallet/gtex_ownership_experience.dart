@@ -267,8 +267,14 @@ class _PositionHeader extends StatelessWidget {
         snapshot?.availableBalance ?? walletSummary?.availableBalance;
     final double? reserved =
         snapshot?.reservedBalance ?? walletSummary?.reservedBalance;
+    final GteLedgerUnit balanceUnit =
+        snapshot?.currency ?? walletSummary?.currency ?? GteLedgerUnit.coin;
 
     final double clubValue = clubOwnership?.totalMarketValueCoin ?? 0;
+    final String balanceLabel =
+        balanceUnit == GteLedgerUnit.credit ? 'Fan Coin ready' : 'Cash ready';
+    final String Function(double) formatBalance =
+        balanceUnit == GteLedgerUnit.credit ? gteFormatFnc : gteFormatGtc;
 
     return GtexPanel(
       title: 'My Position',
@@ -309,10 +315,16 @@ class _PositionHeader extends StatelessWidget {
               GtexColors.textMuted,
             ),
           if (available != null)
-            _tile('Cash ready', gteFormatGtc(available), Icons.account_balance_wallet_outlined,
+            _tile(
+                balanceLabel,
+                formatBalance(available),
+                Icons.account_balance_wallet_outlined,
                 GtexColors.gold),
           if (reserved != null && reserved > 0)
-            _tile('Held by orders', gteFormatGtc(reserved), Icons.lock_clock_outlined,
+            _tile(
+                'Held by orders',
+                formatBalance(reserved),
+                Icons.lock_clock_outlined,
                 GtexColors.gold),
           if (clubValue > 0)
             _tile('Club interests', gteFormatGtc(clubValue), Icons.apartment_outlined,

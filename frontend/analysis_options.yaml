@@ -12,6 +12,10 @@ include: package:flutter_lints/flutter.yaml
 analyzer:
   exclude:
     - lib/data/generated/**
+    - build/**
+    - android/**
+    - web/**
+    - windows/**
   errors:
     constant_identifier_names: ignore
     deprecated_member_use: ignore

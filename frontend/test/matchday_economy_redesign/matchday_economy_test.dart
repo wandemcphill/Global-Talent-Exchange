@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gte_frontend/data/gte_api_repository.dart';
+import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/features/matchday_economy_redesign/matchday_economy_api.dart';
 import 'package:gte_frontend/features/matchday_economy_redesign/matchday_economy_controller.dart';
 import 'package:gte_frontend/features/matchday_economy_redesign/matchday_economy_models.dart';
@@ -81,6 +82,26 @@ void main() {
     controller.dispose();
   });
 
+  test('live overview reads do not evaluate fixture fallbacks', () async {
+    final GtexMatchdayEconomyApi api = GtexMatchdayEconomyApi(
+      client: GteAuthedApi(
+        config: const GteRepositoryConfig(
+          baseUrl: 'https://example.test',
+          mode: GteBackendMode.live,
+        ),
+        transport: _OverviewTransport(),
+        mode: GteBackendMode.live,
+      ),
+    );
+
+    final GtexMatchdayEconomyOverview overview = await api.fetchOverview(
+      admin: false,
+    );
+
+    expect(overview.audience, 'admin');
+    expect(overview.sections, isEmpty);
+  });
+
   test(
     'matchday economy controller exposes fixture admin action adapters',
     () async {
@@ -133,4 +154,18 @@ void main() {
     expect(find.text('Fan Economy'), findsOneWidget);
     expect(find.text('Player Card Collectibles'), findsOneWidget);
   });
+}
+
+class _OverviewTransport implements GteTransport {
+  @override
+  Future<GteTransportResponse> send(GteTransportRequest request) async {
+    return const GteTransportResponse(
+      statusCode: 200,
+      body: <String, Object?>{
+        'audience': 'admin',
+        'sections': <Object?>[],
+        'totals': <String, Object?>{},
+      },
+    );
+  }
 }

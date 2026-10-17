@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.club_social.service import ClubSocialService
-from app.models.club_social import ClubChallenge
+from app.models.club_social import ChallengeShareEvent, ClubChallenge
 from app.models.competition import UserCompetition
 from app.models.competition_match import CompetitionMatch
 from app.models.competition_participant import CompetitionParticipant
@@ -348,3 +349,142 @@ def test_follows_match_shares_live_reactions_and_chat(session: Session, service:
     assert live_reactions[0]["reaction_type"] == "hype"
     assert chat_messages[0]["body"] == "That goal was insane!"
     assert metrics.metadata_json["club_followers"] == 1
+
+
+def _make_open_challenge(session: Session, service: ClubSocialService) -> ClubChallenge:
+    actor = session.get(User, "user-alpha")
+    challenge = service.create_challenge(
+        actor=actor,
+        club_id="club-alpha",
+        title="Dedupe challenge",
+        message="",
+        stakes_text=None,
+        target_club_id="club-charlie",
+        visibility="public",
+        country_code="US",
+        region_name="Texas",
+        city_name="Austin",
+        competition_id=None,
+        accept_by=None,
+        scheduled_for=datetime.now(UTC) - timedelta(hours=1),
+        metadata_json={},
+    )
+    return challenge
+
+
+def test_share_event_dedupes_same_actor_within_window(session: Session, service: ClubSocialService) -> None:
+    challenge = _make_open_challenge(session, service)
+
+    kwargs = dict(
+        challenge_id=challenge.id,
+        link_id=None,
+        link_code=None,
+        actor_user_id=None,
+        actor_fingerprint="fp-ip-1",
+        event_type="share",
+        source_platform="social",
+        country_code="US",
+        metadata_json={},
+    )
+    first = service.record_share_event(**kwargs)
+    second = service.record_share_event(**kwargs)
+
+    assert second.id == first.id
+    assert (
+        session.scalar(
+            select(func.count())
+            .select_from(ChallengeShareEvent)
+            .where(ChallengeShareEvent.challenge_id == challenge.id)
+        )
+        == 1
+    )
+
+
+def test_share_event_distinct_fingerprints_insert_separate_rows(session: Session, service: ClubSocialService) -> None:
+    challenge = _make_open_challenge(session, service)
+
+    for fingerprint in ("fp-ip-1", "fp-ip-2"):
+        service.record_share_event(
+            challenge_id=challenge.id,
+            link_id=None,
+            link_code=None,
+            actor_user_id=None,
+            actor_fingerprint=fingerprint,
+            event_type="share",
+            source_platform="social",
+            country_code="US",
+            metadata_json={},
+        )
+
+    assert (
+        session.scalar(
+            select(func.count())
+            .select_from(ChallengeShareEvent)
+            .where(ChallengeShareEvent.challenge_id == challenge.id)
+        )
+        == 2
+    )
+
+
+def test_share_event_authenticated_actor_dedupes_and_stores_user_id(
+    session: Session, service: ClubSocialService
+) -> None:
+    challenge = _make_open_challenge(session, service)
+
+    first = service.record_share_event(
+        challenge_id=challenge.id,
+        link_id=None,
+        link_code=None,
+        actor_user_id="user-charlie",
+        actor_fingerprint=None,
+        event_type="open",
+        source_platform="social",
+        country_code="US",
+        metadata_json={},
+    )
+    duplicate = service.record_share_event(
+        challenge_id=challenge.id,
+        link_id=None,
+        link_code=None,
+        actor_user_id="user-charlie",
+        actor_fingerprint="fp-should-not-be-stored",
+        event_type="open",
+        source_platform="social",
+        country_code="US",
+        metadata_json={},
+    )
+
+    assert duplicate.id == first.id
+    assert first.actor_user_id == "user-charlie"
+    assert first.actor_fingerprint is None
+
+
+def test_share_event_inserts_again_after_dedupe_window(session: Session, service: ClubSocialService) -> None:
+    challenge = _make_open_challenge(session, service)
+
+    first = service.record_share_event(
+        challenge_id=challenge.id,
+        link_id=None,
+        link_code=None,
+        actor_user_id=None,
+        actor_fingerprint="fp-ip-1",
+        event_type="share",
+        source_platform="social",
+        country_code="US",
+        metadata_json={},
+    )
+    first.created_at = service._now() - timedelta(minutes=11)
+    session.flush()
+
+    second = service.record_share_event(
+        challenge_id=challenge.id,
+        link_id=None,
+        link_code=None,
+        actor_user_id=None,
+        actor_fingerprint="fp-ip-1",
+        event_type="share",
+        source_platform="social",
+        country_code="US",
+        metadata_json={},
+    )
+    assert second.id != first.id

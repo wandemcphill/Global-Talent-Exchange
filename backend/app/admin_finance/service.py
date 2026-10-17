@@ -7,6 +7,7 @@ import hmac
 from hashlib import sha256, sha512
 import json
 import logging
+import math
 import os
 
 from sqlalchemy import func, select
@@ -47,6 +48,32 @@ from app.wallets.service import WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 logger = logging.getLogger(__name__)
+
+
+def _js_json_stringify(value: object) -> str:
+    """Serialize like JavaScript's JSON.stringify.
+
+    Compact separators, UTF-8 (no ASCII escaping), insertion key order, and
+    integral floats rendered without a decimal point (JSON.stringify(100.0)
+    produces "100"). Non-integral floats use repr(), which matches JS for the
+    magnitudes payment payloads use.
+    """
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return "null"
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            return "null"
+        return str(int(value)) if value.is_integer() else repr(value)
+    if isinstance(value, dict):
+        items = (
+            json.dumps(str(key), ensure_ascii=False) + ":" + _js_json_stringify(item) for key, item in value.items()
+        )
+        return "{" + ",".join(items) + "}"
+    if isinstance(value, (list, tuple)):
+        return "[" + ",".join(_js_json_stringify(item) for item in value) + "]"
+    return json.dumps(value, separators=(",", ":"), ensure_ascii=False)
 
 
 def _zero() -> Decimal:
@@ -274,7 +301,11 @@ class AdminFinanceService:
         if normalized_provider == "paystack":
             return self._verify_paystack_webhook(raw_body=raw_body, headers=normalized_headers)
         if normalized_provider == "korapay":
-            return self._verify_korapay_webhook(payload=payload, headers=normalized_headers)
+            return self._verify_korapay_webhook(
+                payload=payload,
+                raw_body=raw_body,
+                headers=normalized_headers,
+            )
         return False
 
     def wallet_protection_summary(
@@ -519,7 +550,13 @@ class AdminFinanceService:
             raise ValueError("Paystack webhook signature is invalid.")
         return True
 
-    def _verify_korapay_webhook(self, *, payload: dict[str, object], headers: dict[str, str]) -> bool:
+    def _verify_korapay_webhook(
+        self,
+        *,
+        payload: dict[str, object],
+        raw_body: bytes | None,
+        headers: dict[str, str],
+    ) -> bool:
         secret = self._provider_secret("korapay")
         if not secret:
             if self._signature_optional("korapay"):
@@ -531,12 +568,21 @@ class AdminFinanceService:
                 return False
             raise ValueError("KoraPay webhook cannot be verified: GTE_KORAPAY_WEBHOOK_SECRET is not configured.")
         signature = headers.get("x-korapay-signature")
-        data = payload.get("data")
         if not signature:
             raise ValueError("KoraPay webhook signature header (x-korapay-signature) is missing.")
+        # KoraPay signs JSON.stringify(payload.data) on their side. When the raw
+        # body is available, re-parse it so the canonical JSON reflects exactly
+        # what was sent rather than a lossy intermediate dict.
+        data_source: object = payload
+        if raw_body:
+            try:
+                data_source = json.loads(raw_body.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise ValueError("KoraPay webhook raw body is not valid JSON.") from exc
+        data = data_source.get("data") if isinstance(data_source, dict) else None
         if not isinstance(data, dict):
             raise ValueError("KoraPay webhook payload.data is missing or invalid.")
-        canonical_payload = json.dumps(data, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        canonical_payload = _js_json_stringify(data).encode("utf-8")
         expected = hmac.new(secret.encode("utf-8"), canonical_payload, sha256).hexdigest()
         if not hmac.compare_digest(expected, signature):
             raise ValueError("KoraPay webhook signature is invalid.")
@@ -552,8 +598,8 @@ class AdminFinanceService:
         if normalized_provider == "KORAPAY":
             env_names.extend(
                 [
-                    "GTE_KORAPAY_ENCRYPTION_KEY",
-                    "KORAPAY_ENCRYPTION_KEY",
+                    "GTE_KORAPAY_SECRET_KEY",
+                    "KORAPAY_SECRET_KEY",
                 ]
             )
         for name in env_names:
