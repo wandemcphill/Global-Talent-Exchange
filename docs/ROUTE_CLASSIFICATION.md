@@ -4,7 +4,7 @@ Generated deterministically from `tools/audit/generate_contract_audit.py`.
 
 ## Module Mount Summary
 
-- Backend module mounts discovered: **181**
+- Backend module mounts discovered: **182**
 - Router paths mounted more than once: **0**
 
 ## KEEP
@@ -173,6 +173,7 @@ Generated deterministically from `tools/audit/generate_contract_audit.py`.
 - `GET /api/admin/sponsorship/analytics`: `/api/admin/sponsorship/analytics` in `backend/app/sponsorship_engine/router.py` (admin_offer_analytics) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/admin/sponsorship/offers`: `/api/admin/sponsorship/offers` in `backend/app/sponsorship_engine/router.py` (admin_list_offers) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/admin/sponsorship/packages`: `/api/admin/sponsorship/packages` in `backend/app/sponsorship_engine/router.py` (admin_list_packages) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
+- `GET /api/admin/story-feed`: `/api/admin/story-feed` in `backend/app/story_feed_engine/router.py` (admin_list_story_feed) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/admin/streamer-tournaments/policy`: `/api/admin/streamer-tournaments/policy` in `backend/app/streamer_tournament_engine/router.py` (get_policy) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/admin/streamer-tournaments/risk-signals`: `/api/admin/streamer-tournaments/risk-signals` in `backend/app/streamer_tournament_engine/router.py` (list_risk_signals) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/admin/talent/{}`: `/admin/talent/{player_id}` in `backend/app/talent/router.py` (admin_read_talent) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
@@ -208,8 +209,7 @@ Generated deterministically from `tools/audit/generate_contract_audit.py`.
 - `GET /api/broadcast-rights/matches/{}/access`: `/api/broadcast-rights/matches/{match_id}/access` in `backend/app/broadcast_rights/router.py` (read_match_broadcast_access) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/broadcast/channels`: `/api/broadcast/channels` in `backend/app/broadcast_network/router.py` (list_channels) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/broadcast/home`: `/api/broadcast/home` in `backend/app/broadcast_network/router.py` (read_broadcast_home) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
-- `GET /api/broadcast/{}`: `/api/broadcast/{match_id}` in `backend/app/football_universe/router.py` (read_broadcast_session) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
-- ... and 1908 more
+- ... and 1963 more
 
 ## MIGRATE_TO
 
