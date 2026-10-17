@@ -21,6 +21,9 @@ void main() {
               sponsors: <Map<String, dynamic>>[<String, dynamic>{'sponsor_name': 'Harbour Trust', 'placement': 'front', 'status': 'approved'}],
               offers: <Map<String, dynamic>>[<String, dynamic>{'candidate_name': 'Tunde Bakare', 'outcome': 'declined'}],
               cases: <Map<String, dynamic>>[<String, dynamic>{'rule_code': 'late_wages', 'status': 'appealed'}],
+              market: <Map<String, dynamic>>[
+                <String, dynamic>{'name': 'Harbour Jet', 'status': 'auction', 'price': '1800.00', 'leading_bid': '2000.00'},
+              ],
             ),
             onAction: actions.add,
           ),
@@ -34,6 +37,7 @@ void main() {
     expect(find.text('Harbour Trust · front · approved'), findsOneWidget);
     expect(find.text('Tunde Bakare · declined'), findsOneWidget);
     expect(find.text('late_wages · appealed'), findsOneWidget);
+    expect(find.text('Harbour Jet · auction · 1800.00 · bid 2000.00'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('club-desk-hire')));
     await tester.tap(find.byKey(const Key('club-desk-preset')));
@@ -41,6 +45,10 @@ void main() {
     await tester.tap(find.byKey(const Key('club-desk-manager')));
     await tester.ensureVisible(find.byKey(const Key('club-desk-case')));
     await tester.tap(find.byKey(const Key('club-desk-case')));
-    expect(actions, <String>['hire', 'preset', 'sponsor', 'manager', 'case']);
+    await tester.ensureVisible(find.byKey(const Key('club-desk-auction')));
+    await tester.tap(find.byKey(const Key('club-desk-auction')));
+    await tester.ensureVisible(find.byKey(const Key('club-desk-bid')));
+    await tester.tap(find.byKey(const Key('club-desk-bid')));
+    expect(actions, <String>['hire', 'preset', 'sponsor', 'manager', 'case', 'list_auction', 'place_bid']);
   });
 }

@@ -11,6 +11,7 @@ class ClubLegacyDeskData {
     required this.sponsors,
     required this.offers,
     required this.cases,
+    this.market = const <Map<String, dynamic>>[],
   });
 
   factory ClubLegacyDeskData.fromJson(Map<String, dynamic> json) {
@@ -24,6 +25,7 @@ class ClubLegacyDeskData {
       sponsors: _rows(json['sponsors']),
       offers: _rows(json['offers']),
       cases: _rows(json['cases']),
+      market: _rows(json['market']),
     );
   }
 
@@ -35,6 +37,7 @@ class ClubLegacyDeskData {
   final List<Map<String, dynamic>> sponsors;
   final List<Map<String, dynamic>> offers;
   final List<Map<String, dynamic>> cases;
+  final List<Map<String, dynamic>> market;
 }
 
 List<Map<String, dynamic>> _rows(Object? value) => (value is List ? value : const <dynamic>[])
@@ -74,7 +77,55 @@ class ClubLegacyDesk extends StatelessWidget {
         _panel('Sponsors', data.sponsors.map((Map<String, dynamic> row) => '${row['sponsor_name']} · ${row['placement']} · ${row['status']}').toList(), 'Offer front sponsor', 'sponsor', const Key('club-desk-sponsor')),
         _panel('Manager talks', data.offers.map((Map<String, dynamic> row) => '${row['candidate_name']} · ${row['outcome']}').toList(), 'Make offer', 'manager', const Key('club-desk-manager')),
         _panel('Governance', data.cases.map((Map<String, dynamic> row) => '${row['rule_code']} · ${row['status']}').toList(), 'Open case', 'case', const Key('club-desk-case')),
+        _market(),
       ],
+    );
+  }
+
+  Widget _market() {
+    final List<String> lines = data.market
+        .map((Map<String, dynamic> row) {
+          final String bid = '${row['leading_bid'] ?? ''}'.trim();
+          final String price = '${row['name']} · ${row['status']} · ${row['price']}';
+          return bid.isEmpty ? price : '$price · bid $bid';
+        })
+        .toList();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: GtexSpacing.md),
+      child: GtexPanel(
+        key: const Key('club-desk-market'),
+        title: 'Market',
+        subtitle: 'Auctions stay in escrow until the leading bid is paid',
+        accent: GtexColors.gold,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            if (lines.isEmpty) const Text('Nothing listed', style: TextStyle(color: GtexColors.textSecondary)),
+            for (final String line in lines) Text(line, style: const TextStyle(color: GtexColors.text)),
+            const SizedBox(height: GtexSpacing.sm),
+            Wrap(
+              spacing: GtexSpacing.xs,
+              children: <Widget>[
+                GtexActionButton(
+                  key: const Key('club-desk-auction'),
+                  label: 'Auction an asset',
+                  icon: Icons.gavel_rounded,
+                  compact: true,
+                  onPressed: () => onAction('list_auction'),
+                ),
+                GtexActionButton(
+                  key: const Key('club-desk-bid'),
+                  label: 'Place bid',
+                  icon: Icons.price_change_rounded,
+                  compact: true,
+                  secondary: true,
+                  onPressed: () => onAction('place_bid'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 

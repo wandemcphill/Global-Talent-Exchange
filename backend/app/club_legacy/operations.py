@@ -1093,7 +1093,38 @@ def desk_snapshot(session: Session, club_id: str, user_id: str) -> dict:
             for item in cases
         ],
         "stakes": [{"holder_user_id": item.holder_user_id, "percentage": str(item.percentage)} for item in stakes],
+        "market": _market_rows(session, club_id),
     }
+
+
+def _market_rows(session: Session, club_id: str) -> list[dict]:
+    listings = session.scalars(
+        select(ClubLegacyListing)
+        .where(ClubLegacyListing.status.in_(("open", "auction")))
+        .order_by(ClubLegacyListing.price.asc())
+    ).all()
+    rows = []
+    for listing in listings:
+        asset = session.get(ClubLegacyAsset, listing.asset_id)
+        if asset is None:
+            continue
+        if asset.club_id != club_id and listing.status != "auction":
+            continue
+        item = session.get(ClubLegacyCatalogueItem, asset.catalogue_id)
+        leading = session.scalar(
+            select(ClubLegacyBid).where(ClubLegacyBid.listing_id == listing.id, ClubLegacyBid.status == "leading")
+        )
+        rows.append(
+            {
+                "id": listing.id,
+                "name": item.name if item else "Asset",
+                "status": listing.status,
+                "price": str(listing.price),
+                "leading_bid": str(leading.amount) if leading is not None else None,
+                "asset_id": asset.id,
+            }
+        )
+    return rows
 
 
 def perform_desk_action(session: Session, club_id: str, user_id: str, action: str, payload: dict) -> dict:
@@ -1159,6 +1190,46 @@ def perform_desk_action(session: Session, club_id: str, user_id: str, action: st
             evidence=payload["evidence"],
         )
         return {"id": case.id, "status": case.status}
+    if action == "list_auction":
+        asset_id = payload.get("asset_id")
+        if not asset_id:
+            asset = session.scalar(
+                select(ClubLegacyAsset).where(
+                    ClubLegacyAsset.club_id == club_id,
+                    ClubLegacyAsset.owner_class == "club",
+                    ClubLegacyAsset.status == "owned",
+                )
+            )
+            if asset is None:
+                raise LegacyError("asset_unavailable", 409)
+            asset_id = asset.id
+        listing = list_asset(
+            session,
+            asset_id=asset_id,
+            user_id=user_id,
+            price=payload.get("price", "1500"),
+            kind="auction",
+        )
+        return {"id": listing.id, "status": listing.status}
+    if action == "place_bid":
+        listing_id = payload.get("listing_id")
+        if not listing_id:
+            listing = session.scalar(
+                select(ClubLegacyListing).where(
+                    ClubLegacyListing.status == "auction",
+                    ClubLegacyListing.seller_user_id != user_id,
+                )
+            )
+            if listing is None:
+                raise LegacyError("auction_closed", 409)
+            listing_id = listing.id
+        bid = place_bid(
+            session,
+            listing_id=listing_id,
+            bidder_user_id=user_id,
+            amount=payload.get("amount", "2000"),
+        )
+        return {"id": bid.id, "amount": str(bid.amount), "status": bid.status}
     raise LegacyError("unknown_action", 404)
 
 

@@ -754,6 +754,8 @@ class OwnerConsoleApi implements OwnerConsoleReader {
       'sponsor' => <String, Object?>{'sponsor_name': 'Harbour Trust', 'placement': 'front', 'fee': '1000'},
       'manager' => <String, Object?>{'candidate_name': 'Tunde Bakare', 'wage': '2000', 'prestige': 20, 'ambition': 8, 'seed': 3},
       'case' => <String, Object?>{'rule_code': 'late_wages', 'allegation': 'Wages slipped', 'evidence': 'Ledger'},
+      'list_auction' => <String, Object?>{'price': '1500'},
+      'place_bid' => <String, Object?>{'amount': '2000'},
       _ => <String, Object?>{},
     };
   }

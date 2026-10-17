@@ -234,6 +234,19 @@ def test_full_desk_rules(client, bootstrap_admin_headers, app):
         assert load_catalogue(session)["within_budget"] is True
         desk = desk_snapshot(session, club_id, admin.id)
         assert any(item["role"] == "gm" for item in desk["staff"])
+        assert any(row["name"] == "Lagoon Coach" and row["status"] == "open" for row in desk["market"])
+        auction = perform_desk_action(session, rival_club.id, rival.id, "list_auction", {"price": "1800"})
+        assert auction["status"] == "auction"
+        bid_action = perform_desk_action(
+            session,
+            club_id,
+            admin.id,
+            "place_bid",
+            {"listing_id": auction["id"], "amount": "2000"},
+        )
+        assert bid_action["status"] == "leading"
+        market = desk_snapshot(session, club_id, admin.id)["market"]
+        assert any(row["id"] == auction["id"] and row["leading_bid"] == "2000.00" for row in market)
         acted = perform_desk_action(
             session,
             club_id,
