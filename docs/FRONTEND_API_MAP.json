@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "call_count": 662,
+  "call_count": 682,
   "calls": [
     {
       "file": "frontend/lib/core/runtime/gtex_realtime_client.dart",
@@ -3087,6 +3087,66 @@
       ]
     },
     {
+      "file": "frontend/lib/data/jackpot_admin_api.dart",
+      "transport_call": "string_reference",
+      "method": "PATCH",
+      "endpoint": "/api/admin/jackpot/balance",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/jackpot_admin_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/jackpot/runtime",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/jackpot_admin_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/jackpot/runtime",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/jackpot_admin_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/jackpot/trigger",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/jackpot_admin_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/jackpot/history",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
       "file": "frontend/lib/data/live_match_repository.dart",
       "transport_call": "string_reference",
       "method": "GET",
@@ -3639,6 +3699,42 @@
       ]
     },
     {
+      "file": "frontend/lib/data/personal_manager_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/clubs/$clubId/growth/personal-manager/appoint",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/personal_manager_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/clubs/personal-manager",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/personal_manager_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/clubs/personal-manager/me",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
       "file": "frontend/lib/data/player_card_watchlist_api.dart",
       "transport_call": "string_reference",
       "method": "INFERRED",
@@ -3681,6 +3777,18 @@
       "endpoint": "http://127.0.0.1:8000",
       "expected_shape": null,
       "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/public_pulse_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/public/live-stats",
+      "expected_shape": null,
+      "base_url_source": "injected",
       "platforms": [
         "web",
         "mobile"
@@ -3893,6 +4001,18 @@
     {
       "file": "frontend/lib/data/story_feed_api.dart",
       "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/story-feed",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/story_feed_api.dart",
+      "transport_call": "string_reference",
       "method": "POST",
       "endpoint": "/api/admin/story-feed",
       "expected_shape": null,
@@ -3905,9 +4025,33 @@
     {
       "file": "frontend/lib/data/story_feed_api.dart",
       "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/story-feed/$storyId/reject",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/story_feed_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/admin/story-feed/$storyId/schedule",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/story_feed_api.dart",
+      "transport_call": "string_reference",
       "method": "INFERRED",
       "endpoint": "/api/story-feed",
-      "expected_shape": null,
+      "expected_shape": "list",
       "base_url_source": "hardcoded_localhost",
       "platforms": [
         "web",
@@ -7159,6 +7303,102 @@
       "transport_call": "string_reference",
       "method": "INFERRED",
       "endpoint": "/api/admin/operations-readiness",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/treasury/disputes",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/treasury/disputes/$disputeId/messages",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/treasury/kyc",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/treasury/kyc/$profileId/review",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/treasury/withdrawals",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/treasury/withdrawals/$orderId/status",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/wallets/purchase-orders",
+      "expected_shape": "map/envelope",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/wallets/purchase-orders/$orderId/status",
       "expected_shape": null,
       "base_url_source": "hardcoded_localhost",
       "platforms": [

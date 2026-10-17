@@ -5,7 +5,7 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 
 ## Shared Source of Truth
 
-- Shared Flutter client files with API calls discovered: **126**
+- Shared Flutter client files with API calls discovered: **129**
 - Web and mobile therefore inherit the same endpoint usage and the same stale/legacy risks.
 
 ## Divergence Risks
@@ -178,6 +178,8 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/data/sponsorship_admin_api.dart -> /api/sponsorship/clubs/$clubId/contracts`
 - `frontend/lib/data/sponsorship_admin_api.dart -> http://127.0.0.1:8000`
 - `frontend/lib/data/story_feed_api.dart -> /api/admin/story-feed`
+- `frontend/lib/data/story_feed_api.dart -> /api/admin/story-feed/$storyId/reject`
+- `frontend/lib/data/story_feed_api.dart -> /api/admin/story-feed/$storyId/schedule`
 - `frontend/lib/data/story_feed_api.dart -> /api/story-feed`
 - `frontend/lib/data/story_feed_api.dart -> /api/story-feed/digest`
 - `frontend/lib/data/story_feed_api.dart -> http://127.0.0.1:8000`
@@ -271,6 +273,14 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/features/matchday_economy_redesign/matchday_economy_api.dart -> /api/matchday-economy/overview`
 - `frontend/lib/features/matchday_economy_redesign/matchday_economy_api.dart -> http://127.0.0.1:8000`
 - `frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart -> /api/admin/operations-readiness`
+- `frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart -> /api/admin/treasury/disputes`
+- `frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart -> /api/admin/treasury/disputes/$disputeId/messages`
+- `frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart -> /api/admin/treasury/kyc`
+- `frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart -> /api/admin/treasury/kyc/$profileId/review`
+- `frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart -> /api/admin/treasury/withdrawals`
+- `frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart -> /api/admin/treasury/withdrawals/$orderId/status`
+- `frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart -> /api/admin/wallets/purchase-orders`
+- `frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart -> /api/admin/wallets/purchase-orders/$orderId/status`
 - `frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart -> http://127.0.0.1:8000`
 - `frontend/lib/features/trust_ops_redesign/presentation/gtex_admin_trust_ops_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/screens/admin/academy_analytics_screen.dart -> http://127.0.0.1:8000`
