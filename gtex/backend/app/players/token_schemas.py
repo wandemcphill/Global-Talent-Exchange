@@ -141,6 +141,9 @@ class PlayerShareMarketListItemView(BaseModel):
     player_name: str
     position: str | None = None
     nationality: str | None = None
+    nationality_code: str | None = None
+    image_url: str | None = None
+    is_regen: bool = False
     current_club_name: str | None = None
     age: int | None = None
     share_price_coin: Decimal
@@ -161,3 +164,9 @@ class PlayerShareMarketListView(BaseModel):
     offset: int
     total: int
     pagination: PaginationMeta | None = None
+
+
+class PlayerShareMarketNationView(BaseModel):
+    name: str
+    code: str | None = None
+    count: int

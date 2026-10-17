@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.event_backbone import defer_event_publish_until_commit
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from app.economy.governor_service import EconomyGovernorService
-from app.ingestion.models import Player
+from app.ingestion.models import Country, Player
 from app.market.player_eligibility_policy import is_preseeded_national_regen, is_share_market_eligible
 from app.models.admin_rules import AdminRewardRule
 from app.models.base import generate_uuid
@@ -146,9 +146,11 @@ class PlayerTokenMarketService:
         limit: int = 50,
         offset: int = 0,
         search: str | None = None,
+        source: str | None = None,
+        nation: str | None = None,
     ) -> dict[str, Any]:
         normalized_search = (search or "").strip()
-        filters = [Player.is_tradable.is_(True)]
+        filters = [Player.is_tradable.is_(True), *self._source_nation_filters(source=source, nation=nation)]
         if normalized_search:
             search_pattern = f"%{normalized_search}%"
             filters.append(
@@ -171,6 +173,7 @@ class PlayerTokenMarketService:
             self.session.scalar(
                 select(func.count(Player.id))
                 .join(PlayerShareMarket, PlayerShareMarket.player_id == Player.id)
+                .outerjoin(Country, Country.id == Player.country_id)
                 .where(*filters, listable)
             )
             or 0
@@ -182,6 +185,7 @@ class PlayerTokenMarketService:
             self.session.scalars(
                 select(Player.id)
                 .join(PlayerShareMarket, PlayerShareMarket.player_id == Player.id)
+                .outerjoin(Country, Country.id == Player.country_id)
                 .where(*filters, listable)
                 .order_by(Player.full_name.asc(), Player.id.asc())
                 .offset(offset)
@@ -202,6 +206,7 @@ class PlayerTokenMarketService:
                 .options(
                     selectinload(PlayerShareMarket.player).selectinload(Player.current_club),
                     selectinload(PlayerShareMarket.player).selectinload(Player.country),
+                    selectinload(PlayerShareMarket.player).selectinload(Player.image_metadata),
                 )
             )
         }
@@ -893,8 +898,33 @@ class PlayerTokenMarketService:
             "updated_at": market.updated_at,
         }
 
+    REGEN_PROVIDERS = ("gtex_national_seed", "gtex_regen")
+
+    def _source_nation_filters(self, *, source: str | None, nation: str | None) -> list[Any]:
+        filters: list[Any] = []
+        if source == "regen":
+            filters.append(Player.source_provider.in_(self.REGEN_PROVIDERS))
+        elif source == "real":
+            filters.append(Player.source_provider.not_in(self.REGEN_PROVIDERS))
+        if nation and nation.strip():
+            value = nation.strip()
+            filters.append(or_(func.lower(Country.name) == value.lower(), Country.alpha2_code == value.upper()))
+        return filters
+
+    def list_market_nations(self, *, source: str | None = None) -> list[dict[str, Any]]:
+        rows = self.session.execute(
+            select(Country.name, Country.alpha2_code, func.count(Player.id))
+            .join(Player, Player.country_id == Country.id)
+            .join(PlayerShareMarket, PlayerShareMarket.player_id == Player.id)
+            .where(Player.is_tradable.is_(True), PlayerShareMarket.status == "active", *self._source_nation_filters(source=source, nation=None))
+            .group_by(Country.name, Country.alpha2_code)
+            .order_by(Country.name.asc())
+        ).all()
+        return [{"name": name, "code": code, "count": int(count)} for name, code, count in rows]
+
     def _serialize_market_list_item(self, market: PlayerShareMarket) -> dict[str, Any]:
         player = market.player or self._get_player(market.player_id)
+        portrait = next((image.source_url for image in (player.image_metadata or []) if image.is_primary and image.source_url), None)
         if player.current_club is not None:
             current_club_name = player.current_club.name
         else:
@@ -904,6 +934,9 @@ class PlayerTokenMarketService:
             "player_name": player.canonical_display_name or player.full_name,
             "position": player.normalized_position or player.position,
             "nationality": player.country.name if player.country is not None else None,
+            "nationality_code": player.country.alpha2_code if player.country is not None else None,
+            "image_url": portrait,
+            "is_regen": player.source_provider in self.REGEN_PROVIDERS,
             "current_club_name": current_club_name,
             "age": self._player_age(player),
             "share_price_coin": self._amount(market.share_price_coin),

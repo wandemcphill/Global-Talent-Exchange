@@ -139,6 +139,12 @@ def compute_plans(conn) -> list[RegenPlan]:
             source_provider=row["source_provider"],
         )
         cfg = resolve_player_share_market_config(p, total_shares=300, status="active")
+        share_price = cfg.share_price_coin
+        if row["source_provider"] == "gtex_national_seed":
+            from app.players.regen_share_pricing import regen_share_price
+
+            dna = row["dna_profile"] or {}
+            share_price = regen_share_price(dna.get("current_rating"), dna.get("potential_rating"), dna.get("rarity_tier"))
         plans.append(
             RegenPlan(
                 player_id=row["id"],
@@ -146,7 +152,7 @@ def compute_plans(conn) -> list[RegenPlan]:
                 is_real_player=bool(row["is_real_player"]),
                 real_player_tier=row["real_player_tier"],
                 total_shares=cfg.total_shares,
-                share_price_coin=cfg.share_price_coin,
+                share_price_coin=share_price,
                 liquidity_coin=cfg.liquidity_coin,
             )
         )

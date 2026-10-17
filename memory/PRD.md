@@ -60,6 +60,12 @@ User choices: work inside the existing repo (github.com/wandemcphill/Global-Tale
 - Tradeable: 11,200 ingestion_players (source_provider gtex_national_seed, deterministic uuid5 ids) plus approved portrait image rows. scripts/bulk_issue_regen_markets.py --provider gtex_national_seed issued 11,200 share markets (25 GTX platform liquidity each, 280k total; repo policy). The script now writes lowercase enum values (it used to write COIN/SYSTEM, which broke reads; the rows it wrote were normalized).
 - The market detail uses the seed rating/potential for regens. The React PlayerDrawer falls back to a Regen dossier (/api/market/players/{id}) when the player isn't real.
 
+## Iteration 8 (2026-10-17): regen filter + regen share pricing
+- app/players/regen_share_pricing.py (regen_rating_potential_rarity_v1): price = 0.012 x 1.06^(rating-60) x (1 + 0.012 x min(potential-rating, 30)) x rarity (common 1.0 / rare 1.1 / elite 1.3 / legendary 1.75), clamped to 0.005-0.25 GTX. Medians: common 0.026, rare 0.037, elite 0.057, legendary 0.089 (real players have a median of 0.05).
+- scripts/reprice_national_regen_markets.py repriced all 11,200 untraded national-regen markets (circulating 0 only; the old price is kept in metadata). bulk_issue_regen_markets uses the model for gtex_national_seed going forward.
+- GET /api/v2/players/markets gained source=regen|real and nation=<country name or alpha2> filters. Items now carry image_url (primary portrait), nationality_code and is_regen. New GET /api/v2/players/markets/nations?source= returns name/code/count.
+- React ShareMarket: 'Regens only' toggle, nation dropdown with counts, photo thumbnails, Regen badge, debounced search.
+
 ## Backlog
 - P0: Bridge the owner-console ledger with the repo's existing wallet ledger: DONE (iteration 2).
 - P0: Register the Paystack webhook URL in the dashboard for the production domain.
@@ -69,6 +75,6 @@ User choices: work inside the existing repo (github.com/wandemcphill/Global-Tale
 - P1: Admin must click 'Seed default tournaments' on /app/national to open rentals: DONE.
 - P1: Fund the wallet to complete a paid national rental: DONE via admin adjustment (no real money). Eligibility batching: DONE.
 - P2: Other ledger idempotency keys that may exceed 128 chars, e.g. fast-cup-entry:{cup}:{club}:{actor} in app/fast_cups/services/finance.py; audit them.
-- P2: Regen share price is the repo's discovery minimum (0.001 GTX) because seeds lack valuation bands. Consider a seed-rating-based price. The share market list items carry no image field.
+- P2: The regen share list item now carries an image field. Regen pricing: DONE (iteration 8).
 - P1: /api/market/players is slow (about 60s) on the live DB; React uses /api/v2/players instead.
 - Future: Phase 3 manager requests and regen pressure; Phase 4 unified ledger and anti-collusion hardening; Phase 5 gifting and sponsor inventory.

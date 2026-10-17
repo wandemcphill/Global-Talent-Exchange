@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Never
+from typing import Literal, Never
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
@@ -50,6 +50,7 @@ from app.players.token_schemas import (
     PlayerShareHoldingView,
     PlayerShareMarketIssueRequest,
     PlayerShareMarketListView,
+    PlayerShareMarketNationView,
     PlayerShareMarketView,
     PlayerSharePerformanceRequest,
     PlayerSharePurchaseRequest,
@@ -175,6 +176,14 @@ def list_recent_player_summaries(
     return service.list_recent_views(limit)
 
 
+@router.get("/markets/nations", response_model=list[PlayerShareMarketNationView])
+def list_player_share_market_nations(
+    source: Literal["regen", "real"] | None = Query(default=None),
+    session: Session = Depends(get_session),
+) -> list[PlayerShareMarketNationView]:
+    return [PlayerShareMarketNationView.model_validate(row) for row in PlayerTokenMarketService(session).list_market_nations(source=source)]
+
+
 @router.get("/markets", response_model=PlayerShareMarketListView)
 def list_player_share_markets(
     request: Request,
@@ -183,6 +192,8 @@ def list_player_share_markets(
     limit: int | None = Query(default=None, ge=1, deprecated=True),
     offset: int | None = Query(default=None, ge=0, deprecated=True),
     search: str | None = Query(default=None),
+    source: Literal["regen", "real"] | None = Query(default=None),
+    nation: str | None = Query(default=None, max_length=80),
     session: Session = Depends(get_session),
 ) -> PlayerShareMarketListView:
     params = resolve_pagination(page=page, per_page=per_page, limit=limit, offset=offset)
@@ -200,6 +211,8 @@ def list_player_share_markets(
             limit=params.per_page,
             offset=params.offset,
             search=search,
+            source=source,
+            nation=nation,
         )
     except PlayerTokenMarketError as exc:
         raise_player_token_market_http_exception(exc)
