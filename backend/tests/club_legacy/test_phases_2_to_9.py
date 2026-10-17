@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from app.admin_engine.service import AdminEngineService
 from app.club_legacy.delegation import PRESEASON_RESPONSE, set_task
 from app.club_legacy.operations import (
+    showroom,
     appeal_case,
     approve_sponsor,
     assert_staff_can_spend,
@@ -386,6 +387,35 @@ def test_phase8_cases_are_appealable_and_stakes_are_proportional(client, bootstr
         interest = economic_interest(session, club_id=club_id, holder_user_id=admin.id)
         assert interest == (club_valuation(session, club_id) * Decimal("0.10")).quantize(Decimal("0.01"))
         session.commit()
+
+
+def test_showroom_labels_club_ownership_and_keeps_a_static_fallback(client, bootstrap_admin_headers, app):
+    club_id = _claim(client, bootstrap_admin_headers)
+    _enable(app)
+    with app.state.session_factory() as session:
+        admin = _admin(session)
+        preview = showroom(session, club_id)
+        owned_jet = any(item["name"] == "Harbour Jet" and item["ownership_label"] == "Club" for item in preview["exhibits"])
+        if not owned_jet:
+            purchase_asset(
+                session,
+                club_id=club_id,
+                user_id=admin.id,
+                sku="gtex-jet-harbour",
+                owner_class="club",
+                idempotency_key="showroom-jet",
+            )
+        room = showroom(session, club_id)
+        assert room["fallback"] == "static-card"
+        assert room["mode"] == "lightweight-preview"
+        labels = {item["name"]: item["ownership_label"] for item in room["exhibits"]}
+        assert labels["Harbour Jet"] == "Club"
+        assert labels["Lagoon Coach"] == "Not owned"
+        assert all(
+            item["ownership_label"] == "Club"
+            for item in room["exhibits"]
+            if item["owned"] and item["owner_class"] == "club"
+        )
 
 
 def test_phase9_small_club_progress_and_flag_rollback(client, bootstrap_admin_headers, app):

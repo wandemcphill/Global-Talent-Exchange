@@ -3,15 +3,17 @@ import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
 import '../../regen_redesign/data/gtex_share_market_api.dart';
 import '../data/owner_console_api.dart';
+import '../widgets/club_legacy_showroom.dart';
 import '../widgets/owner_admin_review_section.dart';
 import '../widgets/owner_console_sections.dart';
 
-enum OwnerConsoleSection { control, clubs, market, squad, academy, admin }
+enum OwnerConsoleSection { control, clubs, showroom, market, squad, academy, admin }
 
 const Map<OwnerConsoleSection, (String, IconData)> _sectionMeta =
     <OwnerConsoleSection, (String, IconData)>{
       OwnerConsoleSection.control: ('Control Center', Icons.space_dashboard_rounded),
       OwnerConsoleSection.clubs: ('My Clubs', Icons.shield_rounded),
+      OwnerConsoleSection.showroom: ('Showroom', Icons.museum_rounded),
       OwnerConsoleSection.market: ('Market & Transfers', Icons.storefront_rounded),
       OwnerConsoleSection.squad: ('Manager & Squad', Icons.groups_rounded),
       OwnerConsoleSection.academy: ('Academy / Regens', Icons.auto_awesome_rounded),
@@ -144,6 +146,8 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
           onClaim: _claimClub,
           claiming: _claiming,
         );
+      case OwnerConsoleSection.showroom:
+        return ShowroomSection(load: widget.reader.fetchShowroom);
       case OwnerConsoleSection.market:
         return MarketSection(onNavigate: widget.onNavigate);
       case OwnerConsoleSection.squad:

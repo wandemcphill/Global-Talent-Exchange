@@ -1,5 +1,32 @@
 import 'package:gte_frontend/data/gte_authed_api.dart';
 
+class ShowroomExhibit {
+  const ShowroomExhibit({
+    required this.id,
+    required this.name,
+    required this.category,
+    required this.ownershipLabel,
+    required this.fallbackLabel,
+    this.owned = false,
+  });
+
+  factory ShowroomExhibit.fromJson(Map<String, dynamic> json) => ShowroomExhibit(
+    id: '${json['id']}',
+    name: '${json['name'] ?? 'Asset'}',
+    category: '${json['category'] ?? 'watch'}',
+    ownershipLabel: '${json['ownership_label'] ?? 'Not owned'}',
+    fallbackLabel: '${json['fallback_label'] ?? 'Static card'}',
+    owned: json['owned'] == true,
+  );
+
+  final String id;
+  final String name;
+  final String category;
+  final String ownershipLabel;
+  final String fallbackLabel;
+  final bool owned;
+}
+
 double _num(Object? v) =>
     v is num ? v.toDouble() : double.tryParse('${v ?? ''}') ?? 0;
 
@@ -589,6 +616,8 @@ abstract class OwnerConsoleReader {
   Future<void> seedDefaultTournaments();
 
   Future<double> fetchWalletBalance();
+
+  Future<List<ShowroomExhibit>> fetchShowroom();
 }
 
 class OwnerConsoleApi implements OwnerConsoleReader {
@@ -676,6 +705,18 @@ class OwnerConsoleApi implements OwnerConsoleReader {
   @override
   Future<double> fetchWalletBalance() async =>
       _num((await client.getMap('/wallets/summary'))['available_balance']);
+
+  @override
+  Future<List<ShowroomExhibit>> fetchShowroom() async {
+    final Map<String, dynamic> center = await client.getMap('/owner/control-center');
+    final List<Map<String, dynamic>> clubs = _maps(center['clubs']);
+    if (clubs.isEmpty) {
+      return const <ShowroomExhibit>[];
+    }
+    final String clubId = '${clubs.first['club_id']}';
+    final Map<String, dynamic> room = await client.getMap('/owner/legacy/$clubId/showroom');
+    return _maps(room['exhibits']).map(ShowroomExhibit.fromJson).toList();
+  }
 
   @override
   Future<void> seedDefaultTournaments() async {

@@ -209,7 +209,7 @@ Generated deterministically from `tools/audit/generate_contract_audit.py`.
 - `GET /api/broadcast-rights/matches/{}/access`: `/api/broadcast-rights/matches/{match_id}/access` in `backend/app/broadcast_rights/router.py` (read_match_broadcast_access) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/broadcast/channels`: `/api/broadcast/channels` in `backend/app/broadcast_network/router.py` (list_channels) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/broadcast/home`: `/api/broadcast/home` in `backend/app/broadcast_network/router.py` (read_broadcast_home) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
-- ... and 1971 more
+- ... and 1972 more
 
 ## MIGRATE_TO
 

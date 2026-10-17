@@ -3400,6 +3400,19 @@
         "source_file": "backend/app/club_legacy/router.py",
         "response_model": null
       },
+      "get_api_v2_owner_legacy_club_id_showroom": {
+        "method": "GET",
+        "canonical_path": "/api/v2/owner/legacy/{club_id}/showroom",
+        "aliases": [
+          "/api/owner/legacy/{club_id}/showroom",
+          "/api/v1/owner/legacy/{club_id}/showroom",
+          "/api/v2/owner/legacy/{club_id}/showroom",
+          "/owner/legacy/{club_id}/showroom"
+        ],
+        "handler": "read_showroom",
+        "source_file": "backend/app/club_legacy/router.py",
+        "response_model": null
+      },
       "get_api_v2_portfolio_clubs": {
         "method": "GET",
         "canonical_path": "/api/v2/portfolio/clubs",
@@ -22588,6 +22601,7 @@
     "/api/v2/owner/legacy/{club_id}/policies/preset": "post_api_v2_owner_legacy_club_id_policies_preset",
     "/api/v2/owner/legacy/{club_id}/policies/{task_key}": "put_api_v2_owner_legacy_club_id_policies_task_key",
     "/api/v2/owner/legacy/{club_id}/recommendations": "post_api_v2_owner_legacy_club_id_recommendations",
+    "/api/v2/owner/legacy/{club_id}/showroom": "get_api_v2_owner_legacy_club_id_showroom",
     "/api/v2/owner/market/quote": "get_api_v2_owner_market_quote",
     "/api/v2/owner/matches/{match_id}": "get_api_v2_owner_matches_match_id",
     "/api/v2/owner/matches/{match_id}/forfeit": "post_api_v2_owner_matches_match_id_forfeit",
@@ -24329,6 +24343,7 @@
     "/api/owner/legacy/{club_id}/policies/preset": "/api/v2/owner/legacy/{club_id}/policies/preset",
     "/api/owner/legacy/{club_id}/policies/{task_key}": "/api/v2/owner/legacy/{club_id}/policies/{task_key}",
     "/api/owner/legacy/{club_id}/recommendations": "/api/v2/owner/legacy/{club_id}/recommendations",
+    "/api/owner/legacy/{club_id}/showroom": "/api/v2/owner/legacy/{club_id}/showroom",
     "/api/owner/market/quote": "/api/v2/owner/market/quote",
     "/api/owner/matches/{match_id}": "/api/v2/owner/matches/{match_id}",
     "/api/owner/matches/{match_id}/forfeit": "/api/v2/owner/matches/{match_id}/forfeit",
@@ -25745,6 +25760,7 @@
     "/api/v1/owner/legacy/{club_id}/policies/preset": "/api/v2/owner/legacy/{club_id}/policies/preset",
     "/api/v1/owner/legacy/{club_id}/policies/{task_key}": "/api/v2/owner/legacy/{club_id}/policies/{task_key}",
     "/api/v1/owner/legacy/{club_id}/recommendations": "/api/v2/owner/legacy/{club_id}/recommendations",
+    "/api/v1/owner/legacy/{club_id}/showroom": "/api/v2/owner/legacy/{club_id}/showroom",
     "/api/v1/owner/market/quote": "/api/v2/owner/market/quote",
     "/api/v1/owner/matches/{match_id}": "/api/v2/owner/matches/{match_id}",
     "/api/v1/owner/matches/{match_id}/forfeit": "/api/v2/owner/matches/{match_id}/forfeit",
@@ -27072,6 +27088,7 @@
     "/owner/legacy/{club_id}/policies/preset": "/api/v2/owner/legacy/{club_id}/policies/preset",
     "/owner/legacy/{club_id}/policies/{task_key}": "/api/v2/owner/legacy/{club_id}/policies/{task_key}",
     "/owner/legacy/{club_id}/recommendations": "/api/v2/owner/legacy/{club_id}/recommendations",
+    "/owner/legacy/{club_id}/showroom": "/api/v2/owner/legacy/{club_id}/showroom",
     "/owner/market/quote": "/api/v2/owner/market/quote",
     "/owner/matches/{match_id}": "/api/v2/owner/matches/{match_id}",
     "/owner/matches/{match_id}/forfeit": "/api/v2/owner/matches/{match_id}/forfeit",

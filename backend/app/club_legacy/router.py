@@ -138,6 +138,19 @@ def execute_recommendation(
     return _run(session, go)
 
 
+@router.get("/{club_id}/showroom")
+def read_showroom(
+    club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)
+) -> dict[str, Any]:
+    def go():
+        delegation.require_owner(session, club_id, user.id)
+        from app.club_legacy.operations import showroom
+
+        return showroom(session, club_id)
+
+    return _run(session, go)
+
+
 @router.get("/{club_id}/page")
 def read_club_page(
     club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)

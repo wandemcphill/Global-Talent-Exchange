@@ -209,7 +209,62 @@ def club_page(session: Session, club_id: str) -> dict:
         "prestige": prestige_score(session, club_id),
         "club_assets": [_asset_dict(session, asset) for asset in assets],
         "showroom_fallback": "static-card",
+        "showroom": showroom(session, club_id),
     }
+
+
+def showroom(session: Session, club_id: str) -> dict:
+    """Lightweight showroom. Preview geometry stays in the client; this is the ownership record."""
+    seed_catalogue(session)
+    profile = session.get(ClubProfile, club_id)
+    if profile is None:
+        raise LegacyError("club_not_found", 404)
+    owned = session.scalars(select(ClubLegacyAsset).where(ClubLegacyAsset.club_id == club_id)).all()
+    personal = session.scalars(
+        select(ClubLegacyAsset).where(
+            ClubLegacyAsset.owner_class == "owner",
+            ClubLegacyAsset.owner_ref == profile.owner_user_id,
+            ClubLegacyAsset.club_id != club_id,
+        )
+    ).all()
+    exhibits = [_exhibit(session, asset, owned=True) for asset in [*owned, *personal]]
+    owned_skus = set()
+    for asset in owned:
+        item = session.get(ClubLegacyCatalogueItem, asset.catalogue_id)
+        if item is not None:
+            owned_skus.add(item.sku)
+    for item in session.scalars(select(ClubLegacyCatalogueItem).order_by(ClubLegacyCatalogueItem.sku.asc())).all():
+        if item.sku in owned_skus:
+            continue
+        if item.supply_cap is not None and item.minted_count >= item.supply_cap:
+            continue
+        exhibits.append(
+            {
+                "id": f"catalogue:{item.sku}",
+                "name": item.name,
+                "category": item.category,
+                "owner_class": None,
+                "ownership_label": "Not owned",
+                "status": "available",
+                "edition_number": None,
+                "fallback_label": item.fallback_label,
+                "owned": False,
+            }
+        )
+    return {"mode": "lightweight-preview", "fallback": "static-card", "exhibits": exhibits}
+
+
+def _exhibit(session: Session, asset: ClubLegacyAsset, *, owned: bool) -> dict:
+    payload = _asset_dict(session, asset)
+    payload["ownership_label"] = _ownership_label(asset.owner_class)
+    payload["owned"] = owned and asset.status == "owned"
+    return payload
+
+
+def _ownership_label(owner_class: str | None) -> str:
+    return {"club": "Club", "owner": "Owner", "player": "Player", "manager": "Manager"}.get(
+        owner_class or "", "Not owned"
+    )
 
 
 def _asset_dict(session: Session, asset: ClubLegacyAsset) -> dict:

@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1772,
+  "route_count": 1773,
   "routes": [
     {
       "method": "POST",
@@ -8187,6 +8187,33 @@
       ],
       "file": "backend/app/club_legacy/router.py",
       "handler": "read_club_page",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.router",
+      "module_mounts": [
+        "club_legacy"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "GET",
+      "path": "/owner/legacy/{club_id}/showroom",
+      "effective_paths": [
+        "/api/owner/legacy/{club_id}/showroom"
+      ],
+      "file": "backend/app/club_legacy/router.py",
+      "handler": "read_showroom",
       "router_variable": "router",
       "module_path": "app.club_legacy.router",
       "module_mounts": [

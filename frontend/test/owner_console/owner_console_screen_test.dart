@@ -151,6 +151,11 @@ class _FakeOwner implements OwnerConsoleReader {
 
   @override
   Future<double> fetchWalletBalance() async => 75;
+
+  @override
+  Future<List<ShowroomExhibit>> fetchShowroom() async => const <ShowroomExhibit>[
+    ShowroomExhibit(id: 'jet-1', name: 'Harbour Jet', category: 'jet', ownershipLabel: 'Club', fallbackLabel: 'Static jet card', owned: true),
+  ];
 }
 
 class _FakeShare implements GtexShareMarketReader {

@@ -2271,6 +2271,12 @@
       },
       {
         "method": "GET",
+        "path": "/api/owner/legacy/{club_id}/showroom",
+        "handler": "read_showroom",
+        "response_model": null
+      },
+      {
+        "method": "GET",
         "path": "/api/portfolio/clubs",
         "handler": "get_my_club_portfolio",
         "response_model": "ClubPortfolioView"
