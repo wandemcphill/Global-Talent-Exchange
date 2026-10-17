@@ -1,0 +1,32 @@
+{
+  "summary": "Retest of iteration_6 action items — all four fixes verified green on LIVE DB + UI. 19/19 pytest green (/app/backend/tests/test_regen_retest_iter7.py). (a) Every one of the 23,200 regens (gtex_regen + gtex_national_seed) now has a primary ingestion_player_image_metadata row whose source_url is on res.cloudinary.com — 0 missing. UI confirms: on /app/market with share-market-regen-toggle ON, pages 1/2/3 each show 15/15 rows with Cloudinary <img> (0 initials fallback); same for Japan filter pages 1/2/3. (b) share-market-nation-select has 159 <option>s and 0 of them contain a <span> child — hydration warning gone, no React 'Warning:' entries on console. (c) /api/v2/players/markets/nations?source=regen is cached server-side (_NATIONS_CACHE 15 min TTL): second call measured < 1s (test TestNationsCache.test_second_call_under_1s passes with hard < 1.0s assert). (d) 23,200 regens have 23,200 distinct full_names, 0 end in a digit, 0 clash with real-player full_names from other providers; all 11,200 national_regen_seeds.display_name values match a gtex_national_seed player.full_name. (e) 5-regen samples: Japan: Hiroki Hayashi, Riku Sato, Kyogo Inoue, Sota Tanaka, Yuito Shimizu. England: Harry Baker, Leo Robinson Wilson, Charlie Wood, Kobbie Roberts, Leo Wilson Brown. Germany: Felix Lukas Schmidt, Paul Schmidt, Robert Richter, Maximilian Fischer, Max Becker Fischer. Brazil: Kaio Barbosa, Felipe Pereira, Murilo Rocha, Kaio Gomes, Pedro Almeida. Egypt: Tarek Youssef, Hamdi Samir, Hossam Fawzy, Akram Ali, Hamdi Farouk. All country-appropriate, none reuse current-star surnames (Mitoma/Mbappé/Haaland etc). (f) Pricing regression intact: all 11,200 national_seed markets tagged pricing_model='regen_rating_potential_rarity_v1'; API prices 0.02-0.09; drawer-share-market price 0.0285 matched row price 0.0285 for Ao Daichi Suzuki (Japan). No Buy clicked.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_regen_retest_iter7.py",
+    "/app/test_reports/pytest/iter7_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "legacy_token_service._NATIONS_CACHE is a process-local dict with 900 s TTL — good for single-worker but each uvicorn worker will warm independently; fine for current single-worker deploy, revisit if horizontal scaling.",
+    "Germany regen pool legitimately produced 'Maximilian Antonio Müller' in a random spot check. Müller is Germany's most common surname so this is not a 'famous current star' clash, but if strict avoidance of 'any ex-star surname' is desired, add Müller/Beckenbauer to _COMMON_SURNAMES skip list. Not blocking.",
+    "ShareMarket.tsx line 27 now uses template string `${n.name} (${fmt(n.count)})` inside <option>, which cleanly fixes the hydration warning."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_regen_retest_iter7.py (new, 19 tests, ~235s)"
+  ],
+  "success_rate": {"backend": "100% (19/19 pytest)", "frontend": "100% (thumbnails, dropdown, drawer price all green)"},
+  "test_credentials": "Admin: vidvimedialtd@gmail.com / Desolamcphill89. — login + GET only.",
+  "seed_data_creation": "None. READ-ONLY. No Buy, no writes.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "iter6 action items 1-4 are closed. Regen portrait coverage is now 100% for both the older gtex_regen lane and gtex_national_seed. Nations endpoint cached via _NATIONS_CACHE; cold call can still take ~90s the very first time per worker, but cached (second call) is < 1s. If the pytest module fixture auth_headers times out on login, retry logic is in place (4 attempts, 90s each). Only latent minor: Germany pool can emit the surname 'Müller' — not failing because spec examples list Mbappé/Haaland/Mitoma level stars, not every German legend; raise with user if stricter filter is desired.",
+  "rca_of_the_issue": "Fixes applied by main agent in iteration 7 that this retest confirmed: (1) repair_gtex_regen_lane.py backfilled is_primary=TRUE on a Cloudinary portrait row for every one of the 12,000 older gtex_regen players, closing the 'initials fallback' gap on ShareMarket.Thumb. (2) repair_national_regen_seeds.py normalised the 11,200 national_regen_seeds.display_name values to match ingestion_players.full_name. (3) ShareMarket.tsx <option> was rewritten to a template-string child, removing the <span> wrapper and the <span>-cannot-be-child-of-<option> hydration warning. (4) legacy_token_service._NATIONS_CACHE added a 15-min in-process cache keyed by source; second call is sub-second."
+}
