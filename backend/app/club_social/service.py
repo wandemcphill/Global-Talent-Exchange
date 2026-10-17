@@ -160,6 +160,7 @@ class ClubSocialService:
         link_id: str | None,
         link_code: str | None,
         actor_user_id: str | None,
+        actor_fingerprint: str | None = None,
         event_type: str,
         source_platform: str | None,
         country_code: str | None,
@@ -174,10 +175,24 @@ class ClubSocialService:
         if link is not None and link.challenge_id != challenge.id:
             raise ClubSocialError("challenge_link_mismatch")
         normalized_event = self._normalize(event_type, default="share")
+        resolved_link_id = link.id if link is not None else None
+        existing = self._find_duplicate_share_event(
+            model=ChallengeShareEvent,
+            scope_column=ChallengeShareEvent.challenge_id,
+            scope_value=challenge.id,
+            link_column=ChallengeShareEvent.link_id,
+            link_value=resolved_link_id,
+            event_type=normalized_event,
+            actor_user_id=actor_user_id,
+            actor_fingerprint=actor_fingerprint,
+        )
+        if existing is not None:
+            return existing
         share_event = ChallengeShareEvent(
             challenge_id=challenge.id,
-            link_id=link.id if link is not None else None,
+            link_id=resolved_link_id,
             actor_user_id=actor_user_id,
+            actor_fingerprint=actor_fingerprint if actor_user_id is None else None,
             event_type=normalized_event,
             source_platform=self._normalize(source_platform),
             country_code=self._normalize(country_code, upper=True),
@@ -655,6 +670,7 @@ class ClubSocialService:
         *,
         share_code: str,
         actor_user_id: str | None,
+        actor_fingerprint: str | None = None,
         event_type: str,
         source_platform: str | None,
         metadata_json: dict[str, object],
@@ -663,9 +679,22 @@ class ClubSocialService:
         if link is None:
             raise ClubSocialError("match_share_link_not_found")
         normalized_event = self._normalize(event_type, default="share")
+        existing = self._find_duplicate_share_event(
+            model=MatchShareEvent,
+            scope_column=MatchShareEvent.share_link_id,
+            scope_value=link.id,
+            link_column=None,
+            link_value=None,
+            event_type=normalized_event,
+            actor_user_id=actor_user_id,
+            actor_fingerprint=actor_fingerprint,
+        )
+        if existing is not None:
+            return existing
         event = MatchShareEvent(
             share_link_id=link.id,
             actor_user_id=actor_user_id,
+            actor_fingerprint=actor_fingerprint if actor_user_id is None else None,
             event_type=normalized_event,
             source_platform=self._normalize(source_platform),
             metadata_json=dict(metadata_json),
@@ -1750,6 +1779,37 @@ class ClubSocialService:
             return None
         cleaned = value.strip()
         return cleaned or None
+
+    _SHARE_EVENT_DEDUPE_WINDOW = timedelta(minutes=10)
+
+    def _find_duplicate_share_event(
+        self,
+        *,
+        model: type[ChallengeShareEvent] | type[MatchShareEvent],
+        scope_column,
+        scope_value: str,
+        link_column,
+        link_value: str | None,
+        event_type: str,
+        actor_user_id: str | None,
+        actor_fingerprint: str | None,
+    ):
+        cutoff = self._now() - self._SHARE_EVENT_DEDUPE_WINDOW
+        conditions = [
+            scope_column == scope_value,
+            model.event_type == event_type,
+            model.created_at >= cutoff,
+        ]
+        if link_column is not None:
+            conditions.append(link_column == link_value if link_value else link_column.is_(None))
+        if actor_user_id:
+            conditions.append(model.actor_user_id == actor_user_id)
+        elif actor_fingerprint:
+            conditions.append(model.actor_user_id.is_(None))
+            conditions.append(model.actor_fingerprint == actor_fingerprint)
+        else:
+            return None
+        return self.session.scalars(select(model).where(*conditions).order_by(model.created_at.desc()).limit(1)).first()
 
     def _now(self) -> datetime:
         return datetime.now(UTC)
