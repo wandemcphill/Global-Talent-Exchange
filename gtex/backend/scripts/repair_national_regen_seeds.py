@@ -116,11 +116,13 @@ def main() -> int:
             seeds = cur.fetchall()
             cur.execute("select id, name, alpha2_code, alpha3_code, fifa_code from ingestion_countries")
             countries = cur.fetchall()
+            cur.execute("select distinct lower(full_name) as n from ingestion_players where source_provider not in ('gtex_regen', 'gtex_national_seed') and full_name is not null")
+            real_names = {r["n"] for r in cur.fetchall()}
         print("seeds", len(seeds), flush=True)
         by_alpha2 = {c["alpha2_code"]: c["id"] for c in countries if c["alpha2_code"]}
         by_name = {c["name"].lower(): c["id"] for c in countries}
 
-        taken: set[str] = set()
+        taken: set[str] = set(real_names)
         seed_updates, players, images = [], [], []
         stats = Counter()
         for seed in seeds:
@@ -149,7 +151,7 @@ def main() -> int:
                 "portraitRecipeVersion": FACE_RECIPE_VERSION, "portraitStorageKey": asset["storage_key"],
                 "portraitSourceProvider": NEWGEN_FACE_BANK_PROVIDER, "portraitSourceCollection": NEWGEN_FACE_BANK_COLLECTION,
                 "portraitEthnicity": group, "minted_player_id": pid, "enabled_for_trade_at": now.isoformat(),
-                "previous_display_name": seed["display_name"] if seed["display_name"] != name else meta.get("previous_display_name"),
+                "previous_display_name": meta.get("previous_display_name") or seed["display_name"],
             })
             seed_updates.append((code, cname, name, json.dumps(meta), seed["id"]))
             stats["renamed"] += seed["display_name"] != name
@@ -176,7 +178,7 @@ def main() -> int:
             ))
             images.append((str(uuid.uuid5(NS, f"{PROVIDER}:portrait:{seed['id']}")), NEWGEN_FACE_BANK_PROVIDER, f"{seed['id']}:portrait", pid, "portrait", portrait_url, asset["storage_key"], asset.get("width"), asset.get("height"), "image/png", asset.get("bytes"), "approved", True, True, now))
 
-        print("stats", dict(stats), "unique names", len(taken), flush=True)
+        print("stats", dict(stats), "unique names", len(taken) - len(real_names), flush=True)
         if args.dry_run:
             for row in seed_updates[:12]:
                 print(row[0], row[1], "->", row[2])

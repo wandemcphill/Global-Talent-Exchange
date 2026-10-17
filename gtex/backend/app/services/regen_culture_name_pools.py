@@ -139,6 +139,47 @@ C: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
                    ("Ferdinan", "Sulaeman", "Maulana", "Arhan", "Ridho", "Mangkualam", "Ari", "Struick", "Jenner", "Hubner", "Haye", "Amat", "Tjoe-A-On", "Fikri", "Drajad", "Caraka", "Sananta", "Sayuri", "Baggott", "Walsh")),
 }
 
+# Everyday surnames replace star surnames, so regens never read as clones of famous players.
+_COMMON_SURNAMES: dict[str, tuple[str, ...]] = {
+    "english": ("Smith", "Jones", "Taylor", "Brown", "Wilson", "Evans", "Thomas", "Johnson", "Roberts", "Walker", "Wright", "Thompson", "White", "Hughes", "Edwards", "Green", "Hall", "Wood", "Harris", "Clarke", "Jackson", "Turner", "Hill", "Moore", "Cooper", "Ward", "Morris", "King", "Baker", "Parker"),
+    "scottish": ("MacDonald", "Campbell", "Stewart", "Fraser", "Murray", "Reid", "Ross", "Paterson", "Mackay", "Watson", "Henderson", "Duncan", "Hamilton", "Scott", "Graham", "Kerr", "Johnstone", "Sinclair", "Robertson", "Munro"),
+    "irish": ("Murphy", "Kelly", "O'Sullivan", "Walsh", "O'Connor", "McCarthy", "Byrne", "Ryan", "O'Neill", "Lynch", "Quinn", "Doyle", "Nolan", "Gallagher", "Kavanagh", "Fitzgerald", "Kennedy", "Moran", "Dunne", "McLaughlin"),
+    "anglo_new_world": ("Mitchell", "Anderson", "Campbell", "Robinson", "Bennett", "Collins", "Stewart", "Carter", "Morgan", "Young", "Lewis", "Nelson", "Bailey", "Reid", "Phillips", "Marshall", "Gordon", "Hayes", "Sullivan", "Foster"),
+    "caribbean_anglo": ("Bailey", "Campbell", "Williams", "Brown", "Thomas", "Grant", "Francis", "Clarke", "Henry", "Edwards", "Wright", "Johnson", "Lewis", "James", "Samuels", "McKenzie", "Gordon", "Walters", "Morgan", "Charles"),
+    "spanish": ("García", "Fernández", "Martínez", "Sánchez", "López", "Gómez", "Jiménez", "Moreno", "Muñoz", "Álvarez", "Romero", "Navarro", "Torres", "Domínguez", "Vázquez", "Ramos", "Gil", "Serrano", "Blanco", "Molina", "Ortega", "Delgado", "Castro", "Ortiz"),
+    "french": ("Martin", "Bernard", "Dubois", "Thomas", "Robert", "Richard", "Petit", "Durand", "Leroy", "Moreau", "Simon", "Laurent", "Lefebvre", "Michel", "Garcia", "David", "Bertrand", "Roux", "Vincent", "Fournier", "Morel", "Girard", "Diallo", "Traoré"),
+    "german": ("Müller", "Schmidt", "Schneider", "Fischer", "Weber", "Meyer", "Wagner", "Becker", "Schulz", "Hoffmann", "Koch", "Richter", "Klein", "Wolf", "Schröder", "Neumann", "Braun", "Zimmermann", "Krüger", "Hartmann", "Lange", "Werner"),
+    "italian": ("Rossi", "Russo", "Ferrari", "Esposito", "Bianchi", "Romano", "Colombo", "Ricci", "Marino", "Greco", "Bruno", "Gallo", "Conti", "De Luca", "Mancini", "Costa", "Giordano", "Rizzo", "Lombardi", "Moretti"),
+    "dutch_flemish": ("de Vries", "Jansen", "van den Berg", "Bakker", "Visser", "Smit", "Meijer", "de Boer", "Mulder", "Bos", "Peeters", "Janssens", "Maes", "Jacobs", "Mertens", "Willems", "Claes", "Goossens", "Wouters", "Dekker"),
+    "nordic": ("Hansen", "Johansen", "Olsen", "Larsen", "Andersen", "Pedersen", "Nilsen", "Kristiansen", "Jensen", "Nielsen", "Andersson", "Johansson", "Karlsson", "Nilsson", "Eriksson", "Larsson", "Lindqvist", "Berg", "Holm", "Dahl"),
+    "portuguese": ("Silva", "Santos", "Ferreira", "Pereira", "Oliveira", "Costa", "Rodrigues", "Martins", "Sousa", "Fernandes", "Gonçalves", "Gomes", "Lopes", "Marques", "Alves", "Almeida", "Ribeiro", "Pinto", "Carvalho", "Teixeira"),
+    "japanese": ("Sato", "Suzuki", "Takahashi", "Tanaka", "Watanabe", "Ito", "Yamamoto", "Nakamura", "Kobayashi", "Kato", "Yoshida", "Yamada", "Sasaki", "Yamaguchi", "Matsumoto", "Inoue", "Kimura", "Hayashi", "Shimizu", "Mori", "Ikeda", "Hashimoto"),
+    "turkish": ("Yılmaz", "Kaya", "Demir", "Şahin", "Çelik", "Yıldız", "Yıldırım", "Öztürk", "Aydın", "Özdemir", "Arslan", "Doğan", "Kılıç", "Aslan", "Çetin", "Kara", "Koç", "Kurt", "Özkan", "Şimşek"),
+    "maghreb": ("Benali", "Bouazza", "El Amrani", "Haddad", "Mansouri", "Belkacem", "Cherif", "Saidi", "Brahimi", "Ouali", "Ziani", "Rahmani", "Benyoucef", "Tahiri", "Alaoui", "Bennani", "Jaziri", "Trabelsi", "Ben Salah", "Gharbi"),
+    "egyptian": ("Hassan", "Mahmoud", "Ibrahim", "Abdelaziz", "Mostafa", "Ali", "Youssef", "Saad", "Fawzy", "Nasser", "Ramadan", "Soliman", "Kamal", "Adel", "Farouk", "Samir", "Eid", "Lotfy", "Abdallah", "Shawky"),
+    "gulf": ("Al-Harbi", "Al-Qahtani", "Al-Otaibi", "Al-Mutairi", "Al-Zahrani", "Al-Ghamdi", "Al-Shammari", "Al-Dosari", "Al-Subaie", "Al-Anazi", "Al-Marri", "Al-Kuwari", "Al-Nuaimi", "Al-Suwaidi", "Al-Balushi", "Al-Hajri", "Al-Rashidi", "Al-Yami", "Al-Saadi", "Al-Mansoori"),
+    "levant": ("Haddad", "Khoury", "Nasser", "Saleh", "Hamdan", "Darwish", "Abbas", "Yassin", "Mansour", "Odeh", "Barakat", "Shalabi", "Jaber", "Khalil", "Hijazi", "Qasem", "Zaid", "Rahal", "Awad", "Saad"),
+    "persian": ("Ahmadi", "Hosseini", "Mohammadi", "Rezaei", "Moradi", "Karimi", "Jafari", "Rahimi", "Sadeghi", "Hashemi", "Bagheri", "Kazemi", "Ebrahimi", "Ghorbani", "Asadi", "Mousavi", "Najafi", "Rostami", "Zamani", "Farahani"),
+    "georgian": ("Beridze", "Kapanadze", "Gelashvili", "Maisuradze", "Giorgadze", "Lomidze", "Tsiklauri", "Bolkvadze", "Kvaratskhelia", "Nozadze", "Abashidze", "Mikadze", "Chikovani", "Japaridze", "Gogoladze", "Kharaishvili", "Tabatadze", "Natsvlishvili", "Gvasalia", "Dolidze"),
+    "polish": ("Nowak", "Kowalski", "Wiśniewski", "Wójcik", "Kowalczyk", "Kamiński", "Lewandowicz", "Zieliński", "Szymański", "Woźniak", "Dąbrowski", "Kozłowski", "Jankowski", "Mazur", "Kwiatkowski", "Krawczyk", "Piotrowski", "Grabowski", "Pawłowski", "Michalski"),
+    "czech_slovak": ("Novák", "Svoboda", "Novotný", "Dvořák", "Černý", "Procházka", "Kučera", "Veselý", "Horák", "Němec", "Pokorný", "Marek", "Pospíšil", "Hájek", "Král", "Horváth", "Kováč", "Varga", "Tóth", "Nagy"),
+    "hungarian": ("Nagy", "Kovács", "Tóth", "Szabó", "Horváth", "Varga", "Kiss", "Molnár", "Németh", "Farkas", "Balogh", "Papp", "Takács", "Juhász", "Lakatos", "Mészáros", "Oláh", "Simon", "Rácz", "Fekete"),
+    "romanian": ("Popescu", "Ionescu", "Popa", "Pop", "Radu", "Dumitru", "Stoica", "Stan", "Gheorghe", "Matei", "Ciobanu", "Rusu", "Munteanu", "Constantin", "Moldovan", "Lungu", "Ursu", "Florea", "Dinu", "Toma"),
+    "south_slavic": ("Horvat", "Kovačević", "Babić", "Marić", "Jurić", "Novak", "Petrović", "Jovanović", "Nikolić", "Đorđević", "Ilić", "Stojanović", "Pavlović", "Popović", "Hodžić", "Begić", "Kovač", "Krajnc", "Zupan", "Stojanovski"),
+    "albanian": ("Hoxha", "Shehu", "Krasniqi", "Gashi", "Berisha", "Morina", "Hasani", "Kelmendi", "Shala", "Bytyqi", "Leka", "Dervishi", "Basha", "Kola", "Cela", "Rama", "Dushku", "Prenga", "Lika", "Mema"),
+    "greek_cypriot": ("Papadopoulos", "Georgiou", "Nikolaou", "Papageorgiou", "Konstantinou", "Christodoulou", "Ioannou", "Dimitriou", "Vasileiou", "Panagiotou", "Antoniou", "Michail", "Pappas", "Karagiannis", "Oikonomou", "Charalambous", "Kyriakou", "Theodorou", "Stavrou", "Andreou"),
+    "east_slavic": ("Ivanov", "Smirnov", "Kuznetsov", "Popov", "Sokolov", "Lebedev", "Kozlov", "Novikov", "Morozov", "Volkov", "Shevchenko", "Bondarenko", "Kovalenko", "Tkachenko", "Kravchenko", "Melnyk", "Boyko", "Moroz", "Lysenko", "Marchenko"),
+    "hebrew": ("Cohen", "Levi", "Mizrahi", "Peretz", "Biton", "Dahan", "Avraham", "Friedman", "Azulay", "Malka", "Katz", "Ohana", "Hadad", "Gabay", "Ben-David", "Shapiro", "Amar", "Elbaz", "Golan", "Segal"),
+    "armenian": ("Grigoryan", "Harutyunyan", "Sargsyan", "Hovhannisyan", "Khachatryan", "Petrosyan", "Vardanyan", "Gevorgyan", "Karapetyan", "Avetisyan", "Mkrtchyan", "Ghazaryan", "Hakobyan", "Martirosyan", "Poghosyan", "Manukyan", "Simonyan", "Davtyan", "Aslanyan", "Movsisyan"),
+    "central_franco": ("Mbarga", "Ngono", "Essomba", "Atangana", "Fouda", "Nkoulou", "Mbida", "Ondo", "Nzé", "Moussavou", "Mabiala", "Makosso", "Malonga", "Kabeya", "Tshibangu", "Mukendi", "Ilunga", "Kasongo", "Mbuyi", "Ngoma"),
+    "ivorian": ("Kouamé", "Kouassi", "Konan", "Koffi", "Yao", "N'Guessan", "Kouadio", "Brou", "Tanoh", "Gnahoré", "Zadi", "Gbagbo", "Séri", "Dago", "Tapé", "Kipré", "Digbeu", "Aka", "Assi", "Ehui"),
+    "indonesian": ("Saputra", "Pratama", "Hidayat", "Nugroho", "Wijaya", "Santoso", "Setiawan", "Kurniawan", "Firmansyah", "Gunawan", "Susanto", "Hakim", "Ramadhan", "Purnomo", "Siregar", "Simanjuntak", "Lubis", "Nasution", "Hutapea", "Wibowo"),
+    "dutch_caribbean": ("Martina", "Rosaria", "Isenia", "Pieternella", "Sint Jago", "Maduro", "Henriquez", "Statia", "Winklaar", "Croes", "Tromp", "Wever", "Koolman", "Werleman", "Kock", "Doran", "Boekhoudt", "Pinas", "Fernandes", "Hooi"),
+}
+for _culture, _surnames in _COMMON_SURNAMES.items():
+    C[_culture] = (C[_culture][0], _surnames)
+
+
 COMPOUND_SURNAME_CULTURES = {"spanish", "catalan", "hispanic_latam", "brazilian", "portuguese", "lusophone_africa"}
 
 # country -> (cultures in priority order, face-bank ethnicity groups, capital)

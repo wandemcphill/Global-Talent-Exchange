@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -22,6 +23,7 @@ from app.players.token_market_defaults import MIN_SHARE_PRICE_COIN, resolve_play
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
+_NATIONS_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 MAX_PRICE_IMPACT_PCT = Decimal("0.0500")
 MIN_PRICE_IMPACT_PCT = Decimal("0.0050")
 PRICE_IMPACT_MULTIPLIER = Decimal("2.5000")
@@ -912,6 +914,9 @@ class PlayerTokenMarketService:
         return filters
 
     def list_market_nations(self, *, source: str | None = None) -> list[dict[str, Any]]:
+        cached = _NATIONS_CACHE.get(source or "all")
+        if cached is not None and cached[0] > time.monotonic():
+            return cached[1]
         rows = self.session.execute(
             select(Country.name, Country.alpha2_code, func.count(Player.id))
             .join(Player, Player.country_id == Country.id)
@@ -920,7 +925,9 @@ class PlayerTokenMarketService:
             .group_by(Country.name, Country.alpha2_code)
             .order_by(Country.name.asc())
         ).all()
-        return [{"name": name, "code": code, "count": int(count)} for name, code, count in rows]
+        result = [{"name": name, "code": code, "count": int(count)} for name, code, count in rows]
+        _NATIONS_CACHE[source or "all"] = (time.monotonic() + 900, result)
+        return result
 
     def _serialize_market_list_item(self, market: PlayerShareMarket) -> dict[str, Any]:
         player = market.player or self._get_player(market.player_id)

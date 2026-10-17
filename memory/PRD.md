@@ -65,6 +65,8 @@ User choices: work inside the existing repo (github.com/wandemcphill/Global-Tale
 - scripts/reprice_national_regen_markets.py repriced all 11,200 untraded national-regen markets (circulating 0 only; the old price is kept in metadata). bulk_issue_regen_markets uses the model for gtex_national_seed going forward.
 - GET /api/v2/players/markets gained source=regen|real and nation=<country name or alpha2> filters. Items now carry image_url (primary portrait), nationality_code and is_regen. New GET /api/v2/players/markets/nations?source= returns name/code/count.
 - React ShareMarket: 'Regens only' toggle, nation dropdown with counts, photo thumbnails, Regen badge, debounced search.
+- The gtex_regen lane (12,000 older tradeable regens, 9,256 with numbered names like 'Harry Robinson 48', no photos) was repaired by scripts/repair_gtex_regen_lane.py: unique country-true names (unique across both lanes), Cloudinary face-bank portrait rows, previous name kept in dna_profile.previous_full_name. The /markets/nations result is cached in memory for 15 min.
+- Known gap: about 16k real (sportmonks) players have no portrait row in the source data, so they show initials thumbnails.
 
 ## Backlog
 - P0: Bridge the owner-console ledger with the repo's existing wallet ledger: DONE (iteration 2).

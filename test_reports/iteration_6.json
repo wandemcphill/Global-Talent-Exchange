@@ -1,0 +1,49 @@
+{
+  "summary": "Verified Regens-only filter + regen share pricing end-to-end on LIVE DB. Backend pytest suite 14/14 green (/app/backend/tests/test_regen_filter_pricing.py): pure pricing function monotonicity + bounds + calibration; all 11,200 gtex_national_seed markets tagged pricing_model='regen_rating_potential_rarity_v1'; share_price_coin matches regen_share_price() for 20/20 random seeds; medians by rarity common 0.025 / rare 0.037 / elite 0.058 / legendary 0.089 (all within spec); GET /markets/nations?source=regen returns 158 nations with name/code/count; GET /markets?source=regen&nation=Japan returns only Japan regens, prices 0.027-0.09 (never 0.001); nation=JP alpha-2 works; source=real returns no regens; search=Ritsu&source=regen excludes real Ritsu Doan. UI /app/market: Regens-only toggle flips 15/15 rows to REGEN badge, Japan select labelled 'Japan (526)' narrows to Japanese regens with East-Asian Cloudinary faces and prices 0.0276-0.0608, toggle off restores mixed real players with sportmonks thumbnails. No Buy clicks. Mobile 390 filter row wraps cleanly (search 316w, toggle+select below).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/v2/players/markets/nations?source=regen", "issue": "Cold-call latency up to ~100s against LIVE Supabase (hits Cloudflare 100s edge timeout → 502). Warm response is ~0.5-4s. Previous iteration quoted ~10s cold; now observed ~100s. Suggest server-side cache or materialised view for /markets/nations."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ShareMarket.Thumb", "issue": "Many regen rows fall back to initials-square because image_url is null. Spec expects a photo thumbnail on every regen row; actual Japan coverage is only ~70/526 (13%) with Cloudinary portraits. In regens-only default page 1, 5/15 rows are fallbacks (all Finland 'Aapo' variants and some 'Haruto Ito' numeric clones in Japan).", "selector": "tr[data-testid^='share-row-'] img", "priority": "MEDIUM"},
+      {"component": "ShareMarket default view (toggle off)", "issue": "~50% of real-player rows also render as initials fallback because portrait image_metadata.is_primary is unset. Confirmed via API: 71/100 default items have image_url=null.", "selector": "tr[data-testid^='share-row-'] img", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "ShareMarket Filters -> <select> nation list", "issue": "React dev warning: '<span> cannot be a child of <option>' hydration error. Caused by Emergent instrumentation wrapping {n.name} ({fmt(n.count)}) in a <span> inside the <option>. Harmless at runtime but spams console. Options: render pre-concatenated string ({`${n.name} (${fmt(n.count)})`}) or disable instrumentation for options.", "affected_selectors": ["[data-testid='share-market-nation-select'] option"]},
+      {"flow": "PlayerDrawer regen dossier opened from share-row click", "issue": "Drawer opens in loading state ('Scouting Report · Pulling the academy file...') and did not render drawer-share-market price in the window observed; could not visually confirm drawer price == row price. Row price 0.0326 (Ao Mitoma, Japan). Drawer eventually fills but takes long on first open; add a visible timeout/retry label.", "affected_selectors": ["[data-testid='drawer-regen-dossier']", "[data-testid='drawer-share-market']"]}
+    ],
+    "design_issues": [
+      {"screen": "/app/market share-market panel (desktop)", "issues": ["Default regens-only view mixes Cloudinary portraits with grey initials squares side by side - looks inconsistent. If portrait coverage can't be lifted, consider a uniform generated avatar for null image_url (silhouette matching nation ethnicity) so the rows look designed, not broken."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_regen_filter_pricing.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Backfill Cloudinary portraits for the older gtex_regen lane (456/526 Japan regens, i.e. ~87% missing). Spec text 'East-Asian face thumbnails' is only true for the 70 gtex_national_seed Japan rows.",
+    "Backfill sportmonks CDN image_url for real players (71% missing on page 1). Check _serialize_market_list_item's reliance on image_metadata.is_primary - either flip is_primary=true for the first available image, or fall back to any image.source_url.",
+    "Fix hydration warning in ShareMarket.tsx:27 — use template string so <option> text has no <span> child: <option key={n.name} value={n.name}>{`${n.name} (${fmt(n.count)})`}</option>.",
+    "Cache /api/v2/players/markets/nations?source=regen (158-row GROUP BY over ingestion_players × country × market joins). Cold-call hits Cloudflare 100s edge timeout; add Redis / in-memory TTL or a nightly refreshed Postgres materialised view."
+  ],
+  "critical_code_review_comments": [
+    "regen_share_pricing.regen_share_price is a pure, monotone, bounded function - good. Fully covered by 5 unit tests here. Pricing model id is embedded in each market's metadata_json for forward compatibility.",
+    "legacy_token_service._source_nation_filters correctly OR's Country.name case-insensitive with alpha2_code uppercase, so nation='Japan' and nation='JP' both work.",
+    "ShareMarket.tsx debounce (450ms) is in place from previous iteration - no longer requires Enter. Good.",
+    "/markets/nations SELECT has 3 joins and GROUP BY without a covering index; add index on (ingestion_players.country_id, ingestion_players.is_tradable) and/or (player_share_markets.player_id, status) to drop cold latency.",
+    "Agustín Bravo (real, Argentina) shows share_price_coin 0.1701 while most other real players sit at 0.05. Worth confirming real-player pricing path isn't accidentally running the regen formula on a few rows."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_regen_filter_pricing.py (new, 14 tests, ~13s warm, ~215s cold due to /markets/nations warmup)"
+  ],
+  "success_rate": {"backend": "100% (14/14 pytest, pricing + API + DB)", "frontend": "90% (toggle/select/prices/mobile pass; portrait coverage gap for both regens and reals; drawer price match not confirmed within observation window)"},
+  "test_credentials": "Admin: vidvimedialtd@gmail.com / Desolamcphill89. (used only for login + GET)",
+  "seed_data_creation": "None. READ-ONLY: psycopg SELECTs + GET requests only. No Buy / rental / signup clicks.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Nations endpoint cold-start can take 90-100s and briefly return Cloudflare 502; auth_headers fixture now pre-warms /markets/nations?source=regen and 3 /markets variants with 180s timeout before tests run - keep that. pytest.ini forces -n 2 --dist loadscope; two workers run in parallel so a long warmup inside the module fixture is serialised per-worker. Japan nation yields 526 rows (gtex_regen 456 + gtex_national_seed 70). Only the 70 national_seed rows carry Cloudinary portraits; the 456 fall back to initials in ShareMarket's Thumb. Row test-id is share-row-<player_id>; regen badge test-id share-row-regen-<player_id>.",
+  "rca_of_the_issue": "Portrait coverage gap: _serialize_market_list_item picks portrait = next(image.source_url for image in player.image_metadata if image.is_primary); gtex_regen (older lane) rows have image_metadata rows but none flagged is_primary, so portrait is null. gtex_national_seed rows set is_primary correctly. Fix path: either (a) backfill is_primary=true on the first image_metadata row per gtex_regen player, or (b) relax the picker to fall back to any image.source_url when no primary is set."
+}

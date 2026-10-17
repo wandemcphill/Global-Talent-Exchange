@@ -24,7 +24,7 @@ function Filters({ regenOnly, setRegenOnly, nation, setNation }: any) {
       </button>
       <select data-testid="share-market-nation-select" className="gx-input w-56" value={nation} onChange={(e) => setNation(e.target.value)}>
         <option value="">All nations</option>
-        {(nations || []).map((n: any) => <option key={n.name} value={n.name}>{n.name} ({fmt(n.count)})</option>)}
+        {(nations || []).map((n: any) => <option key={n.name} value={n.name}>{`${n.name} (${fmt(n.count)})`}</option>)}
       </select>
     </div>
   );
