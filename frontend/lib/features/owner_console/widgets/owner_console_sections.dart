@@ -309,8 +309,11 @@ class ControlCenterSection extends StatelessWidget {
     required this.clubId,
     required this.onRetry,
     required this.onNavigate,
+    required this.onClaim,
     required this.reader,
     required this.onResolved,
+    this.claiming = false,
+    this.claimError,
     this.outcome,
   });
 
@@ -318,8 +321,11 @@ class ControlCenterSection extends StatelessWidget {
   final String? clubId;
   final VoidCallback onRetry;
   final ValueChanged<String> onNavigate;
+  final VoidCallback onClaim;
   final OwnerConsoleReader reader;
   final ValueChanged<String> onResolved;
+  final bool claiming;
+  final String? claimError;
   final String? outcome;
 
   @override
@@ -349,12 +355,27 @@ class ControlCenterSection extends StatelessWidget {
             GtexPanel(
               key: const Key('owner-console-claim-club'),
               title: 'Claim your first club',
-              subtitle: 'Owner tools unlock once you run a club',
+              subtitle: 'Starts your squad, staff coach, and the free launch league',
               accent: GtexColors.gold,
-              child: GtexActionButton(
-                label: 'Claim a club',
-                icon: Icons.add_business_rounded,
-                onPressed: () => onNavigate(_clubPath),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  if (claimError != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: GtexSpacing.sm),
+                      child: Text(
+                        claimError!,
+                        key: const Key('owner-console-claim-error'),
+                        style: const TextStyle(color: GtexColors.danger),
+                      ),
+                    ),
+                  GtexActionButton(
+                    key: const Key('owner-console-claim-club-button'),
+                    label: claiming ? 'Starting your club' : 'Claim a club',
+                    icon: Icons.add_business_rounded,
+                    onPressed: claiming ? null : onClaim,
+                  ),
+                ],
               ),
             ),
           GtexPanel(
@@ -513,6 +534,8 @@ class MyClubsSection extends StatelessWidget {
     required this.onRetry,
     required this.onSelectClub,
     required this.onNavigate,
+    required this.onClaim,
+    this.claiming = false,
   });
 
   final Future<OwnerControlCenter> center;
@@ -520,6 +543,8 @@ class MyClubsSection extends StatelessWidget {
   final VoidCallback onRetry;
   final ValueChanged<String> onSelectClub;
   final ValueChanged<String> onNavigate;
+  final VoidCallback onClaim;
+  final bool claiming;
 
   @override
   Widget build(BuildContext context) {
@@ -537,9 +562,9 @@ class MyClubsSection extends StatelessWidget {
         if (d.clubs.isEmpty)
           GtexActionButton(
             key: const Key('owner-console-claim-club-cta'),
-            label: 'Claim a club',
+            label: claiming ? 'Starting your club' : 'Claim a club',
             icon: Icons.add_business_rounded,
-            onPressed: () => onNavigate(_clubPath),
+            onPressed: claiming ? null : onClaim,
           ),
         for (final OwnerClubCard c in d.clubs)
           GtexPanel(

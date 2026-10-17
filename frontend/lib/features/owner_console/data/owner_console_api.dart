@@ -530,6 +530,9 @@ class OwnerReviewQueue {
 abstract class OwnerConsoleReader {
   Future<OwnerControlCenter> fetchControlCenter();
 
+  /// Creates and starts the caller's first club, then opens today's decisions.
+  Future<void> claimClub();
+
   /// Resolves a Today's Decisions item with one of its own action keys.
   Future<OwnerInboxEntry> decide(String itemId, String action);
 
@@ -567,6 +570,11 @@ class OwnerConsoleApi implements OwnerConsoleReader {
   @override
   Future<OwnerControlCenter> fetchControlCenter() async =>
       OwnerControlCenter.fromJson(await client.getMap('/owner/control-center'));
+
+  @override
+  Future<void> claimClub() async {
+    await client.post('/owner/clubs/claim');
+  }
 
   @override
   Future<OwnerInboxEntry> decide(String itemId, String action) async =>

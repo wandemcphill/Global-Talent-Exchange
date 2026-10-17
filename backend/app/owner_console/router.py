@@ -160,6 +160,12 @@ def onboarding(user=Depends(get_current_user), session: Session = Depends(get_se
     }
 
 
+@router.post("/clubs/claim")
+def claim_club(user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
+    state = _run(session, service.claim_starter_club, session, user)
+    return {"club_id": state.club_id, "club_name": state.club_name, "stage": state.stage}
+
+
 @router.post("/clubs/{club_id}/activate")
 def activate(club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
     state = _run(session, service.start_activation, session, user.id, club_id)

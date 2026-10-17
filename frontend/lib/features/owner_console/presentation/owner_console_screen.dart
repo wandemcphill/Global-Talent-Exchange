@@ -53,6 +53,8 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
   late Future<OwnerControlCenter> _center;
   double? _wallet;
   String? _outcome;
+  bool _claiming = false;
+  String? _claimError;
 
   @override
   void initState() {
@@ -67,6 +69,34 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
   }
 
   void _reload() => setState(() => _center = widget.reader.fetchControlCenter());
+
+  Future<void> _claimClub() async {
+    if (_claiming) {
+      return;
+    }
+    setState(() {
+      _claiming = true;
+      _claimError = null;
+    });
+    try {
+      await widget.reader.claimClub();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _claiming = false;
+        _center = widget.reader.fetchControlCenter();
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _claiming = false;
+        _claimError = '$error';
+      });
+    }
+  }
 
   void _resolved(String outcome) => setState(() {
     _outcome = outcome;
@@ -86,6 +116,9 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
           clubId: _clubId,
           onRetry: _reload,
           onNavigate: widget.onNavigate,
+          onClaim: _claimClub,
+          claiming: _claiming,
+          claimError: _claimError,
           reader: widget.reader,
           onResolved: _resolved,
           outcome: _outcome,
@@ -97,6 +130,8 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
           onRetry: _reload,
           onSelectClub: _pickClub,
           onNavigate: widget.onNavigate,
+          onClaim: _claimClub,
+          claiming: _claiming,
         );
       case OwnerConsoleSection.market:
         return MarketSection(onNavigate: widget.onNavigate);

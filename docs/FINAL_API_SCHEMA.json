@@ -7614,6 +7614,12 @@
         "response_model": null
       },
       {
+        "method": "POST",
+        "path": "/api/owner/clubs/claim",
+        "handler": "claim_club",
+        "response_model": null
+      },
+      {
         "method": "GET",
         "path": "/api/owner/clubs/{club_id}",
         "handler": "club",

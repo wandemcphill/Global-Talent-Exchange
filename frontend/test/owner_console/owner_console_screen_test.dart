@@ -55,7 +55,7 @@ Map<String, dynamic> _centerJson({bool withClubs = true}) => <String, dynamic>{
 class _FakeOwner implements OwnerConsoleReader {
   _FakeOwner({this.withClubs = true, this.failDecide = false, this.emptyQueue = false});
 
-  final bool withClubs;
+  bool withClubs;
   final bool failDecide;
   final bool emptyQueue;
   int seeds = 0;
@@ -67,6 +67,12 @@ class _FakeOwner implements OwnerConsoleReader {
   Future<OwnerControlCenter> fetchControlCenter() async {
     centerLoads++;
     return OwnerControlCenter.fromJson(_centerJson(withClubs: withClubs));
+  }
+
+  @override
+  Future<void> claimClub() async {
+    calls.add('claim');
+    withClubs = true;
   }
 
   @override
@@ -200,6 +206,16 @@ void main() {
     await _pump(tester, _FakeOwner(withClubs: false));
     expect(find.byKey(const Key('owner-console-claim-club')), findsOneWidget);
     expect(find.text('All clear - nothing needs you today'), findsOneWidget);
+  });
+
+  testWidgets('claim starts the club on this console', (WidgetTester tester) async {
+    final _FakeOwner owner = _FakeOwner(withClubs: false);
+    await _pump(tester, owner);
+    await tester.tap(find.byKey(const Key('owner-console-claim-club-button')));
+    await tester.pumpAndSettle();
+    expect(owner.calls, contains('claim'));
+    expect(find.text('Lagos Lions'), findsWidgets);
+    expect(find.byKey(const Key('owner-console-claim-club')), findsNothing);
   });
 
   testWidgets('squad section: suggestion needs review, seed is admin-only', (WidgetTester tester) async {

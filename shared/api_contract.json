@@ -12666,6 +12666,19 @@
         "source_file": "backend/app/owner_console/router.py",
         "response_model": null
       },
+      "post_api_v2_owner_clubs_claim": {
+        "method": "POST",
+        "canonical_path": "/api/v2/owner/clubs/claim",
+        "aliases": [
+          "/api/owner/clubs/claim",
+          "/api/v1/owner/clubs/claim",
+          "/api/v2/owner/clubs/claim",
+          "/owner/clubs/claim"
+        ],
+        "handler": "claim_club",
+        "source_file": "backend/app/owner_console/router.py",
+        "response_model": null
+      },
       "post_api_v2_owner_clubs_club_id_academy_intake": {
         "method": "POST",
         "canonical_path": "/api/v2/owner/clubs/{club_id}/academy/intake",
@@ -22450,6 +22463,7 @@
     "/api/v2/owner/capital/distribute": "post_api_v2_owner_capital_distribute",
     "/api/v2/owner/capital/inject": "post_api_v2_owner_capital_inject",
     "/api/v2/owner/capital/sister-transfer": "post_api_v2_owner_capital_sister_transfer",
+    "/api/v2/owner/clubs/claim": "post_api_v2_owner_clubs_claim",
     "/api/v2/owner/clubs/{club_id}": "get_api_v2_owner_clubs_club_id",
     "/api/v2/owner/clubs/{club_id}/academy/intake": "post_api_v2_owner_clubs_club_id_academy_intake",
     "/api/v2/owner/clubs/{club_id}/activate": "post_api_v2_owner_clubs_club_id_activate",
@@ -24183,6 +24197,7 @@
     "/api/owner/capital/distribute": "/api/v2/owner/capital/distribute",
     "/api/owner/capital/inject": "/api/v2/owner/capital/inject",
     "/api/owner/capital/sister-transfer": "/api/v2/owner/capital/sister-transfer",
+    "/api/owner/clubs/claim": "/api/v2/owner/clubs/claim",
     "/api/owner/clubs/{club_id}": "/api/v2/owner/clubs/{club_id}",
     "/api/owner/clubs/{club_id}/academy/intake": "/api/v2/owner/clubs/{club_id}/academy/intake",
     "/api/owner/clubs/{club_id}/activate": "/api/v2/owner/clubs/{club_id}/activate",
@@ -25591,6 +25606,7 @@
     "/api/v1/owner/capital/distribute": "/api/v2/owner/capital/distribute",
     "/api/v1/owner/capital/inject": "/api/v2/owner/capital/inject",
     "/api/v1/owner/capital/sister-transfer": "/api/v2/owner/capital/sister-transfer",
+    "/api/v1/owner/clubs/claim": "/api/v2/owner/clubs/claim",
     "/api/v1/owner/clubs/{club_id}": "/api/v2/owner/clubs/{club_id}",
     "/api/v1/owner/clubs/{club_id}/academy/intake": "/api/v2/owner/clubs/{club_id}/academy/intake",
     "/api/v1/owner/clubs/{club_id}/activate": "/api/v2/owner/clubs/{club_id}/activate",
@@ -26910,6 +26926,7 @@
     "/owner/capital/distribute": "/api/v2/owner/capital/distribute",
     "/owner/capital/inject": "/api/v2/owner/capital/inject",
     "/owner/capital/sister-transfer": "/api/v2/owner/capital/sister-transfer",
+    "/owner/clubs/claim": "/api/v2/owner/clubs/claim",
     "/owner/clubs/{club_id}": "/api/v2/owner/clubs/{club_id}",
     "/owner/clubs/{club_id}/academy/intake": "/api/v2/owner/clubs/{club_id}/academy/intake",
     "/owner/clubs/{club_id}/activate": "/api/v2/owner/clubs/{club_id}/activate",

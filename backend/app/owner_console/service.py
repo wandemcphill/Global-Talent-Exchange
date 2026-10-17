@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models.club_profile import ClubProfile
 from app.owner_console import engine, ledger
-from app.owner_console.ai import write_messages
+from app.owner_console.ai import inbox_body
 from app.owner_console.models import (
     IntegrityFlag,
     OwnerClubState,
@@ -135,6 +135,103 @@ def start_activation(session: Session, user_id: str, club_id: str) -> OwnerClubS
             memo="Welcome Fan Coin (promotional, non-withdrawable)",
         )
     return state
+
+
+def claim_starter_club(session: Session, user) -> OwnerClubState:
+    """Give this account a runnable club and today's first decisions.
+
+    An existing owner club is left as it is. Otherwise the oldest owned club
+    profile is activated, or a starter profile is created, then a squad, the
+    staff coach, and the free launch league are filled in and the world ticks
+    once.
+    """
+    existing = user_states(session, user.id)
+    if existing:
+        return existing[0]
+    profiles = owned_profiles(session, user.id)
+    if profiles:
+        state = start_activation(session, user.id, profiles[0].id)
+    else:
+        state = start_activation(session, user.id, _create_starter_profile(session, user).id)
+    _bootstrap_starter_club(session, user.id, state)
+    return state
+
+
+def _create_starter_profile(session: Session, user):
+    from app.access_control.service import AccessControlService
+    from app.auth.service import AuthService
+    from app.clubs.ownership_cap import ClubOwnershipCapError, assert_can_acquire_club
+    from app.models.club_profile import ClubLifecycleStatus, ClubProfile, ClubType
+    from app.services.club_dynasty_service import ClubDynastyService
+    from app.services.club_reputation_service import ClubReputationService
+    from app.services.club_trophy_service import ClubTrophyService
+
+    try:
+        assert_can_acquire_club(session, user.id)
+    except ClubOwnershipCapError as exc:
+        raise OwnerError(exc.reason, 409) from exc
+    label = (getattr(user, "display_name", None) or getattr(user, "username", None) or "Owner").strip()
+    club_name = f"{label} FC"[:120]
+    club = ClubProfile(
+        owner_user_id=user.id,
+        club_name=club_name,
+        short_name=(label[:4] or "OWN").upper(),
+        club_type=ClubType.COMMUNITY,
+        lifecycle_status=ClubLifecycleStatus.ACTIVE,
+        slug=AuthService()._generate_unique_club_slug(session, club_name),
+        primary_color="#0F766E",
+        secondary_color="#F8FAFC",
+        accent_color="#EA580C",
+        country_code="NG",
+        city_name="Lagos",
+        visibility="public",
+    )
+    session.add(club)
+    session.flush()
+    ClubReputationService(session).ensure_profile(club.id)
+    ClubDynastyService(session).ensure_progress(club.id)
+    ClubTrophyService(session).ensure_cabinet(club.id)
+    AccessControlService(session).ensure_club_organization(club, owner_user_id=user.id)
+    session.flush()
+    return club
+
+
+def _bootstrap_starter_club(session: Session, user_id: str, state: OwnerClubState) -> None:
+    from app.owner_console import competitions as comps
+
+    if state.stage == "squad":
+        _sign_starter_squad(session, state)
+    if state.stage == "manager":
+        appoint_manager(session, user_id, state.club_id, None)
+    comps.ensure_seed(session)
+    league = session.scalar(
+        select(OwnerCompetition).where(
+            OwnerCompetition.name == "Naija Rising Stars League",
+            OwnerCompetition.status == "open",
+        )
+    )
+    already_in = session.scalar(select(OwnerCompetitionEntry).where(OwnerCompetitionEntry.club_id == state.club_id))
+    if league is not None and already_in is None and state.stage != "squad":
+        comps.enter_competition(session, user_id, league.id, state.club_id)
+    if state.last_tick_at is None and state.stage in ("competition", "active"):
+        tick_club(session, state)
+    if state.stage == "competition":
+        state.stage = "active"
+
+
+def _sign_starter_squad(session: Session, state: OwnerClubState) -> None:
+    current = squad(session, state.club_id)
+    needed = max(0, MIN_SQUAD - len(current))
+    if needed:
+        regens = engine.generate_regens(state.club_id, state.world_day, 1, 12, needed)
+        has_keeper = any(p.position.startswith("goal") for p in current) or any(
+            regen["position"].startswith("goal") for regen in regens
+        )
+        if regens and not has_keeper:
+            regens[0]["position"] = "goalkeeper"
+        for regen in regens:
+            _add_regen(session, state.club_id, regen)
+    _advance_stage_after_squad(session, state)
 
 
 def squad(session: Session, club_id: str, include_inactive: bool = False) -> list[OwnerSquadPlayer]:
@@ -837,13 +934,10 @@ def tick_club(session: Session, state: OwnerClubState, use_ai: bool = True) -> d
             )
         )
     items = [p[0] for p in pending]
-    prompts = [(idx, p[1]) for idx, p in enumerate(pending) if p[1]]
-    if use_ai and prompts:
-        texts = write_messages([p for _, p in prompts])
-        for (idx, _), text in zip(prompts, texts):
-            if text:
-                items[idx].body = text
-                items[idx].ai_generated = True
+    for item in items:
+        item.body = inbox_body(item.sender, item.what, item.why)
+        item.ai_generated = False
+    del use_ai
     for item in items:
         session.add(item)
     snapshot_value(session, state)
