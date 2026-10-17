@@ -417,8 +417,15 @@ def test_showroom_labels_club_ownership_and_keeps_a_static_fallback(client, boot
         assert labels["Harbour Jet"] == "Club"
         assert labels["Lagoon Coach"] == "Not owned"
         models = {item["name"]: item["model_file"] for item in room["exhibits"]}
-        assert models["Harbour Jet"] == "assets/showroom/harbour_jet.glb"
-        assert models["Lagoon Coach"] == "assets/showroom/lagoon_coach.glb"
+        assert models["Harbour Jet"] == "assets/showroom/aurelius_x1_private_jet.glb"
+        assert models["Lagoon Coach"] == "assets/showroom/gtex_voyager_club_coach.glb"
+        assert models["Legacy Arena"] == "assets/showroom/legacy_arena_stadium.glb"
+        assert models["Performance Campus"] == "assets/showroom/gtex_performance_campus.glb"
+        arena = next(item for item in room["exhibits"] if item["name"] == "Legacy Arena")
+        assert arena["ownership_label"] == "Club"
+        assert arena["status"] == "facility"
+        assert "price" not in arena
+        assert all(item["category"] != "vehicle" for item in room["exhibits"])
         from app.club_legacy.models import ClubLegacyAsset, ClubLegacyCatalogueItem
 
         watch = session.scalar(select(ClubLegacyCatalogueItem).where(ClubLegacyCatalogueItem.sku == "gtex-watch-icon"))
@@ -439,7 +446,8 @@ def test_showroom_labels_club_ownership_and_keeps_a_static_fallback(client, boot
         ]
         assert personal
         assert personal[0]["owner_class"] == "owner"
-        assert personal[0]["model_file"] == "assets/showroom/icon_watch.glb"
+        assert personal[0]["model_file"] == "assets/showroom/meridian_luxury_watch.glb"
+        assert personal[0]["preview_file"] == "assets/showroom/meridian_luxury_watch.png"
         assert all(
             item["ownership_label"] == "Club"
             for item in room["exhibits"]

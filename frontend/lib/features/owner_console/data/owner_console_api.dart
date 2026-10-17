@@ -9,6 +9,7 @@ class ShowroomExhibit {
     required this.ownershipLabel,
     required this.fallbackLabel,
     this.modelFile,
+    this.previewFile,
     this.owned = false,
   });
 
@@ -19,6 +20,7 @@ class ShowroomExhibit {
     ownershipLabel: '${json['ownership_label'] ?? 'Not owned'}',
     fallbackLabel: '${json['fallback_label'] ?? 'Static card'}',
     modelFile: _text(json['model_file']),
+    previewFile: _text(json['preview_file']),
     owned: json['owned'] == true,
   );
 
@@ -28,6 +30,7 @@ class ShowroomExhibit {
   final String ownershipLabel;
   final String fallbackLabel;
   final String? modelFile;
+  final String? previewFile;
   final bool owned;
 }
 

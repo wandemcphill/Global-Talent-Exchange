@@ -26,21 +26,16 @@ class ClubLegacyShowroom extends StatefulWidget {
 class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
   int _index = 0;
   double _yaw = 0;
+  double _pitch = 0;
+  double _zoom = 1;
   int _ticket = 0;
   ShowroomGlb? _model;
   Object? _loadError;
-  final TransformationController _transform = TransformationController();
 
   @override
   void initState() {
     super.initState();
     _loadCurrent();
-  }
-
-  @override
-  void dispose() {
-    _transform.dispose();
-    super.dispose();
   }
 
   ShowroomExhibit? get _current =>
@@ -49,8 +44,11 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
           : widget.exhibits[_index.clamp(0, widget.exhibits.length - 1)];
 
   void _reset() {
-    setState(() => _yaw = 0);
-    _transform.value = Matrix4.identity();
+    setState(() {
+      _yaw = 0;
+      _pitch = 0;
+      _zoom = 1;
+    });
   }
 
   void _turn(double delta) => setState(() => _yaw += delta);
@@ -104,9 +102,9 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
         icon: Icons.museum_outlined,
       );
     }
-    return Column(
+    return ListView(
       key: const Key('club-showroom'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+      padding: const EdgeInsets.all(GtexSpacing.sm),
       children: <Widget>[
         _stage(exhibit, reduceMotion),
         const SizedBox(height: GtexSpacing.sm),
@@ -216,6 +214,11 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
   }
 
   Widget _staticCard(ShowroomExhibit exhibit) {
+    final String preview = exhibitPreviewPath(
+      category: exhibit.category,
+      previewFile: exhibit.previewFile,
+      modelFile: exhibit.modelFile,
+    );
     return DecoratedBox(
       key: const Key('club-showroom-static-card'),
       decoration: BoxDecoration(
@@ -223,18 +226,29 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: GtexColors.gold.withValues(alpha: 0.5)),
       ),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(_icon(exhibit.category), color: GtexColors.gold, size: 64),
-            const SizedBox(height: 8),
-            Text(
-              exhibit.fallbackLabel,
-              style: const TextStyle(color: GtexColors.text),
+      child: Image.asset(
+        preview,
+        key: const Key('club-showroom-preview'),
+        fit: BoxFit.contain,
+        errorBuilder: (
+          BuildContext context,
+          Object error,
+          StackTrace? stackTrace,
+        ) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Icon(_icon(exhibit.category), color: GtexColors.gold, size: 64),
+                const SizedBox(height: 8),
+                Text(
+                  exhibit.fallbackLabel,
+                  style: const TextStyle(color: GtexColors.text),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -267,19 +281,27 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
         child: CircularProgressIndicator(key: Key('club-showroom-loading')),
       );
     }
-    return InteractiveViewer(
+    return GestureDetector(
       key: const Key('club-showroom-zoom'),
-      transformationController: _transform,
-      minScale: 0.8,
-      maxScale: 2.5,
+      onScaleUpdate: (ScaleUpdateDetails details) {
+        setState(() {
+          _yaw += details.focalPointDelta.dx * 0.01;
+          _pitch = (_pitch + details.focalPointDelta.dy * 0.01).clamp(
+            -1.2,
+            1.2,
+          );
+          if (details.pointerCount > 1) {
+            _zoom = (_zoom * details.scale).clamp(0.8, 2.5);
+          }
+        });
+      },
       child: Center(
-        child: CustomPaint(
-          key: const Key('club-showroom-model-loaded'),
-          size: const Size(220, 160),
-          painter: _MeshPainter(
-            model.displayPositions,
-            model.displayIndices,
-            _yaw,
+        child: Transform.scale(
+          scale: _zoom,
+          child: CustomPaint(
+            key: const Key('club-showroom-model-loaded'),
+            size: const Size(220, 160),
+            painter: _MeshPainter(model.parts, _yaw, _pitch),
           ),
         ),
       ),
@@ -310,9 +332,9 @@ class _ShowroomFullscreen extends StatefulWidget {
 
 class _ShowroomFullscreenState extends State<_ShowroomFullscreen> {
   double _yaw = 0;
+  double _pitch = 0;
   ShowroomGlb? _model;
   Object? _loadError;
-  final TransformationController _transform = TransformationController();
 
   @override
   void initState() {
@@ -334,12 +356,6 @@ class _ShowroomFullscreenState extends State<_ShowroomFullscreen> {
         }
       },
     );
-  }
-
-  @override
-  void dispose() {
-    _transform.dispose();
-    super.dispose();
   }
 
   @override
@@ -374,28 +390,32 @@ class _ShowroomFullscreenState extends State<_ShowroomFullscreen> {
             SizedBox(
               height: 360,
               child:
-                  widget.reduceMotion
-                      ? const SizedBox.shrink()
-                      : _loadError != null
-                      ? Text(
-                        widget.exhibit.fallbackLabel,
-                        key: const Key('club-showroom-fullscreen-static'),
+                  widget.reduceMotion || _loadError != null
+                      ? Image.asset(
+                        exhibitPreviewPath(
+                          category: exhibit.category,
+                          previewFile: exhibit.previewFile,
+                          modelFile: exhibit.modelFile,
+                        ),
+                        key: const Key('club-showroom-fullscreen-preview'),
+                        fit: BoxFit.contain,
                       )
                       : _model == null
                       ? const Center(child: CircularProgressIndicator())
-                      : InteractiveViewer(
-                        transformationController: _transform,
-                        minScale: 0.8,
-                        maxScale: 2.5,
+                      : GestureDetector(
+                        onScaleUpdate: (ScaleUpdateDetails details) {
+                          setState(() {
+                            _yaw += details.focalPointDelta.dx * 0.01;
+                            _pitch = (_pitch +
+                                    details.focalPointDelta.dy * 0.01)
+                                .clamp(-1.2, 1.2);
+                          });
+                        },
                         child: Center(
                           child: CustomPaint(
                             key: const Key('club-showroom-fullscreen-model'),
                             size: const Size(280, 180),
-                            painter: _MeshPainter(
-                              _model!.displayPositions,
-                              _model!.displayIndices,
-                              _yaw,
-                            ),
+                            painter: _MeshPainter(_model!.parts, _yaw, _pitch),
                           ),
                         ),
                       ),
@@ -506,15 +526,15 @@ class _ShowroomSectionState extends State<ShowroomSection> {
 }
 
 class _MeshPainter extends CustomPainter {
-  _MeshPainter(this.positions, this.indices, this.yaw);
+  _MeshPainter(this.parts, this.yaw, this.pitch);
 
-  final Float32List positions;
-  final Uint32List indices;
+  final List<ShowroomMeshPart> parts;
   final double yaw;
+  final double pitch;
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (positions.length < 3 || indices.length < 3) {
+    if (parts.isEmpty) {
       return;
     }
     double minX = double.infinity;
@@ -523,23 +543,25 @@ class _MeshPainter extends CustomPainter {
     double maxX = -double.infinity;
     double maxY = -double.infinity;
     double maxZ = -double.infinity;
-    for (int i = 0; i < positions.length; i += 3) {
-      final double x = positions[i];
-      final double y = positions[i + 1];
-      final double z = positions[i + 2];
-      minX = math.min(minX, x);
-      minY = math.min(minY, y);
-      minZ = math.min(minZ, z);
-      maxX = math.max(maxX, x);
-      maxY = math.max(maxY, y);
-      maxZ = math.max(maxZ, z);
+    for (final ShowroomMeshPart part in parts) {
+      for (int i = 0; i < part.positions.length; i += 3) {
+        final double x = part.positions[i];
+        final double y = part.positions[i + 1];
+        final double z = part.positions[i + 2];
+        minX = math.min(minX, x);
+        minY = math.min(minY, y);
+        minZ = math.min(minZ, z);
+        maxX = math.max(maxX, x);
+        maxY = math.max(maxY, y);
+        maxZ = math.max(maxZ, z);
+      }
     }
     final double extent = math.max(
       maxX - minX,
       math.max(maxY - minY, maxZ - minZ),
     );
-    final double scale =
-        extent == 0 ? 1 : math.min(size.width, size.height) * 0.86 / extent;
+    final double unit = extent == 0 ? 1 : extent;
+    final double pixel = math.min(size.width, size.height) * 0.92;
     final double midX = (minX + maxX) / 2;
     final double midY = (minY + maxY) / 2;
     final double midZ = (minZ + maxZ) / 2;
@@ -547,68 +569,72 @@ class _MeshPainter extends CustomPainter {
     final double cy = size.height / 2;
     final double cosY = math.cos(yaw);
     final double sinY = math.sin(yaw);
-    final int vertexCount = positions.length ~/ 3;
-    final int triangleCount = indices.length ~/ 3;
+    final double cosP = math.cos(pitch);
+    final double sinP = math.sin(pitch);
 
-    (Offset, double) project(int vertex) {
-      final double x = positions[vertex * 3] - midX;
-      final double y = positions[vertex * 3 + 1] - midY;
-      final double z = positions[vertex * 3 + 2] - midZ;
+    (Offset, double) project(Float32List positions, int vertex) {
+      final double x = (positions[vertex * 3] - midX) / unit;
+      final double y = (positions[vertex * 3 + 1] - midY) / unit;
+      final double z = (positions[vertex * 3 + 2] - midZ) / unit;
       final double xr = x * cosY + z * sinY;
+      final double yr = y;
       final double zr = -x * sinY + z * cosY;
-      final double perspective = 3.2 / (3.2 + zr);
+      final double yp = yr * cosP - zr * sinP;
+      final double zp = yr * sinP + zr * cosP;
+      final double perspective = 2.6 / (2.6 + zp);
       return (
-        Offset(cx + xr * scale * perspective, cy - y * scale * perspective),
-        zr,
+        Offset(cx + xr * pixel * perspective, cy - yp * pixel * perspective),
+        zp,
       );
     }
 
-    final List<({Path path, double depth})> drawn =
-        <({Path path, double depth})>[];
-    for (int triangle = 0; triangle < triangleCount; triangle++) {
-      final int index = triangle * 3;
-      final int a = indices[index];
-      final int b = indices[index + 1];
-      final int c = indices[index + 2];
-      if (a >= vertexCount || b >= vertexCount || c >= vertexCount) {
-        continue;
+    final List<({Path path, double depth, Color color})> drawn =
+        <({Path path, double depth, Color color})>[];
+    for (final ShowroomMeshPart part in parts) {
+      final int vertexCount = part.positions.length ~/ 3;
+      for (int index = 0; index + 2 < part.indices.length; index += 3) {
+        final int a = part.indices[index];
+        final int b = part.indices[index + 1];
+        final int c = part.indices[index + 2];
+        if (a >= vertexCount || b >= vertexCount || c >= vertexCount) {
+          continue;
+        }
+        final (Offset pa, double da) = project(part.positions, a);
+        final (Offset pb, double db) = project(part.positions, b);
+        final (Offset pc, double dc) = project(part.positions, c);
+        drawn.add((
+          path:
+              Path()
+                ..moveTo(pa.dx, pa.dy)
+                ..lineTo(pb.dx, pb.dy)
+                ..lineTo(pc.dx, pc.dy)
+                ..close(),
+          depth: (da + db + dc) / 3,
+          color: part.color,
+        ));
       }
-      final (Offset pa, double da) = project(a);
-      final (Offset pb, double db) = project(b);
-      final (Offset pc, double dc) = project(c);
-      drawn.add((
-        path:
-            Path()
-              ..moveTo(pa.dx, pa.dy)
-              ..lineTo(pb.dx, pb.dy)
-              ..lineTo(pc.dx, pc.dy)
-              ..close(),
-        depth: (da + db + dc) / 3,
-      ));
     }
     drawn.sort(
-      (({Path path, double depth}) left, ({Path path, double depth}) right) =>
-          right.depth.compareTo(left.depth),
+      (
+        ({Path path, double depth, Color color}) left,
+        ({Path path, double depth, Color color}) right,
+      ) => right.depth.compareTo(left.depth),
     );
     final Paint fill = Paint();
-    final Paint line =
-        Paint()
-          ..color = const Color(0xFF1A1408)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 0.6;
     final double far = drawn.isEmpty ? 0 : drawn.first.depth;
     final double near = drawn.isEmpty ? 1 : drawn.last.depth;
     final double span = (near - far).abs() < 0.001 ? 1 : (near - far).abs();
-    for (final ({Path path, double depth}) triangle in drawn) {
-      final double shade = ((triangle.depth - far) / span).clamp(0.0, 1.0);
-      fill.color =
-          Color.lerp(const Color(0xFFE0B84A), const Color(0xFFFFF1C2), shade)!;
+    for (final ({Path path, double depth, Color color}) triangle in drawn) {
+      final double shade = (0.45 + 0.55 * ((triangle.depth - far) / span))
+          .clamp(0.35, 1.0);
+      fill.color = Color.lerp(const Color(0xFF1A1408), triangle.color, shade)!;
       canvas.drawPath(triangle.path, fill);
-      canvas.drawPath(triangle.path, line);
     }
   }
 
   @override
   bool shouldRepaint(covariant _MeshPainter oldDelegate) =>
-      oldDelegate.yaw != yaw || oldDelegate.positions != positions;
+      oldDelegate.yaw != yaw ||
+      oldDelegate.pitch != pitch ||
+      oldDelegate.parts != parts;
 }

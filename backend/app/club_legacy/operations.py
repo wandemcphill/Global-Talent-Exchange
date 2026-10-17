@@ -278,9 +278,11 @@ def showroom(session: Session, club_id: str) -> dict:
                 "edition_number": None,
                 "fallback_label": item.fallback_label,
                 "model_file": _model_file(item.category),
+                "preview_file": _preview_file(item.category),
                 "owned": False,
             }
         )
+    exhibits.extend(_facility_exhibits())
     preview_bytes = 180 * 120 * 4
     return {
         "mode": "lightweight-preview",
@@ -316,15 +318,51 @@ def _asset_dict(session: Session, asset: ClubLegacyAsset) -> dict:
         "edition_number": asset.edition_number,
         "fallback_label": item.fallback_label if item else "Static card",
         "model_file": _model_file(item.category if item else None),
+        "preview_file": _preview_file(item.category if item else None),
+    }
+
+
+def _facility_exhibits() -> list[dict]:
+    return [
+        _facility("facility:legacy-arena", "Legacy Arena", "stadium", "Stadium preview"),
+        _facility("facility:performance-campus", "Performance Campus", "campus", "Campus preview"),
+    ]
+
+
+def _facility(exhibit_id: str, name: str, category: str, fallback: str) -> dict:
+    return {
+        "id": exhibit_id,
+        "name": name,
+        "category": category,
+        "owner_class": "club",
+        "ownership_label": "Club",
+        "status": "facility",
+        "edition_number": None,
+        "fallback_label": fallback,
+        "model_file": _model_file(category),
+        "preview_file": _preview_file(category),
+        "owned": True,
     }
 
 
 def _model_file(category: str | None) -> str:
     return {
-        "jet": "assets/showroom/harbour_jet.glb",
-        "coach": "assets/showroom/lagoon_coach.glb",
-        "watch": "assets/showroom/icon_watch.glb",
-    }.get(category or "", "assets/showroom/icon_watch.glb")
+        "jet": "assets/showroom/aurelius_x1_private_jet.glb",
+        "aircraft": "assets/showroom/aurelius_x1_private_jet.glb",
+        "coach": "assets/showroom/gtex_voyager_club_coach.glb",
+        "team_transport": "assets/showroom/gtex_voyager_club_coach.glb",
+        "vehicle": "assets/showroom/velocity_r_hypercar.glb",
+        "watch": "assets/showroom/meridian_luxury_watch.glb",
+        "watch_collectible": "assets/showroom/meridian_luxury_watch.glb",
+        "stadium": "assets/showroom/legacy_arena_stadium.glb",
+        "stadium_facility": "assets/showroom/legacy_arena_stadium.glb",
+        "campus": "assets/showroom/gtex_performance_campus.glb",
+        "training_academy_facility": "assets/showroom/gtex_performance_campus.glb",
+    }.get(category or "", "assets/showroom/meridian_luxury_watch.glb")
+
+
+def _preview_file(category: str | None) -> str:
+    return _model_file(category).removesuffix(".glb") + ".png"
 
 
 def club_valuation(session: Session, club_id: str) -> Decimal:
