@@ -35,6 +35,7 @@ class GteAuthedApi {
     Map<String, Object?> query = const <String, Object?>{},
     Object? body,
     bool auth = true,
+    bool opportunisticAuth = false,
     bool allowRefresh = true,
   }) async {
     final Map<String, String> headers = <String, String>{
@@ -67,6 +68,12 @@ class GteAuthedApi {
         headers['X-User-Id'] = resolvedUserId;
         headers['X-Session-Id'] = resolvedSessionId;
         headers['X-Device-Id'] = resolvedDeviceId;
+      }
+    } else if (opportunisticAuth) {
+      final String resolvedAccessToken =
+          resolvedSession?.accessToken ?? accessToken ?? '';
+      if (resolvedAccessToken.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $resolvedAccessToken';
       }
     }
     final GteTransportResponse response = await transport.send(
@@ -109,8 +116,15 @@ class GteAuthedApi {
     String path, {
     Map<String, Object?> query = const <String, Object?>{},
     bool auth = true,
+    bool opportunisticAuth = false,
   }) async {
-    final Object? body = await request('GET', path, query: query, auth: auth);
+    final Object? body = await request(
+      'GET',
+      path,
+      query: query,
+      auth: auth,
+      opportunisticAuth: opportunisticAuth,
+    );
     if (body is Map) {
       return Map<String, dynamic>.from(body);
     }

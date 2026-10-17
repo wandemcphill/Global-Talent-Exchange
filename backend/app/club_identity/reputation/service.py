@@ -5,7 +5,12 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.club_identity.models.reputation import ClubReputationProfile, PrestigeTier, ReputationEventLog, ReputationSnapshot
+from app.club_identity.models.reputation import (
+    ClubReputationProfile,
+    PrestigeTier,
+    ReputationEventLog,
+    ReputationSnapshot,
+)
 from app.club_identity.reputation.prestige_tier_service import PrestigeTierService
 from app.club_identity.reputation.schemas import (
     ClubPrestigeView,
@@ -16,6 +21,7 @@ from app.club_identity.reputation.schemas import (
     ReputationMilestoneView,
     SeasonReputationSnapshotView,
 )
+from app.models.club_profile import ClubProfile
 
 
 @dataclass(slots=True)
@@ -25,6 +31,7 @@ class ClubReputationQueryService:
 
     def get_reputation(self, club_id: str) -> ClubReputationView:
         profile = self._get_profile(club_id)
+        club = self.session.get(ClubProfile, club_id)
         milestone_events = self.session.scalars(
             select(ReputationEventLog)
             .where(
@@ -46,6 +53,7 @@ class ClubReputationQueryService:
         ]
         return ClubReputationView(
             club_id=club_id,
+            club_name=club.club_name if club is not None else None,
             current_score=profile.current_score,
             current_prestige_tier=PrestigeTier(profile.prestige_tier),
             highest_score=profile.highest_score,

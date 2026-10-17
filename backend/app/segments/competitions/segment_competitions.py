@@ -287,7 +287,13 @@ def get_competition(
     invite_code: str | None = Query(default=None),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
-    result = orchestrator.get(competition_id, user_id=viewer_id, invite_code=invite_code)
+    result = _handle_competition_errors(
+        lambda: orchestrator.get(
+            competition_id,
+            user_id=viewer_id,
+            invite_code=invite_code,
+        )
+    )
     if result is None:
         raise _not_found(competition_id)
     return result

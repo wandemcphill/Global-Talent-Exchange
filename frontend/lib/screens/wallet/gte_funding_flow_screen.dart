@@ -445,7 +445,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
     final String label = _providerLabel(provider);
     switch (_providerStatus(provider)) {
       case 'blocked':
-        return '$label is not available for live wallet deposits. Use KoraPay or bank transfer below.';
+        return '$label is not available for live wallet deposits. Use manual bank transfer below.';
       case 'unavailable':
         return '$label is unavailable until live gateway credentials are configured.';
       default:
@@ -461,7 +461,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
       case 'mock':
         return '$label is not enabled for live production deposits.';
       case 'blocked':
-        return '$label is blocked for production. Use KoraPay or bank transfer below.';
+        return '$label is not available for live wallet deposits. Use manual bank transfer below.';
       case 'unavailable':
         return '$label is unavailable until live gateway credentials are configured.';
       default:
@@ -494,7 +494,9 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
     return GteWalletFlowScaffold(
       title: 'Deposit',
       subtitle:
-          'Add live wallet value through KoraPay checkout or manual bank transfer review.',
+          _providerSupportsCheckout('korapay')
+              ? 'Add live wallet value through KoraPay checkout or manual bank transfer review.'
+              : 'Add live wallet value through manual bank transfer review.',
       icon: Icons.add_card_outlined,
       statusLabel: 'FUND WALLET',
       child: RefreshIndicator(
@@ -587,10 +589,9 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                   Text(
                     walletOverview == null
                         ? 'Loading the live deposit rail and gateway availability.'
-                        : walletOverview.depositMode == 'gateway' ||
-                            walletOverview.depositMode == 'hybrid'
+                        : _providerSupportsCheckout('korapay')
                         ? 'Automatic checkout uses KoraPay deposits. Manual bank transfer remains available below.'
-                        : 'Instant checkout is currently unavailable because deposits are routed through manual bank transfer review.',
+                        : 'Deposits are available through manual bank transfer review below.',
                   ),
                   if (walletOverview != null) ...<Widget>[
                     const SizedBox(height: 8),

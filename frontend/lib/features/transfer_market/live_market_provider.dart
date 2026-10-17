@@ -209,6 +209,7 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
       api.getMap(
         '/players/markets',
         auth: false,
+        opportunisticAuth: true,
         query: <String, Object?>{
           'page': 1,
           'per_page': resultWindow,
