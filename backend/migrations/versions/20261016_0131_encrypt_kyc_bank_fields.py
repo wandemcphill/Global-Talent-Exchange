@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "20261016_0131_encrypt_kyc_bank_fields"
-down_revision = "20261013_0129_open_default_launch_flags"
+down_revision = "20261016_0130_share_event_actor_fingerprint"
 branch_labels = None
 depends_on = None
 
