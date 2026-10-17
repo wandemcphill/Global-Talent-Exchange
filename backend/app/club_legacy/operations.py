@@ -277,6 +277,7 @@ def showroom(session: Session, club_id: str) -> dict:
                 "status": "available",
                 "edition_number": None,
                 "fallback_label": item.fallback_label,
+                "model_file": _model_file(item.category),
                 "owned": False,
             }
         )
@@ -314,7 +315,16 @@ def _asset_dict(session: Session, asset: ClubLegacyAsset) -> dict:
         "status": asset.status,
         "edition_number": asset.edition_number,
         "fallback_label": item.fallback_label if item else "Static card",
+        "model_file": _model_file(item.category if item else None),
     }
+
+
+def _model_file(category: str | None) -> str:
+    return {
+        "jet": "assets/showroom/harbour_jet.glb",
+        "coach": "assets/showroom/lagoon_coach.glb",
+        "watch": "assets/showroom/icon_watch.glb",
+    }.get(category or "", "assets/showroom/icon_watch.glb")
 
 
 def club_valuation(session: Session, club_id: str) -> Decimal:

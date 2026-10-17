@@ -1,12 +1,20 @@
+import 'dart:math' as math;
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
 import '../data/owner_console_api.dart';
+import '../data/showroom_glb.dart';
 
 /// Lightweight club showroom. Match 3D stays on the match scene.
 /// Reduced motion uses the static card instead of the turntable.
 class ClubLegacyShowroom extends StatefulWidget {
-  const ClubLegacyShowroom({super.key, required this.exhibits, this.forceStatic = false});
+  const ClubLegacyShowroom({
+    super.key,
+    required this.exhibits,
+    this.forceStatic = false,
+  });
 
   final List<ShowroomExhibit> exhibits;
   final bool forceStatic;
@@ -18,7 +26,16 @@ class ClubLegacyShowroom extends StatefulWidget {
 class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
   int _index = 0;
   double _yaw = 0;
+  int _ticket = 0;
+  ShowroomGlb? _model;
+  Object? _loadError;
   final TransformationController _transform = TransformationController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrent();
+  }
 
   @override
   void dispose() {
@@ -26,7 +43,10 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
     super.dispose();
   }
 
-  ShowroomExhibit? get _current => widget.exhibits.isEmpty ? null : widget.exhibits[_index.clamp(0, widget.exhibits.length - 1)];
+  ShowroomExhibit? get _current =>
+      widget.exhibits.isEmpty
+          ? null
+          : widget.exhibits[_index.clamp(0, widget.exhibits.length - 1)];
 
   void _reset() {
     setState(() => _yaw = 0);
@@ -35,16 +55,46 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
 
   void _turn(double delta) => setState(() => _yaw += delta);
 
+  Future<void> _loadCurrent() async {
+    final ShowroomExhibit? exhibit = _current;
+    if (exhibit == null) {
+      return;
+    }
+    final int ticket = ++_ticket;
+    final String path = exhibitModelPath(
+      category: exhibit.category,
+      modelFile: exhibit.modelFile,
+    );
+    try {
+      final ShowroomGlb model = await loadShowroomGlb(path);
+      if (!mounted || ticket != _ticket) {
+        return;
+      }
+      setState(() {
+        _model = model;
+        _loadError = null;
+      });
+    } catch (error) {
+      if (!mounted || ticket != _ticket) {
+        return;
+      }
+      setState(() => _loadError = error);
+    }
+  }
+
   Future<void> _openFullscreen(ShowroomExhibit exhibit, bool reduceMotion) {
     return showDialog<void>(
       context: context,
-      builder: (BuildContext context) => _ShowroomFullscreen(exhibit: exhibit, reduceMotion: reduceMotion),
+      builder:
+          (BuildContext context) =>
+              _ShowroomFullscreen(exhibit: exhibit, reduceMotion: reduceMotion),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool reduceMotion = widget.forceStatic || MediaQuery.disableAnimationsOf(context);
+    final bool reduceMotion =
+        widget.forceStatic || MediaQuery.disableAnimationsOf(context);
     final ShowroomExhibit? exhibit = _current;
     if (exhibit == null) {
       return const GtexEmptyState(
@@ -69,10 +119,11 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
                 key: Key('club-showroom-pick-${widget.exhibits[i].id}'),
                 label: Text(widget.exhibits[i].name),
                 selected: i == _index,
-                onSelected: (_) => setState(() {
-                  _index = i;
+                onSelected: (_) {
+                  setState(() => _index = i);
                   _reset();
-                }),
+                  _loadCurrent();
+                },
               ),
           ],
         ),
@@ -81,7 +132,8 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
   }
 
   Widget _stage(ShowroomExhibit exhibit, bool reduceMotion) {
-    final Widget card = reduceMotion ? _staticCard(exhibit) : _turntable(exhibit);
+    final Widget card =
+        reduceMotion ? _staticCard(exhibit) : _turntable(exhibit);
     return GtexPanel(
       key: Key(reduceMotion ? 'club-showroom-static' : 'club-showroom-stage'),
       title: exhibit.name,
@@ -95,9 +147,26 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
           Text(
             exhibit.ownershipLabel,
             key: const Key('club-showroom-ownership'),
-            style: const TextStyle(color: GtexColors.text, fontWeight: FontWeight.w900),
+            style: const TextStyle(
+              color: GtexColors.text,
+              fontWeight: FontWeight.w900,
+            ),
           ),
-          Text(exhibit.fallbackLabel, style: const TextStyle(color: GtexColors.textSecondary, fontSize: 12)),
+          Text(
+            _statusLine(exhibit),
+            key: const Key('club-showroom-model-file'),
+            style: const TextStyle(
+              color: GtexColors.textSecondary,
+              fontSize: 12,
+            ),
+          ),
+          Text(
+            exhibit.fallbackLabel,
+            style: const TextStyle(
+              color: GtexColors.textSecondary,
+              fontSize: 12,
+            ),
+          ),
           if (!reduceMotion) ...<Widget>[
             const SizedBox(height: GtexSpacing.sm),
             Wrap(
@@ -136,7 +205,10 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
                 ),
               ],
             ),
-            Text('Turn ${_yaw.toStringAsFixed(1)}', key: const Key('club-showroom-yaw')),
+            Text(
+              'Turn ${_yaw.toStringAsFixed(1)}',
+              key: const Key('club-showroom-yaw'),
+            ),
           ],
         ],
       ),
@@ -157,26 +229,57 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
           children: <Widget>[
             Icon(_icon(exhibit.category), color: GtexColors.gold, size: 64),
             const SizedBox(height: 8),
-            Text(exhibit.fallbackLabel, style: const TextStyle(color: GtexColors.text)),
+            Text(
+              exhibit.fallbackLabel,
+              style: const TextStyle(color: GtexColors.text),
+            ),
           ],
         ),
       ),
     );
   }
 
+  String _statusLine(ShowroomExhibit exhibit) {
+    final String path = exhibitModelPath(
+      category: exhibit.category,
+      modelFile: exhibit.modelFile,
+    );
+    if (_loadError != null) {
+      return 'Could not read $path';
+    }
+    if (_model == null || _model!.assetPath != path) {
+      return 'Loading $path';
+    }
+    return _model!.loadedLabel;
+  }
+
   Widget _turntable(ShowroomExhibit exhibit) {
+    final String path = exhibitModelPath(
+      category: exhibit.category,
+      modelFile: exhibit.modelFile,
+    );
+    final ShowroomGlb? model = _model;
+    if (_loadError != null) {
+      return _staticCard(exhibit);
+    }
+    if (model == null || model.assetPath != path) {
+      return const Center(
+        child: CircularProgressIndicator(key: Key('club-showroom-loading')),
+      );
+    }
     return InteractiveViewer(
       key: const Key('club-showroom-zoom'),
       transformationController: _transform,
       minScale: 0.8,
       maxScale: 2.5,
       child: Center(
-        child: Transform.rotate(
-          angle: _yaw,
-          child: CustomPaint(
-            key: const Key('club-showroom-model'),
-            size: const Size(180, 120),
-            painter: _ExhibitPainter(exhibit.category),
+        child: CustomPaint(
+          key: const Key('club-showroom-model-loaded'),
+          size: const Size(220, 160),
+          painter: _MeshPainter(
+            model.displayPositions,
+            model.displayIndices,
+            _yaw,
           ),
         ),
       ),
@@ -193,7 +296,10 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
 }
 
 class _ShowroomFullscreen extends StatefulWidget {
-  const _ShowroomFullscreen({required this.exhibit, required this.reduceMotion});
+  const _ShowroomFullscreen({
+    required this.exhibit,
+    required this.reduceMotion,
+  });
 
   final ShowroomExhibit exhibit;
   final bool reduceMotion;
@@ -204,7 +310,31 @@ class _ShowroomFullscreen extends StatefulWidget {
 
 class _ShowroomFullscreenState extends State<_ShowroomFullscreen> {
   double _yaw = 0;
+  ShowroomGlb? _model;
+  Object? _loadError;
   final TransformationController _transform = TransformationController();
+
+  @override
+  void initState() {
+    super.initState();
+    loadShowroomGlb(
+      exhibitModelPath(
+        category: widget.exhibit.category,
+        modelFile: widget.exhibit.modelFile,
+      ),
+    ).then(
+      (ShowroomGlb model) {
+        if (mounted) {
+          setState(() => _model = model);
+        }
+      },
+      onError: (Object error) {
+        if (mounted) {
+          setState(() => _loadError = error);
+        }
+      },
+    );
+  }
 
   @override
   void dispose() {
@@ -224,21 +354,57 @@ class _ShowroomFullscreenState extends State<_ShowroomFullscreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Text(exhibit.name, style: const TextStyle(color: GtexColors.text, fontSize: 22, fontWeight: FontWeight.w900)),
-            Text(exhibit.ownershipLabel, key: const Key('club-showroom-fullscreen-ownership'), style: const TextStyle(color: GtexColors.gold, fontWeight: FontWeight.w800)),
+            Text(
+              exhibit.name,
+              style: const TextStyle(
+                color: GtexColors.text,
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            Text(
+              exhibit.ownershipLabel,
+              key: const Key('club-showroom-fullscreen-ownership'),
+              style: const TextStyle(
+                color: GtexColors.gold,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
             const SizedBox(height: GtexSpacing.sm),
             SizedBox(
               height: 360,
-              child: widget.reduceMotion
-                  ? const SizedBox.shrink()
-                  : InteractiveViewer(
-                      transformationController: _transform,
-                      minScale: 0.8,
-                      maxScale: 2.5,
-                      child: Center(child: Transform.rotate(angle: _yaw, child: CustomPaint(size: const Size(280, 180), painter: _ExhibitPainter(exhibit.category)))),
-                    ),
+              child:
+                  widget.reduceMotion
+                      ? const SizedBox.shrink()
+                      : _loadError != null
+                      ? Text(
+                        widget.exhibit.fallbackLabel,
+                        key: const Key('club-showroom-fullscreen-static'),
+                      )
+                      : _model == null
+                      ? const Center(child: CircularProgressIndicator())
+                      : InteractiveViewer(
+                        transformationController: _transform,
+                        minScale: 0.8,
+                        maxScale: 2.5,
+                        child: Center(
+                          child: CustomPaint(
+                            key: const Key('club-showroom-fullscreen-model'),
+                            size: const Size(280, 180),
+                            painter: _MeshPainter(
+                              _model!.displayPositions,
+                              _model!.displayIndices,
+                              _yaw,
+                            ),
+                          ),
+                        ),
+                      ),
             ),
-            if (widget.reduceMotion) Text(exhibit.fallbackLabel, key: const Key('club-showroom-fullscreen-static')),
+            if (widget.reduceMotion)
+              Text(
+                exhibit.fallbackLabel,
+                key: const Key('club-showroom-fullscreen-static'),
+              ),
             const SizedBox(height: GtexSpacing.sm),
             Wrap(
               spacing: GtexSpacing.xs,
@@ -261,7 +427,11 @@ class _ShowroomFullscreenState extends State<_ShowroomFullscreen> {
                 ),
               ],
             ),
-            if (!widget.reduceMotion) Text('Turn ${_yaw.toStringAsFixed(1)}', key: const Key('club-showroom-fullscreen-yaw')),
+            if (!widget.reduceMotion)
+              Text(
+                'Turn ${_yaw.toStringAsFixed(1)}',
+                key: const Key('club-showroom-fullscreen-yaw'),
+              ),
           ],
         ),
       ),
@@ -291,17 +461,41 @@ class _ShowroomSectionState extends State<ShowroomSection> {
   Widget build(BuildContext context) {
     return FutureBuilder<List<ShowroomExhibit>>(
       future: _exhibits,
-      builder: (BuildContext context, AsyncSnapshot<List<ShowroomExhibit>> snap) {
+      builder: (
+        BuildContext context,
+        AsyncSnapshot<List<ShowroomExhibit>> snap,
+      ) {
         if (snap.connectionState != ConnectionState.done) {
-          return const Padding(padding: EdgeInsets.all(GtexSpacing.md), child: GtexSkeleton.box(height: 220));
+          return const Padding(
+            padding: EdgeInsets.all(GtexSpacing.md),
+            child: GtexSkeleton.box(height: 220),
+          );
         }
         if (snap.hasError || snap.data == null) {
           return const ClubLegacyShowroom(
             forceStatic: true,
             exhibits: <ShowroomExhibit>[
-              ShowroomExhibit(id: 'catalogue:gtex-jet-harbour', name: 'Harbour Jet', category: 'jet', ownershipLabel: 'Not owned', fallbackLabel: 'Static jet card'),
-              ShowroomExhibit(id: 'catalogue:gtex-coach-lagoon', name: 'Lagoon Coach', category: 'coach', ownershipLabel: 'Not owned', fallbackLabel: 'Static coach card'),
-              ShowroomExhibit(id: 'catalogue:gtex-watch-icon', name: 'Icon Watch', category: 'watch', ownershipLabel: 'Not owned', fallbackLabel: 'Static watch card'),
+              ShowroomExhibit(
+                id: 'catalogue:gtex-jet-harbour',
+                name: 'Harbour Jet',
+                category: 'jet',
+                ownershipLabel: 'Not owned',
+                fallbackLabel: 'Static jet card',
+              ),
+              ShowroomExhibit(
+                id: 'catalogue:gtex-coach-lagoon',
+                name: 'Lagoon Coach',
+                category: 'coach',
+                ownershipLabel: 'Not owned',
+                fallbackLabel: 'Static coach card',
+              ),
+              ShowroomExhibit(
+                id: 'catalogue:gtex-watch-icon',
+                name: 'Icon Watch',
+                category: 'watch',
+                ownershipLabel: 'Not owned',
+                fallbackLabel: 'Static watch card',
+              ),
             ],
           );
         }
@@ -311,30 +505,110 @@ class _ShowroomSectionState extends State<ShowroomSection> {
   }
 }
 
-class _ExhibitPainter extends CustomPainter {
-  _ExhibitPainter(this.category);
+class _MeshPainter extends CustomPainter {
+  _MeshPainter(this.positions, this.indices, this.yaw);
 
-  final String category;
+  final Float32List positions;
+  final Uint32List indices;
+  final double yaw;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final Paint paint = Paint()..color = const Color(0xFFD4A017);
-    final Path path = Path();
-    if (category == 'jet') {
-      path
-        ..moveTo(size.width * 0.5, 0)
-        ..lineTo(size.width, size.height * 0.7)
-        ..lineTo(size.width * 0.5, size.height * 0.5)
-        ..lineTo(0, size.height * 0.7)
-        ..close();
-    } else if (category == 'coach') {
-      path.addRRect(RRect.fromRectAndRadius(Rect.fromLTWH(0, size.height * 0.25, size.width, size.height * 0.5), const Radius.circular(12)));
-    } else {
-      path.addOval(Rect.fromCircle(center: Offset(size.width / 2, size.height / 2), radius: size.shortestSide * 0.35));
+    if (positions.length < 3 || indices.length < 3) {
+      return;
     }
-    canvas.drawPath(path, paint);
+    double minX = double.infinity;
+    double minY = double.infinity;
+    double minZ = double.infinity;
+    double maxX = -double.infinity;
+    double maxY = -double.infinity;
+    double maxZ = -double.infinity;
+    for (int i = 0; i < positions.length; i += 3) {
+      final double x = positions[i];
+      final double y = positions[i + 1];
+      final double z = positions[i + 2];
+      minX = math.min(minX, x);
+      minY = math.min(minY, y);
+      minZ = math.min(minZ, z);
+      maxX = math.max(maxX, x);
+      maxY = math.max(maxY, y);
+      maxZ = math.max(maxZ, z);
+    }
+    final double extent = math.max(
+      maxX - minX,
+      math.max(maxY - minY, maxZ - minZ),
+    );
+    final double scale =
+        extent == 0 ? 1 : math.min(size.width, size.height) * 0.86 / extent;
+    final double midX = (minX + maxX) / 2;
+    final double midY = (minY + maxY) / 2;
+    final double midZ = (minZ + maxZ) / 2;
+    final double cx = size.width / 2;
+    final double cy = size.height / 2;
+    final double cosY = math.cos(yaw);
+    final double sinY = math.sin(yaw);
+    final int vertexCount = positions.length ~/ 3;
+    final int triangleCount = indices.length ~/ 3;
+
+    (Offset, double) project(int vertex) {
+      final double x = positions[vertex * 3] - midX;
+      final double y = positions[vertex * 3 + 1] - midY;
+      final double z = positions[vertex * 3 + 2] - midZ;
+      final double xr = x * cosY + z * sinY;
+      final double zr = -x * sinY + z * cosY;
+      final double perspective = 3.2 / (3.2 + zr);
+      return (
+        Offset(cx + xr * scale * perspective, cy - y * scale * perspective),
+        zr,
+      );
+    }
+
+    final List<({Path path, double depth})> drawn =
+        <({Path path, double depth})>[];
+    for (int triangle = 0; triangle < triangleCount; triangle++) {
+      final int index = triangle * 3;
+      final int a = indices[index];
+      final int b = indices[index + 1];
+      final int c = indices[index + 2];
+      if (a >= vertexCount || b >= vertexCount || c >= vertexCount) {
+        continue;
+      }
+      final (Offset pa, double da) = project(a);
+      final (Offset pb, double db) = project(b);
+      final (Offset pc, double dc) = project(c);
+      drawn.add((
+        path:
+            Path()
+              ..moveTo(pa.dx, pa.dy)
+              ..lineTo(pb.dx, pb.dy)
+              ..lineTo(pc.dx, pc.dy)
+              ..close(),
+        depth: (da + db + dc) / 3,
+      ));
+    }
+    drawn.sort(
+      (({Path path, double depth}) left, ({Path path, double depth}) right) =>
+          right.depth.compareTo(left.depth),
+    );
+    final Paint fill = Paint();
+    final Paint line =
+        Paint()
+          ..color = const Color(0xFF1A1408)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.6;
+    final double far = drawn.isEmpty ? 0 : drawn.first.depth;
+    final double near = drawn.isEmpty ? 1 : drawn.last.depth;
+    final double span = (near - far).abs() < 0.001 ? 1 : (near - far).abs();
+    for (final ({Path path, double depth}) triangle in drawn) {
+      final double shade = ((triangle.depth - far) / span).clamp(0.0, 1.0);
+      fill.color =
+          Color.lerp(const Color(0xFFE0B84A), const Color(0xFFFFF1C2), shade)!;
+      canvas.drawPath(triangle.path, fill);
+      canvas.drawPath(triangle.path, line);
+    }
   }
 
   @override
-  bool shouldRepaint(covariant _ExhibitPainter oldDelegate) => oldDelegate.category != category;
+  bool shouldRepaint(covariant _MeshPainter oldDelegate) =>
+      oldDelegate.yaw != yaw || oldDelegate.positions != positions;
 }
