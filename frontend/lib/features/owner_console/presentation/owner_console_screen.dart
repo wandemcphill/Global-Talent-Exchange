@@ -55,6 +55,8 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
   String? _outcome;
   bool _claiming = false;
   String? _claimError;
+  final TextEditingController _city = TextEditingController(text: 'Lagos');
+  final TextEditingController _country = TextEditingController(text: 'NG');
 
   @override
   void initState() {
@@ -68,6 +70,13 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    _city.dispose();
+    _country.dispose();
+    super.dispose();
+  }
+
   void _reload() => setState(() => _center = widget.reader.fetchControlCenter());
 
   Future<void> _claimClub() async {
@@ -79,7 +88,7 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
       _claimError = null;
     });
     try {
-      await widget.reader.claimClub();
+      await widget.reader.claimClub(city: _city.text, country: _country.text);
       if (!mounted) {
         return;
       }
@@ -117,6 +126,8 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
           onRetry: _reload,
           onNavigate: widget.onNavigate,
           onClaim: _claimClub,
+          city: _city,
+          country: _country,
           claiming: _claiming,
           claimError: _claimError,
           reader: widget.reader,

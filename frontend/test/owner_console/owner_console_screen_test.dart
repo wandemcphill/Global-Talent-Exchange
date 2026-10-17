@@ -50,6 +50,17 @@ Map<String, dynamic> _centerJson({bool withClubs = true}) => <String, dynamic>{
   },
   'economy': <String, dynamic>{'wallet': <String, dynamic>{'withdrawable': '20'}, 'club_cash_total': '50', 'pending_payouts': '0', 'earnings_sources': <String, dynamic>{'gate': '30', 'wages': '-12'}},
   'integrity': <String, dynamic>{'score': 98},
+  'legacy': withClubs
+      ? <Map<String, dynamic>>[
+          <String, dynamic>{
+            'club_id': 'c1',
+            'prestige': 12,
+            'development': 20,
+            'financial_strength': 80,
+            'continent_name': 'Africa',
+          },
+        ]
+      : null,
 };
 
 class _FakeOwner implements OwnerConsoleReader {
@@ -70,8 +81,10 @@ class _FakeOwner implements OwnerConsoleReader {
   }
 
   @override
-  Future<void> claimClub() async {
+  Future<void> claimClub({String? city, String? country}) async {
     calls.add('claim');
+    calls.add('claim-city:${city ?? ''}');
+    calls.add('claim-country:${country ?? ''}');
     withClubs = true;
   }
 
@@ -175,6 +188,17 @@ Future<List<String>> _pump(WidgetTester tester, OwnerConsoleReader reader, {Stri
 }
 
 void main() {
+  testWidgets('control center shows prestige, development, and financial strength separately', (WidgetTester tester) async {
+    await _pump(tester, _FakeOwner());
+    expect(find.byKey(const Key('owner-legacy-ratings')), findsOneWidget);
+    expect(find.byKey(const Key('owner-legacy-prestige')), findsOneWidget);
+    expect(find.byKey(const Key('owner-legacy-development')), findsOneWidget);
+    expect(find.byKey(const Key('owner-legacy-financial')), findsOneWidget);
+    expect(find.text('12'), findsWidgets);
+    expect(find.text('20'), findsWidgets);
+    expect(find.text('80'), findsWidgets);
+  });
+
   testWidgets('control center renders decisions, board, health and chips', (WidgetTester tester) async {
     final List<String> visited = await _pump(tester, _FakeOwner());
     expect(find.text('50 GTX'), findsOneWidget);
@@ -214,7 +238,9 @@ void main() {
     await tester.tap(find.byKey(const Key('owner-console-claim-club-button')));
     await tester.pumpAndSettle();
     expect(owner.calls, contains('claim'));
-    expect(find.text('Lagos Lions'), findsWidgets);
+    expect(owner.calls, contains('claim-city:Lagos'));
+    expect(owner.calls, contains('claim-country:NG'));
+    expect(find.text('#2 Lagos Lions'), findsOneWidget);
     expect(find.byKey(const Key('owner-console-claim-club')), findsNothing);
   });
 

@@ -235,14 +235,26 @@ _FEATURE_FLAG_SEEDS: tuple[dict[str, object], ...] = (
         "launch_state": "beta",
         "metadata_json": {"route": "/app/community"},
     },
+    {
+        "feature_key": "club_legacy",
+        "title": "Club Legacy",
+        "description": "Delegation, separate club ratings, and later Club Legacy systems. Off until reviewed.",
+        "enabled": False,
+        "audience": "internal",
+        "launch_state": "internal",
+        "allowed_roles_json": ["admin", "super_admin"],
+        "metadata_json": {"route": "/app/home"},
+    },
 )
 
 _ADMIN_ONLY_FLAG_KEYS = frozenset({"launch_control"})
+# Club Legacy stays off until a later rollout. Do not force it public with the other modules.
+_KEEP_SEEDED_FLAG_KEYS = frozenset({"launch_control", "club_legacy"})
 
 
 def _opened_flag_payload(payload: dict[str, object]) -> dict[str, object]:
     """Product modules are public. Launch Control remains the admin switchboard."""
-    if payload["feature_key"] in _ADMIN_ONLY_FLAG_KEYS:
+    if payload["feature_key"] in _KEEP_SEEDED_FLAG_KEYS:
         return dict(payload)
     opened = dict(payload)
     opened["enabled"] = True

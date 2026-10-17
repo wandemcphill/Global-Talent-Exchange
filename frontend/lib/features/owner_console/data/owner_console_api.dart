@@ -258,6 +258,7 @@ class OwnerControlCenter {
     required this.pendingPayouts,
     required this.earnings,
     required this.integrityScore,
+    this.legacy = const <OwnerLegacyRating>[],
   });
 
   factory OwnerControlCenter.fromJson(Map<String, dynamic> j) {
@@ -284,6 +285,9 @@ class OwnerControlCenter {
         (String k, dynamic v) => MapEntry<String, double>(k, _num(v)),
       ),
       integrityScore: _int(_map(j['integrity'])['score']),
+      legacy: j['legacy'] is List
+          ? _maps(j['legacy']).map(OwnerLegacyRating.fromJson).toList()
+          : const <OwnerLegacyRating>[],
     );
   }
 
@@ -303,6 +307,31 @@ class OwnerControlCenter {
   final double pendingPayouts;
   final Map<String, double> earnings;
   final int integrityScore;
+  final List<OwnerLegacyRating> legacy;
+}
+
+class OwnerLegacyRating {
+  const OwnerLegacyRating({
+    required this.clubId,
+    required this.prestige,
+    required this.development,
+    required this.financialStrength,
+    this.continentName,
+  });
+
+  factory OwnerLegacyRating.fromJson(Map<String, dynamic> j) => OwnerLegacyRating(
+    clubId: '${j['club_id']}',
+    prestige: _int(j['prestige']),
+    development: _int(j['development']),
+    financialStrength: _int(j['financial_strength']),
+    continentName: _text(j['continent_name']),
+  );
+
+  final String clubId;
+  final int prestige;
+  final int development;
+  final int financialStrength;
+  final String? continentName;
 }
 
 class OwnerNationalCompetition {
@@ -531,7 +560,7 @@ abstract class OwnerConsoleReader {
   Future<OwnerControlCenter> fetchControlCenter();
 
   /// Creates and starts the caller's first club, then opens today's decisions.
-  Future<void> claimClub();
+  Future<void> claimClub({String? city, String? country});
 
   /// Resolves a Today's Decisions item with one of its own action keys.
   Future<OwnerInboxEntry> decide(String itemId, String action);
@@ -572,8 +601,14 @@ class OwnerConsoleApi implements OwnerConsoleReader {
       OwnerControlCenter.fromJson(await client.getMap('/owner/control-center'));
 
   @override
-  Future<void> claimClub() async {
-    await client.post('/owner/clubs/claim');
+  Future<void> claimClub({String? city, String? country}) async {
+    await client.post(
+      '/owner/clubs/claim',
+      body: <String, Object?>{
+        if (city != null && city.trim().isNotEmpty) 'city_name': city.trim(),
+        if (country != null && country.trim().isNotEmpty) 'country_code': country.trim(),
+      },
+    );
   }
 
   @override

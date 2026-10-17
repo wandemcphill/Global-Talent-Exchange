@@ -67,6 +67,7 @@ class ClubProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     accent_color: Mapped[str] = mapped_column(String(16), nullable=False)
     home_venue_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     country_code: Mapped[str | None] = mapped_column(String(8), nullable=True, index=True)
+    continent_code: Mapped[str | None] = mapped_column(String(2), nullable=True)
     region_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     city_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)

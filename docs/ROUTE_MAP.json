@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1765,
+  "route_count": 1770,
   "routes": [
     {
       "method": "POST",
@@ -8127,6 +8127,33 @@
     },
     {
       "method": "GET",
+      "path": "/owner/legacy/{club_id}",
+      "effective_paths": [
+        "/api/owner/legacy/{club_id}"
+      ],
+      "file": "backend/app/club_legacy/router.py",
+      "handler": "read_legacy",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.router",
+      "module_mounts": [
+        "club_legacy"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "GET",
       "path": "/sponsors",
       "effective_paths": [
         "/api/sponsors",
@@ -9552,6 +9579,89 @@
       "domain": "club"
     },
     {
+      "method": "POST",
+      "path": "/owner/legacy/recommendations/{recommendation_id}/execute",
+      "effective_paths": [
+        "/api/owner/legacy/recommendations/{recommendation_id}/execute"
+      ],
+      "file": "backend/app/club_legacy/router.py",
+      "handler": "execute_recommendation",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.router",
+      "module_mounts": [
+        "club_legacy"
+      ],
+      "request_shape": {
+        "parameters": [
+          "recommendation_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/legacy/{club_id}/policies/preset",
+      "effective_paths": [
+        "/api/owner/legacy/{club_id}/policies/preset"
+      ],
+      "file": "backend/app/club_legacy/router.py",
+      "handler": "apply_preset",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.router",
+      "module_mounts": [
+        "club_legacy"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/legacy/{club_id}/recommendations",
+      "effective_paths": [
+        "/api/owner/legacy/{club_id}/recommendations"
+      ],
+      "file": "backend/app/club_legacy/router.py",
+      "handler": "create_recommendation",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.router",
+      "module_mounts": [
+        "club_legacy"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
       "method": "PUT",
       "path": "/api/clubs/{club_id}/sale-market/listing",
       "effective_paths": [
@@ -9604,6 +9714,35 @@
       "response_shape": {
         "response_model": "ClubMatchPlanView",
         "returns": "ClubMatchPlanView"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "PUT",
+      "path": "/owner/legacy/{club_id}/policies/{task_key}",
+      "effective_paths": [
+        "/api/owner/legacy/{club_id}/policies/{task_key}"
+      ],
+      "file": "backend/app/club_legacy/router.py",
+      "handler": "set_policy",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.router",
+      "module_mounts": [
+        "club_legacy"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "task_key",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
       },
       "version": "canonical",
       "domain": "club"
@@ -29360,6 +29499,7 @@
       ],
       "request_shape": {
         "parameters": [
+          "body",
           "user",
           "session"
         ]
