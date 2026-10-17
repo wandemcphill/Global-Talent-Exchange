@@ -1,0 +1,57 @@
+name: Temporary formatter for Emergent integration
+
+on:
+  push:
+    branches:
+      - integration/emergent-player-market-20261017
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.ref == 'refs/heads/integration/emergent-player-market-20261017' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: integration/emergent-player-market-20261017
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Install formatters
+        run: python -m pip install black ruff
+      - name: Format and apply safe lint fixes
+        shell: bash
+        run: |
+          files=(
+            backend/app/auth/router.py
+            backend/app/gtex_universe/service.py
+            backend/app/market/service.py
+            backend/app/match_engine/services/team_factory.py
+            backend/app/models/__init__.py
+            backend/app/models/player_token_market.py
+            backend/app/national_team_engine/tournament_service.py
+            backend/app/players/legacy_token_service.py
+            backend/app/players/regen_share_pricing.py
+            backend/app/players/router.py
+            backend/app/players/token_schemas.py
+            backend/app/services/regen_country_name_pools.py
+            backend/app/services/regen_culture_name_pools.py
+            backend/app/services/regen_portrait_service.py
+            backend/migrations/versions/20261017_0132_player_name_trgm_indexes.py
+            backend/migrations/versions/20261017_0133_player_share_price_snapshots.py
+            backend/scripts/bulk_issue_regen_markets.py
+            backend/scripts/reprice_national_regen_markets.py
+            backend/tests/players/test_player_price_history_contract.py
+          )
+          python -m black "${files[@]}"
+          python -m ruff check --fix "${files[@]}"
+          python -m black "${files[@]}"
+          git add "${files[@]}"
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "style: fix GTEX integration lint"
+            git push origin HEAD:integration/emergent-player-market-20261017
+          fi
