@@ -160,9 +160,26 @@ def onboarding(user=Depends(get_current_user), session: Session = Depends(get_se
     }
 
 
+class ClaimClubRequest(BaseModel):
+    city_name: str | None = None
+    country_code: str | None = None
+
+
 @router.post("/clubs/claim")
-def claim_club(user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
-    state = _run(session, service.claim_starter_club, session, user)
+def claim_club(
+    body: ClaimClubRequest | None = None,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    payload = body or ClaimClubRequest()
+    state = _run(
+        session,
+        service.claim_starter_club,
+        session,
+        user,
+        city_name=payload.city_name,
+        country_code=payload.country_code,
+    )
     return {"club_id": state.club_id, "club_name": state.club_name, "stage": state.stage}
 
 
@@ -273,6 +290,15 @@ def world(session: Session = Depends(get_session), user=Depends(get_current_user
     return {"clubs": money.world_clubs(session)}
 
 
+def _legacy_ratings(session: Session, states: list) -> list[dict[str, Any]] | None:
+    from app.club_legacy.flags import legacy_enabled
+    from app.club_legacy.ratings import legacy_snapshot
+
+    if not legacy_enabled(session):
+        return None
+    return [legacy_snapshot(session, state) for state in states]
+
+
 # ---------- control center + inbox ----------
 
 
@@ -355,6 +381,7 @@ def control_center(user=Depends(get_current_user), session: Session = Depends(ge
                 "score": service.integrity_score(session, user.id),
                 "open_high_flags": service.open_high_flags(session, user.id),
             },
+            "legacy": _legacy_ratings(session, states),
         }
 
     return _run(session, go)

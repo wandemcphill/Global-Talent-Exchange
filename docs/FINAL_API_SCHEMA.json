@@ -2228,6 +2228,66 @@
         "response_model": "ClubSaleOfferCollectionView"
       },
       {
+        "method": "POST",
+        "path": "/api/owner/legacy/recommendations/{recommendation_id}/execute",
+        "handler": "execute_recommendation",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/owner/legacy/{club_id}",
+        "handler": "read_legacy",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/owner/legacy/{club_id}/desk",
+        "handler": "read_desk",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/legacy/{club_id}/desk",
+        "handler": "post_desk_action",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/owner/legacy/{club_id}/metrics",
+        "handler": "read_metrics",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/owner/legacy/{club_id}/page",
+        "handler": "read_club_page",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/legacy/{club_id}/policies/preset",
+        "handler": "apply_preset",
+        "response_model": null
+      },
+      {
+        "method": "PUT",
+        "path": "/api/owner/legacy/{club_id}/policies/{task_key}",
+        "handler": "set_policy",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/legacy/{club_id}/recommendations",
+        "handler": "create_recommendation",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/owner/legacy/{club_id}/showroom",
+        "handler": "read_showroom",
+        "response_model": null
+      },
+      {
         "method": "GET",
         "path": "/api/portfolio/clubs",
         "handler": "get_my_club_portfolio",

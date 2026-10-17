@@ -137,7 +137,13 @@ def start_activation(session: Session, user_id: str, club_id: str) -> OwnerClubS
     return state
 
 
-def claim_starter_club(session: Session, user) -> OwnerClubState:
+def claim_starter_club(
+    session: Session,
+    user,
+    *,
+    city_name: str | None = None,
+    country_code: str | None = None,
+) -> OwnerClubState:
     """Give this account a runnable club and today's first decisions.
 
     An existing owner club is left as it is. Otherwise the oldest owned club
@@ -152,18 +158,29 @@ def claim_starter_club(session: Session, user) -> OwnerClubState:
     if profiles:
         state = start_activation(session, user.id, profiles[0].id)
     else:
-        state = start_activation(session, user.id, _create_starter_profile(session, user).id)
+        state = start_activation(
+            session,
+            user.id,
+            _create_starter_profile(session, user, city_name=city_name, country_code=country_code).id,
+        )
     _bootstrap_starter_club(session, user.id, state)
     return state
 
 
-def _create_starter_profile(session: Session, user):
+def _create_starter_profile(
+    session: Session,
+    user,
+    *,
+    city_name: str | None = None,
+    country_code: str | None = None,
+):
     from app.access_control.service import AccessControlService
     from app.auth.service import AuthService
     from app.clubs.ownership_cap import ClubOwnershipCapError, assert_can_acquire_club
     from app.models.club_profile import ClubLifecycleStatus, ClubProfile, ClubType
     from app.services.club_dynasty_service import ClubDynastyService
     from app.services.club_reputation_service import ClubReputationService
+    from app.club_legacy.geography import continent_for_country
     from app.services.club_trophy_service import ClubTrophyService
 
     try:
@@ -182,8 +199,9 @@ def _create_starter_profile(session: Session, user):
         primary_color="#0F766E",
         secondary_color="#F8FAFC",
         accent_color="#EA580C",
-        country_code="NG",
-        city_name="Lagos",
+        country_code=(country_code or "").strip().upper()[:8] or None,
+        continent_code=continent_for_country(country_code),
+        city_name=(city_name or "").strip()[:120] or None,
         visibility="public",
     )
     session.add(club)
@@ -1151,6 +1169,7 @@ def club_card(session: Session, state: OwnerClubState) -> dict[str, Any]:
         "secondary_color": profile.secondary_color if profile else "#0F172A",
         "city": profile.city_name if profile else None,
         "country_code": profile.country_code if profile else None,
+        "continent_code": profile.continent_code if profile else None,
         "stage": state.stage,
         "status": "active" if state.stage == "active" else "activating",
         "competition": {"id": comp.id, "name": comp.name, "status": comp.status} if comp else None,

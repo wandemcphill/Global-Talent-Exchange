@@ -172,7 +172,7 @@ class _Quiet extends StatelessWidget {
 }
 
 class _Stat extends StatelessWidget {
-  const _Stat(this.label, this.value, {this.warn = false});
+  const _Stat(this.label, this.value, {super.key, this.warn = false});
 
   final String label;
   final String value;
@@ -310,6 +310,8 @@ class ControlCenterSection extends StatelessWidget {
     required this.onRetry,
     required this.onNavigate,
     required this.onClaim,
+    required this.city,
+    required this.country,
     required this.reader,
     required this.onResolved,
     this.claiming = false,
@@ -322,6 +324,8 @@ class ControlCenterSection extends StatelessWidget {
   final VoidCallback onRetry;
   final ValueChanged<String> onNavigate;
   final VoidCallback onClaim;
+  final TextEditingController city;
+  final TextEditingController country;
   final OwnerConsoleReader reader;
   final ValueChanged<String> onResolved;
   final bool claiming;
@@ -351,6 +355,26 @@ class ControlCenterSection extends StatelessWidget {
         final List<OwnerClubCard> clubs = d.clubs;
         final Set<String> myIds = clubs.map((OwnerClubCard c) => c.clubId).toSet();
         return _sectionList(<Widget>[
+          if (d.legacy.isNotEmpty)
+            GtexPanel(
+              key: const Key('owner-legacy-ratings'),
+              title: 'Club Legacy',
+              subtitle: d.legacy.first.continentName ?? 'Location not set',
+              accent: GtexColors.gold,
+              child: Wrap(
+                spacing: GtexSpacing.sm,
+                runSpacing: GtexSpacing.sm,
+                children: <Widget>[
+                  _Stat('Prestige', '${d.legacy.first.prestige}', key: const Key('owner-legacy-prestige')),
+                  _Stat('Development', '${d.legacy.first.development}', key: const Key('owner-legacy-development')),
+                  _Stat(
+                    'Financial strength',
+                    '${d.legacy.first.financialStrength}',
+                    key: const Key('owner-legacy-financial'),
+                  ),
+                ],
+              ),
+            ),
           if (clubs.isEmpty)
             GtexPanel(
               key: const Key('owner-console-claim-club'),
@@ -360,6 +384,19 @@ class ControlCenterSection extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
+                  TextField(
+                    key: const Key('owner-claim-city'),
+                    controller: city,
+                    style: const TextStyle(color: GtexColors.text),
+                    decoration: const InputDecoration(labelText: 'City'),
+                  ),
+                  TextField(
+                    key: const Key('owner-claim-country'),
+                    controller: country,
+                    style: const TextStyle(color: GtexColors.text),
+                    decoration: const InputDecoration(labelText: 'Country code'),
+                  ),
+                  const SizedBox(height: GtexSpacing.sm),
                   if (claimError != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: GtexSpacing.sm),
