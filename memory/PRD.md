@@ -142,5 +142,10 @@ Flutter has no screens yet for: Finance (balances, Paystack deposit with /paymen
 - Rebuild web_dist after any Flutter change.
 
 ## Club Legacy Master Build Plan (uploaded 2026-10-17)
-- The Phase 0 audit and implementation map is in /app/memory/club_legacy_phase0_map.md and is AWAITING USER APPROVAL before any code. The proposed first slice is Slice A: continents, GM/HoYD staff and the delegation policy engine.
+- The Phase 0 map (/app/memory/club_legacy_phase0_map.md) was APPROVED by the user.
+- 2026-10-17 Slice A DONE: GM/HoYD staff (hire/release, salaries), delegation policies (owner_only/approval/auto + budget cap; reserved tasks can't be delegated), staff run, and the 3D club showroom with a public share link (#/showroom/{code}).
+- User choice: the PUBLIC showroom shows only the club name, crest, colours, city/country, founded year and trophies (staff.public_showroom / PUBLIC_SHOWROOM_KEYS). No finances, sponsors, facilities, fans, prestige or players. The owner's own view shows the full cabinet.
+- Root cause of the earlier "routes broken": the Flutter client blocks any endpoint missing from shared/api_contract.json. After adding backend routes, ALWAYS run `python tools/audit/generate_contract_audit.py && python tools/audit/generate_api_contract_bindings.py` (from /app/gtex), then rebuild web_dist.
+- API flow test on isolated SQLite: `env -u DATABASE_URL python -m pytest tests/test_owner_staff_api.py` (never write to the live DB; it has 0 owner clubs). Report: /app/test_reports/iteration_11.json (100% pass).
+- Next: the next Club Legacy slice from the Phase 0 map; Phase 3 realism (manager requests, regen growth pressure).
 
