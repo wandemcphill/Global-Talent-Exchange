@@ -48,6 +48,7 @@ class OwnerInboxEntry {
     this.sender,
     this.status,
     this.outcome,
+    this.respondBy,
     this.actions = const <OwnerDecisionAction>[],
   });
 
@@ -63,6 +64,7 @@ class OwnerInboxEntry {
     sender: _text(j['sender']),
     status: _text(j['status']),
     outcome: _text(j['outcome']),
+    respondBy: DateTime.tryParse(_text(j['respond_by']) ?? ''),
     actions: _maps(j['actions']).map(OwnerDecisionAction.fromJson).toList(),
   );
 
@@ -77,6 +79,7 @@ class OwnerInboxEntry {
   final String? sender;
   final String? status;
   final String? outcome;
+  final DateTime? respondBy;
   final List<OwnerDecisionAction> actions;
 }
 

@@ -102,6 +102,15 @@ User choices: work inside the existing repo (github.com/wandemcphill/Global-Tale
 - Tests: test/owner_console passes 14/14; regen and market suites green; analyze clean; the API contract check is clean. Testing agent iteration_9: 100%, read-only (the live review queue is empty and the admin owns 0 clubs).
 - Known minor issue (pre-existing): the /signin deep link shows "Route unavailable". Sign-in works from the header button.
 
+## Iteration 13 (2026-10-17): Decision countdown and owner alerts
+- User choices: overdue decisions auto-expire with the game's safe default and leave an inbox note. Windows: transfer_bid 48h; regen_breakthrough, sponsor and endorsement 72h; competition_invite 24h; everything else 96h. A one-time warning goes out 6h before the deadline. Wonderkid alert: a regen aged 21 or under moving 10% or more in 7 days, sent to share holders and to the owner of his club, once per player per ISO week.
+- Backend: new app/owner_console/alerts.py (respond_by, expire_decision via resolve_item in a savepoint, warn_decision, sweep_decisions, sweep_price_jumps). Decisions that existed before rollout get a fresh clock from CLOCK_START (2026-10-17). inbox_dict now includes respond_by. The control center and the inbox endpoint sweep the user's decisions on read, and decisions are sorted by deadline before the [:6] cut. New cron POST /api/owner/alerts/cron (WEBHOOK_CRON_SECRET bearer, BackgroundTasks) runs every 15 minutes, set in .emergent/crons.yml.
+- Flutter: OwnerInboxEntry.respondBy. Each decision row shows a countdown ("Respond by · 2d 3h left") that ticks every minute; under 6h it turns red as "Respond soon". Decisions are sorted by deadline, and the panel shows "N urgent". Inbox alert rows (wonderkid_price_jump, decision_expiring, decision_expired) use their own accents and icons.
+- Tests: backend tests/test_owner_alerts.py passes 6/6; Flutter test/owner_console passes 17/17; a read-only sweep on the live DB ran and rolled back (0 open decisions, 0 price jumps).
+
+## React parity gap (found 2026-10-17, approved plan: port everything, then serve Flutter at the main address and delete React)
+Flutter has no screens yet for: Finance (balances, Paystack deposit with /payment/callback verify, withdrawals with eligibility, ledger, Fan Coin, support units, coin-trader desk), Onboarding (create a first club with POST /clubs, activate, sign squad via /owner/clubs/{id}/sign + /owner/market/quote, manager from /managers/catalog, first competition or finish-onboarding), Competitions (list, enter, host, join-by-code, detail with standings, play-next, forfeit and fixtures), Match Center (event replay, owner view, gift rail), My Clubs actions (facility upgrade, capital inject, distribute and sister-transfer, sponsors, supporters, disclosures, new club), Squad (manager sheet, fire, hire, mentality, squad list, internal transfers), Academy (intake, advance, regen cards) and the full Inbox page with filters.
+
 ## Backlog
 - P0: Bridge the owner-console ledger with the repo's existing wallet ledger: DONE (iteration 2).
 - P0: Register the Paystack webhook URL in the dashboard for the production domain.

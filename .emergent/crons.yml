@@ -6,3 +6,10 @@ crons:
     endpoint: "{{BASE_URL}}/api/v2/players/markets/price-snapshots/cron"
     method: POST
     enabled: true
+  - name: owner-alert-sweep
+    description: "Expires overdue owner decisions, sends 6-hour warnings and wonderkid price-jump alerts"
+    cron: "*/15 * * * *"
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    endpoint: "{{BASE_URL}}/api/owner/alerts/cron"
+    method: POST
+    enabled: true

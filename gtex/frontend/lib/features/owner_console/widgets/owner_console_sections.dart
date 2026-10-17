@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
@@ -28,6 +30,30 @@ String decisionRoute(String kind) {
   return _clubPath;
 }
 
+/// Decisions this close to their deadline are urgent.
+const Duration urgentWindow = Duration(hours: 6);
+
+String countdownLabel(Duration left) {
+  if (left <= Duration.zero) return 'Expiring now';
+  final int days = left.inDays;
+  final int hours = left.inHours % 24;
+  final int minutes = left.inMinutes % 60;
+  if (days > 0) return '${days}d ${hours}h left';
+  if (left.inHours > 0) return '${left.inHours}h ${minutes}m left';
+  return '${minutes < 1 ? 1 : minutes}m left';
+}
+
+bool isUrgentDecision(OwnerInboxEntry e, DateTime now) =>
+    e.respondBy != null && e.respondBy!.difference(now) <= urgentWindow;
+
+int compareByDeadline(OwnerInboxEntry a, OwnerInboxEntry b) {
+  final DateTime? x = a.respondBy, y = b.respondBy;
+  if (x != null && y != null && x != y) return x.compareTo(y);
+  if (x == null && y != null) return 1;
+  if (x != null && y == null) return -1;
+  return (b.priority == 'high' ? 1 : 0) - (a.priority == 'high' ? 1 : 0);
+}
+
 /// Decision actions that spend or move money ask for confirmation first.
 bool decisionMovesMoney(String kind, String action) =>
     const <String, String>{
@@ -39,6 +65,20 @@ bool decisionMovesMoney(String kind, String action) =>
       'regen_endorsement': 'accept',
     }[kind] ==
     action;
+
+const Set<String> _alertKinds = <String>{'wonderkid_price_jump', 'decision_expiring', 'decision_expired'};
+
+Color inboxAccent(OwnerInboxEntry e) {
+  switch (e.kind) {
+    case 'wonderkid_price_jump':
+      return e.title.contains(' up ') ? GtexColors.pitch : GtexColors.red;
+    case 'decision_expiring':
+      return GtexColors.red;
+    case 'decision_expired':
+      return GtexColors.textMuted;
+  }
+  return GtexColors.purple;
+}
 
 Widget _sectionList(List<Widget> children) => ListView(
   padding: const EdgeInsets.all(GtexSpacing.md),
@@ -227,6 +267,23 @@ class OwnerDecisionRow extends StatefulWidget {
 class _OwnerDecisionRowState extends State<OwnerDecisionRow> {
   String? _busyKey;
   String? _error;
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.entry.respondBy != null) {
+      _ticker = Timer.periodic(const Duration(minutes: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
 
   Future<void> _act(OwnerDecisionAction a) async {
     final OwnerInboxEntry e = widget.entry;
@@ -254,7 +311,9 @@ class _OwnerDecisionRowState extends State<OwnerDecisionRow> {
   @override
   Widget build(BuildContext context) {
     final OwnerInboxEntry e = widget.entry;
-    final Color accent = e.priority == 'high' ? GtexColors.red : GtexColors.gold;
+    final DateTime now = DateTime.now();
+    final bool urgent = isUrgentDecision(e, now);
+    final Color accent = urgent || e.priority == 'high' ? GtexColors.red : GtexColors.gold;
     return Container(
       margin: const EdgeInsets.only(bottom: GtexSpacing.xs),
       decoration: BoxDecoration(
@@ -273,6 +332,23 @@ class _OwnerDecisionRowState extends State<OwnerDecisionRow> {
             trailing: GtexStatusChip(label: e.kind, color: GtexColors.gold, compact: true),
             onTap: widget.onTap,
           ),
+          if (e.respondBy != null)
+            Padding(
+              key: Key('owner-decision-${e.id}-countdown'),
+              padding: const EdgeInsets.fromLTRB(GtexSpacing.sm, 0, GtexSpacing.sm, GtexSpacing.xs),
+              child: Row(
+                children: <Widget>[
+                  Icon(urgent ? Icons.alarm_rounded : Icons.timer_outlined, size: 14, color: urgent ? GtexColors.red : GtexColors.textSecondary),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      '${urgent ? 'Respond soon' : 'Respond by'} · ${countdownLabel(e.respondBy!.difference(now))}',
+                      style: TextStyle(color: urgent ? GtexColors.red : GtexColors.textSecondary, fontSize: 12, fontWeight: urgent ? FontWeight.w900 : FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           if (e.actions.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(GtexSpacing.sm, 0, GtexSpacing.sm, GtexSpacing.sm),
@@ -329,13 +405,12 @@ class ControlCenterSection extends StatelessWidget {
       onRetry: onRetry,
       builder: (OwnerControlCenter d) {
         bool mine(String? id) => clubId == null || id == null || id == clubId;
+        final DateTime now = DateTime.now();
         final List<OwnerInboxEntry> decisions = d.decisions
             .where((OwnerInboxEntry e) => mine(e.clubId))
             .toList()
-          ..sort(
-            (OwnerInboxEntry a, OwnerInboxEntry b) =>
-                (b.priority == 'high' ? 1 : 0) - (a.priority == 'high' ? 1 : 0),
-          );
+          ..sort(compareByDeadline);
+        final int urgentCount = decisions.where((OwnerInboxEntry e) => isUrgentDecision(e, now)).length;
         final List<OwnerInboxEntry> inbox =
             d.inbox.where((OwnerInboxEntry e) => mine(e.clubId)).toList();
         final List<OwnerClubHealth> health =
@@ -360,7 +435,7 @@ class ControlCenterSection extends StatelessWidget {
           GtexPanel(
             key: const Key('owner-console-decisions'),
             title: "Today's Decisions",
-            subtitle: '${decisions.length} waiting',
+            subtitle: urgentCount > 0 ? '${decisions.length} waiting · $urgentCount urgent' : '${decisions.length} waiting',
             accent: GtexColors.gold,
             child: Column(
               children: <Widget>[
@@ -435,7 +510,18 @@ class ControlCenterSection extends StatelessWidget {
               children: <Widget>[
                 if (inbox.isEmpty) const _Quiet('Inbox clear'),
                 for (final OwnerInboxEntry e in inbox.take(5))
-                  _Row(title: e.title, subtitle: e.sender ?? e.why, accent: GtexColors.purple),
+                  _Row(
+                    key: Key('owner-inbox-${e.id}'),
+                    title: e.title,
+                    subtitle: _alertKinds.contains(e.kind) ? e.what ?? e.why : e.sender ?? e.why,
+                    accent: inboxAccent(e),
+                    trailing: e.kind == 'wonderkid_price_jump'
+                        ? Icon(e.title.contains(' up ') ? Icons.trending_up_rounded : Icons.trending_down_rounded, color: inboxAccent(e), size: 18)
+                        : e.kind == 'decision_expiring'
+                            ? const Icon(Icons.alarm_rounded, color: GtexColors.red, size: 18)
+                            : null,
+                    onTap: e.kind == 'wonderkid_price_jump' ? () => onNavigate(_regensPath) : null,
+                  ),
               ],
             ),
           ),

@@ -20,6 +20,7 @@ Map<String, dynamic> _centerJson({bool withClubs = true}) => <String, dynamic>{
           <String, dynamic>{'id': 'd2', 'club_id': 'c2', 'kind': 'contract', 'title': 'Contract expiring', 'is_decision': true},
           <String, dynamic>{
             'id': 'd3', 'club_id': 'c1', 'kind': 'transfer_bid', 'title': 'Kano bid 12,400 for Ade Bello', 'is_decision': true,
+            'respond_by': DateTime.now().toUtc().add(const Duration(hours: 3)).toIso8601String(),
             'what': 'Kano offer 12,400 GTEX Coin for Ade Bello (valued 10,000).',
             'actions': <Map<String, dynamic>>[
               <String, dynamic>{'key': 'accept', 'label': 'Accept bid', 'style': 'primary'},
@@ -28,8 +29,11 @@ Map<String, dynamic> _centerJson({bool withClubs = true}) => <String, dynamic>{
           },
         ]
       : <Map<String, dynamic>>[],
-  'inbox': <Map<String, dynamic>>[],
-  'inbox_open_count': 0,
+  'inbox': <Map<String, dynamic>>[
+    <String, dynamic>{'id': 'a1', 'club_id': null, 'kind': 'wonderkid_price_jump', 'title': 'Tunde Bakare up 14.2% this week', 'what': 'Wonderkid Tunde Bakare (19) moved +14.2% in 7 days.', 'is_decision': false},
+    <String, dynamic>{'id': 'a2', 'club_id': 'c1', 'kind': 'decision_expiring', 'title': '6 hours left: Kano bid', 'what': 'Respond by Sat or "Reject" is applied automatically.', 'is_decision': false},
+  ],
+  'inbox_open_count': 2,
   'health': <Map<String, dynamic>>[
     <String, dynamic>{'club_id': 'c1', 'club_name': 'Lagos Lions', 'cash': '50', 'squad_size': 18, 'squad_depth': 'thin', 'morale': 70, 'injuries': 1, 'fan_engagement': 55},
   ],
@@ -178,7 +182,7 @@ void main() {
     expect(find.text('Offer for your striker'), findsOneWidget);
     expect(find.text('#2 Lagos Lions'), findsOneWidget);
     expect(find.byKey(const Key('owner-board-next-fixture')), findsOneWidget);
-    expect(find.text('Inbox clear'), findsOneWidget);
+    expect(find.text('Inbox clear'), findsNothing);
 
     await tester.tap(find.byKey(const Key('owner-decision-d1')));
     expect(visited.single, contains('market'));
@@ -237,6 +241,34 @@ void main() {
   test('decision routing by kind', () {
     expect(decisionRoute('rental_request'), '/national-team');
     expect(decisionRoute('lineup_deadline'), contains('play'));
+  });
+
+  test('countdown labels and deadline ordering', () {
+    expect(countdownLabel(const Duration(days: 2, hours: 3)), '2d 3h left');
+    expect(countdownLabel(const Duration(hours: 5, minutes: 12)), '5h 12m left');
+    expect(countdownLabel(const Duration(minutes: 40)), '40m left');
+    expect(countdownLabel(Duration.zero), 'Expiring now');
+    final DateTime now = DateTime.now();
+    OwnerInboxEntry at(String id, Duration? left) => OwnerInboxEntry(id: id, kind: 'k', title: id, isDecision: true, respondBy: left == null ? null : now.add(left));
+    final List<OwnerInboxEntry> list = <OwnerInboxEntry>[at('late', const Duration(hours: 40)), at('none', null), at('soon', const Duration(hours: 2))]
+      ..sort(compareByDeadline);
+    expect(list.map((OwnerInboxEntry e) => e.id), <String>['soon', 'late', 'none']);
+    expect(isUrgentDecision(list.first, now), isTrue);
+    expect(isUrgentDecision(list[1], now), isFalse);
+  });
+
+  testWidgets('decision countdown shows and urgent decisions are flagged', (WidgetTester tester) async {
+    await _pump(tester, _FakeOwner());
+    expect(find.byKey(const Key('owner-decision-d3-countdown')), findsOneWidget);
+    expect(find.textContaining('Respond soon'), findsOneWidget);
+    expect(find.textContaining('1 urgent'), findsOneWidget);
+  });
+
+  testWidgets('owner inbox shows wonderkid and expiry alerts', (WidgetTester tester) async {
+    await _pump(tester, _FakeOwner());
+    expect(find.byKey(const Key('owner-inbox-a1')), findsOneWidget);
+    expect(find.text('Tunde Bakare up 14.2% this week'), findsOneWidget);
+    expect(find.byKey(const Key('owner-inbox-a2')), findsOneWidget);
   });
 
   test('money-moving decisions need confirmation', () {
