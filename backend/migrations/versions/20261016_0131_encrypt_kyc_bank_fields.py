@@ -1,7 +1,7 @@
 """Encrypt KYC/bank identifier columns and add blind-index hashes.
 
 Revision ID: 20261016_0131_encrypt_kyc_bank_fields
-Revises: 20261016_0130_share_event_actor_fingerprint
+Revises: 20261017_0134_merge_regen_and_share_event_heads
 
 Widens the plaintext-identifier columns that now hold ``enc:v1:`` ciphertext,
 drops the unusable nin/bvn indexes (ciphertext cannot be searched), and adds
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "20261016_0131_encrypt_kyc_bank_fields"
-down_revision = "20261016_0130_share_event_actor_fingerprint"
+down_revision = "20261017_0134_merge_regen_and_share_event_heads"
 branch_labels = None
 depends_on = None
 
