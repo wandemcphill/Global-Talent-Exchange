@@ -5,7 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 import random
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.club_legacy.delegation import (
@@ -224,12 +224,16 @@ def showroom(session: Session, club_id: str) -> dict:
         select(ClubLegacyAsset).where(
             ClubLegacyAsset.owner_class == "owner",
             ClubLegacyAsset.owner_ref == profile.owner_user_id,
-            ClubLegacyAsset.club_id != club_id,
+            or_(ClubLegacyAsset.club_id.is_(None), ClubLegacyAsset.club_id != club_id),
         )
     ).all()
-    exhibits = [_exhibit(session, asset, owned=True) for asset in [*owned, *personal]]
+    seen = {asset.id for asset in owned}
+    exhibits = [
+        _exhibit(session, asset, owned=True)
+        for asset in [*owned, *(asset for asset in personal if asset.id not in seen)]
+    ]
     owned_skus = set()
-    for asset in owned:
+    for asset in [*owned, *personal]:
         item = session.get(ClubLegacyCatalogueItem, asset.catalogue_id)
         if item is not None:
             owned_skus.add(item.sku)

@@ -18,7 +18,6 @@ class ClubLegacyShowroom extends StatefulWidget {
 class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
   int _index = 0;
   double _yaw = 0;
-  bool _fullscreen = false;
   final TransformationController _transform = TransformationController();
 
   @override
@@ -35,6 +34,13 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
   }
 
   void _turn(double delta) => setState(() => _yaw += delta);
+
+  Future<void> _openFullscreen(ShowroomExhibit exhibit, bool reduceMotion) {
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext context) => _ShowroomFullscreen(exhibit: exhibit, reduceMotion: reduceMotion),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -84,7 +90,7 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          SizedBox(height: _fullscreen ? 420 : 220, child: card),
+          SizedBox(height: 220, child: card),
           const SizedBox(height: GtexSpacing.sm),
           Text(
             exhibit.ownershipLabel,
@@ -123,10 +129,10 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
                 ),
                 GtexActionButton(
                   key: const Key('club-showroom-fullscreen'),
-                  label: _fullscreen ? 'Close' : 'Full screen',
+                  label: 'Full screen',
                   icon: Icons.fullscreen_rounded,
                   compact: true,
-                  onPressed: () => setState(() => _fullscreen = !_fullscreen),
+                  onPressed: () => _openFullscreen(exhibit, reduceMotion),
                 ),
               ],
             ),
@@ -183,6 +189,83 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
       'coach' => Icons.directions_bus_rounded,
       _ => Icons.watch_rounded,
     };
+  }
+}
+
+class _ShowroomFullscreen extends StatefulWidget {
+  const _ShowroomFullscreen({required this.exhibit, required this.reduceMotion});
+
+  final ShowroomExhibit exhibit;
+  final bool reduceMotion;
+
+  @override
+  State<_ShowroomFullscreen> createState() => _ShowroomFullscreenState();
+}
+
+class _ShowroomFullscreenState extends State<_ShowroomFullscreen> {
+  double _yaw = 0;
+  final TransformationController _transform = TransformationController();
+
+  @override
+  void dispose() {
+    _transform.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ShowroomExhibit exhibit = widget.exhibit;
+    return Dialog(
+      key: const Key('club-showroom-fullscreen-view'),
+      backgroundColor: GtexColors.panelStrong,
+      child: Padding(
+        padding: const EdgeInsets.all(GtexSpacing.md),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text(exhibit.name, style: const TextStyle(color: GtexColors.text, fontSize: 22, fontWeight: FontWeight.w900)),
+            Text(exhibit.ownershipLabel, key: const Key('club-showroom-fullscreen-ownership'), style: const TextStyle(color: GtexColors.gold, fontWeight: FontWeight.w800)),
+            const SizedBox(height: GtexSpacing.sm),
+            SizedBox(
+              height: 360,
+              child: widget.reduceMotion
+                  ? const SizedBox.shrink()
+                  : InteractiveViewer(
+                      transformationController: _transform,
+                      minScale: 0.8,
+                      maxScale: 2.5,
+                      child: Center(child: Transform.rotate(angle: _yaw, child: CustomPaint(size: const Size(280, 180), painter: _ExhibitPainter(exhibit.category)))),
+                    ),
+            ),
+            if (widget.reduceMotion) Text(exhibit.fallbackLabel, key: const Key('club-showroom-fullscreen-static')),
+            const SizedBox(height: GtexSpacing.sm),
+            Wrap(
+              spacing: GtexSpacing.xs,
+              children: <Widget>[
+                if (!widget.reduceMotion)
+                  GtexActionButton(
+                    key: const Key('club-showroom-fullscreen-rotate'),
+                    label: 'Turn',
+                    icon: Icons.rotate_right_rounded,
+                    compact: true,
+                    secondary: true,
+                    onPressed: () => setState(() => _yaw += 0.4),
+                  ),
+                GtexActionButton(
+                  key: const Key('club-showroom-fullscreen-close'),
+                  label: 'Close',
+                  icon: Icons.close_rounded,
+                  compact: true,
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+            if (!widget.reduceMotion) Text('Turn ${_yaw.toStringAsFixed(1)}', key: const Key('club-showroom-fullscreen-yaw')),
+          ],
+        ),
+      ),
+    );
   }
 }
 

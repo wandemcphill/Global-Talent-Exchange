@@ -67,11 +67,21 @@ void main() {
     expect(find.byKey(const Key('club-showroom-zoom')), findsNothing);
   });
 
-  testWidgets('full screen keeps the ownership label', (WidgetTester tester) async {
+  testWidgets('full screen opens its own view and closes', (WidgetTester tester) async {
     await _pump(tester);
     await tester.tap(find.byKey(const Key('club-showroom-fullscreen')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('club-showroom-fullscreen-view')), findsOneWidget);
+    expect(find.byKey(const Key('club-showroom-fullscreen-ownership')), findsOneWidget);
+    expect(find.text('Club'), findsWidgets);
+
+    await tester.tap(find.byKey(const Key('club-showroom-fullscreen-rotate')));
     await tester.pump();
-    expect(find.text('Close'), findsOneWidget);
-    expect(find.byKey(const Key('club-showroom-ownership')), findsOneWidget);
+    expect(find.text('Turn 0.4'), findsWidgets);
+
+    await tester.tap(find.byKey(const Key('club-showroom-fullscreen-close')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('club-showroom-fullscreen-view')), findsNothing);
+    expect(find.byKey(const Key('club-showroom')), findsOneWidget);
   });
 }

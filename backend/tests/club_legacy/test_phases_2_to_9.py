@@ -395,7 +395,9 @@ def test_showroom_labels_club_ownership_and_keeps_a_static_fallback(client, boot
     with app.state.session_factory() as session:
         admin = _admin(session)
         preview = showroom(session, club_id)
-        owned_jet = any(item["name"] == "Harbour Jet" and item["ownership_label"] == "Club" for item in preview["exhibits"])
+        owned_jet = any(
+            item["name"] == "Harbour Jet" and item["ownership_label"] == "Club" for item in preview["exhibits"]
+        )
         if not owned_jet:
             purchase_asset(
                 session,
@@ -411,6 +413,26 @@ def test_showroom_labels_club_ownership_and_keeps_a_static_fallback(client, boot
         labels = {item["name"]: item["ownership_label"] for item in room["exhibits"]}
         assert labels["Harbour Jet"] == "Club"
         assert labels["Lagoon Coach"] == "Not owned"
+        from app.club_legacy.models import ClubLegacyAsset, ClubLegacyCatalogueItem
+
+        watch = session.scalar(select(ClubLegacyCatalogueItem).where(ClubLegacyCatalogueItem.sku == "gtex-watch-icon"))
+        session.add(
+            ClubLegacyAsset(
+                catalogue_id=watch.id,
+                edition_number=99,
+                owner_class="owner",
+                owner_ref=admin.id,
+                club_id=None,
+                status="owned",
+            )
+        )
+        session.flush()
+        again = showroom(session, club_id)
+        personal = [
+            item for item in again["exhibits"] if item["name"] == "Icon Watch" and item["ownership_label"] == "Owner"
+        ]
+        assert personal
+        assert personal[0]["owner_class"] == "owner"
         assert all(
             item["ownership_label"] == "Club"
             for item in room["exhibits"]
