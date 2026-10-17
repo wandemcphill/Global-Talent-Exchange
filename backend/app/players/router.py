@@ -185,7 +185,10 @@ def list_player_share_market_nations(
     source: Literal["regen", "real"] | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> list[PlayerShareMarketNationView]:
-    return [PlayerShareMarketNationView.model_validate(row) for row in PlayerTokenMarketService(session).list_market_nations(source=source)]
+    return [
+        PlayerShareMarketNationView.model_validate(row)
+        for row in PlayerTokenMarketService(session).list_market_nations(source=source)
+    ]
 
 
 def _run_price_snapshot() -> None:
@@ -204,7 +207,9 @@ def trigger_player_share_price_snapshot(request: Request, background_tasks: Back
     token = header[7:] if header.lower().startswith("bearer ") else ""
     secret = os.environ.get("WEBHOOK_CRON_SECRET", "").strip()
     if not secret:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Price-snapshot cron is not configured.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Price-snapshot cron is not configured."
+        )
     if not token or not hmac.compare_digest(token, secret):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid cron credentials.")
     background_tasks.add_task(_run_price_snapshot)

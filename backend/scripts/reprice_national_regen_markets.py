@@ -27,11 +27,9 @@ def main() -> int:
     args = ap.parse_args()
     with psycopg.connect(os.environ["DATABASE_URL"], prepare_threshold=None, connect_timeout=60) as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """select m.id, m.share_price_coin, m.metadata_json, p.dna_profile from player_share_markets m
+            cur.execute("""select m.id, m.share_price_coin, m.metadata_json, p.dna_profile from player_share_markets m
                    join ingestion_players p on p.id = m.player_id
-                   where p.source_provider = 'gtex_national_seed' and m.circulating_shares = 0"""
-            )
+                   where p.source_provider = 'gtex_national_seed' and m.circulating_shares = 0""")
             rows = cur.fetchall()
         updates, by_rarity = [], Counter()
         samples: dict[str, list[Decimal]] = {}
@@ -39,7 +37,13 @@ def main() -> int:
             dna = dna or {}
             price = regen_share_price(dna.get("current_rating"), dna.get("potential_rating"), dna.get("rarity_tier"))
             meta = dict(meta or {})
-            meta.update({"pricing_model": PRICING_MODEL, "initial_share_price_coin": str(price), "previous_share_price_coin": str(old_price)})
+            meta.update(
+                {
+                    "pricing_model": PRICING_MODEL,
+                    "initial_share_price_coin": str(price),
+                    "previous_share_price_coin": str(old_price),
+                }
+            )
             updates.append((price, json.dumps(meta), market_id))
             rarity = str(dna.get("rarity_tier") or "common")
             by_rarity[rarity] += 1
@@ -50,7 +54,10 @@ def main() -> int:
         if args.dry_run:
             return 0
         with conn.cursor() as cur:
-            cur.executemany("update player_share_markets set share_price_coin=%s, metadata_json=%s::json, updated_at=now() where id=%s", updates)
+            cur.executemany(
+                "update player_share_markets set share_price_coin=%s, metadata_json=%s::json, updated_at=now() where id=%s",
+                updates,
+            )
         conn.commit()
         print("repriced", len(updates))
     return 0

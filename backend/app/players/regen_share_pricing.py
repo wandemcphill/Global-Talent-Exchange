@@ -9,7 +9,12 @@ from __future__ import annotations
 from decimal import ROUND_HALF_UP, Decimal
 
 PRICING_MODEL = "regen_rating_potential_rarity_v1"
-RARITY_MULTIPLIERS = {"common": Decimal("1.00"), "rare": Decimal("1.10"), "elite": Decimal("1.30"), "legendary": Decimal("1.75")}
+RARITY_MULTIPLIERS = {
+    "common": Decimal("1.00"),
+    "rare": Decimal("1.10"),
+    "elite": Decimal("1.30"),
+    "legendary": Decimal("1.75"),
+}
 MIN_PRICE = Decimal("0.0050")
 MAX_PRICE = Decimal("0.2500")
 

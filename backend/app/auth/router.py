@@ -1241,4 +1241,11 @@ _V2_EXISTING = {(r.path, frozenset(r.methods)) for r in api_v2_router.routes}
 for _route in list(api_router.routes):
     _v2_path = _route.path.replace("/api/auth", "/api/v2/auth", 1)
     if (_v2_path, frozenset(_route.methods)) not in _V2_EXISTING:
-        router.add_api_route(_v2_path, _route.endpoint, methods=list(_route.methods), response_model=_route.response_model, status_code=_route.status_code, include_in_schema=False)
+        router.add_api_route(
+            _v2_path,
+            _route.endpoint,
+            methods=list(_route.methods),
+            response_model=_route.response_model,
+            status_code=_route.status_code,
+            include_in_schema=False,
+        )

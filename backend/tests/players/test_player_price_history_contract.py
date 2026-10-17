@@ -41,13 +41,15 @@ def test_price_history_response_schema_accepts_decimal_points():
 
 def test_snapshot_cron_fails_closed_when_secret_is_missing(monkeypatch):
     monkeypatch.delenv("WEBHOOK_CRON_SECRET", raising=False)
-    request = Request({
-        "type": "http",
-        "method": "POST",
-        "path": "/api/v2/players/markets/price-snapshots/cron",
-        "headers": [],
-        "query_string": b"",
-    })
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/v2/players/markets/price-snapshots/cron",
+            "headers": [],
+            "query_string": b"",
+        }
+    )
     with pytest.raises(HTTPException) as error:
         trigger_player_share_price_snapshot(request, BackgroundTasks())
     assert error.value.status_code == 503

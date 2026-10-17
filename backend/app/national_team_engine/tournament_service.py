@@ -575,7 +575,9 @@ class NationalTeamTournamentService:
         )
         record("tournament_lock", tournament_lock_reason is None, tournament_lock_reason)
 
-        injury_reason = self._active_injury_reason(player=player, seed=seed, metadata=metadata, today=today, prefetch=prefetch)
+        injury_reason = self._active_injury_reason(
+            player=player, seed=seed, metadata=metadata, today=today, prefetch=prefetch
+        )
         record("injury", injury_reason is None, injury_reason)
 
         suspension_reason = self._active_suspension_reason(player=player, metadata=metadata, now=now, prefetch=prefetch)
@@ -850,8 +852,14 @@ class NationalTeamTournamentService:
         since = utcnow() - timedelta(days=14)
         for start in range(0, len(ids), 500):
             part = ids[start : start + 500]
-            base = select(RentalContract.player_id, func.count()).where(RentalContract.player_id.in_(part)).group_by(RentalContract.player_id)
-            active.update(dict(self.session.execute(base.where(RentalContract.status == RentalContractStatus.ACTIVE)).all()))
+            base = (
+                select(RentalContract.player_id, func.count())
+                .where(RentalContract.player_id.in_(part))
+                .group_by(RentalContract.player_id)
+            )
+            active.update(
+                dict(self.session.execute(base.where(RentalContract.status == RentalContractStatus.ACTIVE)).all())
+            )
             recent.update(dict(self.session.execute(base.where(RentalContract.created_at >= since)).all()))
         return [
             self._priced_pool_item(
@@ -2575,7 +2583,8 @@ class NationalTeamTournamentService:
             description=f"National team rental for {item['player_name']} in {competition.title}",
             external_reference=f"national-rental:{competition.id}:{entry.id}:{player_id}",
             actor=actor,
-            idempotency_key="national-rental:" + hashlib.sha256(f"{competition.id}:{entry.id}:{player_id}:{actor.id}".encode()).hexdigest()[:64],
+            idempotency_key="national-rental:"
+            + hashlib.sha256(f"{competition.id}:{entry.id}:{player_id}:{actor.id}".encode()).hexdigest()[:64],
         )
         contract = self._create_rental_contract(
             entry=entry,

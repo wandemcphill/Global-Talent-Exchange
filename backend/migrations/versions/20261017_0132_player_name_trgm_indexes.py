@@ -18,7 +18,9 @@ def upgrade() -> None:
     if op.get_bind().dialect.name != "postgresql":
         return
     op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
-    op.execute("CREATE INDEX IF NOT EXISTS ix_ingestion_players_full_name_trgm ON ingestion_players USING gin (full_name gin_trgm_ops)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_ingestion_players_full_name_trgm ON ingestion_players USING gin (full_name gin_trgm_ops)"
+    )
     op.execute(
         "CREATE INDEX IF NOT EXISTS ix_ingestion_players_display_name_trgm "
         "ON ingestion_players USING gin (canonical_display_name gin_trgm_ops)"

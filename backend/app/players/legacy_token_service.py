@@ -16,7 +16,12 @@ from app.market.player_eligibility_policy import is_preseeded_national_regen, is
 from app.models.admin_rules import AdminRewardRule
 from app.models.base import generate_uuid
 from app.models.regen_ecosystem import NationalRegenSeed
-from app.models.player_token_market import PlayerShareEvent, PlayerShareHolding, PlayerShareMarket, PlayerSharePriceSnapshot
+from app.models.player_token_market import (
+    PlayerShareEvent,
+    PlayerShareHolding,
+    PlayerShareMarket,
+    PlayerSharePriceSnapshot,
+)
 from app.models.user import User, UserRole
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
 from app.players.token_market_defaults import MIN_SHARE_PRICE_COIN, resolve_player_share_market_config
@@ -162,7 +167,12 @@ class PlayerTokenMarketService:
                 Player.date_of_birth > self._wonderkid_dob_cutoff(),
                 potential.is_not(None),
             ]
-            order_by = (potential.desc(), (potential - func.coalesce(rating, potential)).desc(), Player.full_name.asc(), Player.id.asc())
+            order_by = (
+                potential.desc(),
+                (potential - func.coalesce(rating, potential)).desc(),
+                Player.full_name.asc(),
+                Player.id.asc(),
+            )
         if normalized_search:
             search_pattern = f"%{normalized_search}%"
             filters.append(
@@ -258,8 +268,16 @@ class PlayerTokenMarketService:
                 {"day": day},
             )
             return int(result.rowcount or 0)
-        taken = set(self.session.scalars(select(PlayerSharePriceSnapshot.player_id).where(PlayerSharePriceSnapshot.snapshot_date == day)))
-        markets = [m for m in self.session.scalars(select(PlayerShareMarket).where(PlayerShareMarket.status == "active")) if m.player_id not in taken]
+        taken = set(
+            self.session.scalars(
+                select(PlayerSharePriceSnapshot.player_id).where(PlayerSharePriceSnapshot.snapshot_date == day)
+            )
+        )
+        markets = [
+            m
+            for m in self.session.scalars(select(PlayerShareMarket).where(PlayerShareMarket.status == "active"))
+            if m.player_id not in taken
+        ]
         for market in markets:
             self.session.add(
                 PlayerSharePriceSnapshot(
@@ -281,9 +299,9 @@ class PlayerTokenMarketService:
         series: list[dict[str, Any]] = []
         trade_count = 0
         for at, price, kind in self.session.execute(
-            select(PlayerShareEvent.created_at, PlayerShareEvent.price_per_share_coin, PlayerShareEvent.event_type).where(
-                PlayerShareEvent.player_id == player_id
-            )
+            select(
+                PlayerShareEvent.created_at, PlayerShareEvent.price_per_share_coin, PlayerShareEvent.event_type
+            ).where(PlayerShareEvent.player_id == player_id)
         ):
             if kind == "issue":
                 # A repriced listing opens at its model price, not the pre-launch placeholder.
@@ -296,7 +314,13 @@ class PlayerTokenMarketService:
                 PlayerSharePriceSnapshot.player_id == player_id
             )
         ):
-            series.append({"at": datetime(day.year, day.month, day.day, tzinfo=timezone.utc), "price": self._amount(price), "kind": "daily_close"})
+            series.append(
+                {
+                    "at": datetime(day.year, day.month, day.day, tzinfo=timezone.utc),
+                    "price": self._amount(price),
+                    "kind": "daily_close",
+                }
+            )
         now = datetime.now(timezone.utc)
         series.sort(key=lambda point: point["at"])
         days = self.PRICE_HISTORY_RANGES.get(range_key, 30)
@@ -1004,12 +1028,16 @@ class PlayerTokenMarketService:
     @staticmethod
     def _regen_rating_expr():
         dna = Player.dna_profile
-        return func.coalesce(cast(dna["current_rating"].as_string(), Integer), cast(dna["overall"].as_string(), Integer))
+        return func.coalesce(
+            cast(dna["current_rating"].as_string(), Integer), cast(dna["overall"].as_string(), Integer)
+        )
 
     @staticmethod
     def _regen_potential_expr():
         dna = Player.dna_profile
-        return func.coalesce(cast(dna["potential_rating"].as_string(), Integer), cast(dna["potential"].as_string(), Integer))
+        return func.coalesce(
+            cast(dna["potential_rating"].as_string(), Integer), cast(dna["potential"].as_string(), Integer)
+        )
 
     WONDERKID_MAX_AGE = 21
 
@@ -1040,7 +1068,11 @@ class PlayerTokenMarketService:
             select(Country.name, Country.alpha2_code, func.count(Player.id))
             .join(Player, Player.country_id == Country.id)
             .join(PlayerShareMarket, PlayerShareMarket.player_id == Player.id)
-            .where(Player.is_tradable.is_(True), PlayerShareMarket.status == "active", *self._source_nation_filters(source=source, nation=None))
+            .where(
+                Player.is_tradable.is_(True),
+                PlayerShareMarket.status == "active",
+                *self._source_nation_filters(source=source, nation=None),
+            )
             .group_by(Country.name, Country.alpha2_code)
             .order_by(Country.name.asc())
         ).all()
@@ -1050,7 +1082,9 @@ class PlayerTokenMarketService:
 
     def _serialize_market_list_item(self, market: PlayerShareMarket) -> dict[str, Any]:
         player = market.player or self._get_player(market.player_id)
-        portrait = next((image.source_url for image in (player.image_metadata or []) if image.is_primary and image.source_url), None)
+        portrait = next(
+            (image.source_url for image in (player.image_metadata or []) if image.is_primary and image.source_url), None
+        )
         if player.current_club is not None:
             current_club_name = player.current_club.name
         else:

@@ -220,9 +220,7 @@ class SyntheticSquadFactory:
                 lifecycle_service.session if lifecycle_service is not None else None,
                 team_id,
             )
-        starters, bench, formation = self._resolve_lineup(
-            lifecycle_service.session, team_id, eligible, manager_profile
-        )
+        starters, bench, formation = self._resolve_lineup(lifecycle_service.session, team_id, eligible, manager_profile)
         dynamics_snapshot = TeamDynamicsService(lifecycle_service.session).build_snapshot(
             club_id=team_id,
             squad=starters + bench,
@@ -366,9 +364,7 @@ class SyntheticSquadFactory:
     def _saved_match_plan(session: Session | None, team_id: str) -> ClubMatchPlan | None:
         if session is None:
             return None
-        return session.scalar(
-            select(ClubMatchPlan).where(ClubMatchPlan.club_id == team_id)
-        )
+        return session.scalar(select(ClubMatchPlan).where(ClubMatchPlan.club_id == team_id))
 
     @staticmethod
     def _plan_formation(plan: ClubMatchPlan | None) -> str | None:
@@ -399,22 +395,16 @@ class SyntheticSquadFactory:
             return None
         if any(pid not in eligible_by_id for pid in starter_ids):
             return None
-        starters = [
-            (eligible_by_id[pid], role) for pid, role in zip(starter_ids, roles)
-        ]
+        starters = [(eligible_by_id[pid], role) for pid, role in zip(starter_ids, roles)]
         used = set(starter_ids)
         bench: list[tuple[Player, PlayerRole]] = []
-        for pid in (plan.bench_player_ids_json or []):
+        for pid in plan.bench_player_ids_json or []:
             pid = str(pid)
             if pid in eligible_by_id and pid not in used:
                 bench.append((eligible_by_id[pid], self._resolve_player_role(eligible_by_id[pid])))
                 used.add(pid)
-        remaining = [
-            player for pid, player in eligible_by_id.items() if pid not in used
-        ]
-        for player in sorted(remaining, key=self._managed_player_sort_key, reverse=True)[
-            : max(0, 7 - len(bench))
-        ]:
+        remaining = [player for pid, player in eligible_by_id.items() if pid not in used]
+        for player in sorted(remaining, key=self._managed_player_sort_key, reverse=True)[: max(0, 7 - len(bench))]:
             bench.append((player, self._resolve_player_role(player)))
         return starters, bench, formation
 
@@ -425,10 +415,7 @@ class SyntheticSquadFactory:
         if not manager_profile:
             return "4-3-3"
         mentality = str(manager_profile.get("mentality", "")).strip().lower()
-        tactics = {
-            str(tactic).strip().lower()
-            for tactic in (manager_profile.get("tactics") or [])
-        }
+        tactics = {str(tactic).strip().lower() for tactic in (manager_profile.get("tactics") or [])}
         mapping = {
             "attacking": "4-3-3",
             "aggressive": "4-3-3",

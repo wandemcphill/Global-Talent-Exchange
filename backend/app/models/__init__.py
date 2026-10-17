@@ -399,7 +399,12 @@ from app.models.player_import import PlayerImportItem, PlayerImportItemStatus, P
 from app.models.player_injury_case import PlayerInjuryCase
 from app.models.player_lifecycle_event import PlayerLifecycleEvent
 from app.models.player_personality import PlayerPersonality
-from app.models.player_token_market import PlayerShareEvent, PlayerShareHolding, PlayerShareMarket, PlayerSharePriceSnapshot
+from app.models.player_token_market import (
+    PlayerShareEvent,
+    PlayerShareHolding,
+    PlayerShareMarket,
+    PlayerSharePriceSnapshot,
+)
 from app.models.prestige_rating import PrestigeRating
 from app.models.news_article import NewsArticle
 from app.models.real_world_hub import (
@@ -440,7 +445,12 @@ from app.models.player_cards import (
     PlayerMarketValueSnapshot,
 )
 from app.models.player_match_learning import MatchWeight, PlayerFeatureSnapshot, PlayerMatchEventType, UserPlayerEvent
-from app.models.player_token_market import PlayerShareEvent, PlayerShareHolding, PlayerShareMarket, PlayerSharePriceSnapshot
+from app.models.player_token_market import (
+    PlayerShareEvent,
+    PlayerShareHolding,
+    PlayerShareMarket,
+    PlayerSharePriceSnapshot,
+)
 from app.models.real_world_football import (
     EventEffectRule,
     EventIngestionJob,
