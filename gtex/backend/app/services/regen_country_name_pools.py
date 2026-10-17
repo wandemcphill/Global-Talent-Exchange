@@ -577,4 +577,17 @@ COUNTRY_NAME_PROFILE_ALIASES: dict[str, str] = {
     "cote divoire": "CI",
     "ivory coast": "CI",
     "england": "EN",
+    "scotland": "SC",
+    "northern ireland": "NI",
 }
+
+
+def _install_culture_pools() -> None:
+    from app.services.regen_culture_name_pools import country_pool_entries
+
+    # Countries without a hand-written pool previously fell back to Nigerian names.
+    for code, entry in country_pool_entries().items():
+        COUNTRY_SPECIFIC_NAME_POOLS.setdefault(code, entry)
+
+
+_install_culture_pools()

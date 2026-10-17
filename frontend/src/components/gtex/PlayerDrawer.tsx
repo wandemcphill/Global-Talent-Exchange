@@ -37,8 +37,28 @@ function ShareBox({ playerId }: { playerId: string }) {
   );
 }
 
+function RegenDossier({ playerId }: { playerId: string }) {
+  const { data: m, isLoading } = useQuery({ queryKey: ["market-player", playerId], queryFn: async () => (await api.get(`/market/players/${playerId}`)).data });
+  if (isLoading || !m) return <Loading label="Pulling the academy file" />;
+  const id = m.identity || {};
+  const a = m.attributes || {};
+  return (
+    <div className="space-y-5" data-testid="drawer-regen-dossier">
+      <div className="mx-auto max-w-[240px]">
+        <PlayerCard testid="drawer-regen-card" name={id.player_name} rating={a.overall} potential={a.potential} position={id.normalized_position || id.position} age={id.age} nationality={id.nationality} club={id.current_club_name} image={id.image_url} regen
+          badge={a.potential - a.overall >= 15 ? "Wonderkid" : "Regen"} stats={[{ k: "Ceiling", v: `+${Math.max(0, (a.potential || 0) - (a.overall || 0))}` }, { k: "Nation", v: id.nationality_code || "-" }, { k: "Age", v: id.age ?? "-" }]} />
+      </div>
+      <div className="flex flex-wrap gap-2"><Chip tone="emerald">Pre-seeded national regen</Chip>{id.position && <Chip tone="cyan">{id.position}</Chip>}</div>
+      <div className="space-y-2.5" data-testid="drawer-regen-attributes">
+        {["pace", "shooting", "passing", "dribbling", "defending", "physical"].map((k) => <TraitBar key={k} label={label(k)} value={a[k] ?? 0} max={99} />)}
+      </div>
+      <ShareBox playerId={playerId} />
+    </div>
+  );
+}
+
 export function PlayerDrawer({ playerId, onClose, extra }: { playerId: string | null; onClose: () => void; extra?: React.ReactNode }) {
-  const { data: p, isLoading } = useQuery({ queryKey: ["real-player", playerId], queryFn: async () => (await api.get(`/v2/players/real-universe/${playerId}`)).data, enabled: !!playerId });
+  const { data: p, isLoading, isError } = useQuery({ queryKey: ["real-player", playerId], queryFn: async () => (await api.get(`/v2/players/real-universe/${playerId}`)).data, enabled: !!playerId, retry: false });
   const { data: form } = useQuery({ queryKey: ["player-form", playerId], queryFn: async () => (await api.get(`/v2/players/${playerId}/form`, { params: { include_performances: false } })).data, enabled: !!playerId });
   const { data: quote } = useQuery({ queryKey: ["player-quote", playerId], queryFn: async () => (await api.get("/owner/market/quote", { params: { player_ids: playerId } })).data.quotes[playerId as string], enabled: !!playerId });
   if (!playerId) return null;
@@ -50,7 +70,7 @@ export function PlayerDrawer({ playerId, onClose, extra }: { playerId: string | 
           <p className="gx-eyebrow">Scouting report</p>
           <button onClick={onClose} data-testid="player-drawer-close" className="text-slate-400 transition-colors hover:text-white"><X size={18} /></button>
         </div>
-        {isLoading || !p ? <Loading label="Pulling the dossier" /> : (
+        {isError ? <RegenDossier playerId={playerId} /> : isLoading || !p ? <Loading label="Pulling the dossier" /> : (
           <div className="space-y-5">
             <div className="mx-auto max-w-[240px]">
               <PlayerCard name={p.player_name} rating={quote?.rating} position={p.position} age={p.age} nationality={p.nationality} club={p.current_club_name} image={p.image_url}
