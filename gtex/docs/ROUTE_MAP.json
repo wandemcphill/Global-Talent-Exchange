@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1764,
+  "route_count": 1773,
   "routes": [
     {
       "method": "POST",
@@ -28833,6 +28833,60 @@
     },
     {
       "method": "GET",
+      "path": "/owner/clubs/{club_id}/showroom",
+      "effective_paths": [
+        "/api/owner/clubs/{club_id}/showroom"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "club_showroom",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
+      "path": "/owner/clubs/{club_id}/staff",
+      "effective_paths": [
+        "/api/owner/clubs/{club_id}/staff"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "club_staff",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
       "path": "/owner/clubs/{club_id}/supporters",
       "effective_paths": [
         "/api/owner/clubs/{club_id}/supporters"
@@ -29125,6 +29179,32 @@
     },
     {
       "method": "GET",
+      "path": "/owner/public/showroom/{code}",
+      "effective_paths": [
+        "/api/owner/public/showroom/{code}"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "public_showroom",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "code",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
       "path": "/owner/withdrawals/eligibility",
       "effective_paths": [
         "/api/owner/withdrawals/eligibility"
@@ -29256,6 +29336,32 @@
       "response_shape": {
         "response_model": null,
         "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/alerts/cron",
+      "effective_paths": [
+        "/api/owner/alerts/cron"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "trigger_owner_alert_sweep",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "background_tasks"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, str]"
       },
       "version": "canonical",
       "domain": "owner"
@@ -29534,6 +29640,33 @@
     },
     {
       "method": "POST",
+      "path": "/owner/clubs/{club_id}/showroom/share",
+      "effective_paths": [
+        "/api/owner/clubs/{club_id}/showroom/share"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "share_showroom",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
       "path": "/owner/clubs/{club_id}/sign",
       "effective_paths": [
         "/api/owner/clubs/{club_id}/sign"
@@ -29549,6 +29682,89 @@
         "parameters": [
           "club_id",
           "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/clubs/{club_id}/staff/hire",
+      "effective_paths": [
+        "/api/owner/clubs/{club_id}/staff/hire"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "hire_staff",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/clubs/{club_id}/staff/run",
+      "effective_paths": [
+        "/api/owner/clubs/{club_id}/staff/run"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "run_staff",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/clubs/{club_id}/staff/{staff_id}/release",
+      "effective_paths": [
+        "/api/owner/clubs/{club_id}/staff/{staff_id}/release"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "release_staff",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "staff_id",
           "user",
           "session"
         ]
@@ -29929,6 +30145,35 @@
       ],
       "request_shape": {
         "parameters": [
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "PUT",
+      "path": "/owner/clubs/{club_id}/delegation/{task}",
+      "effective_paths": [
+        "/api/owner/clubs/{club_id}/delegation/{task}"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "update_policy",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "task",
           "body",
           "user",
           "session"

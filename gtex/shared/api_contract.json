@@ -12419,6 +12419,32 @@
         "source_file": "backend/app/owner_console/router.py",
         "response_model": null
       },
+      "get_api_v2_owner_clubs_club_id_showroom": {
+        "method": "GET",
+        "canonical_path": "/api/v2/owner/clubs/{club_id}/showroom",
+        "aliases": [
+          "/api/owner/clubs/{club_id}/showroom",
+          "/api/v1/owner/clubs/{club_id}/showroom",
+          "/api/v2/owner/clubs/{club_id}/showroom",
+          "/owner/clubs/{club_id}/showroom"
+        ],
+        "handler": "club_showroom",
+        "source_file": "backend/app/owner_console/router.py",
+        "response_model": null
+      },
+      "get_api_v2_owner_clubs_club_id_staff": {
+        "method": "GET",
+        "canonical_path": "/api/v2/owner/clubs/{club_id}/staff",
+        "aliases": [
+          "/api/owner/clubs/{club_id}/staff",
+          "/api/v1/owner/clubs/{club_id}/staff",
+          "/api/v2/owner/clubs/{club_id}/staff",
+          "/owner/clubs/{club_id}/staff"
+        ],
+        "handler": "club_staff",
+        "source_file": "backend/app/owner_console/router.py",
+        "response_model": null
+      },
       "get_api_v2_owner_clubs_club_id_supporters": {
         "method": "GET",
         "canonical_path": "/api/v2/owner/clubs/{club_id}/supporters",
@@ -12562,6 +12588,19 @@
         "source_file": "backend/app/owner_console/router.py",
         "response_model": null
       },
+      "get_api_v2_owner_public_showroom_code": {
+        "method": "GET",
+        "canonical_path": "/api/v2/owner/public/showroom/{code}",
+        "aliases": [
+          "/api/owner/public/showroom/{code}",
+          "/api/v1/owner/public/showroom/{code}",
+          "/api/v2/owner/public/showroom/{code}",
+          "/owner/public/showroom/{code}"
+        ],
+        "handler": "public_showroom",
+        "source_file": "backend/app/owner_console/router.py",
+        "response_model": null
+      },
       "get_api_v2_owner_withdrawals_eligibility": {
         "method": "GET",
         "canonical_path": "/api/v2/owner/withdrawals/eligibility",
@@ -12624,6 +12663,19 @@
           "/owner/admin/withdrawals/{withdrawal_id}/review"
         ],
         "handler": "review",
+        "source_file": "backend/app/owner_console/router.py",
+        "response_model": null
+      },
+      "post_api_v2_owner_alerts_cron": {
+        "method": "POST",
+        "canonical_path": "/api/v2/owner/alerts/cron",
+        "aliases": [
+          "/api/owner/alerts/cron",
+          "/api/v1/owner/alerts/cron",
+          "/api/v2/owner/alerts/cron",
+          "/owner/alerts/cron"
+        ],
+        "handler": "trigger_owner_alert_sweep",
         "source_file": "backend/app/owner_console/router.py",
         "response_model": null
       },
@@ -12757,6 +12809,19 @@
         "source_file": "backend/app/owner_console/router.py",
         "response_model": null
       },
+      "post_api_v2_owner_clubs_club_id_showroom_share": {
+        "method": "POST",
+        "canonical_path": "/api/v2/owner/clubs/{club_id}/showroom/share",
+        "aliases": [
+          "/api/owner/clubs/{club_id}/showroom/share",
+          "/api/v1/owner/clubs/{club_id}/showroom/share",
+          "/api/v2/owner/clubs/{club_id}/showroom/share",
+          "/owner/clubs/{club_id}/showroom/share"
+        ],
+        "handler": "share_showroom",
+        "source_file": "backend/app/owner_console/router.py",
+        "response_model": null
+      },
       "post_api_v2_owner_clubs_club_id_sign": {
         "method": "POST",
         "canonical_path": "/api/v2/owner/clubs/{club_id}/sign",
@@ -12767,6 +12832,45 @@
           "/owner/clubs/{club_id}/sign"
         ],
         "handler": "sign",
+        "source_file": "backend/app/owner_console/router.py",
+        "response_model": null
+      },
+      "post_api_v2_owner_clubs_club_id_staff_hire": {
+        "method": "POST",
+        "canonical_path": "/api/v2/owner/clubs/{club_id}/staff/hire",
+        "aliases": [
+          "/api/owner/clubs/{club_id}/staff/hire",
+          "/api/v1/owner/clubs/{club_id}/staff/hire",
+          "/api/v2/owner/clubs/{club_id}/staff/hire",
+          "/owner/clubs/{club_id}/staff/hire"
+        ],
+        "handler": "hire_staff",
+        "source_file": "backend/app/owner_console/router.py",
+        "response_model": null
+      },
+      "post_api_v2_owner_clubs_club_id_staff_run": {
+        "method": "POST",
+        "canonical_path": "/api/v2/owner/clubs/{club_id}/staff/run",
+        "aliases": [
+          "/api/owner/clubs/{club_id}/staff/run",
+          "/api/v1/owner/clubs/{club_id}/staff/run",
+          "/api/v2/owner/clubs/{club_id}/staff/run",
+          "/owner/clubs/{club_id}/staff/run"
+        ],
+        "handler": "run_staff",
+        "source_file": "backend/app/owner_console/router.py",
+        "response_model": null
+      },
+      "post_api_v2_owner_clubs_club_id_staff_staff_id_release": {
+        "method": "POST",
+        "canonical_path": "/api/v2/owner/clubs/{club_id}/staff/{staff_id}/release",
+        "aliases": [
+          "/api/owner/clubs/{club_id}/staff/{staff_id}/release",
+          "/api/v1/owner/clubs/{club_id}/staff/{staff_id}/release",
+          "/api/v2/owner/clubs/{club_id}/staff/{staff_id}/release",
+          "/owner/clubs/{club_id}/staff/{staff_id}/release"
+        ],
+        "handler": "release_staff",
         "source_file": "backend/app/owner_console/router.py",
         "response_model": null
       },
@@ -12949,6 +13053,19 @@
           "/owner/withdrawals"
         ],
         "handler": "withdraw",
+        "source_file": "backend/app/owner_console/router.py",
+        "response_model": null
+      },
+      "put_api_v2_owner_clubs_club_id_delegation_task": {
+        "method": "PUT",
+        "canonical_path": "/api/v2/owner/clubs/{club_id}/delegation/{task}",
+        "aliases": [
+          "/api/owner/clubs/{club_id}/delegation/{task}",
+          "/api/v1/owner/clubs/{club_id}/delegation/{task}",
+          "/api/v2/owner/clubs/{club_id}/delegation/{task}",
+          "/owner/clubs/{club_id}/delegation/{task}"
+        ],
+        "handler": "update_policy",
         "source_file": "backend/app/owner_console/router.py",
         "response_model": null
       },
@@ -22447,6 +22564,7 @@
     "/api/v2/owner/admin/payouts/{event_id}/release": "post_api_v2_owner_admin_payouts_event_id_release",
     "/api/v2/owner/admin/review-queue": "get_api_v2_owner_admin_review_queue",
     "/api/v2/owner/admin/withdrawals/{withdrawal_id}/review": "post_api_v2_owner_admin_withdrawals_withdrawal_id_review",
+    "/api/v2/owner/alerts/cron": "post_api_v2_owner_alerts_cron",
     "/api/v2/owner/capital/distribute": "post_api_v2_owner_capital_distribute",
     "/api/v2/owner/capital/inject": "post_api_v2_owner_capital_inject",
     "/api/v2/owner/capital/sister-transfer": "post_api_v2_owner_capital_sister_transfer",
@@ -22454,12 +22572,19 @@
     "/api/v2/owner/clubs/{club_id}/academy/intake": "post_api_v2_owner_clubs_club_id_academy_intake",
     "/api/v2/owner/clubs/{club_id}/activate": "post_api_v2_owner_clubs_club_id_activate",
     "/api/v2/owner/clubs/{club_id}/advance": "post_api_v2_owner_clubs_club_id_advance",
+    "/api/v2/owner/clubs/{club_id}/delegation/{task}": "put_api_v2_owner_clubs_club_id_delegation_task",
     "/api/v2/owner/clubs/{club_id}/facilities/{kind}/upgrade": "post_api_v2_owner_clubs_club_id_facilities_kind_upgrade",
     "/api/v2/owner/clubs/{club_id}/finish-onboarding": "post_api_v2_owner_clubs_club_id_finish_onboarding",
     "/api/v2/owner/clubs/{club_id}/manager": "post_api_v2_owner_clubs_club_id_manager",
     "/api/v2/owner/clubs/{club_id}/manager/fire": "post_api_v2_owner_clubs_club_id_manager_fire",
     "/api/v2/owner/clubs/{club_id}/mentality": "put_api_v2_owner_clubs_club_id_mentality",
+    "/api/v2/owner/clubs/{club_id}/showroom": "get_api_v2_owner_clubs_club_id_showroom",
+    "/api/v2/owner/clubs/{club_id}/showroom/share": "post_api_v2_owner_clubs_club_id_showroom_share",
     "/api/v2/owner/clubs/{club_id}/sign": "post_api_v2_owner_clubs_club_id_sign",
+    "/api/v2/owner/clubs/{club_id}/staff": "get_api_v2_owner_clubs_club_id_staff",
+    "/api/v2/owner/clubs/{club_id}/staff/hire": "post_api_v2_owner_clubs_club_id_staff_hire",
+    "/api/v2/owner/clubs/{club_id}/staff/run": "post_api_v2_owner_clubs_club_id_staff_run",
+    "/api/v2/owner/clubs/{club_id}/staff/{staff_id}/release": "post_api_v2_owner_clubs_club_id_staff_staff_id_release",
     "/api/v2/owner/clubs/{club_id}/supporters": "get_api_v2_owner_clubs_club_id_supporters",
     "/api/v2/owner/competitions": "post_api_v2_owner_competitions",
     "/api/v2/owner/competitions/join-by-code": "post_api_v2_owner_competitions_join_by_code",
@@ -22480,6 +22605,7 @@
     "/api/v2/owner/matches/{match_id}": "get_api_v2_owner_matches_match_id",
     "/api/v2/owner/matches/{match_id}/forfeit": "post_api_v2_owner_matches_match_id_forfeit",
     "/api/v2/owner/onboarding": "get_api_v2_owner_onboarding",
+    "/api/v2/owner/public/showroom/{code}": "get_api_v2_owner_public_showroom_code",
     "/api/v2/owner/support-units/buy": "post_api_v2_owner_support_units_buy",
     "/api/v2/owner/transfers/internal": "post_api_v2_owner_transfers_internal",
     "/api/v2/owner/transfers/internal/check": "post_api_v2_owner_transfers_internal_check",
@@ -24180,6 +24306,7 @@
     "/api/owner/admin/payouts/{event_id}/release": "/api/v2/owner/admin/payouts/{event_id}/release",
     "/api/owner/admin/review-queue": "/api/v2/owner/admin/review-queue",
     "/api/owner/admin/withdrawals/{withdrawal_id}/review": "/api/v2/owner/admin/withdrawals/{withdrawal_id}/review",
+    "/api/owner/alerts/cron": "/api/v2/owner/alerts/cron",
     "/api/owner/capital/distribute": "/api/v2/owner/capital/distribute",
     "/api/owner/capital/inject": "/api/v2/owner/capital/inject",
     "/api/owner/capital/sister-transfer": "/api/v2/owner/capital/sister-transfer",
@@ -24187,12 +24314,19 @@
     "/api/owner/clubs/{club_id}/academy/intake": "/api/v2/owner/clubs/{club_id}/academy/intake",
     "/api/owner/clubs/{club_id}/activate": "/api/v2/owner/clubs/{club_id}/activate",
     "/api/owner/clubs/{club_id}/advance": "/api/v2/owner/clubs/{club_id}/advance",
+    "/api/owner/clubs/{club_id}/delegation/{task}": "/api/v2/owner/clubs/{club_id}/delegation/{task}",
     "/api/owner/clubs/{club_id}/facilities/{kind}/upgrade": "/api/v2/owner/clubs/{club_id}/facilities/{kind}/upgrade",
     "/api/owner/clubs/{club_id}/finish-onboarding": "/api/v2/owner/clubs/{club_id}/finish-onboarding",
     "/api/owner/clubs/{club_id}/manager": "/api/v2/owner/clubs/{club_id}/manager",
     "/api/owner/clubs/{club_id}/manager/fire": "/api/v2/owner/clubs/{club_id}/manager/fire",
     "/api/owner/clubs/{club_id}/mentality": "/api/v2/owner/clubs/{club_id}/mentality",
+    "/api/owner/clubs/{club_id}/showroom": "/api/v2/owner/clubs/{club_id}/showroom",
+    "/api/owner/clubs/{club_id}/showroom/share": "/api/v2/owner/clubs/{club_id}/showroom/share",
     "/api/owner/clubs/{club_id}/sign": "/api/v2/owner/clubs/{club_id}/sign",
+    "/api/owner/clubs/{club_id}/staff": "/api/v2/owner/clubs/{club_id}/staff",
+    "/api/owner/clubs/{club_id}/staff/hire": "/api/v2/owner/clubs/{club_id}/staff/hire",
+    "/api/owner/clubs/{club_id}/staff/run": "/api/v2/owner/clubs/{club_id}/staff/run",
+    "/api/owner/clubs/{club_id}/staff/{staff_id}/release": "/api/v2/owner/clubs/{club_id}/staff/{staff_id}/release",
     "/api/owner/clubs/{club_id}/supporters": "/api/v2/owner/clubs/{club_id}/supporters",
     "/api/owner/competitions": "/api/v2/owner/competitions",
     "/api/owner/competitions/join-by-code": "/api/v2/owner/competitions/join-by-code",
@@ -24213,6 +24347,7 @@
     "/api/owner/matches/{match_id}": "/api/v2/owner/matches/{match_id}",
     "/api/owner/matches/{match_id}/forfeit": "/api/v2/owner/matches/{match_id}/forfeit",
     "/api/owner/onboarding": "/api/v2/owner/onboarding",
+    "/api/owner/public/showroom/{code}": "/api/v2/owner/public/showroom/{code}",
     "/api/owner/support-units/buy": "/api/v2/owner/support-units/buy",
     "/api/owner/transfers/internal": "/api/v2/owner/transfers/internal",
     "/api/owner/transfers/internal/check": "/api/v2/owner/transfers/internal/check",
@@ -25588,6 +25723,7 @@
     "/api/v1/owner/admin/payouts/{event_id}/release": "/api/v2/owner/admin/payouts/{event_id}/release",
     "/api/v1/owner/admin/review-queue": "/api/v2/owner/admin/review-queue",
     "/api/v1/owner/admin/withdrawals/{withdrawal_id}/review": "/api/v2/owner/admin/withdrawals/{withdrawal_id}/review",
+    "/api/v1/owner/alerts/cron": "/api/v2/owner/alerts/cron",
     "/api/v1/owner/capital/distribute": "/api/v2/owner/capital/distribute",
     "/api/v1/owner/capital/inject": "/api/v2/owner/capital/inject",
     "/api/v1/owner/capital/sister-transfer": "/api/v2/owner/capital/sister-transfer",
@@ -25595,12 +25731,19 @@
     "/api/v1/owner/clubs/{club_id}/academy/intake": "/api/v2/owner/clubs/{club_id}/academy/intake",
     "/api/v1/owner/clubs/{club_id}/activate": "/api/v2/owner/clubs/{club_id}/activate",
     "/api/v1/owner/clubs/{club_id}/advance": "/api/v2/owner/clubs/{club_id}/advance",
+    "/api/v1/owner/clubs/{club_id}/delegation/{task}": "/api/v2/owner/clubs/{club_id}/delegation/{task}",
     "/api/v1/owner/clubs/{club_id}/facilities/{kind}/upgrade": "/api/v2/owner/clubs/{club_id}/facilities/{kind}/upgrade",
     "/api/v1/owner/clubs/{club_id}/finish-onboarding": "/api/v2/owner/clubs/{club_id}/finish-onboarding",
     "/api/v1/owner/clubs/{club_id}/manager": "/api/v2/owner/clubs/{club_id}/manager",
     "/api/v1/owner/clubs/{club_id}/manager/fire": "/api/v2/owner/clubs/{club_id}/manager/fire",
     "/api/v1/owner/clubs/{club_id}/mentality": "/api/v2/owner/clubs/{club_id}/mentality",
+    "/api/v1/owner/clubs/{club_id}/showroom": "/api/v2/owner/clubs/{club_id}/showroom",
+    "/api/v1/owner/clubs/{club_id}/showroom/share": "/api/v2/owner/clubs/{club_id}/showroom/share",
     "/api/v1/owner/clubs/{club_id}/sign": "/api/v2/owner/clubs/{club_id}/sign",
+    "/api/v1/owner/clubs/{club_id}/staff": "/api/v2/owner/clubs/{club_id}/staff",
+    "/api/v1/owner/clubs/{club_id}/staff/hire": "/api/v2/owner/clubs/{club_id}/staff/hire",
+    "/api/v1/owner/clubs/{club_id}/staff/run": "/api/v2/owner/clubs/{club_id}/staff/run",
+    "/api/v1/owner/clubs/{club_id}/staff/{staff_id}/release": "/api/v2/owner/clubs/{club_id}/staff/{staff_id}/release",
     "/api/v1/owner/clubs/{club_id}/supporters": "/api/v2/owner/clubs/{club_id}/supporters",
     "/api/v1/owner/competitions": "/api/v2/owner/competitions",
     "/api/v1/owner/competitions/join-by-code": "/api/v2/owner/competitions/join-by-code",
@@ -25621,6 +25764,7 @@
     "/api/v1/owner/matches/{match_id}": "/api/v2/owner/matches/{match_id}",
     "/api/v1/owner/matches/{match_id}/forfeit": "/api/v2/owner/matches/{match_id}/forfeit",
     "/api/v1/owner/onboarding": "/api/v2/owner/onboarding",
+    "/api/v1/owner/public/showroom/{code}": "/api/v2/owner/public/showroom/{code}",
     "/api/v1/owner/support-units/buy": "/api/v2/owner/support-units/buy",
     "/api/v1/owner/transfers/internal": "/api/v2/owner/transfers/internal",
     "/api/v1/owner/transfers/internal/check": "/api/v2/owner/transfers/internal/check",
@@ -26907,6 +27051,7 @@
     "/owner/admin/payouts/{event_id}/release": "/api/v2/owner/admin/payouts/{event_id}/release",
     "/owner/admin/review-queue": "/api/v2/owner/admin/review-queue",
     "/owner/admin/withdrawals/{withdrawal_id}/review": "/api/v2/owner/admin/withdrawals/{withdrawal_id}/review",
+    "/owner/alerts/cron": "/api/v2/owner/alerts/cron",
     "/owner/capital/distribute": "/api/v2/owner/capital/distribute",
     "/owner/capital/inject": "/api/v2/owner/capital/inject",
     "/owner/capital/sister-transfer": "/api/v2/owner/capital/sister-transfer",
@@ -26914,12 +27059,19 @@
     "/owner/clubs/{club_id}/academy/intake": "/api/v2/owner/clubs/{club_id}/academy/intake",
     "/owner/clubs/{club_id}/activate": "/api/v2/owner/clubs/{club_id}/activate",
     "/owner/clubs/{club_id}/advance": "/api/v2/owner/clubs/{club_id}/advance",
+    "/owner/clubs/{club_id}/delegation/{task}": "/api/v2/owner/clubs/{club_id}/delegation/{task}",
     "/owner/clubs/{club_id}/facilities/{kind}/upgrade": "/api/v2/owner/clubs/{club_id}/facilities/{kind}/upgrade",
     "/owner/clubs/{club_id}/finish-onboarding": "/api/v2/owner/clubs/{club_id}/finish-onboarding",
     "/owner/clubs/{club_id}/manager": "/api/v2/owner/clubs/{club_id}/manager",
     "/owner/clubs/{club_id}/manager/fire": "/api/v2/owner/clubs/{club_id}/manager/fire",
     "/owner/clubs/{club_id}/mentality": "/api/v2/owner/clubs/{club_id}/mentality",
+    "/owner/clubs/{club_id}/showroom": "/api/v2/owner/clubs/{club_id}/showroom",
+    "/owner/clubs/{club_id}/showroom/share": "/api/v2/owner/clubs/{club_id}/showroom/share",
     "/owner/clubs/{club_id}/sign": "/api/v2/owner/clubs/{club_id}/sign",
+    "/owner/clubs/{club_id}/staff": "/api/v2/owner/clubs/{club_id}/staff",
+    "/owner/clubs/{club_id}/staff/hire": "/api/v2/owner/clubs/{club_id}/staff/hire",
+    "/owner/clubs/{club_id}/staff/run": "/api/v2/owner/clubs/{club_id}/staff/run",
+    "/owner/clubs/{club_id}/staff/{staff_id}/release": "/api/v2/owner/clubs/{club_id}/staff/{staff_id}/release",
     "/owner/clubs/{club_id}/supporters": "/api/v2/owner/clubs/{club_id}/supporters",
     "/owner/competitions": "/api/v2/owner/competitions",
     "/owner/competitions/join-by-code": "/api/v2/owner/competitions/join-by-code",
@@ -26940,6 +27092,7 @@
     "/owner/matches/{match_id}": "/api/v2/owner/matches/{match_id}",
     "/owner/matches/{match_id}/forfeit": "/api/v2/owner/matches/{match_id}/forfeit",
     "/owner/onboarding": "/api/v2/owner/onboarding",
+    "/owner/public/showroom/{code}": "/api/v2/owner/public/showroom/{code}",
     "/owner/support-units/buy": "/api/v2/owner/support-units/buy",
     "/owner/transfers/internal": "/api/v2/owner/transfers/internal",
     "/owner/transfers/internal/check": "/api/v2/owner/transfers/internal/check",

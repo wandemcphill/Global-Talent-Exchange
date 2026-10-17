@@ -23,6 +23,7 @@ import 'package:gte_frontend/features/tasks/gtex_daily_challenges_screen.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/features/owner_console/data/owner_ops_api.dart';
 import 'package:gte_frontend/features/owner_console/ops/owner_finance_section.dart';
+import 'package:gte_frontend/features/owner_console/ops/owner_showroom.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/router/gtex_auth_routes.dart';
 import 'package:gte_frontend/screens/auth/gtex_account_signup_screens.dart';
@@ -115,6 +116,21 @@ GoRouter buildGtexAppRouter({
               state: state,
               controller: controller,
             ),
+      ),
+      GoRoute(
+        path: '/showroom/:code',
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                NoTransitionPage<void>(
+                  key: state.pageKey,
+                  child: PublicShowroomScreen(
+                    key: ValueKey<String>('showroom-${state.pathParameters['code']}'),
+                    load: () async {
+                      final Object? body = await dependenciesBuilder(context).createAuthedApi().request('GET', '/owner/public/showroom/${state.pathParameters['code']}', auth: false);
+                      return opsMap(body);
+                    },
+                  ),
+                ),
       ),
       GoRoute(
         path: '/payment/callback',

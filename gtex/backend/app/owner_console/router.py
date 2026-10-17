@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.owner_console import competitions as comps
-from app.owner_console import alerts, ledger, money, service
+from app.owner_console import alerts, ledger, money, service, staff
 from app.owner_console.models import IntegrityFlag, LedgerEvent, OwnerCompetition, OwnerCompetitionEntry, OwnerInboxItem, OwnerMatch, OwnerWithdrawal
 from app.owner_console.service import OwnerError
 
@@ -240,6 +240,7 @@ def control_center(user=Depends(get_current_user), session: Session = Depends(ge
         comps.ensure_seed(session)
         service.maybe_auto_tick(session, user.id)
         alerts.sweep_decisions(session, user.id)
+        staff.sweep_user(session, user.id)
         states = service.user_states(session, user.id)
         club_ids = [s.club_id for s in states]
         items = session.scalars(select(OwnerInboxItem).where(OwnerInboxItem.user_id == user.id, OwnerInboxItem.status == "open").order_by(OwnerInboxItem.created_at.desc())).all()
@@ -299,6 +300,7 @@ def _run_alert_sweep() -> None:
     with get_session_factory()() as session:
         decisions = alerts.sweep_decisions(session)
         jumps = alerts.sweep_price_jumps(session)
+        staff.sweep_all(session)
         session.commit()
     logging.getLogger(__name__).info("owner_alert_sweep decisions=%s price_jumps=%s", decisions, jumps)
 
@@ -312,6 +314,62 @@ def trigger_owner_alert_sweep(request: Request, background_tasks: BackgroundTask
         raise HTTPException(status_code=401, detail="Invalid cron credentials.")
     background_tasks.add_task(_run_alert_sweep)
     return {"status": "accepted", "run_id": request.headers.get("x-webhook-id") or ""}
+
+
+class StaffHireRequest(BaseModel):
+    candidate_id: str = Field(min_length=3, max_length=40)
+
+
+class PolicyRequest(BaseModel):
+    mode: Literal["owner_only", "approval", "auto"]
+    budget_cap: float = Field(ge=0, le=10_000_000)
+
+
+@router.get("/clubs/{club_id}/staff")
+def club_staff(club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
+    return _run(session, staff.staff_overview, session, user.id, club_id)
+
+
+@router.post("/clubs/{club_id}/staff/hire")
+def hire_staff(club_id: str, body: StaffHireRequest, user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
+    return staff.staff_dict(_run(session, staff.hire, session, user.id, club_id, body.candidate_id))
+
+
+@router.post("/clubs/{club_id}/staff/{staff_id}/release")
+def release_staff(club_id: str, staff_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
+    return staff.staff_dict(_run(session, staff.release, session, user.id, club_id, staff_id))
+
+
+@router.put("/clubs/{club_id}/delegation/{task}")
+def update_policy(club_id: str, task: str, body: PolicyRequest, user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
+    p = _run(session, staff.set_policy, session, user.id, club_id, task, body.mode, ledger.D(body.budget_cap))
+    return {"task": p.task, "mode": p.mode, "budget_cap": str(p.budget_cap), "version": p.version}
+
+
+@router.post("/clubs/{club_id}/staff/run")
+def run_staff(club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
+    return _run(session, lambda: staff.run_club(session, service.require_state(session, club_id, user.id)))
+
+
+@router.post("/clubs/{club_id}/showroom/share")
+def share_showroom(club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
+    return {"code": _run(session, staff.share_code, session, user.id, club_id)}
+
+
+@router.get("/clubs/{club_id}/showroom")
+def club_showroom(club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
+    service.require_state(session, club_id, user.id)
+    return staff.showroom(session, club_id)
+
+
+@router.get("/public/showroom/{code}")
+def public_showroom(code: str, session: Session = Depends(get_session)) -> dict[str, Any]:
+    from app.owner_console.staff_models import OwnerShowroomLink
+
+    link = session.scalar(select(OwnerShowroomLink).where(OwnerShowroomLink.code == code))
+    if link is None:
+        raise HTTPException(status_code=404, detail="Showroom not found.")
+    return _run(session, staff.public_showroom, session, link.club_id)
 
 
 @router.post("/inbox/{item_id}/decide")

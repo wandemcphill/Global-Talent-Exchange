@@ -10,13 +10,16 @@ import '../ops/owner_competitions_section.dart';
 import '../ops/owner_finance_section.dart';
 import '../ops/owner_inbox_section.dart';
 import '../ops/owner_setup_section.dart';
+import '../ops/owner_showroom.dart';
+import '../ops/owner_staff_section.dart';
 import '../widgets/owner_admin_review_section.dart';
 import '../widgets/owner_console_sections.dart';
 
-enum OwnerConsoleSection { control, setup, clubs, market, squad, academy, competitions, finance, inbox, admin }
+enum OwnerConsoleSection { control, setup, clubs, staff, market, squad, academy, competitions, finance, inbox, admin }
 
 const Set<OwnerConsoleSection> _opsSections = <OwnerConsoleSection>{
   OwnerConsoleSection.setup,
+  OwnerConsoleSection.staff,
   OwnerConsoleSection.competitions,
   OwnerConsoleSection.finance,
   OwnerConsoleSection.inbox,
@@ -27,6 +30,7 @@ const Map<OwnerConsoleSection, (String, IconData)> _sectionMeta =
       OwnerConsoleSection.control: ('Control Center', Icons.space_dashboard_rounded),
       OwnerConsoleSection.setup: ('Club Setup', Icons.flag_rounded),
       OwnerConsoleSection.clubs: ('My Clubs', Icons.shield_rounded),
+      OwnerConsoleSection.staff: ('Staff & Delegation', Icons.badge_rounded),
       OwnerConsoleSection.market: ('Market & Transfers', Icons.storefront_rounded),
       OwnerConsoleSection.squad: ('Manager & Squad', Icons.groups_rounded),
       OwnerConsoleSection.academy: ('Academy / Regens', Icons.auto_awesome_rounded),
@@ -172,6 +176,10 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
         return ClubSetupSection(client: ops!, onChanged: _reload);
       case OwnerConsoleSection.competitions:
         return _withClubs((String? clubId, _) => CompetitionsSection(client: ops!, clubId: clubId, onChanged: _reload));
+      case OwnerConsoleSection.staff:
+        return _withClubs((String? clubId, _) => clubId == null
+            ? opsList(<Widget>[opsNoClub()])
+            : ListView(padding: const EdgeInsets.all(GtexSpacing.md), children: <Widget>[StaffDelegationPanel(client: ops!, clubId: clubId, onChanged: _reload)]));
       case OwnerConsoleSection.finance:
         return FinanceSection(client: ops!, onNavigate: widget.onNavigate);
       case OwnerConsoleSection.inbox:
@@ -189,7 +197,11 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
       case OwnerConsoleSection.clubs:
         return _opsTabs(
           'Club actions',
-          (OwnerOpsClient c, String clubId, List<(String, String)> clubs) => ClubOpsPanel(client: c, clubId: clubId, clubs: clubs, onChanged: _reload),
+          (OwnerOpsClient c, String clubId, List<(String, String)> clubs) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+            OwnerShowroomPanel(client: c, clubId: clubId),
+            const SizedBox(height: GtexSpacing.md),
+            ClubOpsPanel(client: c, clubId: clubId, clubs: clubs, onChanged: _reload),
+          ]),
           'All clubs',
           MyClubsSection(
             center: _center,
