@@ -347,18 +347,18 @@ def _facility(exhibit_id: str, name: str, category: str, fallback: str) -> dict:
 
 def _model_file(category: str | None) -> str:
     return {
-        "jet": "assets/showroom/aurelius_x1_private_jet.glb",
-        "aircraft": "assets/showroom/aurelius_x1_private_jet.glb",
-        "coach": "assets/showroom/gtex_voyager_club_coach.glb",
-        "team_transport": "assets/showroom/gtex_voyager_club_coach.glb",
-        "vehicle": "assets/showroom/velocity_r_hypercar.glb",
-        "watch": "assets/showroom/meridian_luxury_watch.glb",
-        "watch_collectible": "assets/showroom/meridian_luxury_watch.glb",
-        "stadium": "assets/showroom/legacy_arena_stadium.glb",
-        "stadium_facility": "assets/showroom/legacy_arena_stadium.glb",
-        "campus": "assets/showroom/gtex_performance_campus.glb",
-        "training_academy_facility": "assets/showroom/gtex_performance_campus.glb",
-    }.get(category or "", "assets/showroom/meridian_luxury_watch.glb")
+        "jet": "assets/showroom/sovereign_900x_jet.glb",
+        "aircraft": "assets/showroom/sovereign_900x_jet.glb",
+        "coach": "assets/showroom/vanguard_xii_coach.glb",
+        "team_transport": "assets/showroom/vanguard_xii_coach.glb",
+        "vehicle": "assets/showroom/veloce_gt9_hypercar.glb",
+        "watch": "assets/showroom/chronos_tourbillon_watch.glb",
+        "watch_collectible": "assets/showroom/chronos_tourbillon_watch.glb",
+        "stadium": "assets/showroom/arena_imperiale_stadium.glb",
+        "stadium_facility": "assets/showroom/arena_imperiale_stadium.glb",
+        "campus": "assets/showroom/apex_performance_campus.glb",
+        "training_academy_facility": "assets/showroom/apex_performance_campus.glb",
+    }.get(category or "", "assets/showroom/chronos_tourbillon_watch.glb")
 
 
 def _preview_file(category: str | None) -> str:

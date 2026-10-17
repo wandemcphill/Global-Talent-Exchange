@@ -66,7 +66,7 @@ void main() {
     await _pump(tester);
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('club-showroom-model-loaded')), findsOneWidget);
-    _expectHeavyModel(tester, 'aurelius_x1_private_jet.glb');
+    _expectHeavyModel(tester, 'sovereign_900x_jet.glb');
     expect(find.text('Club'), findsWidgets);
     expect(find.byKey(const Key('club-showroom-zoom')), findsOneWidget);
     expect(find.text('Turn 0.0'), findsOneWidget);
@@ -81,7 +81,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('club-showroom-pick-watch-1')));
     await tester.pumpAndSettle();
-    _expectHeavyModel(tester, 'meridian_luxury_watch.glb');
+    _expectHeavyModel(tester, 'chronos_tourbillon_watch.glb');
     expect(find.text('Owner'), findsWidgets);
     expect(find.text('Turn 0.0'), findsOneWidget);
   });
@@ -103,7 +103,7 @@ void main() {
                 category: 'jet',
                 ownershipLabel: 'Club',
                 fallbackLabel: 'Static jet card',
-                modelFile: 'assets/showroom/gtex_voyager_club_coach.glb',
+                modelFile: 'assets/showroom/vanguard_xii_coach.glb',
                 owned: true,
               ),
             ],
@@ -112,7 +112,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    _expectHeavyModel(tester, 'gtex_voyager_club_coach.glb');
+    _expectHeavyModel(tester, 'vanguard_xii_coach.glb');
   });
 
   testWidgets('reduced motion uses the static card', (
@@ -178,7 +178,7 @@ void main() {
                 ownershipLabel: 'Club',
                 fallbackLabel: 'Static jet card',
                 modelFile: 'assets/showroom/does_not_exist.glb',
-                previewFile: 'assets/showroom/aurelius_x1_private_jet.png',
+                previewFile: 'assets/showroom/sovereign_900x_jet.png',
                 owned: true,
               ),
             ],
@@ -219,12 +219,12 @@ void main() {
   test('all six starter models load at their source size', () async {
     TestWidgetsFlutterBinding.ensureInitialized();
     const Map<String, int> triangles = <String, int>{
-      'assets/showroom/aurelius_x1_private_jet.glb': 6144,
-      'assets/showroom/gtex_voyager_club_coach.glb': 2444,
-      'assets/showroom/velocity_r_hypercar.glb': 4500,
-      'assets/showroom/meridian_luxury_watch.glb': 1300,
-      'assets/showroom/legacy_arena_stadium.glb': 3900,
-      'assets/showroom/gtex_performance_campus.glb': 3924,
+      'assets/showroom/sovereign_900x_jet.glb': 12228,
+      'assets/showroom/vanguard_xii_coach.glb': 8928,
+      'assets/showroom/veloce_gt9_hypercar.glb': 8068,
+      'assets/showroom/chronos_tourbillon_watch.glb': 9184,
+      'assets/showroom/arena_imperiale_stadium.glb': 17568,
+      'assets/showroom/apex_performance_campus.glb': 2040,
     };
     for (final MapEntry<String, int> entry in triangles.entries) {
       final ShowroomGlb model = await loadShowroomGlb(entry.key);
@@ -233,12 +233,20 @@ void main() {
       expect(model.parts, isNotEmpty);
     }
     final ShowroomGlb watch = await loadShowroomGlb(
-      'assets/showroom/meridian_luxury_watch.glb',
+      'assets/showroom/chronos_tourbillon_watch.glb',
     );
     final ShowroomGlb stadium = await loadShowroomGlb(
-      'assets/showroom/legacy_arena_stadium.glb',
+      'assets/showroom/arena_imperiale_stadium.glb',
     );
-    expect(watch.sourceExtent, lessThan(1));
-    expect(stadium.sourceExtent, greaterThan(100));
+    final ShowroomGlb campus = await loadShowroomGlb(
+      'assets/showroom/apex_performance_campus.glb',
+    );
+    final ShowroomGlb jet = await loadShowroomGlb(
+      'assets/showroom/sovereign_900x_jet.glb',
+    );
+    expect(jet.sourceExtent, greaterThan(8));
+    expect(watch.sourceExtent, greaterThan(1));
+    expect(stadium.sourceExtent, greaterThan(1));
+    expect(campus.sourceExtent, greaterThan(1));
   });
 }

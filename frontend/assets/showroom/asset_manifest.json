@@ -1,96 +1,14 @@
 {
-  "pack": "GTEX Club Legacy 3D Asset Starter Pack",
-  "version": "0.1.0",
-  "asset_style": "stylized premium hard-surface starter models; fictional and brand-neutral",
-  "coordinate_system": {
-    "up_axis": "Y",
-    "forward_axis": "+Z",
-    "units": "meters",
-    "origin": "Centered around the model X/Z footprint; Y is up. Vehicle contact points are near y=0, stadium/campus grounds are near y=0 with a site base extending below it, and the watch includes a small display plinth."
-  },
-  "assets": [
-    {
-      "file": "models/aurelius_x1_private_jet.glb",
-      "id": "club_asset_private_jet_aurelius_x1",
-      "name": "Aurelius X1 Private Jet",
-      "category": "aircraft",
-      "ownership_classes": [
-        "club-owned",
-        "owner-personal"
-      ],
-      "recommended_use": "Club Lifestyle / Assets showroom; owner profile collection",
-      "dimensions_m": "approx 17 m wingspan x 18.5 m length",
-      "notes": "Fictional private jet; no manufacturer branding."
-    },
-    {
-      "file": "models/gtex_voyager_club_coach.glb",
-      "id": "club_asset_coach_gtex_voyager",
-      "name": "GTEX Voyager Club Coach",
-      "category": "team_transport",
-      "ownership_classes": [
-        "club-owned"
-      ],
-      "recommended_use": "Club profile transport display and luxury catalogue",
-      "dimensions_m": "body approx 2.52 m wide x 3.53 m high x 11.25 m long; mirrors extend total width to about 3.14 m",
-      "notes": "Generic premium coach design with abstract emblem only."
-    },
-    {
-      "file": "models/velocity_r_hypercar.glb",
-      "id": "personal_asset_velocity_r",
-      "name": "Velocity R Hypercar",
-      "category": "vehicle",
-      "ownership_classes": [
-        "owner-personal",
-        "player-personal",
-        "manager-personal"
-      ],
-      "recommended_use": "Owner/player/manager personal collection",
-      "dimensions_m": "approx 2.1 m width x 1.3 m height x 4.6 m length",
-      "notes": "Fictional vehicle design; not based on a specific marque."
-    },
-    {
-      "file": "models/meridian_luxury_watch.glb",
-      "id": "personal_asset_meridian_watch",
-      "name": "Meridian Mechanical Watch",
-      "category": "watch_collectible",
-      "ownership_classes": [
-        "owner-personal",
-        "player-personal",
-        "manager-personal"
-      ],
-      "recommended_use": "Personal inventory, gifts, rarity collection and asset details",
-      "dimensions_m": "approx 0.046 m case diameter; approx 0.228 m strap length plus a small display plinth",
-      "notes": "Contains a small optional display plinth as a named submesh; viewer should frame from bounds."
-    },
-    {
-      "file": "models/legacy_arena_stadium.glb",
-      "id": "facility_legacy_arena",
-      "name": "Legacy Arena Stadium",
-      "category": "stadium_facility",
-      "ownership_classes": [
-        "club-owned"
-      ],
-      "recommended_use": "Club page stadium/facilities showcase",
-      "dimensions_m": "approx 174 m width x 244 m length; field about 68 x 105 m",
-      "notes": "Stylized oval-bowl geometry; simplified seating and pitch markings."
-    },
-    {
-      "file": "models/gtex_performance_campus.glb",
-      "id": "facility_gtex_performance_campus",
-      "name": "GTEX Performance Campus",
-      "category": "training_academy_facility",
-      "ownership_classes": [
-        "club-owned"
-      ],
-      "recommended_use": "Facilities, Academy and Training Centre showcase",
-      "dimensions_m": "approx 150 m width x 100 m length",
-      "notes": "Includes two training pitches, a youth pitch, performance building and campus details."
-    }
+  "pack": "GTEX Club Legacy 3D asset collection",
+  "note": "Visual files only. Catalogue price, supply, and ownership stay on the server.",
+  "inventory": [
+    {"category": "jet", "file": "sovereign_900x_jet.glb", "name": "Sovereign-900X Executive Jet"},
+    {"category": "coach", "file": "vanguard_xii_coach.glb", "name": "Vanguard-XII Team Touring Coach"},
+    {"category": "vehicle", "file": "veloce_gt9_hypercar.glb", "name": "Veloce-GT9 Obsidian Hypercar", "shown_when": "an inventory record with this category exists"},
+    {"category": "watch", "file": "chronos_tourbillon_watch.glb", "name": "Chronos-Tourbillon Titanium Watch"}
   ],
-  "integration_notes": [
-    "Reuse the repository\u2019s existing renderer/importer and component conventions.",
-    "Do not add a second rendering framework before repository inspection.",
-    "For web rendering, GLB is supported by Three.js GLTFLoader; for Unity, use the project\u2019s existing importer or an approved glTF importer such as glTFast.",
-    "Treat model display as cosmetic. Purchases, rarity, ownership, prices and asset transfers must stay server-authoritative."
+  "environment": [
+    {"category": "stadium", "file": "arena_imperiale_stadium.glb", "name": "Arena Imperiale", "surface": "club facility"},
+    {"category": "campus", "file": "apex_performance_campus.glb", "name": "Apex Performance Campus", "surface": "club facility"}
   ]
 }
