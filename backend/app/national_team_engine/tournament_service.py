@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -385,6 +386,7 @@ class NationalTeamTournamentService:
         seed: NationalRegenSeed | None,
         metadata: dict[str, Any],
         today: date,
+        prefetch: dict[str, Any] | None = None,
     ) -> str | None:
         if bool(metadata.get("injured") or metadata.get("injury_active")):
             return "injury_unavailable"
@@ -395,21 +397,26 @@ class NationalTeamTournamentService:
             return None
         if player is None:
             return None
-        active_case = self.session.scalar(
-            select(PlayerInjuryCase.id)
-            .where(PlayerInjuryCase.player_id == player.id)
-            .where(PlayerInjuryCase.recovered_on.is_(None))
-            .where(or_(PlayerInjuryCase.expected_return_on.is_(None), PlayerInjuryCase.expected_return_on >= today))
-            .limit(1)
-        )
-        if active_case is not None:
-            return "injury_unavailable"
-        injury_status = self.session.scalar(
-            select(InjuryStatus)
-            .where(InjuryStatus.player_id == player.id)
-            .order_by(InjuryStatus.updated_at.desc())
-            .limit(1)
-        )
+        if prefetch is not None:
+            if player.id in prefetch["injury_cases"]:
+                return "injury_unavailable"
+            injury_status = prefetch["injury_status"].get(player.id)
+        else:
+            active_case = self.session.scalar(
+                select(PlayerInjuryCase.id)
+                .where(PlayerInjuryCase.player_id == player.id)
+                .where(PlayerInjuryCase.recovered_on.is_(None))
+                .where(or_(PlayerInjuryCase.expected_return_on.is_(None), PlayerInjuryCase.expected_return_on >= today))
+                .limit(1)
+            )
+            if active_case is not None:
+                return "injury_unavailable"
+            injury_status = self.session.scalar(
+                select(InjuryStatus)
+                .where(InjuryStatus.player_id == player.id)
+                .order_by(InjuryStatus.updated_at.desc())
+                .limit(1)
+            )
         if injury_status is None:
             return None
         status_text = str(injury_status.status or "").strip().lower()
@@ -425,6 +432,7 @@ class NationalTeamTournamentService:
         player: Player | None,
         metadata: dict[str, Any],
         now: datetime,
+        prefetch: dict[str, Any] | None = None,
     ) -> str | None:
         raw_matches = metadata.get("suspension_matches")
         try:
@@ -437,6 +445,8 @@ class NationalTeamTournamentService:
             return "suspension_active"
         if player is None:
             return None
+        if prefetch is not None:
+            return "suspension_active" if player.id in prefetch["sanctions"] else None
         sanction = self.session.scalar(
             select(FederationSanction.id)
             .where(FederationSanction.player_id == player.id)
@@ -454,6 +464,7 @@ class NationalTeamTournamentService:
         player: Player | None,
         metadata: dict[str, Any],
         now: datetime,
+        prefetch: dict[str, Any] | None = None,
     ) -> datetime | None:
         for key in ("rental_cooldown_until", "cooldown_until", "recent_offer_cooldown_until"):
             cooldown_until = self._parse_datetime(metadata.get(key))
@@ -461,6 +472,9 @@ class NationalTeamTournamentService:
                 return cooldown_until
         if player is None:
             return None
+        if prefetch is not None:
+            cooldown_until = prefetch["agency"].get(player.id)
+            return cooldown_until if self._is_future_datetime(cooldown_until, now=now) else None
         agency_state = self.session.scalar(
             select(PlayerAgencyState).where(PlayerAgencyState.player_id == player.id).limit(1)
         )
@@ -476,6 +490,7 @@ class NationalTeamTournamentService:
         seed: NationalRegenSeed | None,
         metadata: dict[str, Any],
         today: date,
+        prefetch: dict[str, Any] | None = None,
     ) -> str | None:
         if bool(
             metadata.get("contract_locked")
@@ -485,6 +500,8 @@ class NationalTeamTournamentService:
             return "contract_locked"
         if seed is not None or player is None:
             return None
+        if prefetch is not None:
+            return "contract_locked" if player.id in prefetch["contracts"] else None
         contract = self.session.scalar(
             select(PlayerContract.id)
             .where(PlayerContract.player_id == player.id)
@@ -525,6 +542,7 @@ class NationalTeamTournamentService:
         country_code: str | None = None,
         entry: NationalTeamEntry | None = None,
         actor: User | None = None,
+        prefetch: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         now = utcnow()
         today = now.date()
@@ -552,31 +570,41 @@ class NationalTeamTournamentService:
             "nationality_mismatch",
         )
 
-        tournament_lock_reason = self._rental_tournament_lock_reason(competition)
+        tournament_lock_reason = (
+            prefetch["tournament_lock"] if prefetch is not None else self._rental_tournament_lock_reason(competition)
+        )
         record("tournament_lock", tournament_lock_reason is None, tournament_lock_reason)
 
-        injury_reason = self._active_injury_reason(player=player, seed=seed, metadata=metadata, today=today)
+        injury_reason = self._active_injury_reason(
+            player=player, seed=seed, metadata=metadata, today=today, prefetch=prefetch
+        )
         record("injury", injury_reason is None, injury_reason)
 
-        suspension_reason = self._active_suspension_reason(player=player, metadata=metadata, now=now)
+        suspension_reason = self._active_suspension_reason(player=player, metadata=metadata, now=now, prefetch=prefetch)
         record("suspension", suspension_reason is None, suspension_reason)
 
-        cooldown_until = self._cooldown_until(player=player, metadata=metadata, now=now)
+        cooldown_until = self._cooldown_until(player=player, metadata=metadata, now=now, prefetch=prefetch)
         record("cooldown", cooldown_until is None, "cooldown_active")
 
-        contract_lock_reason = self._contract_lock_reason(player=player, seed=seed, metadata=metadata, today=today)
+        contract_lock_reason = self._contract_lock_reason(
+            player=player, seed=seed, metadata=metadata, today=today, prefetch=prefetch
+        )
         record("contract_lock", contract_lock_reason is None, contract_lock_reason)
 
         duplicate = False
         if entry is not None:
-            duplicate = any(member.player_id == player_id for member in self._entry_rental_members(entry.id))
+            member_ids = (
+                prefetch["members"]
+                if prefetch is not None
+                else {member.player_id for member in self._entry_rental_members(entry.id)}
+            )
+            duplicate = player_id in member_ids
         record("duplicate", not duplicate, "duplicate_player")
 
-        active_rental_count = self._active_rental_count(
-            player_id=player_id,
-            competition_id=competition.id,
-            actor=actor,
-            now=now,
+        active_rental_count = (
+            int(prefetch["rentals"].get(player_id, 0))
+            if prefetch is not None
+            else self._active_rental_count(player_id=player_id, competition_id=competition.id, actor=actor, now=now)
         )
         record("active_rentals", actor is None or active_rental_count == 0, "active_rental_exists")
 
@@ -591,6 +619,83 @@ class NationalTeamTournamentService:
             "cooldown_until": cooldown_until,
             "source": "national_team_engine",
         }
+
+    def _prefetch_eligibility(
+        self,
+        *,
+        player_ids: list[str],
+        competition: NationalTeamCompetition,
+        entry: NationalTeamEntry | None,
+        actor: User | None,
+    ) -> dict[str, Any]:
+        """One grouped query per eligibility check for a whole pool page."""
+        now = utcnow()
+        today = now.date()
+        ids = list(set(player_ids))
+        cache: dict[str, Any] = {
+            "tournament_lock": self._rental_tournament_lock_reason(competition),
+            "members": {m.player_id for m in self._entry_rental_members(entry.id)} if entry is not None else set(),
+            "injury_cases": set(),
+            "injury_status": {},
+            "sanctions": set(),
+            "agency": {},
+            "contracts": set(),
+            "rentals": {},
+        }
+        if not ids:
+            return cache
+        cache["injury_cases"] = set(
+            self.session.scalars(
+                select(PlayerInjuryCase.player_id)
+                .where(PlayerInjuryCase.player_id.in_(ids))
+                .where(PlayerInjuryCase.recovered_on.is_(None))
+                .where(or_(PlayerInjuryCase.expected_return_on.is_(None), PlayerInjuryCase.expected_return_on >= today))
+            ).all()
+        )
+        for status in self.session.scalars(
+            select(InjuryStatus).where(InjuryStatus.player_id.in_(ids)).order_by(InjuryStatus.updated_at.desc())
+        ).all():
+            cache["injury_status"].setdefault(status.player_id, status)
+        cache["sanctions"] = set(
+            self.session.scalars(
+                select(FederationSanction.player_id)
+                .where(FederationSanction.player_id.in_(ids))
+                .where(FederationSanction.status == "active")
+                .where(FederationSanction.sanction_type == FederationSanctionType.PLAYER_BAN.value)
+                .where(FederationSanction.starts_at <= now)
+                .where(or_(FederationSanction.ends_at.is_(None), FederationSanction.ends_at > now))
+            ).all()
+        )
+        cache["agency"] = dict(
+            self.session.execute(
+                select(PlayerAgencyState.player_id, PlayerAgencyState.recent_offer_cooldown_until).where(
+                    PlayerAgencyState.player_id.in_(ids)
+                )
+            ).all()
+        )
+        cache["contracts"] = set(
+            self.session.scalars(
+                select(PlayerContract.player_id)
+                .where(PlayerContract.player_id.in_(ids))
+                .where(PlayerContract.status.in_(tuple(CONTRACT_LOCK_STATUSES)))
+                .where(PlayerContract.starts_on <= today)
+                .where(PlayerContract.ends_on >= today)
+            ).all()
+        )
+        rentals = (
+            select(RentalContract.player_id, func.count())
+            .where(
+                RentalContract.player_id.in_(ids),
+                RentalContract.tournament_id == competition.id,
+                RentalContract.status == RentalContractStatus.ACTIVE,
+                RentalContract.end_date > now,
+            )
+            .group_by(RentalContract.player_id)
+        )
+        if actor is not None:
+            rentals = rentals.where(RentalContract.user_id == actor.id)
+        cache["rentals"] = dict(self.session.execute(rentals).all())
+        return cache
 
     @staticmethod
     def _eligibility_message(reason: str) -> str:
@@ -729,13 +834,46 @@ class NationalTeamTournamentService:
             )
             or 0
         )
+        return self._multiplier_from_counts(active_contracts, recent_contracts)
+
+    @staticmethod
+    def _multiplier_from_counts(active_contracts: int, recent_contracts: int) -> Decimal:
         multiplier = Decimal("1.0000")
         multiplier += Decimal(active_contracts) * Decimal("0.1500")
         multiplier += Decimal(max(recent_contracts - active_contracts, 0)) * Decimal("0.0500")
         return min(multiplier, Decimal("1.7500")).quantize(AMOUNT_QUANTUM, rounding=ROUND_HALF_UP)
 
-    def _priced_pool_item(self, item: dict[str, Any]) -> dict[str, Any]:
-        demand_multiplier = self._demand_multiplier(player_id=str(item["player_id"]))
+    def _priced_pool(self, items: Any) -> list[dict[str, Any]]:
+        """Price a whole pool with two grouped queries instead of two per player."""
+        items = list(items)
+        ids = list({str(item["player_id"]) for item in items})
+        active: dict[str, int] = {}
+        recent: dict[str, int] = {}
+        since = utcnow() - timedelta(days=14)
+        for start in range(0, len(ids), 500):
+            part = ids[start : start + 500]
+            base = (
+                select(RentalContract.player_id, func.count())
+                .where(RentalContract.player_id.in_(part))
+                .group_by(RentalContract.player_id)
+            )
+            active.update(
+                dict(self.session.execute(base.where(RentalContract.status == RentalContractStatus.ACTIVE)).all())
+            )
+            recent.update(dict(self.session.execute(base.where(RentalContract.created_at >= since)).all()))
+        return [
+            self._priced_pool_item(
+                item,
+                demand_multiplier=self._multiplier_from_counts(
+                    int(active.get(str(item["player_id"]), 0)), int(recent.get(str(item["player_id"]), 0))
+                ),
+            )
+            for item in items
+        ]
+
+    def _priced_pool_item(self, item: dict[str, Any], *, demand_multiplier: Decimal | None = None) -> dict[str, Any]:
+        if demand_multiplier is None:
+            demand_multiplier = self._demand_multiplier(player_id=str(item["player_id"]))
         base_loan_price = self._normalize_amount(item["loan_price_coin"])
         priced = dict(item)
         priced["demand_multiplier"] = demand_multiplier
@@ -1117,6 +1255,7 @@ class NationalTeamTournamentService:
             .outerjoin(IngestionCompetition, IngestionCompetition.id == Player.current_competition_id)
             .outerjoin(InternalLeague, InternalLeague.id == Player.internal_league_id)
             .outerjoin(PlayerSummaryReadModel, PlayerSummaryReadModel.player_id == Player.id)
+            .options(selectinload(Player.image_metadata))
             .limit(limit)
         )
         # Apply the nationality constraint in SQL before the catalogue cap.
@@ -1542,25 +1681,18 @@ class NationalTeamTournamentService:
             tradable_only=tradable_only,
         )
         warnings: list[str] = []
-        catalog: list[dict[str, Any]] = []
-        for item in self._national_pool(
-            filters=filters,
-            competition=competition,
-            limit=max(limit + offset, 1000),
-            warnings=warnings,
-        ):
-            try:
-                catalog.append(self._priced_pool_item(item))
-            except Exception as error:
-                self._record_pool_warning(
-                    warnings,
-                    competition_id=competition.id,
-                    country_code=filters.country_code,
-                    source_bucket=str(item.get("source_bucket") or "unknown"),
-                    record_id=str(item.get("player_id") or ""),
-                    reason=error.__class__.__name__,
-                )
+        catalog = self._priced_pool(
+            self._national_pool(
+                filters=filters,
+                competition=competition,
+                limit=max(limit + offset, 1000),
+                warnings=warnings,
+            )
+        )
         items = catalog[offset : offset + limit]
+        prefetch = self._prefetch_eligibility(
+            player_ids=[str(item["player_id"]) for item in items], competition=competition, entry=entry, actor=actor
+        )
         source_counts: dict[str, int] = {}
         for item in catalog:
             source_bucket = str(item.get("source_bucket") or "unknown")
@@ -1576,6 +1708,7 @@ class NationalTeamTournamentService:
                         country_code=filters.country_code,
                         entry=entry,
                         actor=actor,
+                        prefetch=prefetch,
                     ),
                 }
                 for item in items
@@ -1805,11 +1938,11 @@ class NationalTeamTournamentService:
             positions=positions,
             tradable_only=tradable_only,
         )
-        pool = [
-            self._priced_pool_item(item)
+        pool = self._priced_pool(
+            item
             for item in self._national_pool(filters=filters, competition=competition, limit=1500)
             if self._age_grade_allows(item, age_grade)
-        ]
+        )
         slots = self._auto_build_slots(formation, squad_size)
         selection = self._pick_mixed_auto_build(
             pool=pool,
@@ -2291,14 +2424,13 @@ class NationalTeamTournamentService:
         starter_slots = STARTER_PACK_SLOTS + tuple(
             "MIDFIELDER" for _ in range(max(0, total_remaining - len(STARTER_PACK_SLOTS)))
         )
-        pool = [
-            self._priced_pool_item(item)
-            for item in self._national_pool(
+        pool = self._priced_pool(
+            self._national_pool(
                 filters=self._normalize_pool_filters(country_code=entry.country_code),
                 competition=competition,
                 limit=1000,
             )
-        ]
+        )
         selection = self._pick_slot_players(
             pool=pool,
             slots=starter_slots[:total_remaining],
@@ -2381,11 +2513,13 @@ class NationalTeamTournamentService:
             )
 
         player_catalog = {
-            item["player_id"]: self._priced_pool_item(item)
-            for item in self._national_pool(
-                filters=self._normalize_pool_filters(country_code=entry.country_code),
-                competition=competition,
-                limit=1000,
+            item["player_id"]: item
+            for item in self._priced_pool(
+                self._national_pool(
+                    filters=self._normalize_pool_filters(country_code=entry.country_code),
+                    competition=competition,
+                    limit=1000,
+                )
             )
         }
         item = player_catalog.get(player_id)
@@ -2449,7 +2583,8 @@ class NationalTeamTournamentService:
             description=f"National team rental for {item['player_name']} in {competition.title}",
             external_reference=f"national-rental:{competition.id}:{entry.id}:{player_id}",
             actor=actor,
-            idempotency_key=f"national-rental:{competition.id}:{entry.id}:{player_id}:{actor.id}",
+            idempotency_key="national-rental:"
+            + hashlib.sha256(f"{competition.id}:{entry.id}:{player_id}:{actor.id}".encode()).hexdigest()[:64],
         )
         contract = self._create_rental_contract(
             entry=entry,

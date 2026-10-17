@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from hashlib import sha256
@@ -129,7 +129,8 @@ class GtexUniverseService(GtexBaseService):
         event_publisher: "EventPublisher | None" = None,
         realtime_channel: str = "gtex.realtime",
     ) -> None:
-        super().__init__(
+        GtexBaseService.__init__(
+            self,
             settings=settings,
             wallet_service=wallet_service,
             state_store=state_store,
