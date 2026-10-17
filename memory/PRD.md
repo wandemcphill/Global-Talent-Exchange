@@ -76,6 +76,15 @@ User choices: work inside the existing repo (github.com/wandemcphill/Global-Tale
 - React: the ShareMarket sort select (Name/Wonderkid), an OVR → POT column, and a Wonderkid spotlight strip (top 5) when a nation is picked. PriceHistoryChart (recharts, 7D/30D/ALL) sits in the drawer share box and is refreshed after a buy.
 - Testing: iteration_8, backend 13/13 and frontend 100%.
 
+## Iteration 10 (2026-10-17): Native Flutter UI for Wonderkids + price history
+- User note: GTEX's real app is Flutter (/app/gtex/frontend). The React price-chart and Wonderkid UI was left out of the merge; the backend was merged. User choices: Wonderkids as a new Regen World left-panel section; price chart in the regen dossier rail AND the Transfer Hub selected-player panel; install the Flutter SDK to verify.
+- New: lib/features/regen_redesign/data/gtex_share_market_api.dart (GtexShareMarketReader interface + GtexShareMarketApi on GteAuthedApi; models GtexWonderkid/GtexShareNation/GtexSharePriceHistory).
+- New widgets: gtex_wonderkid_board.dart (nation dropdown, ranked rows, top 5 gold "spotlight", tap opens player via GtexPlayerNavigator) and gtex_share_price_history_panel.dart (fl_chart step line, 7D/30D/ALL chips, change %, H/L/trades, untraded note, 404 → "no issued share market").
+- Wired up: GtexRegenWorldScreenV2 gets an optional `shareMarket` (also on .fixture); RegensScreenV2 passes GtexShareMarketApi(universeApi.client); GtexMarketSelectedPlayerPanel gets an optional priceHistoryBuilder that the Transfer Hub screen supplies.
+- API contract regenerated with the repo's own tools (tools/audit/generate_contract_audit.py, then generate_api_contract_bindings.py), which updated docs/*, shared/api_contract.json and gte_api_contract.g.dart. This also picked up older backend routes that hadn't been regenerated before.
+- Flutter 3.38.10 (git clone, arm64) is at /opt/flutter. Tests: new test/regen_redesign/gtex_wonderkid_price_history_test.dart passes 5/5; the regen_redesign, player_market_redesign and canonical_player_detail suites pass 101/101; flutter analyze shows no new issues; check_api_contract_violations is clean.
+- KNOWN existing issue: the live Flutter web build shows "Regen world unavailable" and "Player market unavailable". The backend's SQLAlchemy QueuePool (size 6, overflow 4) runs out when the Flutter shell fires many parallel requests (for example /api/v2/market/players gives a 500 after 31s, and /regen-universe/tracking takes 18-27s). Not fixed yet; awaiting the user's decision.
+
 ## Backlog
 - P0: Bridge the owner-console ledger with the repo's existing wallet ledger: DONE (iteration 2).
 - P0: Register the Paystack webhook URL in the dashboard for the production domain.

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../controllers/gtex_watchlist_controller.dart';
+import '../../../data/gte_authed_api.dart';
 import '../../../data/gte_exchange_models.dart';
+import '../../regen_redesign/data/gtex_share_market_api.dart';
+import '../../regen_redesign/widgets/gtex_share_price_history_panel.dart';
 import '../../../domain/ownership/gtex_ownership_models.dart';
 import '../../../providers/gte_exchange_controller.dart';
 import '../../../ui_gtex/ui_gtex.dart';
@@ -143,6 +146,14 @@ class _GtexPlayerMarketRedesignScreenState
       });
     }
   }
+
+  late final GtexShareMarketReader _shareMarket = GtexShareMarketApi(
+    client: GteAuthedApi(
+      config: widget.controller.api.config,
+      transport: widget.controller.api.transport,
+      mode: widget.controller.api.config.mode,
+    ),
+  );
 
   @override
   void dispose() {
@@ -380,6 +391,13 @@ class _GtexPlayerMarketRedesignScreenState
             onToggleBasket: _toggleBasket,
             onRemoveFromBasket: _removeFromBasket,
             onCheckout: _reviewBasket,
+            priceHistoryBuilder:
+                (BuildContext context, String playerId) =>
+                    GtexSharePriceHistoryPanel(
+                      key: ValueKey<String>('price-history-$playerId'),
+                      reader: _shareMarket,
+                      playerId: playerId,
+                    ),
           ),
         );
 

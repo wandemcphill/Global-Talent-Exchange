@@ -15,7 +15,13 @@ class GtexMarketSelectedPlayerPanel extends StatelessWidget {
     required this.onRemoveFromBasket,
     required this.onCheckout,
     this.selectedPlayerOwned = false,
+    this.priceHistoryBuilder,
   });
+
+  /// Optional price-history surface for the selected player, supplied by the
+  /// screen so this panel stays a pure view.
+  final Widget Function(BuildContext context, String playerId)?
+  priceHistoryBuilder;
 
   /// True when the signed-in user already holds the selected player.
   final bool selectedPlayerOwned;
@@ -45,6 +51,7 @@ class GtexMarketSelectedPlayerPanel extends StatelessWidget {
                     onOpenLogin: onOpenLogin,
                     onOpenPlayer: () => onOpenPlayer(selectedPlayer!),
                     onToggleBasket: () => onToggleBasket(selectedPlayer!),
+                    priceHistoryBuilder: priceHistoryBuilder,
                   ),
         ),
         const Divider(height: 1, color: GtexColors.line),
@@ -110,8 +117,11 @@ class _SelectedPlayerDetail extends StatelessWidget {
     required this.onOpenLogin,
     required this.onOpenPlayer,
     required this.onToggleBasket,
+    this.priceHistoryBuilder,
   });
 
+  final Widget Function(BuildContext context, String playerId)?
+  priceHistoryBuilder;
   final GtexMarketPlayerView player;
   final bool inBasket;
   final bool isOwned;
@@ -319,6 +329,10 @@ class _SelectedPlayerDetail extends StatelessWidget {
             ),
           ],
         ),
+        if (priceHistoryBuilder != null) ...<Widget>[
+          const SizedBox(height: GtexSpacing.md),
+          priceHistoryBuilder!(context, player.playerId),
+        ],
         const SizedBox(height: GtexSpacing.md),
         // A preview, not a second player screen. The full terms - salary,
         // contract, clauses, swap and loan conditions - live on the

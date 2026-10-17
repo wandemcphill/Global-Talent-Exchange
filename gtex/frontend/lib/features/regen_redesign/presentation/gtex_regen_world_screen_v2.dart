@@ -4,6 +4,7 @@ import 'package:gte_frontend/features/player_detail/gtex_player_navigator.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
 import '../data/gtex_regen_repository.dart';
+import '../data/gtex_share_market_api.dart';
 import '../models/gtex_regen_dossier.dart';
 import '../models/gtex_regen_models.dart';
 import '../models/gtex_regen_wire_models.dart';
@@ -11,6 +12,8 @@ import '../widgets/gtex_regen_discovery_boards.dart';
 import '../../../ui_gtex/components/gtex_football_command_pulse.dart';
 import '../widgets/gtex_regen_dossier_panel.dart';
 import '../widgets/gtex_regen_ownership_actions.dart';
+import '../widgets/gtex_share_price_history_panel.dart';
+import '../widgets/gtex_wonderkid_board.dart';
 import 'gtex_admin_create_son_screen_v2.dart';
 import 'gtex_create_son_screen_v2.dart';
 
@@ -21,6 +24,7 @@ class GtexRegenWorldScreenV2 extends StatefulWidget {
     this.isAdmin = false,
     this.onOpenAwards,
     this.allowFixtureData = false,
+    this.shareMarket,
   });
 
   factory GtexRegenWorldScreenV2.fixture({
@@ -28,6 +32,7 @@ class GtexRegenWorldScreenV2 extends StatefulWidget {
     GtexRegenRepository repository = const DemoGtexRegenRepository(),
     bool isAdmin = false,
     VoidCallback? onOpenAwards,
+    GtexShareMarketReader? shareMarket,
   }) {
     assertFixtureFactoryAllowed('GtexRegenWorldScreenV2.fixture');
     return GtexRegenWorldScreenV2(
@@ -36,6 +41,7 @@ class GtexRegenWorldScreenV2 extends StatefulWidget {
       isAdmin: isAdmin,
       onOpenAwards: onOpenAwards,
       allowFixtureData: true,
+      shareMarket: shareMarket,
     );
   }
 
@@ -43,6 +49,10 @@ class GtexRegenWorldScreenV2 extends StatefulWidget {
   final bool isAdmin;
   final VoidCallback? onOpenAwards;
   final bool allowFixtureData;
+
+  /// Share-market reads for the Wonderkids board and price history. When
+  /// absent (fixture mode) both surfaces are hidden.
+  final GtexShareMarketReader? shareMarket;
 
   @override
   State<GtexRegenWorldScreenV2> createState() => _GtexRegenWorldScreenV2State();
@@ -194,6 +204,7 @@ class _GtexRegenWorldScreenV2State extends State<GtexRegenWorldScreenV2> {
             origin: _origin,
             query: _query,
             isAdmin: widget.isAdmin,
+            showWonderkids: widget.shareMarket != null,
             onQueryChanged: (String value) => setState(() => _query = value),
             onSectionChanged:
                 (String value) => setState(() => _section = value),
@@ -246,6 +257,7 @@ class _GtexRegenWorldScreenV2State extends State<GtexRegenWorldScreenV2> {
           rightPanel: _RegenRightPanel(
             selected: _selected,
             repository: widget.repository,
+            shareMarket: widget.shareMarket,
             dossierFuture: _dossierFuture,
             onRetryDossier: _retryDossier,
             contracts: data.contracts,
@@ -295,6 +307,12 @@ class _GtexRegenWorldScreenV2State extends State<GtexRegenWorldScreenV2> {
         );
       case 'achievements':
         return _AchievementBoard(items: data.achievementFeed);
+      case 'wonderkids':
+        final GtexShareMarketReader? shareMarket = widget.shareMarket;
+        if (shareMarket == null) {
+          return const SizedBox.shrink();
+        }
+        return GtexWonderkidBoard(reader: shareMarket);
       case 'bloodlines':
         return GtexRegenAsyncBoard<RegenBloodlineChain>(
           future: _bloodlines(),
@@ -397,6 +415,7 @@ class _RegenLeftPanel extends StatelessWidget {
     required this.onQueryChanged,
     required this.onSectionChanged,
     required this.onOriginChanged,
+    this.showWonderkids = false,
   });
 
   final GtexRegenWorldData data;
@@ -404,6 +423,7 @@ class _RegenLeftPanel extends StatelessWidget {
   final String origin;
   final String query;
   final bool isAdmin;
+  final bool showWonderkids;
   final ValueChanged<String> onQueryChanged;
   final ValueChanged<String> onSectionChanged;
   final ValueChanged<String> onOriginChanged;
@@ -430,6 +450,13 @@ class _RegenLeftPanel extends StatelessWidget {
             selected: section == 'prospects',
             onTap: () => onSectionChanged('prospects'),
           ),
+          if (showWonderkids)
+            _SectionTile(
+              label: 'Wonderkids',
+              icon: Icons.star_rounded,
+              selected: section == 'wonderkids',
+              onTap: () => onSectionChanged('wonderkids'),
+            ),
           _SectionTile(
             label: 'Awards',
             icon: Icons.emoji_events,
@@ -669,10 +696,12 @@ class _RegenRightPanel extends StatelessWidget {
     required this.contracts,
     required this.achievements,
     required this.onCreateSon,
+    this.shareMarket,
   });
 
   final GtexRegenProspect? selected;
   final GtexRegenRepository repository;
+  final GtexShareMarketReader? shareMarket;
   final Future<GtexRegenDossierResult>? dossierFuture;
   final VoidCallback onRetryDossier;
   final List<GtexRegenContractOffer> contracts;
@@ -694,6 +723,14 @@ class _RegenRightPanel extends StatelessWidget {
           )
         else ...<Widget>[
           _SelectedProspectPanel(prospect: prospect),
+          if (shareMarket != null) ...<Widget>[
+            const SizedBox(height: GtexSpacing.md),
+            GtexSharePriceHistoryPanel(
+              key: ValueKey<String>('price-history-${prospect.id}'),
+              reader: shareMarket!,
+              playerId: prospect.id,
+            ),
+          ],
           const SizedBox(height: GtexSpacing.md),
           _DossierSection(
             future: dossierFuture,
