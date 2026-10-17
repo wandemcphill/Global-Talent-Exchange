@@ -25,7 +25,9 @@ import 'package:gte_frontend/features/competitions/presentation/gtex_live_compet
 import 'package:gte_frontend/features/competitions_hub/routing/competition_hub_destination.dart';
 import 'package:gte_frontend/features/global_search_redesign/global_search_redesign.dart';
 import 'package:gte_frontend/features/home/home_screen.dart';
+import 'package:gte_frontend/features/owner_console/data/owner_alert_sound.dart';
 import 'package:gte_frontend/features/owner_console/data/owner_console_api.dart';
+import 'package:gte_frontend/features/owner_console/data/owner_ops_api.dart';
 import 'package:gte_frontend/features/owner_console/presentation/owner_console_screen.dart';
 import 'package:gte_frontend/features/regen_redesign/data/gtex_share_market_api.dart';
 import 'package:gte_frontend/features/launch_control_redesign/launch_control_feature_gate.dart';
@@ -562,6 +564,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         signedInAs: user?.displayName ?? user?.username ?? 'Owner',
         walletBalance: widget.controller.walletSummary?.availableBalance,
         onNavigate: (String path) => context.go(path),
+        alertSound: DeviceOwnerAlertSound(),
+        ops: GteOwnerOpsClient(authed),
       );
     }
     return const HomeScreen(key: PageStorageKey<String>('home-command'));

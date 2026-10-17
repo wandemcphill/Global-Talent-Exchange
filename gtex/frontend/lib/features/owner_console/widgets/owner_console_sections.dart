@@ -46,6 +46,14 @@ String countdownLabel(Duration left) {
 bool isUrgentDecision(OwnerInboxEntry e, DateTime now) =>
     e.respondBy != null && e.respondBy!.difference(now) <= urgentWindow;
 
+/// Alerts that earn a whistle: urgent decisions and wonderkid price jumps.
+List<String> ownerWhistleAlertIds(OwnerControlCenter d, DateTime now) => <String>[
+  for (final OwnerInboxEntry e in d.decisions)
+    if (isUrgentDecision(e, now)) e.id,
+  for (final OwnerInboxEntry e in d.inbox)
+    if (e.kind == 'wonderkid_price_jump' || e.kind == 'decision_expiring') e.id,
+];
+
 int compareByDeadline(OwnerInboxEntry a, OwnerInboxEntry b) {
   final DateTime? x = a.respondBy, y = b.respondBy;
   if (x != null && y != null && x != y) return x.compareTo(y);

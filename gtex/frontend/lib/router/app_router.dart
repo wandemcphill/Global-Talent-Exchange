@@ -21,6 +21,8 @@ import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.da
 import 'package:gte_frontend/features/federations/federations_hub_screen.dart';
 import 'package:gte_frontend/features/tasks/gtex_daily_challenges_screen.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
+import 'package:gte_frontend/features/owner_console/data/owner_ops_api.dart';
+import 'package:gte_frontend/features/owner_console/ops/owner_finance_section.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/router/gtex_auth_routes.dart';
 import 'package:gte_frontend/screens/auth/gtex_account_signup_screens.dart';
@@ -113,6 +115,19 @@ GoRouter buildGtexAppRouter({
               state: state,
               controller: controller,
             ),
+      ),
+      GoRoute(
+        path: '/payment/callback',
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                NoTransitionPage<void>(
+                  key: state.pageKey,
+                  child: OwnerPaymentCallbackScreen(
+                    client: GteOwnerOpsClient(dependenciesBuilder(context).createAuthedApi()),
+                    reference: state.uri.queryParameters['reference'] ?? state.uri.queryParameters['trxref'],
+                    onDone: () => GoRouter.of(context).go(const GteNavigationRoute.home().path),
+                  ),
+                ),
       ),
       GoRoute(
         path: '/landing',

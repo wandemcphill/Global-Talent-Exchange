@@ -2,19 +2,37 @@ import 'package:flutter/material.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
 import '../../regen_redesign/data/gtex_share_market_api.dart';
+import '../data/owner_alert_sound.dart';
 import '../data/owner_console_api.dart';
+import '../data/owner_ops_api.dart';
+import '../ops/owner_club_ops.dart';
+import '../ops/owner_competitions_section.dart';
+import '../ops/owner_finance_section.dart';
+import '../ops/owner_inbox_section.dart';
+import '../ops/owner_setup_section.dart';
 import '../widgets/owner_admin_review_section.dart';
 import '../widgets/owner_console_sections.dart';
 
-enum OwnerConsoleSection { control, clubs, market, squad, academy, admin }
+enum OwnerConsoleSection { control, setup, clubs, market, squad, academy, competitions, finance, inbox, admin }
+
+const Set<OwnerConsoleSection> _opsSections = <OwnerConsoleSection>{
+  OwnerConsoleSection.setup,
+  OwnerConsoleSection.competitions,
+  OwnerConsoleSection.finance,
+  OwnerConsoleSection.inbox,
+};
 
 const Map<OwnerConsoleSection, (String, IconData)> _sectionMeta =
     <OwnerConsoleSection, (String, IconData)>{
       OwnerConsoleSection.control: ('Control Center', Icons.space_dashboard_rounded),
+      OwnerConsoleSection.setup: ('Club Setup', Icons.flag_rounded),
       OwnerConsoleSection.clubs: ('My Clubs', Icons.shield_rounded),
       OwnerConsoleSection.market: ('Market & Transfers', Icons.storefront_rounded),
       OwnerConsoleSection.squad: ('Manager & Squad', Icons.groups_rounded),
       OwnerConsoleSection.academy: ('Academy / Regens', Icons.auto_awesome_rounded),
+      OwnerConsoleSection.competitions: ('Competitions', Icons.emoji_events_rounded),
+      OwnerConsoleSection.finance: ('Finance', Icons.account_balance_rounded),
+      OwnerConsoleSection.inbox: ('Owner Inbox', Icons.inbox_rounded),
       OwnerConsoleSection.admin: ('Admin Review', Icons.admin_panel_settings_rounded),
     };
 
@@ -29,6 +47,8 @@ class OwnerConsoleScreen extends StatefulWidget {
     required this.signedInAs,
     required this.onNavigate,
     this.walletBalance,
+    this.alertSound,
+    this.ops,
   });
 
   final OwnerConsoleReader reader;
@@ -37,6 +57,8 @@ class OwnerConsoleScreen extends StatefulWidget {
   final String signedInAs;
   final double? walletBalance;
   final ValueChanged<String> onNavigate;
+  final OwnerAlertSound? alertSound;
+  final OwnerOpsClient? ops;
 
   bool get isAdmin => <String>{
     'admin',
@@ -53,11 +75,25 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
   late Future<OwnerControlCenter> _center;
   double? _wallet;
   String? _outcome;
+  bool _muted = false;
+  OwnerControlCenter? _last;
+
+  Future<OwnerControlCenter> _fetchCenter() {
+    final Future<OwnerControlCenter> f = widget.reader.fetchControlCenter();
+    f.then((OwnerControlCenter d) {
+      if (mounted) setState(() => _last = d);
+    }, onError: (Object _) {});
+    return f;
+  }
 
   @override
   void initState() {
     super.initState();
-    _center = widget.reader.fetchControlCenter();
+    _center = _fetchCenter();
+    _center.then(_whistleForNewAlerts, onError: (Object _) {});
+    widget.alertSound?.isMuted().then((bool m) {
+      if (mounted) setState(() => _muted = m);
+    }, onError: (Object _) {});
     _wallet = widget.walletBalance;
     if (_wallet == null) {
       widget.reader.fetchWalletBalance().then((double v) {
@@ -66,11 +102,30 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
     }
   }
 
-  void _reload() => setState(() => _center = widget.reader.fetchControlCenter());
+  void _reload() => setState(() {
+    _center = _fetchCenter();
+  });
+
+  Future<void> _whistleForNewAlerts(OwnerControlCenter d) async {
+    final OwnerAlertSound? sound = widget.alertSound;
+    if (sound == null) return;
+    final List<String> ids = ownerWhistleAlertIds(d, DateTime.now());
+    if (ids.isEmpty) return;
+    final Set<String> heard = await sound.heard();
+    if (ids.every(heard.contains)) return;
+    await sound.markHeard(ids);
+    if (!await sound.isMuted()) await sound.play();
+  }
+
+  Future<void> _toggleMute() async {
+    final bool next = !_muted;
+    setState(() => _muted = next);
+    await widget.alertSound?.setMuted(next);
+  }
 
   void _resolved(String outcome) => setState(() {
     _outcome = outcome;
-    _center = widget.reader.fetchControlCenter();
+    _center = _fetchCenter();
   });
 
   void _pickClub(String clubId) => setState(() {
@@ -78,8 +133,49 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
     _section = OwnerConsoleSection.control;
   });
 
+  Widget _withClubs(Widget Function(String? clubId, List<(String, String)> clubs) builder) {
+    final OwnerControlCenter? d = _last;
+    if (d == null) return const Padding(padding: EdgeInsets.all(GtexSpacing.md), child: GtexSkeleton.box(height: 160));
+    final List<(String, String)> clubs = <(String, String)>[for (final OwnerClubCard c in d.clubs) (c.clubId, c.name)];
+    final String? clubId = clubs.any(((String, String) c) => c.$1 == _clubId) ? _clubId : clubs.firstOrNull?.$1;
+    return builder(clubId, clubs);
+  }
+
+  Widget _opsTabs(String opsLabel, Widget Function(OwnerOpsClient ops, String clubId, List<(String, String)> clubs) ops, String otherLabel, Widget other) {
+    final OwnerOpsClient? client = widget.ops;
+    if (client == null) return other;
+    return DefaultTabController(
+      length: 2,
+      child: Column(children: <Widget>[
+        TabBar(
+          labelColor: GtexColors.pitch,
+          unselectedLabelColor: GtexColors.textSecondary,
+          indicatorColor: GtexColors.pitch,
+          tabs: <Widget>[Tab(key: const Key('owner-ops-tab'), text: opsLabel), Tab(key: const Key('owner-links-tab'), text: otherLabel)],
+        ),
+        Expanded(
+          child: TabBarView(children: <Widget>[
+            _withClubs((String? clubId, List<(String, String)> clubs) => clubId == null
+                ? opsList(<Widget>[opsNoClub()])
+                : ListView(padding: const EdgeInsets.all(GtexSpacing.md), children: <Widget>[ops(client, clubId, clubs)])),
+            other,
+          ]),
+        ),
+      ]),
+    );
+  }
+
   Widget _body() {
+    final OwnerOpsClient? ops = widget.ops;
     switch (_section) {
+      case OwnerConsoleSection.setup:
+        return ClubSetupSection(client: ops!, onChanged: _reload);
+      case OwnerConsoleSection.competitions:
+        return _withClubs((String? clubId, _) => CompetitionsSection(client: ops!, clubId: clubId, onChanged: _reload));
+      case OwnerConsoleSection.finance:
+        return FinanceSection(client: ops!, onNavigate: widget.onNavigate);
+      case OwnerConsoleSection.inbox:
+        return OwnerInboxSection(client: ops!, reader: widget.reader, onNavigate: widget.onNavigate, onChanged: _reload);
       case OwnerConsoleSection.control:
         return ControlCenterSection(
           center: _center,
@@ -91,25 +187,40 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
           outcome: _outcome,
         );
       case OwnerConsoleSection.clubs:
-        return MyClubsSection(
-          center: _center,
-          selectedClubId: _clubId,
-          onRetry: _reload,
-          onSelectClub: _pickClub,
-          onNavigate: widget.onNavigate,
+        return _opsTabs(
+          'Club actions',
+          (OwnerOpsClient c, String clubId, List<(String, String)> clubs) => ClubOpsPanel(client: c, clubId: clubId, clubs: clubs, onChanged: _reload),
+          'All clubs',
+          MyClubsSection(
+            center: _center,
+            selectedClubId: _clubId,
+            onRetry: _reload,
+            onSelectClub: _pickClub,
+            onNavigate: widget.onNavigate,
+          ),
         );
       case OwnerConsoleSection.market:
         return MarketSection(onNavigate: widget.onNavigate);
       case OwnerConsoleSection.squad:
-        return SquadSection(
-          reader: widget.reader,
-          isAdmin: widget.isAdmin,
-          onNavigate: widget.onNavigate,
+        return _opsTabs(
+          'Manager & squad',
+          (OwnerOpsClient c, String clubId, List<(String, String)> clubs) => SquadOpsPanel(client: c, clubId: clubId, clubs: clubs, onChanged: _reload),
+          'National squad',
+          SquadSection(
+            reader: widget.reader,
+            isAdmin: widget.isAdmin,
+            onNavigate: widget.onNavigate,
+          ),
         );
       case OwnerConsoleSection.academy:
-        return AcademySection(
-          shareMarket: widget.shareMarket,
-          onNavigate: widget.onNavigate,
+        return _opsTabs(
+          'Academy',
+          (OwnerOpsClient c, String clubId, _) => AcademyOpsPanel(client: c, clubId: clubId, onChanged: _reload),
+          'Regen World',
+          AcademySection(
+            shareMarket: widget.shareMarket,
+            onNavigate: widget.onNavigate,
+          ),
         );
       case OwnerConsoleSection.admin:
         if (!widget.isAdmin) {
@@ -136,7 +247,7 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
         final Widget menu = _SectionMenu(
           wide: wide,
           sections: OwnerConsoleSection.values
-              .where((OwnerConsoleSection s) => s != OwnerConsoleSection.admin || widget.isAdmin)
+              .where((OwnerConsoleSection s) => (s != OwnerConsoleSection.admin || widget.isAdmin) && (!_opsSections.contains(s) || widget.ops != null))
               .toList(),
           selected: _section,
           onSelected: (OwnerConsoleSection s) => setState(() => _section = s),
@@ -150,6 +261,8 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
               _Header(
                 role: widget.role,
                 walletBalance: widget.walletBalance ?? _wallet,
+                muted: widget.alertSound == null ? null : _muted,
+                onToggleMute: _toggleMute,
               ),
               if (!wide) menu,
               Expanded(
@@ -174,10 +287,12 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.role, required this.walletBalance});
+  const _Header({required this.role, required this.walletBalance, required this.muted, required this.onToggleMute});
 
   final String role;
   final double? walletBalance;
+  final bool? muted;
+  final VoidCallback onToggleMute;
 
   @override
   Widget build(BuildContext context) {
@@ -204,7 +319,18 @@ class _Header extends StatelessWidget {
           ),
           Wrap(
             spacing: GtexSpacing.xs,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: <Widget>[
+              if (muted != null)
+                IconButton(
+                  key: const Key('owner-console-alert-sound-toggle'),
+                  tooltip: muted! ? 'Alert whistle off' : 'Alert whistle on',
+                  onPressed: onToggleMute,
+                  icon: Icon(
+                    muted! ? Icons.volume_off_rounded : Icons.campaign_rounded,
+                    color: muted! ? GtexColors.textMuted : GtexColors.gold,
+                  ),
+                ),
               GtexStatusChip(
                 key: const Key('owner-console-wallet-chip'),
                 label:

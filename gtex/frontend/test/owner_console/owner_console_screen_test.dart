@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gte_frontend/features/owner_console/data/owner_alert_sound.dart';
 import 'package:gte_frontend/features/owner_console/data/owner_console_api.dart';
 import 'package:gte_frontend/features/owner_console/presentation/owner_console_screen.dart';
 import 'package:gte_frontend/features/owner_console/widgets/owner_console_sections.dart';
@@ -150,7 +151,30 @@ class _FakeShare implements GtexShareMarketReader {
   Future<GtexSharePriceHistory> fetchPriceHistory(String playerId, {String range = '30d'}) => throw UnimplementedError();
 }
 
-Future<List<String>> _pump(WidgetTester tester, OwnerConsoleReader reader, {String role = 'user', Size size = const Size(1400, 1000), double? wallet = 50}) async {
+class _FakeSound implements OwnerAlertSound {
+  _FakeSound({this.muted = false, Set<String>? heardIds}) : heardIds = heardIds ?? <String>{};
+
+  bool muted;
+  final Set<String> heardIds;
+  int plays = 0;
+
+  @override
+  Future<bool> isMuted() async => muted;
+
+  @override
+  Future<void> setMuted(bool value) async => muted = value;
+
+  @override
+  Future<Set<String>> heard() async => heardIds;
+
+  @override
+  Future<void> markHeard(Iterable<String> ids) async => heardIds.addAll(ids);
+
+  @override
+  Future<void> play() async => plays++;
+}
+
+Future<List<String>> _pump(WidgetTester tester, OwnerConsoleReader reader, {String role = 'user', Size size = const Size(1400, 1000), double? wallet = 50, OwnerAlertSound? sound}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -165,6 +189,7 @@ Future<List<String>> _pump(WidgetTester tester, OwnerConsoleReader reader, {Stri
         signedInAs: 'Flow Owner',
         walletBalance: wallet,
         onNavigate: visited.add,
+        alertSound: sound,
       ),
     ),
   ));
@@ -173,6 +198,36 @@ Future<List<String>> _pump(WidgetTester tester, OwnerConsoleReader reader, {Stri
 }
 
 void main() {
+  testWidgets('whistle plays once for new urgent alerts and respects mute', (WidgetTester tester) async {
+    final _FakeSound sound = _FakeSound();
+    await _pump(tester, _FakeOwner(), sound: sound);
+    expect(sound.plays, 1);
+    expect(sound.heardIds, containsAll(<String>['d3', 'a1', 'a2']));
+    expect(find.byKey(const Key('owner-console-alert-sound-toggle')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('owner-console-alert-sound-toggle')));
+    await tester.pumpAndSettle();
+    expect(sound.muted, isTrue);
+    expect(find.byTooltip('Alert whistle off'), findsOneWidget);
+  });
+
+  testWidgets('no whistle when alerts were already heard or sound is muted', (WidgetTester tester) async {
+    final _FakeSound heard = _FakeSound(heardIds: <String>{'d3', 'a1', 'a2'});
+    await _pump(tester, _FakeOwner(), sound: heard);
+    expect(heard.plays, 0);
+  });
+
+  testWidgets('muted device marks alerts heard without playing', (WidgetTester tester) async {
+    final _FakeSound muted = _FakeSound(muted: true);
+    await _pump(tester, _FakeOwner(), sound: muted);
+    expect(muted.plays, 0);
+    expect(muted.heardIds, contains('d3'));
+    expect(find.byTooltip('Alert whistle off'), findsOneWidget);
+  });
+
+  testWidgets('no sound toggle without an alert sound', (WidgetTester tester) async {
+    await _pump(tester, _FakeOwner());
+    expect(find.byKey(const Key('owner-console-alert-sound-toggle')), findsNothing);
+  });
   testWidgets('control center renders decisions, board, health and chips', (WidgetTester tester) async {
     final List<String> visited = await _pump(tester, _FakeOwner());
     expect(find.text('50 GTX'), findsOneWidget);
