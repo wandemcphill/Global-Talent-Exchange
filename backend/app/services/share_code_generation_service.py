@@ -56,20 +56,25 @@ class ShareCodeGenerationService:
         }[request.code_type]
         slug_source = request.owner_handle or request.linked_competition_id or request.owner_user_id or prefix
         normalized_slug = self._normalize_code(slug_source)[:6]
-        digest = hashlib.sha1(
-            "|".join(
-                filter(
-                    None,
-                    (
-                        request.code_type.value,
-                        request.owner_user_id,
-                        request.owner_creator_id,
-                        request.linked_competition_id,
-                        request.owner_handle,
-                    ),
-                )
-            ).encode("utf-8")
-        ).hexdigest().upper()
+        digest = (
+            hashlib.sha1(
+                "|".join(
+                    filter(
+                        None,
+                        (
+                            request.code_type.value,
+                            request.owner_user_id,
+                            request.owner_creator_id,
+                            request.linked_competition_id,
+                            request.owner_handle,
+                        ),
+                    )
+                ).encode("utf-8"),
+                usedforsecurity=False,
+            )
+            .hexdigest()
+            .upper()
+        )
         base_code = f"{prefix}{normalized_slug}{digest[:4]}"
         base_code = base_code[: max(self.min_generated_length, len(base_code))]
         resolved = base_code

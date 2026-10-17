@@ -3,9 +3,9 @@ from __future__ import annotations
 import csv
 from dataclasses import dataclass, field
 from pathlib import Path
+import tempfile
 
-
-DEFAULT_UNRESOLVED_REPORT_PATH = Path("/tmp/unresolved_mappings_report.csv")
+DEFAULT_UNRESOLVED_REPORT_PATH = Path(tempfile.gettempdir()) / "unresolved_mappings_report.csv"
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
 
 from app.match_engine.schemas import MatchPlayerVisualView, MatchReplayPayloadView
 from app.models.competition_match import CompetitionMatch
@@ -97,15 +96,9 @@ class MatchViewerPresentationService:
         team_view = view_state.home_team if side == "home" else view_state.away_team
         if replay_payload is not None and replay_payload.visual_identity is not None:
             identity = (
-                replay_payload.visual_identity.home_team
-                if side == "home"
-                else replay_payload.visual_identity.away_team
+                replay_payload.visual_identity.home_team if side == "home" else replay_payload.visual_identity.away_team
             )
-            team_stats = (
-                replay_payload.summary.home_stats
-                if side == "home"
-                else replay_payload.summary.away_stats
-            )
+            team_stats = replay_payload.summary.home_stats if side == "home" else replay_payload.summary.away_stats
             starters = identity.player_visuals[:11]
             bench = identity.player_visuals[11:]
             return MatchViewerPresentationTeamView(
@@ -134,10 +127,7 @@ class MatchViewerPresentationService:
                     formation=team_stats.current_formation or team_stats.started_formation or team_view.formation,
                     rating_lookup=rating_lookup,
                 ),
-                bench=[
-                    self._presentation_player(player, rating_lookup=rating_lookup)
-                    for player in bench
-                ],
+                bench=[self._presentation_player(player, rating_lookup=rating_lookup) for player in bench],
             )
 
         fallback_players = self._fallback_players(view_state, side=side)
@@ -198,8 +188,7 @@ class MatchViewerPresentationService:
             kickoff_label=self._kickoff_label(kickoff_at),
             date_label=self._date_label(kickoff_at),
             referee_name=(
-                self._string(metadata.get("referee_name"))
-                or self._nested_string(metadata, "officials", "referee")
+                self._string(metadata.get("referee_name")) or self._nested_string(metadata, "officials", "referee")
             ),
             match_significance=self._match_significance(
                 standings=standings,
@@ -428,10 +417,7 @@ class MatchViewerPresentationService:
             x = _LINE_X_BY_DEPTH.get(depth, max(14.0, 76.0 - ((depth - 1) * 16.0)))
             y_positions = _LINE_Y_MAP.get(count)
             if y_positions is None:
-                y_positions = tuple(
-                    round((100.0 / (count + 1)) * (index + 1), 1)
-                    for index in range(count)
-                )
+                y_positions = tuple(round((100.0 / (count + 1)) * (index + 1), 1) for index in range(count))
             line = line_labels[min(depth - 1, len(line_labels) - 1)]
             for y in y_positions:
                 coordinates.append((x, y, line))
@@ -483,10 +469,7 @@ class MatchViewerPresentationService:
         }.get(normalized, 9)
 
     def _coach_name(self, metadata: dict[str, object], *, side: str) -> str | None:
-        direct = (
-            self._string(metadata.get(f"{side}_coach_name"))
-            or self._string(metadata.get(f"{side}_manager_name"))
-        )
+        direct = self._string(metadata.get(f"{side}_coach_name")) or self._string(metadata.get(f"{side}_manager_name"))
         if direct is not None:
             return direct
         nested_manager = self._nested_string(metadata, f"{side}_manager", "name")
@@ -517,11 +500,7 @@ class MatchViewerPresentationService:
     def _rating_lookup(self, replay_payload: MatchReplayPayloadView | None) -> dict[str, float]:
         if replay_payload is None:
             return {}
-        return {
-            item.player_id: item.rating
-            for item in replay_payload.summary.player_stats
-            if item.rating is not None
-        }
+        return {item.player_id: item.rating for item in replay_payload.summary.player_stats if item.rating is not None}
 
     def _rating_leaders(
         self,
@@ -529,11 +508,7 @@ class MatchViewerPresentationService:
     ) -> list[MatchViewerPresentationPlayerView]:
         if replay_payload is None:
             return []
-        player_stats = [
-            item
-            for item in replay_payload.summary.player_stats
-            if item.rating is not None
-        ]
+        player_stats = [item for item in replay_payload.summary.player_stats if item.rating is not None]
         player_stats.sort(key=lambda item: item.rating or 0.0, reverse=True)
         return [
             MatchViewerPresentationPlayerView(

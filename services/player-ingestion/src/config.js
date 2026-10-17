@@ -23,16 +23,6 @@ function required(name) {
   return value;
 }
 
-function requiredAny(names) {
-  for (const name of names) {
-    const value = env(name);
-    if (value) {
-      return value;
-    }
-  }
-  throw new Error(`${names.join(" or ")} is required`);
-}
-
 function boolEnv(name, fallback) {
   const value = env(name);
   if (value === undefined) {

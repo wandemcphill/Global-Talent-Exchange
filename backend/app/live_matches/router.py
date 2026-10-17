@@ -555,7 +555,7 @@ def _player_state_threshold(player_id: str | None) -> float:
     if not token:
         return 0.5
 
-    digest = md5(token.encode("utf-8")).digest()
+    digest = md5(token.encode("utf-8"), usedforsecurity=False).digest()
     return 0.35 + ((int.from_bytes(digest[:2], "big") / 65535.0) * 0.3)
 
 

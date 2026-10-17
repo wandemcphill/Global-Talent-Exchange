@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_admin, get_current_match_user, get_session
@@ -196,8 +196,12 @@ def play_fast_game(
         _raise_integrity_error(exc)
 
 
-@legacy_router.post("/notifications/events", response_model=CompetitiveNotificationView, status_code=status.HTTP_201_CREATED)
-@api_router.post("/notifications/events", response_model=CompetitiveNotificationView, status_code=status.HTTP_201_CREATED)
+@legacy_router.post(
+    "/notifications/events", response_model=CompetitiveNotificationView, status_code=status.HTTP_201_CREATED
+)
+@api_router.post(
+    "/notifications/events", response_model=CompetitiveNotificationView, status_code=status.HTTP_201_CREATED
+)
 def create_notification_event(
     payload: NotificationEventRequest,
     current_user: User = Depends(get_current_match_user),

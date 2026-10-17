@@ -121,10 +121,18 @@ class SecurityMonitoringService:
                 actor_user_id = owner_user_ids[0]
             risk_ops.log_audit(
                 actor_user_id=actor_user_id,
-                action_key="trade.executed" if reason == LedgerEntryReason.TRADE_SETTLEMENT.value else "wallet.transaction.recorded",
+                action_key=(
+                    "trade.executed"
+                    if reason == LedgerEntryReason.TRADE_SETTLEMENT.value
+                    else "wallet.transaction.recorded"
+                ),
                 resource_type="trade" if reason == LedgerEntryReason.TRADE_SETTLEMENT.value else "ledger_transaction",
                 resource_id=str(payload.get("transaction_id") or "") or None,
-                detail="Trade settlement recorded." if reason == LedgerEntryReason.TRADE_SETTLEMENT.value else "Wallet transaction recorded.",
+                detail=(
+                    "Trade settlement recorded."
+                    if reason == LedgerEntryReason.TRADE_SETTLEMENT.value
+                    else "Wallet transaction recorded."
+                ),
                 metadata_json={
                     "transaction_id": payload.get("transaction_id"),
                     "reason": reason,
@@ -285,7 +293,9 @@ class SecurityMonitoringService:
                 }
             )
             if len(ip_user_ids) >= self.shared_ip_account_threshold:
-                user_agent_fingerprint = sha1(str(user_agent or "").encode("utf-8")).hexdigest()[:12]
+                user_agent_fingerprint = sha1(str(user_agent or "").encode("utf-8"), usedforsecurity=False).hexdigest()[
+                    :12
+                ]
                 for clustered_user_id in ip_user_ids:
                     self._create_or_update_multi_account_case(
                         risk_ops=risk_ops,
@@ -348,15 +358,9 @@ class SecurityMonitoringService:
             buy_count = sum(1 for direction in directions if direction == "buy")
             sell_count = sum(1 for direction in directions if direction == "sell")
             direction_changes = sum(
-                1
-                for index in range(1, len(directions))
-                if directions[index] != directions[index - 1]
+                1 for index in range(1, len(directions)) if directions[index] != directions[index - 1]
             )
-            if (
-                buy_count
-                and sell_count
-                and direction_changes >= self.rapid_trade_direction_changes
-            ):
+            if buy_count and sell_count and direction_changes >= self.rapid_trade_direction_changes:
                 risk_ops.ingest_signal(
                     actor_user_id=None,
                     user_id=user_id,
@@ -495,7 +499,12 @@ class SecurityMonitoringService:
         if ":" not in candidate:
             return candidate[:80]
         parts = candidate.split(":")
-        if len(parts) >= 2 and parts[0] in {"gtex-market-buy", "gtex-market-sell", "player-share-buy", "player-share-sell"}:
+        if len(parts) >= 2 and parts[0] in {
+            "gtex-market-buy",
+            "gtex-market-sell",
+            "player-share-buy",
+            "player-share-sell",
+        }:
             return parts[1][:80]
         return candidate[:80]
 

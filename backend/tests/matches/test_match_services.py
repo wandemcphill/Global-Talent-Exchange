@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from decimal import Decimal
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -73,7 +72,12 @@ def test_analysis_service_surfaces_expected_problems_and_suggestions() -> None:
                     event_type=MatchEventType.SHOT,
                     team=MatchEventTeam.HOME,
                     player_id="home-striker",
-                    metadata_json={"team_name": "Home FC", "player_name": "Home Striker", "on_target": False, "outcome": "missed"},
+                    metadata_json={
+                        "team_name": "Home FC",
+                        "player_name": "Home Striker",
+                        "on_target": False,
+                        "outcome": "missed",
+                    },
                 ),
                 MatchEvent(
                     match_id="analysis-match",
@@ -91,7 +95,12 @@ def test_analysis_service_surfaces_expected_problems_and_suggestions() -> None:
                     event_type=MatchEventType.SHOT,
                     team=MatchEventTeam.AWAY,
                     player_id="away-9",
-                    metadata_json={"team_name": "Away FC", "player_name": "Away Nine", "on_target": True, "big_chance": True},
+                    metadata_json={
+                        "team_name": "Away FC",
+                        "player_name": "Away Nine",
+                        "on_target": True,
+                        "big_chance": True,
+                    },
                 ),
                 MatchEvent(
                     match_id="analysis-match",

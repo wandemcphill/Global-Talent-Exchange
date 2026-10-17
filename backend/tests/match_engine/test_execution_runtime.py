@@ -1,43 +1,25 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from datetime import datetime
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.common.enums.competition_type import CompetitionType
-from app.common.enums.fixture_window import FixtureWindow
-from app.common.enums.match_status import MatchStatus
 from app.competition_engine.match_dispatcher import MatchDispatcher
-from app.competition_engine.queue_contracts import InMemoryQueuePublisher, MatchSimulationJob
+from app.competition_engine.queue_contracts import InMemoryQueuePublisher
 from app.core.events import InMemoryEventPublisher
 from app.ingestion.models import Player
 from app.leagues.models import LeagueClub
 from app.leagues.repository import InMemoryLeagueEventRepository
 from app.leagues.service import LeagueSeasonLifecycleService
-from app.match_engine.schemas import (
-    MatchEventTimelineView,
-    MatchEventView,
-    MatchFinalSummaryView,
-    MatchPlayerReferenceView,
-    MatchPlayerStatsView,
-    MatchReplayPayloadView,
-    MatchTeamStatsView,
-    MatchTeamStrengthView,
-)
 from app.match_engine.services import LeagueFixtureExecutionService, LocalMatchExecutionWorker
 from app.match_engine.services.team_factory import SyntheticSquadFactory
 from app.schemas.player_lifecycle import ContractCreateRequest, InjuryCreateRequest
 from app.services.player_lifecycle_service import PlayerLifecycleService, PlayerLifecycleValidationError
-from app.match_engine.simulation.models import MatchCompetitionType, MatchEventType, PlayerRole
 from app.models.base import Base
 from app.models.club_profile import ClubProfile
-from app.models.player_contract import PlayerContract
-from app.models.player_injury_case import PlayerInjuryCase
-from app.models.player_lifecycle_event import PlayerLifecycleEvent
 from app.models.user import KycStatus, User, UserRole
 from app.notifications.service import NotificationCenter
 from app.replay_archive.persistence import InMemoryReplayArchiveRepository

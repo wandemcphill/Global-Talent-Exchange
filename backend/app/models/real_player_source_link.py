@@ -5,7 +5,12 @@ from datetime import date
 from sqlalchemy import Boolean, Date, Float, ForeignKey, Index, Integer, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from typing import TYPE_CHECKING
+
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+
+if TYPE_CHECKING:
+    from app.models.real_player_profile import RealPlayerProfile
 
 
 def _player_model():
@@ -40,7 +45,9 @@ class RealPlayerSourceLink(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     current_real_world_club: Mapped[str | None] = mapped_column(String(160), nullable=True)
     identity_confidence_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
     is_verified_real_player: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
-    verification_state: Mapped[str] = mapped_column(String(32), nullable=False, default="verified", server_default="verified")
+    verification_state: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="verified", server_default="verified"
+    )
 
     player = relationship(_player_model)
     profile: Mapped["RealPlayerProfile | None"] = relationship(

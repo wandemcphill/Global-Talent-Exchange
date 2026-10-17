@@ -280,7 +280,7 @@ class FileHighlightRenderQueue:
     @staticmethod
     def job_id_for_storage_key(storage_key: str) -> str:
         normalized = _normalize_storage_key(storage_key)
-        digest = hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:20]
+        digest = hashlib.sha1(normalized.encode("utf-8"), usedforsecurity=False).hexdigest()[:20]
         return f"highlight_{digest}"
 
     def _delete_record(self, job_id: str) -> None:

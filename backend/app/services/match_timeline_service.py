@@ -1103,7 +1103,7 @@ class MatchTimelineService:
             return None
         normalized = "".join(character.lower() if character.isalnum() else "-" for character in player_name).strip("-")
         if not normalized:
-            normalized = md5(player_name.encode("utf-8")).hexdigest()[:10]
+            normalized = md5(player_name.encode("utf-8"), usedforsecurity=False).hexdigest()[:10]
         prefix = "neutral" if side is None else side.value
         return f"{prefix}:{normalized}"
 
@@ -1801,8 +1801,6 @@ class MatchTimelineService:
             time_seconds=time_seconds,
         )
         return MatchTimelineFrameView(
-
-
             frame_id=f"{match_id}:{int(round(time_seconds * 100))}:{stage}",
             time_seconds=round(max(0.0, time_seconds), 2),
             clock_minute=round(max(0.0, min(120.0, clock_minute)), 2),
@@ -1884,7 +1882,7 @@ class MatchTimelineService:
         if highlighted:
             stage_scale *= 0.7
 
-        digest = md5(player.player_id.encode("utf-8")).digest()
+        digest = md5(player.player_id.encode("utf-8"), usedforsecurity=False).digest()
         phase_x = (int.from_bytes(digest[:4], "big") / 0xFFFFFFFF) * tau
         phase_y = (int.from_bytes(digest[4:8], "big") / 0xFFFFFFFF) * tau
 
@@ -1915,7 +1913,7 @@ class MatchTimelineService:
             viewer_type=active_event.view.event_type,
         )
         event_target = self._render_point(active_event, "target") or fallback_target
-        digest = md5(player.player_id.encode("utf-8")).digest()
+        digest = md5(player.player_id.encode("utf-8"), usedforsecurity=False).digest()
         lane_seed = (int.from_bytes(digest[:2], "big") / 65535.0) - 0.5
         depth_seed = (int.from_bytes(digest[2:4], "big") / 65535.0) - 0.5
 
@@ -3356,7 +3354,7 @@ class MatchTimelineService:
         return motion or fallback
 
     def _fraction(self, seed: str) -> float:
-        digest = md5(seed.encode("utf-8")).hexdigest()[:8]
+        digest = md5(seed.encode("utf-8"), usedforsecurity=False).hexdigest()[:8]
         return int(digest, 16) / 0xFFFFFFFF
 
     def _clamp(self, value: float) -> float:

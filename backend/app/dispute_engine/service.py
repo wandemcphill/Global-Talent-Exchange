@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.dispute import Dispute, DisputeMessage, DisputeStatus
@@ -35,11 +35,22 @@ class DisputeEngineService:
         return dispute
 
     def get_messages(self, dispute_id: str) -> list[DisputeMessage]:
-        stmt = select(DisputeMessage).where(DisputeMessage.dispute_id == dispute_id).order_by(DisputeMessage.created_at.asc())
+        stmt = (
+            select(DisputeMessage)
+            .where(DisputeMessage.dispute_id == dispute_id)
+            .order_by(DisputeMessage.created_at.asc())
+        )
         return list(self.session.scalars(stmt).all())
 
     def open_count(self) -> int:
-        return int(self.session.scalar(select(func.count(Dispute.id)).where(Dispute.status.in_([DisputeStatus.OPEN, DisputeStatus.AWAITING_ADMIN, DisputeStatus.AWAITING_USER]))) or 0)
+        return int(
+            self.session.scalar(
+                select(func.count(Dispute.id)).where(
+                    Dispute.status.in_([DisputeStatus.OPEN, DisputeStatus.AWAITING_ADMIN, DisputeStatus.AWAITING_USER])
+                )
+            )
+            or 0
+        )
 
     def create_dispute(
         self,
@@ -73,7 +84,9 @@ class DisputeEngineService:
         )
         self.session.add(dispute)
         self.session.flush()
-        self.add_message(dispute=dispute, sender=user, sender_role="user", message=message, attachment_id=None, touch_status=False)
+        self.add_message(
+            dispute=dispute, sender=user, sender_role="user", message=message, attachment_id=None, touch_status=False
+        )
         self._notify(
             user_id=user.id,
             title="Dispute opened",
@@ -142,7 +155,9 @@ class DisputeEngineService:
             dispute.closed_at = func.now()
         self.session.add(dispute)
         if note:
-            self.add_message(dispute=dispute, sender=actor, sender_role="admin", message=note, attachment_id=None, touch_status=False)
+            self.add_message(
+                dispute=dispute, sender=actor, sender_role="admin", message=note, attachment_id=None, touch_status=False
+            )
         self._notify(
             user_id=dispute.user_id,
             title="Dispute status updated",
@@ -153,7 +168,9 @@ class DisputeEngineService:
         self.session.flush()
         return dispute
 
-    def _notify(self, *, user_id: str, title: str, body: str, notification_type: str, metadata_json: dict[str, object]) -> None:
+    def _notify(
+        self, *, user_id: str, title: str, body: str, notification_type: str, metadata_json: dict[str, object]
+    ) -> None:
         self.session.add(
             NotificationRecord(
                 user_id=user_id,

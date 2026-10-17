@@ -6,7 +6,6 @@ from typing import Any
 from fastapi import FastAPI
 
 from app.ingestion.demo_bootstrap import DemoBootstrapService
-from app.ingestion.demo_discoverability import CANONICAL_DEMO_PLAYER_COUNT
 from app.market.projections import MarketSummaryProjector
 from app.market.repositories import InMemoryMarketRepository
 from app.market.service import MarketEngine
@@ -53,14 +52,18 @@ def seed_demo_simulation_for_app(
 ) -> DemoSimulationRuntimeSummary:
     bootstrap_summary: dict[str, Any] | None = None
     if bootstrap_demo:
-        bootstrap_summary = DemoBootstrapService(
-            session_factory=app.state.session_factory,
-            settings=app.state.settings,
-            event_publisher=app.state.event_publisher,
-        ).seed(
-            player_target_count=demo_player_count,
-            batch_size=min(500, demo_player_count),
-        ).to_dict()
+        bootstrap_summary = (
+            DemoBootstrapService(
+                session_factory=app.state.session_factory,
+                settings=app.state.settings,
+                event_publisher=app.state.event_publisher,
+            )
+            .seed(
+                player_target_count=demo_player_count,
+                batch_size=min(500, demo_player_count),
+            )
+            .to_dict()
+        )
 
     simulation_service = DemoMarketSimulationService(
         session_factory=app.state.session_factory,

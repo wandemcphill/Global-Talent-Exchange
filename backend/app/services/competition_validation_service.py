@@ -12,8 +12,8 @@ from app.config.competition_constants import (
 from app.models.competition import Competition
 from app.schemas.competition_core import CompetitionCreateRequest, CompetitionUpdateRequest
 from app.schemas.competition_financials import CompetitionFeeSummary
-from app.schemas.competition_rules import CompetitionRuleSetPayload
 from app.services.competition_rules_engine import CompetitionRulesEngine, CompetitionRulesError
+from app.schemas.competition_rules import CompetitionRuleSetPayload as CompetitionRuleSetPayload
 
 
 class CompetitionValidationError(ValueError):
