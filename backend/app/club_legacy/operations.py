@@ -17,6 +17,7 @@ from app.club_legacy.delegation import (
 from app.club_legacy.ledger import post_club_legacy_transfer
 from app.club_legacy.models import (
     ClubLegacyAsset,
+    ClubLegacyBid,
     ClubLegacyCase,
     ClubLegacyCatalogueItem,
     ClubLegacyExecutive,
@@ -24,6 +25,7 @@ from app.club_legacy.models import (
     ClubLegacyKitVersion,
     ClubLegacyListing,
     ClubLegacyManagerOffer,
+    ClubLegacyPolicy,
     ClubLegacyPreseasonInvite,
     ClubLegacyPreseasonSettlement,
     ClubLegacyPreseasonWindow,
@@ -108,6 +110,7 @@ def hire_executive(
         select(ClubLegacyExecutive).where(ClubLegacyExecutive.club_id == club_id, ClubLegacyExecutive.role == role)
     )
     attributes = _attributes(role, name)
+    attributes.update(_hiring_fit(session, club_id))
     if current is None:
         current = ClubLegacyExecutive(
             club_id=club_id,
@@ -137,6 +140,28 @@ def _attributes(role: str, name: str) -> dict[str, int]:
         "football_manager": ("tactics", "squad_judgement", "training", "morale"),
     }[role]
     return {key: rng.randint(40, 85) for key in keys}
+
+
+def _hiring_fit(session: Session, club_id: str) -> dict[str, int]:
+    profile = session.get(ClubProfile, club_id)
+    state = session.scalar(select(OwnerClubState).where(OwnerClubState.club_id == club_id))
+    kept = (
+        session.scalar(
+            select(func.count())
+            .select_from(ClubLegacyPromise)
+            .where(ClubLegacyPromise.club_id == club_id, ClubLegacyPromise.status == "kept")
+        )
+        or 0
+    )
+    facility = development_score(state.facilities_json if state else {})
+    city_bonus = 10 if profile and profile.city_name else 0
+    owner_trust = min(100, 40 + int(kept) * 10)
+    return {
+        "facility_level": facility,
+        "city_bonus": city_bonus,
+        "owner_trust": owner_trust,
+        "fit": min(100, facility // 2 + city_bonus + owner_trust // 5),
+    }
 
 
 def recruitment_report(session: Session, club_id: str, user_id: str) -> ClubLegacyReport:
@@ -255,7 +280,14 @@ def showroom(session: Session, club_id: str) -> dict:
                 "owned": False,
             }
         )
-    return {"mode": "lightweight-preview", "fallback": "static-card", "exhibits": exhibits}
+    preview_bytes = 180 * 120 * 4
+    return {
+        "mode": "lightweight-preview",
+        "fallback": "static-card",
+        "preview_bytes": preview_bytes,
+        "within_budget": preview_bytes <= 250_000,
+        "exhibits": exhibits,
+    }
 
 
 def _exhibit(session: Session, asset: ClubLegacyAsset, *, owned: bool) -> dict:
@@ -334,7 +366,7 @@ def purchase_asset(
     if existing is not None:
         return existing
     seed_catalogue(session)
-    item = session.scalar(select(ClubLegacyCatalogueItem).where(ClubLegacyCatalogueItem.sku == sku))
+    item = session.scalar(select(ClubLegacyCatalogueItem).where(ClubLegacyCatalogueItem.sku == sku).with_for_update())
     if item is None:
         raise LegacyError("unknown_item", 404)
     if item.supply_cap is not None and item.minted_count >= item.supply_cap:
@@ -421,7 +453,7 @@ def resolve_gift(session: Session, *, gift_id: str, accept: bool) -> ClubLegacyG
     return gift
 
 
-def list_asset(session: Session, *, asset_id: str, user_id: str, price) -> ClubLegacyListing:
+def list_asset(session: Session, *, asset_id: str, user_id: str, price, kind: str = "fixed") -> ClubLegacyListing:
     asset = session.get(ClubLegacyAsset, asset_id)
     if asset is None or asset.status != "owned":
         raise LegacyError("asset_unavailable", 409)
@@ -433,7 +465,7 @@ def list_asset(session: Session, *, asset_id: str, user_id: str, price) -> ClubL
         seller_user_id=user_id,
         price=_q(price),
         fee=_q(Decimal(price) * Decimal("0.05")),
-        status="open",
+        status="auction" if kind == "auction" else "open",
     )
     session.add(listing)
     session.flush()
@@ -451,16 +483,32 @@ def buy_listing(
         raise LegacyError("listing_closed", 409)
     asset = session.get(ClubLegacyAsset, listing.asset_id)
     require_owner(session, buyer_club_id, buyer_user_id)
+    seller_club = session.get(ClubProfile, asset.club_id) if asset.club_id else None
+    buyer_club = session.get(ClubProfile, buyer_club_id)
+    if (
+        seller_club is not None
+        and buyer_club is not None
+        and seller_club.owner_user_id == buyer_club.owner_user_id
+        and seller_club.id != buyer_club.id
+    ):
+        raise LegacyError("wash_trade", 409, "Related clubs cannot trade this asset with each other.")
+    listing.status = "escrow"
+    session.flush()
     source = ledger.wallet_account(session, ledger.club_account(buyer_club_id), ledger.GTEX)
     destination = ledger.wallet_account(session, ledger.club_account(asset.club_id or buyer_club_id), ledger.GTEX)
-    post_club_legacy_transfer(
-        session,
-        idempotency_key=f"sale:{idempotency_key}",
-        source=source,
-        destination=destination,
-        amount=Decimal(listing.price),
-        description="Asset resale",
-    )
+    try:
+        post_club_legacy_transfer(
+            session,
+            idempotency_key=f"sale:{idempotency_key}",
+            source=source,
+            destination=destination,
+            amount=Decimal(listing.price),
+            description="Asset resale",
+        )
+    except Exception:
+        listing.status = "open"
+        session.flush()
+        raise
     asset.owner_class = "club"
     asset.owner_ref = buyer_club_id
     asset.club_id = buyer_club_id
@@ -490,10 +538,46 @@ def open_window(session: Session, *, name: str, starts_on: str, ends_on: str) ->
     return window
 
 
+def _reject_related_clubs(session: Session, from_club_id: str, to_club_id: str) -> None:
+    home = session.get(ClubProfile, from_club_id)
+    away = session.get(ClubProfile, to_club_id)
+    if home is not None and away is not None and home.owner_user_id == away.owner_user_id:
+        raise LegacyError("related_club_blocked", 409, "Clubs with the same owner cannot arrange this friendly.")
+
+
+def _reject_blocked_calendar(session: Session, match_on: str) -> None:
+    from app.models.admin_rules import AdminCalendarRule
+
+    rules = session.scalars(select(AdminCalendarRule).where(AdminCalendarRule.active.is_(True))).all()
+    for rule in rules:
+        for block in (rule.config_json or {}).get("blocked_ranges", []):
+            if str(block.get("start")) <= match_on <= str(block.get("end")):
+                raise LegacyError("calendar_blocked", 409, "The competition calendar blocks that date.")
+
+
+def _reject_manager_clash(session: Session, from_club_id: str, to_club_id: str, match_on: str) -> None:
+    from app.owner_console.models import OwnerMatch
+
+    scheduled = session.scalars(
+        select(OwnerMatch).where(
+            OwnerMatch.status == "scheduled",
+            (OwnerMatch.home_club_id.in_([from_club_id, to_club_id]))
+            | (OwnerMatch.away_club_id.in_([from_club_id, to_club_id])),
+        )
+    ).all()
+    for match in scheduled:
+        played = match.played_at.date().isoformat() if match.played_at else None
+        if played == match_on:
+            raise LegacyError("manager_unavailable", 409, "The football manager already has a match that day.")
+
+
 def invite_preseason(
     session: Session, *, window_id: str, from_club_id: str, to_club_id: str, match_on: str, appearance_fee, user_id: str
 ) -> ClubLegacyPreseasonInvite:
     require_owner(session, from_club_id, user_id)
+    _reject_related_clubs(session, from_club_id, to_club_id)
+    _reject_blocked_calendar(session, match_on)
+    _reject_manager_clash(session, from_club_id, to_club_id, match_on)
     window = session.get(ClubLegacyPreseasonWindow, window_id)
     if window is None or not (window.starts_on <= match_on <= window.ends_on):
         raise LegacyError("outside_window", 409, "That date is outside the pre-season window.")
@@ -539,7 +623,7 @@ def respond_preseason(
     return invite
 
 
-def settle_preseason(session: Session, *, invite_id: str, tv_pool) -> ClubLegacyPreseasonSettlement:
+def settle_preseason(session: Session, *, invite_id: str, tv_pool, gift_pool=0) -> ClubLegacyPreseasonSettlement:
     existing = session.scalar(
         select(ClubLegacyPreseasonSettlement).where(ClubLegacyPreseasonSettlement.invite_id == invite_id)
     )
@@ -557,6 +641,11 @@ def settle_preseason(session: Session, *, invite_id: str, tv_pool) -> ClubLegacy
     host = _q(club_pool * HOST_CUT_OF_CLUB_POOL)
     participants = club_pool - host
     if platform + host + participants != pool:
+        raise LegacyError("allocation_mismatch", 500)
+    gift = _q(gift_pool)
+    gift_club = _q(gift * Decimal("0.40")) if stage == "foundation" else _q(gift * club_rate)
+    gift_platform = gift - gift_club
+    if gift_platform + gift_club != gift:
         raise LegacyError("allocation_mismatch", 500)
     repeats = (
         session.scalar(
@@ -585,6 +674,8 @@ def settle_preseason(session: Session, *, invite_id: str, tv_pool) -> ClubLegacy
         participant_amount=participants,
         reputation_delta=reputation,
         audience=100,
+        gift_platform_amount=gift_platform,
+        gift_club_amount=gift_club,
     )
     session.add(settlement)
     session.flush()
@@ -760,6 +851,12 @@ def set_stake(session: Session, *, club_id: str, holder_user_id: str, percentage
     percent = _q(percentage)
     if percent <= 0 or percent > 100:
         raise LegacyError("invalid_percentage")
+    others = session.scalars(select(ClubLegacyStake).where(ClubLegacyStake.club_id == club_id)).all()
+    total = (
+        sum((Decimal(row.percentage) for row in others if row.holder_user_id != holder_user_id), Decimal("0")) + percent
+    )
+    if total > Decimal("100"):
+        raise LegacyError("stake_total", 409, f"Stakes would total {total}, above 100.")
     if stake is None:
         stake = ClubLegacyStake(
             club_id=club_id, holder_user_id=holder_user_id, percentage=percent, voting_rights=percent
@@ -804,6 +901,255 @@ def simulate_season(session: Session, club_id: str) -> dict:
         "jets": int(jets),
         "can_progress_without_jets": int(jets) == 0 and development >= 20,
     }
+
+
+def place_bid(session: Session, *, listing_id: str, bidder_user_id: str, amount) -> ClubLegacyBid:
+    listing = session.get(ClubLegacyListing, listing_id)
+    if listing is None or listing.status != "auction":
+        raise LegacyError("auction_closed", 409)
+    if bidder_user_id == listing.seller_user_id:
+        raise LegacyError("wash_trade", 409, "The seller cannot bid on their own auction.")
+    bid_amount = _q(amount)
+    leading = session.scalar(
+        select(ClubLegacyBid).where(ClubLegacyBid.listing_id == listing.id, ClubLegacyBid.status == "leading")
+    )
+    if leading is not None and bid_amount <= Decimal(leading.amount):
+        raise LegacyError("bid_too_low", 409)
+    if leading is not None:
+        leading.status = "outbid"
+    bid = ClubLegacyBid(listing_id=listing.id, bidder_user_id=bidder_user_id, amount=bid_amount, status="leading")
+    session.add(bid)
+    session.flush()
+    return bid
+
+
+def close_auction(session: Session, *, listing_id: str, buyer_club_id: str) -> ClubLegacyListing:
+    listing = session.get(ClubLegacyListing, listing_id)
+    if listing is None or listing.status != "auction":
+        raise LegacyError("auction_closed", 409)
+    winning = session.scalar(
+        select(ClubLegacyBid).where(ClubLegacyBid.listing_id == listing.id, ClubLegacyBid.status == "leading")
+    )
+    if winning is None:
+        listing.status = "cancelled"
+        asset = session.get(ClubLegacyAsset, listing.asset_id)
+        asset.status = "owned"
+        session.flush()
+        return listing
+    listing.price = winning.amount
+    listing.status = "open"
+    session.flush()
+    return buy_listing(
+        session,
+        listing_id=listing.id,
+        buyer_user_id=winning.bidder_user_id,
+        buyer_club_id=buyer_club_id,
+        idempotency_key=f"auction:{listing.id}",
+    )
+
+
+def report_delivery(
+    session: Session, *, contract_id: str, user_id: str, impressions: int, note: str
+) -> ClubLegacySponsorContract:
+    contract = session.get(ClubLegacySponsorContract, contract_id)
+    if contract is None or contract.status != "approved":
+        raise LegacyError("delivery_unavailable", 409)
+    require_owner(session, contract.club_id, user_id)
+    if impressions < 0:
+        raise LegacyError("invalid_impressions")
+    contract.impressions = impressions
+    contract.delivery_report = note
+    contract.status = "completed"
+    session.flush()
+    return contract
+
+
+def renew_sponsor(session: Session, *, contract_id: str, user_id: str) -> ClubLegacySponsorContract:
+    previous = session.get(ClubLegacySponsorContract, contract_id)
+    if previous is None or previous.status != "completed":
+        raise LegacyError("renewal_unavailable", 409)
+    require_owner(session, previous.club_id, user_id)
+    renewed = ClubLegacySponsorContract(
+        club_id=previous.club_id,
+        sponsor_name=previous.sponsor_name,
+        placement=previous.placement,
+        fee=previous.fee,
+        status="offered",
+        renewed_from_id=previous.id,
+    )
+    session.add(renewed)
+    session.flush()
+    return renewed
+
+
+def approach_manager(session: Session, *, executive_id: str, from_club_id: str, user_id: str) -> ClubLegacyExecutive:
+    executive = session.get(ClubLegacyExecutive, executive_id)
+    if executive is None or executive.status != "hired":
+        raise LegacyError("executive_unavailable", 404)
+    require_owner(session, from_club_id, user_id)
+    if executive.club_id == from_club_id:
+        raise LegacyError("already_on_staff", 409)
+    _reject_related_clubs(session, from_club_id, executive.club_id)
+    compensation = _q(Decimal(executive.wage) * Decimal("0.20"))
+    source = ledger.wallet_account(session, ledger.club_account(from_club_id), ledger.GTEX)
+    destination = ledger.wallet_account(session, ledger.club_account(executive.club_id), ledger.GTEX)
+    post_club_legacy_transfer(
+        session,
+        idempotency_key=f"compensation:{executive.id}:{from_club_id}",
+        source=source,
+        destination=destination,
+        amount=compensation,
+        description=f"Compensation for {executive.name}",
+    )
+    executive.status = "in_talks"
+    session.flush()
+    return executive
+
+
+def load_catalogue(session: Session, rounds: int = 40) -> dict:
+    import time
+
+    started = time.perf_counter()
+    for _ in range(rounds):
+        session.scalars(select(ClubLegacyCatalogueItem)).all()
+    elapsed_ms = int((time.perf_counter() - started) * 1000)
+    return {"rounds": rounds, "elapsed_ms": elapsed_ms, "within_budget": elapsed_ms < 1000}
+
+
+def desk_snapshot(session: Session, club_id: str, user_id: str) -> dict:
+    require_owner(session, club_id, user_id)
+    staff = session.scalars(select(ClubLegacyExecutive).where(ClubLegacyExecutive.club_id == club_id)).all()
+    policies = session.scalars(select(ClubLegacyPolicy).where(ClubLegacyPolicy.club_id == club_id)).all()
+    invites = session.scalars(
+        select(ClubLegacyPreseasonInvite).where(
+            (ClubLegacyPreseasonInvite.from_club_id == club_id) | (ClubLegacyPreseasonInvite.to_club_id == club_id)
+        )
+    ).all()
+    sponsors = session.scalars(
+        select(ClubLegacySponsorContract).where(ClubLegacySponsorContract.club_id == club_id)
+    ).all()
+    offers = session.scalars(select(ClubLegacyManagerOffer).where(ClubLegacyManagerOffer.club_id == club_id)).all()
+    promises = session.scalars(select(ClubLegacyPromise).where(ClubLegacyPromise.club_id == club_id)).all()
+    cases = session.scalars(select(ClubLegacyCase).where(ClubLegacyCase.club_id == club_id)).all()
+    stakes = session.scalars(select(ClubLegacyStake).where(ClubLegacyStake.club_id == club_id)).all()
+    return {
+        "staff": [
+            {
+                "id": item.id,
+                "role": item.role,
+                "name": item.name,
+                "status": item.status,
+                "fit": (item.attributes_json or {}).get("fit"),
+            }
+            for item in staff
+        ],
+        "policies": [
+            {
+                "task_key": item.task_key,
+                "mode": item.mode,
+                "max_amount": str(item.max_amount) if item.max_amount is not None else None,
+            }
+            for item in policies
+        ],
+        "finance": {**owner_net_worth(session, user_id), "club_valuation": str(club_valuation(session, club_id))},
+        "preseason": [
+            {
+                "id": item.id,
+                "match_on": item.match_on,
+                "status": item.status,
+                "appearance_fee": str(item.appearance_fee),
+            }
+            for item in invites
+        ],
+        "sponsors": [
+            {
+                "id": item.id,
+                "sponsor_name": item.sponsor_name,
+                "placement": item.placement,
+                "status": item.status,
+                "impressions": item.impressions,
+            }
+            for item in sponsors
+        ],
+        "offers": [
+            {"id": item.id, "candidate_name": item.candidate_name, "outcome": item.outcome, "wage": str(item.wage)}
+            for item in offers
+        ],
+        "promises": [
+            {"id": item.id, "subject": item.subject, "status": item.status, "trust": item.trust} for item in promises
+        ],
+        "cases": [
+            {"id": item.id, "rule_code": item.rule_code, "status": item.status, "sanction": item.sanction}
+            for item in cases
+        ],
+        "stakes": [{"holder_user_id": item.holder_user_id, "percentage": str(item.percentage)} for item in stakes],
+    }
+
+
+def perform_desk_action(session: Session, club_id: str, user_id: str, action: str, payload: dict) -> dict:
+    require_owner(session, club_id, user_id)
+    if action == "hire":
+        hired = hire_executive(
+            session,
+            club_id,
+            user_id,
+            role=payload["role"],
+            name=payload["name"],
+            personality=payload.get("personality", "cautious"),
+            wage=payload.get("wage", "1000"),
+        )
+        return {"id": hired.id, "fit": hired.attributes_json.get("fit")}
+    if action == "preset":
+        from app.club_legacy.delegation import apply_preset
+
+        policy = apply_preset(session, club_id, payload["preset"], actor_user_id=user_id)
+        return {"task_key": policy.task_key, "mode": policy.mode}
+    if action == "preseason_window":
+        window = open_window(session, name=payload["name"], starts_on=payload["starts_on"], ends_on=payload["ends_on"])
+        return {"id": window.id}
+    if action == "preseason_invite":
+        invite = invite_preseason(
+            session,
+            window_id=payload["window_id"],
+            from_club_id=club_id,
+            to_club_id=payload["to_club_id"],
+            match_on=payload["match_on"],
+            appearance_fee=payload["appearance_fee"],
+            user_id=user_id,
+        )
+        return {"id": invite.id, "status": invite.status}
+    if action == "sponsor_offer":
+        contract = offer_sponsor(
+            session,
+            club_id=club_id,
+            user_id=user_id,
+            sponsor_name=payload["sponsor_name"],
+            placement=payload["placement"],
+            fee=payload["fee"],
+        )
+        return {"id": contract.id, "status": contract.status}
+    if action == "manager_offer":
+        offer = decide_manager_offer(
+            session,
+            club_id=club_id,
+            user_id=user_id,
+            candidate_name=payload["candidate_name"],
+            wage=payload["wage"],
+            prestige=int(payload.get("prestige", 10)),
+            ambition=int(payload.get("ambition", 10)),
+            seed=int(payload.get("seed", 1)),
+        )
+        return {"id": offer.id, "outcome": offer.outcome}
+    if action == "open_case":
+        case = open_case(
+            session,
+            club_id=club_id,
+            rule_code=payload["rule_code"],
+            allegation=payload["allegation"],
+            evidence=payload["evidence"],
+        )
+        return {"id": case.id, "status": case.status}
+    raise LegacyError("unknown_action", 404)
 
 
 def metrics(session: Session) -> dict:

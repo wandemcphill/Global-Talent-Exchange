@@ -151,6 +151,8 @@ class ClubLegacyPreseasonSettlement(UUIDPrimaryKeyMixin, Base):
     participant_amount: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False)
     reputation_delta: Mapped[int] = mapped_column(Integer, nullable=False)
     audience: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    gift_platform_amount: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False, default=Decimal("0"))
+    gift_club_amount: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False, default=Decimal("0"))
 
 
 class ClubLegacySponsorContract(UUIDPrimaryKeyMixin, Base):
@@ -161,6 +163,9 @@ class ClubLegacySponsorContract(UUIDPrimaryKeyMixin, Base):
     placement: Mapped[str] = mapped_column(String(32), nullable=False)
     fee: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="offered")
+    delivery_report: Mapped[str | None] = mapped_column(Text, nullable=True)
+    impressions: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    renewed_from_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
 
 class ClubLegacyKitVersion(UUIDPrimaryKeyMixin, Base):
@@ -210,6 +215,15 @@ class ClubLegacyCase(UUIDPrimaryKeyMixin, Base):
     appeal_outcome: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class ClubLegacyBid(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "club_legacy_bids"
+
+    listing_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    bidder_user_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="leading")
+
+
 class ClubLegacyStake(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "club_legacy_stakes"
     __table_args__ = (UniqueConstraint("club_id", "holder_user_id", name="uq_club_legacy_stakes_club_holder"),)
@@ -237,4 +251,5 @@ CLUB_LEGACY_PHASE_TABLES = (
     ClubLegacyPromise.__table__,
     ClubLegacyCase.__table__,
     ClubLegacyStake.__table__,
+    ClubLegacyBid.__table__,
 )

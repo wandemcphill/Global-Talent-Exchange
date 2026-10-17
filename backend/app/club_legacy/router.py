@@ -138,6 +138,33 @@ def execute_recommendation(
     return _run(session, go)
 
 
+@router.get("/{club_id}/desk")
+def read_desk(club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
+    def go():
+        from app.club_legacy.operations import desk_snapshot
+
+        return desk_snapshot(session, club_id, user.id)
+
+    return _run(session, go)
+
+
+class DeskActionRequest(BaseModel):
+    action: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+@router.post("/{club_id}/desk")
+def post_desk_action(
+    club_id: str, body: DeskActionRequest, user=Depends(get_current_user), session: Session = Depends(get_session)
+) -> dict[str, Any]:
+    def go():
+        from app.club_legacy.operations import perform_desk_action
+
+        return perform_desk_action(session, club_id, user.id, body.action, body.payload)
+
+    return _run(session, go)
+
+
 @router.get("/{club_id}/showroom")
 def read_showroom(
     club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)

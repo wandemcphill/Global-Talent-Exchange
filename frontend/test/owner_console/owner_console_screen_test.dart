@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/features/owner_console/data/owner_console_api.dart';
+import 'package:gte_frontend/features/owner_console/widgets/club_legacy_desk.dart';
 import 'package:gte_frontend/features/owner_console/presentation/owner_console_screen.dart';
 import 'package:gte_frontend/features/owner_console/widgets/owner_console_sections.dart';
 import 'package:gte_frontend/features/regen_redesign/data/gtex_share_market_api.dart';
@@ -156,6 +157,12 @@ class _FakeOwner implements OwnerConsoleReader {
   Future<List<ShowroomExhibit>> fetchShowroom() async => const <ShowroomExhibit>[
     ShowroomExhibit(id: 'jet-1', name: 'Harbour Jet', category: 'jet', ownershipLabel: 'Club', fallbackLabel: 'Static jet card', owned: true),
   ];
+
+  @override
+  Future<ClubLegacyDeskData> fetchDesk() async => const ClubLegacyDeskData(staff: [], policies: [], clubValuation: '0', equity: '0', preseason: [], sponsors: [], offers: [], cases: []);
+
+  @override
+  Future<void> performDesk(String action) async {}
 }
 
 class _FakeShare implements GtexShareMarketReader {

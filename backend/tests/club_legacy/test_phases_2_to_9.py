@@ -216,8 +216,11 @@ def test_phase5_preseason_allocates_100_percent_once(client, bootstrap_admin_hea
     _enable(app)
     with app.state.session_factory() as session:
         admin = _admin(session)
+        rival = User(email="rival-owner@gte.local", username="rival_owner", password_hash="hash", display_name="Rival")
+        session.add(rival)
+        session.flush()
         other = ClubProfile(
-            owner_user_id=admin.id,
+            owner_user_id=rival.id,
             club_name="Opposite FC",
             short_name="OPP",
             club_type=ClubType.COMMUNITY,
@@ -254,7 +257,7 @@ def test_phase5_preseason_allocates_100_percent_once(client, bootstrap_admin_hea
             appearance_fee="500",
             user_id=admin.id,
         )
-        respond_preseason(session, invite_id=invite.id, user_id=admin.id, decision="accept")
+        respond_preseason(session, invite_id=invite.id, user_id=rival.id, decision="accept")
         first = settle_preseason(session, invite_id=invite.id, tv_pool="1000")
         second = settle_preseason(session, invite_id=invite.id, tv_pool="1000")
         assert first.id == second.id
@@ -270,7 +273,7 @@ def test_phase5_preseason_allocates_100_percent_once(client, bootstrap_admin_hea
         )
         # date conflict is for accepted matches; 12 June is accepted, 20 June is free
         later = session.scalar(select(type(invite)).where(type(invite).match_on == "2026-06-20"))
-        respond_preseason(session, invite_id=later.id, user_id=admin.id, decision="accept")
+        respond_preseason(session, invite_id=later.id, user_id=rival.id, decision="accept")
         repeat = settle_preseason(session, invite_id=later.id, tv_pool="1000")
         assert repeat.reputation_delta < first.reputation_delta
         session.commit()

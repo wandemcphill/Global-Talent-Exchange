@@ -2241,6 +2241,18 @@
       },
       {
         "method": "GET",
+        "path": "/api/owner/legacy/{club_id}/desk",
+        "handler": "read_desk",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/legacy/{club_id}/desk",
+        "handler": "post_desk_action",
+        "response_model": null
+      },
+      {
+        "method": "GET",
         "path": "/api/owner/legacy/{club_id}/metrics",
         "handler": "read_metrics",
         "response_model": null

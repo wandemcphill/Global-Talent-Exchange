@@ -1,4 +1,5 @@
 import 'package:gte_frontend/data/gte_authed_api.dart';
+import 'package:gte_frontend/features/owner_console/widgets/club_legacy_desk.dart';
 
 class ShowroomExhibit {
   const ShowroomExhibit({
@@ -618,6 +619,10 @@ abstract class OwnerConsoleReader {
   Future<double> fetchWalletBalance();
 
   Future<List<ShowroomExhibit>> fetchShowroom();
+
+  Future<ClubLegacyDeskData> fetchDesk();
+
+  Future<void> performDesk(String action);
 }
 
 class OwnerConsoleApi implements OwnerConsoleReader {
@@ -716,6 +721,38 @@ class OwnerConsoleApi implements OwnerConsoleReader {
     final String clubId = '${clubs.first['club_id']}';
     final Map<String, dynamic> room = await client.getMap('/owner/legacy/$clubId/showroom');
     return _maps(room['exhibits']).map(ShowroomExhibit.fromJson).toList();
+  }
+
+  @override
+  Future<ClubLegacyDeskData> fetchDesk() async {
+    final Map<String, dynamic> center = await client.getMap('/owner/control-center');
+    final List<Map<String, dynamic>> clubs = _maps(center['clubs']);
+    if (clubs.isEmpty) {
+      return ClubLegacyDeskData.fromJson(const <String, dynamic>{});
+    }
+    return ClubLegacyDeskData.fromJson(await client.getMap('/owner/legacy/${clubs.first['club_id']}/desk'));
+  }
+
+  @override
+  Future<void> performDesk(String action) async {
+    final Map<String, dynamic> center = await client.getMap('/owner/control-center');
+    final List<Map<String, dynamic>> clubs = _maps(center['clubs']);
+    if (clubs.isEmpty) {
+      return;
+    }
+    await client.post('/owner/legacy/${clubs.first['club_id']}/desk', body: <String, Object?>{'action': action, 'payload': _deskPayload(action)});
+  }
+
+  @override
+  Map<String, Object?> _deskPayload(String action) {
+    return switch (action) {
+      'hire' => <String, Object?>{'role': 'gm', 'name': 'Ada Okonkwo', 'personality': 'cautious', 'wage': '4000'},
+      'preset' => <String, Object?>{'preset': 'balanced'},
+      'sponsor' => <String, Object?>{'sponsor_name': 'Harbour Trust', 'placement': 'front', 'fee': '1000'},
+      'manager' => <String, Object?>{'candidate_name': 'Tunde Bakare', 'wage': '2000', 'prestige': 20, 'ambition': 8, 'seed': 3},
+      'case' => <String, Object?>{'rule_code': 'late_wages', 'allegation': 'Wages slipped', 'evidence': 'Ledger'},
+      _ => <String, Object?>{},
+    };
   }
 
   @override

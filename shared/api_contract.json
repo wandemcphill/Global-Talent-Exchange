@@ -3374,6 +3374,19 @@
         "source_file": "backend/app/club_legacy/router.py",
         "response_model": null
       },
+      "get_api_v2_owner_legacy_club_id_desk": {
+        "method": "GET",
+        "canonical_path": "/api/v2/owner/legacy/{club_id}/desk",
+        "aliases": [
+          "/api/owner/legacy/{club_id}/desk",
+          "/api/v1/owner/legacy/{club_id}/desk",
+          "/api/v2/owner/legacy/{club_id}/desk",
+          "/owner/legacy/{club_id}/desk"
+        ],
+        "handler": "read_desk",
+        "source_file": "backend/app/club_legacy/router.py",
+        "response_model": null
+      },
       "get_api_v2_owner_legacy_club_id_metrics": {
         "method": "GET",
         "canonical_path": "/api/v2/owner/legacy/{club_id}/metrics",
@@ -3999,6 +4012,19 @@
         "handler": "create_match_share_link",
         "source_file": "backend/app/club_social/router.py",
         "response_model": "MatchShareLinkView"
+      },
+      "post_api_v2_owner_legacy_club_id_desk": {
+        "method": "POST",
+        "canonical_path": "/api/v2/owner/legacy/{club_id}/desk",
+        "aliases": [
+          "/api/owner/legacy/{club_id}/desk",
+          "/api/v1/owner/legacy/{club_id}/desk",
+          "/api/v2/owner/legacy/{club_id}/desk",
+          "/owner/legacy/{club_id}/desk"
+        ],
+        "handler": "post_desk_action",
+        "source_file": "backend/app/club_legacy/router.py",
+        "response_model": null
       },
       "post_api_v2_owner_legacy_club_id_policies_preset": {
         "method": "POST",
@@ -22596,6 +22622,7 @@
     "/api/v2/owner/integrity": "get_api_v2_owner_integrity",
     "/api/v2/owner/legacy/recommendations/{recommendation_id}/execute": "post_api_v2_owner_legacy_recommendations_recommendation_id_execute",
     "/api/v2/owner/legacy/{club_id}": "get_api_v2_owner_legacy_club_id",
+    "/api/v2/owner/legacy/{club_id}/desk": "post_api_v2_owner_legacy_club_id_desk",
     "/api/v2/owner/legacy/{club_id}/metrics": "get_api_v2_owner_legacy_club_id_metrics",
     "/api/v2/owner/legacy/{club_id}/page": "get_api_v2_owner_legacy_club_id_page",
     "/api/v2/owner/legacy/{club_id}/policies/preset": "post_api_v2_owner_legacy_club_id_policies_preset",
@@ -24338,6 +24365,7 @@
     "/api/owner/integrity": "/api/v2/owner/integrity",
     "/api/owner/legacy/recommendations/{recommendation_id}/execute": "/api/v2/owner/legacy/recommendations/{recommendation_id}/execute",
     "/api/owner/legacy/{club_id}": "/api/v2/owner/legacy/{club_id}",
+    "/api/owner/legacy/{club_id}/desk": "/api/v2/owner/legacy/{club_id}/desk",
     "/api/owner/legacy/{club_id}/metrics": "/api/v2/owner/legacy/{club_id}/metrics",
     "/api/owner/legacy/{club_id}/page": "/api/v2/owner/legacy/{club_id}/page",
     "/api/owner/legacy/{club_id}/policies/preset": "/api/v2/owner/legacy/{club_id}/policies/preset",
@@ -25755,6 +25783,7 @@
     "/api/v1/owner/integrity": "/api/v2/owner/integrity",
     "/api/v1/owner/legacy/recommendations/{recommendation_id}/execute": "/api/v2/owner/legacy/recommendations/{recommendation_id}/execute",
     "/api/v1/owner/legacy/{club_id}": "/api/v2/owner/legacy/{club_id}",
+    "/api/v1/owner/legacy/{club_id}/desk": "/api/v2/owner/legacy/{club_id}/desk",
     "/api/v1/owner/legacy/{club_id}/metrics": "/api/v2/owner/legacy/{club_id}/metrics",
     "/api/v1/owner/legacy/{club_id}/page": "/api/v2/owner/legacy/{club_id}/page",
     "/api/v1/owner/legacy/{club_id}/policies/preset": "/api/v2/owner/legacy/{club_id}/policies/preset",
@@ -27083,6 +27112,7 @@
     "/owner/integrity": "/api/v2/owner/integrity",
     "/owner/legacy/recommendations/{recommendation_id}/execute": "/api/v2/owner/legacy/recommendations/{recommendation_id}/execute",
     "/owner/legacy/{club_id}": "/api/v2/owner/legacy/{club_id}",
+    "/owner/legacy/{club_id}/desk": "/api/v2/owner/legacy/{club_id}/desk",
     "/owner/legacy/{club_id}/metrics": "/api/v2/owner/legacy/{club_id}/metrics",
     "/owner/legacy/{club_id}/page": "/api/v2/owner/legacy/{club_id}/page",
     "/owner/legacy/{club_id}/policies/preset": "/api/v2/owner/legacy/{club_id}/policies/preset",
