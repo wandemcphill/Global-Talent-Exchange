@@ -15,11 +15,25 @@ from app.owner_console.ai import inbox_body
 from app.owner_console.models import OwnerInboxItem
 
 OPERATING_SPEND = "operating_spend"
+RECRUITMENT = "recruitment"
+PRESEASON_RESPONSE = "preseason_response"
 MODES = ("owner_only", "approval_required", "automatic")
 PRESETS: dict[str, dict[str, Any]] = {
-    "owner_controlled": {"mode": "owner_only", "max_amount": None},
-    "balanced": {"mode": "approval_required", "max_amount": Decimal("1000")},
-    "executive_led": {"mode": "automatic", "max_amount": Decimal("5000")},
+    "owner_controlled": {
+        OPERATING_SPEND: {"mode": "owner_only", "max_amount": None},
+        RECRUITMENT: {"mode": "approval_required", "max_amount": Decimal("2000")},
+        PRESEASON_RESPONSE: {"mode": "owner_only", "max_amount": None},
+    },
+    "balanced": {
+        OPERATING_SPEND: {"mode": "approval_required", "max_amount": Decimal("1000")},
+        RECRUITMENT: {"mode": "approval_required", "max_amount": Decimal("5000")},
+        PRESEASON_RESPONSE: {"mode": "automatic", "max_amount": Decimal("1000")},
+    },
+    "executive_led": {
+        OPERATING_SPEND: {"mode": "automatic", "max_amount": Decimal("5000")},
+        RECRUITMENT: {"mode": "automatic", "max_amount": Decimal("8000")},
+        PRESEASON_RESPONSE: {"mode": "automatic", "max_amount": Decimal("500")},
+    },
 }
 
 
@@ -69,14 +83,18 @@ def apply_preset(session: Session, club_id: str, preset: str, *, actor_user_id: 
     if preset not in PRESETS:
         raise LegacyError("unknown_preset")
     spec = PRESETS[preset]
-    policy = set_task(
-        session,
-        club_id,
-        OPERATING_SPEND,
-        mode=spec["mode"],
-        max_amount=spec["max_amount"],
-        actor_user_id=actor_user_id,
-    )
+    for task_key, task_spec in spec.items():
+        set_task(
+            session,
+            club_id,
+            task_key,
+            mode=task_spec["mode"],
+            max_amount=task_spec["max_amount"],
+            actor_user_id=actor_user_id,
+        )
+    policy = policy_for(session, club_id, OPERATING_SPEND)
+    if policy is None:
+        raise LegacyError("preset_failed", 500)
     _audit(
         session,
         club_id=club_id,

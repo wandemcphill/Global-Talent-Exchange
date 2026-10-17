@@ -2240,6 +2240,18 @@
         "response_model": null
       },
       {
+        "method": "GET",
+        "path": "/api/owner/legacy/{club_id}/metrics",
+        "handler": "read_metrics",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/owner/legacy/{club_id}/page",
+        "handler": "read_club_page",
+        "response_model": null
+      },
+      {
         "method": "POST",
         "path": "/api/owner/legacy/{club_id}/policies/preset",
         "handler": "apply_preset",

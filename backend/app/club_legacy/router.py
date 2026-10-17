@@ -136,3 +136,30 @@ def execute_recommendation(
         return _recommendation(record)
 
     return _run(session, go)
+
+
+@router.get("/{club_id}/page")
+def read_club_page(
+    club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)
+) -> dict[str, Any]:
+    def go():
+        delegation.require_owner(session, club_id, user.id)
+        from app.club_legacy.operations import club_page
+
+        return club_page(session, club_id)
+
+    return _run(session, go)
+
+
+@router.get("/{club_id}/metrics")
+def read_metrics(
+    club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)
+) -> dict[str, Any]:
+    del club_id, user
+
+    def go():
+        from app.club_legacy.operations import metrics
+
+        return metrics(session)
+
+    return _run(session, go)
