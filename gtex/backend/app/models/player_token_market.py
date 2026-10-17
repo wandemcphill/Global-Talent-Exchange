@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import ForeignKey, Integer, JSON, Numeric, String, UniqueConstraint
+from sqlalchemy import Date, ForeignKey, Integer, JSON, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKeyMixin
@@ -117,4 +118,20 @@ class PlayerShareEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     actor_user: Mapped["User | None"] = relationship("User", foreign_keys=[actor_user_id])
 
 
-__all__ = ["PlayerShareEvent", "PlayerShareHolding", "PlayerShareMarket"]
+class PlayerSharePriceSnapshot(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    __tablename__ = "player_share_price_snapshots"
+    __table_args__ = (UniqueConstraint("player_id", "snapshot_date", name="uq_player_share_price_snapshots_player_date"),)
+
+    player_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("ingestion_players.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    market_id: Mapped[str] = mapped_column(String(36), ForeignKey("player_share_markets.id", ondelete="CASCADE"), nullable=False)
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    share_price_coin: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    circulating_shares: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+
+
+__all__ = ["PlayerShareEvent", "PlayerShareHolding", "PlayerShareMarket", "PlayerSharePriceSnapshot"]

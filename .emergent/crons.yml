@@ -1,0 +1,8 @@
+crons:
+  - name: share-price-snapshot
+    description: "Records each player share market's closing price daily for the price history chart"
+    cron: "5 0 * * *"
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    endpoint: "{{BASE_URL}}/api/v2/players/markets/price-snapshots/cron"
+    method: POST
+    enabled: true

@@ -146,6 +146,8 @@ class PlayerShareMarketListItemView(BaseModel):
     is_regen: bool = False
     current_club_name: str | None = None
     age: int | None = None
+    rating: int | None = None
+    potential: int | None = None
     share_price_coin: Decimal
     liquidity_coin: Decimal
     total_shares: int
@@ -164,6 +166,24 @@ class PlayerShareMarketListView(BaseModel):
     offset: int
     total: int
     pagination: PaginationMeta | None = None
+
+
+class PlayerSharePricePointView(BaseModel):
+    at: datetime
+    price: Decimal
+    kind: str
+
+
+class PlayerSharePriceHistoryView(BaseModel):
+    player_id: str
+    range: str
+    points: list[PlayerSharePricePointView]
+    open_price: Decimal
+    current_price: Decimal
+    high_price: Decimal
+    low_price: Decimal
+    change_pct: Decimal
+    trade_count: int
 
 
 class PlayerShareMarketNationView(BaseModel):

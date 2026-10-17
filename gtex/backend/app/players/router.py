@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import hmac
+import logging
+import os
 from typing import Literal, Never
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -52,6 +55,7 @@ from app.players.token_schemas import (
     PlayerShareMarketListView,
     PlayerShareMarketNationView,
     PlayerShareMarketView,
+    PlayerSharePriceHistoryView,
     PlayerSharePerformanceRequest,
     PlayerSharePurchaseRequest,
     PlayerSharePurchaseView,
@@ -184,6 +188,26 @@ def list_player_share_market_nations(
     return [PlayerShareMarketNationView.model_validate(row) for row in PlayerTokenMarketService(session).list_market_nations(source=source)]
 
 
+def _run_price_snapshot() -> None:
+    from app.core.database import get_session_factory
+
+    with get_session_factory()() as session:
+        written = PlayerTokenMarketService(session).snapshot_share_prices()
+        session.commit()
+    logging.getLogger(__name__).info("player_share_price_snapshot written=%s", written)
+
+
+@router.post("/markets/price-snapshots/cron", status_code=status.HTTP_202_ACCEPTED)
+def trigger_player_share_price_snapshot(request: Request, background_tasks: BackgroundTasks) -> dict[str, str]:
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    header = request.headers.get("authorization") or ""
+    token = header[7:] if header.lower().startswith("bearer ") else ""
+    if not token or not hmac.compare_digest(token, os.environ["WEBHOOK_CRON_SECRET"]):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid cron credentials.")
+    background_tasks.add_task(_run_price_snapshot)
+    return {"status": "accepted", "run_id": request.headers.get("x-webhook-id") or ""}
+
+
 @router.get("/markets", response_model=PlayerShareMarketListView)
 def list_player_share_markets(
     request: Request,
@@ -194,6 +218,7 @@ def list_player_share_markets(
     search: str | None = Query(default=None),
     source: Literal["regen", "real"] | None = Query(default=None),
     nation: str | None = Query(default=None, max_length=80),
+    sort: Literal["name", "wonderkid"] | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> PlayerShareMarketListView:
     params = resolve_pagination(page=page, per_page=per_page, limit=limit, offset=offset)
@@ -211,8 +236,9 @@ def list_player_share_markets(
             limit=params.per_page,
             offset=params.offset,
             search=search,
-            source=source,
+            source="regen" if sort == "wonderkid" else source,
             nation=nation,
+            sort=sort,
         )
     except PlayerTokenMarketError as exc:
         raise_player_token_market_http_exception(exc)
@@ -272,6 +298,19 @@ def list_player_share_events(
     except PlayerTokenMarketError as exc:
         raise_player_token_market_http_exception(exc)
     return [PlayerShareEventView.model_validate(item) for item in events]
+
+
+@router.get("/{player_id}/shares/price-history", response_model=PlayerSharePriceHistoryView)
+def get_player_share_price_history(
+    player_id: str,
+    range: Literal["7d", "30d", "all"] = Query(default="30d"),
+    session: Session = Depends(get_session),
+) -> PlayerSharePriceHistoryView:
+    try:
+        payload = PlayerTokenMarketService(session).get_price_history(player_id=player_id, range_key=range)
+    except PlayerTokenMarketError as exc:
+        raise_player_token_market_http_exception(exc)
+    return PlayerSharePriceHistoryView.model_validate(payload)
 
 
 @router.get("/me/shares/holdings", response_model=list[PlayerShareHoldingView])

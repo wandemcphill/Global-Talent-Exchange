@@ -1,15 +1,17 @@
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { X } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmt, label } from "@/lib/owner";
 import { Btn, Chip, Loading, TraitBar } from "@/components/gtex/ui";
 import { PlayerCard } from "@/components/gtex/PlayerCard";
+import { PriceHistoryChart } from "@/components/gtex/PriceHistoryChart";
 
 function ShareBox({ playerId }: { playerId: string }) {
   const [count, setCount] = useState("1");
+  const qc = useQueryClient();
   const { data, refetch, isError } = useQuery({ queryKey: ["share-market", playerId], queryFn: async () => (await api.get(`/v2/players/${playerId}/shares/market`)).data, retry: false });
   if (isError) return <p className="text-xs text-slate-500" data-testid="drawer-no-share-market">No share market issued for this player yet.</p>;
   if (!data) return null;
@@ -18,6 +20,7 @@ function ShareBox({ playerId }: { playerId: string }) {
       const { data: res } = await api.post(`/v2/players/${playerId}/shares/buy`, { share_count: Number(count) });
       toast.success(`Bought ${count} shares · ${fmt(res.gross_amount_coin, 4)} GTX`);
       refetch();
+      qc.invalidateQueries({ queryKey: ["share-price-history", playerId] });
     } catch (e) {
       toast.error(errMsg(e));
     }
@@ -34,6 +37,7 @@ function ShareBox({ playerId }: { playerId: string }) {
         <input data-testid="drawer-share-count" className="gx-input w-24" value={count} onChange={(e) => setCount(e.target.value.replace(/\D/g, ""))} />
         <Btn onClick={buy} disabled={!Number(count)} data-testid="drawer-buy-shares">Buy shares</Btn>
       </div>
+      <PriceHistoryChart playerId={playerId} />
     </div>
   );
 }
