@@ -116,6 +116,7 @@ def register_versioned_route_aliases(app: FastAPI, routes: Iterable[object]) -> 
 
         if isinstance(route, APIRoute):
             alias_route = _clone_api_route(app, route=route, versioned_path=versioned_path)
+            _promote_over_shadowing_routes(app, alias_route)
         else:
             alias_route = _clone_websocket_route(app, route=route, versioned_path=versioned_path)
 
@@ -180,6 +181,25 @@ def _clone_websocket_route(app: FastAPI, *, route: APIWebSocketRoute, versioned_
         dependencies=list(route.dependencies or ()),
     )
     return app.router.routes[-1]
+
+
+def _promote_over_shadowing_routes(app: FastAPI, alias_route: APIRoute) -> None:
+    # A static alias such as /api/v2/players/markets must win over an earlier /api/v2/players/{player_id}.
+    if "{" in alias_route.path:
+        return
+    routes = app.router.routes
+    methods = alias_route.methods or set()
+    for index, existing in enumerate(routes):
+        if existing is alias_route:
+            return
+        if not isinstance(existing, APIRoute) or "{" not in existing.path:
+            continue
+        if methods and existing.methods and not (methods & existing.methods):
+            continue
+        if existing.path_regex.match(alias_route.path):
+            routes.remove(alias_route)
+            routes.insert(index, alias_route)
+            return
 
 
 def _route_alias_priority(path: str) -> int:
