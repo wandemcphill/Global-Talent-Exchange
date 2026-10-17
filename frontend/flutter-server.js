@@ -2,7 +2,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 
-const ROOT = process.env.GTEX_FLUTTER_WEB_DIR || "/app/gtex/frontend/build/web";
+const ROOT = process.env.GTEX_FLUTTER_WEB_DIR || path.resolve(__dirname, "../gtex/frontend/web_dist");
 const PORT = Number(process.env.PORT || 3000);
 const TYPES = {
   ".html": "text/html; charset=utf-8", ".js": "application/javascript", ".mjs": "application/javascript", ".json": "application/json",

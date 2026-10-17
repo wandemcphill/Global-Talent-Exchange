@@ -123,3 +123,24 @@ Flutter has no screens yet for: Finance (balances, Paystack deposit with /paymen
 - P2: The regen share list item now carries an image field. Regen pricing: DONE (iteration 8).
 - P1: /api/market/players is slow (about 60s) on the live DB; React uses /api/v2/players instead.
 - Future: Phase 3 manager requests and regen pressure; Phase 4 unified ledger and anti-collusion hardening; Phase 5 gifting and sponsor inventory.
+
+## Iteration 14 (2026-10-17): Alert whistle, full React port, Flutter at the main address
+- Whistle: assets/media/gtex_owner_alert_whistle.wav is an original two-blast pea-whistle synthesised in code. data/owner_alert_sound.dart (DeviceOwnerAlertSound uses just_audio + shared_preferences; keys gtex.owner.alerts.muted and gtex.owner.alerts.heard). It plays once per new urgent decision or wonderkid jump id when the console loads. The header has a mute toggle (key owner-console-alert-sound-toggle).
+- Ported every React owner flow to Flutter in lib/features/owner_console/ops/:
+  - Finance: balances, treasuries, Paystack deposit with a #/payment/callback return, withdraw with eligibility, ledger, Fan Coin, support units, coin-trader link.
+  - Club Setup: onboarding stepper (activate, sign squad, manager, first competition or skip) and new club.
+  - Competitions: list, enter (confirm), host, join-by-code, detail with standings, play-next, forfeit and fixtures, and the Match Center with replay, owner view and gift rail.
+  - Club actions: facilities, capital inject, distribute and sister move, sponsors, supporters, disclosures.
+  - Manager & squad: manager sheet, fire, hire, mentality, squad list, signings and sister-club transfer.
+  - Academy: intake, advance and regen cards.
+  - Owner Inbox: open, resolved and all filters with inline decisions.
+- Generic client data/owner_ops_api.dart (OwnerOpsClient / GteOwnerOpsClient) plus the shared Ops widgets.
+- Route /payment/callback lives in router/app_router.dart, keyed by query.
+- GTE_API_BASE_URL=same-origin is now supported (Uri.base.origin).
+- Serving: Flutter is built with `flutter build web --release --base-href / --output /app/gtex/frontend/web_dist --dart-define=GTE_API_BASE_URL=same-origin --dart-define=GTE_BACKEND_MODE=strict_live`. In frontend/package.json, "start" runs `node flutter-server.js` (serving web_dist) and "build" copies web_dist into frontend/build. The React src, public and config files were DELETED. The React npm dependencies are still listed in package.json but unused.
+- Tests: test/owner_console passes 31/31. Testing agent iteration_10: 100% read-only side-by-side check. Its one low-priority issue (the callback screen not refreshing on same-page navigation) is fixed with a ValueKey.
+- Rebuild web_dist after any Flutter change.
+
+## Club Legacy Master Build Plan (uploaded 2026-10-17)
+- The Phase 0 audit and implementation map is in /app/memory/club_legacy_phase0_map.md and is AWAITING USER APPROVAL before any code. The proposed first slice is Slice A: continents, GM/HoYD staff and the delegation policy engine.
+

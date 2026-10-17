@@ -61,11 +61,8 @@
     "zod": "3.24.4"
   },
   "scripts": {
-    "start": "craco start",
-    "start:flutter": "node flutter-server.js",
-    "start:react-console": "craco start",
-    "build": "craco build",
-    "test": "craco test"
+    "start": "node flutter-server.js",
+    "build": "rm -rf build && cp -r ../gtex/frontend/web_dist build"
   },
   "browserslist": {
     "production": [

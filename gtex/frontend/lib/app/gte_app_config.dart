@@ -66,6 +66,9 @@ String resolveGteApiBaseUrl({
   required GteBackendMode backendMode,
 }) {
   final String baseUrl = rawBaseUrl.trim();
+  if (baseUrl == 'same-origin') {
+    return Uri.base.origin;
+  }
   if (baseUrl.isNotEmpty) {
     return baseUrl;
   }
@@ -101,6 +104,9 @@ String resolveGteApiBaseUrlForRuntimeEnvironment({
   ),
 }) {
   final String baseUrl = rawBaseUrl.trim();
+  if (baseUrl == 'same-origin') {
+    return Uri.base.origin;
+  }
   if (baseUrl.isNotEmpty) {
     return baseUrl;
   }

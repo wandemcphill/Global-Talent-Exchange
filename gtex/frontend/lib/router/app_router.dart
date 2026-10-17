@@ -123,6 +123,7 @@ GoRouter buildGtexAppRouter({
                 NoTransitionPage<void>(
                   key: state.pageKey,
                   child: OwnerPaymentCallbackScreen(
+                    key: ValueKey<String>('payment-callback-${state.uri.query}'),
                     client: GteOwnerOpsClient(dependenciesBuilder(context).createAuthedApi()),
                     reference: state.uri.queryParameters['reference'] ?? state.uri.queryParameters['trxref'],
                     onDone: () => GoRouter.of(context).go(const GteNavigationRoute.home().path),

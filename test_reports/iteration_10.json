@@ -1,0 +1,31 @@
+{
+  "summary": "Flutter Owner Console side-by-side read-only verification complete. Logged in via /flutter-preview as SUPER_ADMIN root admin and confirmed: (a) Owner Console header with wallet chip (50 GTX), SUPER_ADMIN chip, and 'Alert whistle on/off' toggle - clicking it flips state (on -> off -> on) with no backend write; (b) Left menu has all 10 items: Control Center, Club Setup, My Clubs, Market & Transfers, Manager & Squad, Academy / Regens, Competitions, Finance, Owner Inbox, Admin Review; (c) Finance renders Balances panel (GTEX Coin Total 50 GTX, Fan Coin 0 FAN, Withdrawable 50, Non-withdrawable 0, Earned 0, Deposited 0, Promotional 0, Pending Review 0, Exchange & Traders 50), Deposit panel with amount field + 'You receive 5.56 GTX at the treasury rate of ₦900 per GTEX Coin.' preview + 'Pay with Paystack' button (Paystack IS configured as 'live payments' - no 'keys not connected' note), Withdraw panel with 'Request withdrawal' button, and Unified ledger; (d) Club Setup shows 'Claim your first club' / 'Create club' panel (admin owns 0 clubs); (e) Owner Inbox shows 'Nothing here' empty state; (f) My Clubs / Manager & Squad / Academy / Regens all show 'No club yet' first tab; (g) Payment callback: without reference -> 'Missing payment reference.' + 'Back to Owner Console'; with ?reference=TEST_FAKE_REF (fresh load) -> 'We could not verify this payment. If you were charged, contact support with your reference.' + 'Reference: TEST_FAKE_REF' + 'Back to Owner Console' (no coins credited - wallet stayed at 50 GTX); (h) Mobile 390x844 after login: Owner Console header, wallet chip, whistle, SUPER_ADMIN chip and all 10 left menu items (as a horizontal strip) are present; documentElement.scrollWidth == clientWidth == 390 (no horizontal overflow). (i) Ran `flutter test test/owner_console` locally - all 31 widget tests pass (owner_console_screen_test + owner_ops_sections_test). Strictly READ-ONLY: no deposits, withdrawals, club creation/activation, signings, hosting, decisions, approvals, releases or any write actions performed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "OwnerPaymentCallbackScreen", "issue": "When navigating from #/payment/callback (no reference) to #/payment/callback?reference=TEST_FAKE_REF in the SAME page without a full reload, GoRouter re-uses the existing State so initState does not re-run; the old 'Missing payment reference.' message remains even though 'Reference: TEST_FAKE_REF' is now rendered below. Fresh page load with the fake reference shows the correct 'We could not verify this payment' message. Low priority (users land here via Paystack external redirect, which is always a fresh load), but worth guarding against by keying the screen on the reference value or using didUpdateWidget.", "selector": "key='owner-payment-callback-message'", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/gtex/frontend/test/owner_console/owner_console_screen_test.dart",
+    "/app/gtex/frontend/test/owner_console/owner_ops_sections_test.dart",
+    "/app/test_reports/iteration_10.json"
+  ],
+  "action_items": [
+    "(Optional/low) Rebuild OwnerPaymentCallbackScreen when the reference query param changes within the same session so an SPA-side hash navigation picks up the new ref (currently only matters if the UI itself navigates between the two forms of the callback URL; the real-world Paystack redirect is always a fresh page load and works correctly)."
+  ],
+  "critical_code_review_comments": [
+    "Flutter semantics requires activating via 'Enable accessibility' (click on flt-semantics-placeholder). This is a Flutter-web limitation; already noted in iter 9. The semantics labels for the whistle button DO flip between 'Alert whistle on' and 'Alert whistle off', which is correct.",
+    "/signin deep link still returns 'Route unavailable' (GoException: no routes for location: /signin). Login is only reachable from the top-right 'Sign in' button on the landing page (same note as iter 9).",
+    "After login, 7+ background requests return 401 in console (notifications poll etc.) which do not break the UI but are noisy; worth investigating if these are stale tokens being retried."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (read-only, no backend tests run)", "frontend": "100% (every required panel / tab / empty-state / mobile layout verified; 31/31 Flutter widget tests pass)"},
+  "test_credentials": "vidvimedialtd@gmail.com / Desolamcphill89. (SUPER_ADMIN root admin, LIVE Supabase)",
+  "seed_data_creation": "none (strictly read-only)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Flutter Owner Console at /flutter-preview/index.html#/ is at parity with the React preview for every section listed in the review request (Control Center, Club Setup, My Clubs, Market & Transfers, Manager & Squad, Academy / Regens, Competitions, Finance, Owner Inbox, Admin Review). Whistle toggle persists via device storage (no backend write). Payment callback handles both no-reference and bad-reference cases. Mobile layout is clean at 390x844 (no overflow). All 31 Flutter widget tests pass. Only nitpick: in-SPA hash navigation does not refresh OwnerPaymentCallbackScreen state. Supabase cold start can need 30-40s after submitting login; keep the long wait. The admin owns 0 clubs so club-scoped tabs show empty states ('No club yet', 'Not in a competition yet', 'Inbox clear', 'Nothing here')."
+}
