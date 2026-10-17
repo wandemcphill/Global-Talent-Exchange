@@ -1,7 +1,7 @@
 """Encrypt KYC/bank identifier columns and add blind-index hashes.
 
 Revision ID: 20261016_0131_encrypt_kyc_bank_fields
-Revises: 20261013_0129_open_default_launch_flags
+Revises: 20261016_0130_share_event_actor_fingerprint
 
 Widens the plaintext-identifier columns that now hold ``enc:v1:`` ciphertext,
 drops the unusable nin/bvn indexes (ciphertext cannot be searched), and adds
