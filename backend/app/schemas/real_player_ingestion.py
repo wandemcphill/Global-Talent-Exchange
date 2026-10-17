@@ -21,6 +21,7 @@ class RealPlayerSeedInput(BaseModel):
     canonical_name: str
     display_name: str | None = None
     known_aliases: list[str] = Field(default_factory=list)
+    source_metadata: dict[str, object] = Field(default_factory=dict)
     nationality: str | None = None
     nationality_code: str | None = None
     national_team_name: str | None = None
