@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from functools import lru_cache
+import logging
 import os
 from pathlib import Path
 import re
@@ -120,6 +121,7 @@ class SettingsSource(BaseModel):
     )
     auth_secret: str | None = Field(default=None, validation_alias="GTE_AUTH_SECRET")
     media_signing_secret: str | None = Field(default=None, validation_alias="GTE_MEDIA_SIGNING_SECRET")
+    field_encryption_key: str | None = Field(default=None, validation_alias="GTE_FIELD_ENCRYPTION_KEY")
     crypto_deposit_enabled: bool = Field(default=False, validation_alias="GTE_CRYPTO_DEPOSIT_ENABLED")
     crypto_provider_key: str = Field(default="crypto_fiat", validation_alias="GTE_CRYPTO_PROVIDER_KEY")
     run_migration_check: bool = Field(default=True, validation_alias="GTE_RUN_MIGRATION_CHECK")
@@ -792,6 +794,7 @@ class Settings:
     broadcast_max_pending_messages: int
     auth_secret: str
     media_signing_secret: str
+    field_encryption_key: str | None
     crypto_deposit_enabled: bool
     crypto_provider_key: str
     run_migration_check: bool
@@ -2002,6 +2005,41 @@ def _require_secret(name: str, value: str | None) -> str:
     return candidate
 
 
+_FIELD_ENCRYPTION_DEV_KEY_WARNING_EMITTED = False
+
+
+def _resolve_field_encryption_key(source: SettingsSource, *, auth_secret: str) -> str:
+    """Resolve the field-encryption key.
+
+    Production-like environments must supply GTE_FIELD_ENCRYPTION_KEY; other
+    environments derive a deterministic key from the auth secret so tests and
+    local development need no extra configuration.
+    """
+    global _FIELD_ENCRYPTION_DEV_KEY_WARNING_EMITTED
+    raw = _normalized_optional_setting(source.field_encryption_key)
+    if raw is not None:
+        from app.core.field_encryption import validate_field_encryption_keys
+
+        validate_field_encryption_keys(raw)
+        return raw
+    from app.core.field_encryption import derived_development_fernet_key, is_production_environment
+
+    if is_production_environment(source.app_env):
+        raise ValueError(
+            "GTE_FIELD_ENCRYPTION_KEY must be set via environment variables in "
+            "production-like environments. Generate a Fernet key with: "
+            'python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+        )
+    if not _FIELD_ENCRYPTION_DEV_KEY_WARNING_EMITTED:
+        _FIELD_ENCRYPTION_DEV_KEY_WARNING_EMITTED = True
+        logging.getLogger(__name__).warning(
+            "GTE_FIELD_ENCRYPTION_KEY is not set; deriving a deterministic "
+            "development key from GTE_AUTH_SECRET. Set a real Fernet key "
+            "outside of development/test environments."
+        )
+    return derived_development_fernet_key(auth_secret)
+
+
 def _validate_bootstrap_admin_config(source: SettingsSource) -> None:
     if not source.bootstrap_admin_enabled:
         return
@@ -2067,6 +2105,7 @@ def load_settings(
     database_url = resolve_database_url(resolved_environ)
     auth_secret = _require_secret("GTE_AUTH_SECRET", source.auth_secret)
     media_signing_secret = _require_secret("GTE_MEDIA_SIGNING_SECRET", source.media_signing_secret)
+    field_encryption_key = _resolve_field_encryption_key(source, auth_secret=auth_secret)
     return Settings(
         app_name=source.app_name,
         app_version=source.app_version,
@@ -2105,6 +2144,7 @@ def load_settings(
         broadcast_max_pending_messages=source.broadcast_max_pending_messages,
         auth_secret=auth_secret,
         media_signing_secret=media_signing_secret,
+        field_encryption_key=field_encryption_key,
         crypto_deposit_enabled=source.crypto_deposit_enabled,
         crypto_provider_key=source.crypto_provider_key,
         run_migration_check=source.run_migration_check,
