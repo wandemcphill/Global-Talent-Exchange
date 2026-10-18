@@ -50,9 +50,7 @@ def _enable(app, enabled: bool = True) -> None:
 
 
 def _claim(client, headers) -> str:
-    response = client.post(
-        "/api/owner/clubs/claim", headers=headers, json={"city_name": "Lagos", "country_code": "NG"}
-    )
+    response = client.post("/api/owner/clubs/claim", headers=headers, json={"city_name": "Lagos", "country_code": "NG"})
     assert response.status_code == 200, response.text
     return response.json()["club_id"]
 
@@ -132,14 +130,18 @@ def test_purchase_debits_the_club_once_and_reuses_the_idempotency_key(client, bo
         assert first.status == "owned"
         assert (
             session.scalar(
-                select(func.count()).select_from(LedgerTransaction).where(LedgerTransaction.idempotency_key == "asset:p4-jet-once")
+                select(func.count())
+                .select_from(LedgerTransaction)
+                .where(LedgerTransaction.idempotency_key == "asset:p4-jet-once")
             )
             == 1
         )
         assert _debit_account_id(session, "asset:p4-jet-once") == treasury.id
         assert (
             session.scalar(
-                select(func.count()).select_from(ClubLegacyAsset).where(ClubLegacyAsset.idempotency_key == "p4-jet-once")
+                select(func.count())
+                .select_from(ClubLegacyAsset)
+                .where(ClubLegacyAsset.idempotency_key == "p4-jet-once")
             )
             == 1
         )
@@ -154,7 +156,9 @@ def test_purchase_debits_the_club_once_and_reuses_the_idempotency_key(client, bo
     with app.state.session_factory() as session:
         assert (
             session.scalar(
-                select(func.count()).select_from(LedgerTransaction).where(LedgerTransaction.idempotency_key == "asset:p4-jet-once")
+                select(func.count())
+                .select_from(LedgerTransaction)
+                .where(LedgerTransaction.idempotency_key == "asset:p4-jet-once")
             )
             == 1
         )
@@ -225,7 +229,9 @@ def test_transfer_is_atomic_and_writes_provenance(client, bootstrap_admin_header
             memo="Rival float",
         )
         session.add(
-            ClubLegacyMarketSettings(settings_key="club_legacy_market", transfer_fee_rate=Decimal("0.1000"), jet_cap=5, coach_cap=10)
+            ClubLegacyMarketSettings(
+                settings_key="club_legacy_market", transfer_fee_rate=Decimal("0.1000"), jet_cap=5, coach_cap=10
+            )
         )
         session.flush()
         priced = transfer_asset(
@@ -241,7 +247,9 @@ def test_transfer_is_atomic_and_writes_provenance(client, bootstrap_admin_header
         assert priced.price == Decimal("1000.00")
         assert priced.from_owner_ref == club_id
         assert priced.to_owner_ref == rival_club.id
-        fee_tx = session.scalar(select(LedgerTransaction).where(LedgerTransaction.idempotency_key == "transfer-fee:p4-priced"))
+        fee_tx = session.scalar(
+            select(LedgerTransaction).where(LedgerTransaction.idempotency_key == "transfer-fee:p4-priced")
+        )
         assert fee_tx is not None
         assert "fee" in (fee_tx.description or "").lower()
         fee_entries = session.scalars(select(LedgerEntry).where(LedgerEntry.transaction_id == fee_tx.id)).all()
@@ -428,7 +436,9 @@ def test_supply_cap_holds_for_two_concurrent_purchases_and_club_caps_stay(client
         admin = _admin(session)
         _cheap(session, "gtex-jet-harbour", price="100", supply=20)
         session.add(
-            ClubLegacyMarketSettings(settings_key="club_legacy_market", transfer_fee_rate=Decimal("0.0500"), jet_cap=1, coach_cap=1)
+            ClubLegacyMarketSettings(
+                settings_key="club_legacy_market", transfer_fee_rate=Decimal("0.0500"), jet_cap=1, coach_cap=1
+            )
         )
         session.flush()
         owned = session.scalar(
@@ -477,7 +487,12 @@ def test_listings_reject_wash_trades_and_a_failed_resale_stays_open(client, boot
         _cheap(session, "gtex-jet-harbour", price="100", supply=20)
         _cheap(session, "gtex-coach-lagoon", price="100", supply=20)
         jet = purchase_asset(
-            session, club_id=club_id, user_id=admin.id, sku="gtex-jet-harbour", owner_class="club", idempotency_key="p4-auction-jet"
+            session,
+            club_id=club_id,
+            user_id=admin.id,
+            sku="gtex-jet-harbour",
+            owner_class="club",
+            idempotency_key="p4-auction-jet",
         )
         auction = list_asset(session, asset_id=jet.id, user_id=admin.id, price="1000", kind="auction")
         with pytest.raises(LegacyError) as seller_bid:
@@ -583,7 +598,9 @@ def test_fee_comes_from_the_admin_row_or_the_documented_default(client, bootstra
         listing = list_asset(session, asset_id=asset.id, user_id=admin.id, price="1000")
         assert listing.fee == Decimal("50.00")
         session.add(
-            ClubLegacyMarketSettings(settings_key="club_legacy_market", transfer_fee_rate=Decimal("0.2500"), jet_cap=4, coach_cap=8)
+            ClubLegacyMarketSettings(
+                settings_key="club_legacy_market", transfer_fee_rate=Decimal("0.2500"), jet_cap=4, coach_cap=8
+            )
         )
         session.flush()
         assert market_limits(session)[0] == Decimal("0.2500")
@@ -608,7 +625,9 @@ def test_fee_comes_from_the_admin_row_or_the_documented_default(client, bootstra
             idempotency_key="p4-fee-sale",
         )
         assert bought.fee == Decimal("250.00")
-        fee_tx = session.scalar(select(LedgerTransaction).where(LedgerTransaction.idempotency_key == "sale-fee:p4-fee-sale"))
+        fee_tx = session.scalar(
+            select(LedgerTransaction).where(LedgerTransaction.idempotency_key == "sale-fee:p4-fee-sale")
+        )
         assert fee_tx is not None
         account = session.get(LedgerAccount, _debit_account_id(session, "sale-fee:p4-fee-sale"))
         assert account is not None

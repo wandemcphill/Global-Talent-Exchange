@@ -49,9 +49,7 @@ RELATIONSHIP_MORALE = 9
 
 
 def market_limits(session: Session) -> tuple[Decimal, int, int]:
-    row = session.scalar(
-        select(ClubLegacyMarketSettings).where(ClubLegacyMarketSettings.settings_key == SETTINGS_KEY)
-    )
+    row = session.scalar(select(ClubLegacyMarketSettings).where(ClubLegacyMarketSettings.settings_key == SETTINGS_KEY))
     if row is None:
         return DEFAULT_TRANSFER_FEE_RATE, DEFAULT_JET_CAP, DEFAULT_COACH_CAP
     return Decimal(row.transfer_fee_rate), int(row.jet_cap), int(row.coach_cap)
@@ -292,6 +290,7 @@ def resolve_gift(session: Session, *, gift_id: str, accept: bool, actor_user_id:
         raise LegacyError("asset_unavailable", 409)
     if actor_user_id is not None:
         from app.models.user import User, UserRole
+
         actor = session.get(User, actor_user_id)
         is_admin = actor is not None and actor.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}
         is_recipient = actor_user_id == gift.recipient_ref
@@ -458,7 +457,6 @@ def _reject_related_trade(session: Session, *, asset: ClubLegacyAsset, buyer_clu
         raise LegacyError("wash_trade", 409, "Related clubs cannot trade this asset with each other.")
 
 
-
 def place_bid(session: Session, *, listing_id: str, bidder_user_id: str, amount) -> ClubLegacyBid:
     listing = session.get(ClubLegacyListing, listing_id)
     if listing is None or listing.status != "auction":
@@ -486,11 +484,13 @@ def place_bid(session: Session, *, listing_id: str, bidder_user_id: str, amount)
 
     if asset is not None and asset.club_id is not None:
         seller_club = session.get(ClubProfile, asset.club_id)
-        bidder_clubs = session.scalars(
-            select(ClubProfile).where(ClubProfile.owner_user_id == bidder_user_id)
-        ).all()
+        bidder_clubs = session.scalars(select(ClubProfile).where(ClubProfile.owner_user_id == bidder_user_id)).all()
         for club in bidder_clubs:
-            if seller_club is not None and club.owner_user_id == seller_club.owner_user_id and club.id != seller_club.id:
+            if (
+                seller_club is not None
+                and club.owner_user_id == seller_club.owner_user_id
+                and club.id != seller_club.id
+            ):
                 remember_refusal(
                     session,
                     club_id=seller_club.id,
