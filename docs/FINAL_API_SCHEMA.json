@@ -7570,6 +7570,278 @@
         "response_model": "OrganizationInviteView"
       }
     ],
+    "owner": [
+      {
+        "method": "POST",
+        "path": "/api/owner/admin/flags/{flag_id}/{decision}",
+        "handler": "flag_decision",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/admin/payouts/{event_id}/release",
+        "handler": "release",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/owner/admin/review-queue",
+        "handler": "review_queue",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/admin/withdrawals/{withdrawal_id}/review",
+        "handler": "review",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/capital/distribute",
+        "handler": "distribute",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/capital/inject",
+        "handler": "inject",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/capital/sister-transfer",
+        "handler": "sister",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/clubs/claim",
+        "handler": "claim_club",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/owner/clubs/{club_id}",
+        "handler": "club",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/clubs/{club_id}/academy/intake",
+        "handler": "intake",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/clubs/{club_id}/activate",
+        "handler": "activate",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/clubs/{club_id}/advance",
+        "handler": "advance",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/clubs/{club_id}/facilities/{kind}/upgrade",
+        "handler": "upgrade",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/clubs/{club_id}/finish-onboarding",
+        "handler": "finish_onboarding",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/clubs/{club_id}/manager",
+        "handler": "appoint",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/clubs/{club_id}/manager/fire",
+        "handler": "fire",
+        "response_model": null
+      },
+      {
+        "method": "PUT",
+        "path": "/api/owner/clubs/{club_id}/mentality",
+        "handler": "set_mentality",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/clubs/{club_id}/sign",
+        "handler": "sign",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/owner/clubs/{club_id}/supporters",
+        "handler": "supporters",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/owner/competitions",
+        "handler": "competitions_list",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/competitions",
+        "handler": "host",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/competitions/join-by-code",
+        "handler": "join_code",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/owner/competitions/{competition_id}",
+        "handler": "competition",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/competitions/{competition_id}/enter",
+        "handler": "enter",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/competitions/{competition_id}/play-next",
+        "handler": "play",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/owner/control-center",
+        "handler": "control_center",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/deposits/init",
+        "handler": "deposit_init",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/owner/deposits/verify/{reference}",
+        "handler": "deposit_verify",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/deposits/webhook",
+        "handler": "deposit_webhook",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/fan-coin/buy",
+        "handler": "fan_coin",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/owner/finance",
+        "handler": "finance",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/gifts/send",
+        "handler": "gift",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/owner/inbox",
+        "handler": "inbox",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/inbox/{item_id}/decide",
+        "handler": "decide",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/owner/integrity",
+        "handler": "integrity",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/owner/market/quote",
+        "handler": "quote",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/owner/matches/{match_id}",
+        "handler": "match",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/matches/{match_id}/forfeit",
+        "handler": "forfeit",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/owner/onboarding",
+        "handler": "onboarding",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/support-units/buy",
+        "handler": "support",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/transfers/internal",
+        "handler": "internal",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/transfers/internal/check",
+        "handler": "internal_check",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/withdrawals",
+        "handler": "withdraw",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/owner/withdrawals/eligibility",
+        "handler": "eligibility",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/owner/world/clubs",
+        "handler": "world",
+        "response_model": null
+      }
+    ],
     "ownership": [
       {
         "method": "POST",
@@ -8304,6 +8576,18 @@
         "response_model": "PlayerShareMarketListView"
       },
       {
+        "method": "GET",
+        "path": "/players/markets/nations",
+        "handler": "list_player_share_market_nations",
+        "response_model": "list[PlayerShareMarketNationView]"
+      },
+      {
+        "method": "POST",
+        "path": "/players/markets/price-snapshots/cron",
+        "handler": "trigger_player_share_price_snapshot",
+        "response_model": null
+      },
+      {
         "method": "POST",
         "path": "/players/match",
         "handler": "match_players",
@@ -8410,6 +8694,12 @@
         "path": "/players/{player_id}/shares/performance",
         "handler": "reprice_player_shares_from_performance",
         "response_model": "PlayerShareMarketView"
+      },
+      {
+        "method": "GET",
+        "path": "/players/{player_id}/shares/price-history",
+        "handler": "get_player_share_price_history",
+        "response_model": "PlayerSharePriceHistoryView"
       },
       {
         "method": "POST",
@@ -10682,6 +10972,12 @@
         "response_model": "ClubSponsorView"
       },
       {
+        "method": "POST",
+        "path": "/api/admin/sponsorship/offers/{offer_id}/broadcast",
+        "handler": "admin_broadcast_offer",
+        "response_model": "SponsorOfferBroadcastResult"
+      },
+      {
         "method": "PUT",
         "path": "/api/admin/sponsorship/offers/{offer_id}/rule",
         "handler": "admin_upsert_offer_rule",
@@ -10692,6 +10988,12 @@
         "path": "/api/admin/sponsorship/packages",
         "handler": "admin_list_packages",
         "response_model": "list[SponsorshipPackageView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/sponsorship/regen-endorsements",
+        "handler": "admin_create_regen_endorsement",
+        "response_model": "RegenEndorsementView"
       },
       {
         "method": "GET",
@@ -10740,6 +11042,24 @@
         "path": "/api/sponsorship/placements",
         "handler": "resolve_placements",
         "response_model": "SponsorshipPlacementResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/sponsorship/regen-endorsements/{deal_id}/respond",
+        "handler": "respond_regen_endorsement",
+        "response_model": "RegenEndorsementView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/sponsorship/regen-endorsements/{player_id}",
+        "handler": "list_regen_endorsements",
+        "response_model": "list[RegenEndorsementView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/sponsorship/regen-endorsements/{player_id}/badge",
+        "handler": "regen_endorsement_badge",
+        "response_model": null
       }
     ],
     "squad": [
@@ -10794,9 +11114,27 @@
     ],
     "story": [
       {
+        "method": "GET",
+        "path": "/api/admin/story-feed",
+        "handler": "admin_list_story_feed",
+        "response_model": "list[StoryFeedItemResponse]"
+      },
+      {
         "method": "POST",
         "path": "/api/admin/story-feed",
         "handler": "publish_story",
+        "response_model": "StoryFeedItemResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/story-feed/{story_id}/reject",
+        "handler": "reject_story",
+        "response_model": "StoryFeedItemResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/story-feed/{story_id}/schedule",
+        "handler": "schedule_story",
         "response_model": "StoryFeedItemResponse"
       },
       {
