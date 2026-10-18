@@ -28,6 +28,36 @@ String decisionRoute(String kind) {
   return _clubPath;
 }
 
+/// Decisions this close to their deadline are urgent.
+const Duration urgentWindow = Duration(hours: 6);
+
+String countdownLabel(Duration left) {
+  if (left <= Duration.zero) return 'Expiring now';
+  final int days = left.inDays;
+  final int hours = left.inHours % 24;
+  final int minutes = left.inMinutes % 60;
+  if (days > 0) return '${days}d ${hours}h left';
+  if (left.inHours > 0) return '${left.inHours}h ${minutes}m left';
+  return '${minutes < 1 ? 1 : minutes}m left';
+}
+
+bool isUrgentDecision(OwnerInboxEntry e, DateTime now) =>
+    e.respondBy != null && e.respondBy!.difference(now) <= urgentWindow;
+
+int compareByDeadline(OwnerInboxEntry a, OwnerInboxEntry b) {
+  final DateTime? x = a.respondBy, y = b.respondBy;
+  if (x != null && y != null && x != y) return x.compareTo(y);
+  if (x == null && y != null) return 1;
+  if (x != null && y == null) return -1;
+  return (b.priority == 'high' ? 1 : 0) - (a.priority == 'high' ? 1 : 0);
+}
+
+String? decisionDeadlineLine(OwnerInboxEntry entry, DateTime now) {
+  if (entry.respondBy == null) return null;
+  final bool urgent = isUrgentDecision(entry, now);
+  return '${urgent ? 'Respond soon' : 'Respond by'} · ${countdownLabel(entry.respondBy!.difference(now))}';
+}
+
 /// Decision actions that spend or move money ask for confirmation first.
 bool decisionMovesMoney(String kind, String action) =>
     const <String, String>{
@@ -172,7 +202,7 @@ class _Quiet extends StatelessWidget {
 }
 
 class _Stat extends StatelessWidget {
-  const _Stat(this.label, this.value, {this.warn = false});
+  const _Stat(this.label, this.value, {super.key, this.warn = false});
 
   final String label;
   final String value;
@@ -254,7 +284,10 @@ class _OwnerDecisionRowState extends State<OwnerDecisionRow> {
   @override
   Widget build(BuildContext context) {
     final OwnerInboxEntry e = widget.entry;
-    final Color accent = e.priority == 'high' ? GtexColors.red : GtexColors.gold;
+    final DateTime now = DateTime.now();
+    final bool urgent = isUrgentDecision(e, now);
+    final String? deadline = decisionDeadlineLine(e, now);
+    final Color accent = urgent || e.priority == 'high' ? GtexColors.red : GtexColors.gold;
     return Container(
       margin: const EdgeInsets.only(bottom: GtexSpacing.xs),
       decoration: BoxDecoration(
@@ -273,6 +306,31 @@ class _OwnerDecisionRowState extends State<OwnerDecisionRow> {
             trailing: GtexStatusChip(label: e.kind, color: GtexColors.gold, compact: true),
             onTap: widget.onTap,
           ),
+          if (deadline != null)
+            Padding(
+              key: Key('owner-decision-${e.id}-countdown'),
+              padding: const EdgeInsets.fromLTRB(GtexSpacing.sm, 0, GtexSpacing.sm, GtexSpacing.xs),
+              child: Row(
+                children: <Widget>[
+                  Icon(
+                    urgent ? Icons.alarm_rounded : Icons.timer_outlined,
+                    size: 14,
+                    color: urgent ? GtexColors.red : GtexColors.textSecondary,
+                  ),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      deadline,
+                      style: TextStyle(
+                        color: urgent ? GtexColors.red : GtexColors.textSecondary,
+                        fontSize: 12,
+                        fontWeight: urgent ? FontWeight.w900 : FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           if (e.actions.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(GtexSpacing.sm, 0, GtexSpacing.sm, GtexSpacing.sm),
@@ -310,6 +368,8 @@ class ControlCenterSection extends StatelessWidget {
     required this.onRetry,
     required this.onNavigate,
     required this.onClaim,
+    required this.city,
+    required this.country,
     required this.reader,
     required this.onResolved,
     this.claiming = false,
@@ -322,6 +382,8 @@ class ControlCenterSection extends StatelessWidget {
   final VoidCallback onRetry;
   final ValueChanged<String> onNavigate;
   final VoidCallback onClaim;
+  final TextEditingController city;
+  final TextEditingController country;
   final OwnerConsoleReader reader;
   final ValueChanged<String> onResolved;
   final bool claiming;
@@ -335,13 +397,11 @@ class ControlCenterSection extends StatelessWidget {
       onRetry: onRetry,
       builder: (OwnerControlCenter d) {
         bool mine(String? id) => clubId == null || id == null || id == clubId;
+        final DateTime now = DateTime.now();
         final List<OwnerInboxEntry> decisions = d.decisions
             .where((OwnerInboxEntry e) => mine(e.clubId))
             .toList()
-          ..sort(
-            (OwnerInboxEntry a, OwnerInboxEntry b) =>
-                (b.priority == 'high' ? 1 : 0) - (a.priority == 'high' ? 1 : 0),
-          );
+          ..sort(compareByDeadline);
         final List<OwnerInboxEntry> inbox =
             d.inbox.where((OwnerInboxEntry e) => mine(e.clubId)).toList();
         final List<OwnerClubHealth> health =
@@ -351,6 +411,26 @@ class ControlCenterSection extends StatelessWidget {
         final List<OwnerClubCard> clubs = d.clubs;
         final Set<String> myIds = clubs.map((OwnerClubCard c) => c.clubId).toSet();
         return _sectionList(<Widget>[
+          if (d.legacy.isNotEmpty)
+            GtexPanel(
+              key: const Key('owner-legacy-ratings'),
+              title: 'Club Legacy',
+              subtitle: d.legacy.first.continentName ?? 'Location not set',
+              accent: GtexColors.gold,
+              child: Wrap(
+                spacing: GtexSpacing.sm,
+                runSpacing: GtexSpacing.sm,
+                children: <Widget>[
+                  _Stat('Prestige', '${d.legacy.first.prestige}', key: const Key('owner-legacy-prestige')),
+                  _Stat('Development', '${d.legacy.first.development}', key: const Key('owner-legacy-development')),
+                  _Stat(
+                    'Financial strength',
+                    '${d.legacy.first.financialStrength}',
+                    key: const Key('owner-legacy-financial'),
+                  ),
+                ],
+              ),
+            ),
           if (clubs.isEmpty)
             GtexPanel(
               key: const Key('owner-console-claim-club'),
@@ -360,6 +440,19 @@ class ControlCenterSection extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
+                  TextField(
+                    key: const Key('owner-claim-city'),
+                    controller: city,
+                    style: const TextStyle(color: GtexColors.text),
+                    decoration: const InputDecoration(labelText: 'City'),
+                  ),
+                  TextField(
+                    key: const Key('owner-claim-country'),
+                    controller: country,
+                    style: const TextStyle(color: GtexColors.text),
+                    decoration: const InputDecoration(labelText: 'Country code'),
+                  ),
+                  const SizedBox(height: GtexSpacing.sm),
                   if (claimError != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: GtexSpacing.sm),
@@ -456,7 +549,12 @@ class ControlCenterSection extends StatelessWidget {
               children: <Widget>[
                 if (inbox.isEmpty) const _Quiet('Inbox clear'),
                 for (final OwnerInboxEntry e in inbox.take(5))
-                  _Row(title: e.title, subtitle: e.sender ?? e.why, accent: GtexColors.purple),
+                  _Row(
+                    key: Key('owner-inbox-${e.id}'),
+                    title: e.title,
+                    subtitle: decisionDeadlineLine(e, now) ?? e.sender ?? e.why,
+                    accent: GtexColors.purple,
+                  ),
               ],
             ),
           ),

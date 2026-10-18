@@ -3,15 +3,19 @@ import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
 import '../../regen_redesign/data/gtex_share_market_api.dart';
 import '../data/owner_console_api.dart';
+import '../widgets/club_legacy_desk.dart';
+import '../widgets/club_legacy_showroom.dart';
 import '../widgets/owner_admin_review_section.dart';
 import '../widgets/owner_console_sections.dart';
 
-enum OwnerConsoleSection { control, clubs, market, squad, academy, admin }
+enum OwnerConsoleSection { control, clubs, showroom, desk, market, squad, academy, admin }
 
 const Map<OwnerConsoleSection, (String, IconData)> _sectionMeta =
     <OwnerConsoleSection, (String, IconData)>{
       OwnerConsoleSection.control: ('Control Center', Icons.space_dashboard_rounded),
       OwnerConsoleSection.clubs: ('My Clubs', Icons.shield_rounded),
+      OwnerConsoleSection.showroom: ('Showroom', Icons.museum_rounded),
+      OwnerConsoleSection.desk: ('Club desk', Icons.account_balance_rounded),
       OwnerConsoleSection.market: ('Market & Transfers', Icons.storefront_rounded),
       OwnerConsoleSection.squad: ('Manager & Squad', Icons.groups_rounded),
       OwnerConsoleSection.academy: ('Academy / Regens', Icons.auto_awesome_rounded),
@@ -55,6 +59,8 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
   String? _outcome;
   bool _claiming = false;
   String? _claimError;
+  final TextEditingController _city = TextEditingController(text: 'Lagos');
+  final TextEditingController _country = TextEditingController(text: 'NG');
 
   @override
   void initState() {
@@ -68,6 +74,13 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    _city.dispose();
+    _country.dispose();
+    super.dispose();
+  }
+
   void _reload() => setState(() => _center = widget.reader.fetchControlCenter());
 
   Future<void> _claimClub() async {
@@ -79,7 +92,7 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
       _claimError = null;
     });
     try {
-      await widget.reader.claimClub();
+      await widget.reader.claimClub(city: _city.text, country: _country.text);
       if (!mounted) {
         return;
       }
@@ -117,6 +130,8 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
           onRetry: _reload,
           onNavigate: widget.onNavigate,
           onClaim: _claimClub,
+          city: _city,
+          country: _country,
           claiming: _claiming,
           claimError: _claimError,
           reader: widget.reader,
@@ -133,6 +148,10 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
           onClaim: _claimClub,
           claiming: _claiming,
         );
+      case OwnerConsoleSection.showroom:
+        return ShowroomSection(load: widget.reader.fetchShowroom);
+      case OwnerConsoleSection.desk:
+        return _DeskLoader(load: widget.reader.fetchDesk, act: widget.reader.performDesk);
       case OwnerConsoleSection.market:
         return MarketSection(onNavigate: widget.onNavigate);
       case OwnerConsoleSection.squad:
@@ -203,6 +222,46 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
             ],
           ),
         );
+      },
+    );
+  }
+}
+
+class _DeskLoader extends StatefulWidget {
+  const _DeskLoader({required this.load, required this.act});
+
+  final Future<ClubLegacyDeskData> Function() load;
+  final Future<void> Function(String action) act;
+
+  @override
+  State<_DeskLoader> createState() => _DeskLoaderState();
+}
+
+class _DeskLoaderState extends State<_DeskLoader> {
+  late Future<ClubLegacyDeskData> _desk;
+
+  @override
+  void initState() {
+    super.initState();
+    _desk = widget.load();
+  }
+
+  Future<void> _run(String action) async {
+    await widget.act(action);
+    setState(() => _desk = widget.load());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<ClubLegacyDeskData>(
+      future: _desk,
+      builder: (BuildContext context, AsyncSnapshot<ClubLegacyDeskData> snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Padding(padding: EdgeInsets.all(GtexSpacing.md), child: GtexSkeleton.box(height: 180));
+        }
+        final ClubLegacyDeskData data = snap.data ??
+            const ClubLegacyDeskData(staff: [], policies: [], clubValuation: '0', equity: '0', preseason: [], sponsors: [], offers: [], cases: []);
+        return ClubLegacyDesk(data: data, onAction: (String action) => _run(action));
       },
     );
   }

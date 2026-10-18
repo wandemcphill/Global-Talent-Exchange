@@ -1,4 +1,38 @@
 import 'package:gte_frontend/data/gte_authed_api.dart';
+import 'package:gte_frontend/features/owner_console/widgets/club_legacy_desk.dart';
+
+class ShowroomExhibit {
+  const ShowroomExhibit({
+    required this.id,
+    required this.name,
+    required this.category,
+    required this.ownershipLabel,
+    required this.fallbackLabel,
+    this.modelFile,
+    this.previewFile,
+    this.owned = false,
+  });
+
+  factory ShowroomExhibit.fromJson(Map<String, dynamic> json) => ShowroomExhibit(
+    id: '${json['id']}',
+    name: '${json['name'] ?? 'Asset'}',
+    category: '${json['category'] ?? 'watch'}',
+    ownershipLabel: '${json['ownership_label'] ?? 'Not owned'}',
+    fallbackLabel: '${json['fallback_label'] ?? 'Static card'}',
+    modelFile: _text(json['model_file']),
+    previewFile: _text(json['preview_file']),
+    owned: json['owned'] == true,
+  );
+
+  final String id;
+  final String name;
+  final String category;
+  final String ownershipLabel;
+  final String fallbackLabel;
+  final String? modelFile;
+  final String? previewFile;
+  final bool owned;
+}
 
 double _num(Object? v) =>
     v is num ? v.toDouble() : double.tryParse('${v ?? ''}') ?? 0;
@@ -48,6 +82,7 @@ class OwnerInboxEntry {
     this.sender,
     this.status,
     this.outcome,
+    this.respondBy,
     this.actions = const <OwnerDecisionAction>[],
   });
 
@@ -63,6 +98,7 @@ class OwnerInboxEntry {
     sender: _text(j['sender']),
     status: _text(j['status']),
     outcome: _text(j['outcome']),
+    respondBy: DateTime.tryParse(_text(j['respond_by']) ?? ''),
     actions: _maps(j['actions']).map(OwnerDecisionAction.fromJson).toList(),
   );
 
@@ -77,7 +113,61 @@ class OwnerInboxEntry {
   final String? sender;
   final String? status;
   final String? outcome;
+  final DateTime? respondBy;
   final List<OwnerDecisionAction> actions;
+}
+
+class PublicTrophy {
+  const PublicTrophy({required this.competition, this.tier, this.position, this.year});
+
+  factory PublicTrophy.fromJson(Map<String, dynamic> j) => PublicTrophy(
+    competition: _text(j['competition']) ?? 'Honour',
+    tier: _text(j['tier']),
+    position: j['position'] == null ? null : _int(j['position']),
+    year: j['year'] == null ? null : _int(j['year']),
+  );
+
+  final String competition;
+  final String? tier;
+  final int? position;
+  final int? year;
+}
+
+/// Logged-out club card. Only the public allowlist is read.
+class PublicClubCard {
+  const PublicClubCard({
+    required this.clubName,
+    this.shortName,
+    this.city,
+    this.countryCode,
+    this.primaryColor,
+    this.secondaryColor,
+    this.founded,
+    this.crestUrl,
+    this.trophies = const <PublicTrophy>[],
+  });
+
+  factory PublicClubCard.fromJson(Map<String, dynamic> j) => PublicClubCard(
+    clubName: _text(j['club_name']) ?? 'Club',
+    shortName: _text(j['short_name']),
+    city: _text(j['city']),
+    countryCode: _text(j['country_code']),
+    primaryColor: _text(j['primary_color']),
+    secondaryColor: _text(j['secondary_color']),
+    founded: j['founded'] == null ? null : _int(j['founded']),
+    crestUrl: _text(j['crest_url']),
+    trophies: _maps(j['trophies']).map(PublicTrophy.fromJson).toList(),
+  );
+
+  final String clubName;
+  final String? shortName;
+  final String? city;
+  final String? countryCode;
+  final String? primaryColor;
+  final String? secondaryColor;
+  final int? founded;
+  final String? crestUrl;
+  final List<PublicTrophy> trophies;
 }
 
 class OwnerClubCard {
@@ -258,6 +348,7 @@ class OwnerControlCenter {
     required this.pendingPayouts,
     required this.earnings,
     required this.integrityScore,
+    this.legacy = const <OwnerLegacyRating>[],
   });
 
   factory OwnerControlCenter.fromJson(Map<String, dynamic> j) {
@@ -284,6 +375,9 @@ class OwnerControlCenter {
         (String k, dynamic v) => MapEntry<String, double>(k, _num(v)),
       ),
       integrityScore: _int(_map(j['integrity'])['score']),
+      legacy: j['legacy'] is List
+          ? _maps(j['legacy']).map(OwnerLegacyRating.fromJson).toList()
+          : const <OwnerLegacyRating>[],
     );
   }
 
@@ -303,6 +397,31 @@ class OwnerControlCenter {
   final double pendingPayouts;
   final Map<String, double> earnings;
   final int integrityScore;
+  final List<OwnerLegacyRating> legacy;
+}
+
+class OwnerLegacyRating {
+  const OwnerLegacyRating({
+    required this.clubId,
+    required this.prestige,
+    required this.development,
+    required this.financialStrength,
+    this.continentName,
+  });
+
+  factory OwnerLegacyRating.fromJson(Map<String, dynamic> j) => OwnerLegacyRating(
+    clubId: '${j['club_id']}',
+    prestige: _int(j['prestige']),
+    development: _int(j['development']),
+    financialStrength: _int(j['financial_strength']),
+    continentName: _text(j['continent_name']),
+  );
+
+  final String clubId;
+  final int prestige;
+  final int development;
+  final int financialStrength;
+  final String? continentName;
 }
 
 class OwnerNationalCompetition {
@@ -531,7 +650,7 @@ abstract class OwnerConsoleReader {
   Future<OwnerControlCenter> fetchControlCenter();
 
   /// Creates and starts the caller's first club, then opens today's decisions.
-  Future<void> claimClub();
+  Future<void> claimClub({String? city, String? country});
 
   /// Resolves a Today's Decisions item with one of its own action keys.
   Future<OwnerInboxEntry> decide(String itemId, String action);
@@ -560,6 +679,12 @@ abstract class OwnerConsoleReader {
   Future<void> seedDefaultTournaments();
 
   Future<double> fetchWalletBalance();
+
+  Future<List<ShowroomExhibit>> fetchShowroom();
+
+  Future<ClubLegacyDeskData> fetchDesk();
+
+  Future<void> performDesk(String action);
 }
 
 class OwnerConsoleApi implements OwnerConsoleReader {
@@ -572,8 +697,14 @@ class OwnerConsoleApi implements OwnerConsoleReader {
       OwnerControlCenter.fromJson(await client.getMap('/owner/control-center'));
 
   @override
-  Future<void> claimClub() async {
-    await client.post('/owner/clubs/claim');
+  Future<void> claimClub({String? city, String? country}) async {
+    await client.post(
+      '/owner/clubs/claim',
+      body: <String, Object?>{
+        if (city != null && city.trim().isNotEmpty) 'city_name': city.trim(),
+        if (country != null && country.trim().isNotEmpty) 'country_code': country.trim(),
+      },
+    );
   }
 
   @override
@@ -641,6 +772,55 @@ class OwnerConsoleApi implements OwnerConsoleReader {
   @override
   Future<double> fetchWalletBalance() async =>
       _num((await client.getMap('/wallets/summary'))['available_balance']);
+
+  Future<PublicClubCard> fetchPublicShowroom(String code) async =>
+      PublicClubCard.fromJson(await client.getMap('/owner/public/showroom/$code', auth: false));
+
+  @override
+  Future<List<ShowroomExhibit>> fetchShowroom() async {
+    final Map<String, dynamic> center = await client.getMap('/owner/control-center');
+    final List<Map<String, dynamic>> clubs = _maps(center['clubs']);
+    if (clubs.isEmpty) {
+      return const <ShowroomExhibit>[];
+    }
+    final String clubId = '${clubs.first['club_id']}';
+    final Map<String, dynamic> room = await client.getMap('/owner/legacy/$clubId/showroom');
+    return _maps(room['exhibits']).map(ShowroomExhibit.fromJson).toList();
+  }
+
+  @override
+  Future<ClubLegacyDeskData> fetchDesk() async {
+    final Map<String, dynamic> center = await client.getMap('/owner/control-center');
+    final List<Map<String, dynamic>> clubs = _maps(center['clubs']);
+    if (clubs.isEmpty) {
+      return ClubLegacyDeskData.fromJson(const <String, dynamic>{});
+    }
+    return ClubLegacyDeskData.fromJson(await client.getMap('/owner/legacy/${clubs.first['club_id']}/desk'));
+  }
+
+  @override
+  Future<void> performDesk(String action) async {
+    final Map<String, dynamic> center = await client.getMap('/owner/control-center');
+    final List<Map<String, dynamic>> clubs = _maps(center['clubs']);
+    if (clubs.isEmpty) {
+      return;
+    }
+    await client.post('/owner/legacy/${clubs.first['club_id']}/desk', body: <String, Object?>{'action': action, 'payload': _deskPayload(action)});
+  }
+
+  @override
+  Map<String, Object?> _deskPayload(String action) {
+    return switch (action) {
+      'hire' => <String, Object?>{'role': 'gm', 'name': 'Ada Okonkwo', 'personality': 'cautious', 'wage': '4000'},
+      'preset' => <String, Object?>{'preset': 'balanced'},
+      'sponsor' => <String, Object?>{'sponsor_name': 'Harbour Trust', 'placement': 'front', 'fee': '1000'},
+      'manager' => <String, Object?>{'candidate_name': 'Tunde Bakare', 'wage': '2000', 'prestige': 20, 'ambition': 8, 'seed': 3},
+      'case' => <String, Object?>{'rule_code': 'late_wages', 'allegation': 'Wages slipped', 'evidence': 'Ledger'},
+      'list_auction' => <String, Object?>{'price': '1500'},
+      'place_bid' => <String, Object?>{'amount': '2000'},
+      _ => <String, Object?>{},
+    };
+  }
 
   @override
   Future<void> seedDefaultTournaments() async {

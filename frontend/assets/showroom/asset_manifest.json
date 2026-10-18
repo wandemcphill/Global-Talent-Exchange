@@ -1,0 +1,14 @@
+{
+  "pack": "GTEX Club Legacy 3D asset collection",
+  "note": "Visual files only. Catalogue price, supply, and ownership stay on the server.",
+  "inventory": [
+    {"category": "jet", "file": "sovereign_900x_jet.glb", "name": "Sovereign-900X Executive Jet"},
+    {"category": "coach", "file": "vanguard_xii_coach.glb", "name": "Vanguard-XII Team Touring Coach"},
+    {"category": "vehicle", "file": "veloce_gt9_hypercar.glb", "name": "Veloce-GT9 Obsidian Hypercar", "shown_when": "an inventory record with this category exists"},
+    {"category": "watch", "file": "chronos_tourbillon_watch.glb", "name": "Chronos-Tourbillon Titanium Watch"}
+  ],
+  "environment": [
+    {"category": "stadium", "file": "arena_imperiale_stadium.glb", "name": "Arena Imperiale", "surface": "club facility"},
+    {"category": "campus", "file": "apex_performance_campus.glb", "name": "Apex Performance Campus", "surface": "club facility"}
+  ]
+}
