@@ -25,7 +25,11 @@ from app.models.club_profile import ClubType
 from app.models.user import User, UserRole
 from app.trader.service import _totp
 from app.users.router import read_current_user
-from backend.tests.support.signup_payloads import creator_signup_payload, trader_signup_payload, user_signup_payload
+from backend.tests.support.signup_payloads import (
+    creator_signup_payload,
+    trader_signup_payload,
+    user_signup_payload,
+)
 
 TEST_PASSWORD = "SuperSecret1"  # pragma: allowlist secret
 WRONG_PASSWORD = "WrongPassword1"  # pragma: allowlist secret
