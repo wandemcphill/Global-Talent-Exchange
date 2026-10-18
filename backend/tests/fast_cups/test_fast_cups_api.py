@@ -3,7 +3,9 @@ from __future__ import annotations
 from datetime import timedelta
 
 
-def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(api_client, base_now) -> None:
+def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(
+    api_client, base_now
+) -> None:
     upcoming_response = api_client.get(
         "/fast-cups/upcoming",
         params={"now": base_now.isoformat(), "horizon_intervals": 1},
@@ -13,7 +15,9 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(api_c
     cups = upcoming_response.json()["cups"]
     assert len(cups) == 8
 
-    senior_32 = next(cup for cup in cups if cup["division"] == "senior" and cup["size"] == 32)
+    senior_32 = next(
+        cup for cup in cups if cup["division"] == "senior" and cup["size"] == 32
+    )
 
     for index in range(1, 33):
         response = api_client.post(
@@ -103,7 +107,9 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(api_c
     # Unauthenticated POST /settle must be rejected.
 
     def unauth_user():
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
+        )
 
     api_client.app.dependency_overrides[get_current_user] = unauth_user
     unauth_settle = api_client.post(
@@ -133,7 +139,9 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(api_c
     )
     assert admin_settle.status_code == 200
     settle_payload = admin_settle.json()
-    assert settle_payload["champion"]["club_id"] == summary_payload["champion"]["club_id"]
+    assert (
+        settle_payload["champion"]["club_id"] == summary_payload["champion"]["club_id"]
+    )
 
     payout_count_after_settle, ledger_count_after_settle = payout_counts()
     assert payout_count_after_settle > 0
