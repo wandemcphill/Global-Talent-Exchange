@@ -50,12 +50,20 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(api_c
     assert early_summary_response.status_code == 409
 
     kickoff_plus_duration = base_now + timedelta(minutes=30)
+    ecosystem = api_client.app.state.fast_cup_ecosystem
+    cup_before_summary = ecosystem.repository.get(senior_32["cup_id"])
+    assert cup_before_summary.result_summary is None
+    cup_status_before_summary = cup_before_summary.status
+
     summary_response = api_client.get(
         f"/fast-cups/{senior_32['cup_id']}/result-summary",
         params={"now": kickoff_plus_duration.isoformat()},
     )
     assert summary_response.status_code == 200
     summary_payload = summary_response.json()
+    cup_after_summary = ecosystem.repository.get(senior_32["cup_id"])
+    assert cup_after_summary.result_summary is None
+    assert cup_after_summary.status == cup_status_before_summary
     assert summary_payload["champion"]["club_id"].startswith("senior-club-")
     assert summary_payload["expected_duration_minutes"] == 30
     assert len(summary_payload["events"]) == 6
