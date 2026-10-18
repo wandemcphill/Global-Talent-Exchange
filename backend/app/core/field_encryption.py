@@ -122,6 +122,19 @@ def blind_index(value: str | None) -> str | None:
     return hmac.new(key, normalized.encode("utf-8"), sha256).hexdigest()
 
 
+def identifier_hash_clause(column, term: str | None):
+    """Exact-match predicate for a blind-index column.
+
+    Blank terms (and terms that normalize to empty) return None. Callers must
+    omit that result from the query: ``column == None`` compiles to ``IS NULL``
+    and would match every row whose hash has not been populated.
+    """
+    hashed = blind_index(term)
+    if hashed is None:
+        return None
+    return column == hashed
+
+
 class EncryptedString(TypeDecorator):
     """String column that transparently encrypts values at rest."""
 

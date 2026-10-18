@@ -241,8 +241,10 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 ```
 
 Development/test derive a deterministic key from `GTE_AUTH_SECRET`
-automatically. After deploying the migration on a database with existing
-plaintext rows, run the idempotent backfill:
+automatically. Blind indexes use that same auth secret. After deploying the
+migration on a database with existing plaintext rows, run the idempotent
+backfill. Re-running it after an auth-secret rotation recomputes stale blind
+indexes from decrypted values and leaves existing ciphertext in place:
 
 ```bash
 python backend/scripts/encrypt_sensitive_fields.py --dry-run   # count legacy rows

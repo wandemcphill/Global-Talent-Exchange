@@ -14,7 +14,7 @@ from app.core.cloudinary_upload import (
     upload_kyc_document,
 )
 from app.auth.dependencies import get_current_admin, get_current_user, get_current_wallet_user, get_session
-from app.core.field_encryption import blind_index
+from app.core.field_encryption import identifier_hash_clause
 from app.models.dispute import Dispute, DisputeMessage
 from app.models.treasury import (
     DepositRequest,
@@ -716,17 +716,18 @@ def list_admin_withdrawals(
         query = query.where(TreasuryWithdrawalRequest.status == status_filter)
     if q:
         like = f"%{q.lower()}%"
-        query = query.where(
-            or_(
-                func.lower(TreasuryWithdrawalRequest.reference).ilike(like),
-                func.lower(User.email).ilike(like),
-                func.lower(User.full_name).ilike(like),
-                func.lower(User.phone_number).ilike(like),
-                func.lower(TreasuryWithdrawalRequest.bank_name).ilike(like),
-                TreasuryWithdrawalRequest.bank_account_number_hash == blind_index(q.strip()),
-                func.lower(TreasuryWithdrawalRequest.bank_account_name).ilike(like),
-            )
-        )
+        clauses = [
+            func.lower(TreasuryWithdrawalRequest.reference).ilike(like),
+            func.lower(User.email).ilike(like),
+            func.lower(User.full_name).ilike(like),
+            func.lower(User.phone_number).ilike(like),
+            func.lower(TreasuryWithdrawalRequest.bank_name).ilike(like),
+            func.lower(TreasuryWithdrawalRequest.bank_account_name).ilike(like),
+        ]
+        account_clause = identifier_hash_clause(TreasuryWithdrawalRequest.bank_account_number_hash, q)
+        if account_clause is not None:
+            clauses.append(account_clause)
+        query = query.where(or_(*clauses))
     total = session.scalar(select(func.count()).select_from(query.subquery()))
     rows = session.execute(
         query.order_by(TreasuryWithdrawalRequest.created_at.desc()).limit(limit).offset(offset)
@@ -864,15 +865,16 @@ def list_admin_kyc(
         query = query.where(KycProfile.status == status_filter)
     if q:
         like = f"%{q.lower()}%"
-        query = query.where(
-            or_(
-                func.lower(User.email).ilike(like),
-                func.lower(User.full_name).ilike(like),
-                func.lower(User.phone_number).ilike(like),
-                KycProfile.nin_hash == blind_index(q.strip()),
-                KycProfile.bvn_hash == blind_index(q.strip()),
-            )
-        )
+        clauses = [
+            func.lower(User.email).ilike(like),
+            func.lower(User.full_name).ilike(like),
+            func.lower(User.phone_number).ilike(like),
+        ]
+        for column in (KycProfile.nin_hash, KycProfile.bvn_hash):
+            identifier_clause = identifier_hash_clause(column, q)
+            if identifier_clause is not None:
+                clauses.append(identifier_clause)
+        query = query.where(or_(*clauses))
     total = session.scalar(select(func.count()).select_from(query.subquery()))
     rows = session.execute(query.order_by(KycProfile.updated_at.desc()).limit(limit).offset(offset)).all()
     items = [

@@ -7,9 +7,12 @@ tokens) and populates the *_hash blind indexes. Withdrawal rows also have
 ``bank_snapshot_json.account_number`` replaced by a masked
 ``account_number_masked`` snapshot.
 
-Stored values are read raw (bypassing the EncryptedString decrypt), so rows
-already carrying the ``enc:v1:`` prefix are skipped: the script is idempotent
-and ``--dry-run`` counts only genuinely legacy rows.
+Stored values are read raw (bypassing the EncryptedString decrypt). Rows that
+already carry the ``enc:v1:`` prefix keep that ciphertext. A missing or stale
+blind index is rewritten from the decrypted plaintext, so rotating
+``GTE_AUTH_SECRET`` and re-running this script repairs exact-match search
+without re-encrypting. The script is idempotent. ``--dry-run`` reports rows
+that still need a write.
 
 Usage:
     python backend/scripts/encrypt_sensitive_fields.py --dry-run
@@ -26,7 +29,7 @@ from typing import Sequence
 from sqlalchemy import String, select, type_coerce, update
 
 from app.core.database import create_database_engine, create_session_factory, load_model_modules
-from app.core.field_encryption import ENCRYPTION_PREFIX, blind_index, encrypt_field
+from app.core.field_encryption import ENCRYPTION_PREFIX, blind_index, decrypt_field, encrypt_field
 from app.models.treasury import KycProfile, TreasuryWithdrawalRequest, UserBankAccount
 from app.treasury.service import _mask_account_number
 
@@ -54,31 +57,31 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Report legacy plaintext row counts without writing.",
+        help="Report rows that still need encryption or index repair without writing.",
     )
     return parser
 
 
 def _iter_raw_batches(session, model, columns, has_snapshot):
-    raw_columns = [type_coerce(getattr(model, column), String).label(column) for column, _hash_column in columns]
-    extra = [model.bank_snapshot_json] if has_snapshot else []
+    selected = [model.id]
+    for column, hash_column in columns:
+        # Coerce away EncryptedString so legacy plaintext and ciphertext are
+        # both returned unchanged. Decrypting here would hide rows that still
+        # need encryption.
+        selected.append(type_coerce(getattr(model, column), String).label(column))
+        if hash_column:
+            selected.append(getattr(model, hash_column).label(hash_column))
+    if has_snapshot:
+        selected.append(model.bank_snapshot_json)
     last_id = ""
     while True:
         rows = session.execute(
-            select(model.id, *raw_columns, *extra).where(model.id > last_id).order_by(model.id).limit(_BATCH_SIZE)
-        ).all()
+            select(*selected).where(model.id > last_id).order_by(model.id).limit(_BATCH_SIZE)
+        ).mappings().all()
         if not rows:
             return
-        last_id = rows[-1][0]
+        last_id = rows[-1]["id"]
         yield rows
-
-
-def _row_is_legacy(raw_values, snapshot, has_snapshot) -> bool:
-    if any(value is not None and not str(value).startswith(ENCRYPTION_PREFIX) for value in raw_values):
-        return True
-    if has_snapshot and isinstance(snapshot, dict) and "account_number" in snapshot:
-        return True
-    return False
 
 
 def _masked_snapshot(snapshot: dict) -> dict:
@@ -87,22 +90,41 @@ def _masked_snapshot(snapshot: dict) -> dict:
     return masked
 
 
-def _encrypt_row(session, model, columns, has_snapshot, row) -> bool:
+def _row_changes(columns, row, has_snapshot) -> tuple[bool, bool, dict[str, object]]:
+    """Return (legacy_plaintext, stale_index, column updates).
+
+    Ciphertext is never rewritten. A stale blind index is replaced with the
+    HMAC of the decrypted identifier so auth-secret rotation can be repaired
+    by re-running the script.
+    """
     values: dict[str, object] = {}
-    raw_values = row[1 : 1 + len(columns)]
-    snapshot = row[1 + len(columns)] if has_snapshot else None
-    for (column, hash_column), raw_value in zip(columns, raw_values):
-        if raw_value is None or str(raw_value).startswith(ENCRYPTION_PREFIX):
+    legacy = False
+    stale = False
+    for column, hash_column in columns:
+        raw_value = row[column]
+        if raw_value is None or not str(raw_value).startswith(ENCRYPTION_PREFIX):
+            if raw_value is not None:
+                legacy = True
+                plaintext = str(raw_value)
+                values[column] = encrypt_field(plaintext)
+                if hash_column:
+                    values[hash_column] = blind_index(plaintext)
+            elif hash_column and row[hash_column] is not None:
+                stale = True
+                values[hash_column] = None
             continue
-        values[column] = encrypt_field(str(raw_value))
-        if hash_column:
-            values[hash_column] = blind_index(str(raw_value))
-    if has_snapshot and isinstance(snapshot, dict) and "account_number" in snapshot:
-        values["bank_snapshot_json"] = _masked_snapshot(snapshot)
-    if not values:
-        return False
-    session.execute(update(model).where(model.id == row[0]).values(**values))
-    return True
+        if not hash_column:
+            continue
+        expected = blind_index(decrypt_field(str(raw_value)))
+        if row[hash_column] != expected:
+            stale = True
+            values[hash_column] = expected
+    if has_snapshot:
+        snapshot = row["bank_snapshot_json"]
+        if isinstance(snapshot, dict) and "account_number" in snapshot:
+            legacy = True
+            values["bank_snapshot_json"] = _masked_snapshot(snapshot)
+    return legacy, stale, values
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -118,23 +140,29 @@ def main(argv: Sequence[str] | None = None) -> int:
         total_written = 0
         for model, columns, has_snapshot in _TARGETS:
             legacy_count = 0
+            stale_count = 0
             written = 0
             for batch in _iter_raw_batches(session, model, columns, has_snapshot):
                 for row in batch:
-                    raw_values = row[1 : 1 + len(columns)]
-                    snapshot = row[1 + len(columns)] if has_snapshot else None
-                    if not _row_is_legacy(raw_values, snapshot, has_snapshot):
+                    legacy, stale, values = _row_changes(columns, row, has_snapshot)
+                    if not legacy and not stale:
                         continue
-                    legacy_count += 1
-                    if not args.dry_run and _encrypt_row(session, model, columns, has_snapshot, row):
-                        written += 1
+                    legacy_count += int(legacy)
+                    stale_count += int(stale)
+                    if args.dry_run or not values:
+                        continue
+                    session.execute(update(model).where(model.id == row["id"]).values(**values))
+                    written += 1
                 if not args.dry_run:
                     session.commit()
-            print(f"{model.__tablename__}: {legacy_count} legacy plaintext row(s)")
+            print(
+                f"{model.__tablename__}: {legacy_count} legacy plaintext row(s), "
+                f"{stale_count} stale blind index row(s)"
+            )
             if not args.dry_run:
                 total_written += written
         if not args.dry_run:
-            print(f"Done. {total_written} row(s) encrypted.")
+            print(f"Done. {total_written} row(s) updated.")
     return 0
 
 

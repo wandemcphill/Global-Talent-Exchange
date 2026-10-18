@@ -14,6 +14,7 @@ from app.core.field_encryption import (
     blind_index,
     decrypt_field,
     encrypt_field,
+    identifier_hash_clause,
 )
 from app.core.config import load_settings
 from app.models import Base
@@ -361,4 +362,90 @@ def test_backfill_script_encrypts_legacy_rows_and_is_idempotent(tmp_path, capsys
     assert "treasury_withdrawal_requests: 0 legacy plaintext row(s)" in out
 
     assert backfill_main(["--database-url", url]) == 0
-    assert "Done. 0 row(s) encrypted." in capsys.readouterr().out
+    assert "Done. 0 row(s) updated." in capsys.readouterr().out
+
+
+def test_blank_identifier_search_does_not_match_null_hashes() -> None:
+    from sqlalchemy.dialects import sqlite
+
+    assert identifier_hash_clause(KycProfile.nin_hash, None) is None
+    assert identifier_hash_clause(KycProfile.bvn_hash, "   ") is None
+    assert identifier_hash_clause(TreasuryWithdrawalRequest.bank_account_number_hash, "\t") is None
+
+    clause = identifier_hash_clause(KycProfile.bvn_hash, " 2211 2233445 ")
+    compiled = str(clause.compile(dialect=sqlite.dialect(), compile_kwargs={"literal_binds": True}))
+    assert "IS NULL" not in compiled.upper()
+    assert blind_index("22112233445") in compiled
+
+
+def test_reload_keeps_ciphertext_and_blind_index(session) -> None:
+    profile = _kyc(session, nin="12345678901", bvn="22112233445")
+    session.commit()
+    raw_before = session.execute(
+        text("SELECT nin, bvn, nin_hash, bvn_hash FROM kyc_profiles WHERE id = :id"),
+        {"id": profile.id},
+    ).one()
+
+    session.expire_all()
+    reloaded = session.get(KycProfile, profile.id)
+    assert reloaded is not None
+    assert reloaded.nin == "12345678901"
+    assert reloaded.bvn_hash == blind_index("22112233445")
+    session.commit()
+
+    raw_after = session.execute(
+        text("SELECT nin, bvn, nin_hash, bvn_hash FROM kyc_profiles WHERE id = :id"),
+        {"id": profile.id},
+    ).one()
+    assert raw_after == raw_before
+    assert raw_after[2] == blind_index("12345678901")
+    assert raw_after[3] == blind_index("22112233445")
+
+
+def test_backfill_repairs_stale_blind_index_without_rewriting_ciphertext(tmp_path, capsys) -> None:
+    from backend.scripts.encrypt_sensitive_fields import main as backfill_main
+
+    db_path = tmp_path / "stale-index.db"
+    url = f"sqlite+pysqlite:///{db_path.as_posix()}"
+    engine = create_engine(url)
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine)
+    with SessionLocal() as seed:
+        user = User(
+            id="u-stale",
+            email="stale@example.com",
+            username="u-stale",
+            display_name="Stale",
+            password_hash="x",
+            kyc_status=KycStatus.UNVERIFIED,
+        )
+        seed.add(user)
+        seed.flush()
+        profile = KycProfile(
+            id="k-stale",
+            user_id=user.id,
+            status=KycStatus.UNDER_REVIEW,
+            nin="11122233344",
+            bvn="55566677788",
+        )
+        seed.add(profile)
+        seed.commit()
+        raw_before = seed.execute(text("SELECT nin, bvn FROM kyc_profiles WHERE id='k-stale'")).one()
+        seed.execute(text("UPDATE kyc_profiles SET nin_hash='stale', bvn_hash=NULL WHERE id='k-stale'"))
+        seed.commit()
+
+    assert backfill_main(["--database-url", url, "--dry-run"]) == 0
+    dry_run = capsys.readouterr().out
+    assert "kyc_profiles: 0 legacy plaintext row(s), 1 stale blind index row(s)" in dry_run
+
+    assert backfill_main(["--database-url", url]) == 0
+    assert "Done. 1 row(s) updated." in capsys.readouterr().out
+    with SessionLocal() as check:
+        raw_after = check.execute(text("SELECT nin, bvn, nin_hash, bvn_hash FROM kyc_profiles WHERE id='k-stale'")).one()
+        assert raw_after[0] == raw_before[0]
+        assert raw_after[1] == raw_before[1]
+        assert raw_after[2] == blind_index("11122233344")
+        assert raw_after[3] == blind_index("55566677788")
+
+    assert backfill_main(["--database-url", url]) == 0
+    assert "Done. 0 row(s) updated." in capsys.readouterr().out
