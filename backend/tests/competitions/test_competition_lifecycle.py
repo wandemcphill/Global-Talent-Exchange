@@ -439,9 +439,7 @@ def test_match_writes_require_host_or_admin(
     results to any competition, corrupting standings and settlement input.
     """
     host = auth_user_factory(suffix="result-authz-host")
-    competition_id = _create_competition(
-        client, host=host, name="Result AuthZ League", format="league", capacity=2
-    )
+    competition_id = _create_competition(client, host=host, name="Result AuthZ League", format="league", capacity=2)
     entrants = []
     for index in range(1, 3):
         entrant = auth_user_factory(suffix=f"result-authz-{index}")
