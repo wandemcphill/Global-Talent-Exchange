@@ -167,6 +167,7 @@ def onboarding(user=Depends(get_current_user), session: Session = Depends(get_se
 class ClaimClubRequest(BaseModel):
     city_name: str | None = None
     country_code: str | None = None
+    continent_code: str | None = None
 
 
 @router.post("/clubs/claim")
@@ -183,6 +184,7 @@ def claim_club(
         user,
         city_name=payload.city_name,
         country_code=payload.country_code,
+        continent_code=payload.continent_code,
     )
     return {"club_id": state.club_id, "club_name": state.club_name, "stage": state.stage}
 

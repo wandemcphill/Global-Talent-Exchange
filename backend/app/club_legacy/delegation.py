@@ -142,17 +142,25 @@ def recommend(
     user_id: str,
     task_key: str,
     amount: Decimal,
+    reason: str | None = None,
+    confidence: int | None = None,
+    consequence: str | None = None,
 ) -> ClubLegacyRecommendation:
     gross = Decimal(amount).quantize(Decimal("0.01"))
     if gross <= 0:
         raise LegacyError("amount_must_be_positive")
     profile = require_owner(session, club_id, user_id)
+    bounded = 70 if confidence is None else max(0, min(99, int(confidence)))
     record = ClubLegacyRecommendation(
         club_id=club_id,
         user_id=user_id,
         task_key=task_key,
         amount=gross,
         status="recommended",
+        reason=reason or f"The owner asked to {task_key.replace('_', ' ')} {gross}.",
+        confidence=bounded,
+        consequence=consequence
+        or "The delegation policy is read again at execution, so a change made after this recommendation still applies.",
     )
     session.add(record)
     session.flush()

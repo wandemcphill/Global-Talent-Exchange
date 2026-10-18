@@ -39,8 +39,6 @@ from app.models.club_profile import ClubProfile
 from app.owner_console import ledger
 from app.owner_console.models import OwnerClubState
 
-JET_CAP = 5
-COACH_CAP = 10
 CATALOGUE = (
     {
         "sku": "gtex-jet-harbour",
@@ -67,14 +65,6 @@ CATALOGUE = (
         "fallback_label": "Static watch card",
     },
 )
-TV_SHARES = {
-    "foundation": Decimal("0.30"),
-    "growing": Decimal("0.40"),
-    "established": Decimal("0.50"),
-    "elite": Decimal("0.60"),
-    "legacy": Decimal("0.70"),
-}
-HOST_CUT_OF_CLUB_POOL = Decimal("0.40")
 
 
 def _q(value) -> Decimal:
@@ -101,98 +91,36 @@ def seed_catalogue(session: Session) -> None:
 
 
 def hire_executive(
-    session: Session, club_id: str, user_id: str, *, role: str, name: str, personality: str, wage
+    session: Session,
+    club_id: str,
+    user_id: str,
+    *,
+    role: str,
+    name: str,
+    personality: str,
+    wage,
+    contract_months: int = 24,
+    authority: str | None = None,
 ) -> ClubLegacyExecutive:
-    if role not in {"gm", "hoyd", "football_manager"}:
-        raise LegacyError("unknown_role")
-    require_owner(session, club_id, user_id)
-    current = session.scalar(
-        select(ClubLegacyExecutive).where(ClubLegacyExecutive.club_id == club_id, ClubLegacyExecutive.role == role)
+    from app.club_legacy.full.phase2 import hire_executive as hire_full
+
+    return hire_full(
+        session,
+        club_id,
+        user_id,
+        role=role,
+        name=name,
+        personality=personality,
+        wage=wage,
+        contract_months=contract_months,
+        authority=authority,
     )
-    attributes = _attributes(role, name)
-    attributes.update(_hiring_fit(session, club_id))
-    if current is None:
-        current = ClubLegacyExecutive(
-            club_id=club_id,
-            role=role,
-            name=name,
-            personality=personality,
-            attributes_json=attributes,
-            wage=_q(wage),
-            status="hired",
-        )
-        session.add(current)
-    else:
-        current.name = name
-        current.personality = personality
-        current.attributes_json = attributes
-        current.wage = _q(wage)
-        current.status = "hired"
-    session.flush()
-    return current
-
-
-def _attributes(role: str, name: str) -> dict[str, int]:
-    rng = random.Random(f"{role}:{name}")
-    keys = {
-        "gm": ("intelligence", "talent_evaluation", "financial_acumen", "negotiation"),
-        "hoyd": ("talent_identification", "potential_assessment", "recruitment_network", "judgement"),
-        "football_manager": ("tactics", "squad_judgement", "training", "morale"),
-    }[role]
-    return {key: rng.randint(40, 85) for key in keys}
-
-
-def _hiring_fit(session: Session, club_id: str) -> dict[str, int]:
-    profile = session.get(ClubProfile, club_id)
-    state = session.scalar(select(OwnerClubState).where(OwnerClubState.club_id == club_id))
-    kept = (
-        session.scalar(
-            select(func.count())
-            .select_from(ClubLegacyPromise)
-            .where(ClubLegacyPromise.club_id == club_id, ClubLegacyPromise.status == "kept")
-        )
-        or 0
-    )
-    facility = development_score(state.facilities_json if state else {})
-    city_bonus = 10 if profile and profile.city_name else 0
-    owner_trust = min(100, 40 + int(kept) * 10)
-    return {
-        "facility_level": facility,
-        "city_bonus": city_bonus,
-        "owner_trust": owner_trust,
-        "fit": min(100, facility // 2 + city_bonus + owner_trust // 5),
-    }
 
 
 def recruitment_report(session: Session, club_id: str, user_id: str) -> ClubLegacyReport:
-    require_owner(session, club_id, user_id)
-    hoyd = session.scalar(
-        select(ClubLegacyExecutive).where(
-            ClubLegacyExecutive.club_id == club_id,
-            ClubLegacyExecutive.role == "hoyd",
-            ClubLegacyExecutive.status == "hired",
-        )
-    )
-    skill = int((hoyd.attributes_json or {}).get("talent_identification", 45)) if hoyd else 45
-    prestige = prestige_score(session, club_id)
-    rng = random.Random(f"intake:{club_id}:{skill}")
-    low = 48 + skill // 10
-    high = min(94, low + 18 + rng.randint(0, 12))
-    if prestige < 30 and rng.random() < 0.15:
-        high = min(94, high + 8)
-    confidence = min(80, 35 + skill // 3)
-    report = ClubLegacyReport(
-        club_id=club_id,
-        role="hoyd" if hoyd else "owner",
-        kind="recruitment",
-        summary=f"Prospect band {low}-{high}. Not a guaranteed star.",
-        reason=f"HoYD identification {skill}/100 and club prestige {prestige}. Smaller clubs can still find the top of the band.",
-        confidence=confidence,
-        consequence="A signing in this band can develop or stall. Wealth does not reserve world-class regens.",
-    )
-    session.add(report)
-    session.flush()
-    return report
+    from app.club_legacy.full.phase2 import recruitment_report as report_full
+
+    return report_full(session, club_id, user_id)
 
 
 def assert_staff_can_spend(session: Session, club_id: str, task_key: str, amount: Decimal) -> None:
@@ -214,28 +142,9 @@ def assert_staff_can_spend(session: Session, club_id: str, task_key: str, amount
 
 
 def club_page(session: Session, club_id: str) -> dict:
-    profile = session.get(ClubProfile, club_id)
-    if profile is None:
-        raise LegacyError("club_not_found", 404)
-    state = session.scalar(select(OwnerClubState).where(OwnerClubState.club_id == club_id))
-    staff = session.scalars(select(ClubLegacyExecutive).where(ClubLegacyExecutive.club_id == club_id)).all()
-    assets = session.scalars(
-        select(ClubLegacyAsset).where(ClubLegacyAsset.club_id == club_id, ClubLegacyAsset.owner_class == "club")
-    ).all()
-    return {
-        "club_id": club_id,
-        "name": profile.club_name,
-        "city": profile.city_name,
-        "country_code": profile.country_code,
-        "continent_code": profile.continent_code,
-        "staff": [{"role": item.role, "name": item.name} for item in staff],
-        "facilities": state.facilities_json if state else {},
-        "development": development_score(state.facilities_json if state else {}),
-        "prestige": prestige_score(session, club_id),
-        "club_assets": [_asset_dict(session, asset) for asset in assets],
-        "showroom_fallback": "static-card",
-        "showroom": showroom(session, club_id),
-    }
+    from app.club_legacy.full.phase3 import club_page as page_full
+
+    return page_full(session, club_id)
 
 
 def showroom(session: Session, club_id: str) -> dict:
@@ -381,27 +290,9 @@ def club_valuation(session: Session, club_id: str) -> Decimal:
 
 
 def owner_net_worth(session: Session, user_id: str) -> dict:
-    personal_cash = ledger.balance(session, ledger.user_account(user_id), ledger.GTEX)
-    personal_assets = Decimal("0")
-    for asset in session.scalars(
-        select(ClubLegacyAsset).where(
-            ClubLegacyAsset.owner_class == "owner",
-            ClubLegacyAsset.owner_ref == user_id,
-            ClubLegacyAsset.status == "owned",
-        )
-    ).all():
-        item = session.get(ClubLegacyCatalogueItem, asset.catalogue_id)
-        if item is not None:
-            personal_assets += Decimal(item.price)
-    equity = Decimal("0")
-    for stake in session.scalars(select(ClubLegacyStake).where(ClubLegacyStake.holder_user_id == user_id)).all():
-        equity += _q(club_valuation(session, stake.club_id) * Decimal(stake.percentage) / Decimal("100"))
-    return {
-        "personal_cash": str(_q(personal_cash)),
-        "personal_assets": str(_q(personal_assets)),
-        "equity": str(equity),
-        "net_worth": str(_q(personal_cash + personal_assets + equity)),
-    }
+    from app.club_legacy.full.phase3 import owner_net_worth as worth_full
+
+    return worth_full(session, user_id)
 
 
 def purchase_asset(
@@ -435,20 +326,28 @@ def purchase_asset(
     session.flush()
     source = ledger.wallet_account(session, ledger.club_account(club_id), ledger.GTEX)
     destination = ledger.wallet_account(session, ledger.PLATFORM_FEES, ledger.GTEX)
-    post_club_legacy_transfer(
+    from app.club_legacy.full.phase1 import post_economic
+
+    post_economic(
         session,
         idempotency_key=f"asset:{idempotency_key}",
         source=source,
         destination=destination,
         amount=Decimal(item.price),
+        actor_user_id=user_id,
+        club_id=club_id,
+        action="asset_purchased",
         description=f"Buy {item.name}",
+        detail={"sku": item.sku, "owner_class": owner_class},
     )
     session.flush()
     return asset
 
 
 def _enforce_club_cap(session: Session, club_id: str, category: str) -> None:
-    cap = {"jet": JET_CAP, "coach": COACH_CAP}.get(category)
+    from app.club_legacy.full.phase1 import inventory_cap
+
+    cap = inventory_cap(session, category)
     if cap is None:
         return
     owned = (
@@ -508,11 +407,13 @@ def list_asset(session: Session, *, asset_id: str, user_id: str, price, kind: st
     if asset.owner_class == "club":
         require_owner(session, asset.owner_ref, user_id)
     asset.status = "listed"
+    from app.club_legacy.full.phase1 import transfer_fee
+
     listing = ClubLegacyListing(
         asset_id=asset.id,
         seller_user_id=user_id,
         price=_q(price),
-        fee=_q(Decimal(price) * Decimal("0.05")),
+        fee=transfer_fee(session, price),
         status="auction" if kind == "auction" else "open",
     )
     session.add(listing)
@@ -544,15 +445,42 @@ def buy_listing(
     session.flush()
     source = ledger.wallet_account(session, ledger.club_account(buyer_club_id), ledger.GTEX)
     destination = ledger.wallet_account(session, ledger.club_account(asset.club_id or buyer_club_id), ledger.GTEX)
+    fees = ledger.wallet_account(session, ledger.PLATFORM_FEES, ledger.GTEX)
     try:
-        post_club_legacy_transfer(
-            session,
-            idempotency_key=f"sale:{idempotency_key}",
-            source=source,
-            destination=destination,
-            amount=Decimal(listing.price),
-            description="Asset resale",
-        )
+        from app.club_legacy.full.phase1 import post_economic, transfer_fee
+
+        price = Decimal(listing.price)
+        if ledger.balance(session, ledger.club_account(buyer_club_id), ledger.GTEX) < price:
+            raise LegacyError("insufficient_funds", 409, "The buyer club cannot cover this price.")
+        fee = min(transfer_fee(session, price), price)
+        net = price - fee
+        seller_club_id = asset.club_id or buyer_club_id
+        if net > 0:
+            post_economic(
+                session,
+                idempotency_key=f"sale:{idempotency_key}",
+                source=source,
+                destination=destination,
+                amount=net,
+                actor_user_id=buyer_user_id,
+                club_id=buyer_club_id,
+                action="asset_resale",
+                description="Asset resale",
+                detail={"listing_id": listing.id},
+            )
+        if fee > 0:
+            post_economic(
+                session,
+                idempotency_key=f"sale:{idempotency_key}:fee",
+                source=source,
+                destination=fees,
+                amount=fee,
+                actor_user_id=buyer_user_id,
+                club_id=seller_club_id,
+                action="transfer_fee",
+                description="Asset resale fee",
+                detail={"listing_id": listing.id, "rate_from": "club_legacy_settings"},
+            )
     except Exception:
         listing.status = "open"
         session.flush()
@@ -682,19 +610,14 @@ def settle_preseason(session: Session, *, invite_id: str, tv_pool, gift_pool=0) 
         raise LegacyError("invite_not_accepted", 409)
     state = session.scalar(select(OwnerClubState).where(OwnerClubState.club_id == invite.to_club_id))
     stage = development_stage_name(development_score(state.facilities_json if state else {}))
-    pool = _q(tv_pool)
-    club_rate = TV_SHARES[stage]
-    platform = _q(pool * (Decimal("1") - club_rate))
-    club_pool = pool - platform
-    host = _q(club_pool * HOST_CUT_OF_CLUB_POOL)
-    participants = club_pool - host
-    if platform + host + participants != pool:
-        raise LegacyError("allocation_mismatch", 500)
-    gift = _q(gift_pool)
-    gift_club = _q(gift * Decimal("0.40")) if stage == "foundation" else _q(gift * club_rate)
-    gift_platform = gift - gift_club
-    if gift_platform + gift_club != gift:
-        raise LegacyError("allocation_mismatch", 500)
+    from app.club_legacy.full.phase1 import post_economic, preseason_split
+
+    split = preseason_split(session, stage=stage, tv_pool=tv_pool, gift_pool=gift_pool)
+    platform = split["platform"]
+    host = split["host"]
+    participants = split["participants"]
+    gift_platform = split["gift_platform"]
+    gift_club = split["gift_club"]
     repeats = (
         session.scalar(
             select(func.count())
@@ -731,21 +654,27 @@ def settle_preseason(session: Session, *, invite_id: str, tv_pool, gift_pool=0) 
     host_account = ledger.wallet_account(session, ledger.club_account(invite.from_club_id), ledger.GTEX)
     away_account = ledger.wallet_account(session, ledger.club_account(invite.to_club_id), ledger.GTEX)
     if host > 0:
-        post_club_legacy_transfer(
+        post_economic(
             session,
             idempotency_key=f"preseason:{invite.id}:host",
             source=source,
             destination=host_account,
             amount=host,
+            actor_user_id=None,
+            club_id=invite.from_club_id,
+            action="preseason_host_share",
             description="Pre-season host share",
         )
     if participants > 0:
-        post_club_legacy_transfer(
+        post_economic(
             session,
             idempotency_key=f"preseason:{invite.id}:participant",
             source=source,
             destination=away_account,
             amount=participants,
+            actor_user_id=None,
+            club_id=invite.to_club_id,
+            action="preseason_participant_share",
             description="Pre-season participant share",
         )
     session.flush()

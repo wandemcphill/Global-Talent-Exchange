@@ -143,6 +143,7 @@ def claim_starter_club(
     *,
     city_name: str | None = None,
     country_code: str | None = None,
+    continent_code: str | None = None,
 ) -> OwnerClubState:
     """Give this account a runnable club and today's first decisions.
 
@@ -161,7 +162,9 @@ def claim_starter_club(
         state = start_activation(
             session,
             user.id,
-            _create_starter_profile(session, user, city_name=city_name, country_code=country_code).id,
+            _create_starter_profile(
+                session, user, city_name=city_name, country_code=country_code, continent_code=continent_code
+            ).id,
         )
     _bootstrap_starter_club(session, user.id, state)
     return state
@@ -173,6 +176,7 @@ def _create_starter_profile(
     *,
     city_name: str | None = None,
     country_code: str | None = None,
+    continent_code: str | None = None,
 ):
     from app.access_control.service import AccessControlService
     from app.auth.service import AuthService
@@ -180,13 +184,20 @@ def _create_starter_profile(
     from app.models.club_profile import ClubLifecycleStatus, ClubProfile, ClubType
     from app.services.club_dynasty_service import ClubDynastyService
     from app.services.club_reputation_service import ClubReputationService
-    from app.club_legacy.geography import continent_for_country
+    from app.club_legacy.delegation import LegacyError
+    from app.club_legacy.full.phase1 import resolve_location
     from app.services.club_trophy_service import ClubTrophyService
 
     try:
         assert_can_acquire_club(session, user.id)
     except ClubOwnershipCapError as exc:
         raise OwnerError(exc.reason, 409) from exc
+    try:
+        city, country, continent = resolve_location(
+            city_name=city_name, country_code=country_code, continent_code=continent_code
+        )
+    except LegacyError as exc:
+        raise OwnerError(exc.code, exc.status, exc.detail) from exc
     label = (getattr(user, "display_name", None) or getattr(user, "username", None) or "Owner").strip()
     club_name = f"{label} FC"[:120]
     club = ClubProfile(
@@ -199,9 +210,9 @@ def _create_starter_profile(
         primary_color="#0F766E",
         secondary_color="#F8FAFC",
         accent_color="#EA580C",
-        country_code=(country_code or "").strip().upper()[:8] or None,
-        continent_code=continent_for_country(country_code),
-        city_name=(city_name or "").strip()[:120] or None,
+        country_code=country,
+        continent_code=continent,
+        city_name=city,
         visibility="public",
     )
     session.add(club)

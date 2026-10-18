@@ -35,6 +35,9 @@ class ClubLegacyRecommendation(UUIDPrimaryKeyMixin, Base):
     amount: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="recommended")
     outcome: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    confidence: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    consequence: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow, server_default=func.now()
     )
@@ -47,6 +50,7 @@ class ClubLegacyAuditEvent(UUIDPrimaryKeyMixin, Base):
     actor_user_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     action: Mapped[str] = mapped_column(String(64), nullable=False)
     detail_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, unique=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow, server_default=func.now()
     )
@@ -62,6 +66,8 @@ class ClubLegacyExecutive(UUIDPrimaryKeyMixin, Base):
     personality: Mapped[str] = mapped_column(String(40), nullable=False, default="cautious")
     attributes_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     wage: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False, default=Decimal("0"))
+    contract_months: Mapped[int] = mapped_column(Integer, nullable=False, default=24, server_default="24")
+    authority: Mapped[str] = mapped_column(String(64), nullable=False, default="limited", server_default="limited")
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="hired")
 
 
@@ -232,6 +238,21 @@ class ClubLegacyStake(UUIDPrimaryKeyMixin, Base):
     holder_user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     percentage: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
     voting_rights: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
+
+
+class ClubLegacySettings(UUIDPrimaryKeyMixin, Base):
+    """One current row. Execution reads this row instead of a hardcoded fee or cap."""
+
+    __tablename__ = "club_legacy_settings"
+
+    settings_key: Mapped[str] = mapped_column(String(32), nullable=False, unique=True, default="current")
+    transfer_fee_rate: Mapped[Decimal] = mapped_column(Numeric(8, 4), nullable=False, default=Decimal("0.0500"))
+    inventory_caps_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    preseason_shares_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    updated_by_user_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, server_default=func.now()
+    )
 
 
 CLUB_LEGACY_TABLES = (ClubLegacyPolicy.__table__, ClubLegacyRecommendation.__table__, ClubLegacyAuditEvent.__table__)
