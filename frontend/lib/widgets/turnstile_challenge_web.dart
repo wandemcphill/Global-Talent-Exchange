@@ -14,9 +14,6 @@ external JSAny? _turnstileRender(web.HTMLElement container, JSAny options);
 @JS('turnstile.remove')
 external void _turnstileRemove(JSString widgetId);
 
-@JS()
-external JSAny _turnstileCallback(JSString token);
-
 class TurnstileChallenge extends StatefulWidget {
   const TurnstileChallenge({
     super.key,
@@ -79,15 +76,12 @@ class _TurnstileChallengeState extends State<TurnstileChallenge> {
         }).toJS,
       }.jsify();
 
-      final id = _renderWithOptions(container, options);
-      _widgetId = id?.toDartString();
+      final id = _turnstileRender(container, options);
+      _widgetId = id?.dartify()?.toString();
     } catch (_) {
       if (mounted) widget.onTokenChanged(null);
     }
   }
-
-  JSAny? _renderWithOptions(web.HTMLElement container, JSAny options) =>
-      _turnstileRender(container, options);
 
   static Future<void> _ensureScriptLoaded() async {
     if (_turnstile != null) return;
