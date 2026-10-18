@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.club_legacy.delegation import LegacyError
 from app.club_legacy.flags import legacy_enabled
+from app.club_legacy.models import ClubLegacyAuditEvent
 
 
 def run_legacy(session: Session, fn: Callable[[], Any]) -> Any:
@@ -20,5 +21,10 @@ def run_legacy(session: Session, fn: Callable[[], Any]) -> Any:
         session.commit()
         return result
     except LegacyError as exc:
+        saved = list(session.info.get("legacy_refusals", []))
         session.rollback()
+        if saved:
+            for item in saved:
+                session.add(ClubLegacyAuditEvent(**item))
+            session.commit()
         raise HTTPException(status_code=exc.status, detail={"code": exc.code, "detail": exc.detail}) from exc
