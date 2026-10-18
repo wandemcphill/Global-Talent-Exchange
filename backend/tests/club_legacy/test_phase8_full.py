@@ -252,26 +252,38 @@ def test_stakes_cap_voting_and_distributions_pay_once(client, bootstrap_admin_he
 
 
 def test_net_worth_keeps_personal_club_and_minority_distinct(client, bootstrap_admin_headers, app):
-    club_id = _claim(client, bootstrap_admin_headers)
+    _claim(client, bootstrap_admin_headers)
     with app.state.session_factory() as session:
-        admin = _admin(session)
+        owner = _user(session, "phase8_worth_owner")
+        club = _club(session, owner, "phase8-worth-club")
+        ledger.record(
+            session,
+            event_type="launch_grant",
+            source=ledger.PLATFORM_GRANTS,
+            destination=ledger.club_account(club.id),
+            currency=ledger.GTEX,
+            gross=100000,
+            user_id=owner.id,
+            club_id=club.id,
+            memo="Net worth purchase float",
+        )
         purchase_asset(
             session,
-            club_id=club_id,
-            user_id=admin.id,
+            club_id=club.id,
+            user_id=owner.id,
             sku="gtex-watch-icon",
             owner_class="owner",
             idempotency_key="phase8-watch",
         )
         purchase_asset(
             session,
-            club_id=club_id,
-            user_id=admin.id,
+            club_id=club.id,
+            user_id=owner.id,
             sku="gtex-jet-harbour",
             owner_class="club",
             idempotency_key="phase8-worth-jet",
         )
-        other_owner = _user(session, "phase8-other-owner")
+        other_owner = _user(session, "phase8_other_owner")
         other = _club(session, other_owner, "phase8-minority-club")
         ledger.record(
             session,
@@ -284,8 +296,8 @@ def test_net_worth_keeps_personal_club_and_minority_distinct(client, bootstrap_a
             club_id=other.id,
             memo="Minority club float",
         )
-        phase8.set_stake(session, club_id=other.id, holder_user_id=admin.id, percentage="20", voting_rights="5")
-        worth = owner_net_worth(session, admin.id)
+        phase8.set_stake(session, club_id=other.id, holder_user_id=owner.id, percentage="20", voting_rights="5")
+        worth = owner_net_worth(session, owner.id)
         personal = Decimal(worth["personal_assets"])
         club_assets = Decimal(worth["club_assets"])
         minority = Decimal(worth["minority_stakes"])
