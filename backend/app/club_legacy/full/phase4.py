@@ -430,7 +430,26 @@ def _reject_related_trade(session: Session, *, asset: ClubLegacyAsset, buyer_clu
                 "reason": "wash_trade",
             },
         )
+        from app.club_legacy.full.phase8 import log_trade_review
+
+        log_trade_review(
+            session,
+            listing_id=None,
+            from_club_id=seller_club.id,
+            to_club_id=buyer_club_id,
+            kind="sister_club",
+            note="Sister-club marketplace trade is blocked and left reviewable.",
+        )
+        log_trade_review(
+            session,
+            listing_id=None,
+            from_club_id=seller_club.id,
+            to_club_id=buyer_club_id,
+            kind="related_party",
+            note="Related-party marketplace trade is blocked and left reviewable.",
+        )
         raise LegacyError("wash_trade", 409, "Related clubs cannot trade this asset with each other.")
+
 
 
 def place_bid(session: Session, *, listing_id: str, bidder_user_id: str, amount) -> ClubLegacyBid:
@@ -446,7 +465,18 @@ def place_bid(session: Session, *, listing_id: str, bidder_user_id: str, amount)
             action="seller_bid_refused",
             detail={"listing_id": listing.id, "reason": "wash_trade"},
         )
+        from app.club_legacy.full.phase8 import log_trade_review
+
+        log_trade_review(
+            session,
+            listing_id=listing.id,
+            from_club_id=asset.club_id if asset is not None else None,
+            to_club_id=asset.club_id if asset is not None else None,
+            kind="related_party",
+            note="The seller cannot bid on their own auction.",
+        )
         raise LegacyError("wash_trade", 409, "The seller cannot bid on their own auction.")
+
     if asset is not None and asset.club_id is not None:
         seller_club = session.get(ClubProfile, asset.club_id)
         bidder_clubs = session.scalars(
