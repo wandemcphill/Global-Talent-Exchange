@@ -1,0 +1,35 @@
+{
+  "schema_version": "legendary-enrichment-v1",
+  "generated_at": "2026-09-17T21:00:00Z",
+  "patches": [
+    {
+      "source_id": "wikidata:Q336916",
+      "country_code": "GHA",
+      "date_of_birth": "1964-11-05",
+      "historical_height_cm": 174,
+      "position_candidates": ["midfielder"],
+      "preferred_foot": "left",
+      "football_evidence": [
+        {
+          "provider": "Wikidata",
+          "uri": "https://www.wikidata.org/wiki/Q336916",
+          "claim_types": ["country_for_sport", "date_of_birth", "height", "position_played"]
+        },
+        {
+          "provider": "FIFPlay",
+          "uri": "https://www.fifplay.com/fc-26/players/50499073/abedi-pele/",
+          "claim_types": ["preferred_foot", "weak_foot"]
+        }
+      ],
+      "editorial_status": "enriched",
+      "rights_status": "unknown",
+      "catalogue_status": "staged",
+      "source_notes": "Preferred foot is recorded as left. The player is also documented with strong two-foot capability; that capability is preserved as metadata rather than changing the canonical preferred-foot field. GTEX position mapping, era, traits, profiles, editorial approval, rights approval and fictional portrait configuration remain deferred.",
+      "metadata": {
+        "research_batch": "2026-09-17-abedi-pele-002",
+        "position_mapping": "deferred",
+        "two_foot_capability": true
+      }
+    }
+  ]
+}
