@@ -50,11 +50,16 @@ class _TurnstileChallengeState extends State<TurnstileChallenge> {
         return;
       }
 
-      final Object options = js_util.jsify(<String, Object?>{
+      final Object? rawOptions = js_util.jsify(<String, Object?>{
         'sitekey': widget.siteKey.trim(),
         'theme': 'dark',
         'size': 'normal',
       });
+      if (rawOptions == null) {
+        widget.onTokenChanged(null);
+        return;
+      }
+      final Object options = rawOptions;
       js_util.setProperty(
         options,
         'callback',
