@@ -1,0 +1,21 @@
+
+> gtex-react-shell@0.1.0 build
+> craco build
+
+Creating an optimized production build...
+Compiled successfully.
+
+File sizes after gzip:
+
+  282.96 kB (+31 B)  build/static/js/main.441afe0e.js
+  13.16 kB           build/static/css/main.b341f88f.css
+
+The project was built assuming it is hosted at /console/.
+You can control this with the homepage field in your package.json.
+
+The build folder is ready to be deployed.
+
+Find out more about deployment here:
+
+  https://cra.link/deployment
+
