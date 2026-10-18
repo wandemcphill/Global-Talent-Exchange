@@ -3,7 +3,9 @@ from __future__ import annotations
 from datetime import timedelta
 
 
-def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(api_client, base_now) -> None:
+def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(
+    api_client, base_now
+) -> None:
     upcoming_response = api_client.get(
         "/fast-cups/upcoming",
         params={"now": base_now.isoformat(), "horizon_intervals": 1},
@@ -13,7 +15,9 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(api_c
     cups = upcoming_response.json()["cups"]
     assert len(cups) == 8
 
-    senior_32 = next(cup for cup in cups if cup["division"] == "senior" and cup["size"] == 32)
+    senior_32 = next(
+        cup for cup in cups if cup["division"] == "senior" and cup["size"] == 32
+    )
 
     for index in range(1, 33):
         response = api_client.post(
@@ -50,24 +54,62 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(api_c
     assert early_summary_response.status_code == 409
 
     kickoff_plus_duration = base_now + timedelta(minutes=30)
+    ecosystem = api_client.app.state.fast_cup_ecosystem
+    cup_before_summary = ecosystem.repository.get(senior_32["cup_id"])
+    assert cup_before_summary.result_summary is None
+    cup_status_before_summary = cup_before_summary.status
+
     summary_response = api_client.get(
         f"/fast-cups/{senior_32['cup_id']}/result-summary",
         params={"now": kickoff_plus_duration.isoformat()},
     )
     assert summary_response.status_code == 200
     summary_payload = summary_response.json()
+    cup_after_summary = ecosystem.repository.get(senior_32["cup_id"])
+    assert cup_after_summary.result_summary is None
+    assert cup_after_summary.status == cup_status_before_summary
     assert summary_payload["champion"]["club_id"].startswith("senior-club-")
     assert summary_payload["expected_duration_minutes"] == 30
     assert len(summary_payload["events"]) == 6
     assert summary_payload["penalty_shootouts"] >= 1
 
-    # Unauthenticated POST /settle (overriding user dependency to raise 401 or no auth)
+    from sqlalchemy import func, select
     from app.auth.dependencies import get_current_user
-    from app.models.user import UserRole
+    from app.core.database import get_session
+    from app.models.fast_cup_finance import FastCupPayout
+    from app.models.user import User, UserRole
+    from app.models.wallet import LedgerTransaction
     from fastapi import HTTPException, status
 
+    session = list(api_client.app.dependency_overrides[get_session]())[0]
+
+    def payout_counts() -> tuple[int, int]:
+        session.expire_all()
+        payout_count = session.scalar(
+            select(func.count())
+            .select_from(FastCupPayout)
+            .where(FastCupPayout.cup_id == senior_32["cup_id"])
+        )
+        ledger_count = session.scalar(
+            select(func.count())
+            .select_from(LedgerTransaction)
+            .where(
+                LedgerTransaction.idempotency_key.like(
+                    f"fast-cup-payout:{senior_32['cup_id']}:%"
+                )
+            )
+        )
+        return int(payout_count or 0), int(ledger_count or 0)
+
+    # Reading a summary must not write payout rows or payout ledger entries.
+    assert payout_counts() == (0, 0)
+
+    # Unauthenticated settlement must be rejected.
+
     def unauth_user():
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
+        )
 
     api_client.app.dependency_overrides[get_current_user] = unauth_user
     unauth_settle = api_client.post(
@@ -75,13 +117,10 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(api_c
         params={"now": kickoff_plus_duration.isoformat()},
     )
     assert unauth_settle.status_code == 401
+    assert payout_counts() == (0, 0)
 
     # Non-admin user POST /settle (returning regular user)
     # Restore original override where current_user has UserRole.USER
-    from app.models.user import User
-    from app.core.database import get_session
-
-    session = list(api_client.app.dependency_overrides[get_session]())[0]
     actor = session.get(User, "fast-cup-owner")
 
     api_client.app.dependency_overrides[get_current_user] = lambda: actor
@@ -90,6 +129,7 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(api_c
         params={"now": kickoff_plus_duration.isoformat()},
     )
     assert forbidden_settle.status_code == 403
+    assert payout_counts() == (0, 0)
 
     # Admin user POST /settle
     actor.role = UserRole.ADMIN
@@ -101,4 +141,26 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(api_c
     )
     assert admin_settle.status_code == 200
     settle_payload = admin_settle.json()
-    assert settle_payload["champion"]["club_id"] == summary_payload["champion"]["club_id"]
+    assert (
+        settle_payload["champion"]["club_id"] == summary_payload["champion"]["club_id"]
+    )
+
+    payout_count_after_settle, ledger_count_after_settle = payout_counts()
+    assert payout_count_after_settle > 0
+    assert ledger_count_after_settle > 0
+
+    # Reading the summary after settlement stays read-only too.
+    after_settlement_read = api_client.get(
+        f"/fast-cups/{senior_32['cup_id']}/result-summary",
+        params={"now": kickoff_plus_duration.isoformat()},
+    )
+    assert after_settlement_read.status_code == 200
+    assert payout_counts() == (payout_count_after_settle, ledger_count_after_settle)
+
+    # Repeat the authorized settlement; no duplicate payouts or ledger credits.
+    repeated_settle = api_client.post(
+        f"/fast-cups/{senior_32['cup_id']}/settle",
+        params={"now": kickoff_plus_duration.isoformat()},
+    )
+    assert repeated_settle.status_code == 200
+    assert payout_counts() == (payout_count_after_settle, ledger_count_after_settle)
