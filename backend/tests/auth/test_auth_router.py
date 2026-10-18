@@ -831,7 +831,6 @@ def test_turnstile_enforced_on_all_signup_routes(app_client, monkeypatch) -> Non
             "/auth/signup/trader",
             trader_signup_payload(
                 email="turnstile-trader@example.com",
-                username="turnstile-trader",
                 trading_alias="turnstile_trader",
                 password=TEST_PASSWORD,
                 totp_secret=trader_secret,
