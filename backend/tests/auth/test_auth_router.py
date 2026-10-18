@@ -823,10 +823,14 @@ def test_turnstile_enforced_on_all_signup_routes(app_client, monkeypatch) -> Non
         # 1. Omitted / empty turnstile_token should return 400 Bad Request
         missing_payload = {k: v for k, v in payload.items() if k != "turnstile_token"}
         res_missing = client.post(path, json=missing_payload)
-        assert res_missing.status_code == 400, f"Expected 400 for missing turnstile token on {path}, got {res_missing.status_code}: {res_missing.text}"
+        assert (
+            res_missing.status_code == 400
+        ), f"Expected 400 for missing turnstile token on {path}, got {res_missing.status_code}: {res_missing.text}"
         assert "Complete the security check" in res_missing.text or "Security check failed" in res_missing.text
 
         # 2. Valid dev-bypass token should succeed (in test environment)
         bypass_payload = {**missing_payload, "turnstile_token": "dev-bypass"}
         res_bypass = client.post(path, json=bypass_payload)
-        assert res_bypass.status_code == 201, f"Expected 201 for dev-bypass token on {path}, got {res_bypass.status_code}: {res_bypass.text}"
+        assert (
+            res_bypass.status_code == 201
+        ), f"Expected 201 for dev-bypass token on {path}, got {res_bypass.status_code}: {res_bypass.text}"
