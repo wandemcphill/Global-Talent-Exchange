@@ -38,7 +38,7 @@ Steps 1–2 are safe without new economics. Steps 3 and 4 need the product rules
 
 **Certification:** Run `pytest backend/tests/club_legacy/test_full_desk.py -q` and the Flutter desk widget test. This agent’s environment had neither pytest nor Flutter; the repair PR must record the actual result.
 
-**Status:** Implement on a branch separate from the audit documents.
+**Status:** Open as draft PR #272. `pytest backend/tests/club_legacy/test_full_desk.py` passed (1 test) in the audit environment. Flutter widget tests were not run because the Flutter SDK is not installed.
 
 ### PR-B — Unmounted routes the Flutter client already calls (FND-003)
 
@@ -153,13 +153,13 @@ Steps 1–2 are safe without new economics. Steps 3 and 4 need the product rules
 
 These are not duplicates of #2, #169, #176, #228, #263, or #136.
 
-| Proposed title | Findings | Acceptance |
+| Issue | Findings | Acceptance |
 | --- | --- | --- |
-| Wire club-legacy prestige purchase and gift through the existing catalogue | FND-002 | PR-E acceptance |
-| Flutter and React signup follow the normal-account rule and stop sending a Turnstile bypass | FND-001, FND-005 | PR-C acceptance |
-| Flutter club-sale and club-identity routes must match mounted routers | FND-003 | PR-B acceptance |
-| Canonical staff contract is the only hire path; decide GM and HYD before new roles | FND-009 | PR-D acceptance, decision recorded in the PR |
-| Require explicit asset and listing ids on club-legacy desk auctions and bids | FND-016 | PR-A acceptance |
+| [#273](https://github.com/wandemcphill/Global-Talent-Exchange/issues/273) Prestige purchase and gift | FND-002 | PR-E acceptance |
+| [#274](https://github.com/wandemcphill/Global-Talent-Exchange/issues/274) Normal-account signup and Turnstile bypass | FND-001, FND-005 | PR-C acceptance |
+| [#275](https://github.com/wandemcphill/Global-Talent-Exchange/issues/275) Unmounted club-sale and identity routes | FND-003 | PR-B acceptance |
+| [#276](https://github.com/wandemcphill/Global-Talent-Exchange/issues/276) One staff hire path; GM and HYD decision | FND-009 | PR-D acceptance, decision recorded in the PR |
+| [#272](https://github.com/wandemcphill/Global-Talent-Exchange/pull/272) Explicit desk auction and bid targets | FND-016 | PR-A acceptance. Draft PR open, not merged |
 
 #228 already covers browser certification, regen seeds, and the card rebuild. #263 already covers `/console`. #176 already covers lifecycle bridges. Link those instead of filing them again.
 
