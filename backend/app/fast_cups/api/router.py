@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_admin, get_current_user
 from app.core.database import get_session
 from app.fast_cups.api.schemas import (
     FastCupBracketView,
@@ -156,7 +156,23 @@ def get_fast_cup_countdown(
 def get_fast_cup_result_summary(
     cup_id: str,
     now: datetime | None = None,
+    ecosystem: FastCupEcosystemService = Depends(get_fast_cup_ecosystem),
+) -> FastCupResultSummaryView:
+    try:
+        summary = ecosystem.preview_result_summary(cup_id=cup_id, now=now or datetime.now(UTC))
+    except FastCupNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except FastCupStateError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return FastCupResultSummaryView.model_validate(summary)
+
+
+@router.post("/{cup_id}/settle", response_model=FastCupResultSummaryView)
+def settle_fast_cup(
+    cup_id: str,
+    now: datetime | None = None,
     session: Session = Depends(get_session),
+    _admin: User = Depends(get_current_admin),
     ecosystem: FastCupEcosystemService = Depends(get_fast_cup_ecosystem),
 ) -> FastCupResultSummaryView:
     try:
