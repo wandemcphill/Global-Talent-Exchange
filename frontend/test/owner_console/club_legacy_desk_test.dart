@@ -8,6 +8,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final List<String> actions = <String>[];
+    final List<Map<String, Object?>> payloads = <Map<String, Object?>>[];
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -22,10 +23,23 @@ void main() {
               offers: <Map<String, dynamic>>[<String, dynamic>{'candidate_name': 'Tunde Bakare', 'outcome': 'declined'}],
               cases: <Map<String, dynamic>>[<String, dynamic>{'rule_code': 'late_wages', 'status': 'appealed'}],
               market: <Map<String, dynamic>>[
-                <String, dynamic>{'name': 'Harbour Jet', 'status': 'auction', 'price': '1800.00', 'leading_bid': '2000.00'},
+                <String, dynamic>{
+                  'id': 'listing-jet',
+                  'name': 'Harbour Jet',
+                  'status': 'auction',
+                  'price': '1800.00',
+                  'leading_bid': '2000.00',
+                  'can_bid': true,
+                },
+              ],
+              auctionable: <Map<String, dynamic>>[
+                <String, dynamic>{'asset_id': 'asset-coach', 'name': 'Lagoon Coach'},
               ],
             ),
-            onAction: actions.add,
+            onAction: (String action, Map<String, Object?> payload) {
+              actions.add(action);
+              payloads.add(payload);
+            },
           ),
         ),
       ),
@@ -45,10 +59,14 @@ void main() {
     await tester.tap(find.byKey(const Key('club-desk-manager')));
     await tester.ensureVisible(find.byKey(const Key('club-desk-case')));
     await tester.tap(find.byKey(const Key('club-desk-case')));
-    await tester.ensureVisible(find.byKey(const Key('club-desk-auction')));
-    await tester.tap(find.byKey(const Key('club-desk-auction')));
-    await tester.ensureVisible(find.byKey(const Key('club-desk-bid')));
-    await tester.tap(find.byKey(const Key('club-desk-bid')));
+    await tester.ensureVisible(find.byKey(const Key('club-desk-auction-asset-coach')));
+    await tester.tap(find.byKey(const Key('club-desk-auction-asset-coach')));
+    await tester.ensureVisible(find.byKey(const Key('club-desk-bid-listing-jet')));
+    await tester.tap(find.byKey(const Key('club-desk-bid-listing-jet')));
     expect(actions, <String>['hire', 'preset', 'sponsor', 'manager', 'case', 'list_auction', 'place_bid']);
+    expect(payloads[5]['asset_id'], 'asset-coach');
+    expect(payloads[6]['listing_id'], 'listing-jet');
+    expect(find.byKey(const Key('club-desk-auction')), findsNothing);
+    expect(find.byKey(const Key('club-desk-bid')), findsNothing);
   });
 }

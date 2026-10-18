@@ -684,7 +684,7 @@ abstract class OwnerConsoleReader {
 
   Future<ClubLegacyDeskData> fetchDesk();
 
-  Future<void> performDesk(String action);
+  Future<void> performDesk(String action, [Map<String, Object?> payload = const <String, Object?>{}]);
 }
 
 class OwnerConsoleApi implements OwnerConsoleReader {
@@ -799,13 +799,14 @@ class OwnerConsoleApi implements OwnerConsoleReader {
   }
 
   @override
-  Future<void> performDesk(String action) async {
+  Future<void> performDesk(String action, [Map<String, Object?> payload = const <String, Object?>{}]) async {
     final Map<String, dynamic> center = await client.getMap('/owner/control-center');
     final List<Map<String, dynamic>> clubs = _maps(center['clubs']);
     if (clubs.isEmpty) {
       return;
     }
-    await client.post('/owner/legacy/${clubs.first['club_id']}/desk', body: <String, Object?>{'action': action, 'payload': _deskPayload(action)});
+    final Map<String, Object?> body = <String, Object?>{..._deskPayload(action), ...payload};
+    await client.post('/owner/legacy/${clubs.first['club_id']}/desk', body: <String, Object?>{'action': action, 'payload': body});
   }
 
   @override
