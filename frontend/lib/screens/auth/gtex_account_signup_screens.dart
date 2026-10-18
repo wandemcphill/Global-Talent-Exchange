@@ -340,7 +340,8 @@ class _GtexUserSignupScreenState extends State<GtexUserSignupScreen> {
         ),
       ),
       const Text(
-        'Security check runs automatically. Club creation happens in the Hub after signup.',
+        'Club creation happens in the Hub after signup. '
+        'If this environment requires a security check, the server will reject signup until a valid token is provided.',
         style: TextStyle(fontSize: 12, color: Color(0xFF8B97A5)),
       ),
     ],
@@ -362,6 +363,9 @@ class _GtexUserSignupScreenState extends State<GtexUserSignupScreen> {
       );
       final String dob =
           '$_birthYear-${_birthMonth.toString().padLeft(2, '0')}-${_birthDay.toString().padLeft(2, '0')}';
+      // Never send a hardcoded Turnstile bypass. When no secret is configured the
+      // API accepts a missing token; when production requires Turnstile the client
+      // must obtain a real token (see issue #274).
       final session = await client.signupUser(
         GteUserSignupRequest(
           fullName: _name.text.trim(),
@@ -370,7 +374,6 @@ class _GtexUserSignupScreenState extends State<GtexUserSignupScreen> {
           password: _password.text,
           isOver18: _isOver18,
           dateOfBirth: dob,
-          turnstileToken: 'dev-bypass',
         ),
       );
       widget.controller.syncSession(session);

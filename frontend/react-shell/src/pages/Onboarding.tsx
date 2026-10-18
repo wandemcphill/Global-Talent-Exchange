@@ -150,12 +150,34 @@ function CompetitionStep({ clubId, onDone }: any) {
 
 function CreateFirstClub({ onDone }: any) {
   const [name, setName] = useState("");
+  const [countryCode, setCountryCode] = useState("");
+  const [cityName, setCityName] = useState("");
   const [busy, setBusy] = useState(false);
   const create = async () => {
+    const code = countryCode.trim().toUpperCase();
+    const city = cityName.trim();
+    if (code.length < 2) {
+      toast.error("Enter a country code (for example NG or GH).");
+      return;
+    }
+    if (city.length < 2) {
+      toast.error("Enter the club home city.");
+      return;
+    }
     setBusy(true);
     try {
       const slug = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString(36).slice(-4)}`;
-      await api.post("/clubs", { club_name: name, slug, short_name: name.slice(0, 12), primary_color: "#0F766E", secondary_color: "#F8FAFC", accent_color: "#F59E0B", country_code: "NG", city_name: "Lagos", club_type: "community" });
+      await api.post("/clubs", {
+        club_name: name,
+        slug,
+        short_name: name.slice(0, 12),
+        primary_color: "#0F766E",
+        secondary_color: "#F8FAFC",
+        accent_color: "#F59E0B",
+        country_code: code,
+        city_name: city,
+        club_type: "community",
+      });
       onDone();
     } catch (e) {
       toast.error(errMsg(e));
@@ -166,7 +188,11 @@ function CreateFirstClub({ onDone }: any) {
   return (
     <div className="gx-pitch-grid flex min-h-screen items-center justify-center bg-[#070B11] px-4" data-testid="create-first-club">
       <Panel eyebrow="First-club activation" title="Name your club" className="w-full max-w-lg">
-        <input data-testid="first-club-name-input" className="gx-input" placeholder="Lagos Lions FC" value={name} onChange={(e) => setName(e.target.value)} />
+        <input data-testid="first-club-name-input" className="gx-input" placeholder="Club name" value={name} onChange={(e) => setName(e.target.value)} />
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <input data-testid="first-club-country-input" className="gx-input" placeholder="Country code (NG)" value={countryCode} onChange={(e) => setCountryCode(e.target.value)} />
+          <input data-testid="first-club-city-input" className="gx-input" placeholder="City" value={cityName} onChange={(e) => setCityName(e.target.value)} />
+        </div>
         <Btn className="mt-4 w-full" disabled={name.length < 3 || busy} onClick={create} data-testid="first-club-create-button">Create club</Btn>
       </Panel>
     </div>
