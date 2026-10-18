@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1773,
+  "route_count": 1776,
   "routes": [
     {
       "method": "POST",
@@ -28833,6 +28833,33 @@
     },
     {
       "method": "GET",
+      "path": "/owner/clubs/{club_id}/money-history",
+      "effective_paths": [
+        "/api/owner/clubs/{club_id}/money-history"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "club_money_history",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
       "path": "/owner/clubs/{club_id}/showroom",
       "effective_paths": [
         "/api/owner/clubs/{club_id}/showroom"
@@ -29153,6 +29180,32 @@
     },
     {
       "method": "GET",
+      "path": "/owner/net-worth",
+      "effective_paths": [
+        "/api/owner/net-worth"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "owner_net_worth",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
       "path": "/owner/onboarding",
       "effective_paths": [
         "/api/owner/onboarding"
@@ -29167,6 +29220,32 @@
       "request_shape": {
         "parameters": [
           "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
+      "path": "/owner/public/clubs/{club_id}",
+      "effective_paths": [
+        "/api/owner/public/clubs/{club_id}"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "public_club_page",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
           "session"
         ]
       },

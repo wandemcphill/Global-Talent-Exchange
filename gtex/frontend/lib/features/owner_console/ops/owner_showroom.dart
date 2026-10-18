@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
 import '../data/owner_ops_api.dart';
+import 'showroom_card.dart';
 
 String showroomShareUrl(String code, [Uri? base]) {
   final Uri b = base ?? Uri.base;
@@ -135,34 +136,57 @@ class _OwnerShowroomPanelState extends State<OwnerShowroomPanel> {
     title: 'Club showroom',
     subtitle: 'Drag to turn the cabinet · share it with supporters',
     accent: GtexColors.gold,
-    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
-      OpsLoader(label: 'Showroom', load: () => widget.client.get('/owner/clubs/${widget.clubId}/showroom'), builder: (BuildContext context, Map<String, dynamic> d, _) => ShowroomCabinet(data: d)),
-      const SizedBox(height: GtexSpacing.sm),
-      Wrap(spacing: GtexSpacing.sm, crossAxisAlignment: WrapCrossAlignment.center, children: <Widget>[
-        GtexActionButton(
-          key: const Key('owner-showroom-share'),
-          label: 'Share showroom link',
-          icon: Icons.ios_share_rounded,
-          compact: true,
-          onPressed: () async {
-            final Map<String, dynamic>? r = await runOwnerAction(context, () => widget.client.post('/owner/clubs/${widget.clubId}/showroom/share'), success: (_) => 'Showroom link copied');
-            if (r == null) return;
-            final String url = showroomShareUrl('${r['code']}');
-            await Clipboard.setData(ClipboardData(text: url));
-            if (mounted) setState(() => _link = url);
-          },
-        ),
-        if (_link != null) SelectableText(_link!, key: const Key('owner-showroom-link'), style: const TextStyle(color: GtexColors.cyan, fontSize: 12)),
+    child: OpsLoader(
+      label: 'Showroom',
+      load: () => widget.client.get('/owner/clubs/${widget.clubId}/showroom'),
+      builder: (BuildContext context, Map<String, dynamic> d, _) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+        ShowroomCabinet(data: d),
+        const SizedBox(height: GtexSpacing.sm),
+        Wrap(spacing: GtexSpacing.sm, runSpacing: GtexSpacing.xs, crossAxisAlignment: WrapCrossAlignment.center, children: <Widget>[
+          GtexActionButton(
+            key: const Key('owner-showroom-share'),
+            label: 'Share showroom link',
+            icon: Icons.ios_share_rounded,
+            compact: true,
+            onPressed: () async {
+              final String? url = await _shareUrl(context, 'Showroom link copied');
+              if (url == null) return;
+              await Clipboard.setData(ClipboardData(text: url));
+            },
+          ),
+          GtexActionButton(
+            key: const Key('owner-showroom-card'),
+            label: 'Share card',
+            icon: Icons.image_rounded,
+            compact: true,
+            secondary: true,
+            onPressed: () async {
+              final String? url = await _shareUrl(context, null);
+              if (url != null && context.mounted) await showShowroomCard(context, d, url);
+            },
+          ),
+          if (_link != null) SelectableText(_link!, key: const Key('owner-showroom-link'), style: const TextStyle(color: GtexColors.cyan, fontSize: 12)),
+        ]),
       ]),
-    ]),
+    ),
   );
+
+  Future<String?> _shareUrl(BuildContext context, String? toast) async {
+    final Map<String, dynamic>? r = await runOwnerAction(context, () => widget.client.post('/owner/clubs/${widget.clubId}/showroom/share'), success: toast == null ? null : (_) => toast);
+    if (r == null) return null;
+    final String url = showroomShareUrl('${r['code']}');
+    if (mounted) setState(() => _link = url);
+    return url;
+  }
 }
 
 /// Public showroom page supporters open without signing in.
 class PublicShowroomScreen extends StatelessWidget {
-  const PublicShowroomScreen({super.key, required this.load});
+  const PublicShowroomScreen({super.key, required this.load, this.code, this.linkBase});
 
   final Future<Map<String, dynamic>> Function() load;
+  final String? code;
+  final Uri? linkBase;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -175,7 +199,20 @@ class PublicShowroomScreen extends StatelessWidget {
           child: ListView(padding: const EdgeInsets.all(GtexSpacing.md), children: <Widget>[
             const Text('GTEX CLUB SHOWROOM', style: TextStyle(color: GtexColors.gold, letterSpacing: 3, fontWeight: FontWeight.w900, fontSize: 12)),
             const SizedBox(height: GtexSpacing.sm),
-            OpsLoader(label: 'Showroom', load: load, builder: (BuildContext context, Map<String, dynamic> d, _) => ShowroomCabinet(data: d)),
+            OpsLoader(
+              label: 'Showroom',
+              load: load,
+              builder: (BuildContext context, Map<String, dynamic> d, _) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+                ShowroomCabinet(data: d),
+                if (code != null) ...<Widget>[
+                  const SizedBox(height: GtexSpacing.sm),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: GtexActionButton(key: const Key('public-showroom-card'), label: 'Share card', icon: Icons.ios_share_rounded, compact: true, onPressed: () => showShowroomCard(context, d, showroomShareUrl(code!, linkBase))),
+                  ),
+                ],
+              ]),
+            ),
           ]),
         ),
       ),

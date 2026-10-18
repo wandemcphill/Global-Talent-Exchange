@@ -92,3 +92,4 @@ credentials.json
 .credentials
 frontend/node_modules/.cache/default-development/13.pack
 frontend/node_modules/.cache/default-development/0.pack
+gtex/tmp/infinite_league/universe.db

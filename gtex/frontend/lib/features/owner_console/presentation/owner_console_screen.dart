@@ -5,6 +5,7 @@ import '../../regen_redesign/data/gtex_share_market_api.dart';
 import '../data/owner_alert_sound.dart';
 import '../data/owner_console_api.dart';
 import '../data/owner_ops_api.dart';
+import '../ops/club_page.dart';
 import '../ops/owner_club_ops.dart';
 import '../ops/owner_competitions_section.dart';
 import '../ops/owner_finance_section.dart';
@@ -15,10 +16,11 @@ import '../ops/owner_staff_section.dart';
 import '../widgets/owner_admin_review_section.dart';
 import '../widgets/owner_console_sections.dart';
 
-enum OwnerConsoleSection { control, setup, clubs, staff, market, squad, academy, competitions, finance, inbox, admin }
+enum OwnerConsoleSection { control, setup, clubs, legacy, staff, market, squad, academy, competitions, finance, inbox, admin }
 
 const Set<OwnerConsoleSection> _opsSections = <OwnerConsoleSection>{
   OwnerConsoleSection.setup,
+  OwnerConsoleSection.legacy,
   OwnerConsoleSection.staff,
   OwnerConsoleSection.competitions,
   OwnerConsoleSection.finance,
@@ -30,6 +32,7 @@ const Map<OwnerConsoleSection, (String, IconData)> _sectionMeta =
       OwnerConsoleSection.control: ('Control Center', Icons.space_dashboard_rounded),
       OwnerConsoleSection.setup: ('Club Setup', Icons.flag_rounded),
       OwnerConsoleSection.clubs: ('My Clubs', Icons.shield_rounded),
+      OwnerConsoleSection.legacy: ('Club Page & Net Worth', Icons.public_rounded),
       OwnerConsoleSection.staff: ('Staff & Delegation', Icons.badge_rounded),
       OwnerConsoleSection.market: ('Market & Transfers', Icons.storefront_rounded),
       OwnerConsoleSection.squad: ('Manager & Squad', Icons.groups_rounded),
@@ -180,6 +183,8 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
         return _withClubs((String? clubId, _) => clubId == null
             ? opsList(<Widget>[opsNoClub()])
             : ListView(padding: const EdgeInsets.all(GtexSpacing.md), children: <Widget>[StaffDelegationPanel(client: ops!, clubId: clubId, onChanged: _reload)]));
+      case OwnerConsoleSection.legacy:
+        return _withClubs((String? clubId, _) => clubId == null ? opsList(<Widget>[opsNoClub()]) : OwnerClubPageSection(key: ValueKey<String>('club-page-$clubId'), client: ops!, clubId: clubId));
       case OwnerConsoleSection.finance:
         return FinanceSection(client: ops!, onNavigate: widget.onNavigate);
       case OwnerConsoleSection.inbox:

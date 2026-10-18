@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.owner_console import competitions as comps
-from app.owner_console import alerts, ledger, money, service, staff
+from app.owner_console import alerts, ledger, legacy, money, service, staff
 from app.owner_console.models import IntegrityFlag, LedgerEvent, OwnerCompetition, OwnerCompetitionEntry, OwnerInboxItem, OwnerMatch, OwnerWithdrawal
 from app.owner_console.service import OwnerError
 
@@ -370,6 +370,24 @@ def public_showroom(code: str, session: Session = Depends(get_session)) -> dict[
     if link is None:
         raise HTTPException(status_code=404, detail="Showroom not found.")
     return _run(session, staff.public_showroom, session, link.club_id)
+
+
+@router.get("/public/clubs/{club_id}")
+def public_club_page(club_id: str, session: Session = Depends(get_session)) -> dict[str, Any]:
+    try:
+        return legacy.public_page(session, club_id)
+    except OwnerError as exc:
+        raise HTTPException(status_code=404, detail="Club page not found.") from exc
+
+
+@router.get("/net-worth")
+def owner_net_worth(user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
+    return _run(session, legacy.net_worth, session, user.id)
+
+
+@router.get("/clubs/{club_id}/money-history")
+def club_money_history(club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
+    return _run(session, legacy.money_history, session, user.id, club_id)
 
 
 @router.post("/inbox/{item_id}/decide")

@@ -23,6 +23,7 @@ import 'package:gte_frontend/features/tasks/gtex_daily_challenges_screen.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/features/owner_console/data/owner_ops_api.dart';
 import 'package:gte_frontend/features/owner_console/ops/owner_finance_section.dart';
+import 'package:gte_frontend/features/owner_console/ops/club_page.dart';
 import 'package:gte_frontend/features/owner_console/ops/owner_showroom.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/router/gtex_auth_routes.dart';
@@ -125,8 +126,24 @@ GoRouter buildGtexAppRouter({
                   key: state.pageKey,
                   child: PublicShowroomScreen(
                     key: ValueKey<String>('showroom-${state.pathParameters['code']}'),
+                    code: state.pathParameters['code'],
                     load: () async {
                       final Object? body = await dependenciesBuilder(context).createAuthedApi().request('GET', '/owner/public/showroom/${state.pathParameters['code']}', auth: false);
+                      return opsMap(body);
+                    },
+                  ),
+                ),
+      ),
+      GoRoute(
+        path: '/club-page/:clubId',
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                NoTransitionPage<void>(
+                  key: state.pageKey,
+                  child: PublicClubPageScreen(
+                    key: ValueKey<String>('club-page-${state.pathParameters['clubId']}'),
+                    load: () async {
+                      final Object? body = await dependenciesBuilder(context).createAuthedApi().request('GET', '/owner/public/clubs/${state.pathParameters['clubId']}', auth: false);
                       return opsMap(body);
                     },
                   ),

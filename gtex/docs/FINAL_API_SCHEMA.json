@@ -7681,6 +7681,12 @@
       },
       {
         "method": "GET",
+        "path": "/api/owner/clubs/{club_id}/money-history",
+        "handler": "club_money_history",
+        "response_model": null
+      },
+      {
+        "method": "GET",
         "path": "/api/owner/clubs/{club_id}/showroom",
         "handler": "club_showroom",
         "response_model": null
@@ -7843,8 +7849,20 @@
       },
       {
         "method": "GET",
+        "path": "/api/owner/net-worth",
+        "handler": "owner_net_worth",
+        "response_model": null
+      },
+      {
+        "method": "GET",
         "path": "/api/owner/onboarding",
         "handler": "onboarding",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/owner/public/clubs/{club_id}",
+        "handler": "public_club_page",
         "response_model": null
       },
       {
