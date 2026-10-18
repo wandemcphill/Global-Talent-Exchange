@@ -71,23 +71,28 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(api_c
 
     # Read-only result-summary GET must never create payout rows or payout ledger entries.
     session = list(api_client.app.dependency_overrides[get_session]())[0]
-    payout_count_before = session.scalar(
-        select(func.count())
-        .select_from(FastCupPayout)
-        .where(FastCupPayout.cup_id == senior_32["cup_id"])
-    )
-    ledger_count_before = session.scalar(
-        select(func.count()).select_from(LedgerTransaction).where(
-            LedgerTransaction.idempotency_key.like(
-                f"fast-cup-payout:{senior_32['cup_id']}:%"
+
+    def payout_counts() -> tuple[int, int]:
+        session.expire_all()
+        payout_count = session.scalar(
+            select(func.count())
+            .select_from(FastCupPayout)
+            .where(FastCupPayout.cup_id == senior_32["cup_id"])
+        )
+        ledger_count = session.scalar(
+            select(func.count())
+            .select_from(LedgerTransaction)
+            .where(
+                LedgerTransaction.idempotency_key.like(
+                    f"fast-cup-payout:{senior_32['cup_id']}:%"
+                )
             )
         )
-    )
-    assert payout_count_before == 0
-    assert ledger_count_before == 0
+        return int(payout_count or 0), int(ledger_count or 0)
 
-    # Unauthenticated POST /settle (overriding user dependency to raise 401 or no auth)
+    assert payout_counts() == (0, 0)
 
+    # Unauthenticated settlement must be rejected.
     def unauth_user():
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
@@ -97,22 +102,21 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(api_c
         params={"now": kickoff_plus_duration.isoformat()},
     )
     assert unauth_settle.status_code == 401
+    assert payout_counts() == (0, 0)
 
-    # Non-admin user POST /settle (returning regular user)
-    # Restore original override where current_user has UserRole.USER
+    # A regular user cannot settle the cup.
     actor = session.get(User, "fast-cup-owner")
-
     api_client.app.dependency_overrides[get_current_user] = lambda: actor
     forbidden_settle = api_client.post(
         f"/fast-cups/{senior_32['cup_id']}/settle",
         params={"now": kickoff_plus_duration.isoformat()},
     )
     assert forbidden_settle.status_code == 403
+    assert payout_counts() == (0, 0)
 
-    # Admin user POST /settle
+    # An administrator can settle the cup.
     actor.role = UserRole.ADMIN
     session.commit()
-
     admin_settle = api_client.post(
         f"/fast-cups/{senior_32['cup_id']}/settle",
         params={"now": kickoff_plus_duration.isoformat()},
@@ -121,19 +125,7 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(api_c
     settle_payload = admin_settle.json()
     assert settle_payload["champion"]["club_id"] == summary_payload["champion"]["club_id"]
 
-    session.expire_all()
-    payout_count_after_settle = session.scalar(
-        select(func.count())
-        .select_from(FastCupPayout)
-        .where(FastCupPayout.cup_id == senior_32["cup_id"])
-    )
-    ledger_count_after_settle = session.scalar(
-        select(func.count()).select_from(LedgerTransaction).where(
-            LedgerTransaction.idempotency_key.like(
-                f"fast-cup-payout:{senior_32['cup_id']}:%"
-            )
-        )
-    )
+    payout_count_after_settle, ledger_count_after_settle = payout_counts()
     assert payout_count_after_settle > 0
     assert ledger_count_after_settle > 0
 
@@ -143,48 +135,12 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(api_c
         params={"now": kickoff_plus_duration.isoformat()},
     )
     assert after_settlement_read.status_code == 200
-    session.expire_all()
-    assert (
-        session.scalar(
-            select(func.count())
-        .select_from(FastCupPayout)
-        .where(FastCupPayout.cup_id == senior_32["cup_id"])
-        )
-        == payout_count_after_settle
-    )
-    assert (
-        session.scalar(
-            select(func.count()).select_from(LedgerTransaction).where(
-                LedgerTransaction.idempotency_key.like(
-                    f"fast-cup-payout:{senior_32['cup_id']}:%"
-                )
-            )
-        )
-        == ledger_count_after_settle
-    )
+    assert payout_counts() == (payout_count_after_settle, ledger_count_after_settle)
 
-    # Repeating the authorized mutation is idempotent: no duplicate payout or ledger credit.
+    # Repeating the authorized mutation is idempotent: no duplicate payouts or credits.
     repeated_settle = api_client.post(
         f"/fast-cups/{senior_32['cup_id']}/settle",
         params={"now": kickoff_plus_duration.isoformat()},
     )
     assert repeated_settle.status_code == 200
-    session.expire_all()
-    assert (
-        session.scalar(
-            select(func.count())
-        .select_from(FastCupPayout)
-        .where(FastCupPayout.cup_id == senior_32["cup_id"])
-        )
-        == payout_count_after_settle
-    )
-    assert (
-        session.scalar(
-            select(func.count()).select_from(LedgerTransaction).where(
-                LedgerTransaction.idempotency_key.like(
-                    f"fast-cup-payout:{senior_32['cup_id']}:%"
-                )
-            )
-        )
-        == ledger_count_after_settle
-    )
+    assert payout_counts() == (payout_count_after_settle, ledger_count_after_settle)
