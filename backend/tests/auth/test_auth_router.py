@@ -844,23 +844,14 @@ def test_turnstile_enforced_on_all_signup_routes(app_client, monkeypatch) -> Non
 
         # Missing tokens must fail before creating an account.
         res_missing = client.post(path, json=base_payload)
-        assert res_missing.status_code == 400, (
-            f"Expected 400 for missing token on {path}, got "
-            f"{res_missing.status_code}: {res_missing.text}"
-        )
+        assert res_missing.status_code == 400, res_missing.text
 
         # A rejected siteverify response must also fail closed.
         invalid_payload = {**base_payload, "turnstile_token": "invalid-turnstile-token"}
         res_invalid = client.post(path, json=invalid_payload)
-        assert res_invalid.status_code == 400, (
-            f"Expected 400 for invalid token on {path}, got "
-            f"{res_invalid.status_code}: {res_invalid.text}"
-        )
+        assert res_invalid.status_code == 400, res_invalid.text
 
         # A mocked successful Cloudflare verification allows signup.
         valid_payload = {**base_payload, "turnstile_token": "valid-turnstile-token"}
         res_valid = client.post(path, json=valid_payload)
-        assert res_valid.status_code == 201, (
-            f"Expected 201 for valid token on {path}, got "
-            f"{res_valid.status_code}: {res_valid.text}"
-        )
+        assert res_valid.status_code == 201, res_valid.text
