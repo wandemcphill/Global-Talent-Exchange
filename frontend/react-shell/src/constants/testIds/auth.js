@@ -12,22 +12,22 @@
 // and the lint rule `emergent(kebab-case-testid)`.
 
 export const LOGIN = {
-	emailInput: 'login-email-input',
-	passwordInput: 'login-password-input',
-	submitButton: 'login-submit-button',
-	forgotPasswordLink: 'login-forgot-password-link',
-	registerLink: 'login-register-link',
+  emailInput: "login-email-input",
+  passwordInput: "login-password-input", // pragma: allowlist secret
+  submitButton: "login-submit-button",
+  forgotPasswordLink: "login-forgot-password-link", // pragma: allowlist secret
+  registerLink: "login-register-link",
 };
 
 export const REGISTER = {
-	nameInput: 'register-name-input',
-	emailInput: 'register-email-input',
-	passwordInput: 'register-password-input',
-	passwordConfirmInput: 'register-password-confirm-input',
-	submitButton: 'register-submit-button',
-	loginLink: 'register-login-link',
+  nameInput: "register-name-input",
+  emailInput: "register-email-input",
+  passwordInput: "register-password-input", // pragma: allowlist secret
+  passwordConfirmInput: "register-password-confirm-input", // pragma: allowlist secret
+  submitButton: "register-submit-button",
+  loginLink: "register-login-link",
 };
 
 export const LOGOUT = {
-	button: 'logout-button',
+  button: "logout-button",
 };
