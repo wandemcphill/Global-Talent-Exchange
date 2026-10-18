@@ -187,11 +187,11 @@ def test_phase4_purchase_gift_and_resale_cannot_double(client, bootstrap_admin_h
         )
         gift = offer_gift(session, asset_id=owned.id, user_id=admin.id, recipient_ref="player-1")
         assert owned.status == "offered"
-        resolve_gift(session, gift_id=gift.id, accept=False)
+        resolve_gift(session, gift_id=gift.id, accept=False, actor_user_id=admin.id)
         session.refresh(owned)
         assert owned.owner_class == "owner"
         gift = offer_gift(session, asset_id=owned.id, user_id=admin.id, recipient_ref="player-1")
-        resolve_gift(session, gift_id=gift.id, accept=True)
+        resolve_gift(session, gift_id=gift.id, accept=True, actor_user_id=admin.id)
         session.refresh(owned)
         assert owned.owner_class == "player"
         assert owned.owner_ref == "player-1"
