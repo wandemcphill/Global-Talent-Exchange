@@ -785,6 +785,18 @@ def test_email_fingerprint_is_normalized_and_truncated() -> None:
     assert len(_email_fingerprint("fan@example.com")) == 32
 
 
+def test_turnstile_fails_closed_in_production_without_secret(monkeypatch) -> None:
+    from app.auth import turnstile
+    from app.auth.service import AuthError
+
+    monkeypatch.delenv("GTE_TURNSTILE_SECRET_KEY", raising=False)
+    monkeypatch.delenv("TURNSTILE_SECRET_KEY", raising=False)
+    monkeypatch.setenv("GTE_APP_ENV", "production")
+
+    with pytest.raises(AuthError, match="Security check is unavailable"):
+        turnstile.verify_turnstile_token("any-token")
+
+
 def test_turnstile_enforced_on_all_signup_routes(app_client, monkeypatch) -> None:
     from app.auth import turnstile
 
