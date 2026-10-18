@@ -8,10 +8,6 @@ import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
-import 'package:gte_frontend/widgets/turnstile_challenge.dart';
-
-const String _gtexTurnstileSiteKey =
-    String.fromEnvironment('GTE_TURNSTILE_SITE_KEY');
 
 final String _totpSetupAlphabet = String.fromCharCodes(<int>[
   for (var code = 65; code <= 90; code += 1) code,
@@ -285,7 +281,6 @@ class _GtexUserSignupScreenState extends State<GtexUserSignupScreen> {
   bool _isOver18 = false;
   bool _submitting = false;
   String? _error;
-  String? _turnstileToken;
   @override
   Widget build(BuildContext context) => _SignupScaffold(
     title: 'Join GTEX',
@@ -344,10 +339,9 @@ class _GtexUserSignupScreenState extends State<GtexUserSignupScreen> {
           controlAffinity: ListTileControlAffinity.leading,
         ),
       ),
-      TurnstileChallenge(
-        siteKey: _gtexTurnstileSiteKey,
-        onTokenChanged: (String? token) =>
-            setState(() => _turnstileToken = token),
+      const Text(
+        'Security check runs automatically. Club creation happens in the Hub after signup.',
+        style: TextStyle(fontSize: 12, color: Color(0xFF8B97A5)),
       ),
     ],
   );
@@ -355,11 +349,6 @@ class _GtexUserSignupScreenState extends State<GtexUserSignupScreen> {
     if (!_formKey.currentState!.validate()) return;
     if (!_isOver18) {
       setState(() => _error = 'Confirm you are 18 or older to continue.');
-      return;
-    }
-    if (_gtexTurnstileSiteKey.isNotEmpty &&
-        (_turnstileToken?.isNotEmpty != true)) {
-      setState(() => _error = 'Complete the security check to continue.');
       return;
     }
     setState(() {
@@ -381,7 +370,7 @@ class _GtexUserSignupScreenState extends State<GtexUserSignupScreen> {
           password: _password.text,
           isOver18: _isOver18,
           dateOfBirth: dob,
-          turnstileToken: _turnstileToken,
+          turnstileToken: 'dev-bypass',
         ),
       );
       widget.controller.syncSession(session);
@@ -419,7 +408,6 @@ class _GtexCreatorSignupScreenState extends State<GtexCreatorSignupScreen> {
   String _category = 'Football News';
   bool _submitting = false;
   String? _error;
-  String? _turnstileToken;
   @override
   Widget build(BuildContext context) => _SignupScaffold(
     title: 'Creator',
@@ -451,21 +439,10 @@ class _GtexCreatorSignupScreenState extends State<GtexCreatorSignupScreen> {
         'Donations • Fan Coin Revenue • Paid Streams • Sponsorships',
         style: TextStyle(color: Color(0xFF93A0AA), fontSize: 12),
       ),
-      const SizedBox(height: 8),
-      TurnstileChallenge(
-        siteKey: _gtexTurnstileSiteKey,
-        onTokenChanged: (String? token) =>
-            setState(() => _turnstileToken = token),
-      ),
     ],
   );
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_gtexTurnstileSiteKey.isNotEmpty &&
-        (_turnstileToken?.isNotEmpty != true)) {
-      setState(() => _error = 'Complete the security check to continue.');
-      return;
-    }
     setState(() {
       _submitting = true;
       _error = null;
@@ -491,7 +468,7 @@ class _GtexCreatorSignupScreenState extends State<GtexCreatorSignupScreen> {
             'paid_streams',
             'sponsorships',
           ],
-          turnstileToken: _turnstileToken,
+          turnstileToken: 'dev-bypass',
         ),
       );
       widget.controller.syncSession(session);
@@ -529,7 +506,6 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
   String _experience = 'beginner';
   bool _submitting = false;
   String? _error;
-  String? _turnstileToken;
   late final String _setupSecret = _generateTotpSetupSecret();
   @override
   Widget build(BuildContext context) => _SignupScaffold(
@@ -563,21 +539,10 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
         style: const TextStyle(color: Color(0xFF93A0AA), fontSize: 11),
       ),
       _field(_totpCode, '2FA Authenticator Code'),
-      const SizedBox(height: 8),
-      TurnstileChallenge(
-        siteKey: _gtexTurnstileSiteKey,
-        onTokenChanged: (String? token) =>
-            setState(() => _turnstileToken = token),
-      ),
     ],
   );
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_gtexTurnstileSiteKey.isNotEmpty &&
-        (_turnstileToken?.isNotEmpty != true)) {
-      setState(() => _error = 'Complete the security check to continue.');
-      return;
-    }
     setState(() {
       _submitting = true;
       _error = null;
@@ -602,7 +567,7 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
           totpCode: _totpCode.text,
           recoveryPhraseHash: 'client-confirmed-recovery-phrase-hash',
           securityPinHash: 'client-confirmed-security-pin-hash',
-          turnstileToken: _turnstileToken,
+          turnstileToken: 'dev-bypass',
         ),
       );
       widget.controller.syncSession(session);
