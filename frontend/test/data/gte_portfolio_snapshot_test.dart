@@ -43,6 +43,6 @@ void main() {
       },
     );
     expect(snapshot.holdings, isEmpty);
-    expect(snapshot.currency, 'coin');
+    expect(snapshot.currency, GteLedgerUnit.coin);
   });
 }

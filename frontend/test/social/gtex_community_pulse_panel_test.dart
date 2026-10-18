@@ -242,7 +242,7 @@ void main() {
             access: GtexCommunityAccess.authenticated,
             headline: '1 thing happened around your football.',
             yourSignals: const <GtexCommunitySignal>[_ownedMove],
-            warnings: const <String>['Your club shares could not be loaded: 500'],
+            warnings: const <String>['Your club shares could not be loaded.'],
           ),
         ),
       ),

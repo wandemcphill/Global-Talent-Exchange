@@ -82,7 +82,8 @@ class _GtexEmpireClubWorkspaceState extends State<GtexEmpireClubWorkspace> {
                 .where((GtexEmpireGroupSummary group) => group.id.isNotEmpty)
                 .toList(growable: false);
       } catch (error) {
-        groupError = 'Could not load ownership groups: $error';
+        debugPrint('Could not load ownership groups: $error');
+        groupError = 'Ownership groups could not be loaded right now.';
       }
       if (!mounted) {
         return;
@@ -137,38 +138,50 @@ class _GtexEmpireClubWorkspaceState extends State<GtexEmpireClubWorkspace> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: <Widget>[
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            GtexSpacing.md,
-            GtexSpacing.md,
-            GtexSpacing.md,
-            0,
-          ),
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double childHeight =
+            !constraints.hasBoundedHeight
+                ? 720
+                : constraints.maxHeight > 560
+                ? constraints.maxHeight
+                : 560;
+        return SingleChildScrollView(
           child: Column(
             children: <Widget>[
-              GtexEmpireClubSwitcher(
-                clubs: _clubs,
-                activeClubId: widget.activeClubId,
-                busy: _switching || _loading,
-                errorMessage: _error,
-                onActivate: (GtexOwnedClubOption club) {
-                  unawaited(_activate(club));
-                },
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  GtexSpacing.md,
+                  GtexSpacing.md,
+                  GtexSpacing.md,
+                  0,
+                ),
+                child: Column(
+                  children: <Widget>[
+                    GtexEmpireClubSwitcher(
+                      clubs: _clubs,
+                      activeClubId: widget.activeClubId,
+                      busy: _switching || _loading,
+                      errorMessage: _error,
+                      onActivate: (GtexOwnedClubOption club) {
+                        unawaited(_activate(club));
+                      },
+                    ),
+                    const SizedBox(height: GtexSpacing.sm),
+                    GtexEmpireGroupPanel(
+                      groups: _groups,
+                      isLoading: _loading,
+                      errorMessage: _groupError,
+                      onRetry: () => unawaited(_load()),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: GtexSpacing.sm),
-              GtexEmpireGroupPanel(
-                groups: _groups,
-                isLoading: _loading,
-                errorMessage: _groupError,
-                onRetry: () => unawaited(_load()),
-              ),
+              SizedBox(height: childHeight, child: widget.child),
             ],
           ),
-        ),
-        Expanded(child: widget.child),
-      ],
+        );
+      },
     );
   }
 }

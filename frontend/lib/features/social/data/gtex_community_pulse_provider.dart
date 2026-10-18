@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../data/gte_exchange_api_client.dart';
 import '../../../data/gte_exchange_models.dart';
@@ -78,7 +79,8 @@ Future<GtexCommunityPulse> loadGtexCommunityPulse({
     try {
       return await load();
     } catch (error) {
-      warnings.add('$warning: $error');
+      debugPrint('$warning: $error');
+      warnings.add('$warning.');
       return fallback;
     }
   }

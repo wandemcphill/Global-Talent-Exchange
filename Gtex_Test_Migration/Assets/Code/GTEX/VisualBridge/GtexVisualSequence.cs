@@ -27,6 +27,7 @@ namespace FStudio.GTEX.VisualBridge
         public Vector3 completionWorldPosition;
         public float completionDistance = 1.5f;
         public bool evaluateShotOutcome;
+        public string forcedShotOutcome = string.Empty;
     }
 
     public sealed class GtexVisualSequencePositionTarget

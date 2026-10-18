@@ -958,6 +958,19 @@ namespace FStudio.GTEX.Simulation
             ResolvePossessionContestAfterCarry(currentMinute, holderPlayer);
         }
 
+        private void UpdateCameraPreset(float currentMinute)
+        {
+            if (currentCameraPresetUntilMinute < currentMinute)
+            {
+                currentCameraPreset = "broadcast";
+            }
+
+            if (activeEventUntilMinute < currentMinute)
+            {
+                activeEventId = string.Empty;
+            }
+        }
+
         private void ResolvePossessionContestAfterCarry(float currentMinute, GtexSimSpatialPlayerState holder)
         {
             if (holder == null || dribbleUntilMinute < currentMinute || !string.Equals(dribblePlayerId, holder.PlayerId, StringComparison.Ordinal))
@@ -1503,6 +1516,14 @@ namespace FStudio.GTEX.Simulation
             }
 
             return GroundPassArcHeight;
+        }
+
+        private string ResolveCentralPlayerId(string teamSide)
+        {
+            var teamPlayers = ResolveTeamPlayers(teamSide);
+            return teamPlayers != null && teamPlayers.Length > 6 && teamPlayers[6] != null
+                ? teamPlayers[6].PlayerId
+                : string.Empty;
         }
 
         private GtexSimSpatialPlayerState[] ResolveTeamPlayers(string teamSide)

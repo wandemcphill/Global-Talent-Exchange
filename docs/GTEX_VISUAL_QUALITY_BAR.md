@@ -39,6 +39,23 @@ Not FIFA photorealism. Not Flutter canvas / 2.5D markers.
 4. Press Play — original simulator camera, players, ball, and AI should run.
 5. Optional: set `GTEX_RUNTIME_MODE=original-visual` or use `Resources/GTEX/match-config.original-visual.json` values when bootstrapping outside the scene override.
 
+## Verification
+
+Run **Tools → GTEX → Runtime → Verify Original Visual Runtime** in the Unity Editor, or invoke `FStudio.GTEX.Editor.GtexOriginalVisualRuntimeVerifier.VerifyFromCommandLine` with Unity `-batchmode`, `-projectPath`, and a `-logFile`. The verifier exits the Editor when finished; do not add `-quit` or `-nographics`.
+
+```text
+Unity.exe -batchmode -projectPath <Gtex_Test_Migration> -executeMethod FStudio.GTEX.Editor.GtexOriginalVisualRuntimeVerifier.VerifyFromCommandLine -logFile <verifier-log-path>
+```
+
+The verifier runs four sections:
+
+- **A. Editor no-backend:** confirms the original visual scene boots and advances without a backend.
+- **B. Scripted replay:** checks the wide-cross/save and central-buildup/goal sequences, command ordering, reset-after-goal, and score change.
+- **C. Local sim feed:** checks the original visual runtime against the local simulation feed.
+- **D. Live backend feed:** checks a scripted local HTTP feed, expected match commands and score, and isolation from the legacy live/simulation runtime hosts.
+
+Reports are written to `Gtex_Test_Migration/tmp/original-visual-runtime-verification/<stamp>/report.md`, with screenshots and console output alongside the report.
+
 ## Acceptance for visual quality
 
 - Kickoff looks like the original football simulator, not sliding puppets

@@ -277,15 +277,17 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                         spacing: 10,
                         runSpacing: 10,
                         children: <Widget>[
-                          _WalletQuickAction(
-                            label: 'Top up via KoraPay',
-                            detail: _providerStatusLabel(
-                              overview.paymentProviderStatus['korapay'],
+                          if (overview.paymentProviderStatus['korapay'] ==
+                              'ready')
+                            _WalletQuickAction(
+                              label: 'Top up via KoraPay',
+                              detail: _providerStatusLabel(
+                                overview.paymentProviderStatus['korapay'],
+                              ),
+                              icon: Icons.open_in_new_outlined,
+                              accent: GteShellTheme.accentCapital,
+                              onPressed: _openDeposit,
                             ),
-                            icon: Icons.open_in_new_outlined,
-                            accent: GteShellTheme.accentCapital,
-                            onPressed: _openDeposit,
-                          ),
                           _WalletQuickAction(
                             label: 'Manual deposit',
                             detail: 'Admin review',
@@ -311,7 +313,9 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Live funding is available through KoraPay checkout or manual bank transfer review.',
+                        overview.paymentProviderStatus['korapay'] == 'ready'
+                            ? 'Live funding is available through KoraPay checkout or manual bank transfer review.'
+                            : 'Live wallet funding is available through manual bank transfer review.',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
@@ -391,7 +395,9 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Instant provider status: KoraPay ${_providerStatusLabel(overview.paymentProviderStatus['korapay'])}. Manual bank transfer is handled through admin review.',
+                        overview.paymentProviderStatus['korapay'] == 'ready'
+                            ? 'Instant provider status: KoraPay ${_providerStatusLabel(overview.paymentProviderStatus['korapay'])}. Manual bank transfer is handled through admin review.'
+                            : 'Live wallet funding is available through manual bank transfer review.',
                       ),
                     ],
                   ),

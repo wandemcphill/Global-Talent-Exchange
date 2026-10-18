@@ -27,6 +27,9 @@ import 'package:gte_frontend/features/global_search_redesign/global_search_redes
 import 'package:gte_frontend/features/home/home_screen.dart';
 import 'package:gte_frontend/features/launch_control_redesign/launch_control_feature_gate.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
+import 'package:gte_frontend/features/owner_console/data/owner_console_api.dart';
+import 'package:gte_frontend/features/owner_console/presentation/owner_console_screen.dart';
+import 'package:gte_frontend/features/regen_redesign/data/gtex_share_market_api.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/features/player_detail/gtex_fm_player_profile_screen.dart';
 import 'package:gte_frontend/features/player_detail/gtex_player_navigator.dart';
@@ -547,6 +550,22 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     // Club for owners, Wallet for traders (its module rail carries the trader
     // dashboard), and the admin action in the shell bar for admins, which now
     // shows at every viewport width rather than only the wide one.
+    // Signed-in sessions land on the Owner Console; visitors keep Home.
+    if (widget.controller.isAuthenticated) {
+      final GteAuthedApi authed = _createShellAuthedApi();
+      final user = widget.controller.session?.user;
+      return OwnerConsoleScreen(
+        key: ValueKey<String>(
+          'owner-console-${widget.controller.accessToken ?? ''}',
+        ),
+        reader: OwnerConsoleApi(client: authed),
+        shareMarket: GtexShareMarketApi(client: authed),
+        role: user?.role ?? 'user',
+        signedInAs: user?.displayName ?? user?.username ?? 'Owner',
+        walletBalance: widget.controller.walletSummary?.availableBalance,
+        onNavigate: (String path) => context.go(path),
+      );
+    }
     return const HomeScreen(key: PageStorageKey<String>('home-command'));
   }
 

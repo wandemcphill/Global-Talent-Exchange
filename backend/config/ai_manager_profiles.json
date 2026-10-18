@@ -1,4 +1,17 @@
 {
+  "00000000-0000-0000-0000-000000000101": {
+    "club_id": "00000000-0000-0000-0000-000000000101",
+    "financial_strategy": "aggressive",
+    "personality_profile": {
+      "adaptability": 0.53,
+      "aggression": 0.69,
+      "discipline": 0.35,
+      "risk": 0.27,
+      "youth_bias": 0.31
+    },
+    "risk_tolerance": 0.27,
+    "tactical_style": "possession"
+  },
   "club-lagos": {
     "club_id": "club-lagos",
     "financial_strategy": "balanced",

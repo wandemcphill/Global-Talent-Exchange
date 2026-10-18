@@ -13,6 +13,7 @@ from app.club_identity.models.reputation import ClubReputationProfile, Reputatio
 from app.club_identity.reputation.router import router
 from app.db import get_session
 from app.models.base import Base
+from app.models.club_profile import ClubProfile
 
 
 @pytest.fixture()
@@ -28,6 +29,7 @@ def session() -> Iterator[Session]:
             ClubReputationProfile.__table__,
             ReputationEventLog.__table__,
             ReputationSnapshot.__table__,
+            ClubProfile.__table__,
         ],
     )
     session_local = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)

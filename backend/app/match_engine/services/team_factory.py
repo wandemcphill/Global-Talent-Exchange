@@ -220,9 +220,7 @@ class SyntheticSquadFactory:
                 lifecycle_service.session if lifecycle_service is not None else None,
                 team_id,
             )
-        starters, bench, formation = self._resolve_lineup(
-            lifecycle_service.session, team_id, eligible, manager_profile
-        )
+        starters, bench, formation = self._resolve_lineup(lifecycle_service.session, team_id, eligible, manager_profile)
         dynamics_snapshot = TeamDynamicsService(lifecycle_service.session).build_snapshot(
             club_id=team_id,
             squad=starters + bench,
@@ -314,7 +312,8 @@ class SyntheticSquadFactory:
         manager_profile: dict[str, object] | None,
     ) -> tuple[list[tuple[Player, PlayerRole]], list[tuple[Player, PlayerRole]], str]:
         """Resolve starters/bench/formation with layered, always-safe fallback:
-        owner-saved exact XI -> owner-saved formation -> coach formation -> 4-3-3."""
+        owner-saved exact XI -> owner-saved formation -> coach formation -> 4-3-3
+        -> AI Coach auto-draft (best available XI, out-of-position if needed)."""
         plan = self._saved_match_plan(session, team_id)
         eligible_by_id = {player.id: player for player in eligible}
 
@@ -330,25 +329,42 @@ class SyntheticSquadFactory:
         if "4-3-3" not in candidates:
             candidates.append("4-3-3")
 
-        last_error: PlayerLifecycleValidationError | None = None
         for formation in candidates:
             try:
                 starters, bench = self._select_managed_squad(eligible, formation)
                 return starters, bench, formation
-            except PlayerLifecycleValidationError as exc:
-                last_error = exc
+            except PlayerLifecycleValidationError:
                 continue
-        raise last_error or PlayerLifecycleValidationError(
-            "Managed squad cannot satisfy any formation role requirements"
-        )
+        return self._ai_coach_auto_draft(eligible, candidates[0])
+
+    def _ai_coach_auto_draft(
+        self,
+        players: list[Player],
+        formation: str,
+    ) -> tuple[list[tuple[Player, PlayerRole]], list[tuple[Player, PlayerRole]], str]:
+        """AI Coach: fill every slot with the best-fitting available player, even out of position."""
+        if len(players) < 11:
+            raise PlayerLifecycleValidationError("AI Coach needs at least 11 eligible players to pick a lineup")
+        remaining = list(players)
+        starters: list[tuple[Player, PlayerRole]] = []
+        for role in self._starter_roles(formation):
+            candidate = max(
+                remaining,
+                key=lambda player: (self._role_fit_score(player, role), *self._managed_player_sort_key(player)),
+            )
+            starters.append((candidate, role))
+            remaining.remove(candidate)
+        bench = [
+            (player, self._resolve_player_role(player))
+            for player in sorted(remaining, key=self._managed_player_sort_key, reverse=True)[:7]
+        ]
+        return starters, bench, formation
 
     @staticmethod
     def _saved_match_plan(session: Session | None, team_id: str) -> ClubMatchPlan | None:
         if session is None:
             return None
-        return session.scalar(
-            select(ClubMatchPlan).where(ClubMatchPlan.club_id == team_id)
-        )
+        return session.scalar(select(ClubMatchPlan).where(ClubMatchPlan.club_id == team_id))
 
     @staticmethod
     def _plan_formation(plan: ClubMatchPlan | None) -> str | None:
@@ -379,22 +395,16 @@ class SyntheticSquadFactory:
             return None
         if any(pid not in eligible_by_id for pid in starter_ids):
             return None
-        starters = [
-            (eligible_by_id[pid], role) for pid, role in zip(starter_ids, roles)
-        ]
+        starters = [(eligible_by_id[pid], role) for pid, role in zip(starter_ids, roles)]
         used = set(starter_ids)
         bench: list[tuple[Player, PlayerRole]] = []
-        for pid in (plan.bench_player_ids_json or []):
+        for pid in plan.bench_player_ids_json or []:
             pid = str(pid)
             if pid in eligible_by_id and pid not in used:
                 bench.append((eligible_by_id[pid], self._resolve_player_role(eligible_by_id[pid])))
                 used.add(pid)
-        remaining = [
-            player for pid, player in eligible_by_id.items() if pid not in used
-        ]
-        for player in sorted(remaining, key=self._managed_player_sort_key, reverse=True)[
-            : max(0, 7 - len(bench))
-        ]:
+        remaining = [player for pid, player in eligible_by_id.items() if pid not in used]
+        for player in sorted(remaining, key=self._managed_player_sort_key, reverse=True)[: max(0, 7 - len(bench))]:
             bench.append((player, self._resolve_player_role(player)))
         return starters, bench, formation
 
@@ -405,10 +415,7 @@ class SyntheticSquadFactory:
         if not manager_profile:
             return "4-3-3"
         mentality = str(manager_profile.get("mentality", "")).strip().lower()
-        tactics = {
-            str(tactic).strip().lower()
-            for tactic in (manager_profile.get("tactics") or [])
-        }
+        tactics = {str(tactic).strip().lower() for tactic in (manager_profile.get("tactics") or [])}
         mapping = {
             "attacking": "4-3-3",
             "aggressive": "4-3-3",

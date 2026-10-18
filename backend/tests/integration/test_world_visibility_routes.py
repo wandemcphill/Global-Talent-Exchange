@@ -7,13 +7,16 @@ from pathlib import Path
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 
 from backend.tests.support.secrets import MEDIA_SIGNING_TEST_SECRET, TEST_AUTH_SECRET
 from app.core.config import load_settings, reset_settings_cache
 from app.ingestion.demo_bootstrap import DEFAULT_DEMO_PASSWORD
 from app.ingestion.dev_cli import rebuild_demo_market
 from app.main import create_app
+from app.models.competition import UserCompetition
+from app.models.competition_prize_rule import CompetitionPrizeRule
+from app.models.competition_rule_set import CompetitionRuleSet
 
 _NEGOTIATION_LISTING_ID = "00000000-0000-0000-0000-000000000503"
 
@@ -123,6 +126,27 @@ def test_rebuild_demo_market_restores_seeded_live_visibility_routes(tmp_path: Pa
                     federations = client.get("/api/federations")
                     assert federations.status_code == 200, federations.text
                     assert federations.json()
+
+                    with app.state.session_factory() as session:
+                        competition = session.scalar(
+                            select(UserCompetition).where(UserCompetition.source_type == "federation_league")
+                        )
+                        assert competition is not None
+                        rule_set = session.scalar(
+                            select(CompetitionRuleSet).where(CompetitionRuleSet.competition_id == competition.id)
+                        )
+                        prize_rule = session.scalar(
+                            select(CompetitionPrizeRule).where(CompetitionPrizeRule.competition_id == competition.id)
+                        )
+                        assert rule_set is not None
+                        assert rule_set.format == "league"
+                        assert rule_set.min_participants == 2
+                        assert rule_set.league_win_points == 3
+                        assert rule_set.league_draw_points == 1
+                        assert rule_set.league_loss_points == 0
+                        assert rule_set.league_home_away is True
+                        assert rule_set.cup_single_elimination is None
+                        assert prize_rule is not None
 
                     federation_rankings = client.get("/api/federations/rankings")
                     assert federation_rankings.status_code == 200, federation_rankings.text

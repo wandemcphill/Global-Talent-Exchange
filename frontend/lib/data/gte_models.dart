@@ -4067,7 +4067,7 @@ class GtePortfolioSnapshot {
   });
 
   final String userId;
-  final String currency;
+  final GteLedgerUnit currency;
   final double availableBalance;
   final double reservedBalance;
   final double totalBalance;
@@ -4080,8 +4080,9 @@ class GtePortfolioSnapshot {
     );
     return GtePortfolioSnapshot(
       userId: GteJson.string(json, <String>['user_id', 'userId'], fallback: ''),
-      currency:
-          GteJson.stringOrNull(json, <String>['currency']) ?? 'coin',
+      currency: _ledgerUnitFromString(
+        GteJson.string(json, <String>['currency'], fallback: 'coin'),
+      ),
       availableBalance: GteJson.number(json, <String>[
         'available_balance',
         'availableBalance',

@@ -934,6 +934,10 @@ def _attribute_bucket(position: str | None) -> str:
 def derive_player_attributes(player: Player, overall: int | None) -> MarketPlayerAttributes:
     """Derive the 6 FIFA-style stats from GSI + position archetype, preferring any
     values stored in dna_profile. Mirrors services/player-ingestion footballAttributes."""
+    dna_seed = player.dna_profile if isinstance(player.dna_profile, dict) else {}
+    seeded_rating = dna_seed.get("current_rating")
+    if isinstance(seeded_rating, (int, float)) and seeded_rating > 0:
+        overall = int(seeded_rating)
     base_overall = int(max(1, min(99, overall if overall and overall > 0 else 60)))
     archetype = _ATTRIBUTE_ARCHETYPES[_attribute_bucket(player.normalized_position or player.position)]
     dna = player.dna_profile if isinstance(player.dna_profile, dict) else {}
@@ -949,7 +953,7 @@ def derive_player_attributes(player: Player, overall: int | None) -> MarketPlaye
             return int(max(1, min(99, round(value))))
         return int(max(1, min(99, archetype[name] + shift)))
 
-    stored_potential = dna.get("potential")
+    stored_potential = dna.get("potential") or dna.get("potential_rating")
     if isinstance(stored_potential, (int, float)) and stored_potential > 0:
         potential = int(max(base_overall, min(99, round(float(stored_potential)))))
     else:

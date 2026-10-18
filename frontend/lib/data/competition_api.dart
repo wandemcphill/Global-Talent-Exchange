@@ -436,6 +436,8 @@ class CompetitionApi {
         );
       }
       headers['Authorization'] = 'Bearer $token';
+    } else if (accessToken?.trim().isNotEmpty ?? false) {
+      headers['Authorization'] = 'Bearer ${accessToken!.trim()}';
     }
     try {
       final GteTransportResponse response = await transport.send(

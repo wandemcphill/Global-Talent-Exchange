@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1709,
+  "route_count": 1765,
   "routes": [
     {
       "method": "POST",
@@ -8338,6 +8338,8 @@
         "parameters": [
           "challenge_id",
           "payload",
+          "request",
+          "current_user",
           "service"
         ]
       },
@@ -8806,6 +8808,8 @@
         "parameters": [
           "share_code",
           "payload",
+          "request",
+          "current_user",
           "service"
         ]
       },
@@ -28780,6 +28784,1223 @@
     },
     {
       "method": "GET",
+      "path": "/owner/admin/review-queue",
+      "effective_paths": [
+        "/api/owner/admin/review-queue"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "review_queue",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "admin",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
+      "path": "/owner/clubs/{club_id}",
+      "effective_paths": [
+        "/api/owner/clubs/{club_id}"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "club",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
+      "path": "/owner/clubs/{club_id}/supporters",
+      "effective_paths": [
+        "/api/owner/clubs/{club_id}/supporters"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "supporters",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "session",
+          "user"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
+      "path": "/owner/competitions",
+      "effective_paths": [
+        "/api/owner/competitions"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "competitions_list",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
+      "path": "/owner/competitions/{competition_id}",
+      "effective_paths": [
+        "/api/owner/competitions/{competition_id}"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "competition",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "competition_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
+      "path": "/owner/control-center",
+      "effective_paths": [
+        "/api/owner/control-center"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "control_center",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
+      "path": "/owner/deposits/verify/{reference}",
+      "effective_paths": [
+        "/api/owner/deposits/verify/{reference}"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "deposit_verify",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "reference",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
+      "path": "/owner/finance",
+      "effective_paths": [
+        "/api/owner/finance"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "finance",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
+      "path": "/owner/inbox",
+      "effective_paths": [
+        "/api/owner/inbox"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "inbox",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "status",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
+      "path": "/owner/integrity",
+      "effective_paths": [
+        "/api/owner/integrity"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "integrity",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
+      "path": "/owner/market/quote",
+      "effective_paths": [
+        "/api/owner/market/quote"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "quote",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_ids",
+          "session",
+          "user"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
+      "path": "/owner/matches/{match_id}",
+      "effective_paths": [
+        "/api/owner/matches/{match_id}"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "match",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
+      "path": "/owner/onboarding",
+      "effective_paths": [
+        "/api/owner/onboarding"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "onboarding",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
+      "path": "/owner/withdrawals/eligibility",
+      "effective_paths": [
+        "/api/owner/withdrawals/eligibility"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "eligibility",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "amount",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
+      "path": "/owner/world/clubs",
+      "effective_paths": [
+        "/api/owner/world/clubs"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "world",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "session",
+          "user"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/admin/flags/{flag_id}/{decision}",
+      "effective_paths": [
+        "/api/owner/admin/flags/{flag_id}/{decision}"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "flag_decision",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "flag_id",
+          "decision",
+          "\"action\"]",
+          "admin",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/admin/payouts/{event_id}/release",
+      "effective_paths": [
+        "/api/owner/admin/payouts/{event_id}/release"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "release",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "event_id",
+          "admin",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/admin/withdrawals/{withdrawal_id}/review",
+      "effective_paths": [
+        "/api/owner/admin/withdrawals/{withdrawal_id}/review"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "review",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "withdrawal_id",
+          "body",
+          "admin",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/capital/distribute",
+      "effective_paths": [
+        "/api/owner/capital/distribute"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "distribute",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/capital/inject",
+      "effective_paths": [
+        "/api/owner/capital/inject"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "inject",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/capital/sister-transfer",
+      "effective_paths": [
+        "/api/owner/capital/sister-transfer"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "sister",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/clubs/claim",
+      "effective_paths": [
+        "/api/owner/clubs/claim"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "claim_club",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/clubs/{club_id}/academy/intake",
+      "effective_paths": [
+        "/api/owner/clubs/{club_id}/academy/intake"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "intake",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/clubs/{club_id}/activate",
+      "effective_paths": [
+        "/api/owner/clubs/{club_id}/activate"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "activate",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/clubs/{club_id}/advance",
+      "effective_paths": [
+        "/api/owner/clubs/{club_id}/advance"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "advance",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/clubs/{club_id}/facilities/{kind}/upgrade",
+      "effective_paths": [
+        "/api/owner/clubs/{club_id}/facilities/{kind}/upgrade"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "upgrade",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "kind",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/clubs/{club_id}/finish-onboarding",
+      "effective_paths": [
+        "/api/owner/clubs/{club_id}/finish-onboarding"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "finish_onboarding",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/clubs/{club_id}/manager",
+      "effective_paths": [
+        "/api/owner/clubs/{club_id}/manager"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "appoint",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/clubs/{club_id}/manager/fire",
+      "effective_paths": [
+        "/api/owner/clubs/{club_id}/manager/fire"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "fire",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/clubs/{club_id}/sign",
+      "effective_paths": [
+        "/api/owner/clubs/{club_id}/sign"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "sign",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/competitions",
+      "effective_paths": [
+        "/api/owner/competitions"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "host",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/competitions/join-by-code",
+      "effective_paths": [
+        "/api/owner/competitions/join-by-code"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "join_code",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/competitions/{competition_id}/enter",
+      "effective_paths": [
+        "/api/owner/competitions/{competition_id}/enter"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "enter",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "competition_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/competitions/{competition_id}/play-next",
+      "effective_paths": [
+        "/api/owner/competitions/{competition_id}/play-next"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "play",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "competition_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/deposits/init",
+      "effective_paths": [
+        "/api/owner/deposits/init"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "deposit_init",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/deposits/webhook",
+      "effective_paths": [
+        "/api/owner/deposits/webhook"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "deposit_webhook",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "JSONResponse"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/fan-coin/buy",
+      "effective_paths": [
+        "/api/owner/fan-coin/buy"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "fan_coin",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/gifts/send",
+      "effective_paths": [
+        "/api/owner/gifts/send"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "gift",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/inbox/{item_id}/decide",
+      "effective_paths": [
+        "/api/owner/inbox/{item_id}/decide"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "decide",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "item_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/matches/{match_id}/forfeit",
+      "effective_paths": [
+        "/api/owner/matches/{match_id}/forfeit"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "forfeit",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/support-units/buy",
+      "effective_paths": [
+        "/api/owner/support-units/buy"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "support",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/transfers/internal",
+      "effective_paths": [
+        "/api/owner/transfers/internal"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "internal",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/transfers/internal/check",
+      "effective_paths": [
+        "/api/owner/transfers/internal/check"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "internal_check",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/withdrawals",
+      "effective_paths": [
+        "/api/owner/withdrawals"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "withdraw",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "PUT",
+      "path": "/owner/clubs/{club_id}/mentality",
+      "effective_paths": [
+        "/api/owner/clubs/{club_id}/mentality"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "set_mentality",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
       "path": "/ownership-groups",
       "effective_paths": [
         "/api/ownership-groups",
@@ -30932,12 +32153,45 @@
           "ge",
           "deprecated",
           "search",
+          "source",
+          "\"real\"] | None",
+          "nation",
+          "max_length",
+          "sort",
+          "\"wonderkid\"] | None",
           "session"
         ]
       },
       "response_shape": {
         "response_model": "PlayerShareMarketListView",
         "returns": "PlayerShareMarketListView"
+      },
+      "version": "canonical",
+      "domain": "players"
+    },
+    {
+      "method": "GET",
+      "path": "/players/markets/nations",
+      "effective_paths": [
+        "/players/markets/nations"
+      ],
+      "file": "backend/app/players/router.py",
+      "handler": "list_player_share_market_nations",
+      "router_variable": "router",
+      "module_path": "app.players.router",
+      "module_mounts": [
+        "players"
+      ],
+      "request_shape": {
+        "parameters": [
+          "source",
+          "\"real\"] | None",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[PlayerShareMarketNationView]",
+        "returns": "list[PlayerShareMarketNationView]"
       },
       "version": "canonical",
       "domain": "players"
@@ -31308,6 +32562,35 @@
     },
     {
       "method": "GET",
+      "path": "/players/{player_id}/shares/price-history",
+      "effective_paths": [
+        "/players/{player_id}/shares/price-history"
+      ],
+      "file": "backend/app/players/router.py",
+      "handler": "get_player_share_price_history",
+      "router_variable": "router",
+      "module_path": "app.players.router",
+      "module_mounts": [
+        "players"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "range",
+          "\"30d\"",
+          "\"all\"]",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PlayerSharePriceHistoryView",
+        "returns": "PlayerSharePriceHistoryView"
+      },
+      "version": "canonical",
+      "domain": "players"
+    },
+    {
+      "method": "GET",
       "path": "/players/{player_id}/story",
       "effective_paths": [
         "/players/{player_id}/story"
@@ -31381,6 +32664,32 @@
       "response_shape": {
         "response_model": "PlayerMatchEventView",
         "returns": "PlayerMatchEventView"
+      },
+      "version": "canonical",
+      "domain": "players"
+    },
+    {
+      "method": "POST",
+      "path": "/players/markets/price-snapshots/cron",
+      "effective_paths": [
+        "/players/markets/price-snapshots/cron"
+      ],
+      "file": "backend/app/players/router.py",
+      "handler": "trigger_player_share_price_snapshot",
+      "router_variable": "router",
+      "module_path": "app.players.router",
+      "module_mounts": [
+        "players"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "background_tasks"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, str]"
       },
       "version": "canonical",
       "domain": "players"
@@ -40114,6 +41423,58 @@
       "domain": "sponsorship"
     },
     {
+      "method": "GET",
+      "path": "/sponsorship/regen-endorsements/{player_id}",
+      "effective_paths": [
+        "/api/sponsorship/regen-endorsements/{player_id}"
+      ],
+      "file": "backend/app/sponsorship_engine/router.py",
+      "handler": "list_regen_endorsements",
+      "router_variable": "router",
+      "module_path": "app.sponsorship_engine.router",
+      "module_mounts": [
+        "sponsorship_engine"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[RegenEndorsementView]",
+        "returns": "list[RegenEndorsementView]"
+      },
+      "version": "canonical",
+      "domain": "sponsorship"
+    },
+    {
+      "method": "GET",
+      "path": "/sponsorship/regen-endorsements/{player_id}/badge",
+      "effective_paths": [
+        "/api/sponsorship/regen-endorsements/{player_id}/badge"
+      ],
+      "file": "backend/app/sponsorship_engine/router.py",
+      "handler": "regen_endorsement_badge",
+      "router_variable": "router",
+      "module_path": "app.sponsorship_engine.router",
+      "module_mounts": [
+        "sponsorship_engine"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "sponsorship"
+    },
+    {
       "method": "POST",
       "path": "/admin/sponsorship/categories/{category}",
       "effective_paths": [
@@ -40253,6 +41614,61 @@
     },
     {
       "method": "POST",
+      "path": "/admin/sponsorship/offers/{offer_id}/broadcast",
+      "effective_paths": [
+        "/api/admin/sponsorship/offers/{offer_id}/broadcast"
+      ],
+      "file": "backend/app/sponsorship_engine/router.py",
+      "handler": "admin_broadcast_offer",
+      "router_variable": "admin_router",
+      "module_path": "app.sponsorship_engine.router",
+      "module_mounts": [
+        "sponsorship_engine_admin"
+      ],
+      "request_shape": {
+        "parameters": [
+          "offer_id",
+          "payload",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "SponsorOfferBroadcastResult",
+        "returns": "SponsorOfferBroadcastResult"
+      },
+      "version": "canonical",
+      "domain": "sponsorship"
+    },
+    {
+      "method": "POST",
+      "path": "/admin/sponsorship/regen-endorsements",
+      "effective_paths": [
+        "/api/admin/sponsorship/regen-endorsements"
+      ],
+      "file": "backend/app/sponsorship_engine/router.py",
+      "handler": "admin_create_regen_endorsement",
+      "router_variable": "admin_router",
+      "module_path": "app.sponsorship_engine.router",
+      "module_mounts": [
+        "sponsorship_engine_admin"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "RegenEndorsementView",
+        "returns": "RegenEndorsementView"
+      },
+      "version": "canonical",
+      "domain": "sponsorship"
+    },
+    {
+      "method": "POST",
       "path": "/sponsorship/contracts/request",
       "effective_paths": [
         "/api/sponsorship/contracts/request"
@@ -40301,6 +41717,34 @@
       "response_shape": {
         "response_model": "SponsorshipPlacementResponse",
         "returns": "SponsorshipPlacementResponse"
+      },
+      "version": "canonical",
+      "domain": "sponsorship"
+    },
+    {
+      "method": "POST",
+      "path": "/sponsorship/regen-endorsements/{deal_id}/respond",
+      "effective_paths": [
+        "/api/sponsorship/regen-endorsements/{deal_id}/respond"
+      ],
+      "file": "backend/app/sponsorship_engine/router.py",
+      "handler": "respond_regen_endorsement",
+      "router_variable": "router",
+      "module_path": "app.sponsorship_engine.router",
+      "module_mounts": [
+        "sponsorship_engine"
+      ],
+      "request_shape": {
+        "parameters": [
+          "deal_id",
+          "payload",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "RegenEndorsementView",
+        "returns": "RegenEndorsementView"
       },
       "version": "canonical",
       "domain": "sponsorship"
@@ -40454,6 +41898,35 @@
     },
     {
       "method": "GET",
+      "path": "/admin/story-feed",
+      "effective_paths": [
+        "/api/admin/story-feed"
+      ],
+      "file": "backend/app/story_feed_engine/router.py",
+      "handler": "admin_list_story_feed",
+      "router_variable": "admin_router",
+      "module_path": "app.story_feed_engine.router",
+      "module_mounts": [
+        "story_feed_engine_admin"
+      ],
+      "request_shape": {
+        "parameters": [
+          "limit",
+          "story_type",
+          "country_code",
+          "session",
+          "current_admin"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[StoryFeedItemResponse]",
+        "returns": null
+      },
+      "version": "canonical",
+      "domain": "story"
+    },
+    {
+      "method": "GET",
       "path": "/story-feed",
       "effective_paths": [
         "/api/story-feed"
@@ -40537,42 +42010,13 @@
       "domain": "story"
     },
     {
-      "method": "GET",
-      "path": "/admin/story-feed",
-      "effective_paths": [
-        "/api/admin/story-feed"
-      ],
-      "file": "backend/app/story_feed_engine/router.py",
-      "handler": "admin_list_story_feed",
-      "router_variable": "admin_router",
-      "module_path": "app.story_feed_engine.router",
-      "module_mounts": [
-        "story_feed_engine_admin"
-      ],
-      "request_shape": {
-        "parameters": [
-          "limit",
-          "story_type",
-          "country_code",
-          "session",
-          "current_admin"
-        ]
-      },
-      "response_shape": {
-        "response_model": "list[StoryFeedItemResponse]",
-        "returns": null
-      },
-      "version": "canonical",
-      "domain": "story"
-    },
-    {
       "method": "POST",
-      "path": "/admin/story-feed/{story_id}/schedule",
+      "path": "/admin/story-feed/{story_id}/reject",
       "effective_paths": [
-        "/api/admin/story-feed/{story_id}/schedule"
+        "/api/admin/story-feed/{story_id}/reject"
       ],
       "file": "backend/app/story_feed_engine/router.py",
-      "handler": "schedule_story",
+      "handler": "reject_story",
       "router_variable": "admin_router",
       "module_path": "app.story_feed_engine.router",
       "module_mounts": [
@@ -40595,12 +42039,12 @@
     },
     {
       "method": "POST",
-      "path": "/admin/story-feed/{story_id}/reject",
+      "path": "/admin/story-feed/{story_id}/schedule",
       "effective_paths": [
-        "/api/admin/story-feed/{story_id}/reject"
+        "/api/admin/story-feed/{story_id}/schedule"
       ],
       "file": "backend/app/story_feed_engine/router.py",
-      "handler": "reject_story",
+      "handler": "schedule_story",
       "router_variable": "admin_router",
       "module_path": "app.story_feed_engine.router",
       "module_mounts": [

@@ -4,6 +4,7 @@ import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/domain/ownership/gtex_ownership_models.dart';
 import 'package:gte_frontend/features/club_redesign/models/gtex_club_ownership_models.dart';
 import 'package:gte_frontend/screens/wallet/gtex_ownership_experience.dart';
+import 'package:gte_frontend/widgets/gte_formatters.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 GtePortfolioHolding _holding({
@@ -95,6 +96,30 @@ void main() {
     expect(find.text('MY SQUAD'), findsOneWidget);
     expect(find.textContaining('YOU OWN 2 SHARES'), findsOneWidget);
     expect(find.text('Enyimba FC'), findsWidgets);
+  });
+
+  testWidgets('credit portfolio snapshots label and format Fan Coin cash', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      GtexOwnershipExperience(
+        book: _book(<GtePortfolioHolding>[
+          _holding(id: 'a', name: 'Ada Obi', club: 'Enyimba FC'),
+        ]),
+        snapshot: GtePortfolioSnapshot.fromJson(<String, Object?>{
+          'currency': 'credit',
+          'available_balance': 1200,
+          'reserved_balance': 0,
+          'total_balance': 1200,
+          'holdings': <Object?>[],
+        }),
+      ),
+    );
+
+    expect(find.text('FAN COIN READY'), findsOneWidget);
+    expect(find.text(gteFormatFnc(1200)), findsOneWidget);
+    expect(find.text('CASH READY'), findsNothing);
   });
 
   testWidgets('multiple holdings group by club', (WidgetTester tester) async {

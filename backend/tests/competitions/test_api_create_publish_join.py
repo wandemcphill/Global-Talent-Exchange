@@ -3,9 +3,11 @@ from __future__ import annotations
 import os
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, delete
 
 from app.core.module import DomainModule
+from app.models.competition_prize_rule import CompetitionPrizeRule
+from app.models.competition_rule_set import CompetitionRuleSet
 
 
 @pytest.fixture(scope="module")
@@ -163,6 +165,7 @@ def test_create_patch_publish_join_leave_flow(
 
     detail_response = client.get(f"/api/competitions/{competition_id}")
     assert detail_response.status_code == 200
+
     detail = detail_response.json()
     assert detail["name"] == "Weekend Skills League Reloaded"
     assert detail["participant_count"] == 1
@@ -183,6 +186,45 @@ def test_create_patch_publish_join_leave_flow(
     left = leave_response.json()
     assert left["participant_count"] == 0
     assert left["status"] == "open"
+
+
+def test_competition_detail_reports_missing_rules_as_bad_request(
+    client,
+    auth_user_factory,
+    app_session_factory,
+) -> None:
+    host = auth_user_factory(suffix="missing-competition-rules")
+    create_response = client.post(
+        "/api/competitions",
+        headers=host["headers"],
+        json={
+            "name": "Rules Missing League",
+            "format": "league",
+            "visibility": "public",
+            "entry_fee": "0.00",
+            "currency": "credit",
+            "capacity": 12,
+            "creator_id": host["user_id"],
+            "creator_name": host["display_name"],
+            "platform_fee_pct": "0.10",
+            "host_fee_pct": "0.05",
+            "payout_structure": [{"place": 1, "percent": "1.00"}],
+            "rules_summary": "Standard league rules.",
+            "beginner_friendly": True,
+        },
+    )
+    assert create_response.status_code == 201, create_response.text
+    competition_id = create_response.json()["id"]
+
+    with app_session_factory() as session:
+        session.execute(delete(CompetitionRuleSet).where(CompetitionRuleSet.competition_id == competition_id))
+        session.execute(delete(CompetitionPrizeRule).where(CompetitionPrizeRule.competition_id == competition_id))
+        session.commit()
+
+    response = client.get(f"/api/competitions/{competition_id}")
+
+    assert response.status_code == 400
+    assert response.json()["message"] == "rules_missing"
 
 
 def test_join_returns_conflict_before_publish(client, auth_user_factory, competition_club_factory) -> None:

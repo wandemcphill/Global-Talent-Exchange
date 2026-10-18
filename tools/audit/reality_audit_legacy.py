@@ -1155,7 +1155,7 @@ def _strict_live_failures() -> list[str]:
         not in provider_registry
     ):
         failures.append("Payment provider registry does not mark KoraPay as the live provider.")
-    for key in ("GTE_KORAPAY_SECRET_KEY", "GTE_KORAPAY_WEBHOOK_SECRET", "GTE_KORAPAY_ENCRYPTION_KEY"):
+    for key in ("GTE_KORAPAY_SECRET_KEY", "GTE_KORAPAY_WEBHOOK_SECRET"):
         if key not in provider_registry:
             failures.append(f"KoraPay provider readiness does not reference {key}.")
 

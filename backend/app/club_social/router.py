@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+import hmac
+from hashlib import sha256
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, get_optional_current_user
 from app.club_social.schemas import (
     ChallengeAcceptRequest,
     ChallengeCreateRequest,
@@ -31,10 +34,24 @@ from app.club_social.schemas import (
     SocialFollowView,
 )
 from app.club_social.service import ClubSocialError, ClubSocialService
+from app.core.config import get_settings
+from app.core.request_security import extract_client_ip
 from app.db import get_session
 from app.models.user import User
 
 router = APIRouter(tags=["club_social"])
+
+
+def _anonymous_actor_fingerprint(request: Request) -> str:
+    """HMAC fingerprint of the client IP for anonymous share-event dedupe."""
+    secret = get_settings().auth_secret or ""
+    client_ip = extract_client_ip(request)
+    digest = hmac.new(
+        secret.encode("utf-8"),
+        f"share-event:{client_ip}".encode("utf-8"),
+        sha256,
+    ).hexdigest()
+    return digest[:32]
 
 
 def get_service(session: Session = Depends(get_session)) -> ClubSocialService:
@@ -137,10 +154,17 @@ def create_challenge_link(
 def record_challenge_share_event(
     challenge_id: str,
     payload: ChallengeShareEventRequest,
+    request: Request,
+    current_user: User | None = Depends(get_optional_current_user),
     service: ClubSocialService = Depends(get_service),
 ) -> ChallengeShareEventView:
     try:
-        event = service.record_share_event(challenge_id=challenge_id, actor_user_id=None, **payload.model_dump())
+        event = service.record_share_event(
+            challenge_id=challenge_id,
+            actor_user_id=current_user.id if current_user else None,
+            actor_fingerprint=_anonymous_actor_fingerprint(request) if current_user is None else None,
+            **payload.model_dump(),
+        )
         service.session.commit()
     except ClubSocialError as exc:
         _raise(exc)
@@ -278,12 +302,15 @@ def create_match_share_link(
 def record_match_share_event(
     share_code: str,
     payload: MatchShareEventRequest,
+    request: Request,
+    current_user: User | None = Depends(get_optional_current_user),
     service: ClubSocialService = Depends(get_service),
 ) -> dict[str, str]:
     try:
         service.record_match_share_event(
             share_code=share_code,
-            actor_user_id=None,
+            actor_user_id=current_user.id if current_user else None,
+            actor_fingerprint=_anonymous_actor_fingerprint(request) if current_user is None else None,
             **payload.model_dump(),
         )
         service.session.commit()
