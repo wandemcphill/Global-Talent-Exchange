@@ -350,7 +350,7 @@ def gm_respond_preseason(session: Session, *, invite_id: str, user_id: str, deci
     _staff_policy(session, invite.to_club_id, PRESEASON_RESPONSE, Decimal(invite.appearance_fee))
     from app.club_legacy.operations import respond_preseason
 
-    updated = respond_preseason(session, invite_id=invite.id, user_id=user_id, decision=decision, as_staff=True)
+    updated = respond_preseason(session, invite_id=invite.id, user_id=user_id, decision=decision)
     return {"invite_status": updated.status, "recommendation_id": None, "acted": True}
 
 

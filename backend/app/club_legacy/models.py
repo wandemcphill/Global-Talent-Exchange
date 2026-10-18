@@ -201,6 +201,16 @@ class ClubLegacyManagerOffer(UUIDPrimaryKeyMixin, Base):
     outcome: Mapped[str] = mapped_column(String(16), nullable=False)
     money_score: Mapped[int] = mapped_column(Integer, nullable=False)
     project_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    contract_length: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    role: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    parent_offer_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    manager_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    personality: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    wage_expectation: Mapped[Decimal | None] = mapped_column(Numeric(20, 2), nullable=True)
+    relationship_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    expectation_gap: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=utcnow)
 
 
 class ClubLegacyPromise(UUIDPrimaryKeyMixin, Base):
@@ -210,6 +220,7 @@ class ClubLegacyPromise(UUIDPrimaryKeyMixin, Base):
     subject: Mapped[str] = mapped_column(String(160), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="open")
     trust: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    manager_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
 
 
 class ClubLegacyCase(UUIDPrimaryKeyMixin, Base):
