@@ -72,11 +72,15 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(api_c
     # Read-only result-summary GET must never create payout rows or payout ledger entries.
     session = list(api_client.app.dependency_overrides[get_session]())[0]
     payout_count_before = session.scalar(
-        select(func.count()).select_from(FastCupPayout).where(FastCupPayout.cup_id == senior_32["cup_id"])
+        select(func.count())
+        .select_from(FastCupPayout)
+        .where(FastCupPayout.cup_id == senior_32["cup_id"])
     )
     ledger_count_before = session.scalar(
         select(func.count()).select_from(LedgerTransaction).where(
-            LedgerTransaction.idempotency_key.like(f"fast-cup-payout:{senior_32['cup_id']}:%")
+            LedgerTransaction.idempotency_key.like(
+                f"fast-cup-payout:{senior_32['cup_id']}:%"
+            )
         )
     )
     assert payout_count_before == 0
@@ -119,11 +123,15 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(api_c
 
     session.expire_all()
     payout_count_after_settle = session.scalar(
-        select(func.count()).select_from(FastCupPayout).where(FastCupPayout.cup_id == senior_32["cup_id"])
+        select(func.count())
+        .select_from(FastCupPayout)
+        .where(FastCupPayout.cup_id == senior_32["cup_id"])
     )
     ledger_count_after_settle = session.scalar(
         select(func.count()).select_from(LedgerTransaction).where(
-            LedgerTransaction.idempotency_key.like(f"fast-cup-payout:{senior_32['cup_id']}:%")
+            LedgerTransaction.idempotency_key.like(
+                f"fast-cup-payout:{senior_32['cup_id']}:%"
+            )
         )
     )
     assert payout_count_after_settle > 0
@@ -138,14 +146,18 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(api_c
     session.expire_all()
     assert (
         session.scalar(
-            select(func.count()).select_from(FastCupPayout).where(FastCupPayout.cup_id == senior_32["cup_id"])
+            select(func.count())
+        .select_from(FastCupPayout)
+        .where(FastCupPayout.cup_id == senior_32["cup_id"])
         )
         == payout_count_after_settle
     )
     assert (
         session.scalar(
             select(func.count()).select_from(LedgerTransaction).where(
-                LedgerTransaction.idempotency_key.like(f"fast-cup-payout:{senior_32['cup_id']}:%")
+                LedgerTransaction.idempotency_key.like(
+                    f"fast-cup-payout:{senior_32['cup_id']}:%"
+                )
             )
         )
         == ledger_count_after_settle
@@ -160,14 +172,18 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(api_c
     session.expire_all()
     assert (
         session.scalar(
-            select(func.count()).select_from(FastCupPayout).where(FastCupPayout.cup_id == senior_32["cup_id"])
+            select(func.count())
+        .select_from(FastCupPayout)
+        .where(FastCupPayout.cup_id == senior_32["cup_id"])
         )
         == payout_count_after_settle
     )
     assert (
         session.scalar(
             select(func.count()).select_from(LedgerTransaction).where(
-                LedgerTransaction.idempotency_key.like(f"fast-cup-payout:{senior_32['cup_id']}:%")
+                LedgerTransaction.idempotency_key.like(
+                    f"fast-cup-payout:{senior_32['cup_id']}:%"
+                )
             )
         )
         == ledger_count_after_settle
