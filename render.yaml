@@ -50,6 +50,8 @@ services:
         value: "1"
       - key: GTE_AUTH_SECRET
         sync: false
+      - key: GTE_FIELD_ENCRYPTION_KEY
+        sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
         sync: false
       - key: GTE_KORAPAY_PUBLIC_KEY
@@ -125,6 +127,8 @@ services:
         value: production
       - key: GTE_AUTH_SECRET
         sync: false
+      - key: GTE_FIELD_ENCRYPTION_KEY
+        sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
         sync: false
       - key: GTE_RUN_MIGRATION_CHECK
@@ -157,6 +161,8 @@ services:
         value: production
       - key: GTE_AUTH_SECRET
         sync: false
+      - key: GTE_FIELD_ENCRYPTION_KEY
+        sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
         sync: false
       - key: GTE_RUN_MIGRATION_CHECK
@@ -186,6 +192,8 @@ services:
       - key: GTE_APP_ENV
         value: production
       - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_FIELD_ENCRYPTION_KEY
         sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
         sync: false
@@ -296,6 +304,8 @@ services:
         value: sportmonks
       - key: GTE_AUTH_SECRET
         sync: false
+      - key: GTE_FIELD_ENCRYPTION_KEY
+        sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
         sync: false
 
@@ -324,6 +334,8 @@ services:
         value: production
       - key: GTE_AUTH_SECRET
         sync: false
+      - key: GTE_FIELD_ENCRYPTION_KEY
+        sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
         sync: false
 
@@ -341,6 +353,8 @@ services:
       - key: GTE_APP_ENV
         value: production
       - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_FIELD_ENCRYPTION_KEY
         sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
         sync: false
@@ -367,6 +381,8 @@ services:
         value: production
       - key: GTE_AUTH_SECRET
         sync: false
+      - key: GTE_FIELD_ENCRYPTION_KEY
+        sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
         sync: false
 
@@ -387,6 +403,8 @@ services:
         value: production
       - key: GTE_AUTH_SECRET
         sync: false
+      - key: GTE_FIELD_ENCRYPTION_KEY
+        sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
         sync: false
 
@@ -404,6 +422,8 @@ services:
       - key: GTE_APP_ENV
         value: production
       - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_FIELD_ENCRYPTION_KEY
         sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
         sync: false
@@ -430,6 +450,8 @@ services:
       - key: GTE_APP_ENV
         value: production
       - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_FIELD_ENCRYPTION_KEY
         sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
         sync: false
@@ -458,6 +480,8 @@ services:
       - key: GTE_APP_ENV
         value: production
       - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_FIELD_ENCRYPTION_KEY
         sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
         sync: false

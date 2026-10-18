@@ -76,6 +76,14 @@ def _is_protected_app_env() -> bool:
     return environment in PROTECTED_APP_ENVS
 
 
+def _mask_account_number(account_number: str | None) -> str:
+    if not account_number:
+        return ""
+    if len(account_number) <= 4:
+        return "*" * len(account_number)
+    return "*" * (len(account_number) - 4) + account_number[-4:]
+
+
 def _is_placeholder_treasury_bank_account(bank_account: TreasuryBankAccount) -> bool:
     return (
         bank_account.bank_name == PLACEHOLDER_TREASURY_BANK_NAME
@@ -742,7 +750,7 @@ class TreasuryService:
             bank_code=bank_account.bank_code,
             bank_snapshot_json={
                 "bank_name": bank_account.bank_name,
-                "account_number": bank_account.account_number,
+                "account_number_masked": _mask_account_number(bank_account.account_number),
                 "account_name": bank_account.account_name,
                 "bank_code": bank_account.bank_code,
                 "currency_code": bank_account.currency_code,

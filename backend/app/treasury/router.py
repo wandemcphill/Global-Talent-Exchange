@@ -14,6 +14,7 @@ from app.core.cloudinary_upload import (
     upload_kyc_document,
 )
 from app.auth.dependencies import get_current_admin, get_current_user, get_current_wallet_user, get_session
+from app.core.field_encryption import identifier_hash_clause
 from app.models.dispute import Dispute, DisputeMessage
 from app.models.treasury import (
     DepositRequest,
@@ -175,9 +176,7 @@ async def submit_kyc_documents(
 
     government_id_url = await _store(government_id, "government_id")
     selfie_url = await _store(selfie, "selfie")
-    proof_of_address_url = (
-        await _store(proof_of_address, "proof_of_address") if proof_of_address is not None else None
-    )
+    proof_of_address_url = await _store(proof_of_address, "proof_of_address") if proof_of_address is not None else None
 
     service = _service(request)
     try:
@@ -344,9 +343,7 @@ def get_dispute_detail(
     if dispute is None or dispute.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dispute not found.")
     messages = session.scalars(
-        select(DisputeMessage)
-        .where(DisputeMessage.dispute_id == dispute.id)
-        .order_by(DisputeMessage.created_at.asc())
+        select(DisputeMessage).where(DisputeMessage.dispute_id == dispute.id).order_by(DisputeMessage.created_at.asc())
     ).all()
     return AdminDisputeView(
         id=dispute.id,
@@ -376,7 +373,9 @@ def get_dispute_detail(
     )
 
 
-@api_router.post("/disputes/{dispute_id}/messages", response_model=AdminDisputeMessageView, status_code=status.HTTP_201_CREATED)
+@api_router.post(
+    "/disputes/{dispute_id}/messages", response_model=AdminDisputeMessageView, status_code=status.HTTP_201_CREATED
+)
 def add_dispute_message(
     dispute_id: str,
     payload: DisputeMessageRequest,
@@ -539,38 +538,41 @@ def treasury_dashboard(
     )
     pending_withdrawals = session.scalar(
         select(func.count(TreasuryWithdrawalRequest.id)).where(
-            TreasuryWithdrawalRequest.status.in_([
-                TreasuryWithdrawalStatus.PENDING_REVIEW,
-                TreasuryWithdrawalStatus.APPROVED,
-                TreasuryWithdrawalStatus.PROCESSING,
-            ])
+            TreasuryWithdrawalRequest.status.in_(
+                [
+                    TreasuryWithdrawalStatus.PENDING_REVIEW,
+                    TreasuryWithdrawalStatus.APPROVED,
+                    TreasuryWithdrawalStatus.PROCESSING,
+                ]
+            )
         )
     )
     pending_kyc = session.scalar(
         select(func.count(KycProfile.id)).where(KycProfile.status.in_([KycStatus.PENDING, KycStatus.UNDER_REVIEW]))
     )
     open_disputes = session.scalar(
-        select(func.count(Dispute.id)).where(
-            Dispute.status.in_(["open", "awaiting_admin", "awaiting_user"])
-        )
+        select(func.count(Dispute.id)).where(Dispute.status.in_(["open", "awaiting_admin", "awaiting_user"]))
     )
     deposits_confirmed_today = session.scalar(
-        select(func.count(DepositRequest.id)).where(DepositRequest.confirmed_at >= now.replace(hour=0, minute=0, second=0, microsecond=0))
+        select(func.count(DepositRequest.id)).where(
+            DepositRequest.confirmed_at >= now.replace(hour=0, minute=0, second=0, microsecond=0)
+        )
     )
     withdrawals_paid_today = session.scalar(
-        select(func.count(TreasuryWithdrawalRequest.id)).where(TreasuryWithdrawalRequest.paid_at >= now.replace(hour=0, minute=0, second=0, microsecond=0))
+        select(func.count(TreasuryWithdrawalRequest.id)).where(
+            TreasuryWithdrawalRequest.paid_at >= now.replace(hour=0, minute=0, second=0, microsecond=0)
+        )
     )
-    wallet_liability = session.scalar(
-        select(func.coalesce(func.sum(DepositRequest.amount_coin), 0))
-    )
+    wallet_liability = session.scalar(select(func.coalesce(func.sum(DepositRequest.amount_coin), 0)))
     pending_treasury_exposure = session.scalar(
-        select(func.coalesce(func.sum(TreasuryWithdrawalRequest.amount_coin), 0))
-        .where(
-            TreasuryWithdrawalRequest.status.in_([
-                TreasuryWithdrawalStatus.PENDING_REVIEW,
-                TreasuryWithdrawalStatus.APPROVED,
-                TreasuryWithdrawalStatus.PROCESSING,
-            ])
+        select(func.coalesce(func.sum(TreasuryWithdrawalRequest.amount_coin), 0)).where(
+            TreasuryWithdrawalRequest.status.in_(
+                [
+                    TreasuryWithdrawalStatus.PENDING_REVIEW,
+                    TreasuryWithdrawalStatus.APPROVED,
+                    TreasuryWithdrawalStatus.PROCESSING,
+                ]
+            )
         )
     )
     return TreasuryDashboardView(
@@ -654,7 +656,9 @@ def admin_confirm_deposit(
     _require_permission(request, actor, "manage_treasury_withdrawals")
     service = _service(request)
     try:
-        deposit = service.confirm_deposit(session, actor=actor, deposit_request_id=deposit_id, admin_notes=(payload or {}).get("admin_notes"))
+        deposit = service.confirm_deposit(
+            session, actor=actor, deposit_request_id=deposit_id, admin_notes=(payload or {}).get("admin_notes")
+        )
         session.commit()
     except TreasuryConflictError as exc:
         session.rollback()
@@ -672,7 +676,9 @@ def admin_reject_deposit(
 ) -> DepositRequestView:
     _require_permission(request, actor, "manage_treasury_withdrawals")
     service = _service(request)
-    deposit = service.reject_deposit(session, actor=actor, deposit_request_id=deposit_id, admin_notes=(payload or {}).get("admin_notes"))
+    deposit = service.reject_deposit(
+        session, actor=actor, deposit_request_id=deposit_id, admin_notes=(payload or {}).get("admin_notes")
+    )
     session.commit()
     return DepositRequestView.model_validate(deposit)
 
@@ -687,7 +693,9 @@ def admin_review_deposit(
 ) -> DepositRequestView:
     _require_permission(request, actor, "manage_treasury_withdrawals")
     service = _service(request)
-    deposit = service.mark_deposit_under_review(session, actor=actor, deposit_request_id=deposit_id, admin_notes=(payload or {}).get("admin_notes"))
+    deposit = service.mark_deposit_under_review(
+        session, actor=actor, deposit_request_id=deposit_id, admin_notes=(payload or {}).get("admin_notes")
+    )
     session.commit()
     return DepositRequestView.model_validate(deposit)
 
@@ -708,19 +716,22 @@ def list_admin_withdrawals(
         query = query.where(TreasuryWithdrawalRequest.status == status_filter)
     if q:
         like = f"%{q.lower()}%"
-        query = query.where(
-            or_(
-                func.lower(TreasuryWithdrawalRequest.reference).ilike(like),
-                func.lower(User.email).ilike(like),
-                func.lower(User.full_name).ilike(like),
-                func.lower(User.phone_number).ilike(like),
-                func.lower(TreasuryWithdrawalRequest.bank_name).ilike(like),
-                func.lower(TreasuryWithdrawalRequest.bank_account_number).ilike(like),
-                func.lower(TreasuryWithdrawalRequest.bank_account_name).ilike(like),
-            )
-        )
+        clauses = [
+            func.lower(TreasuryWithdrawalRequest.reference).ilike(like),
+            func.lower(User.email).ilike(like),
+            func.lower(User.full_name).ilike(like),
+            func.lower(User.phone_number).ilike(like),
+            func.lower(TreasuryWithdrawalRequest.bank_name).ilike(like),
+            func.lower(TreasuryWithdrawalRequest.bank_account_name).ilike(like),
+        ]
+        account_clause = identifier_hash_clause(TreasuryWithdrawalRequest.bank_account_number_hash, q)
+        if account_clause is not None:
+            clauses.append(account_clause)
+        query = query.where(or_(*clauses))
     total = session.scalar(select(func.count()).select_from(query.subquery()))
-    rows = session.execute(query.order_by(TreasuryWithdrawalRequest.created_at.desc()).limit(limit).offset(offset)).all()
+    rows = session.execute(
+        query.order_by(TreasuryWithdrawalRequest.created_at.desc()).limit(limit).offset(offset)
+    ).all()
     items = [
         AdminWithdrawalView(
             id=withdrawal.id,
@@ -854,15 +865,16 @@ def list_admin_kyc(
         query = query.where(KycProfile.status == status_filter)
     if q:
         like = f"%{q.lower()}%"
-        query = query.where(
-            or_(
-                func.lower(User.email).ilike(like),
-                func.lower(User.full_name).ilike(like),
-                func.lower(User.phone_number).ilike(like),
-                func.lower(KycProfile.nin).ilike(like),
-                func.lower(KycProfile.bvn).ilike(like),
-            )
-        )
+        clauses = [
+            func.lower(User.email).ilike(like),
+            func.lower(User.full_name).ilike(like),
+            func.lower(User.phone_number).ilike(like),
+        ]
+        for column in (KycProfile.nin_hash, KycProfile.bvn_hash):
+            identifier_clause = identifier_hash_clause(column, q)
+            if identifier_clause is not None:
+                clauses.append(identifier_clause)
+        query = query.where(or_(*clauses))
     total = session.scalar(select(func.count()).select_from(query.subquery()))
     rows = session.execute(query.order_by(KycProfile.updated_at.desc()).limit(limit).offset(offset)).all()
     items = [
@@ -1004,7 +1016,9 @@ def get_admin_dispute(
     )
 
 
-@admin_router.post("/disputes/{dispute_id}/messages", response_model=AdminDisputeMessageView, status_code=status.HTTP_201_CREATED)
+@admin_router.post(
+    "/disputes/{dispute_id}/messages", response_model=AdminDisputeMessageView, status_code=status.HTTP_201_CREATED
+)
 def add_admin_dispute_message(
     request: Request,
     dispute_id: str,
