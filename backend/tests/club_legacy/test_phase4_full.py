@@ -300,7 +300,7 @@ def test_gift_waits_for_acceptance_and_does_not_max_loyalty(client, bootstrap_ad
         assert owned.status == "offered"
         assert owned.owner_class == owner_class
         assert owned.owner_ref == admin.id
-        resolve_gift(session, gift_id=gift.id, accept=False)
+        resolve_gift(session, gift_id=gift.id, accept=False, actor_user_id=admin.id)
         session.refresh(owned)
         assert owned.owner_class == "owner"
         gift = offer_gift(session, asset_id=owned.id, user_id=admin.id, recipient_ref="player-1")
@@ -364,6 +364,16 @@ def test_gift_resolution_authorization_checks(client, bootstrap_admin_headers, a
 
         gift_a = offer_gift(session, asset_id=owned_a.id, user_id=admin.id, recipient_ref=recipient_user.id)
         gift_b = offer_gift(session, asset_id=owned_b.id, user_id=admin.id, recipient_ref=recipient_user.id)
+
+        # A missing actor must be rejected before either gift or asset is mutated.
+        with pytest.raises(LegacyError) as missing_actor:
+            resolve_gift(session, gift_id=gift_a.id, accept=True)
+        assert missing_actor.value.status == 403
+        assert missing_actor.value.code == "gift_actor_required"
+        session.refresh(gift_a)
+        session.refresh(owned_a)
+        assert gift_a.status == "offered"
+        assert owned_a.status == "offered"
 
         # Unauthorized user receives 403 when resolving recipient_user's gift
         with pytest.raises(LegacyError) as exc_info:
