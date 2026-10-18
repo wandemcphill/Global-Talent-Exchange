@@ -41,4 +41,12 @@ module.exports = [
       sourceType: "module",
     },
   },
+  // The React shell's src/*.js files are ES modules. Config files at the
+  // shell root stay CommonJS (`module.exports`).
+  {
+    files: ["frontend/react-shell/src/**/*.js"],
+    languageOptions: {
+      sourceType: "module",
+    },
+  },
 ];

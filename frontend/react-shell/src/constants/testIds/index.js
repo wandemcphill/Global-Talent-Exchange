@@ -11,5 +11,5 @@
 //   2. Export named objects (e.g. `export const PROFILE = { ... }`)
 //   3. Re-export here: `export * from './<feature>';`
 
-export * from './auth';
-export * from './home';
+export * from "./auth";
+export * from "./home";
