@@ -159,7 +159,7 @@ def get_fast_cup_result_summary(
     ecosystem: FastCupEcosystemService = Depends(get_fast_cup_ecosystem),
 ) -> FastCupResultSummaryView:
     try:
-        summary = ecosystem.get_result_summary(cup_id=cup_id, now=now or datetime.now(UTC))
+        summary = ecosystem.preview_result_summary(cup_id=cup_id, now=now or datetime.now(UTC))
     except FastCupNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except FastCupStateError as exc:
