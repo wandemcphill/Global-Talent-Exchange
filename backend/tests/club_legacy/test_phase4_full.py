@@ -328,6 +328,52 @@ def test_gift_waits_for_acceptance_and_does_not_max_loyalty(client, bootstrap_ad
         session.commit()
 
 
+def test_gift_resolution_authorization_checks(client, bootstrap_admin_headers, app):
+    club_id = _claim(client, bootstrap_admin_headers)
+    _enable(app)
+    with app.state.session_factory() as session:
+        admin = _admin(session)
+        other_user = _user(session, "p4-other@gte.local", "p4_other")
+        recipient_user = _user(session, "p4-recipient@gte.local", "p4_recipient")
+
+        _cheap(session, "gtex-watch-icon", price="100", supply=5)
+        owned_a = purchase_asset(
+            session,
+            club_id=club_id,
+            user_id=admin.id,
+            sku="gtex-watch-icon",
+            owner_class="owner",
+            idempotency_key="p4-gift-auth-a",
+        )
+        owned_b = purchase_asset(
+            session,
+            club_id=club_id,
+            user_id=admin.id,
+            sku="gtex-watch-icon",
+            owner_class="owner",
+            idempotency_key="p4-gift-auth-b",
+        )
+
+        gift_a = offer_gift(session, asset_id=owned_a.id, user_id=admin.id, recipient_ref=recipient_user.id)
+        gift_b = offer_gift(session, asset_id=owned_b.id, user_id=admin.id, recipient_ref=recipient_user.id)
+
+        # Unauthorized user receives 403 when resolving recipient_user's gift
+        with pytest.raises(LegacyError) as exc_info:
+            resolve_gift(session, gift_id=gift_a.id, accept=True, actor_user_id=other_user.id)
+        assert exc_info.value.status == 403
+        assert exc_info.value.code == "not_gift_recipient"
+
+        # Intended recipient can accept
+        resolved_a = resolve_gift(session, gift_id=gift_a.id, accept=True, actor_user_id=recipient_user.id)
+        assert resolved_a.status == "accepted"
+
+        # Admin user can decline on behalf of recipient
+        resolved_b = resolve_gift(session, gift_id=gift_b.id, accept=False, actor_user_id=admin.id)
+        assert resolved_b.status == "declined"
+
+        session.commit()
+
+
 def test_supply_cap_holds_for_two_concurrent_purchases_and_club_caps_stay(client, bootstrap_admin_headers, app):
     club_id = _claim(client, bootstrap_admin_headers)
     _enable(app)

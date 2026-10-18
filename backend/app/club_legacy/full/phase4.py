@@ -290,6 +290,13 @@ def resolve_gift(session: Session, *, gift_id: str, accept: bool, actor_user_id:
     asset = session.get(ClubLegacyAsset, gift.asset_id)
     if asset is None:
         raise LegacyError("asset_unavailable", 409)
+    if actor_user_id is not None:
+        from app.models.user import User, UserRole
+        actor = session.get(User, actor_user_id)
+        is_admin = actor is not None and actor.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}
+        is_recipient = actor_user_id == gift.recipient_ref
+        if not (is_recipient or is_admin):
+            raise LegacyError("not_gift_recipient", 403, "Caller is not authorized to resolve this gift.")
     if accept:
         asset.owner_class = "player"
         asset.owner_ref = gift.recipient_ref
