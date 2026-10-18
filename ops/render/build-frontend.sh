@@ -31,3 +31,7 @@ flutter pub get
 flutter build web --release \
   --dart-define="GTE_API_BASE_URL=${GTE_API_BASE_URL}" \
   --dart-define="GTE_BACKEND_MODE=${GTE_BACKEND_MODE}"
+
+# Flutter remains the site root. The React shell is published only under console/.
+# set -e above fails the Render build if this step fails.
+bash "${SCRIPT_DIR}/publish-react-shell.sh"

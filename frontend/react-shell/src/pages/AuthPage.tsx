@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { errMsg } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { publicUrl } from "@/lib/publicPath";
 import { Btn } from "@/components/gtex/ui";
 
 function Field({ label, children }: any) {
@@ -43,7 +44,7 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
   return (
     <div className="grid min-h-screen bg-[#070B11] lg:grid-cols-2">
       <div className="relative hidden overflow-hidden lg:block">
-        <img src="/img/hero.jpg" alt="Stadium under lights" className="absolute inset-0 h-full w-full object-cover opacity-50" />
+        <img src={publicUrl("/img/hero.jpg")} alt="Stadium under lights" className="absolute inset-0 h-full w-full object-cover opacity-50" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#070B11] via-[#070B11]/40 to-transparent" />
         <div className="absolute bottom-12 left-12 right-12">
           <p className="gx-eyebrow mb-3">GTEX Owner Console</p>

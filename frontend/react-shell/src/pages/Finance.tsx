@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ShieldAlert } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
+import { publicUrl } from "@/lib/publicPath";
 import { fmt, label, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, Stat } from "@/components/gtex/ui";
 import { CoinTraderDesk } from "@/components/gtex/CoinTraderDesk";
@@ -30,7 +31,7 @@ function Deposit({ configured, rates, mode }: any) {
   const coins = rates?.deposit_direction === "coin_per_fiat" ? Number(amount || 0) * rate : Number(amount || 0) / (rate || 1);
   const go = async () => {
     try {
-      const { data } = await api.post("/owner/deposits/init", { amount_ngn: Number(amount), callback_url: `${window.location.origin}/payment/callback` });
+      const { data } = await api.post("/owner/deposits/init", { amount_ngn: Number(amount), callback_url: `${window.location.origin}${publicUrl("/payment/callback")}` });
       window.location.href = data.authorization_url;
     } catch (e) {
       toast.error(errMsg(e));

@@ -4,11 +4,19 @@ on:
   pull_request:
     paths:
       - "frontend/react-shell/**"
+      - "ops/render/build-frontend.sh"
+      - "ops/render/publish-react-shell.sh"
+      - "ops/render/verify-console-bundle.sh"
+      - "render.yaml"
       - ".github/workflows/react-shell-build.yml"
   push:
     branches: [main]
     paths:
       - "frontend/react-shell/**"
+      - "ops/render/build-frontend.sh"
+      - "ops/render/publish-react-shell.sh"
+      - "ops/render/verify-console-bundle.sh"
+      - "render.yaml"
       - ".github/workflows/react-shell-build.yml"
 
 jobs:
@@ -17,16 +25,22 @@ jobs:
     defaults:
       run:
         working-directory: frontend/react-shell
+    env:
+      CI: "false"
+      NODE_OPTIONS: "--openssl-legacy-provider"
+      PUBLIC_URL: "/console"
+      REACT_APP_BACKEND_URL: "https://gtex-api-opea.onrender.com"
+      GTE_API_BASE_URL: "https://gtex-api-opea.onrender.com"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/react-shell/package-lock.json
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
-      - name: Build React shell
-        env:
-          CI: "false"
-          NODE_OPTIONS: "--openssl-legacy-provider"
-          REACT_APP_BACKEND_URL: "https://gtex-api-opea.onrender.com"
+        run: npm ci --legacy-peer-deps --include=dev
+      - name: Build React shell for /console
         run: npm run build
+      - name: Verify /console asset prefix and canonical API origin
+        run: bash ../../ops/render/verify-console-bundle.sh build
