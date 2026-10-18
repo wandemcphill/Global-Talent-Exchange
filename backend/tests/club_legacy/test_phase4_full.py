@@ -371,9 +371,34 @@ def test_gift_resolution_authorization_checks(client, bootstrap_admin_headers, a
         assert exc_info.value.status == 403
         assert exc_info.value.code == "not_gift_recipient"
 
-        # Intended recipient can accept
+        # Intended recipient can accept directly (user id)
         resolved_a = resolve_gift(session, gift_id=gift_a.id, accept=True, actor_user_id=recipient_user.id)
         assert resolved_a.status == "accepted"
+
+        # Gift sent to a player in recipient_user's club can be accepted by recipient_user
+        recipient_club = _club(session, recipient_user.id, "Recipient FC", "recipient-fc")
+        player = OwnerSquadPlayer(id="squad-player-1", club_id=recipient_club.id, name="Star Player", position="ST")
+        session.add(player)
+        session.flush()
+
+        owned_c = purchase_asset(
+            session,
+            club_id=club_id,
+            user_id=admin.id,
+            sku="gtex-watch-icon",
+            owner_class="owner",
+            idempotency_key="p4-gift-auth-c",
+        )
+        gift_c = offer_gift(session, asset_id=owned_c.id, user_id=admin.id, recipient_ref=player.id)
+
+        # Other user cannot resolve gift sent to squad player
+        with pytest.raises(LegacyError) as exc_info:
+            resolve_gift(session, gift_id=gift_c.id, accept=True, actor_user_id=other_user.id)
+        assert exc_info.value.status == 403
+
+        # Owner of the player's club can accept
+        resolved_c = resolve_gift(session, gift_id=gift_c.id, accept=True, actor_user_id=recipient_user.id)
+        assert resolved_c.status == "accepted"
 
         # Admin user can decline on behalf of recipient
         resolved_b = resolve_gift(session, gift_id=gift_b.id, accept=False, actor_user_id=admin.id)

@@ -281,6 +281,22 @@ def offer_gift(session: Session, *, asset_id: str, user_id: str, recipient_ref: 
     return gift
 
 
+def _is_gift_recipient(session: Session, gift: ClubLegacyGift, actor_user_id: str) -> bool:
+    if actor_user_id == gift.recipient_ref:
+        return True
+    club = session.get(ClubProfile, gift.recipient_ref)
+    if club is not None and club.owner_user_id == actor_user_id:
+        return True
+    from app.owner_console.models import OwnerSquadPlayer
+
+    player = session.get(OwnerSquadPlayer, gift.recipient_ref)
+    if player is not None and player.club_id is not None:
+        player_club = session.get(ClubProfile, player.club_id)
+        if player_club is not None and player_club.owner_user_id == actor_user_id:
+            return True
+    return False
+
+
 def resolve_gift(session: Session, *, gift_id: str, accept: bool, actor_user_id: str | None = None) -> ClubLegacyGift:
     gift = session.get(ClubLegacyGift, gift_id)
     if gift is None or gift.status != "offered":
@@ -293,7 +309,7 @@ def resolve_gift(session: Session, *, gift_id: str, accept: bool, actor_user_id:
 
         actor = session.get(User, actor_user_id)
         is_admin = actor is not None and actor.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}
-        is_recipient = actor_user_id == gift.recipient_ref
+        is_recipient = _is_gift_recipient(session, gift, actor_user_id)
         if not (is_recipient or is_admin):
             raise LegacyError("not_gift_recipient", 403, "Caller is not authorized to resolve this gift.")
     if accept:
