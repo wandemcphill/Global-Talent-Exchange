@@ -1,10 +1,21 @@
 import 'dart:async';
-import 'dart:html' as html;
-import 'dart:js' as js;
-import 'dart:js_util' as js_util;
+import 'dart:js_interop';
 import 'dart:ui_web' as ui_web;
+import 'package:web/web.dart' as web;
 
 import 'package:flutter/material.dart';
+
+@JS('turnstile')
+external JSObject? get _turnstile;
+
+@JS('turnstile.render')
+external JSAny? _turnstileRender(web.HTMLElement container, JSAny options);
+
+@JS('turnstile.remove')
+external void _turnstileRemove(JSString widgetId);
+
+@JS()
+external JSAny _turnstileCallback(JSString token);
 
 class TurnstileChallenge extends StatefulWidget {
   const TurnstileChallenge({
@@ -31,7 +42,7 @@ class _TurnstileChallengeState extends State<TurnstileChallenge> {
   void initState() {
     super.initState();
     ui_web.platformViewRegistry.registerViewFactory(_viewType, (int _) {
-      final container = html.DivElement()
+      final container = web.HTMLDivElement()
         ..style.width = '100%'
         ..style.minHeight = '65px';
       scheduleMicrotask(() => _render(container));
@@ -39,63 +50,47 @@ class _TurnstileChallengeState extends State<TurnstileChallenge> {
     });
   }
 
-  Future<void> _render(html.DivElement container) async {
+  Future<void> _render(web.HTMLDivElement container) async {
     if (widget.siteKey.trim().isEmpty) {
       widget.onTokenChanged(null);
       return;
     }
+
     try {
       await _ensureScriptLoaded();
       if (!mounted) return;
-      final Object? turnstile = js_util.getProperty(html.window, 'turnstile');
-      if (turnstile == null) {
+      if (_turnstile == null) {
         widget.onTokenChanged(null);
         return;
       }
-      final Object? rawOptions = js_util.jsify(<String, Object?>{
+
+      final options = <String, Object>{
         'sitekey': widget.siteKey.trim(),
         'theme': 'dark',
         'size': 'normal',
-      });
-      if (rawOptions == null) {
-        widget.onTokenChanged(null);
-        return;
-      }
-      final Object options = rawOptions;
-      js_util.setProperty(
-        options,
-        'callback',
-        js.allowInterop((dynamic token) {
-          if (mounted) widget.onTokenChanged(token?.toString());
-        }),
-      );
-      js_util.setProperty(
-        options,
-        'expired-callback',
-        js.allowInterop(() {
+        'callback': ((JSString token) {
+          if (mounted) widget.onTokenChanged(token.toDart);
+        }).toJS,
+        'expired-callback': (() {
           if (mounted) widget.onTokenChanged(null);
-        }),
-      );
-      js_util.setProperty(
-        options,
-        'error-callback',
-        js.allowInterop(() {
+        }).toJS,
+        'error-callback': (() {
           if (mounted) widget.onTokenChanged(null);
-        }),
-      );
-      final dynamic id = js_util.callMethod<Object?>(
-        turnstile,
-        'render',
-        <Object?>[container, options],
-      );
-      _widgetId = id?.toString();
+        }).toJS,
+      }.jsify();
+
+      final id = _renderWithOptions(container, options);
+      _widgetId = id?.toDartString();
     } catch (_) {
       if (mounted) widget.onTokenChanged(null);
     }
   }
 
+  JSAny? _renderWithOptions(web.HTMLElement container, JSAny options) =>
+      _turnstileRender(container, options);
+
   static Future<void> _ensureScriptLoaded() async {
-    if (js_util.hasProperty(html.window, 'turnstile')) return;
+    if (_turnstile != null) return;
     if (_scriptReady != null) {
       await _scriptReady;
       return;
@@ -103,24 +98,30 @@ class _TurnstileChallengeState extends State<TurnstileChallenge> {
 
     final completer = Completer<void>();
     _scriptReady = completer.future;
-    final existing = html.document.getElementById(_scriptId);
-    final script = existing is html.ScriptElement
+    final existing = web.document.getElementById(_scriptId);
+    final script = existing is web.HTMLScriptElement
         ? existing
-        : html.ScriptElement()
+        : web.HTMLScriptElement()
           ..id = _scriptId
           ..src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
           ..async = true
           ..defer = true;
 
-    script.onLoad.listen((_) {
-      if (!completer.isCompleted) completer.complete();
-    });
-    script.onError.listen((_) {
-      if (!completer.isCompleted) {
-        completer.completeError(StateError('Unable to load Turnstile.'));
-      }
-    });
-    if (existing == null) html.document.head?.append(script);
+    script.addEventListener(
+      'load',
+      ((web.Event _) {
+        if (!completer.isCompleted) completer.complete();
+      }).toJS,
+    );
+    script.addEventListener(
+      'error',
+      ((web.Event _) {
+        if (!completer.isCompleted) {
+          completer.completeError(StateError('Unable to load Turnstile.'));
+        }
+      }).toJS,
+    );
+    if (existing == null) web.document.head?.append(script);
     await completer.future;
   }
 
@@ -144,10 +145,9 @@ class _TurnstileChallengeState extends State<TurnstileChallenge> {
   @override
   void dispose() {
     final String? widgetId = _widgetId;
-    if (widgetId != null && js_util.hasProperty(html.window, 'turnstile')) {
+    if (widgetId != null && _turnstile != null) {
       try {
-        final dynamic turnstile = js_util.getProperty(html.window, 'turnstile');
-        js_util.callMethod<void>(turnstile, 'remove', <Object?>[widgetId]);
+        _turnstileRemove(widgetId.toJS);
       } catch (_) {
         // Removal is best-effort; server-side verification remains enforced.
       }
