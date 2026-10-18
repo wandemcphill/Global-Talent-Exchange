@@ -149,7 +149,16 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
           claiming: _claiming,
         );
       case OwnerConsoleSection.showroom:
-        return ShowroomSection(load: widget.reader.fetchShowroom);
+        return ShowroomSection(
+          load: widget.reader.fetchShowroom,
+          onPurchaseSku: widget.reader.purchaseCatalogueSku,
+          onOfferGift:
+              (String assetId, String recipientRef) =>
+                  widget.reader.offerShowroomGift(
+                    assetId: assetId,
+                    recipientRef: recipientRef,
+                  ),
+        );
       case OwnerConsoleSection.desk:
         return _DeskLoader(load: widget.reader.fetchDesk, act: widget.reader.performDesk);
       case OwnerConsoleSection.market:

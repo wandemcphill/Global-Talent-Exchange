@@ -249,4 +249,39 @@ void main() {
     expect(stadium.sourceExtent, greaterThan(1));
     expect(campus.sourceExtent, greaterThan(1));
   });
+
+  testWidgets('catalogue exhibits call purchase with sku', (
+    WidgetTester tester,
+  ) async {
+    final List<String> bought = <String>[];
+    tester.view.physicalSize = const Size(900, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ClubLegacyShowroom(
+            forceStatic: true,
+            onPurchaseSku: (String sku) async {
+              bought.add(sku);
+            },
+            exhibits: const <ShowroomExhibit>[
+              ShowroomExhibit(
+                id: 'catalogue:gtex-jet-harbour',
+                name: 'Harbour Jet',
+                category: 'jet',
+                ownershipLabel: 'Not owned',
+                fallbackLabel: 'Static jet card',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('club-showroom-buy-gtex-jet-harbour')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('club-showroom-buy-gtex-jet-harbour')));
+    await tester.pumpAndSettle();
+    expect(bought, <String>['gtex-jet-harbour']);
+  });
 }
