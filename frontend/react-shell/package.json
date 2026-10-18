@@ -95,7 +95,8 @@
     "globals": "15.15.0",
     "postcss": "8.5.28",
     "tailwindcss": "3.4.17",
-    "typescript": "4.9.5"
+    "typescript": "4.9.5",
+    "ajv": "^8.17.1"
   },
   "resolutions": {
     "react-router": "7.18.4",
