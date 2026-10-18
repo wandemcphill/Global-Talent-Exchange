@@ -6784,19 +6784,6 @@
         "handler": "join_fast_cup",
         "source_file": "backend/app/fast_cups/api/router.py",
         "response_model": "JoinFastCupResponse"
-      },
-      "post_api_v2_fast_cups_cup_id_settle": {
-        "method": "POST",
-        "canonical_path": "/api/v2/fast-cups/{cup_id}/settle",
-        "aliases": [
-          "/api/fast-cups/{cup_id}/settle",
-          "/api/v1/fast-cups/{cup_id}/settle",
-          "/api/v2/fast-cups/{cup_id}/settle",
-          "/fast-cups/{cup_id}/settle"
-        ],
-        "handler": "settle_fast_cup",
-        "source_file": "backend/app/fast_cups/api/router.py",
-        "response_model": "FastCupResultSummaryView"
       }
     },
     "federations": {
@@ -13335,817 +13322,6 @@
         "handler": "handle_paystack_webhook",
         "source_file": "backend/app/admin_finance/router.py",
         "response_model": "AdminFinanceWebhookResultView"
-      }
-    },
-    "phase1": {
-      "get_api_v2_full_phase1_club_id_ratings": {
-        "method": "GET",
-        "canonical_path": "/api/v2/full/phase1/{club_id}/ratings",
-        "aliases": [
-          "/api/full/phase1/{club_id}/ratings",
-          "/api/v1/full/phase1/{club_id}/ratings",
-          "/api/v2/full/phase1/{club_id}/ratings",
-          "/full/phase1/{club_id}/ratings"
-        ],
-        "handler": "read_ratings",
-        "source_file": "backend/app/club_legacy/full/phase1_routes.py",
-        "response_model": null
-      },
-      "get_api_v2_full_phase1_settings": {
-        "method": "GET",
-        "canonical_path": "/api/v2/full/phase1/settings",
-        "aliases": [
-          "/api/full/phase1/settings",
-          "/api/v1/full/phase1/settings",
-          "/api/v2/full/phase1/settings",
-          "/full/phase1/settings"
-        ],
-        "handler": "read_settings",
-        "source_file": "backend/app/club_legacy/full/phase1_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_full_phase1_location": {
-        "method": "POST",
-        "canonical_path": "/api/v2/full/phase1/location",
-        "aliases": [
-          "/api/full/phase1/location",
-          "/api/v1/full/phase1/location",
-          "/api/v2/full/phase1/location",
-          "/full/phase1/location"
-        ],
-        "handler": "check_location",
-        "source_file": "backend/app/club_legacy/full/phase1_routes.py",
-        "response_model": null
-      },
-      "put_api_v2_full_phase1_settings": {
-        "method": "PUT",
-        "canonical_path": "/api/v2/full/phase1/settings",
-        "aliases": [
-          "/api/full/phase1/settings",
-          "/api/v1/full/phase1/settings",
-          "/api/v2/full/phase1/settings",
-          "/full/phase1/settings"
-        ],
-        "handler": "write_settings",
-        "source_file": "backend/app/club_legacy/full/phase1_routes.py",
-        "response_model": null
-      }
-    },
-    "phase2": {
-      "post_api_v2_full_phase2_club_id_academy": {
-        "method": "POST",
-        "canonical_path": "/api/v2/full/phase2/{club_id}/academy",
-        "aliases": [
-          "/api/full/phase2/{club_id}/academy",
-          "/api/v1/full/phase2/{club_id}/academy",
-          "/api/v2/full/phase2/{club_id}/academy",
-          "/full/phase2/{club_id}/academy"
-        ],
-        "handler": "post_academy",
-        "source_file": "backend/app/club_legacy/full/phase2_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_full_phase2_club_id_executives": {
-        "method": "POST",
-        "canonical_path": "/api/v2/full/phase2/{club_id}/executives",
-        "aliases": [
-          "/api/full/phase2/{club_id}/executives",
-          "/api/v1/full/phase2/{club_id}/executives",
-          "/api/v2/full/phase2/{club_id}/executives",
-          "/full/phase2/{club_id}/executives"
-        ],
-        "handler": "post_executive",
-        "source_file": "backend/app/club_legacy/full/phase2_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_full_phase2_club_id_pathways": {
-        "method": "POST",
-        "canonical_path": "/api/v2/full/phase2/{club_id}/pathways",
-        "aliases": [
-          "/api/full/phase2/{club_id}/pathways",
-          "/api/v1/full/phase2/{club_id}/pathways",
-          "/api/v2/full/phase2/{club_id}/pathways",
-          "/full/phase2/{club_id}/pathways"
-        ],
-        "handler": "post_pathway",
-        "source_file": "backend/app/club_legacy/full/phase2_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_full_phase2_club_id_presets_preset": {
-        "method": "POST",
-        "canonical_path": "/api/v2/full/phase2/{club_id}/presets/{preset}",
-        "aliases": [
-          "/api/full/phase2/{club_id}/presets/{preset}",
-          "/api/v1/full/phase2/{club_id}/presets/{preset}",
-          "/api/v2/full/phase2/{club_id}/presets/{preset}",
-          "/full/phase2/{club_id}/presets/{preset}"
-        ],
-        "handler": "post_preset",
-        "source_file": "backend/app/club_legacy/full/phase2_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_full_phase2_preseason_invite_id_gm": {
-        "method": "POST",
-        "canonical_path": "/api/v2/full/phase2/preseason/{invite_id}/gm",
-        "aliases": [
-          "/api/full/phase2/preseason/{invite_id}/gm",
-          "/api/v1/full/phase2/preseason/{invite_id}/gm",
-          "/api/v2/full/phase2/preseason/{invite_id}/gm",
-          "/full/phase2/preseason/{invite_id}/gm"
-        ],
-        "handler": "post_gm_preseason",
-        "source_file": "backend/app/club_legacy/full/phase2_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_full_phase2_recommendations_recommendation_id_execute": {
-        "method": "POST",
-        "canonical_path": "/api/v2/full/phase2/recommendations/{recommendation_id}/execute",
-        "aliases": [
-          "/api/full/phase2/recommendations/{recommendation_id}/execute",
-          "/api/v1/full/phase2/recommendations/{recommendation_id}/execute",
-          "/api/v2/full/phase2/recommendations/{recommendation_id}/execute",
-          "/full/phase2/recommendations/{recommendation_id}/execute"
-        ],
-        "handler": "post_execute",
-        "source_file": "backend/app/club_legacy/full/phase2_routes.py",
-        "response_model": null
-      },
-      "put_api_v2_full_phase2_club_id_tasks_task_key": {
-        "method": "PUT",
-        "canonical_path": "/api/v2/full/phase2/{club_id}/tasks/{task_key}",
-        "aliases": [
-          "/api/full/phase2/{club_id}/tasks/{task_key}",
-          "/api/v1/full/phase2/{club_id}/tasks/{task_key}",
-          "/api/v2/full/phase2/{club_id}/tasks/{task_key}",
-          "/full/phase2/{club_id}/tasks/{task_key}"
-        ],
-        "handler": "put_task",
-        "source_file": "backend/app/club_legacy/full/phase2_routes.py",
-        "response_model": null
-      }
-    },
-    "phase3": {
-      "get_api_v2_full_phase3_club_id_finance": {
-        "method": "GET",
-        "canonical_path": "/api/v2/full/phase3/{club_id}/finance",
-        "aliases": [
-          "/api/full/phase3/{club_id}/finance",
-          "/api/v1/full/phase3/{club_id}/finance",
-          "/api/v2/full/phase3/{club_id}/finance",
-          "/full/phase3/{club_id}/finance"
-        ],
-        "handler": "read_finance",
-        "source_file": "backend/app/club_legacy/full/phase3_routes.py",
-        "response_model": null
-      },
-      "get_api_v2_full_phase3_club_id_net_worth": {
-        "method": "GET",
-        "canonical_path": "/api/v2/full/phase3/{club_id}/net-worth",
-        "aliases": [
-          "/api/full/phase3/{club_id}/net-worth",
-          "/api/v1/full/phase3/{club_id}/net-worth",
-          "/api/v2/full/phase3/{club_id}/net-worth",
-          "/full/phase3/{club_id}/net-worth"
-        ],
-        "handler": "read_net_worth",
-        "source_file": "backend/app/club_legacy/full/phase3_routes.py",
-        "response_model": null
-      },
-      "get_api_v2_full_phase3_club_id_page": {
-        "method": "GET",
-        "canonical_path": "/api/v2/full/phase3/{club_id}/page",
-        "aliases": [
-          "/api/full/phase3/{club_id}/page",
-          "/api/v1/full/phase3/{club_id}/page",
-          "/api/v2/full/phase3/{club_id}/page",
-          "/full/phase3/{club_id}/page"
-        ],
-        "handler": "read_page",
-        "source_file": "backend/app/club_legacy/full/phase3_routes.py",
-        "response_model": null
-      },
-      "get_api_v2_full_phase3_club_id_showroom": {
-        "method": "GET",
-        "canonical_path": "/api/v2/full/phase3/{club_id}/showroom",
-        "aliases": [
-          "/api/full/phase3/{club_id}/showroom",
-          "/api/v1/full/phase3/{club_id}/showroom",
-          "/api/v2/full/phase3/{club_id}/showroom",
-          "/full/phase3/{club_id}/showroom"
-        ],
-        "handler": "read_showroom",
-        "source_file": "backend/app/club_legacy/full/phase3_routes.py",
-        "response_model": null
-      }
-    },
-    "phase4": {
-      "post_api_v2_club_id_market_gifts": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/market/gifts",
-        "aliases": [
-          "/api/v1/{club_id}/market/gifts",
-          "/api/v2/{club_id}/market/gifts",
-          "/api/{club_id}/market/gifts",
-          "/{club_id}/market/gifts"
-        ],
-        "handler": "offer_gift",
-        "source_file": "backend/app/club_legacy/full/phase4_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_market_gifts_gift_id_accept": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/market/gifts/{gift_id}/accept",
-        "aliases": [
-          "/api/v1/{club_id}/market/gifts/{gift_id}/accept",
-          "/api/v2/{club_id}/market/gifts/{gift_id}/accept",
-          "/api/{club_id}/market/gifts/{gift_id}/accept",
-          "/{club_id}/market/gifts/{gift_id}/accept"
-        ],
-        "handler": "accept_gift",
-        "source_file": "backend/app/club_legacy/full/phase4_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_market_gifts_gift_id_decline": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/market/gifts/{gift_id}/decline",
-        "aliases": [
-          "/api/v1/{club_id}/market/gifts/{gift_id}/decline",
-          "/api/v2/{club_id}/market/gifts/{gift_id}/decline",
-          "/api/{club_id}/market/gifts/{gift_id}/decline",
-          "/{club_id}/market/gifts/{gift_id}/decline"
-        ],
-        "handler": "decline_gift",
-        "source_file": "backend/app/club_legacy/full/phase4_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_market_listings": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/market/listings",
-        "aliases": [
-          "/api/v1/{club_id}/market/listings",
-          "/api/v2/{club_id}/market/listings",
-          "/api/{club_id}/market/listings",
-          "/{club_id}/market/listings"
-        ],
-        "handler": "list_asset",
-        "source_file": "backend/app/club_legacy/full/phase4_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_market_listings_listing_id_bids": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/market/listings/{listing_id}/bids",
-        "aliases": [
-          "/api/v1/{club_id}/market/listings/{listing_id}/bids",
-          "/api/v2/{club_id}/market/listings/{listing_id}/bids",
-          "/api/{club_id}/market/listings/{listing_id}/bids",
-          "/{club_id}/market/listings/{listing_id}/bids"
-        ],
-        "handler": "place_bid",
-        "source_file": "backend/app/club_legacy/full/phase4_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_market_listings_listing_id_buy": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/market/listings/{listing_id}/buy",
-        "aliases": [
-          "/api/v1/{club_id}/market/listings/{listing_id}/buy",
-          "/api/v2/{club_id}/market/listings/{listing_id}/buy",
-          "/api/{club_id}/market/listings/{listing_id}/buy",
-          "/{club_id}/market/listings/{listing_id}/buy"
-        ],
-        "handler": "buy_listing",
-        "source_file": "backend/app/club_legacy/full/phase4_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_market_purchases": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/market/purchases",
-        "aliases": [
-          "/api/v1/{club_id}/market/purchases",
-          "/api/v2/{club_id}/market/purchases",
-          "/api/{club_id}/market/purchases",
-          "/{club_id}/market/purchases"
-        ],
-        "handler": "purchase_asset",
-        "source_file": "backend/app/club_legacy/full/phase4_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_market_transfers": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/market/transfers",
-        "aliases": [
-          "/api/v1/{club_id}/market/transfers",
-          "/api/v2/{club_id}/market/transfers",
-          "/api/{club_id}/market/transfers",
-          "/{club_id}/market/transfers"
-        ],
-        "handler": "transfer_asset",
-        "source_file": "backend/app/club_legacy/full/phase4_routes.py",
-        "response_model": null
-      }
-    },
-    "phase5": {
-      "post_api_v2_club_id_preseason_invites": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/preseason/invites",
-        "aliases": [
-          "/api/v1/{club_id}/preseason/invites",
-          "/api/v2/{club_id}/preseason/invites",
-          "/api/{club_id}/preseason/invites",
-          "/{club_id}/preseason/invites"
-        ],
-        "handler": "invite",
-        "source_file": "backend/app/club_legacy/full/phase5_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_preseason_invites_invite_id_respond": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/preseason/invites/{invite_id}/respond",
-        "aliases": [
-          "/api/v1/{club_id}/preseason/invites/{invite_id}/respond",
-          "/api/v2/{club_id}/preseason/invites/{invite_id}/respond",
-          "/api/{club_id}/preseason/invites/{invite_id}/respond",
-          "/{club_id}/preseason/invites/{invite_id}/respond"
-        ],
-        "handler": "respond",
-        "source_file": "backend/app/club_legacy/full/phase5_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_preseason_invites_invite_id_settle": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/preseason/invites/{invite_id}/settle",
-        "aliases": [
-          "/api/v1/{club_id}/preseason/invites/{invite_id}/settle",
-          "/api/v2/{club_id}/preseason/invites/{invite_id}/settle",
-          "/api/{club_id}/preseason/invites/{invite_id}/settle",
-          "/{club_id}/preseason/invites/{invite_id}/settle"
-        ],
-        "handler": "settle",
-        "source_file": "backend/app/club_legacy/full/phase5_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_preseason_tournaments": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/preseason/tournaments",
-        "aliases": [
-          "/api/v1/{club_id}/preseason/tournaments",
-          "/api/v2/{club_id}/preseason/tournaments",
-          "/api/{club_id}/preseason/tournaments",
-          "/{club_id}/preseason/tournaments"
-        ],
-        "handler": "host_tournament",
-        "source_file": "backend/app/club_legacy/full/phase5_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_preseason_tournaments_tournament_id_participants": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/preseason/tournaments/{tournament_id}/participants",
-        "aliases": [
-          "/api/v1/{club_id}/preseason/tournaments/{tournament_id}/participants",
-          "/api/v2/{club_id}/preseason/tournaments/{tournament_id}/participants",
-          "/api/{club_id}/preseason/tournaments/{tournament_id}/participants",
-          "/{club_id}/preseason/tournaments/{tournament_id}/participants"
-        ],
-        "handler": "add_participant",
-        "source_file": "backend/app/club_legacy/full/phase5_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_preseason_tournaments_tournament_id_settle": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/preseason/tournaments/{tournament_id}/settle",
-        "aliases": [
-          "/api/v1/{club_id}/preseason/tournaments/{tournament_id}/settle",
-          "/api/v2/{club_id}/preseason/tournaments/{tournament_id}/settle",
-          "/api/{club_id}/preseason/tournaments/{tournament_id}/settle",
-          "/{club_id}/preseason/tournaments/{tournament_id}/settle"
-        ],
-        "handler": "settle_tournament",
-        "source_file": "backend/app/club_legacy/full/phase5_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_preseason_windows": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/preseason/windows",
-        "aliases": [
-          "/api/v1/{club_id}/preseason/windows",
-          "/api/v2/{club_id}/preseason/windows",
-          "/api/{club_id}/preseason/windows",
-          "/{club_id}/preseason/windows"
-        ],
-        "handler": "open_window",
-        "source_file": "backend/app/club_legacy/full/phase5_routes.py",
-        "response_model": null
-      }
-    },
-    "phase6": {
-      "get_api_v2_club_id_sponsors_zones": {
-        "method": "GET",
-        "canonical_path": "/api/v2/{club_id}/sponsors/zones",
-        "aliases": [
-          "/api/v1/{club_id}/sponsors/zones",
-          "/api/v2/{club_id}/sponsors/zones",
-          "/api/{club_id}/sponsors/zones",
-          "/{club_id}/sponsors/zones"
-        ],
-        "handler": "read_zones",
-        "source_file": "backend/app/club_legacy/full/phase6_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_sponsors_contracts": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/sponsors/contracts",
-        "aliases": [
-          "/api/v1/{club_id}/sponsors/contracts",
-          "/api/v2/{club_id}/sponsors/contracts",
-          "/api/{club_id}/sponsors/contracts",
-          "/{club_id}/sponsors/contracts"
-        ],
-        "handler": "offer_contract",
-        "source_file": "backend/app/club_legacy/full/phase6_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_sponsors_contracts_contract_id_approve": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/approve",
-        "aliases": [
-          "/api/v1/{club_id}/sponsors/contracts/{contract_id}/approve",
-          "/api/v2/{club_id}/sponsors/contracts/{contract_id}/approve",
-          "/api/{club_id}/sponsors/contracts/{contract_id}/approve",
-          "/{club_id}/sponsors/contracts/{contract_id}/approve"
-        ],
-        "handler": "approve_contract",
-        "source_file": "backend/app/club_legacy/full/phase6_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_sponsors_contracts_contract_id_delivery": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/delivery",
-        "aliases": [
-          "/api/v1/{club_id}/sponsors/contracts/{contract_id}/delivery",
-          "/api/v2/{club_id}/sponsors/contracts/{contract_id}/delivery",
-          "/api/{club_id}/sponsors/contracts/{contract_id}/delivery",
-          "/{club_id}/sponsors/contracts/{contract_id}/delivery"
-        ],
-        "handler": "report_delivery",
-        "source_file": "backend/app/club_legacy/full/phase6_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_sponsors_contracts_contract_id_preview": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/preview",
-        "aliases": [
-          "/api/v1/{club_id}/sponsors/contracts/{contract_id}/preview",
-          "/api/v2/{club_id}/sponsors/contracts/{contract_id}/preview",
-          "/api/{club_id}/sponsors/contracts/{contract_id}/preview",
-          "/{club_id}/sponsors/contracts/{contract_id}/preview"
-        ],
-        "handler": "preview_kit",
-        "source_file": "backend/app/club_legacy/full/phase6_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_sponsors_contracts_contract_id_publish": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/publish",
-        "aliases": [
-          "/api/v1/{club_id}/sponsors/contracts/{contract_id}/publish",
-          "/api/v2/{club_id}/sponsors/contracts/{contract_id}/publish",
-          "/api/{club_id}/sponsors/contracts/{contract_id}/publish",
-          "/{club_id}/sponsors/contracts/{contract_id}/publish"
-        ],
-        "handler": "publish_kit",
-        "source_file": "backend/app/club_legacy/full/phase6_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_sponsors_contracts_contract_id_renew": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/renew",
-        "aliases": [
-          "/api/v1/{club_id}/sponsors/contracts/{contract_id}/renew",
-          "/api/v2/{club_id}/sponsors/contracts/{contract_id}/renew",
-          "/api/{club_id}/sponsors/contracts/{contract_id}/renew",
-          "/{club_id}/sponsors/contracts/{contract_id}/renew"
-        ],
-        "handler": "renew_contract",
-        "source_file": "backend/app/club_legacy/full/phase6_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_sponsors_contracts_contract_id_suggest": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/suggest",
-        "aliases": [
-          "/api/v1/{club_id}/sponsors/contracts/{contract_id}/suggest",
-          "/api/v2/{club_id}/sponsors/contracts/{contract_id}/suggest",
-          "/api/{club_id}/sponsors/contracts/{contract_id}/suggest",
-          "/{club_id}/sponsors/contracts/{contract_id}/suggest"
-        ],
-        "handler": "suggest_kit",
-        "source_file": "backend/app/club_legacy/full/phase6_routes.py",
-        "response_model": null
-      }
-    },
-    "phase7": {
-      "get_api_v2_club_id_managers_manager_id_history": {
-        "method": "GET",
-        "canonical_path": "/api/v2/{club_id}/managers/{manager_id}/history",
-        "aliases": [
-          "/api/v1/{club_id}/managers/{manager_id}/history",
-          "/api/v2/{club_id}/managers/{manager_id}/history",
-          "/api/{club_id}/managers/{manager_id}/history",
-          "/{club_id}/managers/{manager_id}/history"
-        ],
-        "handler": "read_history",
-        "source_file": "backend/app/club_legacy/full/phase7_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_managers": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/managers",
-        "aliases": [
-          "/api/v1/{club_id}/managers",
-          "/api/v2/{club_id}/managers",
-          "/api/{club_id}/managers",
-          "/{club_id}/managers"
-        ],
-        "handler": "create_manager",
-        "source_file": "backend/app/club_legacy/full/phase7_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_managers_manager_id_gifts": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/managers/{manager_id}/gifts",
-        "aliases": [
-          "/api/v1/{club_id}/managers/{manager_id}/gifts",
-          "/api/v2/{club_id}/managers/{manager_id}/gifts",
-          "/api/{club_id}/managers/{manager_id}/gifts",
-          "/{club_id}/managers/{manager_id}/gifts"
-        ],
-        "handler": "give_gift",
-        "source_file": "backend/app/club_legacy/full/phase7_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_managers_manager_id_offers": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/managers/{manager_id}/offers",
-        "aliases": [
-          "/api/v1/{club_id}/managers/{manager_id}/offers",
-          "/api/v2/{club_id}/managers/{manager_id}/offers",
-          "/api/{club_id}/managers/{manager_id}/offers",
-          "/{club_id}/managers/{manager_id}/offers"
-        ],
-        "handler": "create_offer",
-        "source_file": "backend/app/club_legacy/full/phase7_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_managers_manager_id_poach": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/managers/{manager_id}/poach",
-        "aliases": [
-          "/api/v1/{club_id}/managers/{manager_id}/poach",
-          "/api/v2/{club_id}/managers/{manager_id}/poach",
-          "/api/{club_id}/managers/{manager_id}/poach",
-          "/{club_id}/managers/{manager_id}/poach"
-        ],
-        "handler": "poach",
-        "source_file": "backend/app/club_legacy/full/phase7_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_managers_manager_id_retention": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/managers/{manager_id}/retention",
-        "aliases": [
-          "/api/v1/{club_id}/managers/{manager_id}/retention",
-          "/api/v2/{club_id}/managers/{manager_id}/retention",
-          "/api/{club_id}/managers/{manager_id}/retention",
-          "/{club_id}/managers/{manager_id}/retention"
-        ],
-        "handler": "retention",
-        "source_file": "backend/app/club_legacy/full/phase7_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_promises": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/promises",
-        "aliases": [
-          "/api/v1/{club_id}/promises",
-          "/api/v2/{club_id}/promises",
-          "/api/{club_id}/promises",
-          "/{club_id}/promises"
-        ],
-        "handler": "create_promise",
-        "source_file": "backend/app/club_legacy/full/phase7_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_offers_offer_id_respond": {
-        "method": "POST",
-        "canonical_path": "/api/v2/offers/{offer_id}/respond",
-        "aliases": [
-          "/api/offers/{offer_id}/respond",
-          "/api/v1/offers/{offer_id}/respond",
-          "/api/v2/offers/{offer_id}/respond",
-          "/offers/{offer_id}/respond"
-        ],
-        "handler": "respond_offer",
-        "source_file": "backend/app/club_legacy/full/phase7_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_promises_promise_id_resolve": {
-        "method": "POST",
-        "canonical_path": "/api/v2/promises/{promise_id}/resolve",
-        "aliases": [
-          "/api/promises/{promise_id}/resolve",
-          "/api/v1/promises/{promise_id}/resolve",
-          "/api/v2/promises/{promise_id}/resolve",
-          "/promises/{promise_id}/resolve"
-        ],
-        "handler": "resolve_promise",
-        "source_file": "backend/app/club_legacy/full/phase7_routes.py",
-        "response_model": null
-      }
-    },
-    "phase8": {
-      "get_api_v2_club_id_governance_cases": {
-        "method": "GET",
-        "canonical_path": "/api/v2/{club_id}/governance/cases",
-        "aliases": [
-          "/api/v1/{club_id}/governance/cases",
-          "/api/v2/{club_id}/governance/cases",
-          "/api/{club_id}/governance/cases",
-          "/{club_id}/governance/cases"
-        ],
-        "handler": "list_cases",
-        "source_file": "backend/app/club_legacy/full/phase8_routes.py",
-        "response_model": null
-      },
-      "get_api_v2_club_id_governance_net_worth": {
-        "method": "GET",
-        "canonical_path": "/api/v2/{club_id}/governance/net-worth",
-        "aliases": [
-          "/api/v1/{club_id}/governance/net-worth",
-          "/api/v2/{club_id}/governance/net-worth",
-          "/api/{club_id}/governance/net-worth",
-          "/{club_id}/governance/net-worth"
-        ],
-        "handler": "read_net_worth",
-        "source_file": "backend/app/club_legacy/full/phase8_routes.py",
-        "response_model": null
-      },
-      "get_api_v2_club_id_governance_trades": {
-        "method": "GET",
-        "canonical_path": "/api/v2/{club_id}/governance/trades",
-        "aliases": [
-          "/api/v1/{club_id}/governance/trades",
-          "/api/v2/{club_id}/governance/trades",
-          "/api/{club_id}/governance/trades",
-          "/{club_id}/governance/trades"
-        ],
-        "handler": "list_trades",
-        "source_file": "backend/app/club_legacy/full/phase8_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_governance_cases": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/governance/cases",
-        "aliases": [
-          "/api/v1/{club_id}/governance/cases",
-          "/api/v2/{club_id}/governance/cases",
-          "/api/{club_id}/governance/cases",
-          "/{club_id}/governance/cases"
-        ],
-        "handler": "open_case",
-        "source_file": "backend/app/club_legacy/full/phase8_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_governance_distributions": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/governance/distributions",
-        "aliases": [
-          "/api/v1/{club_id}/governance/distributions",
-          "/api/v2/{club_id}/governance/distributions",
-          "/api/{club_id}/governance/distributions",
-          "/{club_id}/governance/distributions"
-        ],
-        "handler": "pay_distribution",
-        "source_file": "backend/app/club_legacy/full/phase8_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_governance_stakes": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/governance/stakes",
-        "aliases": [
-          "/api/v1/{club_id}/governance/stakes",
-          "/api/v2/{club_id}/governance/stakes",
-          "/api/{club_id}/governance/stakes",
-          "/{club_id}/governance/stakes"
-        ],
-        "handler": "put_stake",
-        "source_file": "backend/app/club_legacy/full/phase8_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_governance_cases_case_id_appeal": {
-        "method": "POST",
-        "canonical_path": "/api/v2/governance/cases/{case_id}/appeal",
-        "aliases": [
-          "/api/governance/cases/{case_id}/appeal",
-          "/api/v1/governance/cases/{case_id}/appeal",
-          "/api/v2/governance/cases/{case_id}/appeal",
-          "/governance/cases/{case_id}/appeal"
-        ],
-        "handler": "appeal_case",
-        "source_file": "backend/app/club_legacy/full/phase8_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_governance_cases_case_id_ruling": {
-        "method": "POST",
-        "canonical_path": "/api/v2/governance/cases/{case_id}/ruling",
-        "aliases": [
-          "/api/governance/cases/{case_id}/ruling",
-          "/api/v1/governance/cases/{case_id}/ruling",
-          "/api/v2/governance/cases/{case_id}/ruling",
-          "/governance/cases/{case_id}/ruling"
-        ],
-        "handler": "rule_case",
-        "source_file": "backend/app/club_legacy/full/phase8_routes.py",
-        "response_model": null
-      }
-    },
-    "phase9": {
-      "get_api_v2_club_id_market_supply": {
-        "method": "GET",
-        "canonical_path": "/api/v2/{club_id}/market/supply",
-        "aliases": [
-          "/api/v1/{club_id}/market/supply",
-          "/api/v2/{club_id}/market/supply",
-          "/api/{club_id}/market/supply",
-          "/{club_id}/market/supply"
-        ],
-        "handler": "market_supply",
-        "source_file": "backend/app/club_legacy/full/phase9_routes.py",
-        "response_model": null
-      },
-      "get_api_v2_club_id_preseason_invitations": {
-        "method": "GET",
-        "canonical_path": "/api/v2/{club_id}/preseason/invitations",
-        "aliases": [
-          "/api/v1/{club_id}/preseason/invitations",
-          "/api/v2/{club_id}/preseason/invitations",
-          "/api/{club_id}/preseason/invitations",
-          "/{club_id}/preseason/invitations"
-        ],
-        "handler": "preseason_invitations",
-        "source_file": "backend/app/club_legacy/full/phase9_routes.py",
-        "response_model": null
-      },
-      "get_api_v2_club_id_sponsors_contracts": {
-        "method": "GET",
-        "canonical_path": "/api/v2/{club_id}/sponsors/contracts",
-        "aliases": [
-          "/api/v1/{club_id}/sponsors/contracts",
-          "/api/v2/{club_id}/sponsors/contracts",
-          "/api/{club_id}/sponsors/contracts",
-          "/{club_id}/sponsors/contracts"
-        ],
-        "handler": "sponsor_contracts",
-        "source_file": "backend/app/club_legacy/full/phase9_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_catalogue_load": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/catalogue/load",
-        "aliases": [
-          "/api/v1/{club_id}/catalogue/load",
-          "/api/v2/{club_id}/catalogue/load",
-          "/api/{club_id}/catalogue/load",
-          "/{club_id}/catalogue/load"
-        ],
-        "handler": "read_catalogue",
-        "source_file": "backend/app/club_legacy/full/phase9_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_seasons_simulate": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/seasons/simulate",
-        "aliases": [
-          "/api/v1/{club_id}/seasons/simulate",
-          "/api/v2/{club_id}/seasons/simulate",
-          "/api/{club_id}/seasons/simulate",
-          "/{club_id}/seasons/simulate"
-        ],
-        "handler": "simulate",
-        "source_file": "backend/app/club_legacy/full/phase9_routes.py",
-        "response_model": null
-      },
-      "post_api_v2_club_id_showroom_failures": {
-        "method": "POST",
-        "canonical_path": "/api/v2/{club_id}/showroom/failures",
-        "aliases": [
-          "/api/v1/{club_id}/showroom/failures",
-          "/api/v2/{club_id}/showroom/failures",
-          "/api/{club_id}/showroom/failures",
-          "/{club_id}/showroom/failures"
-        ],
-        "handler": "showroom_failure",
-        "source_file": "backend/app/club_legacy/full/phase9_routes.py",
-        "response_model": null
       }
     },
     "platform": {
@@ -23125,7 +22301,6 @@
     "/api/v2/fast-cups/{cup_id}/countdown": "get_api_v2_fast_cups_cup_id_countdown",
     "/api/v2/fast-cups/{cup_id}/join": "post_api_v2_fast_cups_cup_id_join",
     "/api/v2/fast-cups/{cup_id}/result-summary": "get_api_v2_fast_cups_cup_id_result_summary",
-    "/api/v2/fast-cups/{cup_id}/settle": "post_api_v2_fast_cups_cup_id_settle",
     "/api/v2/feature-flags/client": "get_api_v2_feature_flags_client",
     "/api/v2/federations": "post_api_v2_federations",
     "/api/v2/federations/national-associations/{country_code}": "get_api_v2_federations_national_associations_country_code",
@@ -23153,20 +22328,6 @@
     "/api/v2/follow/{user_id}": "post_api_v2_follow_user_id",
     "/api/v2/football-events/players/{player_id}/events": "get_api_v2_football_events_players_player_id_events",
     "/api/v2/football-events/players/{player_id}/impact": "get_api_v2_football_events_players_player_id_impact",
-    "/api/v2/full/phase1/location": "post_api_v2_full_phase1_location",
-    "/api/v2/full/phase1/settings": "put_api_v2_full_phase1_settings",
-    "/api/v2/full/phase1/{club_id}/ratings": "get_api_v2_full_phase1_club_id_ratings",
-    "/api/v2/full/phase2/preseason/{invite_id}/gm": "post_api_v2_full_phase2_preseason_invite_id_gm",
-    "/api/v2/full/phase2/recommendations/{recommendation_id}/execute": "post_api_v2_full_phase2_recommendations_recommendation_id_execute",
-    "/api/v2/full/phase2/{club_id}/academy": "post_api_v2_full_phase2_club_id_academy",
-    "/api/v2/full/phase2/{club_id}/executives": "post_api_v2_full_phase2_club_id_executives",
-    "/api/v2/full/phase2/{club_id}/pathways": "post_api_v2_full_phase2_club_id_pathways",
-    "/api/v2/full/phase2/{club_id}/presets/{preset}": "post_api_v2_full_phase2_club_id_presets_preset",
-    "/api/v2/full/phase2/{club_id}/tasks/{task_key}": "put_api_v2_full_phase2_club_id_tasks_task_key",
-    "/api/v2/full/phase3/{club_id}/finance": "get_api_v2_full_phase3_club_id_finance",
-    "/api/v2/full/phase3/{club_id}/net-worth": "get_api_v2_full_phase3_club_id_net_worth",
-    "/api/v2/full/phase3/{club_id}/page": "get_api_v2_full_phase3_club_id_page",
-    "/api/v2/full/phase3/{club_id}/showroom": "get_api_v2_full_phase3_club_id_showroom",
     "/api/v2/gift-engine/me/combos": "get_api_v2_gift_engine_me_combos",
     "/api/v2/gift-engine/me/summary": "get_api_v2_gift_engine_me_summary",
     "/api/v2/gift-engine/me/transactions": "get_api_v2_gift_engine_me_transactions",
@@ -23177,8 +22338,6 @@
     "/api/v2/gifts/events": "get_api_v2_gifts_events",
     "/api/v2/gifts/send": "post_api_v2_gifts_send",
     "/api/v2/gifts/users/{user_id}/gift-stats": "get_api_v2_gifts_users_user_id_gift_stats",
-    "/api/v2/governance/cases/{case_id}/appeal": "post_api_v2_governance_cases_case_id_appeal",
-    "/api/v2/governance/cases/{case_id}/ruling": "post_api_v2_governance_cases_case_id_ruling",
     "/api/v2/governance/clubs/{club_id}/panel": "get_api_v2_governance_clubs_club_id_panel",
     "/api/v2/governance/me/overview": "get_api_v2_governance_me_overview",
     "/api/v2/governance/proposals": "post_api_v2_governance_proposals",
@@ -23440,7 +22599,6 @@
     "/api/v2/notifications/{notification_id}/read": "post_api_v2_notifications_notification_id_read",
     "/api/v2/objectives/me": "get_api_v2_objectives_me",
     "/api/v2/observability/config": "get_api_v2_observability_config",
-    "/api/v2/offers/{offer_id}/respond": "post_api_v2_offers_offer_id_respond",
     "/api/v2/orchestrator/config": "post_api_v2_orchestrator_config",
     "/api/v2/orchestrator/metrics": "get_api_v2_orchestrator_metrics",
     "/api/v2/orders": "post_api_v2_orders",
@@ -23629,7 +22787,6 @@
     "/api/v2/profile": "patch_api_v2_profile",
     "/api/v2/profile/security": "get_api_v2_profile_security",
     "/api/v2/profile/sessions": "get_api_v2_profile_sessions",
-    "/api/v2/promises/{promise_id}/resolve": "post_api_v2_promises_promise_id_resolve",
     "/api/v2/public/live-stats": "get_api_v2_public_live_stats",
     "/api/v2/pundits/matches/{match_key}": "get_api_v2_pundits_matches_match_key",
     "/api/v2/rankings/clubs": "get_api_v2_rankings_clubs",
@@ -23904,46 +23061,6 @@
     "/api/v2/ws/notifications": "websocket_api_v2_ws_notifications",
     "/api/v2/ws/spectate/{match_id}": "websocket_api_v2_ws_spectate_match_id",
     "/api/v2/ws/tournament/{tournament_id}": "websocket_api_v2_ws_tournament_tournament_id",
-    "/api/v2/{club_id}/catalogue/load": "post_api_v2_club_id_catalogue_load",
-    "/api/v2/{club_id}/governance/cases": "post_api_v2_club_id_governance_cases",
-    "/api/v2/{club_id}/governance/distributions": "post_api_v2_club_id_governance_distributions",
-    "/api/v2/{club_id}/governance/net-worth": "get_api_v2_club_id_governance_net_worth",
-    "/api/v2/{club_id}/governance/stakes": "post_api_v2_club_id_governance_stakes",
-    "/api/v2/{club_id}/governance/trades": "get_api_v2_club_id_governance_trades",
-    "/api/v2/{club_id}/managers": "post_api_v2_club_id_managers",
-    "/api/v2/{club_id}/managers/{manager_id}/gifts": "post_api_v2_club_id_managers_manager_id_gifts",
-    "/api/v2/{club_id}/managers/{manager_id}/history": "get_api_v2_club_id_managers_manager_id_history",
-    "/api/v2/{club_id}/managers/{manager_id}/offers": "post_api_v2_club_id_managers_manager_id_offers",
-    "/api/v2/{club_id}/managers/{manager_id}/poach": "post_api_v2_club_id_managers_manager_id_poach",
-    "/api/v2/{club_id}/managers/{manager_id}/retention": "post_api_v2_club_id_managers_manager_id_retention",
-    "/api/v2/{club_id}/market/gifts": "post_api_v2_club_id_market_gifts",
-    "/api/v2/{club_id}/market/gifts/{gift_id}/accept": "post_api_v2_club_id_market_gifts_gift_id_accept",
-    "/api/v2/{club_id}/market/gifts/{gift_id}/decline": "post_api_v2_club_id_market_gifts_gift_id_decline",
-    "/api/v2/{club_id}/market/listings": "post_api_v2_club_id_market_listings",
-    "/api/v2/{club_id}/market/listings/{listing_id}/bids": "post_api_v2_club_id_market_listings_listing_id_bids",
-    "/api/v2/{club_id}/market/listings/{listing_id}/buy": "post_api_v2_club_id_market_listings_listing_id_buy",
-    "/api/v2/{club_id}/market/purchases": "post_api_v2_club_id_market_purchases",
-    "/api/v2/{club_id}/market/supply": "get_api_v2_club_id_market_supply",
-    "/api/v2/{club_id}/market/transfers": "post_api_v2_club_id_market_transfers",
-    "/api/v2/{club_id}/preseason/invitations": "get_api_v2_club_id_preseason_invitations",
-    "/api/v2/{club_id}/preseason/invites": "post_api_v2_club_id_preseason_invites",
-    "/api/v2/{club_id}/preseason/invites/{invite_id}/respond": "post_api_v2_club_id_preseason_invites_invite_id_respond",
-    "/api/v2/{club_id}/preseason/invites/{invite_id}/settle": "post_api_v2_club_id_preseason_invites_invite_id_settle",
-    "/api/v2/{club_id}/preseason/tournaments": "post_api_v2_club_id_preseason_tournaments",
-    "/api/v2/{club_id}/preseason/tournaments/{tournament_id}/participants": "post_api_v2_club_id_preseason_tournaments_tournament_id_participants",
-    "/api/v2/{club_id}/preseason/tournaments/{tournament_id}/settle": "post_api_v2_club_id_preseason_tournaments_tournament_id_settle",
-    "/api/v2/{club_id}/preseason/windows": "post_api_v2_club_id_preseason_windows",
-    "/api/v2/{club_id}/promises": "post_api_v2_club_id_promises",
-    "/api/v2/{club_id}/seasons/simulate": "post_api_v2_club_id_seasons_simulate",
-    "/api/v2/{club_id}/showroom/failures": "post_api_v2_club_id_showroom_failures",
-    "/api/v2/{club_id}/sponsors/contracts": "get_api_v2_club_id_sponsors_contracts",
-    "/api/v2/{club_id}/sponsors/contracts/{contract_id}/approve": "post_api_v2_club_id_sponsors_contracts_contract_id_approve",
-    "/api/v2/{club_id}/sponsors/contracts/{contract_id}/delivery": "post_api_v2_club_id_sponsors_contracts_contract_id_delivery",
-    "/api/v2/{club_id}/sponsors/contracts/{contract_id}/preview": "post_api_v2_club_id_sponsors_contracts_contract_id_preview",
-    "/api/v2/{club_id}/sponsors/contracts/{contract_id}/publish": "post_api_v2_club_id_sponsors_contracts_contract_id_publish",
-    "/api/v2/{club_id}/sponsors/contracts/{contract_id}/renew": "post_api_v2_club_id_sponsors_contracts_contract_id_renew",
-    "/api/v2/{club_id}/sponsors/contracts/{contract_id}/suggest": "post_api_v2_club_id_sponsors_contracts_contract_id_suggest",
-    "/api/v2/{club_id}/sponsors/zones": "get_api_v2_club_id_sponsors_zones",
     "/health": "get_health",
     "/ready": "get_ready",
     "/version": "get_version"
@@ -24934,7 +24051,6 @@
     "/api/fast-cups/{cup_id}/countdown": "/api/v2/fast-cups/{cup_id}/countdown",
     "/api/fast-cups/{cup_id}/join": "/api/v2/fast-cups/{cup_id}/join",
     "/api/fast-cups/{cup_id}/result-summary": "/api/v2/fast-cups/{cup_id}/result-summary",
-    "/api/fast-cups/{cup_id}/settle": "/api/v2/fast-cups/{cup_id}/settle",
     "/api/feature-flags/client": "/api/v2/feature-flags/client",
     "/api/federations": "/api/v2/federations",
     "/api/federations/national-associations/{country_code}": "/api/v2/federations/national-associations/{country_code}",
@@ -24959,20 +24075,6 @@
     "/api/follow/{user_id}": "/api/v2/follow/{user_id}",
     "/api/football-events/players/{player_id}/events": "/api/v2/football-events/players/{player_id}/events",
     "/api/football-events/players/{player_id}/impact": "/api/v2/football-events/players/{player_id}/impact",
-    "/api/full/phase1/location": "/api/v2/full/phase1/location",
-    "/api/full/phase1/settings": "/api/v2/full/phase1/settings",
-    "/api/full/phase1/{club_id}/ratings": "/api/v2/full/phase1/{club_id}/ratings",
-    "/api/full/phase2/preseason/{invite_id}/gm": "/api/v2/full/phase2/preseason/{invite_id}/gm",
-    "/api/full/phase2/recommendations/{recommendation_id}/execute": "/api/v2/full/phase2/recommendations/{recommendation_id}/execute",
-    "/api/full/phase2/{club_id}/academy": "/api/v2/full/phase2/{club_id}/academy",
-    "/api/full/phase2/{club_id}/executives": "/api/v2/full/phase2/{club_id}/executives",
-    "/api/full/phase2/{club_id}/pathways": "/api/v2/full/phase2/{club_id}/pathways",
-    "/api/full/phase2/{club_id}/presets/{preset}": "/api/v2/full/phase2/{club_id}/presets/{preset}",
-    "/api/full/phase2/{club_id}/tasks/{task_key}": "/api/v2/full/phase2/{club_id}/tasks/{task_key}",
-    "/api/full/phase3/{club_id}/finance": "/api/v2/full/phase3/{club_id}/finance",
-    "/api/full/phase3/{club_id}/net-worth": "/api/v2/full/phase3/{club_id}/net-worth",
-    "/api/full/phase3/{club_id}/page": "/api/v2/full/phase3/{club_id}/page",
-    "/api/full/phase3/{club_id}/showroom": "/api/v2/full/phase3/{club_id}/showroom",
     "/api/gift-engine/me/combos": "/api/v2/gift-engine/me/combos",
     "/api/gift-engine/me/summary": "/api/v2/gift-engine/me/summary",
     "/api/gift-engine/me/transactions": "/api/v2/gift-engine/me/transactions",
@@ -24983,8 +24085,6 @@
     "/api/gifts/events": "/api/v2/gifts/events",
     "/api/gifts/send": "/api/v2/gifts/send",
     "/api/gifts/users/{user_id}/gift-stats": "/api/v2/gifts/users/{user_id}/gift-stats",
-    "/api/governance/cases/{case_id}/appeal": "/api/v2/governance/cases/{case_id}/appeal",
-    "/api/governance/cases/{case_id}/ruling": "/api/v2/governance/cases/{case_id}/ruling",
     "/api/governance/clubs/{club_id}/panel": "/api/v2/governance/clubs/{club_id}/panel",
     "/api/governance/me/overview": "/api/v2/governance/me/overview",
     "/api/governance/proposals": "/api/v2/governance/proposals",
@@ -25244,7 +24344,6 @@
     "/api/notifications/{notification_id}/read": "/api/v2/notifications/{notification_id}/read",
     "/api/objectives/me": "/api/v2/objectives/me",
     "/api/observability/config": "/api/v2/observability/config",
-    "/api/offers/{offer_id}/respond": "/api/v2/offers/{offer_id}/respond",
     "/api/orchestrator/config": "/api/v2/orchestrator/config",
     "/api/orchestrator/metrics": "/api/v2/orchestrator/metrics",
     "/api/orders": "/api/v2/orders",
@@ -25433,7 +24532,6 @@
     "/api/profile": "/api/v2/profile",
     "/api/profile/security": "/api/v2/profile/security",
     "/api/profile/sessions": "/api/v2/profile/sessions",
-    "/api/promises/{promise_id}/resolve": "/api/v2/promises/{promise_id}/resolve",
     "/api/public/live-stats": "/api/v2/public/live-stats",
     "/api/pundits/matches/{match_key}": "/api/v2/pundits/matches/{match_key}",
     "/api/rankings/clubs": "/api/v2/rankings/clubs",
@@ -26373,7 +25471,6 @@
     "/api/v1/fast-cups/{cup_id}/countdown": "/api/v2/fast-cups/{cup_id}/countdown",
     "/api/v1/fast-cups/{cup_id}/join": "/api/v2/fast-cups/{cup_id}/join",
     "/api/v1/fast-cups/{cup_id}/result-summary": "/api/v2/fast-cups/{cup_id}/result-summary",
-    "/api/v1/fast-cups/{cup_id}/settle": "/api/v2/fast-cups/{cup_id}/settle",
     "/api/v1/feature-flags/client": "/api/v2/feature-flags/client",
     "/api/v1/federations": "/api/v2/federations",
     "/api/v1/federations/national-associations/{country_code}": "/api/v2/federations/national-associations/{country_code}",
@@ -26398,20 +25495,6 @@
     "/api/v1/follow/{user_id}": "/api/v2/follow/{user_id}",
     "/api/v1/football-events/players/{player_id}/events": "/api/v2/football-events/players/{player_id}/events",
     "/api/v1/football-events/players/{player_id}/impact": "/api/v2/football-events/players/{player_id}/impact",
-    "/api/v1/full/phase1/location": "/api/v2/full/phase1/location",
-    "/api/v1/full/phase1/settings": "/api/v2/full/phase1/settings",
-    "/api/v1/full/phase1/{club_id}/ratings": "/api/v2/full/phase1/{club_id}/ratings",
-    "/api/v1/full/phase2/preseason/{invite_id}/gm": "/api/v2/full/phase2/preseason/{invite_id}/gm",
-    "/api/v1/full/phase2/recommendations/{recommendation_id}/execute": "/api/v2/full/phase2/recommendations/{recommendation_id}/execute",
-    "/api/v1/full/phase2/{club_id}/academy": "/api/v2/full/phase2/{club_id}/academy",
-    "/api/v1/full/phase2/{club_id}/executives": "/api/v2/full/phase2/{club_id}/executives",
-    "/api/v1/full/phase2/{club_id}/pathways": "/api/v2/full/phase2/{club_id}/pathways",
-    "/api/v1/full/phase2/{club_id}/presets/{preset}": "/api/v2/full/phase2/{club_id}/presets/{preset}",
-    "/api/v1/full/phase2/{club_id}/tasks/{task_key}": "/api/v2/full/phase2/{club_id}/tasks/{task_key}",
-    "/api/v1/full/phase3/{club_id}/finance": "/api/v2/full/phase3/{club_id}/finance",
-    "/api/v1/full/phase3/{club_id}/net-worth": "/api/v2/full/phase3/{club_id}/net-worth",
-    "/api/v1/full/phase3/{club_id}/page": "/api/v2/full/phase3/{club_id}/page",
-    "/api/v1/full/phase3/{club_id}/showroom": "/api/v2/full/phase3/{club_id}/showroom",
     "/api/v1/gift-engine/me/combos": "/api/v2/gift-engine/me/combos",
     "/api/v1/gift-engine/me/summary": "/api/v2/gift-engine/me/summary",
     "/api/v1/gift-engine/me/transactions": "/api/v2/gift-engine/me/transactions",
@@ -26422,8 +25505,6 @@
     "/api/v1/gifts/events": "/api/v2/gifts/events",
     "/api/v1/gifts/send": "/api/v2/gifts/send",
     "/api/v1/gifts/users/{user_id}/gift-stats": "/api/v2/gifts/users/{user_id}/gift-stats",
-    "/api/v1/governance/cases/{case_id}/appeal": "/api/v2/governance/cases/{case_id}/appeal",
-    "/api/v1/governance/cases/{case_id}/ruling": "/api/v2/governance/cases/{case_id}/ruling",
     "/api/v1/governance/clubs/{club_id}/panel": "/api/v2/governance/clubs/{club_id}/panel",
     "/api/v1/governance/me/overview": "/api/v2/governance/me/overview",
     "/api/v1/governance/proposals": "/api/v2/governance/proposals",
@@ -26683,7 +25764,6 @@
     "/api/v1/notifications/{notification_id}/read": "/api/v2/notifications/{notification_id}/read",
     "/api/v1/objectives/me": "/api/v2/objectives/me",
     "/api/v1/observability/config": "/api/v2/observability/config",
-    "/api/v1/offers/{offer_id}/respond": "/api/v2/offers/{offer_id}/respond",
     "/api/v1/orchestrator/config": "/api/v2/orchestrator/config",
     "/api/v1/orchestrator/metrics": "/api/v2/orchestrator/metrics",
     "/api/v1/orders": "/api/v2/orders",
@@ -26872,7 +25952,6 @@
     "/api/v1/profile": "/api/v2/profile",
     "/api/v1/profile/security": "/api/v2/profile/security",
     "/api/v1/profile/sessions": "/api/v2/profile/sessions",
-    "/api/v1/promises/{promise_id}/resolve": "/api/v2/promises/{promise_id}/resolve",
     "/api/v1/public/live-stats": "/api/v2/public/live-stats",
     "/api/v1/pundits/matches/{match_key}": "/api/v2/pundits/matches/{match_key}",
     "/api/v1/rankings/clubs": "/api/v2/rankings/clubs",
@@ -27260,46 +26339,6 @@
     "/api/v1/ws/matches/{match_id}": "/api/v2/ws/matches/{match_id}",
     "/api/v1/ws/spectate/{match_id}": "/api/v2/ws/spectate/{match_id}",
     "/api/v1/ws/tournament/{tournament_id}": "/api/v2/ws/tournament/{tournament_id}",
-    "/api/v1/{club_id}/catalogue/load": "/api/v2/{club_id}/catalogue/load",
-    "/api/v1/{club_id}/governance/cases": "/api/v2/{club_id}/governance/cases",
-    "/api/v1/{club_id}/governance/distributions": "/api/v2/{club_id}/governance/distributions",
-    "/api/v1/{club_id}/governance/net-worth": "/api/v2/{club_id}/governance/net-worth",
-    "/api/v1/{club_id}/governance/stakes": "/api/v2/{club_id}/governance/stakes",
-    "/api/v1/{club_id}/governance/trades": "/api/v2/{club_id}/governance/trades",
-    "/api/v1/{club_id}/managers": "/api/v2/{club_id}/managers",
-    "/api/v1/{club_id}/managers/{manager_id}/gifts": "/api/v2/{club_id}/managers/{manager_id}/gifts",
-    "/api/v1/{club_id}/managers/{manager_id}/history": "/api/v2/{club_id}/managers/{manager_id}/history",
-    "/api/v1/{club_id}/managers/{manager_id}/offers": "/api/v2/{club_id}/managers/{manager_id}/offers",
-    "/api/v1/{club_id}/managers/{manager_id}/poach": "/api/v2/{club_id}/managers/{manager_id}/poach",
-    "/api/v1/{club_id}/managers/{manager_id}/retention": "/api/v2/{club_id}/managers/{manager_id}/retention",
-    "/api/v1/{club_id}/market/gifts": "/api/v2/{club_id}/market/gifts",
-    "/api/v1/{club_id}/market/gifts/{gift_id}/accept": "/api/v2/{club_id}/market/gifts/{gift_id}/accept",
-    "/api/v1/{club_id}/market/gifts/{gift_id}/decline": "/api/v2/{club_id}/market/gifts/{gift_id}/decline",
-    "/api/v1/{club_id}/market/listings": "/api/v2/{club_id}/market/listings",
-    "/api/v1/{club_id}/market/listings/{listing_id}/bids": "/api/v2/{club_id}/market/listings/{listing_id}/bids",
-    "/api/v1/{club_id}/market/listings/{listing_id}/buy": "/api/v2/{club_id}/market/listings/{listing_id}/buy",
-    "/api/v1/{club_id}/market/purchases": "/api/v2/{club_id}/market/purchases",
-    "/api/v1/{club_id}/market/supply": "/api/v2/{club_id}/market/supply",
-    "/api/v1/{club_id}/market/transfers": "/api/v2/{club_id}/market/transfers",
-    "/api/v1/{club_id}/preseason/invitations": "/api/v2/{club_id}/preseason/invitations",
-    "/api/v1/{club_id}/preseason/invites": "/api/v2/{club_id}/preseason/invites",
-    "/api/v1/{club_id}/preseason/invites/{invite_id}/respond": "/api/v2/{club_id}/preseason/invites/{invite_id}/respond",
-    "/api/v1/{club_id}/preseason/invites/{invite_id}/settle": "/api/v2/{club_id}/preseason/invites/{invite_id}/settle",
-    "/api/v1/{club_id}/preseason/tournaments": "/api/v2/{club_id}/preseason/tournaments",
-    "/api/v1/{club_id}/preseason/tournaments/{tournament_id}/participants": "/api/v2/{club_id}/preseason/tournaments/{tournament_id}/participants",
-    "/api/v1/{club_id}/preseason/tournaments/{tournament_id}/settle": "/api/v2/{club_id}/preseason/tournaments/{tournament_id}/settle",
-    "/api/v1/{club_id}/preseason/windows": "/api/v2/{club_id}/preseason/windows",
-    "/api/v1/{club_id}/promises": "/api/v2/{club_id}/promises",
-    "/api/v1/{club_id}/seasons/simulate": "/api/v2/{club_id}/seasons/simulate",
-    "/api/v1/{club_id}/showroom/failures": "/api/v2/{club_id}/showroom/failures",
-    "/api/v1/{club_id}/sponsors/contracts": "/api/v2/{club_id}/sponsors/contracts",
-    "/api/v1/{club_id}/sponsors/contracts/{contract_id}/approve": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/approve",
-    "/api/v1/{club_id}/sponsors/contracts/{contract_id}/delivery": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/delivery",
-    "/api/v1/{club_id}/sponsors/contracts/{contract_id}/preview": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/preview",
-    "/api/v1/{club_id}/sponsors/contracts/{contract_id}/publish": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/publish",
-    "/api/v1/{club_id}/sponsors/contracts/{contract_id}/renew": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/renew",
-    "/api/v1/{club_id}/sponsors/contracts/{contract_id}/suggest": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/suggest",
-    "/api/v1/{club_id}/sponsors/zones": "/api/v2/{club_id}/sponsors/zones",
     "/api/v2/admin/access": "/api/v2/admin/access",
     "/api/v2/admin/access/permissions": "/api/v2/admin/access/permissions",
     "/api/v2/admin/analytics/funnels": "/api/v2/admin/analytics/funnels",
@@ -27573,46 +26612,6 @@
     "/api/world/competitions/{competition_id}/context": "/api/v2/world/competitions/{competition_id}/context",
     "/api/world/cultures": "/api/v2/world/cultures",
     "/api/world/narratives": "/api/v2/world/narratives",
-    "/api/{club_id}/catalogue/load": "/api/v2/{club_id}/catalogue/load",
-    "/api/{club_id}/governance/cases": "/api/v2/{club_id}/governance/cases",
-    "/api/{club_id}/governance/distributions": "/api/v2/{club_id}/governance/distributions",
-    "/api/{club_id}/governance/net-worth": "/api/v2/{club_id}/governance/net-worth",
-    "/api/{club_id}/governance/stakes": "/api/v2/{club_id}/governance/stakes",
-    "/api/{club_id}/governance/trades": "/api/v2/{club_id}/governance/trades",
-    "/api/{club_id}/managers": "/api/v2/{club_id}/managers",
-    "/api/{club_id}/managers/{manager_id}/gifts": "/api/v2/{club_id}/managers/{manager_id}/gifts",
-    "/api/{club_id}/managers/{manager_id}/history": "/api/v2/{club_id}/managers/{manager_id}/history",
-    "/api/{club_id}/managers/{manager_id}/offers": "/api/v2/{club_id}/managers/{manager_id}/offers",
-    "/api/{club_id}/managers/{manager_id}/poach": "/api/v2/{club_id}/managers/{manager_id}/poach",
-    "/api/{club_id}/managers/{manager_id}/retention": "/api/v2/{club_id}/managers/{manager_id}/retention",
-    "/api/{club_id}/market/gifts": "/api/v2/{club_id}/market/gifts",
-    "/api/{club_id}/market/gifts/{gift_id}/accept": "/api/v2/{club_id}/market/gifts/{gift_id}/accept",
-    "/api/{club_id}/market/gifts/{gift_id}/decline": "/api/v2/{club_id}/market/gifts/{gift_id}/decline",
-    "/api/{club_id}/market/listings": "/api/v2/{club_id}/market/listings",
-    "/api/{club_id}/market/listings/{listing_id}/bids": "/api/v2/{club_id}/market/listings/{listing_id}/bids",
-    "/api/{club_id}/market/listings/{listing_id}/buy": "/api/v2/{club_id}/market/listings/{listing_id}/buy",
-    "/api/{club_id}/market/purchases": "/api/v2/{club_id}/market/purchases",
-    "/api/{club_id}/market/supply": "/api/v2/{club_id}/market/supply",
-    "/api/{club_id}/market/transfers": "/api/v2/{club_id}/market/transfers",
-    "/api/{club_id}/preseason/invitations": "/api/v2/{club_id}/preseason/invitations",
-    "/api/{club_id}/preseason/invites": "/api/v2/{club_id}/preseason/invites",
-    "/api/{club_id}/preseason/invites/{invite_id}/respond": "/api/v2/{club_id}/preseason/invites/{invite_id}/respond",
-    "/api/{club_id}/preseason/invites/{invite_id}/settle": "/api/v2/{club_id}/preseason/invites/{invite_id}/settle",
-    "/api/{club_id}/preseason/tournaments": "/api/v2/{club_id}/preseason/tournaments",
-    "/api/{club_id}/preseason/tournaments/{tournament_id}/participants": "/api/v2/{club_id}/preseason/tournaments/{tournament_id}/participants",
-    "/api/{club_id}/preseason/tournaments/{tournament_id}/settle": "/api/v2/{club_id}/preseason/tournaments/{tournament_id}/settle",
-    "/api/{club_id}/preseason/windows": "/api/v2/{club_id}/preseason/windows",
-    "/api/{club_id}/promises": "/api/v2/{club_id}/promises",
-    "/api/{club_id}/seasons/simulate": "/api/v2/{club_id}/seasons/simulate",
-    "/api/{club_id}/showroom/failures": "/api/v2/{club_id}/showroom/failures",
-    "/api/{club_id}/sponsors/contracts": "/api/v2/{club_id}/sponsors/contracts",
-    "/api/{club_id}/sponsors/contracts/{contract_id}/approve": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/approve",
-    "/api/{club_id}/sponsors/contracts/{contract_id}/delivery": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/delivery",
-    "/api/{club_id}/sponsors/contracts/{contract_id}/preview": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/preview",
-    "/api/{club_id}/sponsors/contracts/{contract_id}/publish": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/publish",
-    "/api/{club_id}/sponsors/contracts/{contract_id}/renew": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/renew",
-    "/api/{club_id}/sponsors/contracts/{contract_id}/suggest": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/suggest",
-    "/api/{club_id}/sponsors/zones": "/api/v2/{club_id}/sponsors/zones",
     "/auth/confirm-email": "/api/v2/auth/confirm-email",
     "/auth/login": "/api/v2/auth/login",
     "/auth/logout": "/api/v2/auth/logout",
@@ -27843,7 +26842,6 @@
     "/fast-cups/{cup_id}/countdown": "/api/v2/fast-cups/{cup_id}/countdown",
     "/fast-cups/{cup_id}/join": "/api/v2/fast-cups/{cup_id}/join",
     "/fast-cups/{cup_id}/result-summary": "/api/v2/fast-cups/{cup_id}/result-summary",
-    "/fast-cups/{cup_id}/settle": "/api/v2/fast-cups/{cup_id}/settle",
     "/feature-flags/client": "/api/v2/feature-flags/client",
     "/federations": "/api/v2/federations",
     "/federations/national-associations/{country_code}": "/api/v2/federations/national-associations/{country_code}",
@@ -27868,20 +26866,6 @@
     "/follow/{user_id}": "/api/v2/follow/{user_id}",
     "/football-events/players/{player_id}/events": "/api/v2/football-events/players/{player_id}/events",
     "/football-events/players/{player_id}/impact": "/api/v2/football-events/players/{player_id}/impact",
-    "/full/phase1/location": "/api/v2/full/phase1/location",
-    "/full/phase1/settings": "/api/v2/full/phase1/settings",
-    "/full/phase1/{club_id}/ratings": "/api/v2/full/phase1/{club_id}/ratings",
-    "/full/phase2/preseason/{invite_id}/gm": "/api/v2/full/phase2/preseason/{invite_id}/gm",
-    "/full/phase2/recommendations/{recommendation_id}/execute": "/api/v2/full/phase2/recommendations/{recommendation_id}/execute",
-    "/full/phase2/{club_id}/academy": "/api/v2/full/phase2/{club_id}/academy",
-    "/full/phase2/{club_id}/executives": "/api/v2/full/phase2/{club_id}/executives",
-    "/full/phase2/{club_id}/pathways": "/api/v2/full/phase2/{club_id}/pathways",
-    "/full/phase2/{club_id}/presets/{preset}": "/api/v2/full/phase2/{club_id}/presets/{preset}",
-    "/full/phase2/{club_id}/tasks/{task_key}": "/api/v2/full/phase2/{club_id}/tasks/{task_key}",
-    "/full/phase3/{club_id}/finance": "/api/v2/full/phase3/{club_id}/finance",
-    "/full/phase3/{club_id}/net-worth": "/api/v2/full/phase3/{club_id}/net-worth",
-    "/full/phase3/{club_id}/page": "/api/v2/full/phase3/{club_id}/page",
-    "/full/phase3/{club_id}/showroom": "/api/v2/full/phase3/{club_id}/showroom",
     "/gift-engine/me/combos": "/api/v2/gift-engine/me/combos",
     "/gift-engine/me/summary": "/api/v2/gift-engine/me/summary",
     "/gift-engine/me/transactions": "/api/v2/gift-engine/me/transactions",
@@ -27892,8 +26876,6 @@
     "/gifts/events": "/api/v2/gifts/events",
     "/gifts/send": "/api/v2/gifts/send",
     "/gifts/users/{user_id}/gift-stats": "/api/v2/gifts/users/{user_id}/gift-stats",
-    "/governance/cases/{case_id}/appeal": "/api/v2/governance/cases/{case_id}/appeal",
-    "/governance/cases/{case_id}/ruling": "/api/v2/governance/cases/{case_id}/ruling",
     "/governance/clubs/{club_id}/panel": "/api/v2/governance/clubs/{club_id}/panel",
     "/governance/me/overview": "/api/v2/governance/me/overview",
     "/governance/proposals": "/api/v2/governance/proposals",
@@ -28118,7 +27100,6 @@
     "/notifications/{notification_id}/read": "/api/v2/notifications/{notification_id}/read",
     "/objectives/me": "/api/v2/objectives/me",
     "/observability/config": "/api/v2/observability/config",
-    "/offers/{offer_id}/respond": "/api/v2/offers/{offer_id}/respond",
     "/orchestrator/config": "/api/v2/orchestrator/config",
     "/orchestrator/metrics": "/api/v2/orchestrator/metrics",
     "/orders": "/api/v2/orders",
@@ -28273,7 +27254,6 @@
     "/portfolios/me": "/api/v2/portfolios/me",
     "/predictions": "/api/v2/predictions",
     "/predictions/leaderboard": "/api/v2/predictions/leaderboard",
-    "/promises/{promise_id}/resolve": "/api/v2/promises/{promise_id}/resolve",
     "/public/live-stats": "/api/v2/public/live-stats",
     "/rankings/clubs": "/api/v2/rankings/clubs",
     "/rankings/global": "/api/v2/rankings/global",
@@ -28463,46 +27443,6 @@
     "/ws/match/{match_id}": "/api/v2/ws/match/{match_id}",
     "/ws/matches/{match_id}": "/api/v2/ws/matches/{match_id}",
     "/ws/spectate/{match_id}": "/api/v2/ws/spectate/{match_id}",
-    "/ws/tournament/{tournament_id}": "/api/v2/ws/tournament/{tournament_id}",
-    "/{club_id}/catalogue/load": "/api/v2/{club_id}/catalogue/load",
-    "/{club_id}/governance/cases": "/api/v2/{club_id}/governance/cases",
-    "/{club_id}/governance/distributions": "/api/v2/{club_id}/governance/distributions",
-    "/{club_id}/governance/net-worth": "/api/v2/{club_id}/governance/net-worth",
-    "/{club_id}/governance/stakes": "/api/v2/{club_id}/governance/stakes",
-    "/{club_id}/governance/trades": "/api/v2/{club_id}/governance/trades",
-    "/{club_id}/managers": "/api/v2/{club_id}/managers",
-    "/{club_id}/managers/{manager_id}/gifts": "/api/v2/{club_id}/managers/{manager_id}/gifts",
-    "/{club_id}/managers/{manager_id}/history": "/api/v2/{club_id}/managers/{manager_id}/history",
-    "/{club_id}/managers/{manager_id}/offers": "/api/v2/{club_id}/managers/{manager_id}/offers",
-    "/{club_id}/managers/{manager_id}/poach": "/api/v2/{club_id}/managers/{manager_id}/poach",
-    "/{club_id}/managers/{manager_id}/retention": "/api/v2/{club_id}/managers/{manager_id}/retention",
-    "/{club_id}/market/gifts": "/api/v2/{club_id}/market/gifts",
-    "/{club_id}/market/gifts/{gift_id}/accept": "/api/v2/{club_id}/market/gifts/{gift_id}/accept",
-    "/{club_id}/market/gifts/{gift_id}/decline": "/api/v2/{club_id}/market/gifts/{gift_id}/decline",
-    "/{club_id}/market/listings": "/api/v2/{club_id}/market/listings",
-    "/{club_id}/market/listings/{listing_id}/bids": "/api/v2/{club_id}/market/listings/{listing_id}/bids",
-    "/{club_id}/market/listings/{listing_id}/buy": "/api/v2/{club_id}/market/listings/{listing_id}/buy",
-    "/{club_id}/market/purchases": "/api/v2/{club_id}/market/purchases",
-    "/{club_id}/market/supply": "/api/v2/{club_id}/market/supply",
-    "/{club_id}/market/transfers": "/api/v2/{club_id}/market/transfers",
-    "/{club_id}/preseason/invitations": "/api/v2/{club_id}/preseason/invitations",
-    "/{club_id}/preseason/invites": "/api/v2/{club_id}/preseason/invites",
-    "/{club_id}/preseason/invites/{invite_id}/respond": "/api/v2/{club_id}/preseason/invites/{invite_id}/respond",
-    "/{club_id}/preseason/invites/{invite_id}/settle": "/api/v2/{club_id}/preseason/invites/{invite_id}/settle",
-    "/{club_id}/preseason/tournaments": "/api/v2/{club_id}/preseason/tournaments",
-    "/{club_id}/preseason/tournaments/{tournament_id}/participants": "/api/v2/{club_id}/preseason/tournaments/{tournament_id}/participants",
-    "/{club_id}/preseason/tournaments/{tournament_id}/settle": "/api/v2/{club_id}/preseason/tournaments/{tournament_id}/settle",
-    "/{club_id}/preseason/windows": "/api/v2/{club_id}/preseason/windows",
-    "/{club_id}/promises": "/api/v2/{club_id}/promises",
-    "/{club_id}/seasons/simulate": "/api/v2/{club_id}/seasons/simulate",
-    "/{club_id}/showroom/failures": "/api/v2/{club_id}/showroom/failures",
-    "/{club_id}/sponsors/contracts": "/api/v2/{club_id}/sponsors/contracts",
-    "/{club_id}/sponsors/contracts/{contract_id}/approve": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/approve",
-    "/{club_id}/sponsors/contracts/{contract_id}/delivery": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/delivery",
-    "/{club_id}/sponsors/contracts/{contract_id}/preview": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/preview",
-    "/{club_id}/sponsors/contracts/{contract_id}/publish": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/publish",
-    "/{club_id}/sponsors/contracts/{contract_id}/renew": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/renew",
-    "/{club_id}/sponsors/contracts/{contract_id}/suggest": "/api/v2/{club_id}/sponsors/contracts/{contract_id}/suggest",
-    "/{club_id}/sponsors/zones": "/api/v2/{club_id}/sponsors/zones"
+    "/ws/tournament/{tournament_id}": "/api/v2/ws/tournament/{tournament_id}"
   }
 }
