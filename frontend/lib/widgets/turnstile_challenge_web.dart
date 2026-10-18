@@ -76,7 +76,8 @@ class _TurnstileChallengeState extends State<TurnstileChallenge> {
         }).toJS,
       }.jsify();
 
-      final id = _turnstileRender(container, options);
+      final JSAny optionsJs = options;
+      final id = _turnstileRender(container, optionsJs);
       _widgetId = id?.dartify()?.toString();
     } catch (_) {
       if (mounted) widget.onTokenChanged(null);
