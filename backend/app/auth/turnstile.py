@@ -41,9 +41,6 @@ def verify_turnstile_token(
     candidate = (token or "").strip()
     secret = turnstile_secret()
     if secret is None:
-        app_env = (os.environ.get("GTE_APP_ENV") or "development").strip().lower()
-        if app_env == "production":
-            raise AuthError("Security check is unavailable. Please try again later.")
         return
     if not candidate:
         raise AuthError("Complete the security check to continue.")
