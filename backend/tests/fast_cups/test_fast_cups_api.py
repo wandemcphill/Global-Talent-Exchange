@@ -2,6 +2,15 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+from fastapi import HTTPException, status
+from sqlalchemy import func, select
+
+from app.auth.dependencies import get_current_user
+from app.core.database import get_session
+from app.models.fast_cup_finance import FastCupPayout
+from app.models.user import User, UserRole
+from app.models.wallet import LedgerTransaction
+
 
 def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(
     api_client, base_now
@@ -73,14 +82,6 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(
     assert len(summary_payload["events"]) == 6
     assert summary_payload["penalty_shootouts"] >= 1
 
-    from sqlalchemy import func, select
-    from app.auth.dependencies import get_current_user
-    from app.core.database import get_session
-    from app.models.fast_cup_finance import FastCupPayout
-    from app.models.user import User, UserRole
-    from app.models.wallet import LedgerTransaction
-    from fastapi import HTTPException, status
-
     session = list(api_client.app.dependency_overrides[get_session]())[0]
 
     def payout_counts() -> tuple[int, int]:
@@ -106,7 +107,8 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(
 
     def unauth_user():
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
         )
 
     api_client.app.dependency_overrides[get_current_user] = unauth_user
@@ -117,10 +119,8 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(
     assert unauth_settle.status_code == 401
     assert payout_counts() == (0, 0)
 
-    # Non-admin user POST /settle (returning regular user)
-    # Restore original override where current_user has UserRole.USER
+    # Non-admin user POST /settle (returning regular user).
     actor = session.get(User, "fast-cup-owner")
-
     api_client.app.dependency_overrides[get_current_user] = lambda: actor
     forbidden_settle = api_client.post(
         f"/fast-cups/{senior_32['cup_id']}/settle",
@@ -129,7 +129,7 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(
     assert forbidden_settle.status_code == 403
     assert payout_counts() == (0, 0)
 
-    # Admin user POST /settle
+    # Admin user POST /settle.
     actor.role = UserRole.ADMIN
     session.commit()
 
