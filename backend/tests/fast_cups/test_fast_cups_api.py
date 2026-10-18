@@ -15,9 +15,12 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(
     cups = upcoming_response.json()["cups"]
     assert len(cups) == 8
 
-    senior_32 = next(
-        cup for cup in cups if cup["division"] == "senior" and cup["size"] == 32
-    )
+    senior_32_candidates = [
+        cup
+        for cup in cups
+        if cup["division"] == "senior" and cup["size"] == 32
+    ]
+    senior_32 = senior_32_candidates[0]
 
     for index in range(1, 33):
         response = api_client.post(
