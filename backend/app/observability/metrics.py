@@ -368,8 +368,10 @@ class GTexMetrics:
         if self._started_server or port <= 0:
             return
         start_http_server(
-            port, addr="0.0.0.0", registry=self.registry
-        )  # nosec B104 - metrics endpoint intentionally binds all interfaces for scraping
+            port,
+            addr="0.0.0.0",  # nosec B104 - metrics endpoint intentionally binds all interfaces for scraping
+            registry=self.registry,
+        )
         self._started_server = True
         logger.info("observability.metrics.server_started runtime=%s port=%s", self.runtime_name, port)
 
