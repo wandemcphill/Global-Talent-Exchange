@@ -19,11 +19,12 @@ import InboxPage from "@/pages/Inbox";
 import Admin from "@/pages/Admin";
 import PaymentCallback from "@/pages/PaymentCallback";
 import NationalTeam from "@/pages/NationalTeam";
+import { ROUTER_BASENAME } from "@/lib/publicPath";
 
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <BrowserRouter basename={ROUTER_BASENAME}>
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<AuthPage mode="login" />} />

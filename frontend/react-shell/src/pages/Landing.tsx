@@ -2,6 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, BookOpenCheck, Building2, Coins, Gauge, ShieldCheck, Shirt, Sprout, Trophy, Users } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { publicUrl } from "@/lib/publicPath";
 
 const CLARITY = [
   { icon: Building2, t: "You own a football club", d: "Up to three clubs in a persistent football world." },
@@ -22,7 +23,7 @@ function Hero() {
   const { user } = useAuth();
   return (
     <section className="gx-noise relative min-h-[92vh] overflow-hidden">
-      <img src="/img/hero.jpg" alt="Floodlit stadium" className="absolute inset-0 h-full w-full object-cover opacity-40" />
+      <img src={publicUrl("/img/hero.jpg")} alt="Floodlit stadium" className="absolute inset-0 h-full w-full object-cover opacity-40" />
       <div className="absolute inset-0 bg-gradient-to-r from-[#070B11] via-[#070B11]/85 to-[#070B11]/30" />
       <div className="gx-pitch-grid absolute inset-0 opacity-60" />
       <div className="relative mx-auto flex max-w-[1400px] flex-col px-6 pb-20 pt-8 sm:px-10">
@@ -104,7 +105,7 @@ function Boardroom() {
   return (
     <section className="mx-auto grid max-w-[1400px] gap-10 px-6 pb-28 sm:px-10 lg:grid-cols-12">
       <div className="relative overflow-hidden rounded-md border border-white/10 lg:col-span-7">
-        <img src="/img/boardroom.jpg" alt="Executive boardroom" className="h-full max-h-[460px] w-full object-cover opacity-70" />
+        <img src={publicUrl("/img/boardroom.jpg")} alt="Executive boardroom" className="h-full max-h-[460px] w-full object-cover opacity-70" />
         <div className="absolute inset-x-4 bottom-4 rounded-sm border border-white/10 bg-slate-950/85 p-4 backdrop-blur-xl">
           <p className="gx-eyebrow text-amber-400">Owner Inbox · Manager request</p>
           <p className="mt-2 text-sm text-slate-200">"Boss, the training ground is holding our young lads back. Level 2 costs 15,157 GTEX Coin. Give me the tools and I'll give you a first-team regen by the spring."</p>
@@ -164,7 +165,7 @@ export default function Landing() {
       <Boardroom />
       <Trust />
       <section className="relative overflow-hidden">
-        <img src="/img/crowd.jpg" alt="Stadium crowd" className="absolute inset-0 h-full w-full object-cover opacity-25" />
+        <img src={publicUrl("/img/crowd.jpg")} alt="Stadium crowd" className="absolute inset-0 h-full w-full object-cover opacity-25" />
         <div className="relative mx-auto max-w-[1400px] px-6 py-28 sm:px-10">
           <h2 className="gx-h1 max-w-3xl">The home end is waiting for an owner.</h2>
           <Link to="/signup" data-testid="landing-footer-cta" className="gx-btn gx-btn-primary mt-10 px-6 py-3 text-sm">

@@ -1,6 +1,19 @@
 import axios from "axios";
 
-const BACKEND_ORIGIN = (process.env.REACT_APP_BACKEND_URL || window.location.origin).replace(/\/+$/, "");
+function backendOrigin(): string {
+  const configured = (process.env.REACT_APP_BACKEND_URL || "").trim().replace(/\/+$/, "");
+  if (!configured) {
+    throw new Error(
+      "REACT_APP_BACKEND_URL is required. Set it to the canonical GTEX API origin, without a /api suffix.",
+    );
+  }
+  if (configured.endsWith("/api")) {
+    throw new Error("REACT_APP_BACKEND_URL must be the API origin without a /api suffix. The shell appends /api itself.");
+  }
+  return configured;
+}
+
+const BACKEND_ORIGIN = backendOrigin();
 export const API = `${BACKEND_ORIGIN}/api`;
 export const api = axios.create({ baseURL: API });
 

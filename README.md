@@ -13,7 +13,7 @@ The current Render Blueprint uses:
 - API: `https://gtex-api-opea.onrender.com`
 - KoraPay webhook: `https://gtex-api-opea.onrender.com/integrations/payments/korapay/webhook`
 
-The production frontend is configured for the canonical API above. Local/demo instructions below remain explicitly local-only.
+The production frontend is configured for the canonical API above. Flutter web remains the site at `/`. The Emergent React shell is published beside it at `/console/` from the same `gtex-web` static deploy. Build, rewrite, environment, and rollback steps are in `docs/REACT_CONSOLE_RENDER.md`. Local/demo instructions below remain explicitly local-only.
 
 Local backend workflow for SQLite demos, seeded exchange liquidity, deterministic simulation ticks, and repeatable verification.
 

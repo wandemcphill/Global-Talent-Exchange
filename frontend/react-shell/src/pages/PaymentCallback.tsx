@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
+import { publicUrl } from "@/lib/publicPath";
 import { Loading } from "@/components/gtex/ui";
 
 export default function PaymentCallback() {
@@ -15,7 +16,7 @@ export default function PaymentCallback() {
     api
       .get(`/owner/deposits/verify/${ref}`)
       .then(({ data }) => {
-        if (data.status === "success") window.location.href = "/app/finance?deposit=success";
+        if (data.status === "success") window.location.href = publicUrl("/app/finance?deposit=success");
         else setMsg("Payment was not successful. No coins were credited.");
       })
       .catch(() => setMsg("We could not verify this payment. If you were charged, contact support with your reference."));
