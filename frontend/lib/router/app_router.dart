@@ -18,6 +18,8 @@ import 'package:gte_frontend/features/match/gte_live_match_hub_route_screen.dart
 import 'package:gte_frontend/features/match/match_viewer_route_screen.dart';
 import 'package:gte_frontend/features/matchday_economy_redesign/matchday_economy_screen.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
+import 'package:gte_frontend/features/owner_console/data/owner_console_api.dart';
+import 'package:gte_frontend/features/owner_console/presentation/public_showroom_screen.dart';
 import 'package:gte_frontend/features/federations/federations_hub_screen.dart';
 import 'package:gte_frontend/features/tasks/gtex_daily_challenges_screen.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
@@ -122,6 +124,17 @@ GoRouter buildGtexAppRouter({
               state: state,
               controller: controller,
             ),
+      ),
+      GoRoute(
+        path: '/showroom/:code',
+        pageBuilder: (BuildContext context, GoRouterState state) {
+          final String code = state.pathParameters['code']?.trim() ?? '';
+          final OwnerConsoleApi api = OwnerConsoleApi(client: dependenciesBuilder(context).createAuthedApi());
+          return NoTransitionPage<void>(
+            key: state.pageKey,
+            child: PublicShowroomScreen(code: code, load: () => api.fetchPublicShowroom(code)),
+          );
+        },
       ),
       GoRoute(
         path: '/app',

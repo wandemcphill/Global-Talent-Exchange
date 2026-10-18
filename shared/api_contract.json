@@ -12692,6 +12692,19 @@
         "source_file": "backend/app/owner_console/router.py",
         "response_model": null
       },
+      "get_api_v2_owner_public_showroom_code": {
+        "method": "GET",
+        "canonical_path": "/api/v2/owner/public/showroom/{code}",
+        "aliases": [
+          "/api/owner/public/showroom/{code}",
+          "/api/v1/owner/public/showroom/{code}",
+          "/api/v2/owner/public/showroom/{code}",
+          "/owner/public/showroom/{code}"
+        ],
+        "handler": "public_showroom",
+        "source_file": "backend/app/owner_console/router.py",
+        "response_model": null
+      },
       "get_api_v2_owner_withdrawals_eligibility": {
         "method": "GET",
         "canonical_path": "/api/v2/owner/withdrawals/eligibility",
@@ -12754,6 +12767,19 @@
           "/owner/admin/withdrawals/{withdrawal_id}/review"
         ],
         "handler": "review",
+        "source_file": "backend/app/owner_console/router.py",
+        "response_model": null
+      },
+      "post_api_v2_owner_alerts_cron": {
+        "method": "POST",
+        "canonical_path": "/api/v2/owner/alerts/cron",
+        "aliases": [
+          "/api/owner/alerts/cron",
+          "/api/v1/owner/alerts/cron",
+          "/api/v2/owner/alerts/cron",
+          "/owner/alerts/cron"
+        ],
+        "handler": "trigger_owner_alert_sweep",
         "source_file": "backend/app/owner_console/router.py",
         "response_model": null
       },
@@ -22590,6 +22616,7 @@
     "/api/v2/owner/admin/payouts/{event_id}/release": "post_api_v2_owner_admin_payouts_event_id_release",
     "/api/v2/owner/admin/review-queue": "get_api_v2_owner_admin_review_queue",
     "/api/v2/owner/admin/withdrawals/{withdrawal_id}/review": "post_api_v2_owner_admin_withdrawals_withdrawal_id_review",
+    "/api/v2/owner/alerts/cron": "post_api_v2_owner_alerts_cron",
     "/api/v2/owner/capital/distribute": "post_api_v2_owner_capital_distribute",
     "/api/v2/owner/capital/inject": "post_api_v2_owner_capital_inject",
     "/api/v2/owner/capital/sister-transfer": "post_api_v2_owner_capital_sister_transfer",
@@ -22633,6 +22660,7 @@
     "/api/v2/owner/matches/{match_id}": "get_api_v2_owner_matches_match_id",
     "/api/v2/owner/matches/{match_id}/forfeit": "post_api_v2_owner_matches_match_id_forfeit",
     "/api/v2/owner/onboarding": "get_api_v2_owner_onboarding",
+    "/api/v2/owner/public/showroom/{code}": "get_api_v2_owner_public_showroom_code",
     "/api/v2/owner/support-units/buy": "post_api_v2_owner_support_units_buy",
     "/api/v2/owner/transfers/internal": "post_api_v2_owner_transfers_internal",
     "/api/v2/owner/transfers/internal/check": "post_api_v2_owner_transfers_internal_check",
@@ -24333,6 +24361,7 @@
     "/api/owner/admin/payouts/{event_id}/release": "/api/v2/owner/admin/payouts/{event_id}/release",
     "/api/owner/admin/review-queue": "/api/v2/owner/admin/review-queue",
     "/api/owner/admin/withdrawals/{withdrawal_id}/review": "/api/v2/owner/admin/withdrawals/{withdrawal_id}/review",
+    "/api/owner/alerts/cron": "/api/v2/owner/alerts/cron",
     "/api/owner/capital/distribute": "/api/v2/owner/capital/distribute",
     "/api/owner/capital/inject": "/api/v2/owner/capital/inject",
     "/api/owner/capital/sister-transfer": "/api/v2/owner/capital/sister-transfer",
@@ -24376,6 +24405,7 @@
     "/api/owner/matches/{match_id}": "/api/v2/owner/matches/{match_id}",
     "/api/owner/matches/{match_id}/forfeit": "/api/v2/owner/matches/{match_id}/forfeit",
     "/api/owner/onboarding": "/api/v2/owner/onboarding",
+    "/api/owner/public/showroom/{code}": "/api/v2/owner/public/showroom/{code}",
     "/api/owner/support-units/buy": "/api/v2/owner/support-units/buy",
     "/api/owner/transfers/internal": "/api/v2/owner/transfers/internal",
     "/api/owner/transfers/internal/check": "/api/v2/owner/transfers/internal/check",
@@ -25751,6 +25781,7 @@
     "/api/v1/owner/admin/payouts/{event_id}/release": "/api/v2/owner/admin/payouts/{event_id}/release",
     "/api/v1/owner/admin/review-queue": "/api/v2/owner/admin/review-queue",
     "/api/v1/owner/admin/withdrawals/{withdrawal_id}/review": "/api/v2/owner/admin/withdrawals/{withdrawal_id}/review",
+    "/api/v1/owner/alerts/cron": "/api/v2/owner/alerts/cron",
     "/api/v1/owner/capital/distribute": "/api/v2/owner/capital/distribute",
     "/api/v1/owner/capital/inject": "/api/v2/owner/capital/inject",
     "/api/v1/owner/capital/sister-transfer": "/api/v2/owner/capital/sister-transfer",
@@ -25794,6 +25825,7 @@
     "/api/v1/owner/matches/{match_id}": "/api/v2/owner/matches/{match_id}",
     "/api/v1/owner/matches/{match_id}/forfeit": "/api/v2/owner/matches/{match_id}/forfeit",
     "/api/v1/owner/onboarding": "/api/v2/owner/onboarding",
+    "/api/v1/owner/public/showroom/{code}": "/api/v2/owner/public/showroom/{code}",
     "/api/v1/owner/support-units/buy": "/api/v2/owner/support-units/buy",
     "/api/v1/owner/transfers/internal": "/api/v2/owner/transfers/internal",
     "/api/v1/owner/transfers/internal/check": "/api/v2/owner/transfers/internal/check",
@@ -27080,6 +27112,7 @@
     "/owner/admin/payouts/{event_id}/release": "/api/v2/owner/admin/payouts/{event_id}/release",
     "/owner/admin/review-queue": "/api/v2/owner/admin/review-queue",
     "/owner/admin/withdrawals/{withdrawal_id}/review": "/api/v2/owner/admin/withdrawals/{withdrawal_id}/review",
+    "/owner/alerts/cron": "/api/v2/owner/alerts/cron",
     "/owner/capital/distribute": "/api/v2/owner/capital/distribute",
     "/owner/capital/inject": "/api/v2/owner/capital/inject",
     "/owner/capital/sister-transfer": "/api/v2/owner/capital/sister-transfer",
@@ -27123,6 +27156,7 @@
     "/owner/matches/{match_id}": "/api/v2/owner/matches/{match_id}",
     "/owner/matches/{match_id}/forfeit": "/api/v2/owner/matches/{match_id}/forfeit",
     "/owner/onboarding": "/api/v2/owner/onboarding",
+    "/owner/public/showroom/{code}": "/api/v2/owner/public/showroom/{code}",
     "/owner/support-units/buy": "/api/v2/owner/support-units/buy",
     "/owner/transfers/internal": "/api/v2/owner/transfers/internal",
     "/owner/transfers/internal/check": "/api/v2/owner/transfers/internal/check",

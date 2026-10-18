@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import hmac
+import logging
+import os
+from datetime import datetime, timezone
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
-from app.owner_console import competitions as comps
+from app.owner_console import alerts, competitions as comps
 from app.owner_console import ledger, money, service
 from app.owner_console.models import (
     IntegrityFlag,
@@ -307,6 +311,7 @@ def control_center(user=Depends(get_current_user), session: Session = Depends(ge
     def go():
         comps.ensure_seed(session)
         service.maybe_auto_tick(session, user.id)
+        alerts.sweep_decisions(session, user.id)
         states = service.user_states(session, user.id)
         club_ids = [s.club_id for s in states]
         items = session.scalars(
@@ -360,7 +365,13 @@ def control_center(user=Depends(get_current_user), session: Session = Depends(ge
             "ownership_group": service.group_label(session, user.id),
             "inbox": [service.inbox_dict(i) for i in items[:8]],
             "inbox_open_count": len(items),
-            "decisions": [service.inbox_dict(i) for i in items if i.is_decision][:6],
+            "decisions": [
+                service.inbox_dict(i)
+                for i in sorted(
+                    (i for i in items if i.is_decision),
+                    key=lambda i: alerts.respond_by(i) or datetime.max.replace(tzinfo=timezone.utc),
+                )
+            ][:6],
             "health": [service.club_health(session, s) for s in states],
             "board": board,
             "fixtures": {
@@ -391,11 +402,43 @@ def control_center(user=Depends(get_current_user), session: Session = Depends(ge
 def inbox(
     status: str = "open", user=Depends(get_current_user), session: Session = Depends(get_session)
 ) -> dict[str, Any]:
+    _run(session, alerts.sweep_decisions, session, user.id)
     stmt = select(OwnerInboxItem).where(OwnerInboxItem.user_id == user.id)
     if status != "all":
         stmt = stmt.where(OwnerInboxItem.status == status)
     items = session.scalars(stmt.order_by(OwnerInboxItem.created_at.desc()).limit(100)).all()
     return {"items": [service.inbox_dict(i) for i in items]}
+
+
+def _run_alert_sweep() -> None:
+    from app.core.database import get_session_factory
+
+    with get_session_factory()() as session:
+        decisions = alerts.sweep_decisions(session)
+        jumps = alerts.sweep_price_jumps(session)
+        session.commit()
+    logging.getLogger(__name__).info("owner_alert_sweep decisions=%s price_jumps=%s", decisions, jumps)
+
+
+@router.post("/alerts/cron", status_code=202)
+def trigger_owner_alert_sweep(request: Request, background_tasks: BackgroundTasks) -> dict[str, str]:
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    header = request.headers.get("authorization") or ""
+    token = header[7:] if header.lower().startswith("bearer ") else ""
+    secret = os.environ.get("WEBHOOK_CRON_SECRET", "").strip()
+    if not secret:
+        raise HTTPException(status_code=503, detail="Owner alert cron is not configured.")
+    if not token or not hmac.compare_digest(token, secret):
+        raise HTTPException(status_code=401, detail="Invalid cron credentials.")
+    background_tasks.add_task(_run_alert_sweep)
+    return {"status": "accepted", "run_id": request.headers.get("x-webhook-id") or ""}
+
+
+@router.get("/public/showroom/{code}")
+def public_showroom(code: str, session: Session = Depends(get_session)) -> dict[str, Any]:
+    from app.owner_console.public_showroom import public_showroom as public_card
+
+    return _run(session, public_card, session, code)
 
 
 @router.post("/inbox/{item_id}/decide")

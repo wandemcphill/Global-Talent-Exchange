@@ -1106,7 +1106,11 @@ def resolve_item(session: Session, user_id: str, item_id: str, action: str) -> O
 
 
 def inbox_dict(item: OwnerInboxItem) -> dict[str, Any]:
+    from app.owner_console.alerts import respond_by
+
+    due = respond_by(item) if item.status == "open" else None
     return {
+        "respond_by": due.isoformat() if due else None,
         "id": item.id,
         "club_id": item.club_id,
         "kind": item.kind,

@@ -82,6 +82,7 @@ class OwnerInboxEntry {
     this.sender,
     this.status,
     this.outcome,
+    this.respondBy,
     this.actions = const <OwnerDecisionAction>[],
   });
 
@@ -97,6 +98,7 @@ class OwnerInboxEntry {
     sender: _text(j['sender']),
     status: _text(j['status']),
     outcome: _text(j['outcome']),
+    respondBy: DateTime.tryParse(_text(j['respond_by']) ?? ''),
     actions: _maps(j['actions']).map(OwnerDecisionAction.fromJson).toList(),
   );
 
@@ -111,7 +113,61 @@ class OwnerInboxEntry {
   final String? sender;
   final String? status;
   final String? outcome;
+  final DateTime? respondBy;
   final List<OwnerDecisionAction> actions;
+}
+
+class PublicTrophy {
+  const PublicTrophy({required this.competition, this.tier, this.position, this.year});
+
+  factory PublicTrophy.fromJson(Map<String, dynamic> j) => PublicTrophy(
+    competition: _text(j['competition']) ?? 'Honour',
+    tier: _text(j['tier']),
+    position: j['position'] == null ? null : _int(j['position']),
+    year: j['year'] == null ? null : _int(j['year']),
+  );
+
+  final String competition;
+  final String? tier;
+  final int? position;
+  final int? year;
+}
+
+/// Logged-out club card. Only the public allowlist is read.
+class PublicClubCard {
+  const PublicClubCard({
+    required this.clubName,
+    this.shortName,
+    this.city,
+    this.countryCode,
+    this.primaryColor,
+    this.secondaryColor,
+    this.founded,
+    this.crestUrl,
+    this.trophies = const <PublicTrophy>[],
+  });
+
+  factory PublicClubCard.fromJson(Map<String, dynamic> j) => PublicClubCard(
+    clubName: _text(j['club_name']) ?? 'Club',
+    shortName: _text(j['short_name']),
+    city: _text(j['city']),
+    countryCode: _text(j['country_code']),
+    primaryColor: _text(j['primary_color']),
+    secondaryColor: _text(j['secondary_color']),
+    founded: j['founded'] == null ? null : _int(j['founded']),
+    crestUrl: _text(j['crest_url']),
+    trophies: _maps(j['trophies']).map(PublicTrophy.fromJson).toList(),
+  );
+
+  final String clubName;
+  final String? shortName;
+  final String? city;
+  final String? countryCode;
+  final String? primaryColor;
+  final String? secondaryColor;
+  final int? founded;
+  final String? crestUrl;
+  final List<PublicTrophy> trophies;
 }
 
 class OwnerClubCard {
@@ -716,6 +772,9 @@ class OwnerConsoleApi implements OwnerConsoleReader {
   @override
   Future<double> fetchWalletBalance() async =>
       _num((await client.getMap('/wallets/summary'))['available_balance']);
+
+  Future<PublicClubCard> fetchPublicShowroom(String code) async =>
+      PublicClubCard.fromJson(await client.getMap('/owner/public/showroom/$code', auth: false));
 
   @override
   Future<List<ShowroomExhibit>> fetchShowroom() async {
