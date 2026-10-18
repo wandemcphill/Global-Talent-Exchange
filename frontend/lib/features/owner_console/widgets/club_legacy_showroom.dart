@@ -14,10 +14,23 @@ class ClubLegacyShowroom extends StatefulWidget {
     super.key,
     required this.exhibits,
     this.forceStatic = false,
+    this.onPurchaseSku,
+    this.onOfferGift,
+    this.busy = false,
+    this.actionMessage,
   });
 
   final List<ShowroomExhibit> exhibits;
   final bool forceStatic;
+
+  /// Catalogue exhibits use ids `catalogue:{sku}`. Wired to phase-4 purchases.
+  final Future<void> Function(String sku)? onPurchaseSku;
+
+  /// Owned exhibits use the asset id. Recipient is collected in a dialog.
+  final Future<void> Function(String assetId, String recipientRef)? onOfferGift;
+
+  final bool busy;
+  final String? actionMessage;
 
   @override
   State<ClubLegacyShowroom> createState() => _ClubLegacyShowroomState();
@@ -89,6 +102,65 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
     );
   }
 
+  String? _catalogueSku(ShowroomExhibit exhibit) {
+    const String prefix = 'catalogue:';
+    if (!exhibit.id.startsWith(prefix)) {
+      return null;
+    }
+    final String sku = exhibit.id.substring(prefix.length).trim();
+    return sku.isEmpty ? null : sku;
+  }
+
+  Future<void> _purchase(ShowroomExhibit exhibit) async {
+    final String? sku = _catalogueSku(exhibit);
+    final Future<void> Function(String sku)? buy = widget.onPurchaseSku;
+    if (sku == null || buy == null || widget.busy) {
+      return;
+    }
+    await buy(sku);
+  }
+
+  Future<void> _gift(ShowroomExhibit exhibit) async {
+    final Future<void> Function(String assetId, String recipientRef)? gift =
+        widget.onOfferGift;
+    if (!exhibit.owned || gift == null || widget.busy) {
+      return;
+    }
+    final TextEditingController recipient = TextEditingController();
+    final String? recipientRef = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          key: const Key('club-showroom-gift-dialog'),
+          title: const Text('Gift this asset'),
+          content: TextField(
+            key: const Key('club-showroom-gift-recipient'),
+            controller: recipient,
+            decoration: const InputDecoration(
+              labelText: 'Recipient player or manager ref',
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              key: const Key('club-showroom-gift-confirm'),
+              onPressed: () => Navigator.of(context).pop(recipient.text.trim()),
+              child: const Text('Offer gift'),
+            ),
+          ],
+        );
+      },
+    );
+    recipient.dispose();
+    if (recipientRef == null || recipientRef.isEmpty) {
+      return;
+    }
+    await gift(exhibit.id, recipientRef);
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool reduceMotion =
@@ -102,11 +174,39 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
         icon: Icons.museum_outlined,
       );
     }
+    final String? sku = _catalogueSku(exhibit);
     return ListView(
       key: const Key('club-showroom'),
       padding: const EdgeInsets.all(GtexSpacing.sm),
       children: <Widget>[
         _stage(exhibit, reduceMotion),
+        if (widget.actionMessage != null) ...<Widget>[
+          const SizedBox(height: GtexSpacing.sm),
+          Text(
+            widget.actionMessage!,
+            key: const Key('club-showroom-action-message'),
+            style: const TextStyle(color: GtexColors.textSecondary),
+          ),
+        ],
+        if (sku != null && widget.onPurchaseSku != null) ...<Widget>[
+          const SizedBox(height: GtexSpacing.sm),
+          GtexActionButton(
+            key: Key('club-showroom-buy-$sku'),
+            label: widget.busy ? 'Purchasing…' : 'Buy from catalogue',
+            icon: Icons.shopping_bag_outlined,
+            onPressed: widget.busy ? null : () => _purchase(exhibit),
+          ),
+        ],
+        if (exhibit.owned && widget.onOfferGift != null) ...<Widget>[
+          const SizedBox(height: GtexSpacing.sm),
+          GtexActionButton(
+            key: Key('club-showroom-gift-${exhibit.id}'),
+            label: widget.busy ? 'Working…' : 'Offer gift',
+            icon: Icons.card_giftcard,
+            secondary: true,
+            onPressed: widget.busy ? null : () => _gift(exhibit),
+          ),
+        ],
         const SizedBox(height: GtexSpacing.sm),
         Wrap(
           spacing: GtexSpacing.xs,
@@ -460,9 +560,16 @@ class _ShowroomFullscreenState extends State<_ShowroomFullscreen> {
 }
 
 class ShowroomSection extends StatefulWidget {
-  const ShowroomSection({super.key, required this.load});
+  const ShowroomSection({
+    super.key,
+    required this.load,
+    this.onPurchaseSku,
+    this.onOfferGift,
+  });
 
   final Future<List<ShowroomExhibit>> Function() load;
+  final Future<void> Function(String sku)? onPurchaseSku;
+  final Future<void> Function(String assetId, String recipientRef)? onOfferGift;
 
   @override
   State<ShowroomSection> createState() => _ShowroomSectionState();
@@ -470,11 +577,74 @@ class ShowroomSection extends StatefulWidget {
 
 class _ShowroomSectionState extends State<ShowroomSection> {
   late Future<List<ShowroomExhibit>> _exhibits;
+  bool _busy = false;
+  String? _message;
 
   @override
   void initState() {
     super.initState();
     _exhibits = widget.load();
+  }
+
+  Future<void> _purchase(String sku) async {
+    final Future<void> Function(String sku)? buy = widget.onPurchaseSku;
+    if (buy == null || _busy) {
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+    try {
+      await buy(sku);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _busy = false;
+        _message = 'Purchased $sku.';
+        _exhibits = widget.load();
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _busy = false;
+        _message = '$error';
+      });
+    }
+  }
+
+  Future<void> _gift(String assetId, String recipientRef) async {
+    final Future<void> Function(String assetId, String recipientRef)? gift =
+        widget.onOfferGift;
+    if (gift == null || _busy) {
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+    try {
+      await gift(assetId, recipientRef);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _busy = false;
+        _message = 'Gift offered to $recipientRef.';
+        _exhibits = widget.load();
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _busy = false;
+        _message = '$error';
+      });
+    }
   }
 
   @override
@@ -492,9 +662,13 @@ class _ShowroomSectionState extends State<ShowroomSection> {
           );
         }
         if (snap.hasError || snap.data == null) {
-          return const ClubLegacyShowroom(
+          return ClubLegacyShowroom(
             forceStatic: true,
-            exhibits: <ShowroomExhibit>[
+            busy: _busy,
+            actionMessage: _message ?? 'Showroom unavailable. Catalogue is preview-only until the club legacy API responds.',
+            onPurchaseSku: widget.onPurchaseSku == null ? null : _purchase,
+            onOfferGift: widget.onOfferGift == null ? null : _gift,
+            exhibits: const <ShowroomExhibit>[
               ShowroomExhibit(
                 id: 'catalogue:gtex-jet-harbour',
                 name: 'Harbour Jet',
@@ -519,7 +693,13 @@ class _ShowroomSectionState extends State<ShowroomSection> {
             ],
           );
         }
-        return ClubLegacyShowroom(exhibits: snap.data!);
+        return ClubLegacyShowroom(
+          exhibits: snap.data!,
+          busy: _busy,
+          actionMessage: _message,
+          onPurchaseSku: widget.onPurchaseSku == null ? null : _purchase,
+          onOfferGift: widget.onOfferGift == null ? null : _gift,
+        );
       },
     );
   }

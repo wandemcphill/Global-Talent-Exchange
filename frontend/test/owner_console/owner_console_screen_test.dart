@@ -160,6 +160,26 @@ class _FakeOwner implements OwnerConsoleReader {
     ShowroomExhibit(id: 'jet-1', name: 'Harbour Jet', category: 'jet', ownershipLabel: 'Club', fallbackLabel: 'Static jet card', owned: true),
   ];
 
+  final List<String> purchases = <String>[];
+  final List<String> gifts = <String>[];
+
+  @override
+  Future<void> purchaseCatalogueSku(
+    String sku, {
+    String ownerClass = 'club',
+    String? idempotencyKey,
+  }) async {
+    purchases.add('$sku:$ownerClass:${idempotencyKey ?? ''}');
+  }
+
+  @override
+  Future<void> offerShowroomGift({
+    required String assetId,
+    required String recipientRef,
+  }) async {
+    gifts.add('$assetId->$recipientRef');
+  }
+
   @override
   Future<ClubLegacyDeskData> fetchDesk() async => const ClubLegacyDeskData(staff: [], policies: [], clubValuation: '0', equity: '0', preseason: [], sponsors: [], offers: [], cases: []);
 

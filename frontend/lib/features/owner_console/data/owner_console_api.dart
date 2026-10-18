@@ -682,6 +682,20 @@ abstract class OwnerConsoleReader {
 
   Future<List<ShowroomExhibit>> fetchShowroom();
 
+  /// Primary-market purchase through Club Legacy phase 4 HTTP.
+  /// [sku] is a catalogue key such as `gtex-jet-harbour`.
+  Future<void> purchaseCatalogueSku(
+    String sku, {
+    String ownerClass = 'club',
+    String? idempotencyKey,
+  });
+
+  /// Offer a owned prestige asset as a gift. Recipient must accept separately.
+  Future<void> offerShowroomGift({
+    required String assetId,
+    required String recipientRef,
+  });
+
   Future<ClubLegacyDeskData> fetchDesk();
 
   Future<void> performDesk(String action, [Map<String, Object?> payload = const <String, Object?>{}]);
@@ -786,6 +800,56 @@ class OwnerConsoleApi implements OwnerConsoleReader {
     final String clubId = '${clubs.first['club_id']}';
     final Map<String, dynamic> room = await client.getMap('/owner/legacy/$clubId/showroom');
     return _maps(room['exhibits']).map(ShowroomExhibit.fromJson).toList();
+  }
+
+  Future<String?> _primaryClubId() async {
+    final Map<String, dynamic> center = await client.getMap('/owner/control-center');
+    final List<Map<String, dynamic>> clubs = _maps(center['clubs']);
+    if (clubs.isEmpty) {
+      return null;
+    }
+    return '${clubs.first['club_id']}';
+  }
+
+  @override
+  Future<void> purchaseCatalogueSku(
+    String sku, {
+    String ownerClass = 'club',
+    String? idempotencyKey,
+  }) async {
+    final String? clubId = await _primaryClubId();
+    if (clubId == null) {
+      throw StateError('No club available for prestige purchase.');
+    }
+    final String key =
+        idempotencyKey ??
+        'purchase:$clubId:$sku:$ownerClass:${DateTime.now().microsecondsSinceEpoch}';
+    await client.post(
+      '/owner/legacy/$clubId/market/purchases',
+      body: <String, Object?>{
+        'sku': sku,
+        'owner_class': ownerClass,
+        'idempotency_key': key,
+      },
+    );
+  }
+
+  @override
+  Future<void> offerShowroomGift({
+    required String assetId,
+    required String recipientRef,
+  }) async {
+    final String? clubId = await _primaryClubId();
+    if (clubId == null) {
+      throw StateError('No club available for prestige gift.');
+    }
+    await client.post(
+      '/owner/legacy/$clubId/market/gifts',
+      body: <String, Object?>{
+        'asset_id': assetId,
+        'recipient_ref': recipientRef,
+      },
+    );
   }
 
   @override

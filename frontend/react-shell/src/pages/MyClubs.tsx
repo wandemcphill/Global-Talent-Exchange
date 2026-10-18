@@ -117,13 +117,35 @@ function Commercial({ club }: any) {
 function NewClub({ count, max }: any) {
   const navigate = useNavigate();
   const [name, setName] = useState("");
+  const [countryCode, setCountryCode] = useState("");
+  const [cityName, setCityName] = useState("");
   const [busy, setBusy] = useState(false);
   if (count >= max) return null;
   const create = async () => {
+    const code = countryCode.trim().toUpperCase();
+    const city = cityName.trim();
+    if (code.length < 2) {
+      toast.error("Enter a country code (for example NG or GH).");
+      return;
+    }
+    if (city.length < 2) {
+      toast.error("Enter the club home city.");
+      return;
+    }
     setBusy(true);
     try {
       const slug = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString(36).slice(-4)}`;
-      await api.post("/clubs", { club_name: name, slug, short_name: name.slice(0, 12), primary_color: "#0F766E", secondary_color: "#F8FAFC", accent_color: "#F59E0B", country_code: "NG", city_name: "Lagos", club_type: "community" });
+      await api.post("/clubs", {
+        club_name: name,
+        slug,
+        short_name: name.slice(0, 12),
+        primary_color: "#0F766E",
+        secondary_color: "#F8FAFC",
+        accent_color: "#F59E0B",
+        country_code: code,
+        city_name: city,
+        club_type: "community",
+      });
       navigate("/onboarding");
     } catch (e) {
       toast.error(errMsg(e));
@@ -134,8 +156,12 @@ function NewClub({ count, max }: any) {
   return (
     <Panel eyebrow={`Expand · ${count}/${max} clubs`} title="Add a club" testid="new-club-panel">
       <p className="mb-3 text-sm text-slate-400">Owning several clubs makes you a labelled multi-club ownership group. Sister clubs can't share a prize bracket, and transfers between them must sit inside a fair-value band.</p>
-      <div className="flex gap-2">
-        <input data-testid="new-club-name-input" className="gx-input" placeholder="Abuja Eagles FC" value={name} onChange={(e) => setName(e.target.value)} />
+      <div className="space-y-2">
+        <input data-testid="new-club-name-input" className="gx-input" placeholder="Club name" value={name} onChange={(e) => setName(e.target.value)} />
+        <div className="grid grid-cols-2 gap-2">
+          <input data-testid="new-club-country-input" className="gx-input" placeholder="Country code" value={countryCode} onChange={(e) => setCountryCode(e.target.value)} />
+          <input data-testid="new-club-city-input" className="gx-input" placeholder="City" value={cityName} onChange={(e) => setCityName(e.target.value)} />
+        </div>
         <Btn disabled={name.length < 3 || busy} onClick={create} data-testid="create-club-button">Create</Btn>
       </div>
     </Panel>
