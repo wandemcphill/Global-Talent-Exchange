@@ -424,3 +424,60 @@ def test_paid_competition_join_is_idempotent_and_collects_single_fee(
     assert participant is not None
     assert participant.paid_at is not None
     assert participant.paid_entry_fee_minor == 250000
+
+
+def test_match_writes_require_host_or_admin(
+    client,
+    app_session_factory,
+    auth_user_factory,
+    competition_admin_headers,
+    competition_club_factory,
+) -> None:
+    """Unrelated authenticated users must not write match events or results.
+
+    Regression: previously any authenticated caller could post events and
+    results to any competition, corrupting standings and settlement input.
+    """
+    host = auth_user_factory(suffix="result-authz-host")
+    competition_id = _create_competition(
+        client, host=host, name="Result AuthZ League", format="league", capacity=2
+    )
+    entrants = []
+    for index in range(1, 3):
+        entrant = auth_user_factory(suffix=f"result-authz-{index}")
+        entrant["club_id"] = competition_club_factory(owner_user_id=entrant["user_id"])
+        entrants.append(entrant)
+    _publish_and_join(client, competition_id, competition_admin_headers, entrants)
+    launch = client.post(
+        f"/api/competitions/{competition_id}/launch",
+        headers=competition_admin_headers,
+    )
+    assert launch.status_code == 200
+    match = client.get(f"/api/competitions/{competition_id}/fixtures").json()[0]
+
+    outsider = auth_user_factory(suffix="result-authz-outsider")
+    bad_event = client.post(
+        f"/api/competitions/{competition_id}/matches/{match['id']}/events",
+        headers=outsider["headers"],
+        json={"event_type": "goal", "minute": 5, "club_id": match["home_club_id"]},
+    )
+    assert bad_event.status_code == 403
+    bad_result = client.post(
+        f"/api/competitions/{competition_id}/matches/{match['id']}/result",
+        headers=outsider["headers"],
+        json={"home_score": 9, "away_score": 9},
+    )
+    assert bad_result.status_code == 403
+
+    host_event = client.post(
+        f"/api/competitions/{competition_id}/matches/{match['id']}/events",
+        headers=host["headers"],
+        json={"event_type": "goal", "minute": 12, "club_id": match["home_club_id"], "highlight": True},
+    )
+    assert host_event.status_code == 201
+    host_result = client.post(
+        f"/api/competitions/{competition_id}/matches/{match['id']}/result",
+        headers=host["headers"],
+        json={"home_score": 2, "away_score": 1},
+    )
+    assert host_result.status_code == 200
