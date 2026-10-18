@@ -1,20 +1,18 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices } from "@playwright/test";
 
 const apiBaseUrl = process.env.GTEX_E2E_API_BASE_URL;
-const baseURL = process.env.GTEX_E2E_BASE_URL ?? 'http://127.0.0.1:7357';
+const baseURL = process.env.GTEX_E2E_BASE_URL ?? "http://127.0.0.1:7357";
 
-// A caller can either point Playwright at a deployed/staging Flutter Web app,
-// or supply a local API URL and let this config run Flutter's web-server.
 const webServer = process.env.GTEX_E2E_BASE_URL
   ? undefined
   : apiBaseUrl
     ? {
         command: [
-          'flutter run -d web-server --web-hostname 127.0.0.1 --web-port 7357',
+          "flutter run -d web-server --web-hostname 127.0.0.1 --web-port 7357",
           `--dart-define=GTE_API_BASE_URL=${apiBaseUrl}`,
-          '--dart-define=GTE_BACKEND_MODE=live',
-        ].join(' '),
-        cwd: '../../frontend',
+          "--dart-define=GTE_BACKEND_MODE=live",
+        ].join(" "),
+        cwd: "../../frontend",
         url: baseURL,
         timeout: 180_000,
         reuseExistingServer: !process.env.CI,
@@ -22,28 +20,28 @@ const webServer = process.env.GTEX_E2E_BASE_URL
     : undefined;
 
 export default defineConfig({
-  testDir: './tests',
-  timeout: 45_000,
+  testDir: "./tests",
+  timeout: 120_000,
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
-  reporter: [['list'], ['html', { open: 'never' }]],
-  outputDir: 'test-results',
+  reporter: [["list"], ["html", { open: "never" }]],
+  outputDir: "test-results",
   use: {
     baseURL,
-    trace: 'retain-on-failure',
-    screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
+    video: "retain-on-failure",
   },
   webServer,
   projects: [
-    { name: 'mobile', use: { ...devices['Pixel 5'] } },
+    { name: "mobile", use: { ...devices["Pixel 5"] } },
     {
-      name: 'tablet',
+      name: "tablet",
       use: { viewport: { width: 768, height: 1024 }, deviceScaleFactor: 1 },
     },
     {
-      name: 'desktop',
+      name: "desktop",
       use: { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 },
     },
   ],
