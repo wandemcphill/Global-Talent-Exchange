@@ -2,24 +2,57 @@
 
 Baseline: `main` `3e2e94b661c060dbd67512756923d0b4eecc0b8a`, audit date 2026-10-18. Findings are defined in `docs/audits/GTEX_COMPREHENSIVE_PLATFORM_AUDIT.md`. Screen and role rows cite those ids.
 
+**Second pass (2026-10-18, `45e29ef6`)**: re-verified on a working environment — all CI backend slices green, `flutter analyze` clean, `flutter test` 1259 pass/20 fail (CI-failing rot), live seeded API + HTTP checks. Corrected FND-003 (routers mounted), FND-004 (#265 merged), FND-016 (#272 merged), FND-008 (route lives at `/api/v2`). New runtime findings added below.
+
 Nothing here is permission to merge. Each repair is a reviewable pull request. Do not start a shell rewrite. Do not run live deposits, withdrawals, jackpot funding, or payouts to close a row.
 
-## Dependency order
+## Dependency order (revised, second pass)
 
 ```text
-1. Stop unsafe implicit money actions (FND-016)
-2. Stop advertising unmounted financial routes (FND-003) without mounting them blindly
-3. Signup honesty (FND-001, FND-005) — product rules already written on #228
-4. One staff authority (FND-009) — continues #169 / #176
-5. Prestige purchase and gift on the existing catalogue (FND-002)
-6. Market and card lanes (FND-010, FND-011)
-7. Inbox and newsroom route honesty (FND-012, FND-015)
-8. Publish React only at /console (FND-004, existing PR #265)
-9. Provider and jackpot certification in sandbox (FND-006, FND-007, FND-014)
-10. Admin capability alignment (FND-013)
+0. Authorization on money/competition writes — CMP-NEW-01 fixed in PR #280; remaining: CMP-NEW-04, NEW-PRESTIGE-2, NAT-NEW-1, NEW-003
+1. Settlement correctness — NEW-001 (unbacked bids), CMP-NEW-03 (fees never paid), NEW-002 (caller-supplied price), CMP-NEW-02 (double-settle race), NEW-JRW-001 (double-credit), NEW-JRW-003 (FanCoin→COIN mint)
+2. Signup honesty (FND-001, FND-005, NEW-AUTH-1) — product rules already written on #228
+3. One staff/club-ops authority (FND-009, NEW-STF-001, NEW-STF-002/003/004) — continues #169 / #176
+4. Prestige purchase/gift on the existing catalogue (FND-002, NEW-PRESTIGE-1, NEW-PRESTIGE-4/5)
+5. Market and card lanes (FND-010, FND-011)
+6. Inbox, newsroom, chat route honesty (FND-012, FND-015, NEWS-001, MSG-001, JNY-001)
+7. React /console deploy verification (FND-004 → #263 close-out)
+8. Provider and jackpot certification in sandbox (FND-006, FND-007, FND-014, NEW-JRW-002, WAL-NEW-01/03/04)
+9. Admin capability alignment (FND-013, NEW-004)
+10. API contract reconciliation (CONTRACT-001)
+11. Test rot: 20 flutter failures on CI path, ~34 domain backend failures excluded from CI
 ```
 
-Steps 1–2 are safe without new economics. Steps 3 and 4 need the product rules already written on #228 and #176; they do not need new prices. Step 5 uses prices and caps already in `CATALOGUE`. Steps 9–10 need credentials or an admin policy decision.
+Steps 0–1 are the highest-risk items: arbitrary writes into competition settlement and value that moves (or never moves) without backing. They are safe to fix without new economics — they remove unauthorized or unbacked paths. Step 2 needs the product rules already written on #228; it does not need new prices. Steps 8–9 need credentials or an admin policy decision.
+
+## Second-pass repair PRs
+
+### PR-280 — Authorization on competition match writes (CMP-NEW-01) — **open**
+
+**Severity:** P0. **Merged:** no, review pending.
+
+**Change:** `record_match_event` and `complete_match` in `backend/app/segments/competitions/segment_competitions.py` now load the `Competition` and call `_require_manage_competitions_or_creator(request, actor, competition)` — the same guard `cancel_competition`/`settle_competition_payouts` already use. Previously any authenticated user could write events/results to any competition, feeding `ranking_integrity_service.record_match_result` and corrupting standings/settlement input.
+
+**Regression test:** `test_match_writes_require_host_or_admin` in `backend/tests/competitions/test_competition_lifecycle.py` — outsider gets 403 on both endpoints; host succeeds (201/200).
+
+### Remaining P0/P1 candidates (needs own focused PR each)
+
+| Finding | Sev | Shape |
+| --- | --- | --- |
+| CMP-NEW-04 (#282) | P1 | `GET /api/fast-cups/{cup_id}/result-summary` has no `get_current_user` and settles payouts via `FastCupFinanceService.settle_result_summary` + `session.commit()`. Add auth + move settlement to POST/admin path. |
+| NEW-001 (#281) | P0 | Transfer market accepts unbacked bids — no settlement moves coins on acceptance. Needs a settlement path or bid locking; product-owner decision on which. |
+| NEW-PRESTIGE-2 (#283) | P1 | Gift accept/decline has no authorization — any authenticated user can resolve anyone's gift. Same pattern as CMP-NEW-01. |
+| NAT-NEW-1 (#284) | high | National lifecycle squad submit accepts fabricated players; rental provenance unenforced. |
+| CMP-NEW-03 (#285) | P1 | `/api/tournaments` collects entry fees but never pays winners — prize pool locked. |
+| CMP-NEW-02 (#285) | P1 | FanCoin-pool hosted finalize has no row lock/idempotency — double-settle race. |
+| NEW-JRW-001 (#286) | high | Reward settlements double-credit: no DB unique constraint, no ledger idempotency. |
+| NEW-JRW-003 (#286) | medium-high | FanCoin ticket revenue mints withdrawable GTEX Coin jackpot pool — cross-unit leak. |
+| NEW-002 | P1 | Club-sale transfer settles at caller-supplied price, not accepted offer price. |
+| NEW-003 | P1 | Free-agent transfer listings creatable by any club (seller hijack). |
+| NEW-STF-001 (#288) | high | Club ops API served from in-memory `ClubOpsStore` singleton — data resets on restart. |
+| NEW-PRESTIGE-1 | P1 | Desk Sponsor/Manager/Governance buttons 404 — Flutter action names don't match `perform_desk_action` verbs. |
+| NEW-AUTH-1 (#287) | P1 | Turnstile enforced only on `/signup/user`; creator/trader signups skip `verify_turnstile_token`. |
+| WAL-NEW-01 | high | Admin coin-trader liquidity issue broken on migrated DBs (migration `20260914_0122`). |
 
 ## PR groups
 
