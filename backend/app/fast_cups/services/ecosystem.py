@@ -88,25 +88,7 @@ class FastCupEcosystemService:
         cup = self.repository.get(cup_id)
         return self.countdown_service.build(cup=cup, now=_normalize_timestamp(now))
 
-    def preview_result_summary(self, *, cup_id: str, now: datetime) -> FastCupResultSummary:
-        """Build a result summary without persisting competition or financial state."""
-        current_time = _normalize_timestamp(now)
-        cup = self.repository.get(cup_id)
-        if cup.result_summary is not None:
-            return cup.result_summary
-        if len(cup.entrants) != cup.size:
-            raise FastCupStateError("Result summary is unavailable until the fast cup reaches capacity.")
-        if current_time < cup.slot.kickoff_at:
-            raise FastCupStateError("Result summary is unavailable before kickoff.")
-        bracket = self.bracket_service.simulate_bracket(cup)
-        return self.reward_service.build_result_summary(
-            cup=cup,
-            bracket=bracket,
-            concluded_at=min(current_time, cup.slot.expected_completion_at),
-        )
-
     def get_result_summary(self, *, cup_id: str, now: datetime) -> FastCupResultSummary:
-        """Persist the completed competition result for an explicit lifecycle mutation."""
         current_time = _normalize_timestamp(now)
         cup = self.repository.get(cup_id)
         if cup.result_summary is not None:
