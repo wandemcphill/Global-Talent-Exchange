@@ -60,3 +60,44 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(api_c
     assert summary_payload["expected_duration_minutes"] == 30
     assert len(summary_payload["events"]) == 6
     assert summary_payload["penalty_shootouts"] >= 1
+
+    # Unauthenticated POST /settle (overriding user dependency to raise 401 or no auth)
+    from app.auth.dependencies import get_current_admin, get_current_user
+    from app.models.user import UserRole
+    from fastapi import HTTPException, status
+
+    def unauth_user():
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
+    api_client.app.dependency_overrides[get_current_user] = unauth_user
+    unauth_settle = api_client.post(
+        f"/fast-cups/{senior_32['cup_id']}/settle",
+        params={"now": kickoff_plus_duration.isoformat()},
+    )
+    assert unauth_settle.status_code == 401
+
+    # Non-admin user POST /settle (returning regular user)
+    # Restore original override where current_user has UserRole.USER
+    from app.models.user import User
+    from app.core.database import get_session
+    session = list(api_client.app.dependency_overrides[get_session]())[0]
+    actor = session.get(User, "fast-cup-owner")
+
+    api_client.app.dependency_overrides[get_current_user] = lambda: actor
+    forbidden_settle = api_client.post(
+        f"/fast-cups/{senior_32['cup_id']}/settle",
+        params={"now": kickoff_plus_duration.isoformat()},
+    )
+    assert forbidden_settle.status_code == 403
+
+    # Admin user POST /settle
+    actor.role = UserRole.ADMIN
+    session.commit()
+
+    admin_settle = api_client.post(
+        f"/fast-cups/{senior_32['cup_id']}/settle",
+        params={"now": kickoff_plus_duration.isoformat()},
+    )
+    assert admin_settle.status_code == 200
+    settle_payload = admin_settle.json()
+    assert settle_payload["champion"]["club_id"] == summary_payload["champion"]["club_id"]
