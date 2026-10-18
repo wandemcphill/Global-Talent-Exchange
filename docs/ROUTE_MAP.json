@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1777,
+  "route_count": 1839,
   "routes": [
     {
       "method": "POST",
@@ -15662,7 +15662,6 @@
         "parameters": [
           "cup_id",
           "now",
-          "session",
           "ecosystem"
         ]
       },
@@ -15700,6 +15699,36 @@
       "response_shape": {
         "response_model": "JoinFastCupResponse",
         "returns": "JoinFastCupResponse"
+      },
+      "version": "canonical",
+      "domain": "fast"
+    },
+    {
+      "method": "POST",
+      "path": "/fast-cups/{cup_id}/settle",
+      "effective_paths": [
+        "/api/fast-cups/{cup_id}/settle",
+        "/fast-cups/{cup_id}/settle"
+      ],
+      "file": "backend/app/fast_cups/api/router.py",
+      "handler": "settle_fast_cup",
+      "router_variable": "router",
+      "module_path": "app.fast_cups.api.router",
+      "module_mounts": [
+        "fast_cups"
+      ],
+      "request_shape": {
+        "parameters": [
+          "cup_id",
+          "now",
+          "session",
+          "_admin",
+          "ecosystem"
+        ]
+      },
+      "response_shape": {
+        "response_model": "FastCupResultSummaryView",
+        "returns": "FastCupResultSummaryView"
       },
       "version": "canonical",
       "domain": "fast"
@@ -30714,6 +30743,1588 @@
       },
       "version": "canonical",
       "domain": "paystack"
+    },
+    {
+      "method": "GET",
+      "path": "/full/phase1/settings",
+      "effective_paths": [
+        "/full/phase1/settings"
+      ],
+      "file": "backend/app/club_legacy/full/phase1_routes.py",
+      "handler": "read_settings",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase1_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase1"
+    },
+    {
+      "method": "GET",
+      "path": "/full/phase1/{club_id}/ratings",
+      "effective_paths": [
+        "/full/phase1/{club_id}/ratings"
+      ],
+      "file": "backend/app/club_legacy/full/phase1_routes.py",
+      "handler": "read_ratings",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase1_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase1"
+    },
+    {
+      "method": "POST",
+      "path": "/full/phase1/location",
+      "effective_paths": [
+        "/full/phase1/location"
+      ],
+      "file": "backend/app/club_legacy/full/phase1_routes.py",
+      "handler": "check_location",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase1_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase1"
+    },
+    {
+      "method": "PUT",
+      "path": "/full/phase1/settings",
+      "effective_paths": [
+        "/full/phase1/settings"
+      ],
+      "file": "backend/app/club_legacy/full/phase1_routes.py",
+      "handler": "write_settings",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase1_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase1"
+    },
+    {
+      "method": "POST",
+      "path": "/full/phase2/preseason/{invite_id}/gm",
+      "effective_paths": [
+        "/full/phase2/preseason/{invite_id}/gm"
+      ],
+      "file": "backend/app/club_legacy/full/phase2_routes.py",
+      "handler": "post_gm_preseason",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase2_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "invite_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase2"
+    },
+    {
+      "method": "POST",
+      "path": "/full/phase2/recommendations/{recommendation_id}/execute",
+      "effective_paths": [
+        "/full/phase2/recommendations/{recommendation_id}/execute"
+      ],
+      "file": "backend/app/club_legacy/full/phase2_routes.py",
+      "handler": "post_execute",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase2_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "recommendation_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase2"
+    },
+    {
+      "method": "POST",
+      "path": "/full/phase2/{club_id}/academy",
+      "effective_paths": [
+        "/full/phase2/{club_id}/academy"
+      ],
+      "file": "backend/app/club_legacy/full/phase2_routes.py",
+      "handler": "post_academy",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase2_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase2"
+    },
+    {
+      "method": "POST",
+      "path": "/full/phase2/{club_id}/executives",
+      "effective_paths": [
+        "/full/phase2/{club_id}/executives"
+      ],
+      "file": "backend/app/club_legacy/full/phase2_routes.py",
+      "handler": "post_executive",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase2_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase2"
+    },
+    {
+      "method": "POST",
+      "path": "/full/phase2/{club_id}/pathways",
+      "effective_paths": [
+        "/full/phase2/{club_id}/pathways"
+      ],
+      "file": "backend/app/club_legacy/full/phase2_routes.py",
+      "handler": "post_pathway",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase2_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase2"
+    },
+    {
+      "method": "POST",
+      "path": "/full/phase2/{club_id}/presets/{preset}",
+      "effective_paths": [
+        "/full/phase2/{club_id}/presets/{preset}"
+      ],
+      "file": "backend/app/club_legacy/full/phase2_routes.py",
+      "handler": "post_preset",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase2_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "preset",
+          "\"balanced\"",
+          "\"executive_led\"]",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase2"
+    },
+    {
+      "method": "PUT",
+      "path": "/full/phase2/{club_id}/tasks/{task_key}",
+      "effective_paths": [
+        "/full/phase2/{club_id}/tasks/{task_key}"
+      ],
+      "file": "backend/app/club_legacy/full/phase2_routes.py",
+      "handler": "put_task",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase2_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "task_key",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase2"
+    },
+    {
+      "method": "GET",
+      "path": "/full/phase3/{club_id}/finance",
+      "effective_paths": [
+        "/full/phase3/{club_id}/finance"
+      ],
+      "file": "backend/app/club_legacy/full/phase3_routes.py",
+      "handler": "read_finance",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase3_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase3"
+    },
+    {
+      "method": "GET",
+      "path": "/full/phase3/{club_id}/net-worth",
+      "effective_paths": [
+        "/full/phase3/{club_id}/net-worth"
+      ],
+      "file": "backend/app/club_legacy/full/phase3_routes.py",
+      "handler": "read_net_worth",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase3_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase3"
+    },
+    {
+      "method": "GET",
+      "path": "/full/phase3/{club_id}/page",
+      "effective_paths": [
+        "/full/phase3/{club_id}/page"
+      ],
+      "file": "backend/app/club_legacy/full/phase3_routes.py",
+      "handler": "read_page",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase3_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase3"
+    },
+    {
+      "method": "GET",
+      "path": "/full/phase3/{club_id}/showroom",
+      "effective_paths": [
+        "/full/phase3/{club_id}/showroom"
+      ],
+      "file": "backend/app/club_legacy/full/phase3_routes.py",
+      "handler": "read_showroom",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase3_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase3"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/market/gifts",
+      "effective_paths": [
+        "/{club_id}/market/gifts"
+      ],
+      "file": "backend/app/club_legacy/full/phase4_routes.py",
+      "handler": "offer_gift",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase4_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "phase4"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/market/gifts/{gift_id}/accept",
+      "effective_paths": [
+        "/{club_id}/market/gifts/{gift_id}/accept"
+      ],
+      "file": "backend/app/club_legacy/full/phase4_routes.py",
+      "handler": "accept_gift",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase4_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "gift_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "phase4"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/market/gifts/{gift_id}/decline",
+      "effective_paths": [
+        "/{club_id}/market/gifts/{gift_id}/decline"
+      ],
+      "file": "backend/app/club_legacy/full/phase4_routes.py",
+      "handler": "decline_gift",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase4_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "gift_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "phase4"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/market/listings",
+      "effective_paths": [
+        "/{club_id}/market/listings"
+      ],
+      "file": "backend/app/club_legacy/full/phase4_routes.py",
+      "handler": "list_asset",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase4_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "phase4"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/market/listings/{listing_id}/bids",
+      "effective_paths": [
+        "/{club_id}/market/listings/{listing_id}/bids"
+      ],
+      "file": "backend/app/club_legacy/full/phase4_routes.py",
+      "handler": "place_bid",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase4_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "listing_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "phase4"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/market/listings/{listing_id}/buy",
+      "effective_paths": [
+        "/{club_id}/market/listings/{listing_id}/buy"
+      ],
+      "file": "backend/app/club_legacy/full/phase4_routes.py",
+      "handler": "buy_listing",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase4_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "listing_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "phase4"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/market/purchases",
+      "effective_paths": [
+        "/{club_id}/market/purchases"
+      ],
+      "file": "backend/app/club_legacy/full/phase4_routes.py",
+      "handler": "purchase_asset",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase4_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "phase4"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/market/transfers",
+      "effective_paths": [
+        "/{club_id}/market/transfers"
+      ],
+      "file": "backend/app/club_legacy/full/phase4_routes.py",
+      "handler": "transfer_asset",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase4_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "phase4"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/preseason/invites",
+      "effective_paths": [
+        "/{club_id}/preseason/invites"
+      ],
+      "file": "backend/app/club_legacy/full/phase5_routes.py",
+      "handler": "invite",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase5_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "phase5"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/preseason/invites/{invite_id}/respond",
+      "effective_paths": [
+        "/{club_id}/preseason/invites/{invite_id}/respond"
+      ],
+      "file": "backend/app/club_legacy/full/phase5_routes.py",
+      "handler": "respond",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase5_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "invite_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "phase5"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/preseason/invites/{invite_id}/settle",
+      "effective_paths": [
+        "/{club_id}/preseason/invites/{invite_id}/settle"
+      ],
+      "file": "backend/app/club_legacy/full/phase5_routes.py",
+      "handler": "settle",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase5_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "invite_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "phase5"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/preseason/tournaments",
+      "effective_paths": [
+        "/{club_id}/preseason/tournaments"
+      ],
+      "file": "backend/app/club_legacy/full/phase5_routes.py",
+      "handler": "host_tournament",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase5_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "phase5"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/preseason/tournaments/{tournament_id}/participants",
+      "effective_paths": [
+        "/{club_id}/preseason/tournaments/{tournament_id}/participants"
+      ],
+      "file": "backend/app/club_legacy/full/phase5_routes.py",
+      "handler": "add_participant",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase5_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "tournament_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "phase5"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/preseason/tournaments/{tournament_id}/settle",
+      "effective_paths": [
+        "/{club_id}/preseason/tournaments/{tournament_id}/settle"
+      ],
+      "file": "backend/app/club_legacy/full/phase5_routes.py",
+      "handler": "settle_tournament",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase5_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "tournament_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "phase5"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/preseason/windows",
+      "effective_paths": [
+        "/{club_id}/preseason/windows"
+      ],
+      "file": "backend/app/club_legacy/full/phase5_routes.py",
+      "handler": "open_window",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase5_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "phase5"
+    },
+    {
+      "method": "GET",
+      "path": "/{club_id}/sponsors/zones",
+      "effective_paths": [
+        "/{club_id}/sponsors/zones"
+      ],
+      "file": "backend/app/club_legacy/full/phase6_routes.py",
+      "handler": "read_zones",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase6_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "phase6"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/sponsors/contracts",
+      "effective_paths": [
+        "/{club_id}/sponsors/contracts"
+      ],
+      "file": "backend/app/club_legacy/full/phase6_routes.py",
+      "handler": "offer_contract",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase6_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "phase6"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/sponsors/contracts/{contract_id}/approve",
+      "effective_paths": [
+        "/{club_id}/sponsors/contracts/{contract_id}/approve"
+      ],
+      "file": "backend/app/club_legacy/full/phase6_routes.py",
+      "handler": "approve_contract",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase6_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "contract_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "phase6"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/sponsors/contracts/{contract_id}/delivery",
+      "effective_paths": [
+        "/{club_id}/sponsors/contracts/{contract_id}/delivery"
+      ],
+      "file": "backend/app/club_legacy/full/phase6_routes.py",
+      "handler": "report_delivery",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase6_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "contract_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "phase6"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/sponsors/contracts/{contract_id}/preview",
+      "effective_paths": [
+        "/{club_id}/sponsors/contracts/{contract_id}/preview"
+      ],
+      "file": "backend/app/club_legacy/full/phase6_routes.py",
+      "handler": "preview_kit",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase6_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "contract_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "phase6"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/sponsors/contracts/{contract_id}/publish",
+      "effective_paths": [
+        "/{club_id}/sponsors/contracts/{contract_id}/publish"
+      ],
+      "file": "backend/app/club_legacy/full/phase6_routes.py",
+      "handler": "publish_kit",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase6_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "contract_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "phase6"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/sponsors/contracts/{contract_id}/renew",
+      "effective_paths": [
+        "/{club_id}/sponsors/contracts/{contract_id}/renew"
+      ],
+      "file": "backend/app/club_legacy/full/phase6_routes.py",
+      "handler": "renew_contract",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase6_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "contract_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "phase6"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/sponsors/contracts/{contract_id}/suggest",
+      "effective_paths": [
+        "/{club_id}/sponsors/contracts/{contract_id}/suggest"
+      ],
+      "file": "backend/app/club_legacy/full/phase6_routes.py",
+      "handler": "suggest_kit",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase6_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "contract_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "phase6"
+    },
+    {
+      "method": "GET",
+      "path": "/{club_id}/managers/{manager_id}/history",
+      "effective_paths": [
+        "/{club_id}/managers/{manager_id}/history"
+      ],
+      "file": "backend/app/club_legacy/full/phase7_routes.py",
+      "handler": "read_history",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase7_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "manager_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase7"
+    },
+    {
+      "method": "POST",
+      "path": "/offers/{offer_id}/respond",
+      "effective_paths": [
+        "/offers/{offer_id}/respond"
+      ],
+      "file": "backend/app/club_legacy/full/phase7_routes.py",
+      "handler": "respond_offer",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase7_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "offer_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase7"
+    },
+    {
+      "method": "POST",
+      "path": "/promises/{promise_id}/resolve",
+      "effective_paths": [
+        "/promises/{promise_id}/resolve"
+      ],
+      "file": "backend/app/club_legacy/full/phase7_routes.py",
+      "handler": "resolve_promise",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase7_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "promise_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase7"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/managers",
+      "effective_paths": [
+        "/{club_id}/managers"
+      ],
+      "file": "backend/app/club_legacy/full/phase7_routes.py",
+      "handler": "create_manager",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase7_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase7"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/managers/{manager_id}/gifts",
+      "effective_paths": [
+        "/{club_id}/managers/{manager_id}/gifts"
+      ],
+      "file": "backend/app/club_legacy/full/phase7_routes.py",
+      "handler": "give_gift",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase7_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "manager_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase7"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/managers/{manager_id}/offers",
+      "effective_paths": [
+        "/{club_id}/managers/{manager_id}/offers"
+      ],
+      "file": "backend/app/club_legacy/full/phase7_routes.py",
+      "handler": "create_offer",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase7_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "manager_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase7"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/managers/{manager_id}/poach",
+      "effective_paths": [
+        "/{club_id}/managers/{manager_id}/poach"
+      ],
+      "file": "backend/app/club_legacy/full/phase7_routes.py",
+      "handler": "poach",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase7_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "manager_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase7"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/managers/{manager_id}/retention",
+      "effective_paths": [
+        "/{club_id}/managers/{manager_id}/retention"
+      ],
+      "file": "backend/app/club_legacy/full/phase7_routes.py",
+      "handler": "retention",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase7_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "manager_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase7"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/promises",
+      "effective_paths": [
+        "/{club_id}/promises"
+      ],
+      "file": "backend/app/club_legacy/full/phase7_routes.py",
+      "handler": "create_promise",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase7_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase7"
+    },
+    {
+      "method": "GET",
+      "path": "/{club_id}/governance/cases",
+      "effective_paths": [
+        "/{club_id}/governance/cases"
+      ],
+      "file": "backend/app/club_legacy/full/phase8_routes.py",
+      "handler": "list_cases",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase8_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase8"
+    },
+    {
+      "method": "GET",
+      "path": "/{club_id}/governance/net-worth",
+      "effective_paths": [
+        "/{club_id}/governance/net-worth"
+      ],
+      "file": "backend/app/club_legacy/full/phase8_routes.py",
+      "handler": "read_net_worth",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase8_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase8"
+    },
+    {
+      "method": "GET",
+      "path": "/{club_id}/governance/trades",
+      "effective_paths": [
+        "/{club_id}/governance/trades"
+      ],
+      "file": "backend/app/club_legacy/full/phase8_routes.py",
+      "handler": "list_trades",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase8_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase8"
+    },
+    {
+      "method": "POST",
+      "path": "/governance/cases/{case_id}/appeal",
+      "effective_paths": [
+        "/governance/cases/{case_id}/appeal"
+      ],
+      "file": "backend/app/club_legacy/full/phase8_routes.py",
+      "handler": "appeal_case",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase8_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "case_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase8"
+    },
+    {
+      "method": "POST",
+      "path": "/governance/cases/{case_id}/ruling",
+      "effective_paths": [
+        "/governance/cases/{case_id}/ruling"
+      ],
+      "file": "backend/app/club_legacy/full/phase8_routes.py",
+      "handler": "rule_case",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase8_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "case_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase8"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/governance/cases",
+      "effective_paths": [
+        "/{club_id}/governance/cases"
+      ],
+      "file": "backend/app/club_legacy/full/phase8_routes.py",
+      "handler": "open_case",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase8_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase8"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/governance/distributions",
+      "effective_paths": [
+        "/{club_id}/governance/distributions"
+      ],
+      "file": "backend/app/club_legacy/full/phase8_routes.py",
+      "handler": "pay_distribution",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase8_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase8"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/governance/stakes",
+      "effective_paths": [
+        "/{club_id}/governance/stakes"
+      ],
+      "file": "backend/app/club_legacy/full/phase8_routes.py",
+      "handler": "put_stake",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase8_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase8"
+    },
+    {
+      "method": "GET",
+      "path": "/{club_id}/market/supply",
+      "effective_paths": [
+        "/{club_id}/market/supply"
+      ],
+      "file": "backend/app/club_legacy/full/phase9_routes.py",
+      "handler": "market_supply",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase9_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase9"
+    },
+    {
+      "method": "GET",
+      "path": "/{club_id}/preseason/invitations",
+      "effective_paths": [
+        "/{club_id}/preseason/invitations"
+      ],
+      "file": "backend/app/club_legacy/full/phase9_routes.py",
+      "handler": "preseason_invitations",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase9_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase9"
+    },
+    {
+      "method": "GET",
+      "path": "/{club_id}/sponsors/contracts",
+      "effective_paths": [
+        "/{club_id}/sponsors/contracts"
+      ],
+      "file": "backend/app/club_legacy/full/phase9_routes.py",
+      "handler": "sponsor_contracts",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase9_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase9"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/catalogue/load",
+      "effective_paths": [
+        "/{club_id}/catalogue/load"
+      ],
+      "file": "backend/app/club_legacy/full/phase9_routes.py",
+      "handler": "read_catalogue",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase9_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase9"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/seasons/simulate",
+      "effective_paths": [
+        "/{club_id}/seasons/simulate"
+      ],
+      "file": "backend/app/club_legacy/full/phase9_routes.py",
+      "handler": "simulate",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase9_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase9"
+    },
+    {
+      "method": "POST",
+      "path": "/{club_id}/showroom/failures",
+      "effective_paths": [
+        "/{club_id}/showroom/failures"
+      ],
+      "file": "backend/app/club_legacy/full/phase9_routes.py",
+      "handler": "showroom_failure",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.full.phase9_routes",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "phase9"
     },
     {
       "method": "GET",

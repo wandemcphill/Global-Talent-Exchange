@@ -4040,6 +4040,18 @@
         "path": "/api/fast-cups/{cup_id}/result-summary",
         "handler": "get_fast_cup_result_summary",
         "response_model": "FastCupResultSummaryView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/fast-cups/{cup_id}/settle",
+        "handler": "settle_fast_cup",
+        "response_model": "FastCupResultSummaryView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/fast-cups/{cup_id}/settle",
+        "handler": "settle_fast_cup",
+        "response_model": "FastCupResultSummaryView"
       }
     ],
     "federations": [
@@ -8046,6 +8058,390 @@
         "path": "/integrations/payments/paystack/webhook",
         "handler": "handle_paystack_webhook",
         "response_model": "AdminFinanceWebhookResultView"
+      }
+    ],
+    "phase1": [
+      {
+        "method": "POST",
+        "path": "/full/phase1/location",
+        "handler": "check_location",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/full/phase1/settings",
+        "handler": "read_settings",
+        "response_model": null
+      },
+      {
+        "method": "PUT",
+        "path": "/full/phase1/settings",
+        "handler": "write_settings",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/full/phase1/{club_id}/ratings",
+        "handler": "read_ratings",
+        "response_model": null
+      }
+    ],
+    "phase2": [
+      {
+        "method": "POST",
+        "path": "/full/phase2/preseason/{invite_id}/gm",
+        "handler": "post_gm_preseason",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/full/phase2/recommendations/{recommendation_id}/execute",
+        "handler": "post_execute",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/full/phase2/{club_id}/academy",
+        "handler": "post_academy",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/full/phase2/{club_id}/executives",
+        "handler": "post_executive",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/full/phase2/{club_id}/pathways",
+        "handler": "post_pathway",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/full/phase2/{club_id}/presets/{preset}",
+        "handler": "post_preset",
+        "response_model": null
+      },
+      {
+        "method": "PUT",
+        "path": "/full/phase2/{club_id}/tasks/{task_key}",
+        "handler": "put_task",
+        "response_model": null
+      }
+    ],
+    "phase3": [
+      {
+        "method": "GET",
+        "path": "/full/phase3/{club_id}/finance",
+        "handler": "read_finance",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/full/phase3/{club_id}/net-worth",
+        "handler": "read_net_worth",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/full/phase3/{club_id}/page",
+        "handler": "read_page",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/full/phase3/{club_id}/showroom",
+        "handler": "read_showroom",
+        "response_model": null
+      }
+    ],
+    "phase4": [
+      {
+        "method": "POST",
+        "path": "/{club_id}/market/gifts",
+        "handler": "offer_gift",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/market/gifts/{gift_id}/accept",
+        "handler": "accept_gift",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/market/gifts/{gift_id}/decline",
+        "handler": "decline_gift",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/market/listings",
+        "handler": "list_asset",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/market/listings/{listing_id}/bids",
+        "handler": "place_bid",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/market/listings/{listing_id}/buy",
+        "handler": "buy_listing",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/market/purchases",
+        "handler": "purchase_asset",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/market/transfers",
+        "handler": "transfer_asset",
+        "response_model": null
+      }
+    ],
+    "phase5": [
+      {
+        "method": "POST",
+        "path": "/{club_id}/preseason/invites",
+        "handler": "invite",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/preseason/invites/{invite_id}/respond",
+        "handler": "respond",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/preseason/invites/{invite_id}/settle",
+        "handler": "settle",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/preseason/tournaments",
+        "handler": "host_tournament",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/preseason/tournaments/{tournament_id}/participants",
+        "handler": "add_participant",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/preseason/tournaments/{tournament_id}/settle",
+        "handler": "settle_tournament",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/preseason/windows",
+        "handler": "open_window",
+        "response_model": null
+      }
+    ],
+    "phase6": [
+      {
+        "method": "POST",
+        "path": "/{club_id}/sponsors/contracts",
+        "handler": "offer_contract",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/sponsors/contracts/{contract_id}/approve",
+        "handler": "approve_contract",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/sponsors/contracts/{contract_id}/delivery",
+        "handler": "report_delivery",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/sponsors/contracts/{contract_id}/preview",
+        "handler": "preview_kit",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/sponsors/contracts/{contract_id}/publish",
+        "handler": "publish_kit",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/sponsors/contracts/{contract_id}/renew",
+        "handler": "renew_contract",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/sponsors/contracts/{contract_id}/suggest",
+        "handler": "suggest_kit",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/{club_id}/sponsors/zones",
+        "handler": "read_zones",
+        "response_model": null
+      }
+    ],
+    "phase7": [
+      {
+        "method": "POST",
+        "path": "/offers/{offer_id}/respond",
+        "handler": "respond_offer",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/promises/{promise_id}/resolve",
+        "handler": "resolve_promise",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/managers",
+        "handler": "create_manager",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/managers/{manager_id}/gifts",
+        "handler": "give_gift",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/{club_id}/managers/{manager_id}/history",
+        "handler": "read_history",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/managers/{manager_id}/offers",
+        "handler": "create_offer",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/managers/{manager_id}/poach",
+        "handler": "poach",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/managers/{manager_id}/retention",
+        "handler": "retention",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/promises",
+        "handler": "create_promise",
+        "response_model": null
+      }
+    ],
+    "phase8": [
+      {
+        "method": "POST",
+        "path": "/governance/cases/{case_id}/appeal",
+        "handler": "appeal_case",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/governance/cases/{case_id}/ruling",
+        "handler": "rule_case",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/{club_id}/governance/cases",
+        "handler": "list_cases",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/governance/cases",
+        "handler": "open_case",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/governance/distributions",
+        "handler": "pay_distribution",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/{club_id}/governance/net-worth",
+        "handler": "read_net_worth",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/governance/stakes",
+        "handler": "put_stake",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/{club_id}/governance/trades",
+        "handler": "list_trades",
+        "response_model": null
+      }
+    ],
+    "phase9": [
+      {
+        "method": "POST",
+        "path": "/{club_id}/catalogue/load",
+        "handler": "read_catalogue",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/{club_id}/market/supply",
+        "handler": "market_supply",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/{club_id}/preseason/invitations",
+        "handler": "preseason_invitations",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/seasons/simulate",
+        "handler": "simulate",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/{club_id}/showroom/failures",
+        "handler": "showroom_failure",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/{club_id}/sponsors/contracts",
+        "handler": "sponsor_contracts",
+        "response_model": null
       }
     ],
     "platform": [
