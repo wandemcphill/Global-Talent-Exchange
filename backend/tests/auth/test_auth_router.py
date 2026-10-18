@@ -138,14 +138,25 @@ def _assert_no_synthetic_markers(payload: object, *, path: str = "$") -> None:
         for key, value in payload.items():
             normalized_key = str(key).strip().lower()
             if normalized_key in {"fixture", "demo", "mock", "synthetic"} and value:
-                pytest.fail(f"synthetic marker {path}.{normalized_key} leaked into strict-live payload")
-            if normalized_key in {"source", "runtime_source", "source_of_truth", "mode"}:
+                pytest.fail(
+                    f"synthetic marker {path}.{normalized_key} "
+                    "leaked into strict-live payload"
+                )
+            if normalized_key in {
+                "source",
+                "runtime_source",
+                "source_of_truth",
+                "mode",
+            }:
                 normalized_value = str(value).strip().lower()
                 if any(
                     marker in normalized_value
                     for marker in ("fixture", "demo", "mock", "synthetic")
                 ):
-                    pytest.fail(f"synthetic source marker {path}.{normalized_key}={normalized_value!r}")
+                    pytest.fail(
+                        f"synthetic source marker {path}.{normalized_key}="
+                        f"{normalized_value!r}"
+                    )
             _assert_no_synthetic_markers(value, path=f"{path}.{normalized_key}")
     elif isinstance(payload, list):
         for index, item in enumerate(payload):
@@ -377,7 +388,9 @@ def test_api_auth_me_patch_rejects_protected_fields(app_client) -> None:
     assert "Protected fields cannot be updated" in response.text
 
 
-def test_strict_live_profile_bootstrap_wallet_routes_require_bearer_token(app_client) -> None:
+def test_strict_live_profile_bootstrap_wallet_routes_require_bearer_token(
+    app_client,
+) -> None:
     _app, client = app_client
 
     for path in (
@@ -513,7 +526,9 @@ def test_refresh_logout_and_session_bootstrap_flow(app_client) -> None:
     assert revoked_bootstrap.status_code == 401
 
 
-def test_user_creator_and_trader_signup_sessions_include_public_account_type(app_client) -> None:
+def test_user_creator_and_trader_signup_sessions_include_public_account_type(
+    app_client,
+) -> None:
     app, client = app_client
     trader_secret = "JBSWY3DPEHPK3PXP"  # pragma: allowlist secret
     signups = [
@@ -699,7 +714,9 @@ def test_login_user_logs_completion(session, caplog: pytest.LogCaptureFixture) -
     assert any("service.authenticate_user_ms" in message for message in caplog.messages)
 
 
-def test_login_user_logs_failure_with_rollback(session, caplog: pytest.LogCaptureFixture) -> None:
+def test_login_user_logs_failure_with_rollback(
+    session, caplog: pytest.LogCaptureFixture
+) -> None:
     AuthService().register_user(
         session,
         email="telemetry-login-failure@example.com",
@@ -721,7 +738,9 @@ def test_login_user_logs_failure_with_rollback(session, caplog: pytest.LogCaptur
             )
 
     assert exc_info.value.status_code == 401
-    assert any("auth.request.route_entry flow=login" in message for message in caplog.messages)
+    assert any(
+        "auth.request.route_entry flow=login" in message for message in caplog.messages
+    )
     assert any(
         "auth.request.failed flow=login status_code=401" in message
         for message in caplog.messages
@@ -729,7 +748,9 @@ def test_login_user_logs_failure_with_rollback(session, caplog: pytest.LogCaptur
     assert any("db.rollback_ms" in message for message in caplog.messages)
 
 
-def test_super_admin_login_includes_catalog_permissions_and_god_mode_route(app_client) -> None:
+def test_super_admin_login_includes_catalog_permissions_and_god_mode_route(
+    app_client,
+) -> None:
     app, client = app_client
     _ensure_bootstrap_admin(app)
 
@@ -739,7 +760,9 @@ def test_super_admin_login_includes_catalog_permissions_and_god_mode_route(app_c
     assert payload["landing_route"] == "/profile/admin/god-mode"
 
 
-def test_scoped_admin_login_reflects_delegated_permissions_and_admin_route(app_client) -> None:
+def test_scoped_admin_login_reflects_delegated_permissions_and_admin_route(
+    app_client,
+) -> None:
     app, client = app_client
     _ensure_bootstrap_admin(app)
 
@@ -778,7 +801,9 @@ def test_scoped_admin_login_reflects_delegated_permissions_and_admin_route(app_c
     assert "manage_manager_catalog" in me_response.json()["permissions"]
 
 
-def test_login_failure_analytics_stores_email_hash_not_email(session, monkeypatch) -> None:
+def test_login_failure_analytics_stores_email_hash_not_email(
+    session, monkeypatch
+) -> None:
     from app.analytics.service import AnalyticsService
     from app.auth.router import _email_fingerprint
 
