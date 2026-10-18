@@ -128,9 +128,9 @@ class _TurnstileChallengeState extends State<TurnstileChallenge> {
         ),
       );
     }
-    return const SizedBox(
+    return SizedBox(
       height: 72,
-      child: _TurnstileElementViewPlaceholder(),
+      child: HtmlElementView(viewType: _viewType),
     );
   }
 
@@ -149,12 +149,3 @@ class _TurnstileChallengeState extends State<TurnstileChallenge> {
   }
 }
 
-class _TurnstileElementViewPlaceholder extends StatelessWidget {
-  const _TurnstileElementViewPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    // The actual DOM view is supplied by the parent State's HtmlElementView.
-    return const SizedBox.shrink();
-  }
-}
