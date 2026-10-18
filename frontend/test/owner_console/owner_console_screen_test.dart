@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/features/owner_console/data/owner_console_api.dart';
+import 'package:gte_frontend/features/owner_console/widgets/club_legacy_desk.dart';
 import 'package:gte_frontend/features/owner_console/presentation/owner_console_screen.dart';
 import 'package:gte_frontend/features/owner_console/widgets/owner_console_sections.dart';
 import 'package:gte_frontend/features/regen_redesign/data/gtex_share_market_api.dart';
 
-Map<String, dynamic> _centerJson({bool withClubs = true}) => <String, dynamic>{
+Map<String, dynamic> _centerJson({bool withClubs = true, String? respondBy}) => <String, dynamic>{
   'user': <String, dynamic>{'username': 'flow', 'display_name': 'Flow Owner', 'role': 'user'},
   'clubs': withClubs
       ? <Map<String, dynamic>>[
@@ -20,6 +21,7 @@ Map<String, dynamic> _centerJson({bool withClubs = true}) => <String, dynamic>{
           <String, dynamic>{'id': 'd2', 'club_id': 'c2', 'kind': 'contract', 'title': 'Contract expiring', 'is_decision': true},
           <String, dynamic>{
             'id': 'd3', 'club_id': 'c1', 'kind': 'transfer_bid', 'title': 'Kano bid 12,400 for Ade Bello', 'is_decision': true,
+            if (respondBy != null) 'respond_by': respondBy,
             'what': 'Kano offer 12,400 GTEX Coin for Ade Bello (valued 10,000).',
             'actions': <Map<String, dynamic>>[
               <String, dynamic>{'key': 'accept', 'label': 'Accept bid', 'style': 'primary'},
@@ -50,14 +52,26 @@ Map<String, dynamic> _centerJson({bool withClubs = true}) => <String, dynamic>{
   },
   'economy': <String, dynamic>{'wallet': <String, dynamic>{'withdrawable': '20'}, 'club_cash_total': '50', 'pending_payouts': '0', 'earnings_sources': <String, dynamic>{'gate': '30', 'wages': '-12'}},
   'integrity': <String, dynamic>{'score': 98},
+  'legacy': withClubs
+      ? <Map<String, dynamic>>[
+          <String, dynamic>{
+            'club_id': 'c1',
+            'prestige': 12,
+            'development': 20,
+            'financial_strength': 80,
+            'continent_name': 'Africa',
+          },
+        ]
+      : null,
 };
 
 class _FakeOwner implements OwnerConsoleReader {
-  _FakeOwner({this.withClubs = true, this.failDecide = false, this.emptyQueue = false});
+  _FakeOwner({this.withClubs = true, this.failDecide = false, this.emptyQueue = false, this.respondBy});
 
   bool withClubs;
   final bool failDecide;
   final bool emptyQueue;
+  final String? respondBy;
   int seeds = 0;
   int suggestions = 0;
   int centerLoads = 0;
@@ -66,12 +80,14 @@ class _FakeOwner implements OwnerConsoleReader {
   @override
   Future<OwnerControlCenter> fetchControlCenter() async {
     centerLoads++;
-    return OwnerControlCenter.fromJson(_centerJson(withClubs: withClubs));
+    return OwnerControlCenter.fromJson(_centerJson(withClubs: withClubs, respondBy: respondBy));
   }
 
   @override
-  Future<void> claimClub() async {
+  Future<void> claimClub({String? city, String? country}) async {
     calls.add('claim');
+    calls.add('claim-city:${city ?? ''}');
+    calls.add('claim-country:${country ?? ''}');
     withClubs = true;
   }
 
@@ -138,6 +154,17 @@ class _FakeOwner implements OwnerConsoleReader {
 
   @override
   Future<double> fetchWalletBalance() async => 75;
+
+  @override
+  Future<List<ShowroomExhibit>> fetchShowroom() async => const <ShowroomExhibit>[
+    ShowroomExhibit(id: 'jet-1', name: 'Harbour Jet', category: 'jet', ownershipLabel: 'Club', fallbackLabel: 'Static jet card', owned: true),
+  ];
+
+  @override
+  Future<ClubLegacyDeskData> fetchDesk() async => const ClubLegacyDeskData(staff: [], policies: [], clubValuation: '0', equity: '0', preseason: [], sponsors: [], offers: [], cases: []);
+
+  @override
+  Future<void> performDesk(String action) async {}
 }
 
 class _FakeShare implements GtexShareMarketReader {
@@ -175,6 +202,17 @@ Future<List<String>> _pump(WidgetTester tester, OwnerConsoleReader reader, {Stri
 }
 
 void main() {
+  testWidgets('control center shows prestige, development, and financial strength separately', (WidgetTester tester) async {
+    await _pump(tester, _FakeOwner());
+    expect(find.byKey(const Key('owner-legacy-ratings')), findsOneWidget);
+    expect(find.byKey(const Key('owner-legacy-prestige')), findsOneWidget);
+    expect(find.byKey(const Key('owner-legacy-development')), findsOneWidget);
+    expect(find.byKey(const Key('owner-legacy-financial')), findsOneWidget);
+    expect(find.text('12'), findsWidgets);
+    expect(find.text('20'), findsWidgets);
+    expect(find.text('80'), findsWidgets);
+  });
+
   testWidgets('control center renders decisions, board, health and chips', (WidgetTester tester) async {
     final List<String> visited = await _pump(tester, _FakeOwner());
     expect(find.text('50 GTX'), findsOneWidget);
@@ -214,7 +252,9 @@ void main() {
     await tester.tap(find.byKey(const Key('owner-console-claim-club-button')));
     await tester.pumpAndSettle();
     expect(owner.calls, contains('claim'));
-    expect(find.text('Lagos Lions'), findsWidgets);
+    expect(owner.calls, contains('claim-city:Lagos'));
+    expect(owner.calls, contains('claim-country:NG'));
+    expect(find.text('#2 Lagos Lions'), findsOneWidget);
     expect(find.byKey(const Key('owner-console-claim-club')), findsNothing);
   });
 
@@ -336,5 +376,13 @@ void main() {
     expect(find.text('Queue clear'), findsOneWidget);
     expect(find.text('No open flags'), findsOneWidget);
     expect(find.text('Nothing held'), findsOneWidget);
+  });
+
+  testWidgets('a decision shows its respond-by deadline', (WidgetTester tester) async {
+    final String respondBy = DateTime.now().toUtc().add(const Duration(hours: 30)).toIso8601String();
+    await _pump(tester, _FakeOwner(respondBy: respondBy));
+    expect(find.byKey(const Key('owner-decision-d3-countdown')), findsOneWidget);
+    expect(find.textContaining('Respond by'), findsOneWidget);
+    expect(find.textContaining('1d'), findsOneWidget);
   });
 }

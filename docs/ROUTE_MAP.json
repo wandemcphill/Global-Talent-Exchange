@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1765,
+  "route_count": 1777,
   "routes": [
     {
       "method": "POST",
@@ -8127,6 +8127,141 @@
     },
     {
       "method": "GET",
+      "path": "/owner/legacy/{club_id}",
+      "effective_paths": [
+        "/api/owner/legacy/{club_id}"
+      ],
+      "file": "backend/app/club_legacy/router.py",
+      "handler": "read_legacy",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.router",
+      "module_mounts": [
+        "club_legacy"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "GET",
+      "path": "/owner/legacy/{club_id}/desk",
+      "effective_paths": [
+        "/api/owner/legacy/{club_id}/desk"
+      ],
+      "file": "backend/app/club_legacy/router.py",
+      "handler": "read_desk",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.router",
+      "module_mounts": [
+        "club_legacy"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "GET",
+      "path": "/owner/legacy/{club_id}/metrics",
+      "effective_paths": [
+        "/api/owner/legacy/{club_id}/metrics"
+      ],
+      "file": "backend/app/club_legacy/router.py",
+      "handler": "read_metrics",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.router",
+      "module_mounts": [
+        "club_legacy"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "GET",
+      "path": "/owner/legacy/{club_id}/page",
+      "effective_paths": [
+        "/api/owner/legacy/{club_id}/page"
+      ],
+      "file": "backend/app/club_legacy/router.py",
+      "handler": "read_club_page",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.router",
+      "module_mounts": [
+        "club_legacy"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "GET",
+      "path": "/owner/legacy/{club_id}/showroom",
+      "effective_paths": [
+        "/api/owner/legacy/{club_id}/showroom"
+      ],
+      "file": "backend/app/club_legacy/router.py",
+      "handler": "read_showroom",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.router",
+      "module_mounts": [
+        "club_legacy"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "GET",
       "path": "/sponsors",
       "effective_paths": [
         "/api/sponsors",
@@ -9552,6 +9687,117 @@
       "domain": "club"
     },
     {
+      "method": "POST",
+      "path": "/owner/legacy/recommendations/{recommendation_id}/execute",
+      "effective_paths": [
+        "/api/owner/legacy/recommendations/{recommendation_id}/execute"
+      ],
+      "file": "backend/app/club_legacy/router.py",
+      "handler": "execute_recommendation",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.router",
+      "module_mounts": [
+        "club_legacy"
+      ],
+      "request_shape": {
+        "parameters": [
+          "recommendation_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/legacy/{club_id}/desk",
+      "effective_paths": [
+        "/api/owner/legacy/{club_id}/desk"
+      ],
+      "file": "backend/app/club_legacy/router.py",
+      "handler": "post_desk_action",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.router",
+      "module_mounts": [
+        "club_legacy"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/legacy/{club_id}/policies/preset",
+      "effective_paths": [
+        "/api/owner/legacy/{club_id}/policies/preset"
+      ],
+      "file": "backend/app/club_legacy/router.py",
+      "handler": "apply_preset",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.router",
+      "module_mounts": [
+        "club_legacy"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/legacy/{club_id}/recommendations",
+      "effective_paths": [
+        "/api/owner/legacy/{club_id}/recommendations"
+      ],
+      "file": "backend/app/club_legacy/router.py",
+      "handler": "create_recommendation",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.router",
+      "module_mounts": [
+        "club_legacy"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
       "method": "PUT",
       "path": "/api/clubs/{club_id}/sale-market/listing",
       "effective_paths": [
@@ -9604,6 +9850,35 @@
       "response_shape": {
         "response_model": "ClubMatchPlanView",
         "returns": "ClubMatchPlanView"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "PUT",
+      "path": "/owner/legacy/{club_id}/policies/{task_key}",
+      "effective_paths": [
+        "/api/owner/legacy/{club_id}/policies/{task_key}"
+      ],
+      "file": "backend/app/club_legacy/router.py",
+      "handler": "set_policy",
+      "router_variable": "router",
+      "module_path": "app.club_legacy.router",
+      "module_mounts": [
+        "club_legacy"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "task_key",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
       },
       "version": "canonical",
       "domain": "club"
@@ -29129,6 +29404,32 @@
     },
     {
       "method": "GET",
+      "path": "/owner/public/showroom/{code}",
+      "effective_paths": [
+        "/api/owner/public/showroom/{code}"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "public_showroom",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "code",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
       "path": "/owner/withdrawals/eligibility",
       "effective_paths": [
         "/api/owner/withdrawals/eligibility"
@@ -29266,6 +29567,32 @@
     },
     {
       "method": "POST",
+      "path": "/owner/alerts/cron",
+      "effective_paths": [
+        "/api/owner/alerts/cron"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "trigger_owner_alert_sweep",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "background_tasks"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, str]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
       "path": "/owner/capital/distribute",
       "effective_paths": [
         "/api/owner/capital/distribute"
@@ -29360,6 +29687,7 @@
       ],
       "request_shape": {
         "parameters": [
+          "body",
           "user",
           "session"
         ]

@@ -15,4 +15,4 @@ Canonical operational docs live here.
 - `architecture/match-3d-engine.md` defines the deterministic simulation -> event stream -> Flutter/Unity 3D rendering architecture.
 - `architecture/render-to-kubernetes-microservices.md` defines the canonical service-boundary, outbox, broker, and Kubernetes migration plan.
 - `../README.md` remains the repo overview and backend CLI reference.
-- `../APK_PREP_CHECKLIST.md` and `../APK_HARDENING_REPORT.md` are historical package notes, not the canonical runbooks.
+- `reports/APK_PREP_CHECKLIST.md` and `reports/APK_HARDENING_REPORT.md` are historical package notes, not the canonical runbooks.

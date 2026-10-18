@@ -701,6 +701,7 @@ DOMAIN_MODULES = (
     _module("ownership_groups", router_path="app.ownership_groups.router:router", with_api_alias=True),
     _module("ownership_groups_admin", router_path="app.ownership_groups.router:admin_router"),
     _module("owner_console", router_path="app.owner_console.router:router", api_only=True),
+    _module("club_legacy", router_path="app.club_legacy.router:router", api_only=True),
     _module("live_ops", router_path="app.live_ops.router:router", with_api_alias=True),
     _module("creator_campaign_engine", router_path="app.creator_campaign_engine.router:router"),
     _module("creator_campaign_engine_admin", router_path="app.creator_campaign_engine.router:admin_router"),

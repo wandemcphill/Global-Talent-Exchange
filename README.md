@@ -2,9 +2,9 @@
 
 See also:
 - `Docs/README.md`
-- `API_DOCUMENTATION.md`
+- `docs/reports/API_DOCUMENTATION.md`
 - `DEPLOYMENT_GUIDE.md`
-- `ADMIN_SETUP_GUIDE.md`
+- `docs/reports/ADMIN_SETUP_GUIDE.md`
 
 ## Canonical production deployment
 
@@ -32,8 +32,12 @@ Use the checked-in backend dependency manifest when you are starting from a clea
 python -m venv .venv
 .venv\Scripts\activate
 python -m pip install --upgrade pip
-python -m pip install -r backend/requirements.txt
+python -m pip install -r backend/requirements.lock
 ```
+
+### Updating dependencies
+
+Edit `backend/requirements.txt`, then regenerate the pinned lock with `uv pip compile backend/requirements.txt --python-version 3.14 --python-platform x86_64-unknown-linux-gnu --generate-hashes -o backend/requirements.lock` and commit both files. CI fails the build if `backend/requirements.lock` is out of sync.
 
 ## Scaling runtime
 

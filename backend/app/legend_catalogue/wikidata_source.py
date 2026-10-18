@@ -58,7 +58,7 @@ def fetch_rows(*, page_size: int = 500, max_pages: int = 20, pause_seconds: floa
             f"{ENDPOINT}?{params}",
             headers={"Accept": "application/sparql-results+json", "User-Agent": USER_AGENT},
         )
-        with urlopen(request, timeout=90) as response:
+        with urlopen(request, timeout=90) as response:  # nosec B310 - endpoint is the fixed https Wikidata SPARQL URL
             payload = json.load(response)
         bindings = payload.get("results", {}).get("bindings", [])
         if not bindings:

@@ -12,7 +12,7 @@ services:
     runtime: python
     region: frankfurt
     plan: standard
-    buildCommand: "pip install -r backend/requirements.txt"
+    buildCommand: "pip install -r backend/requirements.lock"
     preDeployCommand: "PGOPTIONS='-c default_transaction_read_only=off' bash -lc 'source ops/render/production-preflight.sh && cd backend && alembic -c migrations/alembic.ini upgrade head'"
     startCommand: "cd backend && gunicorn app.asgi:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers ${WEB_CONCURRENCY:-1} --timeout 180 --graceful-timeout 120"
     envVars:
@@ -111,7 +111,7 @@ services:
     runtime: python
     region: frankfurt
     plan: starter
-    buildCommand: "pip install -r backend/requirements.txt"
+    buildCommand: "pip install -r backend/requirements.lock"
     startCommand: "cd backend && python -m app.workers.rq_worker_main"
     envVars:
       - key: DATABASE_URL
@@ -145,7 +145,7 @@ services:
     runtime: python
     region: frankfurt
     plan: starter
-    buildCommand: "pip install -r backend/requirements.txt"
+    buildCommand: "pip install -r backend/requirements.lock"
     startCommand: "cd backend && python -m app.backbone.simulation_worker_main"
     envVars:
       - key: DATABASE_URL
@@ -177,7 +177,7 @@ services:
     runtime: python
     region: frankfurt
     plan: starter
-    buildCommand: "pip install -r backend/requirements.txt"
+    buildCommand: "pip install -r backend/requirements.lock"
     startCommand: "cd backend && python -m app.backbone.outbox_relay_main"
     envVars:
       - key: DATABASE_URL
@@ -284,7 +284,7 @@ services:
     region: frankfurt
     plan: starter
     schedule: "0 3 * * *"
-    buildCommand: "pip install -r backend/requirements.txt"
+    buildCommand: "pip install -r backend/requirements.lock"
     startCommand: "bash ops/render/run-realplayer-ingest.sh"
     envVars:
       - key: DATABASE_URL
@@ -315,7 +315,7 @@ services:
     region: frankfurt
     plan: starter
     schedule: "0 6 1 * *"
-    buildCommand: "pip install -r backend/requirements.txt"
+    buildCommand: "pip install -r backend/requirements.lock"
     startCommand: "bash ops/render/run-sofifa-import.sh"
     envVars:
       - key: DATABASE_URL
@@ -345,7 +345,7 @@ services:
     region: frankfurt
     plan: starter
     schedule: "0 2 * * 1"
-    buildCommand: "pip install -r backend/requirements.txt"
+    buildCommand: "pip install -r backend/requirements.lock"
     startCommand: "bash ops/render/run-reprice-appreciation.sh"
     envVars:
       - key: DATABASE_URL
@@ -372,7 +372,7 @@ services:
     region: frankfurt
     plan: starter
     schedule: "0 4 * * *"
-    buildCommand: "pip install -r backend/requirements.txt"
+    buildCommand: "pip install -r backend/requirements.lock"
     startCommand: "bash ops/render/run-value-snapshots.sh"
     envVars:
       - key: DATABASE_URL
@@ -392,7 +392,7 @@ services:
     region: frankfurt
     plan: starter
     schedule: "0 4 1 * *"
-    buildCommand: "pip install -r backend/requirements.txt"
+    buildCommand: "pip install -r backend/requirements.lock"
     startCommand: "bash ops/render/run-regen-rebuild.sh"
     envVars:
       - key: DATABASE_URL
@@ -414,7 +414,7 @@ services:
     region: frankfurt
     plan: starter
     schedule: "0 5 1 * *"
-    buildCommand: "pip install -r backend/requirements.txt"
+    buildCommand: "pip install -r backend/requirements.lock"
     startCommand: "bash ops/render/run-squad-tier-backfill.sh"
     envVars:
       - key: DATABASE_URL
@@ -438,7 +438,7 @@ services:
     region: frankfurt
     plan: starter
     schedule: "0 3 1 1 *"
-    buildCommand: "pip install -r backend/requirements.txt"
+    buildCommand: "pip install -r backend/requirements.lock"
     startCommand: "bash ops/render/run-regen-world-bootstrap.sh"
     envVars:
       - key: DATABASE_URL
@@ -465,7 +465,7 @@ services:
     region: frankfurt
     plan: starter
     schedule: "0 2 1 1 *"
-    buildCommand: "pip install -r backend/requirements.txt"
+    buildCommand: "pip install -r backend/requirements.lock"
     startCommand: "bash ops/render/run-player-share-issuance.sh"
     envVars:
       - key: DATABASE_URL

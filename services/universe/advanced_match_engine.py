@@ -3,12 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import random
-from typing import Any, Mapping, Sequence
+from typing import Mapping, Sequence
 
 from services.universe.generator import GeneratedClub, GeneratedPlayer, UniverseGenerator
 from services.universe.scheduler import Fixture
 from services.universe.storyline import StorylineBundle, build_content_brief, inject_storylines
-
+from typing import Any as Any
 
 _STYLE_TEMPO = {
     "attacking": 1.07,
@@ -123,7 +123,7 @@ def _normalize_rating(value: float) -> float:
 
 def _stable_seed(*parts: object) -> int:
     payload = "|".join(str(part) for part in parts)
-    digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
+    digest = hashlib.sha1(payload.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
     return int(digest, 16)
 
 
@@ -160,7 +160,9 @@ def _pick_lineup(club: GeneratedClub) -> tuple[GeneratedPlayer, ...]:
     remaining = list(club.roster)
     lineup: list[GeneratedPlayer] = []
     for role in formation:
-        best = max(remaining, key=lambda player, target=role: (_fit_score(player, target), player.potential, -player.age))
+        best = max(
+            remaining, key=lambda player, target=role: (_fit_score(player, target), player.potential, -player.age)
+        )
         lineup.append(best)
         remaining.remove(best)
     return tuple(lineup[:_LINEUP_SIZE])
@@ -488,7 +490,7 @@ def create_league(
     generator: UniverseGenerator | None = None,
 ) -> League:
     resolved_clubs = tuple(clubs or (generator or UniverseGenerator()).generate_clubs(count=club_count))
-    digest = hashlib.sha1(f"{name}|{season}".encode("utf-8")).hexdigest()[:12]
+    digest = hashlib.sha1(f"{name}|{season}".encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
     return League(
         league_id=f"league_{digest}",
         name=name,
@@ -607,7 +609,9 @@ def _default_team_chemistry(club: GeneratedClub, lineup: Sequence[GeneratedPlaye
     chemistry += age_balance * 0.12
     chemistry += rating_spread * 0.10
     chemistry += _clamp(nationality_links / 10.0, 0.0, 0.12)
-    chemistry += 0.04 if club.style in {"balanced", "counter"} else 0.06 if club.style in {"pressing", "attacking"} else 0.0
+    chemistry += (
+        0.04 if club.style in {"balanced", "counter"} else 0.06 if club.style in {"pressing", "attacking"} else 0.0
+    )
     return _clamp(chemistry, 0.42, 0.92)
 
 
@@ -627,14 +631,22 @@ def _runtime_for_team(
 ) -> _TeamRuntime:
     lineup = _pick_lineup(club)
     attackers = tuple(player for player in lineup if player.position in _ATTACKING_POSITIONS) or lineup
-    creators = tuple(player for player in lineup if player.position in {"AM", "CM", "DM", "RW", "LW", "RB", "LB"}) or lineup
+    creators = (
+        tuple(player for player in lineup if player.position in {"AM", "CM", "DM", "RW", "LW", "RB", "LB"}) or lineup
+    )
     defenders = tuple(player for player in lineup if player.position in _DEFENSIVE_POSITIONS) or lineup
     keepers = tuple(player for player in lineup if player.position == "GK") or lineup
     keeper = max(keepers, key=lambda player: (player.rating, player.potential, -player.age))
-    attack_index = _normalize_rating((club.attack_rating * 0.55) + (_average([player.rating for player in attackers]) * 0.45))
+    attack_index = _normalize_rating(
+        (club.attack_rating * 0.55) + (_average([player.rating for player in attackers]) * 0.45)
+    )
     midfield_core = tuple(player for player in lineup if player.position in {"CM", "DM", "AM"}) or lineup
-    midfield_index = _normalize_rating((club.midfield_rating * 0.60) + (_average([player.rating for player in midfield_core]) * 0.40))
-    defense_index = _normalize_rating((club.defense_rating * 0.60) + (_average([player.rating for player in defenders]) * 0.40))
+    midfield_index = _normalize_rating(
+        (club.midfield_rating * 0.60) + (_average([player.rating for player in midfield_core]) * 0.40)
+    )
+    defense_index = _normalize_rating(
+        (club.defense_rating * 0.60) + (_average([player.rating for player in defenders]) * 0.40)
+    )
     goalkeeper_index = _normalize_rating(keeper.rating)
     finishing_index = _normalize_rating(_average([player.rating for player in attackers]))
     creativity_index = _normalize_rating(_average([player.rating for player in creators]))
@@ -685,7 +697,9 @@ def _resolve_team_inputs(
 
 
 def _dynamic_fatigue(runtime: _TeamRuntime, *, elapsed_ratio: float) -> float:
-    workload = runtime.inputs.fatigue + (elapsed_ratio * (0.14 + max(runtime.tempo - 1.0, 0.0) * 0.34 + max(runtime.press_index - 0.8, 0.0) * 0.22))
+    workload = runtime.inputs.fatigue + (
+        elapsed_ratio * (0.14 + max(runtime.tempo - 1.0, 0.0) * 0.34 + max(runtime.press_index - 0.8, 0.0) * 0.22)
+    )
     return _clamp(workload, 0.04, 0.78)
 
 
@@ -772,7 +786,11 @@ def _assign_volume_stats(
     rng: random.Random,
 ) -> None:
     final_fatigue = _dynamic_fatigue(runtime, elapsed_ratio=1.0)
-    passes_multiplier = (team_stats.possession_pct / 50.0) * (0.92 + (runtime.inputs.chemistry * 0.18)) * (1.04 - (final_fatigue * 0.12))
+    passes_multiplier = (
+        (team_stats.possession_pct / 50.0)
+        * (0.92 + (runtime.inputs.chemistry * 0.18))
+        * (1.04 - (final_fatigue * 0.12))
+    )
     tackle_multiplier = ((100.0 - team_stats.possession_pct) / 50.0) * (0.90 + (runtime.press_index * 0.16))
     for accumulator in accumulators.values():
         minutes_ratio = accumulator.minutes / 90.0
@@ -791,14 +809,7 @@ def _assign_volume_stats(
         )
         accumulator.tackles_won = max(
             accumulator.tackles_won,
-            int(
-                round(
-                    (tackle_weight * 4.2)
-                    * tackle_multiplier
-                    * minutes_ratio
-                    * rng.uniform(0.80, 1.20)
-                )
-            ),
+            int(round((tackle_weight * 4.2) * tackle_multiplier * minutes_ratio * rng.uniform(0.80, 1.20))),
         )
         if accumulator.player.position in _DEFENSIVE_POSITIONS and conceding_goals == 0:
             accumulator.tackles_won += 1
@@ -1008,7 +1019,9 @@ class LeagueEngine:
         storyline = inject_storylines(
             fixture,
             clubs_by_id,
-            previous_results=tuple(result.as_dict() if isinstance(result, MatchResult) else result for result in previous_results),
+            previous_results=tuple(
+                result.as_dict() if isinstance(result, MatchResult) else result for result in previous_results
+            ),
             table_positions=table_positions,
         )
         settings = MatchSimulationSettings(
@@ -1019,8 +1032,12 @@ class LeagueEngine:
         seed_basis = self._seed if self._seed is not None else random.SystemRandom().randint(1, 2**31 - 1)
         rng = random.Random(_stable_seed(seed_basis, league.league_id, fixture.fixture_id, fixture.round_number))
         resolved_team_inputs = dict(team_inputs or {})
-        home_inputs = _resolve_team_inputs(club=home, previous_results=previous_results, override=resolved_team_inputs.get(home.club_id))
-        away_inputs = _resolve_team_inputs(club=away, previous_results=previous_results, override=resolved_team_inputs.get(away.club_id))
+        home_inputs = _resolve_team_inputs(
+            club=home, previous_results=previous_results, override=resolved_team_inputs.get(home.club_id)
+        )
+        away_inputs = _resolve_team_inputs(
+            club=away, previous_results=previous_results, override=resolved_team_inputs.get(away.club_id)
+        )
         home_runtime = _runtime_for_team(club=home, inputs=home_inputs)
         away_runtime = _runtime_for_team(club=away, inputs=away_inputs)
         accumulators = _create_player_accumulators(home_runtime)
@@ -1037,7 +1054,9 @@ class LeagueEngine:
         current_second = 0
         current_possession = home.club_id if rng.random() < 0.5 else away.club_id
         while current_second < total_seconds:
-            tick_seconds = min(rng.randint(settings.tick_seconds_min, settings.tick_seconds_max), total_seconds - current_second)
+            tick_seconds = min(
+                rng.randint(settings.tick_seconds_min, settings.tick_seconds_max), total_seconds - current_second
+            )
             current_second += tick_seconds
             elapsed_ratio = current_second / total_seconds
             home_fatigue = _dynamic_fatigue(home_runtime, elapsed_ratio=elapsed_ratio)
@@ -1059,8 +1078,18 @@ class LeagueEngine:
                 + (away_runtime.inputs.form_momentum * 0.07)
                 + (away_runtime.possession_bias * 0.12)
             ) * away_numbers - (away_fatigue * 0.15)
-            home_share = _clamp(0.5 + ((home_control - away_control) * 1.35) + _noise(rng, factor=settings.randomness_factor, amplitude=0.05), 0.31, 0.69)
-            retain_probability = _clamp(0.53 + abs(home_share - 0.5) + _noise(rng, factor=settings.randomness_factor, amplitude=0.02), 0.42, 0.82)
+            home_share = _clamp(
+                0.5
+                + ((home_control - away_control) * 1.35)
+                + _noise(rng, factor=settings.randomness_factor, amplitude=0.05),
+                0.31,
+                0.69,
+            )
+            retain_probability = _clamp(
+                0.53 + abs(home_share - 0.5) + _noise(rng, factor=settings.randomness_factor, amplitude=0.02),
+                0.42,
+                0.82,
+            )
             if rng.random() > retain_probability:
                 current_possession = home.club_id if rng.random() < home_share else away.club_id
             possession_seconds[current_possession] += tick_seconds
@@ -1095,12 +1124,20 @@ class LeagueEngine:
             )
             if rng.random() < foul_probability:
                 fouls[defender.club.club_id] += 1
-                offender = _weighted_choice(defender.defenders or defender.lineup, rng, weights_by_position=_TACKLE_ROLE_WEIGHTS)
+                offender = _weighted_choice(
+                    defender.defenders or defender.lineup, rng, weights_by_position=_TACKLE_ROLE_WEIGHTS
+                )
                 offender_accumulator = accumulators[offender.player_id]
                 offender_accumulator.fouls_committed += 1
-                red_card_probability = 0.010 + (0.010 if storyline.rivalry else 0.0) + (0.010 if elapsed_ratio > 0.70 else 0.0)
+                red_card_probability = (
+                    0.010 + (0.010 if storyline.rivalry else 0.0) + (0.010 if elapsed_ratio > 0.70 else 0.0)
+                )
                 yellow_card_probability = 0.16 + (0.06 if storyline.rivalry else 0.0)
-                if not offender_accumulator.red_card and players_on_pitch[defender.club.club_id] > 9 and rng.random() < red_card_probability:
+                if (
+                    not offender_accumulator.red_card
+                    and players_on_pitch[defender.club.club_id] > 9
+                    and rng.random() < red_card_probability
+                ):
                     players_on_pitch[defender.club.club_id] -= 1
                     offender_accumulator.red_card = True
                     offender_accumulator.minutes = min(offender_accumulator.minutes, _event_minute(current_second))
@@ -1139,10 +1176,16 @@ class LeagueEngine:
             if rng.random() >= shot_probability:
                 continue
             shot_source = "set_piece" if rng.random() < 0.10 else "open_play"
-            creator = _weighted_choice(attacker.creators or attacker.lineup, rng, weights_by_position=_CREATOR_POSITION_WEIGHTS)
-            shooter = _weighted_choice(attacker.attackers or attacker.lineup, rng, weights_by_position=_SHOTTER_POSITION_WEIGHTS)
+            creator = _weighted_choice(
+                attacker.creators or attacker.lineup, rng, weights_by_position=_CREATOR_POSITION_WEIGHTS
+            )
+            shooter = _weighted_choice(
+                attacker.attackers or attacker.lineup, rng, weights_by_position=_SHOTTER_POSITION_WEIGHTS
+            )
             if shooter.player_id == creator.player_id and len(attacker.lineup) > 1:
-                alternatives = tuple(player for player in attacker.attackers if player.player_id != creator.player_id) or tuple(player for player in attacker.lineup if player.player_id != creator.player_id)
+                alternatives = tuple(
+                    player for player in attacker.attackers if player.player_id != creator.player_id
+                ) or tuple(player for player in attacker.lineup if player.player_id != creator.player_id)
                 if alternatives:
                     shooter = _weighted_choice(alternatives, rng, weights_by_position=_SHOTTER_POSITION_WEIGHTS)
             finisher_delta = (shooter.rating - defender.keeper.rating) / 100.0
@@ -1196,10 +1239,7 @@ class LeagueEngine:
             )
             goal = rng.random() < goal_probability
             on_target_probability = _clamp(
-                0.24
-                + (shot_xg * 1.55)
-                + ((shooter.rating - 70) * 0.004)
-                - (attacker_fatigue * 0.06),
+                0.24 + (shot_xg * 1.55) + ((shooter.rating - 70) * 0.004) - (attacker_fatigue * 0.06),
                 0.18,
                 0.94,
             )
@@ -1276,14 +1316,17 @@ class LeagueEngine:
         randomness_factor: float | None = None,
     ) -> list[MatchResult]:
         historic_results = [
-            result
-            for result in previous_results
-            if str(_result_value(result, "league_id") or "") == league.league_id
+            result for result in previous_results if str(_result_value(result, "league_id") or "") == league.league_id
         ]
         table_positions: Mapping[str, int] = {}
         if historic_results:
-            converted = [result if isinstance(result, MatchResult) else match_result_from_mapping(dict(result)) for result in historic_results]
-            table_positions = {row["club_id"]: int(row["position"]) for row in build_table(league=league, results=converted)}
+            converted = [
+                result if isinstance(result, MatchResult) else match_result_from_mapping(dict(result))
+                for result in historic_results
+            ]
+            table_positions = {
+                row["club_id"]: int(row["position"]) for row in build_table(league=league, results=converted)
+            }
         return [
             self.simulate_fixture(
                 league=league,
@@ -1336,14 +1379,22 @@ class LeagueEngine:
         )
         _assign_volume_stats(
             runtime=home_runtime,
-            accumulators={player_id: accumulator for player_id, accumulator in accumulators.items() if accumulator.team_id == home.club_id},
+            accumulators={
+                player_id: accumulator
+                for player_id, accumulator in accumulators.items()
+                if accumulator.team_id == home.club_id
+            },
             team_stats=home_stats,
             conceding_goals=goals[away.club_id],
             rng=rng,
         )
         _assign_volume_stats(
             runtime=away_runtime,
-            accumulators={player_id: accumulator for player_id, accumulator in accumulators.items() if accumulator.team_id == away.club_id},
+            accumulators={
+                player_id: accumulator
+                for player_id, accumulator in accumulators.items()
+                if accumulator.team_id == away.club_id
+            },
             team_stats=away_stats,
             conceding_goals=goals[home.club_id],
             rng=rng,
@@ -1367,14 +1418,23 @@ class LeagueEngine:
                 reverse=True,
             )
         )
-        winner_club_id = home.club_id if goals[home.club_id] > goals[away.club_id] else away.club_id if goals[away.club_id] > goals[home.club_id] else None
+        winner_club_id = (
+            home.club_id
+            if goals[home.club_id] > goals[away.club_id]
+            else away.club_id if goals[away.club_id] > goals[home.club_id] else None
+        )
         favorite = home if home.overall_rating >= away.overall_rating else away
         underdog = away if favorite.club_id == home.club_id else home
         upset = winner_club_id == underdog.club_id and abs(home.overall_rating - away.overall_rating) >= 4
         man_of_the_match = player_performances[0].player_name if player_performances else home.star_player.name
         content_brief = build_content_brief(fixture, storyline, home_club=home, away_club=away)
-        last_highlight = next((event for event in reversed(major_events) if event.event_type == "goal"), major_events[-1] if major_events else None)
-        last_highlight_line = last_highlight.description if last_highlight is not None else "The match stayed tense and compact."
+        last_highlight = next(
+            (event for event in reversed(major_events) if event.event_type == "goal"),
+            major_events[-1] if major_events else None,
+        )
+        last_highlight_line = (
+            last_highlight.description if last_highlight is not None else "The match stayed tense and compact."
+        )
         commentary_prompt = (
             f"{storyline.commentary_angle} Final score: {home.name} {goals[home.club_id]}-{goals[away.club_id]} {away.name}. "
             f"Possession {home_stats.possession_pct:.1f}-{away_stats.possession_pct:.1f}, shots {home_stats.shots}-{away_stats.shots}, "
@@ -1401,7 +1461,9 @@ class LeagueEngine:
             upset=upset,
             man_of_the_match=man_of_the_match,
             storyline=storyline,
-            events=tuple(sorted(major_events, key=lambda event: (event.match_second, event.team_name, event.player_name))),
+            events=tuple(
+                sorted(major_events, key=lambda event: (event.match_second, event.team_name, event.player_name))
+            ),
             commentary_prompt=commentary_prompt,
             pundit_prompt=pundit_prompt,
             viral_score=self._viral_score(
@@ -1479,9 +1541,7 @@ class LeagueEngine:
         winning_team_name = (
             result.home_club_name
             if result.winner_club_id == result.home_club_id
-            else result.away_club_name
-            if result.winner_club_id == result.away_club_id
-            else result.home_club_name
+            else result.away_club_name if result.winner_club_id == result.away_club_id else result.home_club_name
         )
         opponent_name = result.away_club_name if winning_team_name == result.home_club_name else result.home_club_name
         title = f"{winning_team_name} ignite {result.storyline.headline.lower()}"

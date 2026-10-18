@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, get_current_wallet_user, get_session
+from app.auth.dependencies import get_current_wallet_user, get_session
 from app.models.user import User
 from app.services.payment_gateway_service import PaymentGatewayError, PaymentGatewayService
 from app.services.runtime_control_service import RuntimeControlService, WalletTransactionLockConflict
@@ -14,7 +14,6 @@ from app.integrations.payments.schemas import (
     PaymentQuoteRequest,
     PaymentQuoteView,
 )
-
 
 router = APIRouter(prefix="/integrations/payments", tags=["payments"])
 
@@ -66,7 +65,9 @@ def quote_payment(
         net_amount=quote.net_amount,
         currency_code=quote.currency_code,
         rate_value=quote.rate_value,
-        rate_direction=quote.rate_direction.value if hasattr(quote.rate_direction, "value") else str(quote.rate_direction),
+        rate_direction=(
+            quote.rate_direction.value if hasattr(quote.rate_direction, "value") else str(quote.rate_direction)
+        ),
         unit=quote.unit,
         processor_mode=quote.processor_mode,
         payout_channel=quote.payout_channel,

@@ -22,7 +22,6 @@ from app.replay_archive.schemas import (
     ReplayArchiveRecord,
     ReplayClubView,
     ReplayMomentView,
-    ReplayScoreline,
     ReplaySummaryView,
 )
 
@@ -134,7 +133,9 @@ class ReplayArchiveService:
         *,
         recorded_at: datetime | None = None,
     ) -> CountdownView:
-        update = payload if isinstance(payload, CountdownUpdatePayload) else CountdownUpdatePayload.model_validate(payload)
+        update = (
+            payload if isinstance(payload, CountdownUpdatePayload) else CountdownUpdatePayload.model_validate(payload)
+        )
         decision = self.spectator_policy.resolve(
             replay_visibility=update.competition_context.replay_visibility,
             round_number=update.competition_context.round_number,

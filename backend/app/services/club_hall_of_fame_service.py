@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ingestion.models import Player
 from app.models.club_hall_of_fame import ClubHallOfFameEntry
 from app.models.regen import RegenLegacyRecord, RegenProfile
+from sqlalchemy import select as select
 
 
 @dataclass(slots=True)

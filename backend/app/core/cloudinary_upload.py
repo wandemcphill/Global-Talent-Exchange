@@ -59,7 +59,9 @@ def cloudinary_configured() -> bool:
 def _sign(params: dict[str, str], api_secret: str) -> str:
     # Cloudinary signature: sha1 of "k=v&k=v..." (sorted, excluding file/api_key/etc.) + secret.
     to_sign = "&".join(f"{key}={params[key]}" for key in sorted(params))
-    return hashlib.sha1(f"{to_sign}{api_secret}".encode()).hexdigest()
+    # Cloudinary's API requires SHA1 for request signing; it is not used for
+    # password storage or integrity guarantees here.
+    return hashlib.sha1(f"{to_sign}{api_secret}".encode()).hexdigest()  # nosec B324
 
 
 def upload_kyc_document(

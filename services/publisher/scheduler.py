@@ -69,7 +69,7 @@ def _resolve_clip_id(clip: Mapping[str, Any]) -> str:
     )
     if not seed:
         raise ValueError("Clip must provide clip_id/highlight_id or enough identifying fields.")
-    digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()[:16]
+    digest = hashlib.sha1(seed.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
     return f"clip_{digest}"
 
 
@@ -167,7 +167,11 @@ def should_post(clip: Mapping[str, Any], policy: PublisherSchedulePolicy | None 
     viral_score = _get_int(clip, "viral_score", default=0)
     duration_seconds = _get_int(clip, "duration", "duration_seconds", default=0)
     video_path = _resolve_video_path(clip, phase="immediate")
-    return viral_score > resolved_policy.min_viral_score and duration_seconds < resolved_policy.max_duration_seconds and bool(video_path)
+    return (
+        viral_score > resolved_policy.min_viral_score
+        and duration_seconds < resolved_policy.max_duration_seconds
+        and bool(video_path)
+    )
 
 
 def build_publish_jobs(

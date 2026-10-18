@@ -13,7 +13,6 @@ from app.value_engine.schemas import (
     ValueAdminAuditResponse,
     ValueAdminAuditView,
     ValueCandidateResponse,
-    ValueHistoryResponse,
     ValueRecomputeCandidateView,
     ValueRecomputeRequest,
     ValueRunHistoryResponse,

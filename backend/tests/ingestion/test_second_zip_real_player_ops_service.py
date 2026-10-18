@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import csv
-from datetime import UTC, datetime
 import logging
 from pathlib import Path
 from types import SimpleNamespace
@@ -31,7 +29,6 @@ from app.models.real_player_import_batch import (
     RealPlayerImportRowStatus,
 )
 from app.schemas.real_player_ingestion import RealPlayerIngestionItemResult, RealPlayerSeedInput
-
 
 PLAYER_HEADERS = [
     "player_id",
@@ -77,11 +74,13 @@ def _initialize_database(database_url: str, *, enforce_foreign_keys: bool = Fals
     load_model_modules()
     engine = create_engine(database_url, connect_args={"check_same_thread": False})
     if enforce_foreign_keys and database_url.startswith("sqlite"):
+
         @event.listens_for(engine, "connect")
         def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record) -> None:
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.close()
+
     Base.metadata.create_all(engine)
     return engine
 
@@ -343,7 +342,9 @@ def _stub_batch_publisher(chunk_calls: list[list[str]], result_calls: list[str] 
                 result_calls.append(row.source_player_key)
                 sequence = len(result_calls)
             else:
-                sequence = sum(len(chunk) for chunk in chunk_calls[: len(chunk_calls) - 1]) + len(results_by_source_key) + 1
+                sequence = (
+                    sum(len(chunk) for chunk in chunk_calls[: len(chunk_calls) - 1]) + len(results_by_source_key) + 1
+                )
             result = RealPlayerIngestionItemResult(
                 source_name=row.source_name,
                 source_player_key=row.source_player_key,
@@ -411,15 +412,24 @@ def test_preload_references_inserts_and_updates_second_zip_entities(tmp_path: Pa
     assert second.counts.updated_competitions == 1
     assert second.counts.updated_clubs == 1
     with _session_factory(engine)() as session:
-        assert session.scalar(
-            select(func.count()).select_from(Country).where(Country.source_provider == SECOND_ZIP_SOURCE_NAME)
-        ) == 1
-        assert session.scalar(
-            select(func.count()).select_from(Competition).where(Competition.source_provider == SECOND_ZIP_SOURCE_NAME)
-        ) == 1
-        assert session.scalar(
-            select(func.count()).select_from(Club).where(Club.source_provider == SECOND_ZIP_SOURCE_NAME)
-        ) == 1
+        assert (
+            session.scalar(
+                select(func.count()).select_from(Country).where(Country.source_provider == SECOND_ZIP_SOURCE_NAME)
+            )
+            == 1
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(Competition)
+                .where(Competition.source_provider == SECOND_ZIP_SOURCE_NAME)
+            )
+            == 1
+        )
+        assert (
+            session.scalar(select(func.count()).select_from(Club).where(Club.source_provider == SECOND_ZIP_SOURCE_NAME))
+            == 1
+        )
     engine.dispose()
 
 
@@ -448,15 +458,8 @@ def test_preload_references_seeds_missing_canonical_countries_idempotently(tmp_p
 
     canonical_names = [seed.name for seed in CANONICAL_COUNTRY_SEEDS]
     with _session_factory(engine)() as session:
-        rows = list(
-            session.scalars(
-                select(Country).where(Country.name.in_(canonical_names))
-            )
-        )
-        counts_by_name = {
-            name: sum(1 for row in rows if row.name == name)
-            for name in canonical_names
-        }
+        rows = list(session.scalars(select(Country).where(Country.name.in_(canonical_names))))
+        counts_by_name = {name: sum(1 for row in rows if row.name == name) for name in canonical_names}
 
     assert counts_by_name == {name: 1 for name in canonical_names}
     engine.dispose()
@@ -480,15 +483,24 @@ def test_import_archive_preloads_references_automatically(tmp_path: Path, monkey
 
     assert imported.counts.publish_ready == 1
     with _session_factory(engine)() as session:
-        assert session.scalar(
-            select(func.count()).select_from(Country).where(Country.source_provider == SECOND_ZIP_SOURCE_NAME)
-        ) == 1
-        assert session.scalar(
-            select(func.count()).select_from(Competition).where(Competition.source_provider == SECOND_ZIP_SOURCE_NAME)
-        ) == 1
-        assert session.scalar(
-            select(func.count()).select_from(Club).where(Club.source_provider == SECOND_ZIP_SOURCE_NAME)
-        ) == 1
+        assert (
+            session.scalar(
+                select(func.count()).select_from(Country).where(Country.source_provider == SECOND_ZIP_SOURCE_NAME)
+            )
+            == 1
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(Competition)
+                .where(Competition.source_provider == SECOND_ZIP_SOURCE_NAME)
+            )
+            == 1
+        )
+        assert (
+            session.scalar(select(func.count()).select_from(Club).where(Club.source_provider == SECOND_ZIP_SOURCE_NAME))
+            == 1
+        )
     engine.dispose()
 
 
@@ -530,7 +542,9 @@ def test_import_archive_commits_player_import_items_before_evaluation(tmp_path: 
     engine.dispose()
 
 
-def test_import_archive_persists_valid_player_import_item_reference_when_foreign_keys_are_enforced(tmp_path: Path) -> None:
+def test_import_archive_persists_valid_player_import_item_reference_when_foreign_keys_are_enforced(
+    tmp_path: Path,
+) -> None:
     database_url = _database_url(tmp_path / "2ndzip-fk-reference.db")
     engine = _initialize_database(database_url, enforce_foreign_keys=True)
     _seed_canonical_entities(engine)
@@ -990,11 +1004,7 @@ def test_publish_checkpoints_summary_less_often_than_publish_chunks(tmp_path: Pa
     assert publish_calls == [["1", "2"], ["3", "4"], ["5"]]
     assert refresh_states == [True, False]
     assert published.counts.published == 5
-    messages = [
-        record.message
-        for record in caplog.records
-        if "2nd.zip publish checkpoint" in record.message
-    ]
+    messages = [record.message for record in caplog.records if "2nd.zip publish checkpoint" in record.message]
     assert len(messages) == 2
     assert "processed_in_batch=4" in messages[0]
     assert "total_published=4" in messages[0]
