@@ -104,9 +104,8 @@ class CampaignViralIntegrationHook:
         creator_profile: CreatorProfile,
         clips: list[dict[str, Any]],
     ) -> list[ViralClipView]:
-        if (
-            not self._has_bound_table(AnalyticsEvent.__tablename__)
-            or not self._has_bound_table(ClipVariant.__tablename__)
+        if not self._has_bound_table(AnalyticsEvent.__tablename__) or not self._has_bound_table(
+            ClipVariant.__tablename__
         ):
             return []
         published: list[ViralClipView] = []
@@ -166,7 +165,6 @@ class CampaignViralIntegrationHook:
         clip_url = str(clip_payload.get("clip_url") or f"campaign://{campaign.id}/{clip_id}").strip()
         views = max(0, _as_int(clip_payload.get("views")))
         engagement = max(0, _as_int(clip_payload.get("engagement")))
-        conversions = max(0, _as_int(clip_payload.get("conversions")))
         metadata = dict(clip_payload.get("metadata") or {})
         duration_seconds = max(5.0, _as_float(metadata.get("duration_seconds"), default=18.0))
         shares = max(0, _as_int(metadata.get("shares"), default=int(round(engagement * 0.45))))

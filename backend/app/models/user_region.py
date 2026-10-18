@@ -5,14 +5,17 @@ from datetime import datetime
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from typing import TYPE_CHECKING
+
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class UserRegionProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "user_region_profiles"
-    __table_args__ = (
-        UniqueConstraint("user_id", name="uq_user_region_profiles_user_id"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", name="uq_user_region_profiles_user_id"),)
 
     user_id: Mapped[str] = mapped_column(
         String(36),

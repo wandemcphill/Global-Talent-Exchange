@@ -18,7 +18,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-
 FM23_GENIE_SCOUT_PROVIDER = "fm23_club_legends_v0"
 FM23_GENIE_SCOUT_SCHEMA_VERSION = "gtex.fm23-genie-scout.v1"
 DEFAULT_SNAPSHOT_AT = datetime(2022, 6, 27, tzinfo=UTC)
@@ -64,8 +63,7 @@ def build_manifest(
         "mode": "curated_seed",
         "ingestion_batch_id": f"{provider_name}-{snapshot_at.date().isoformat()}",
         "ingestion_source_version": (
-            f"{FM23_GENIE_SCOUT_SCHEMA_VERSION}:"
-            f"{path.name}:sha256:{hashlib.sha256(raw_bytes).hexdigest()}"
+            f"{FM23_GENIE_SCOUT_SCHEMA_VERSION}:" f"{path.name}:sha256:{hashlib.sha256(raw_bytes).hexdigest()}"
         ),
         "as_of": snapshot_at.astimezone(UTC).isoformat(),
         "players": players,
@@ -108,12 +106,15 @@ def _to_player_row(
         "age": age,
         "occurrence": occurrence,
     }
-    source_key = "fm23gs-" + hashlib.sha256(
-        json.dumps(source_key_payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
-    ).hexdigest()[:24]
+    source_key = (
+        "fm23gs-"
+        + hashlib.sha256(
+            json.dumps(source_key_payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        ).hexdigest()[:24]
+    )
     value = _money(row.get("Value"))
     sale_value = _money(row.get("Sale Value"))
-    wage = _money(row.get("Wage"))
+
     return {
         "source_name": provider_name,
         "source_player_key": source_key,
@@ -137,7 +138,9 @@ def _require_headers(rows: list[dict[str, str | None]]) -> None:
     required = {"Name", "Nation", "Position", "Club", "Age", "Best Rating", "Best Pot Rating"}
     missing = required - set(rows[0])
     if missing:
-        raise Fm23GenieScoutImportError(f"FM23 Genie Scout CSV is missing required columns: {', '.join(sorted(missing))}.")
+        raise Fm23GenieScoutImportError(
+            f"FM23 Genie Scout CSV is missing required columns: {', '.join(sorted(missing))}."
+        )
 
 
 def _decode_source(raw_bytes: bytes) -> str:
@@ -151,7 +154,9 @@ def _decode_source(raw_bytes: bytes) -> str:
         try:
             return raw_bytes.decode("cp1252")
         except UnicodeDecodeError as exc:
-            raise Fm23GenieScoutImportError(f"FM23 Genie Scout CSV could not be decoded as UTF-8 or Windows-1252: {exc}") from exc
+            raise Fm23GenieScoutImportError(
+                f"FM23 Genie Scout CSV could not be decoded as UTF-8 or Windows-1252: {exc}"
+            ) from exc
 
 
 def _required(row: dict[str, str | None], key: str, row_number: int) -> str:

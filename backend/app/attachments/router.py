@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.auth.dependencies import get_current_user, get_session
 from app.models.attachment import Attachment
 from app.models.user import User
 
@@ -47,10 +47,13 @@ def download_attachment(
     attachment = session.get(Attachment, attachment_id)
     if attachment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found.")
-    if attachment.created_by_user_id not in {None, current_user.id} and current_user.role.value not in {"admin", "super_admin"}:
+    if attachment.created_by_user_id not in {None, current_user.id} and current_user.role.value not in {
+        "admin",
+        "super_admin",
+    }:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this attachment.")
     return Response(
         content=attachment.data,
         media_type=attachment.content_type,
-        headers={"Content-Disposition": f'attachment; filename=\"{attachment.filename}\"'},
+        headers={"Content-Disposition": f'attachment; filename="{attachment.filename}"'},
     )

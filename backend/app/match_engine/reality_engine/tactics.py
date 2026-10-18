@@ -5,7 +5,8 @@ from statistics import fmean
 
 from app.match_engine.reality_engine.match_state import MatchState
 from app.match_engine.reality_engine.roles import resolve_role_profile
-from app.match_engine.simulation.models import PlayerRole, TeamRuntimeState
+from app.match_engine.simulation.models import TeamRuntimeState
+from app.match_engine.simulation.models import PlayerRole as PlayerRole
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,8 +83,7 @@ class TacticalEngine:
         outfielders = team.active_outfielders()
         if outfielders:
             buildup_layer = fmean(
-                player.control_value() * resolve_role_profile(player).buildup
-                for player in outfielders
+                player.control_value() * resolve_role_profile(player).buildup for player in outfielders
             )
             press_resistance = fmean(
                 (
@@ -96,12 +96,10 @@ class TacticalEngine:
                 for player in outfielders
             )
             pressing_layer = fmean(
-                player.pressing_value() * resolve_role_profile(player).pressing
-                for player in outfielders
+                player.pressing_value() * resolve_role_profile(player).pressing for player in outfielders
             )
             recovery_layer = fmean(
-                player.defensive_value() * resolve_role_profile(player).recovery
-                for player in outfielders
+                player.defensive_value() * resolve_role_profile(player).recovery for player in outfielders
             )
             set_piece_threat = fmean(
                 ((player.aerial_ability * 0.58) + (player.attacking_value() * 0.42))
@@ -161,9 +159,7 @@ class TacticalEngine:
             115.0,
         )
         chance_suppression = self._clamp(
-            (defensive_compactness * 0.72)
-            + (team.strength.goalkeeping * 0.20)
-            + (press_intensity * 0.08),
+            (defensive_compactness * 0.72) + (team.strength.goalkeeping * 0.20) + (press_intensity * 0.08),
             18.0,
             115.0,
         )
@@ -217,9 +213,7 @@ class TacticalEngine:
 
     def _fatigue_multiplier(self, *, team: TeamRuntimeState, minute: int) -> float:
         return self._clamp(
-            1.02
-            - max(0.0, (team.fatigue_level - 42.0) / 180.0)
-            - max(0, minute - 68) / 600.0,
+            1.02 - max(0.0, (team.fatigue_level - 42.0) / 180.0) - max(0, minute - 68) / 600.0,
             0.72,
             1.04,
         )

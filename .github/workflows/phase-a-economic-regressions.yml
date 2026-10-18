@@ -23,9 +23,10 @@ jobs:
         with:
           python-version: "3.14"
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: backend/requirements.lock
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install -r backend/requirements.txt pytest
+      - run: python -m pip install -r backend/requirements.lock
+      - run: python -m pip install pytest
       - name: Run Phase A economic regression suite
         run: >
           python -m pytest

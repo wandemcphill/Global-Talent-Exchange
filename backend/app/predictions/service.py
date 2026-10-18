@@ -1,19 +1,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time
+from datetime import UTC, datetime, time
 from math import exp
 
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.live_ops.service import LiveOpsService
-from app.models.club_profile import ClubProfile
 from app.models.competition_match import CompetitionMatch
 from app.models.competition_participant import CompetitionParticipant
 from app.models.notification_record import NotificationRecord
 from app.models.user import User
 from app.predictions.models import Prediction, PredictionOutcome
+from datetime import date as date
+from app.models.club_profile import ClubProfile as ClubProfile
 
 BASE_REWARD = 10.0
 

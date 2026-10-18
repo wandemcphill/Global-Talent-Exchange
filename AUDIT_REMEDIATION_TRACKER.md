@@ -184,7 +184,7 @@ Phase acceptance criteria:
 
 Canonical matrix:
 
-- `CURRENT_STATE_CONTRACT_MATRIX.md`
+- `docs/reports/CURRENT_STATE_CONTRACT_MATRIX.md`
 
 The following audit claims have already been verified as stale or reframed and should be treated as Phase A0 baseline evidence:
 

@@ -14,7 +14,7 @@ from app.common.schemas.competition import (
 )
 from app.competition_engine.match_dispatcher import MatchDispatcher, scale_strength_rating
 from app.competition_engine.scheduler import CompetitionScheduler, CompetitionWindowResolver
-from app.fast_cups.models.domain import FastCup, FastCupBracket, FastCupMatch, FastCupRound
+from app.fast_cups.models.domain import FastCup, FastCupBracket, FastCupMatch
 
 
 @dataclass(slots=True)

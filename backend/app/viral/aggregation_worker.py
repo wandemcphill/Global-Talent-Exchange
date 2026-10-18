@@ -8,7 +8,6 @@ from threading import Event as ThreadEvent
 
 from pydantic import ValidationError
 from redis import Redis
-from redis.exceptions import RedisError
 
 from app.backbone.kafka import KafkaJsonConsumer, KafkaMessage
 from app.core.config import Settings, get_settings
@@ -16,6 +15,7 @@ from app.observability.logging import configure_logging
 from app.viral.ingestion_runtime import ClipEventTopicManager
 from app.viral.ingestion_schemas import CLIP_EVENT_TOPICS, CLIP_METRIC_FIELDS, ClipEvent, ClipEventType
 from app.viral.trust import LOW_TRUST_THRESHOLD
+from redis.exceptions import RedisError as RedisError
 
 logger = logging.getLogger(__name__)
 

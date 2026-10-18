@@ -49,36 +49,70 @@ class RiskOpsService:
     def get_overview(self) -> dict:
         self._expire_actions()
         now = self._now()
-        open_aml = self.session.scalar(
-            select(func.count()).select_from(AmlCase).where(AmlCase.status.in_([RiskCaseStatus.OPEN, RiskCaseStatus.IN_REVIEW]))
-        ) or 0
-        open_fraud = self.session.scalar(
-            select(func.count()).select_from(FraudCase).where(FraudCase.status.in_([RiskCaseStatus.OPEN, RiskCaseStatus.IN_REVIEW]))
-        ) or 0
-        open_integrity = self.session.scalar(
-            select(func.count()).select_from(IntegrityIncident).where(IntegrityIncident.status == "open")
-        ) or 0
-        open_reports = self.session.scalar(
-            select(func.count()).select_from(ModerationReport).where(
-                ModerationReport.status.in_([ModerationReportStatus.OPEN, ModerationReportStatus.IN_REVIEW])
+        open_aml = (
+            self.session.scalar(
+                select(func.count())
+                .select_from(AmlCase)
+                .where(AmlCase.status.in_([RiskCaseStatus.OPEN, RiskCaseStatus.IN_REVIEW]))
             )
-        ) or 0
-        critical_events = self.session.scalar(
-            select(func.count()).select_from(SystemEvent).where(SystemEvent.severity == SystemEventSeverity.CRITICAL)
-        ) or 0
+            or 0
+        )
+        open_fraud = (
+            self.session.scalar(
+                select(func.count())
+                .select_from(FraudCase)
+                .where(FraudCase.status.in_([RiskCaseStatus.OPEN, RiskCaseStatus.IN_REVIEW]))
+            )
+            or 0
+        )
+        open_integrity = (
+            self.session.scalar(
+                select(func.count()).select_from(IntegrityIncident).where(IntegrityIncident.status == "open")
+            )
+            or 0
+        )
+        open_reports = (
+            self.session.scalar(
+                select(func.count())
+                .select_from(ModerationReport)
+                .where(ModerationReport.status.in_([ModerationReportStatus.OPEN, ModerationReportStatus.IN_REVIEW]))
+            )
+            or 0
+        )
+        critical_events = (
+            self.session.scalar(
+                select(func.count())
+                .select_from(SystemEvent)
+                .where(SystemEvent.severity == SystemEventSeverity.CRITICAL)
+            )
+            or 0
+        )
         recent_audits = self.session.scalar(select(func.count()).select_from(AuditLog)) or 0
-        elevated = self.session.scalar(
-            select(func.count()).select_from(IntegrityScore).where(IntegrityScore.risk_level.in_(["high", "critical"]))
-        ) or 0
-        active_actions = self.session.scalar(
-            select(func.count()).select_from(RiskAction).where(
-                RiskAction.status == RiskActionStatus.ACTIVE,
-                or_(RiskAction.expires_at.is_(None), RiskAction.expires_at > now),
+        elevated = (
+            self.session.scalar(
+                select(func.count())
+                .select_from(IntegrityScore)
+                .where(IntegrityScore.risk_level.in_(["high", "critical"]))
             )
-        ) or 0
-        signals_24h = self.session.scalar(
-            select(func.count()).select_from(RiskSignal).where(RiskSignal.created_at >= now - timedelta(hours=24))
-        ) or 0
+            or 0
+        )
+        active_actions = (
+            self.session.scalar(
+                select(func.count())
+                .select_from(RiskAction)
+                .where(
+                    RiskAction.status == RiskActionStatus.ACTIVE,
+                    or_(RiskAction.expires_at.is_(None), RiskAction.expires_at > now),
+                )
+            )
+            or 0
+        )
+        signals_24h = (
+            self.session.scalar(
+                select(func.count()).select_from(RiskSignal).where(RiskSignal.created_at >= now - timedelta(hours=24))
+            )
+            or 0
+        )
         notes: list[str] = []
         if open_fraud:
             notes.append("Fraud queue has active cases pending review.")
@@ -104,30 +138,50 @@ class RiskOpsService:
     def get_user_overview(self, user: User) -> dict:
         self._expire_actions()
         score = self.session.scalar(select(IntegrityScore).where(IntegrityScore.user_id == user.id))
-        open_aml = self.session.scalar(
-            select(func.count()).select_from(AmlCase).where(
-                AmlCase.user_id == user.id,
-                AmlCase.status.in_([RiskCaseStatus.OPEN, RiskCaseStatus.IN_REVIEW]),
+        open_aml = (
+            self.session.scalar(
+                select(func.count())
+                .select_from(AmlCase)
+                .where(
+                    AmlCase.user_id == user.id,
+                    AmlCase.status.in_([RiskCaseStatus.OPEN, RiskCaseStatus.IN_REVIEW]),
+                )
             )
-        ) or 0
-        open_fraud = self.session.scalar(
-            select(func.count()).select_from(FraudCase).where(
-                FraudCase.user_id == user.id,
-                FraudCase.status.in_([RiskCaseStatus.OPEN, RiskCaseStatus.IN_REVIEW]),
+            or 0
+        )
+        open_fraud = (
+            self.session.scalar(
+                select(func.count())
+                .select_from(FraudCase)
+                .where(
+                    FraudCase.user_id == user.id,
+                    FraudCase.status.in_([RiskCaseStatus.OPEN, RiskCaseStatus.IN_REVIEW]),
+                )
             )
-        ) or 0
-        open_integrity = self.session.scalar(
-            select(func.count()).select_from(IntegrityIncident).where(
-                IntegrityIncident.user_id == user.id,
-                IntegrityIncident.status == "open",
+            or 0
+        )
+        open_integrity = (
+            self.session.scalar(
+                select(func.count())
+                .select_from(IntegrityIncident)
+                .where(
+                    IntegrityIncident.user_id == user.id,
+                    IntegrityIncident.status == "open",
+                )
             )
-        ) or 0
-        open_reports = self.session.scalar(
-            select(func.count()).select_from(ModerationReport).where(
-                or_(ModerationReport.subject_user_id == user.id, ModerationReport.reporter_user_id == user.id),
-                ModerationReport.status.in_([ModerationReportStatus.OPEN, ModerationReportStatus.IN_REVIEW]),
+            or 0
+        )
+        open_reports = (
+            self.session.scalar(
+                select(func.count())
+                .select_from(ModerationReport)
+                .where(
+                    or_(ModerationReport.subject_user_id == user.id, ModerationReport.reporter_user_id == user.id),
+                    ModerationReport.status.in_([ModerationReportStatus.OPEN, ModerationReportStatus.IN_REVIEW]),
+                )
             )
-        ) or 0
+            or 0
+        )
         restrictions = self.get_user_restrictions(user.id)
         notes: list[str] = []
         if user.kyc_status != KycStatus.FULLY_VERIFIED:
@@ -159,7 +213,9 @@ class RiskOpsService:
             "notes": notes,
         }
 
-    def list_aml_cases(self, *, user_id: str | None = None, status: str | None = None, limit: int = 100) -> list[AmlCase]:
+    def list_aml_cases(
+        self, *, user_id: str | None = None, status: str | None = None, limit: int = 100
+    ) -> list[AmlCase]:
         stmt = select(AmlCase)
         if user_id:
             stmt = stmt.where(AmlCase.user_id == user_id)
@@ -343,7 +399,9 @@ class RiskOpsService:
         occurred_at: datetime | None = None,
         metadata_json: dict[str, Any] | None = None,
     ) -> RiskSignal:
-        normalized_type = signal_type if isinstance(signal_type, RiskSignalType) else RiskSignalType(str(signal_type).strip().lower())
+        normalized_type = (
+            signal_type if isinstance(signal_type, RiskSignalType) else RiskSignalType(str(signal_type).strip().lower())
+        )
         cleaned_signal_value = self._clean(signal_value)
         cleaned_device_id = self._clean(device_id)
         cleaned_ip_address = self._clean(ip_address)
@@ -406,7 +464,9 @@ class RiskOpsService:
         metadata_json: dict[str, Any] | None = None,
     ) -> tuple[RiskAction, bool]:
         self._expire_actions()
-        normalized_type = action_type if isinstance(action_type, RiskActionType) else RiskActionType(str(action_type).strip().lower())
+        normalized_type = (
+            action_type if isinstance(action_type, RiskActionType) else RiskActionType(str(action_type).strip().lower())
+        )
         normalized_rule = self._clean(source_rule_key) or "manual"
         existing = self.session.scalar(
             select(RiskAction).where(
@@ -590,7 +650,9 @@ class RiskOpsService:
                         "device_id": device_id,
                         "linked_user_ids": sorted(user_ids),
                         "supporting_ip_addresses": sorted(
-                            ip for ip, ip_users in ip_clusters.items() if clustered_user_id in ip_users and len(ip_users) > 1
+                            ip
+                            for ip, ip_users in ip_clusters.items()
+                            if clustered_user_id in ip_users and len(ip_users) > 1
                         ),
                     },
                     case_key=self._rule_case_key(clustered_user_id, "same_device_multiple_accounts", device_id),
@@ -611,7 +673,9 @@ class RiskOpsService:
                 users_flagged.add(clustered_user_id)
 
         for flagged_user_id, user_signals in signals_by_user.items():
-            fake_deposit_signal = next((signal for signal in user_signals if self._is_fake_deposit_signal(signal)), None)
+            fake_deposit_signal = next(
+                (signal for signal in user_signals if self._is_fake_deposit_signal(signal)), None
+            )
             if fake_deposit_signal is not None:
                 case, created = self.create_or_update_fraud_case(
                     actor_user_id=admin_user_id,
@@ -691,7 +755,9 @@ class RiskOpsService:
                     actions_created += 1
                 users_flagged.add(flagged_user_id)
 
-            rapid_loop_signal = next((signal for signal in user_signals if self._is_rapid_trade_loop_signal(signal)), None)
+            rapid_loop_signal = next(
+                (signal for signal in user_signals if self._is_rapid_trade_loop_signal(signal)), None
+            )
             if rapid_loop_signal is not None:
                 case, created = self.create_or_update_fraud_case(
                     actor_user_id=admin_user_id,
@@ -726,7 +792,9 @@ class RiskOpsService:
                 users_flagged.add(flagged_user_id)
 
         if users_flagged:
-            notes.append("Signal evaluation flagged users for multi-account, fake deposit, collusion, or bot-trading review.")
+            notes.append(
+                "Signal evaluation flagged users for multi-account, fake deposit, collusion, or bot-trading review."
+            )
         else:
             notes.append("Signal evaluation completed without new fraud actions.")
         self.log_audit(
@@ -960,15 +1028,11 @@ class RiskOpsService:
             if signal.signal_type != RiskSignalType.MATCH_BEHAVIOR:
                 continue
             metadata = signal.metadata_json or {}
-            win_rate = self._ratio(
-                metadata.get("win_rate") or metadata.get("abnormal_win_rate") or signal.signal_value
-            )
+            win_rate = self._ratio(metadata.get("win_rate") or metadata.get("abnormal_win_rate") or signal.signal_value)
             sample_size = self._int(
                 metadata.get("sample_size") or metadata.get("matches_sampled") or metadata.get("matches_played")
             )
-            repeated_rate = self._ratio(
-                metadata.get("repeated_opponent_rate") or metadata.get("opponent_repeat_ratio")
-            )
+            repeated_rate = self._ratio(metadata.get("repeated_opponent_rate") or metadata.get("opponent_repeat_ratio"))
             if win_rate > best_win_rate or (win_rate == best_win_rate and sample_size > best_sample_size):
                 best_win_rate = win_rate
                 best_sample_size = sample_size
@@ -1024,7 +1088,9 @@ class RiskOpsService:
         return any(token in normalized_blob for token in ("rapid_trade_loop", "trade_loop", "bot_trading"))
 
     def _rule_case_key(self, user_id: str | None, rule_key: str, evidence_key: str) -> str:
-        digest = sha1(f"{user_id or 'global'}|{rule_key}|{evidence_key}".encode("utf-8")).hexdigest()[:12]
+        digest = sha1(
+            f"{user_id or 'global'}|{rule_key}|{evidence_key}".encode("utf-8"), usedforsecurity=False
+        ).hexdigest()[:12]
         return f"{(rule_key or 'rule').strip().lower()}-{(user_id or 'global').strip().lower()}-{digest}"
 
     def _clean(self, value: Any) -> str | None:

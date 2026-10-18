@@ -17,7 +17,7 @@ from app.auth.service import (
     InvalidCredentialsError,
     InvalidSessionError,
 )
-from app.models import AuthSession, Base, ClubProfile, LedgerAccount, LedgerUnit, UserWallet
+from app.models import AuthSession, Base, LedgerAccount, LedgerUnit, UserWallet
 from app.models.user import PublicAccountType
 from app.schemas.club_requests import ClubCreateRequest
 from app.services.club_branding_service import ClubBrandingService

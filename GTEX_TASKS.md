@@ -104,7 +104,7 @@ Source prompt:
 - `Prompt C` in `GTEX_PHASED_PROMPTS.md`
 
 Execution addendum:
-- `GTEX_P6_PRODUCTION_GAP_BACKLOG.md`
+- `docs/reports/GTEX_P6_PRODUCTION_GAP_BACKLOG.md`
 
 Scope:
 - Keep `MatchManager`, `MatchEngineLoader`, and the current 3D engine as the default shipped runtime owners

@@ -24,7 +24,7 @@ def build_tracking_token(
     user_id: str | None = None,
 ) -> str:
     seed = "|".join((match_id, ad_id, action, user_id or "anonymous"))
-    return md5(seed.encode("utf-8")).hexdigest()[:16]
+    return md5(seed.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
 
 
 def track_event(

@@ -61,14 +61,11 @@ class LeaderboardEnvelope:
 
 
 class ViralLeaderboardStore(Protocol):
-    def upsert(self, entries: list[LeaderboardEnvelope]) -> None:
-        ...
+    def upsert(self, entries: list[LeaderboardEnvelope]) -> None: ...
 
-    def replace(self, entries: list[LeaderboardEnvelope]) -> None:
-        ...
+    def replace(self, entries: list[LeaderboardEnvelope]) -> None: ...
 
-    def top(self, limit: int) -> list[LeaderboardEnvelope]:
-        ...
+    def top(self, limit: int) -> list[LeaderboardEnvelope]: ...
 
 
 @dataclass(slots=True)
@@ -86,8 +83,7 @@ class InMemoryViralLeaderboardStore:
     def replace(self, entries: list[LeaderboardEnvelope]) -> None:
         with self._lock:
             self._entries = {
-                entry.clip_id: (float(entry.score), json.dumps(entry.payload, default=str))
-                for entry in entries
+                entry.clip_id: (float(entry.score), json.dumps(entry.payload, default=str)) for entry in entries
             }
 
     def top(self, limit: int) -> list[LeaderboardEnvelope]:
@@ -282,8 +278,7 @@ class ClipLiveMetricsSnapshot:
 
 
 class ClipLiveMetricsStore(Protocol):
-    def get_snapshot(self, clip_id: str, *, now: datetime) -> ClipLiveMetricsSnapshot | None:
-        ...
+    def get_snapshot(self, clip_id: str, *, now: datetime) -> ClipLiveMetricsSnapshot | None: ...
 
 
 @dataclass(slots=True)
@@ -364,7 +359,6 @@ class DatabaseClipLiveMetricsStore:
             return None
         if not events:
             return None
-        snapshot = ClipLiveMetricsSnapshot()
         views_last_10min = 0
         views_last_60min = 0
         completions = 0.0
@@ -374,7 +368,11 @@ class DatabaseClipLiveMetricsStore:
         comments = 0.0
         skips = 0.0
         for event in events:
-            created_at = event.created_at.astimezone(UTC) if event.created_at.tzinfo is not None else event.created_at.replace(tzinfo=UTC)
+            created_at = (
+                event.created_at.astimezone(UTC)
+                if event.created_at.tzinfo is not None
+                else event.created_at.replace(tzinfo=UTC)
+            )
             name = str(event.name or "").strip().lower()
             metadata = dict(event.metadata_json or {})
             if name == "clip.view":
@@ -511,47 +509,25 @@ class ViralRankingService:
         ad_weight_adjustments = self.feedback_engine.viral_weight_adjustments()
         ranking_weights = TrendingScoreWeights(
             completion_rate=(
-                float(runtime_snapshot.viral_weights.completion_rate)
-                if runtime_snapshot is not None
-                else 0.35
+                float(runtime_snapshot.viral_weights.completion_rate) if runtime_snapshot is not None else 0.35
             )
             + float(ad_weight_adjustments.get("completion_rate", 0.0)),
-            loop_rate=(
-                float(runtime_snapshot.viral_weights.loop_rate)
-                if runtime_snapshot is not None
-                else 0.20
-            ),
-            share_rate=(
-                float(runtime_snapshot.viral_weights.share_rate)
-                if runtime_snapshot is not None
-                else 0.20
-            )
+            loop_rate=(float(runtime_snapshot.viral_weights.loop_rate) if runtime_snapshot is not None else 0.20),
+            share_rate=(float(runtime_snapshot.viral_weights.share_rate) if runtime_snapshot is not None else 0.20)
             + float(ad_weight_adjustments.get("share_rate", 0.0)),
-            comment_rate=(
-                float(runtime_snapshot.viral_weights.comment_rate)
-                if runtime_snapshot is not None
-                else 0.10
-            )
+            comment_rate=(float(runtime_snapshot.viral_weights.comment_rate) if runtime_snapshot is not None else 0.10)
             + float(ad_weight_adjustments.get("comment_rate", 0.0)),
             avg_watch_time=(
-                float(runtime_snapshot.viral_weights.avg_watch_time)
-                if runtime_snapshot is not None
-                else 0.10
+                float(runtime_snapshot.viral_weights.avg_watch_time) if runtime_snapshot is not None else 0.10
             )
             + float(ad_weight_adjustments.get("avg_watch_time", 0.0)),
             skip_penalty=max(
                 0.01,
-                (
-                    float(runtime_snapshot.viral_weights.skip_penalty)
-                    if runtime_snapshot is not None
-                    else 0.15
-                )
+                (float(runtime_snapshot.viral_weights.skip_penalty) if runtime_snapshot is not None else 0.15)
                 - float(ad_weight_adjustments.get("skip_penalty", 0.0)),
             ),
             velocity_multiplier=(
-                float(runtime_snapshot.viral_weights.velocity_multiplier)
-                if runtime_snapshot is not None
-                else 1.20
+                float(runtime_snapshot.viral_weights.velocity_multiplier) if runtime_snapshot is not None else 1.20
             ),
         )
         for candidate in self._recent_replay_candidates():
@@ -675,7 +651,11 @@ class ViralRankingService:
             entry.payload["rank"] = index
             metadata = dict(entry.payload.get("metadata") or {})
             creator_id = metadata.get("creator_id")
-            if isinstance(creator_id, str) and creator_id.strip() and float(entry.payload.get("trending_score", 0.0) or 0.0) >= 0.45:
+            if (
+                isinstance(creator_id, str)
+                and creator_id.strip()
+                and float(entry.payload.get("trending_score", 0.0) or 0.0) >= 0.45
+            ):
                 analytics_payload = dict(entry.payload.get("analytics") or {})
                 self.feedback_engine.record_viral_success(
                     creator_id=creator_id,
@@ -695,7 +675,9 @@ class ViralRankingService:
         if inspector.has_table(CompetitionMatch.__tablename__):
             competition_matches = list(
                 self.session.scalars(
-                    select(CompetitionMatch).order_by(CompetitionMatch.updated_at.desc()).limit(self.match_candidate_limit)
+                    select(CompetitionMatch)
+                    .order_by(CompetitionMatch.updated_at.desc())
+                    .limit(self.match_candidate_limit)
                 ).all()
             )
             for row in competition_matches:
@@ -738,7 +720,9 @@ class ViralRankingService:
         analytics = clip.analytics
         resolved_weight = max(float(trust_weight), 0.0)
         views = max(int(round(int(analytics.view_count) * resolved_weight)), 1)
-        completions = max(0, min(int(getattr(analytics, "completions", 0) or round(analytics.completion_rate * views)), views))
+        completions = max(
+            0, min(int(getattr(analytics, "completions", 0) or round(analytics.completion_rate * views)), views)
+        )
         total_watch_time = float(getattr(analytics, "total_watch_time", 0.0) or 0.0) * resolved_weight
         if total_watch_time <= 0.0:
             total_watch_time = round(float(analytics.watch_time) * views * resolved_weight, 2)
@@ -748,7 +732,9 @@ class ViralRankingService:
         skips = max(0, int(getattr(analytics, "skips", 0) or max(views - completions, 0)))
         views_last_60min = int(round((getattr(analytics, "views_last_60min", 0) or 0) * resolved_weight))
         views_last_10min = int(round((getattr(analytics, "views_last_10min", 0) or 0) * resolved_weight))
-        live_snapshot = self.metrics_store.get_snapshot(clip.clip_id, now=ranked_at) if self.metrics_store is not None else None
+        live_snapshot = (
+            self.metrics_store.get_snapshot(clip.clip_id, now=ranked_at) if self.metrics_store is not None else None
+        )
         if live_snapshot is not None and live_snapshot.has_metrics:
             views += int(round(float(live_snapshot.views) * resolved_weight))
             completions = min(
@@ -777,12 +763,14 @@ class ViralRankingService:
             total_watch_time=total_watch_time,
             loops=loops,
             shares=(
-                int(round(int(analytics.shares) * resolved_weight)) + int(round(float(live_snapshot.shares) * resolved_weight))
+                int(round(int(analytics.shares) * resolved_weight))
+                + int(round(float(live_snapshot.shares) * resolved_weight))
                 if live_snapshot is not None
                 else int(round(int(analytics.shares) * resolved_weight))
             ),
             comments=(
-                int(round(int(analytics.comments) * resolved_weight)) + int(round(float(live_snapshot.comments) * resolved_weight))
+                int(round(int(analytics.comments) * resolved_weight))
+                + int(round(float(live_snapshot.comments) * resolved_weight))
                 if live_snapshot is not None
                 else int(round(int(analytics.comments) * resolved_weight))
             ),

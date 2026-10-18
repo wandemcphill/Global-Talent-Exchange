@@ -13,7 +13,6 @@ from sqlalchemy.pool import StaticPool
 
 from app.access_control.service import AccessControlService
 from app.auth.dependencies import get_current_user, get_session
-from app.club_growth.personal_manager_policy import PersonalManagerBand
 from app.club_growth.router import router as club_growth_router
 from app.club_growth.schemas import PersonalManagerCreateRequest
 from app.club_growth.service import ClubGrowthService
@@ -166,9 +165,7 @@ def test_create_personal_manager_success(client: TestClient, session: Session) -
     assert manager_in_db.salary_bearing is False
 
     transaction = session.scalar(
-        select(LedgerTransaction).where(
-            LedgerTransaction.reference == "personal-manager:create:user-owner"
-        )
+        select(LedgerTransaction).where(LedgerTransaction.reference == "personal-manager:create:user-owner")
     )
     assert transaction is not None
     assert transaction.source_tag == LedgerSourceTag.PERSONAL_MANAGER_CREATION_SPEND

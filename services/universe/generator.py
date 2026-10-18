@@ -5,7 +5,6 @@ import hashlib
 import random
 from typing import Iterable
 
-
 _CITY_NAMES = (
     "Lagos",
     "Abuja",
@@ -151,7 +150,7 @@ def _average(values: Iterable[int]) -> int:
 
 def _digest_id(*parts: object, prefix: str) -> str:
     seed = "|".join(str(part).strip().lower() for part in parts if str(part).strip())
-    digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()[:12]
+    digest = hashlib.sha1(seed.encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
     return f"{prefix}_{digest}"
 
 
@@ -268,8 +267,7 @@ class UniverseGenerator:
         if size > len(positions):
             positions.extend(self._random.choice(_POSITIONS) for _ in range(size - len(positions)))
         return tuple(
-            self.generate_player(club_id=club_id, index=index, position=positions[index])
-            for index in range(size)
+            self.generate_player(club_id=club_id, index=index, position=positions[index]) for index in range(size)
         )
 
     def generate_club(

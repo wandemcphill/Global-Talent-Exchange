@@ -110,14 +110,6 @@ function withSourceHash(player) {
   };
 }
 
-function isReusableImageUrl(value) {
-  if (!value) {
-    return false;
-  }
-  const text = String(value);
-  return text.startsWith("https://res.cloudinary.com/") || text.includes("/image/upload/");
-}
-
 async function existingAppPlayerImage(playerId) {
   const result = await db.query(
     `

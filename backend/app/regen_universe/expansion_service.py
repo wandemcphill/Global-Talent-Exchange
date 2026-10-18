@@ -88,7 +88,7 @@ def _normalized_country_code(value: str | None) -> str | None:
 
 
 def _hashed_national_seed_country_code(country: Country) -> str:
-    digest = sha1(str(country.id).encode("utf-8")).hexdigest().upper()
+    digest = sha1(str(country.id).encode("utf-8"), usedforsecurity=False).hexdigest().upper()
     return f"C{digest[:7]}"
 
 

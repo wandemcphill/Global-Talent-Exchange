@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
@@ -54,7 +53,8 @@ def _reference_lookup_keys(
             entity_type=CanonicalReferenceEntityType.CLUB.value,
             provider_external_id=_normalize_text(_payload_value(raw_payload, "current_real_world_club_key")) or None,
             display_name=_normalize_text(_payload_value(raw_payload, "current_real_world_club")) or None,
-            competition_external_id=_normalize_text(_payload_value(raw_payload, "current_real_world_league_key")) or None,
+            competition_external_id=_normalize_text(_payload_value(raw_payload, "current_real_world_league_key"))
+            or None,
             competition_display_name=_normalize_text(_payload_value(raw_payload, "current_real_world_league")) or None,
         )
     else:
@@ -82,10 +82,7 @@ def _render_list(values: tuple[str, ...]) -> str:
 def _render_counts(values: dict[str, int]) -> str:
     if not values:
         return "(none)"
-    return ", ".join(
-        f"{key}={count}"
-        for key, count in sorted(values.items())
-    )
+    return ", ".join(f"{key}={count}" for key, count in sorted(values.items()))
 
 
 @dataclass(frozen=True, slots=True)
@@ -303,10 +300,9 @@ class RealPlayerImportValidationReport:
         return "pass"
 
     def render_text(self) -> str:
-        status_summary = ", ".join(
-            f"{status}={count}"
-            for status, count in sorted(self.rows_by_status.items())
-        ) or "(none)"
+        status_summary = (
+            ", ".join(f"{status}={count}" for status, count in sorted(self.rows_by_status.items())) or "(none)"
+        )
         sections = [
             (
                 "1. Batch summary",
@@ -470,22 +466,25 @@ class RealPlayerImportValidationService:
             for identity_key, items in grouped.items():
                 if len(items) < 2:
                     continue
-                player_ids = tuple(sorted({_normalize_text(item.gtex_player_id) for item in items if item.gtex_player_id}))
+                player_ids = tuple(
+                    sorted({_normalize_text(item.gtex_player_id) for item in items if item.gtex_player_id})
+                )
                 groups.append(
                     DuplicateCandidateGroup(
                         key_type=key_type,
                         identity_key=identity_key,
                         row_count=len(items),
                         distinct_player_count=len(player_ids),
-                        source_keys=tuple(
-                            sorted(
-                                f"{item.source_name}:{item.source_player_key}"
-                                for item in items
-                            )
-                        ),
+                        source_keys=tuple(sorted(f"{item.source_name}:{item.source_player_key}" for item in items)),
                         player_ids=player_ids,
                         canonical_names=tuple(
-                            sorted({_normalize_text(item.canonical_name) for item in items if _normalize_text(item.canonical_name)})
+                            sorted(
+                                {
+                                    _normalize_text(item.canonical_name)
+                                    for item in items
+                                    if _normalize_text(item.canonical_name)
+                                }
+                            )
                         ),
                     )
                 )
@@ -513,13 +512,13 @@ class RealPlayerImportValidationService:
             ):
                 if not lookup_keys:
                     continue
-                direct_key = _normalize_text(row.club_reference_key if entity_type == "club" else row.league_reference_key)
+                direct_key = _normalize_text(
+                    row.club_reference_key if entity_type == "club" else row.league_reference_key
+                )
                 reference_key = direct_key or lookup_keys[0]
                 lookup = (row.source_name, reference_key)
                 existing = referenced_keys[entity_type].get(lookup, ())
-                referenced_keys[entity_type][lookup] = tuple(
-                    dict.fromkeys([*existing, *lookup_keys])
-                )
+                referenced_keys[entity_type][lookup] = tuple(dict.fromkeys([*existing, *lookup_keys]))
         if not referenced_keys["club"] and not referenced_keys["competition"]:
             return _CanonicalMappingAnalysis(
                 unresolved_references=(),
@@ -535,13 +534,7 @@ class RealPlayerImportValidationService:
                 ),
             )
 
-        source_names = sorted(
-            {
-                source_name
-                for values in referenced_keys.values()
-                for source_name, _ in values
-            }
-        )
+        source_names = sorted({source_name for values in referenced_keys.values() for source_name, _ in values})
         provider_reference_keys = sorted(
             {
                 candidate_key
@@ -585,8 +578,7 @@ class RealPlayerImportValidationService:
             )
         )
         unresolved_lookup = {
-            (row.entity_type, row.source_name, row.provider_reference_key): row
-            for row in unresolved_rows
+            (row.entity_type, row.source_name, row.provider_reference_key): row for row in unresolved_rows
         }
 
         findings: list[UnresolvedReferenceItem] = []
@@ -691,25 +683,39 @@ class RealPlayerImportValidationService:
         rows: list[RealPlayerImportRow],
     ) -> ValuationCoverageSummary:
         player_ids = sorted({_normalize_text(row.gtex_player_id) for row in rows if row.gtex_player_id})
-        snapshot_ids = sorted({_normalize_text(row.authoritative_snapshot_id) for row in rows if row.authoritative_snapshot_id})
-        profile_lookup = {
-            profile.gtex_player_id: profile
-            for profile in session.scalars(
-                select(RealPlayerProfile).where(RealPlayerProfile.gtex_player_id.in_(player_ids))
-            )
-        } if player_ids else {}
-        summary_lookup = {
-            summary.player_id: summary
-            for summary in session.scalars(
-                select(PlayerSummaryReadModel).where(PlayerSummaryReadModel.player_id.in_(player_ids))
-            )
-        } if player_ids else {}
-        snapshot_lookup = {
-            snapshot.id: snapshot
-            for snapshot in session.scalars(
-                select(PlayerValueSnapshotRecord).where(PlayerValueSnapshotRecord.id.in_(snapshot_ids))
-            )
-        } if snapshot_ids else {}
+        snapshot_ids = sorted(
+            {_normalize_text(row.authoritative_snapshot_id) for row in rows if row.authoritative_snapshot_id}
+        )
+        profile_lookup = (
+            {
+                profile.gtex_player_id: profile
+                for profile in session.scalars(
+                    select(RealPlayerProfile).where(RealPlayerProfile.gtex_player_id.in_(player_ids))
+                )
+            }
+            if player_ids
+            else {}
+        )
+        summary_lookup = (
+            {
+                summary.player_id: summary
+                for summary in session.scalars(
+                    select(PlayerSummaryReadModel).where(PlayerSummaryReadModel.player_id.in_(player_ids))
+                )
+            }
+            if player_ids
+            else {}
+        )
+        snapshot_lookup = (
+            {
+                snapshot.id: snapshot
+                for snapshot in session.scalars(
+                    select(PlayerValueSnapshotRecord).where(PlayerValueSnapshotRecord.id.in_(snapshot_ids))
+                )
+            }
+            if snapshot_ids
+            else {}
+        )
 
         missing_rows: list[str] = []
         rows_with_snapshot_id = 0
@@ -731,7 +737,10 @@ class RealPlayerImportValidationService:
             profile = profile_lookup.get(_normalize_text(row.gtex_player_id))
             if profile is not None and _normalize_text(profile.pricing_snapshot_id):
                 profiles_with_snapshot_id += 1
-                if profile.pricing_snapshot_id == row.authoritative_snapshot_id and profile.pricing_snapshot_id in snapshot_lookup:
+                if (
+                    profile.pricing_snapshot_id == row.authoritative_snapshot_id
+                    and profile.pricing_snapshot_id in snapshot_lookup
+                ):
                     profiles_with_matching_snapshot += 1
             else:
                 row_has_gap = True

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.national_team import (
@@ -24,7 +24,9 @@ class NationalTeamEngineService:
     session: Session
 
     def create_competition(self, *, payload, actor: User) -> NationalTeamCompetition:
-        existing = self.session.scalar(select(NationalTeamCompetition).where(NationalTeamCompetition.key == payload.key.strip().lower()))
+        existing = self.session.scalar(
+            select(NationalTeamCompetition).where(NationalTeamCompetition.key == payload.key.strip().lower())
+        )
         if existing is not None:
             raise NationalTeamEngineError("National team competition key already exists.")
         competition = NationalTeamCompetition(
@@ -60,7 +62,11 @@ class NationalTeamEngineService:
         return list(self.session.scalars(stmt).all())
 
     def get_competition(self, competition_id: str) -> NationalTeamCompetition | None:
-        stmt = select(NationalTeamCompetition).where(NationalTeamCompetition.id == competition_id).options(selectinload(NationalTeamCompetition.entries))
+        stmt = (
+            select(NationalTeamCompetition)
+            .where(NationalTeamCompetition.id == competition_id)
+            .options(selectinload(NationalTeamCompetition.entries))
+        )
         return self.session.scalar(stmt)
 
     def upsert_entry(self, *, competition_id: str, payload, actor: User) -> NationalTeamEntry:
@@ -182,6 +188,18 @@ class NationalTeamEngineService:
         )
 
     def user_history(self, *, user: User) -> dict[str, list]:
-        managed_entries = list(self.session.scalars(select(NationalTeamEntry).where(NationalTeamEntry.manager_user_id == user.id).order_by(NationalTeamEntry.updated_at.desc())).all())
-        squad_memberships = list(self.session.scalars(select(NationalTeamSquadMember).where(NationalTeamSquadMember.user_id == user.id).order_by(NationalTeamSquadMember.updated_at.desc())).all())
+        managed_entries = list(
+            self.session.scalars(
+                select(NationalTeamEntry)
+                .where(NationalTeamEntry.manager_user_id == user.id)
+                .order_by(NationalTeamEntry.updated_at.desc())
+            ).all()
+        )
+        squad_memberships = list(
+            self.session.scalars(
+                select(NationalTeamSquadMember)
+                .where(NationalTeamSquadMember.user_id == user.id)
+                .order_by(NationalTeamSquadMember.updated_at.desc())
+            ).all()
+        )
         return {"managed_entries": managed_entries, "squad_memberships": squad_memberships}

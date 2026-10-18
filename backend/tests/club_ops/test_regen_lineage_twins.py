@@ -107,11 +107,7 @@ def test_owner_son_lifetime_max() -> None:
             random_seed=idx,
             owner_context=owner_context,
         )
-    owner_sons = [
-        regen
-        for regen in regen_service.list_regens("club-lagos")
-        if regen.metadata.get("club_owner_son")
-    ]
+    owner_sons = [regen for regen in regen_service.list_regens("club-lagos") if regen.metadata.get("club_owner_son")]
     assert len(owner_sons) == settings.regen_generation.owner_son_lifetime_cap
     assert store.owner_son_lifetime_counts_by_user["user-owner-1"] == settings.regen_generation.owner_son_lifetime_cap
 
@@ -136,7 +132,7 @@ def test_paid_owner_son_request_flow() -> None:
     )
     assert request.total_cost_coin == expected_cost
     club_context = RegenClubContext(country_code="NG", region_name="Lagos", city_name="Lagos")
-    batch = regen_service.generate_academy_intake(
+    regen_service.generate_academy_intake(
         club_id="club-lagos",
         club_context=club_context,
         season_label="2029/2030",
@@ -146,10 +142,7 @@ def test_paid_owner_son_request_flow() -> None:
     )
     assert request in store.owner_son_fulfilled_requests_by_club["club-lagos"]
     assert request not in store.owner_son_pending_requests_by_club["club-lagos"]
-    assert any(
-        regen.metadata.get("club_owner_son")
-        for regen in regen_service.list_regens("club-lagos")
-    )
+    assert any(regen.metadata.get("club_owner_son") for regen in regen_service.list_regens("club-lagos"))
 
 
 def test_twin_generation_rarity() -> None:
