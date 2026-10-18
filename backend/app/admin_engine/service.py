@@ -245,11 +245,60 @@ _FEATURE_FLAG_SEEDS: tuple[dict[str, object], ...] = (
         "allowed_roles_json": ["admin", "super_admin"],
         "metadata_json": {"route": "/app/home"},
     },
+    {
+        "feature_key": "club_legacy_market",
+        "title": "Club Legacy Market",
+        "description": "Marketplace and showroom supply routes. Off until Club Legacy is reviewed.",
+        "enabled": False,
+        "audience": "internal",
+        "launch_state": "internal",
+        "allowed_roles_json": ["admin", "super_admin"],
+        "metadata_json": {"route": "/app/home"},
+    },
+    {
+        "feature_key": "club_legacy_preseason",
+        "title": "Club Legacy Pre-season",
+        "description": "Pre-season invitation routes. Off until Club Legacy is reviewed.",
+        "enabled": False,
+        "audience": "internal",
+        "launch_state": "internal",
+        "allowed_roles_json": ["admin", "super_admin"],
+        "metadata_json": {"route": "/app/home"},
+    },
+    {
+        "feature_key": "club_legacy_sponsors",
+        "title": "Club Legacy Sponsors",
+        "description": "Sponsor contract routes. Off until Club Legacy is reviewed.",
+        "enabled": False,
+        "audience": "internal",
+        "launch_state": "internal",
+        "allowed_roles_json": ["admin", "super_admin"],
+        "metadata_json": {"route": "/app/home"},
+    },
+    {
+        "feature_key": "club_legacy_governance",
+        "title": "Club Legacy Governance",
+        "description": "Cases, stakes, and distributions. Off until Club Legacy is reviewed.",
+        "enabled": False,
+        "audience": "internal",
+        "launch_state": "internal",
+        "allowed_roles_json": ["admin", "super_admin"],
+        "metadata_json": {"route": "/app/home"},
+    },
 )
 
 _ADMIN_ONLY_FLAG_KEYS = frozenset({"launch_control"})
 # Club Legacy stays off until a later rollout. Do not force it public with the other modules.
-_KEEP_SEEDED_FLAG_KEYS = frozenset({"launch_control", "club_legacy"})
+_KEEP_SEEDED_FLAG_KEYS = frozenset(
+    {
+        "launch_control",
+        "club_legacy",
+        "club_legacy_market",
+        "club_legacy_preseason",
+        "club_legacy_sponsors",
+        "club_legacy_governance",
+    }
+)
 
 
 def _opened_flag_payload(payload: dict[str, object]) -> dict[str, object]:

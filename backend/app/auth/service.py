@@ -630,6 +630,7 @@ class AuthService:
         crest_asset_ref: str | None,
         primary_color: str,
         secondary_color: str,
+        continent_code: str | None = None,
     ) -> ClubProfile:
         from app.clubs.ownership_cap import ClubOwnershipCapError, assert_can_acquire_club
 
@@ -642,6 +643,15 @@ class AuthService:
         normalized_name = club_name.strip()
         if not normalized_name:
             raise AuthError("Club name is required.")
+        from app.club_legacy.delegation import LegacyError
+        from app.club_legacy.full.phase1 import resolve_location
+
+        try:
+            city, country, continent = resolve_location(
+                city_name=city_name, country_code=country_code, continent_code=continent_code
+            )
+        except LegacyError as exc:
+            raise AuthError(exc.detail) from exc
         club = ClubProfile(
             owner_user_id=user.id,
             club_name=normalized_name,
@@ -653,9 +663,10 @@ class AuthService:
             primary_color=primary_color.strip() or "#0F766E",
             secondary_color=secondary_color.strip() or "#F8FAFC",
             accent_color="#EA580C",
-            country_code=((country_code or "").strip().upper()[:8]) or None,
+            country_code=country,
+            continent_code=continent,
             region_name=(region_name or "").strip() or None,
-            city_name=(city_name or "").strip() or None,
+            city_name=city,
             visibility="public",
         )
         session.add(club)

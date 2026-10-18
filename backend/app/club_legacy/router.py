@@ -55,6 +55,9 @@ def _recommendation(record) -> dict[str, Any]:
         "amount": str(record.amount),
         "status": record.status,
         "outcome": record.outcome,
+        "reason": record.reason,
+        "confidence": record.confidence,
+        "consequence": record.consequence,
     }
 
 
@@ -203,3 +206,28 @@ def read_metrics(
         return metrics(session)
 
     return _run(session, go)
+
+
+def _include_full_phase_routers() -> None:
+    from app.club_legacy.full.phase1_routes import router as phase1_router
+    from app.club_legacy.full.phase2_routes import router as phase2_router
+    from app.club_legacy.full.phase3_routes import router as phase3_router
+    from app.club_legacy.full.phase4_routes import router as phase4_router
+    from app.club_legacy.full.phase5_routes import router as phase5_router
+    from app.club_legacy.full.phase6_routes import router as phase6_router
+    from app.club_legacy.full.phase7_routes import router as phase7_router
+    from app.club_legacy.full.phase8_routes import router as phase8_router
+    from app.club_legacy.full.phase9_routes import router as phase9_router
+
+    router.include_router(phase1_router)
+    router.include_router(phase2_router)
+    router.include_router(phase3_router)
+    router.include_router(phase4_router)
+    router.include_router(phase5_router)
+    router.include_router(phase6_router)
+    router.include_router(phase7_router)
+    router.include_router(phase8_router)
+    router.include_router(phase9_router)
+
+
+_include_full_phase_routers()
