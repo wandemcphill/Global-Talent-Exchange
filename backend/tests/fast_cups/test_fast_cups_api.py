@@ -62,7 +62,7 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(api_c
     assert summary_payload["penalty_shootouts"] >= 1
 
     # Unauthenticated POST /settle (overriding user dependency to raise 401 or no auth)
-    from app.auth.dependencies import get_current_admin, get_current_user
+    from app.auth.dependencies import get_current_user
     from app.models.user import UserRole
     from fastapi import HTTPException, status
 
