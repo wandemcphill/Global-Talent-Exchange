@@ -34,7 +34,7 @@ from app.club_legacy.models import (
     ClubLegacySponsorContract,
     ClubLegacyStake,
 )
-from app.club_legacy.ratings import development_score, financial_strength, prestige_score
+from app.club_legacy.ratings import development_score, prestige_score
 from app.models.club_profile import ClubProfile
 from app.owner_console import ledger
 from app.owner_console.models import OwnerClubState
@@ -381,27 +381,9 @@ def club_valuation(session: Session, club_id: str) -> Decimal:
 
 
 def owner_net_worth(session: Session, user_id: str) -> dict:
-    personal_cash = ledger.balance(session, ledger.user_account(user_id), ledger.GTEX)
-    personal_assets = Decimal("0")
-    for asset in session.scalars(
-        select(ClubLegacyAsset).where(
-            ClubLegacyAsset.owner_class == "owner",
-            ClubLegacyAsset.owner_ref == user_id,
-            ClubLegacyAsset.status == "owned",
-        )
-    ).all():
-        item = session.get(ClubLegacyCatalogueItem, asset.catalogue_id)
-        if item is not None:
-            personal_assets += Decimal(item.price)
-    equity = Decimal("0")
-    for stake in session.scalars(select(ClubLegacyStake).where(ClubLegacyStake.holder_user_id == user_id)).all():
-        equity += _q(club_valuation(session, stake.club_id) * Decimal(stake.percentage) / Decimal("100"))
-    return {
-        "personal_cash": str(_q(personal_cash)),
-        "personal_assets": str(_q(personal_assets)),
-        "equity": str(equity),
-        "net_worth": str(_q(personal_cash + personal_assets + equity)),
-    }
+    from app.club_legacy.full.phase8 import owner_net_worth as net_worth
+
+    return net_worth(session, user_id)
 
 
 def purchase_asset(
@@ -539,6 +521,24 @@ def buy_listing(
         and seller_club.owner_user_id == buyer_club.owner_user_id
         and seller_club.id != buyer_club.id
     ):
+        from app.club_legacy.full.phase8 import log_trade_review
+
+        log_trade_review(
+            session,
+            listing_id=listing.id,
+            from_club_id=seller_club.id,
+            to_club_id=buyer_club.id,
+            kind="sister_club",
+            note="Sister-club marketplace trade is blocked and left reviewable.",
+        )
+        log_trade_review(
+            session,
+            listing_id=listing.id,
+            from_club_id=seller_club.id,
+            to_club_id=buyer_club.id,
+            kind="related_party",
+            note="Related-party marketplace trade is blocked and left reviewable.",
+        )
         raise LegacyError("wash_trade", 409, "Related clubs cannot trade this asset with each other.")
     listing.status = "escrow"
     session.flush()
@@ -813,142 +813,82 @@ def publish_kit(
 
 
 def offer_score(wage, prestige: int, ambition: int, seed: int) -> tuple[int, int, int]:
-    rng = random.Random(seed)
-    money = min(40, int(Decimal(wage) / Decimal("1000")))
-    project = min(40, int(prestige / 2) + max(0, 20 - ambition))
-    noise = rng.randint(0, 30)
-    return money, project, money + project + noise
+    from app.club_legacy.full.phase7 import offer_score as score_offer
+
+    return score_offer(wage, prestige, ambition, seed)
 
 
 def decide_manager_offer(
     session: Session, *, club_id: str, user_id: str, candidate_name: str, wage, prestige: int, ambition: int, seed: int
 ) -> ClubLegacyManagerOffer:
-    require_owner(session, club_id, user_id)
-    money, project, total = offer_score(wage, prestige, ambition, seed)
-    outcome = "accepted" if total >= 70 else "declined"
-    offer = ClubLegacyManagerOffer(
+    from app.club_legacy.full.phase7 import decide_manager_offer as decide
+
+    return decide(
+        session,
         club_id=club_id,
+        user_id=user_id,
         candidate_name=candidate_name,
-        wage=_q(wage),
+        wage=wage,
         prestige=prestige,
         ambition=ambition,
         seed=seed,
-        outcome=outcome,
-        money_score=money,
-        project_score=project,
     )
-    session.add(offer)
-    session.flush()
-    return offer
 
 
-def make_promise(session: Session, *, club_id: str, user_id: str, subject: str) -> ClubLegacyPromise:
-    require_owner(session, club_id, user_id)
-    promise = ClubLegacyPromise(club_id=club_id, subject=subject, status="open", trust=50)
-    session.add(promise)
-    session.flush()
-    return promise
+def make_promise(session: Session, *, club_id: str, user_id: str, subject: str, manager_id: str | None = None):
+    from app.club_legacy.full.phase7 import make_promise as open_promise
+
+    return open_promise(session, club_id=club_id, user_id=user_id, subject=subject, manager_id=manager_id)
 
 
-def resolve_promise(session: Session, *, promise_id: str, kept: bool) -> ClubLegacyPromise:
-    promise = session.get(ClubLegacyPromise, promise_id)
-    if promise is None:
-        raise LegacyError("promise_not_found", 404)
-    promise.status = "kept" if kept else "broken"
-    promise.trust = min(100, promise.trust + 10) if kept else max(0, promise.trust - 20)
-    session.flush()
-    return promise
+def resolve_promise(session: Session, *, promise_id: str, kept: bool):
+    from app.club_legacy.full.phase7 import resolve_promise as settle_promise
+
+    return settle_promise(session, promise_id=promise_id, kept=kept)
 
 
-def open_case(session: Session, *, club_id: str, rule_code: str, allegation: str, evidence: str) -> ClubLegacyCase:
-    if rule_code == "luxury_possession":
-        raise LegacyError("not_misconduct", 409, "Expensive possessions alone are not a disciplinary case.")
-    case = ClubLegacyCase(club_id=club_id, rule_code=rule_code, allegation=allegation, evidence=evidence, status="open")
-    session.add(case)
-    session.flush()
-    return case
+def open_case(session: Session, *, club_id: str, rule_code: str, allegation: str, evidence: str):
+    from app.club_legacy.full.phase8 import open_case as open_disciplinary_case
 
-
-def rule_case(session: Session, *, case_id: str, sanction: str, reason: str) -> ClubLegacyCase:
-    case = session.get(ClubLegacyCase, case_id)
-    if case is None:
-        raise LegacyError("case_not_found", 404)
-    case.status = "ruled"
-    case.sanction = sanction
-    case.reason = reason
-    session.flush()
-    return case
-
-
-def appeal_case(session: Session, *, case_id: str, outcome: str) -> ClubLegacyCase:
-    case = session.get(ClubLegacyCase, case_id)
-    if case is None or case.status != "ruled":
-        raise LegacyError("appeal_unavailable", 409)
-    case.status = "appealed"
-    case.appeal_outcome = outcome
-    session.flush()
-    return case
-
-
-def set_stake(session: Session, *, club_id: str, holder_user_id: str, percentage) -> ClubLegacyStake:
-    stake = session.scalar(
-        select(ClubLegacyStake).where(
-            ClubLegacyStake.club_id == club_id, ClubLegacyStake.holder_user_id == holder_user_id
-        )
+    return open_disciplinary_case(
+        session, club_id=club_id, rule_code=rule_code, allegation=allegation, evidence=evidence
     )
-    percent = _q(percentage)
-    if percent <= 0 or percent > 100:
-        raise LegacyError("invalid_percentage")
-    others = session.scalars(select(ClubLegacyStake).where(ClubLegacyStake.club_id == club_id)).all()
-    total = (
-        sum((Decimal(row.percentage) for row in others if row.holder_user_id != holder_user_id), Decimal("0")) + percent
+
+
+def rule_case(session: Session, *, case_id: str, sanction: str, reason: str):
+    from app.club_legacy.full.phase8 import rule_case as apply_ruling
+
+    return apply_ruling(session, case_id=case_id, sanction=sanction, reason=reason)
+
+
+def appeal_case(session: Session, *, case_id: str, outcome: str):
+    from app.club_legacy.full.phase8 import appeal_case as lodge_appeal
+
+    return lodge_appeal(session, case_id=case_id, outcome=outcome)
+
+
+def set_stake(session: Session, *, club_id: str, holder_user_id: str, percentage, voting_rights=None):
+    from app.club_legacy.full.phase8 import set_stake as record_stake
+
+    return record_stake(
+        session,
+        club_id=club_id,
+        holder_user_id=holder_user_id,
+        percentage=percentage,
+        voting_rights=voting_rights,
     )
-    if total > Decimal("100"):
-        raise LegacyError("stake_total", 409, f"Stakes would total {total}, above 100.")
-    if stake is None:
-        stake = ClubLegacyStake(
-            club_id=club_id, holder_user_id=holder_user_id, percentage=percent, voting_rights=percent
-        )
-        session.add(stake)
-    else:
-        stake.percentage = percent
-        stake.voting_rights = percent
-    session.flush()
-    return stake
 
 
 def economic_interest(session: Session, *, club_id: str, holder_user_id: str) -> Decimal:
-    stake = session.scalar(
-        select(ClubLegacyStake).where(
-            ClubLegacyStake.club_id == club_id, ClubLegacyStake.holder_user_id == holder_user_id
-        )
-    )
-    if stake is None:
-        return Decimal("0.00")
-    return _q(club_valuation(session, club_id) * Decimal(stake.percentage) / Decimal("100"))
+    from app.club_legacy.full.phase8 import economic_interest as interest
+
+    return interest(session, club_id=club_id, holder_user_id=holder_user_id)
 
 
 def simulate_season(session: Session, club_id: str) -> dict:
-    state = session.scalar(select(OwnerClubState).where(OwnerClubState.club_id == club_id))
-    development = development_score(state.facilities_json if state else {})
-    cash = ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)
-    jets = (
-        session.scalar(
-            select(func.count())
-            .select_from(ClubLegacyAsset)
-            .join(ClubLegacyCatalogueItem, ClubLegacyCatalogueItem.id == ClubLegacyAsset.catalogue_id)
-            .where(ClubLegacyAsset.club_id == club_id, ClubLegacyCatalogueItem.category == "jet")
-        )
-        or 0
-    )
-    return {
-        "club_id": club_id,
-        "development": development,
-        "financial_strength": financial_strength(cash),
-        "prestige": prestige_score(session, club_id),
-        "jets": int(jets),
-        "can_progress_without_jets": int(jets) == 0 and development >= 20,
-    }
+    from app.club_legacy.full.phase9 import simulate_season as run_season
+
+    return run_season(session, club_id)
 
 
 def place_bid(session: Session, *, listing_id: str, bidder_user_id: str, amount) -> ClubLegacyBid:
@@ -956,6 +896,17 @@ def place_bid(session: Session, *, listing_id: str, bidder_user_id: str, amount)
     if listing is None or listing.status != "auction":
         raise LegacyError("auction_closed", 409)
     if bidder_user_id == listing.seller_user_id:
+        from app.club_legacy.full.phase8 import log_trade_review
+
+        asset = session.get(ClubLegacyAsset, listing.asset_id)
+        log_trade_review(
+            session,
+            listing_id=listing.id,
+            from_club_id=asset.club_id if asset is not None else None,
+            to_club_id=asset.club_id if asset is not None else None,
+            kind="related_party",
+            note="The seller cannot bid on their own auction.",
+        )
         raise LegacyError("wash_trade", 409, "The seller cannot bid on their own auction.")
     bid_amount = _q(amount)
     leading = session.scalar(
@@ -1031,37 +982,15 @@ def renew_sponsor(session: Session, *, contract_id: str, user_id: str) -> ClubLe
 
 
 def approach_manager(session: Session, *, executive_id: str, from_club_id: str, user_id: str) -> ClubLegacyExecutive:
-    executive = session.get(ClubLegacyExecutive, executive_id)
-    if executive is None or executive.status != "hired":
-        raise LegacyError("executive_unavailable", 404)
-    require_owner(session, from_club_id, user_id)
-    if executive.club_id == from_club_id:
-        raise LegacyError("already_on_staff", 409)
-    _reject_related_clubs(session, from_club_id, executive.club_id)
-    compensation = _q(Decimal(executive.wage) * Decimal("0.20"))
-    source = ledger.wallet_account(session, ledger.club_account(from_club_id), ledger.GTEX)
-    destination = ledger.wallet_account(session, ledger.club_account(executive.club_id), ledger.GTEX)
-    post_club_legacy_transfer(
-        session,
-        idempotency_key=f"compensation:{executive.id}:{from_club_id}",
-        source=source,
-        destination=destination,
-        amount=compensation,
-        description=f"Compensation for {executive.name}",
-    )
-    executive.status = "in_talks"
-    session.flush()
-    return executive
+    from app.club_legacy.full.phase7 import approach_manager as open_talks
+
+    return open_talks(session, executive_id=executive_id, from_club_id=from_club_id, user_id=user_id)
 
 
 def load_catalogue(session: Session, rounds: int = 40) -> dict:
-    import time
+    from app.club_legacy.full.phase9 import load_catalogue as read_catalogue
 
-    started = time.perf_counter()
-    for _ in range(rounds):
-        session.scalars(select(ClubLegacyCatalogueItem)).all()
-    elapsed_ms = int((time.perf_counter() - started) * 1000)
-    return {"rounds": rounds, "elapsed_ms": elapsed_ms, "within_budget": elapsed_ms < 1000}
+    return read_catalogue(session, rounds)
 
 
 def desk_snapshot(session: Session, club_id: str, user_id: str) -> dict:
@@ -1272,14 +1201,6 @@ def perform_desk_action(session: Session, club_id: str, user_id: str, action: st
 
 
 def metrics(session: Session) -> dict:
-    def count(model) -> int:
-        return int(session.scalar(select(func.count()).select_from(model)) or 0)
+    from app.club_legacy.full.phase9 import metrics as legacy_metrics
 
-    return {
-        "executives": count(ClubLegacyExecutive),
-        "assets": count(ClubLegacyAsset),
-        "invites": count(ClubLegacyPreseasonInvite),
-        "settlements": count(ClubLegacyPreseasonSettlement),
-        "cases": count(ClubLegacyCase),
-        "rollback": "Disable the club_legacy feature flag. Legacy routes then return 404.",
-    }
+    return legacy_metrics(session)

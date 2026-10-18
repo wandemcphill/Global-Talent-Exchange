@@ -6,7 +6,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, Integer, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, DateTime, Integer, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, UUIDPrimaryKeyMixin, utcnow
@@ -191,6 +191,16 @@ class ClubLegacyManagerOffer(UUIDPrimaryKeyMixin, Base):
     outcome: Mapped[str] = mapped_column(String(16), nullable=False)
     money_score: Mapped[int] = mapped_column(Integer, nullable=False)
     project_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    contract_length: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    role: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    parent_offer_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    manager_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    personality: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    wage_expectation: Mapped[Decimal | None] = mapped_column(Numeric(20, 2), nullable=True)
+    relationship_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    expectation_gap: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=utcnow)
 
 
 class ClubLegacyPromise(UUIDPrimaryKeyMixin, Base):
@@ -200,6 +210,7 @@ class ClubLegacyPromise(UUIDPrimaryKeyMixin, Base):
     subject: Mapped[str] = mapped_column(String(160), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="open")
     trust: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    manager_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
 
 
 class ClubLegacyCase(UUIDPrimaryKeyMixin, Base):
@@ -234,6 +245,92 @@ class ClubLegacyStake(UUIDPrimaryKeyMixin, Base):
     voting_rights: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
 
 
+class ClubLegacyManager(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "club_legacy_managers"
+
+    club_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    personality: Mapped[str] = mapped_column(String(40), nullable=False)
+    ambition: Mapped[int] = mapped_column(Integer, nullable=False)
+    wage_expectation: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False)
+    wage: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False, default=Decimal("0"))
+    relationship_score: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="available")
+    seed: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+
+class ClubLegacyRelationshipEvent(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "club_legacy_relationship_events"
+
+    manager_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    club_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    delta: Mapped[int] = mapped_column(Integer, nullable=False)
+    score_before: Mapped[int] = mapped_column(Integer, nullable=False)
+    score_after: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class ClubLegacyTradeReview(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "club_legacy_trade_reviews"
+
+    listing_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    from_club_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    to_club_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="reviewable")
+    note: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class ClubLegacyDistribution(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "club_legacy_distributions"
+
+    club_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="paid")
+
+
+class ClubLegacyDistributionLine(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "club_legacy_distribution_lines"
+
+    distribution_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    holder_user_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    percentage: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+
+
+class ClubLegacySeasonRun(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "club_legacy_season_runs"
+
+    club_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    tier: Mapped[str] = mapped_column(String(32), nullable=False)
+    seasons: Mapped[int] = mapped_column(Integer, nullable=False)
+    seed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    reputation: Mapped[int] = mapped_column(Integer, nullable=False)
+    revenue: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False)
+    sanction_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    results_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class ClubLegacyYouthProspect(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "club_legacy_youth_prospects"
+
+    run_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    club_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    season_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    potential: Mapped[int] = mapped_column(Integer, nullable=False)
+    high_potential: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class ClubLegacyShowroomFailure(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "club_legacy_showroom_failures"
+
+    club_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 CLUB_LEGACY_TABLES = (ClubLegacyPolicy.__table__, ClubLegacyRecommendation.__table__, ClubLegacyAuditEvent.__table__)
 CLUB_LEGACY_PHASE_TABLES = (
     ClubLegacyExecutive.__table__,
@@ -252,4 +349,14 @@ CLUB_LEGACY_PHASE_TABLES = (
     ClubLegacyCase.__table__,
     ClubLegacyStake.__table__,
     ClubLegacyBid.__table__,
+)
+CLUB_LEGACY_FULL_TABLES = (
+    ClubLegacyManager.__table__,
+    ClubLegacyRelationshipEvent.__table__,
+    ClubLegacyTradeReview.__table__,
+    ClubLegacyDistribution.__table__,
+    ClubLegacyDistributionLine.__table__,
+    ClubLegacySeasonRun.__table__,
+    ClubLegacyYouthProspect.__table__,
+    ClubLegacyShowroomFailure.__table__,
 )

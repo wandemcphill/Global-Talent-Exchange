@@ -203,3 +203,12 @@ def read_metrics(
         return metrics(session)
 
     return _run(session, go)
+
+
+from app.club_legacy.full.phase7_routes import router as phase7_router
+from app.club_legacy.full.phase8_routes import router as phase8_router
+from app.club_legacy.full.phase9_routes import router as phase9_router
+
+router.include_router(phase7_router)
+router.include_router(phase8_router)
+router.include_router(phase9_router)
