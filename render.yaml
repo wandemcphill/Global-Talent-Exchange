@@ -50,6 +50,8 @@ services:
         value: "1"
       - key: GTE_AUTH_SECRET
         sync: false
+      - key: GTE_TURNSTILE_SECRET_KEY
+        sync: false
       - key: GTE_FIELD_ENCRYPTION_KEY
         sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
@@ -117,6 +119,8 @@ services:
     envVars:
       - key: GTE_API_BASE_URL
         value: https://gtex-api-opea.onrender.com
+      - key: GTE_TURNSTILE_SITE_KEY
+        sync: false
       - key: GTE_BACKEND_MODE
         value: live
       # Pins the static-site build image so the React shell matches CI (Node 20).
