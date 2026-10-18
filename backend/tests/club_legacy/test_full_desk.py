@@ -235,7 +235,19 @@ def test_full_desk_rules(client, bootstrap_admin_headers, app):
         desk = desk_snapshot(session, club_id, admin.id)
         assert any(item["role"] == "gm" for item in desk["staff"])
         assert any(row["name"] == "Lagoon Coach" and row["status"] == "open" for row in desk["market"])
-        auction = perform_desk_action(session, rival_club.id, rival.id, "list_auction", {"price": "1800"})
+        with pytest.raises(LegacyError) as missing_asset:
+            perform_desk_action(session, rival_club.id, rival.id, "list_auction", {"price": "1800"})
+        assert missing_asset.value.code == "asset_required"
+        with pytest.raises(LegacyError) as missing_listing:
+            perform_desk_action(session, club_id, admin.id, "place_bid", {"amount": "2000"})
+        assert missing_listing.value.code == "listing_required"
+        auction = perform_desk_action(
+            session,
+            rival_club.id,
+            rival.id,
+            "list_auction",
+            {"asset_id": jet.id, "price": "1800"},
+        )
         assert auction["status"] == "auction"
         bid_action = perform_desk_action(
             session,

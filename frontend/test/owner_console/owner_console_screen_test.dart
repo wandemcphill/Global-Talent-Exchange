@@ -164,7 +164,7 @@ class _FakeOwner implements OwnerConsoleReader {
   Future<ClubLegacyDeskData> fetchDesk() async => const ClubLegacyDeskData(staff: [], policies: [], clubValuation: '0', equity: '0', preseason: [], sponsors: [], offers: [], cases: []);
 
   @override
-  Future<void> performDesk(String action) async {}
+  Future<void> performDesk(String action, [Map<String, Object?> payload = const <String, Object?>{}]) async {}
 }
 
 class _FakeShare implements GtexShareMarketReader {

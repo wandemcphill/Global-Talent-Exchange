@@ -231,7 +231,7 @@ class _DeskLoader extends StatefulWidget {
   const _DeskLoader({required this.load, required this.act});
 
   final Future<ClubLegacyDeskData> Function() load;
-  final Future<void> Function(String action) act;
+  final Future<void> Function(String action, [Map<String, Object?> payload]) act;
 
   @override
   State<_DeskLoader> createState() => _DeskLoaderState();
@@ -246,8 +246,8 @@ class _DeskLoaderState extends State<_DeskLoader> {
     _desk = widget.load();
   }
 
-  Future<void> _run(String action) async {
-    await widget.act(action);
+  Future<void> _run(String action, [Map<String, Object?> payload = const <String, Object?>{}]) async {
+    await widget.act(action, payload);
     setState(() => _desk = widget.load());
   }
 
@@ -261,7 +261,10 @@ class _DeskLoaderState extends State<_DeskLoader> {
         }
         final ClubLegacyDeskData data = snap.data ??
             const ClubLegacyDeskData(staff: [], policies: [], clubValuation: '0', equity: '0', preseason: [], sponsors: [], offers: [], cases: []);
-        return ClubLegacyDesk(data: data, onAction: (String action) => _run(action));
+        return ClubLegacyDesk(
+          data: data,
+          onAction: (String action, Map<String, Object?> payload) => _run(action, payload),
+        );
       },
     );
   }

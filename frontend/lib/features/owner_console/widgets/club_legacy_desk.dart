@@ -12,6 +12,7 @@ class ClubLegacyDeskData {
     required this.offers,
     required this.cases,
     this.market = const <Map<String, dynamic>>[],
+    this.auctionable = const <Map<String, dynamic>>[],
   });
 
   factory ClubLegacyDeskData.fromJson(Map<String, dynamic> json) {
@@ -26,6 +27,7 @@ class ClubLegacyDeskData {
       offers: _rows(json['offers']),
       cases: _rows(json['cases']),
       market: _rows(json['market']),
+      auctionable: _rows(json['auctionable_assets']),
     );
   }
 
@@ -38,6 +40,7 @@ class ClubLegacyDeskData {
   final List<Map<String, dynamic>> offers;
   final List<Map<String, dynamic>> cases;
   final List<Map<String, dynamic>> market;
+  final List<Map<String, dynamic>> auctionable;
 }
 
 List<Map<String, dynamic>> _rows(Object? value) => (value is List ? value : const <dynamic>[])
@@ -49,7 +52,7 @@ class ClubLegacyDesk extends StatelessWidget {
   const ClubLegacyDesk({super.key, required this.data, required this.onAction});
 
   final ClubLegacyDeskData data;
-  final void Function(String action) onAction;
+  final void Function(String action, Map<String, Object?> payload) onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -83,13 +86,10 @@ class ClubLegacyDesk extends StatelessWidget {
   }
 
   Widget _market() {
-    final List<String> lines = data.market
-        .map((Map<String, dynamic> row) {
-          final String bid = '${row['leading_bid'] ?? ''}'.trim();
-          final String price = '${row['name']} · ${row['status']} · ${row['price']}';
-          return bid.isEmpty ? price : '$price · bid $bid';
-        })
-        .toList();
+    final List<Widget> lines = <Widget>[
+      for (final Map<String, dynamic> row in data.market)
+        Text(_marketLine(row), style: const TextStyle(color: GtexColors.text)),
+    ];
     return Padding(
       padding: const EdgeInsets.only(bottom: GtexSpacing.md),
       child: GtexPanel(
@@ -101,32 +101,50 @@ class ClubLegacyDesk extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             if (lines.isEmpty) const Text('Nothing listed', style: TextStyle(color: GtexColors.textSecondary)),
-            for (final String line in lines) Text(line, style: const TextStyle(color: GtexColors.text)),
+            ...lines,
             const SizedBox(height: GtexSpacing.sm),
             Wrap(
               spacing: GtexSpacing.xs,
+              runSpacing: GtexSpacing.xs,
               children: <Widget>[
-                GtexActionButton(
-                  key: const Key('club-desk-auction'),
-                  label: 'Auction an asset',
-                  icon: Icons.gavel_rounded,
-                  compact: true,
-                  onPressed: () => onAction('list_auction'),
-                ),
-                GtexActionButton(
-                  key: const Key('club-desk-bid'),
-                  label: 'Place bid',
-                  icon: Icons.price_change_rounded,
-                  compact: true,
-                  secondary: true,
-                  onPressed: () => onAction('place_bid'),
-                ),
+                for (final Map<String, dynamic> asset in data.auctionable)
+                  GtexActionButton(
+                    key: Key('club-desk-auction-${asset['asset_id']}'),
+                    label: 'Auction ${asset['name']}',
+                    icon: Icons.gavel_rounded,
+                    compact: true,
+                    onPressed: () => onAction('list_auction', <String, Object?>{
+                      'asset_id': '${asset['asset_id']}',
+                      'price': '1500',
+                    }),
+                  ),
+                if (data.auctionable.isEmpty)
+                  const Text('No owned asset is free to auction', style: TextStyle(color: GtexColors.textSecondary)),
+                for (final Map<String, dynamic> row in data.market)
+                  if (row['can_bid'] == true)
+                    GtexActionButton(
+                      key: Key('club-desk-bid-${row['id']}'),
+                      label: 'Bid on ${row['name']}',
+                      icon: Icons.price_change_rounded,
+                      compact: true,
+                      secondary: true,
+                      onPressed: () => onAction('place_bid', <String, Object?>{
+                        'listing_id': '${row['id']}',
+                        'amount': '2000',
+                      }),
+                    ),
               ],
             ),
           ],
         ),
       ),
     );
+  }
+
+  String _marketLine(Map<String, dynamic> row) {
+    final String bid = '${row['leading_bid'] ?? ''}'.trim();
+    final String price = '${row['name']} · ${row['status']} · ${row['price']}';
+    return bid.isEmpty ? price : '$price · bid $bid';
   }
 
   Widget _panel(String title, List<String> lines, String? button, String? action, Key? buttonKey) {
@@ -142,7 +160,13 @@ class ClubLegacyDesk extends StatelessWidget {
             for (final String line in lines) Text(line, style: const TextStyle(color: GtexColors.text)),
             if (button != null && action != null) ...<Widget>[
               const SizedBox(height: GtexSpacing.sm),
-              GtexActionButton(key: buttonKey, label: button, icon: Icons.play_arrow_rounded, compact: true, onPressed: () => onAction(action)),
+              GtexActionButton(
+                key: buttonKey,
+                label: button,
+                icon: Icons.play_arrow_rounded,
+                compact: true,
+                onPressed: () => onAction(action, const <String, Object?>{}),
+              ),
             ],
           ],
         ),
