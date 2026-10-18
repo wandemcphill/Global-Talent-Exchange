@@ -80,6 +80,7 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(api_c
     # Restore original override where current_user has UserRole.USER
     from app.models.user import User
     from app.core.database import get_session
+
     session = list(api_client.app.dependency_overrides[get_session]())[0]
     actor = session.get(User, "fast-cup-owner")
 
