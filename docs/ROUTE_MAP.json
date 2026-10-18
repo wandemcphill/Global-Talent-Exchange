@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1775,
+  "route_count": 1777,
   "routes": [
     {
       "method": "POST",
@@ -29404,6 +29404,32 @@
     },
     {
       "method": "GET",
+      "path": "/owner/public/showroom/{code}",
+      "effective_paths": [
+        "/api/owner/public/showroom/{code}"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "public_showroom",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "code",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
       "path": "/owner/withdrawals/eligibility",
       "effective_paths": [
         "/api/owner/withdrawals/eligibility"
@@ -29535,6 +29561,32 @@
       "response_shape": {
         "response_model": null,
         "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/alerts/cron",
+      "effective_paths": [
+        "/api/owner/alerts/cron"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "trigger_owner_alert_sweep",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "background_tasks"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, str]"
       },
       "version": "canonical",
       "domain": "owner"

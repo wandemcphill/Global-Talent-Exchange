@@ -6,7 +6,7 @@ import 'package:gte_frontend/features/owner_console/presentation/owner_console_s
 import 'package:gte_frontend/features/owner_console/widgets/owner_console_sections.dart';
 import 'package:gte_frontend/features/regen_redesign/data/gtex_share_market_api.dart';
 
-Map<String, dynamic> _centerJson({bool withClubs = true}) => <String, dynamic>{
+Map<String, dynamic> _centerJson({bool withClubs = true, String? respondBy}) => <String, dynamic>{
   'user': <String, dynamic>{'username': 'flow', 'display_name': 'Flow Owner', 'role': 'user'},
   'clubs': withClubs
       ? <Map<String, dynamic>>[
@@ -21,6 +21,7 @@ Map<String, dynamic> _centerJson({bool withClubs = true}) => <String, dynamic>{
           <String, dynamic>{'id': 'd2', 'club_id': 'c2', 'kind': 'contract', 'title': 'Contract expiring', 'is_decision': true},
           <String, dynamic>{
             'id': 'd3', 'club_id': 'c1', 'kind': 'transfer_bid', 'title': 'Kano bid 12,400 for Ade Bello', 'is_decision': true,
+            if (respondBy != null) 'respond_by': respondBy,
             'what': 'Kano offer 12,400 GTEX Coin for Ade Bello (valued 10,000).',
             'actions': <Map<String, dynamic>>[
               <String, dynamic>{'key': 'accept', 'label': 'Accept bid', 'style': 'primary'},
@@ -65,11 +66,12 @@ Map<String, dynamic> _centerJson({bool withClubs = true}) => <String, dynamic>{
 };
 
 class _FakeOwner implements OwnerConsoleReader {
-  _FakeOwner({this.withClubs = true, this.failDecide = false, this.emptyQueue = false});
+  _FakeOwner({this.withClubs = true, this.failDecide = false, this.emptyQueue = false, this.respondBy});
 
   bool withClubs;
   final bool failDecide;
   final bool emptyQueue;
+  final String? respondBy;
   int seeds = 0;
   int suggestions = 0;
   int centerLoads = 0;
@@ -78,7 +80,7 @@ class _FakeOwner implements OwnerConsoleReader {
   @override
   Future<OwnerControlCenter> fetchControlCenter() async {
     centerLoads++;
-    return OwnerControlCenter.fromJson(_centerJson(withClubs: withClubs));
+    return OwnerControlCenter.fromJson(_centerJson(withClubs: withClubs, respondBy: respondBy));
   }
 
   @override
@@ -374,5 +376,13 @@ void main() {
     expect(find.text('Queue clear'), findsOneWidget);
     expect(find.text('No open flags'), findsOneWidget);
     expect(find.text('Nothing held'), findsOneWidget);
+  });
+
+  testWidgets('a decision shows its respond-by deadline', (WidgetTester tester) async {
+    final String respondBy = DateTime.now().toUtc().add(const Duration(hours: 30)).toIso8601String();
+    await _pump(tester, _FakeOwner(respondBy: respondBy));
+    expect(find.byKey(const Key('owner-decision-d3-countdown')), findsOneWidget);
+    expect(find.textContaining('Respond by'), findsOneWidget);
+    expect(find.textContaining('1d'), findsOneWidget);
   });
 }

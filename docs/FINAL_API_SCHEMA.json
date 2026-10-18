@@ -7657,6 +7657,12 @@
       },
       {
         "method": "POST",
+        "path": "/api/owner/alerts/cron",
+        "handler": "trigger_owner_alert_sweep",
+        "response_model": null
+      },
+      {
+        "method": "POST",
         "path": "/api/owner/capital/distribute",
         "handler": "distribute",
         "response_model": null
@@ -7863,6 +7869,12 @@
         "method": "GET",
         "path": "/api/owner/onboarding",
         "handler": "onboarding",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/owner/public/showroom/{code}",
+        "handler": "public_showroom",
         "response_model": null
       },
       {
