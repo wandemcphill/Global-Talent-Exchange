@@ -683,12 +683,16 @@ def signup_creator(
     session: Session = Depends(get_session),
     request: Request = None,
 ) -> TokenResponse:
+    from app.auth.turnstile import verify_turnstile_token
+
     service = _build_auth_service(request)
     telemetry = _AuthRouteTelemetry("signup_creator")
     user: User | None = None
     issued_session: IssuedAuthSession | None = None
     confirmation_code: str | None = None
     try:
+        remote_ip = request.client.host if request is not None and request.client is not None else None
+        verify_turnstile_token(payload.turnstile_token, remote_ip=remote_ip)
         user = service.register_user(
             session,
             email=payload.email,
@@ -759,12 +763,16 @@ def signup_trader(
     session: Session = Depends(get_session),
     request: Request = None,
 ) -> TokenResponse:
+    from app.auth.turnstile import verify_turnstile_token
+
     service = _build_auth_service(request)
     telemetry = _AuthRouteTelemetry("signup_trader")
     user: User | None = None
     issued_session: IssuedAuthSession | None = None
     confirmation_code: str | None = None
     try:
+        remote_ip = request.client.host if request is not None and request.client is not None else None
+        verify_turnstile_token(payload.turnstile_token, remote_ip=remote_ip)
         user = service.register_user(
             session,
             email=payload.email,

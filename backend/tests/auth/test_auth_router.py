@@ -783,3 +783,50 @@ def test_email_fingerprint_is_normalized_and_truncated() -> None:
 
     assert _email_fingerprint("  Fan@Example.COM  ") == _email_fingerprint("fan@example.com")
     assert len(_email_fingerprint("fan@example.com")) == 32
+
+
+def test_turnstile_enforced_on_all_signup_routes(app_client, monkeypatch) -> None:
+    _app, client = app_client
+    monkeypatch.setenv("GTE_TURNSTILE_SECRET_KEY", "dummy-secret-key")
+
+    trader_secret = "JBSWY3DPEHPK3PXP"  # pragma: allowlist secret
+    routes_and_payloads = [
+        (
+            "/auth/signup/user",
+            user_signup_payload(
+                email="turnstile-user@example.com",
+                username="turnstile_user",
+                password=TEST_PASSWORD,
+            ),
+        ),
+        (
+            "/auth/signup/creator",
+            creator_signup_payload(
+                email="turnstile-creator@example.com",
+                username="turnstile_creator",
+                password=TEST_PASSWORD,
+            ),
+        ),
+        (
+            "/auth/signup/trader",
+            trader_signup_payload(
+                email="turnstile-trader@example.com",
+                trading_alias="turnstile_trader",
+                password=TEST_PASSWORD,
+                totp_secret=trader_secret,
+                totp_code=_current_totp(trader_secret),
+            ),
+        ),
+    ]
+
+    for path, payload in routes_and_payloads:
+        # 1. Omitted / empty turnstile_token should return 400 Bad Request
+        missing_payload = {k: v for k, v in payload.items() if k != "turnstile_token"}
+        res_missing = client.post(path, json=missing_payload)
+        assert res_missing.status_code == 400, f"Expected 400 for missing turnstile token on {path}, got {res_missing.status_code}: {res_missing.text}"
+        assert "Complete the security check" in res_missing.text or "Security check failed" in res_missing.text
+
+        # 2. Valid dev-bypass token should succeed (in test environment)
+        bypass_payload = {**missing_payload, "turnstile_token": "dev-bypass"}
+        res_bypass = client.post(path, json=bypass_payload)
+        assert res_bypass.status_code == 201, f"Expected 201 for dev-bypass token on {path}, got {res_bypass.status_code}: {res_bypass.text}"

@@ -57,6 +57,7 @@ def creator_signup_payload(
         "main_club_supported": "GTEX FC",
         "primary_language": "English",
         "monetization": ["donations", "fan_coin_revenue"],
+        "turnstile_token": "dev-bypass",
     }
 
 
@@ -86,6 +87,7 @@ def trader_signup_payload(
         "recovery_phrase_hash": f"recovery-hash-{trader_token}",
         "security_pin_hash": f"security-pin-hash-{trader_token}",
         "totp_code": totp_code,
+        "turnstile_token": "dev-bypass",
         "compliance": {
             "government_id_attachment_id": f"gov-{trader_token}",
             "selfie_attachment_id": f"selfie-{trader_token}",
