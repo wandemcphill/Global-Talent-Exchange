@@ -72,9 +72,7 @@ def app_client(tmp_path):
             "GTE_TEST_AUTH_FIXTURE_MODE": "1",
         }
     )
-    engine = create_engine(
-        settings.database_url, connect_args={"check_same_thread": False}
-    )
+    engine = create_engine(settings.database_url, connect_args={"check_same_thread": False})
     load_model_modules()
     Base.metadata.create_all(engine)
     with engine.begin() as connection:
@@ -124,10 +122,7 @@ def _ensure_bootstrap_admin(app) -> None:
             email=settings.bootstrap_admin_email,
             password=settings.bootstrap_admin_password,
             username=settings.bootstrap_admin_username,
-            display_name=(
-                settings.bootstrap_admin_display_name
-                or settings.bootstrap_admin_username
-            ),
+            display_name=(settings.bootstrap_admin_display_name or settings.bootstrap_admin_username),
             role=UserRole.SUPER_ADMIN,
         )
         session.commit()
@@ -138,10 +133,7 @@ def _assert_no_synthetic_markers(payload: object, *, path: str = "$") -> None:
         for key, value in payload.items():
             normalized_key = str(key).strip().lower()
             if normalized_key in {"fixture", "demo", "mock", "synthetic"} and value:
-                pytest.fail(
-                    f"synthetic marker {path}.{normalized_key} "
-                    "leaked into strict-live payload"
-                )
+                pytest.fail(f"synthetic marker {path}.{normalized_key} " "leaked into strict-live payload")
             if normalized_key in {
                 "source",
                 "runtime_source",
@@ -149,14 +141,8 @@ def _assert_no_synthetic_markers(payload: object, *, path: str = "$") -> None:
                 "mode",
             }:
                 normalized_value = str(value).strip().lower()
-                if any(
-                    marker in normalized_value
-                    for marker in ("fixture", "demo", "mock", "synthetic")
-                ):
-                    pytest.fail(
-                        f"synthetic source marker {path}.{normalized_key}="
-                        f"{normalized_value!r}"
-                    )
+                if any(marker in normalized_value for marker in ("fixture", "demo", "mock", "synthetic")):
+                    pytest.fail(f"synthetic source marker {path}.{normalized_key}=" f"{normalized_value!r}")
             _assert_no_synthetic_markers(value, path=f"{path}.{normalized_key}")
     elif isinstance(payload, list):
         for index, item in enumerate(payload):
@@ -460,10 +446,7 @@ def test_refresh_logout_and_session_bootstrap_flow(app_client) -> None:
     assert "club_owner" in bootstrap["roles"]
     assert bootstrap["security"]["current_session_id"] == refreshed["session_id"]
     assert bootstrap["security"]["active_session_count"] >= 1
-    assert any(
-        item["id"] == refreshed["session_id"] and item["is_current"]
-        for item in bootstrap["sessions"]
-    )
+    assert any(item["id"] == refreshed["session_id"] and item["is_current"] for item in bootstrap["sessions"])
     assert bootstrap["runtime"]["strictLive"] is True
     assert bootstrap["runtime"]["payments"]["paystackEnabled"] is False
     assert isinstance(bootstrap["runtime"]["payments"]["korapayEnabled"], bool)
@@ -487,9 +470,7 @@ def test_refresh_logout_and_session_bootstrap_flow(app_client) -> None:
     _assert_no_synthetic_markers(sessions)
     assert any(item["id"] == refreshed["session_id"] for item in sessions)
 
-    wallet_summary_response = client.get(
-        "/api/wallet/summary", headers=canonical_headers
-    )
+    wallet_summary_response = client.get("/api/wallet/summary", headers=canonical_headers)
     assert wallet_summary_response.status_code == 200, wallet_summary_response.text
     wallet_summary = wallet_summary_response.json()
     _assert_no_synthetic_markers(wallet_summary)
@@ -572,10 +553,7 @@ def test_user_creator_and_trader_signup_sessions_include_public_account_type(
         assert response.status_code == 201, response.text
         issued = response.json()
         assert issued["user"]["account_type"] == expected_account_type
-        assert (
-            decode_access_token(issued["access_token"])["account_type"]
-            == expected_account_type
-        )
+        assert decode_access_token(issued["access_token"])["account_type"] == expected_account_type
         bootstrap_response = client.get(
             "/api/v2/session/bootstrap",
             headers={
@@ -607,31 +585,16 @@ def test_user_creator_and_trader_signup_sessions_include_public_account_type(
             assert bootstrap["club"] is None
             assert "club_owner" not in bootstrap["roles"]
             assert bootstrap["onboarding"]["requires_club"] is False
-            assert (
-                "coin_trader_marketplace"
-                in bootstrap["onboarding"]["available_actions"]
-            )
+            assert "coin_trader_marketplace" in bootstrap["onboarding"]["available_actions"]
         else:
             assert bootstrap["club"]["owner_user_id"] == issued["user"]["id"]
             assert bootstrap["onboarding"]["has_club"] is True
 
     with app.state.session_factory() as session:
-        creator = session.scalar(
-            select(User).where(User.email == "account-type-creator@example.com")
-        )
+        creator = session.scalar(select(User).where(User.email == "account-type-creator@example.com"))
         assert creator is not None
-        assert (
-            session.scalar(
-                select(CreatorProfile).where(CreatorProfile.user_id == creator.id)
-            )
-            is not None
-        )
-        assert (
-            session.scalar(
-                select(ClubProfile).where(ClubProfile.owner_user_id == creator.id)
-            )
-            is None
-        )
+        assert session.scalar(select(CreatorProfile).where(CreatorProfile.user_id == creator.id)) is not None
+        assert session.scalar(select(ClubProfile).where(ClubProfile.owner_user_id == creator.id)) is None
 
 
 def test_public_signup_rejects_external_admin_account_type(app_client) -> None:
@@ -703,20 +666,13 @@ def test_login_user_logs_completion(session, caplog: pytest.LogCaptureFixture) -
         )
 
     assert response.user.email == "telemetry-login@example.com"
-    assert any(
-        "auth.request.route_entry flow=login" in message for message in caplog.messages
-    )
-    assert any(
-        "auth.request.completed flow=login status_code=200" in message
-        for message in caplog.messages
-    )
+    assert any("auth.request.route_entry flow=login" in message for message in caplog.messages)
+    assert any("auth.request.completed flow=login status_code=200" in message for message in caplog.messages)
     assert any("auth.create_access_token_ms" in message for message in caplog.messages)
     assert any("service.authenticate_user_ms" in message for message in caplog.messages)
 
 
-def test_login_user_logs_failure_with_rollback(
-    session, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_login_user_logs_failure_with_rollback(session, caplog: pytest.LogCaptureFixture) -> None:
     AuthService().register_user(
         session,
         email="telemetry-login-failure@example.com",
@@ -738,13 +694,8 @@ def test_login_user_logs_failure_with_rollback(
             )
 
     assert exc_info.value.status_code == 401
-    assert any(
-        "auth.request.route_entry flow=login" in message for message in caplog.messages
-    )
-    assert any(
-        "auth.request.failed flow=login status_code=401" in message
-        for message in caplog.messages
-    )
+    assert any("auth.request.route_entry flow=login" in message for message in caplog.messages)
+    assert any("auth.request.failed flow=login status_code=401" in message for message in caplog.messages)
     assert any("db.rollback_ms" in message for message in caplog.messages)
 
 
@@ -801,9 +752,7 @@ def test_scoped_admin_login_reflects_delegated_permissions_and_admin_route(
     assert "manage_manager_catalog" in me_response.json()["permissions"]
 
 
-def test_login_failure_analytics_stores_email_hash_not_email(
-    session, monkeypatch
-) -> None:
+def test_login_failure_analytics_stores_email_hash_not_email(session, monkeypatch) -> None:
     from app.analytics.service import AnalyticsService
     from app.auth.router import _email_fingerprint
 
@@ -849,10 +798,7 @@ def test_login_failure_analytics_stores_email_hash_not_email(
 def test_email_fingerprint_is_normalized_and_truncated() -> None:
     from app.auth.router import _email_fingerprint
 
-    assert (
-        _email_fingerprint("  Fan@Example.COM  ")
-        == _email_fingerprint("fan@example.com")
-    )
+    assert _email_fingerprint("  Fan@Example.COM  ") == _email_fingerprint("fan@example.com")
     assert len(_email_fingerprint("fan@example.com")) == 32
 
 
@@ -923,9 +869,7 @@ def test_turnstile_enforced_on_all_signup_routes(app_client, monkeypatch) -> Non
     ]
 
     for path, payload in routes_and_payloads:
-        base_payload = {
-            key: value for key, value in payload.items() if key != "turnstile_token"
-        }
+        base_payload = {key: value for key, value in payload.items() if key != "turnstile_token"}
 
         # Missing tokens must fail before creating an account.
         res_missing = client.post(path, json=base_payload)
