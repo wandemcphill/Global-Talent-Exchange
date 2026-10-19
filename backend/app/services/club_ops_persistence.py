@@ -413,7 +413,9 @@ def _persist_academy_projection(session: Any, store: object) -> None:
                 "program_type": program_type,
                 "budget_minor": _integer(_attr(program, "budget_minor")),
                 "cycle_length_weeks": _integer(_attr(program, "cycle_length_weeks"), 6),
-                "focus_attributes_json": _plain(_attr(program, "focus_attributes_json", "focus_attributes", default=[])),
+                "focus_attributes_json": _plain(
+                    _attr(program, "focus_attributes_json", "focus_attributes", default=[])
+                ),
                 "is_active": bool(_attr(program, "is_active", "active", default=True)),
             }
             row = _upsert(session, AcademyProgram, record_id, values)
@@ -442,7 +444,9 @@ def _persist_academy_projection(session: Any, store: object) -> None:
                 "overall_rating": _integer(_attr(player, "overall_rating", "rating")),
                 "readiness_score": _integer(_attr(player, "readiness_score")),
                 "completed_cycles": _integer(_attr(player, "completed_cycles")),
-                "development_attributes_json": _plain(_attr(player, "development_attributes_json", "development_attributes", default={})),
+                "development_attributes_json": _plain(
+                    _attr(player, "development_attributes_json", "development_attributes", default={})
+                ),
                 "pathway_note": _attr(player, "pathway_note"),
             }
             row = _upsert(session, AcademyPlayer, record_id, values)
@@ -475,7 +479,9 @@ def _persist_academy_projection(session: Any, store: object) -> None:
         for index, event in enumerate(graduations):
             source_player_id = _attr(event, "academy_player_id", "player_id", "prospect_id")
             player_id = player_ids.get(str(source_player_id))
-            from_status = _enum_value(AcademyGraduationEvent, "from_status", _attr(event, "from_status", "previous_status"))
+            from_status = _enum_value(
+                AcademyGraduationEvent, "from_status", _attr(event, "from_status", "previous_status")
+            )
             to_status = _enum_value(AcademyGraduationEvent, "to_status", _attr(event, "to_status", "status"))
             if player_id is None or from_status is None or to_status is None:
                 continue
@@ -539,10 +545,21 @@ def _persist_scouting_projection(session: Any, store: object) -> None:
             region_code = _attr(assignment, "region_code", "code")
             region_name = _attr(assignment, "region_name", "name")
             focus_area = _attr(assignment, "focus_area", "focus", "objective")
-            if status is None or starts_at is None or ends_at is None or not region_code or not region_name or not focus_area:
+            if (
+                status is None
+                or starts_at is None
+                or ends_at is None
+                or not region_code
+                or not region_name
+                or not focus_area
+            ):
                 continue
             source_region_id = _attr(assignment, "region_id")
-            region_id = region_ids.get(str(source_region_id)) if source_region_id is not None else region_ids.get(str(region_code))
+            region_id = (
+                region_ids.get(str(source_region_id))
+                if source_region_id is not None
+                else region_ids.get(str(region_code))
+            )
             values = {
                 "club_id": club_id,
                 "region_id": region_id,
@@ -572,7 +589,14 @@ def _persist_scouting_projection(session: Any, store: object) -> None:
             region = _attr(prospect, "region_label", "region_name", "region")
             position = _attr(prospect, "primary_position", "position")
             source = _attr(prospect, "scouting_source", "source", default="club_ops")
-            if rating_band is None or pathway_stage is None or not name or age is None or not nationality or not position:
+            if (
+                rating_band is None
+                or pathway_stage is None
+                or not name
+                or age is None
+                or not nationality
+                or not position
+            ):
                 continue
             source_assignment_id = _attr(prospect, "assignment_id", "scout_assignment_id")
             assignment_id = assignment_ids.get(str(source_assignment_id)) if source_assignment_id is not None else None
@@ -586,7 +610,9 @@ def _persist_scouting_projection(session: Any, store: object) -> None:
                 "primary_position": str(position)[:40],
                 "secondary_position": _attr(prospect, "secondary_position"),
                 "rating_band": rating_band,
-                "development_traits_json": _plain(_attr(prospect, "development_traits_json", "development_traits", default=[])),
+                "development_traits_json": _plain(
+                    _attr(prospect, "development_traits_json", "development_traits", default=[])
+                ),
                 "pathway_stage": pathway_stage,
                 "scouting_source": str(source)[:80],
                 "follow_priority": _integer(_attr(prospect, "follow_priority"), 5),
@@ -608,9 +634,13 @@ def _persist_scouting_projection(session: Any, store: object) -> None:
                 "prospect_id": prospect_id,
                 "assignment_id": assignment_id,
                 "confidence_bps": _integer(_attr(report, "confidence_bps", "confidence_score")),
-                "summary_text": str(_attr(report, "summary_text", "summary", "description", default="Youth scouting report recorded"))[:255],
+                "summary_text": str(
+                    _attr(report, "summary_text", "summary", "description", default="Youth scouting report recorded")
+                )[:255],
                 "strengths_json": _plain(_attr(report, "strengths_json", "strengths", default=[])),
-                "development_flags_json": _plain(_attr(report, "development_flags_json", "development_flags", default=[])),
+                "development_flags_json": _plain(
+                    _attr(report, "development_flags_json", "development_flags", default=[])
+                ),
             }
             _upsert(session, YouthProspectReport, record_id, values)
     session.flush()
@@ -618,19 +648,25 @@ def _persist_scouting_projection(session: Any, store: object) -> None:
     for club_id, snapshot in store.youth_pipeline_by_club.items():
         if snapshot is None:
             continue
-        existing = session.scalar(select(YouthPipelineSnapshot).where(YouthPipelineSnapshot.club_id == club_id).limit(1))
+        existing = session.scalar(
+            select(YouthPipelineSnapshot).where(YouthPipelineSnapshot.club_id == club_id).limit(1)
+        )
         if existing is None:
             record_id = _attr(snapshot, "id", default=f"{club_id}:youth-pipeline")
             values = {
                 "club_id": club_id,
                 "funnel_json": _plain(_attr(snapshot, "funnel_json", "funnel", "funnel_counts", default={})),
-                "academy_conversion_rate_bps": _integer(_attr(snapshot, "academy_conversion_rate_bps", "academy_conversion_bps")),
+                "academy_conversion_rate_bps": _integer(
+                    _attr(snapshot, "academy_conversion_rate_bps", "academy_conversion_bps")
+                ),
                 "promotion_rate_bps": _integer(_attr(snapshot, "promotion_rate_bps", "promotion_bps")),
             }
             _upsert(session, YouthPipelineSnapshot, record_id, values)
         else:
             existing.funnel_json = _plain(_attr(snapshot, "funnel_json", "funnel", "funnel_counts", default={}))
-            existing.academy_conversion_rate_bps = _integer(_attr(snapshot, "academy_conversion_rate_bps", "academy_conversion_bps"))
+            existing.academy_conversion_rate_bps = _integer(
+                _attr(snapshot, "academy_conversion_rate_bps", "academy_conversion_bps")
+            )
             existing.promotion_rate_bps = _integer(_attr(snapshot, "promotion_rate_bps", "promotion_bps"))
     session.flush()
 
