@@ -265,10 +265,10 @@ class GtexUserSignupScreen extends StatefulWidget {
   const GtexUserSignupScreen({
     super.key,
     required this.controller,
-    required this.config,
+    this.config,
   });
   final GteExchangeController controller;
-  final GteAppConfig config;
+  final GteAppConfig? config;
   @override
   State<GtexUserSignupScreen> createState() => _GtexUserSignupScreenState();
 }
@@ -289,7 +289,7 @@ class _GtexUserSignupScreenState extends State<GtexUserSignupScreen> {
   @override
   Widget build(BuildContext context) => _SignupScaffold(
     title: 'Join GTEX',
-    subtitle: 'Display name, @handle, password — create your club after you land.',
+    subtitle: 'Display name, @username, password — create your GTEX ID.',
     icon: Icons.sports_soccer_rounded,
     error: _error,
     submitting: _submitting,
@@ -358,7 +358,7 @@ class _GtexUserSignupScreenState extends State<GtexUserSignupScreen> {
       setState(() => _error = 'Confirm you are 18 or older to continue.');
       return;
     }
-    if (_turnstileToken?.isNotEmpty != true) {
+    if (_gtexTurnstileSiteKey.isNotEmpty && _turnstileToken?.isNotEmpty != true) {
       setState(() => _error = 'Complete the security check to continue.');
       return;
     }
@@ -367,9 +367,14 @@ class _GtexUserSignupScreenState extends State<GtexUserSignupScreen> {
       _error = null;
     });
     try {
+      final GteAppConfig activeConfig = widget.config ??
+          GteAppConfig(
+            apiBaseUrl: widget.controller.api.config.baseUrl,
+            backendMode: widget.controller.api.config.mode,
+          );
       final client = GteExchangeApiClient.standard(
-        baseUrl: widget.config.apiBaseUrl,
-        mode: widget.config.backendMode,
+        baseUrl: activeConfig.apiBaseUrl,
+        mode: activeConfig.backendMode,
       );
       final String dob =
           '$_birthYear-${_birthMonth.toString().padLeft(2, '0')}-${_birthDay.toString().padLeft(2, '0')}';

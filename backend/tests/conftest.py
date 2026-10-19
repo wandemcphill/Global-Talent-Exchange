@@ -228,6 +228,7 @@ def auth_user_factory(client, app_session_factory):
                 username=username,
                 password=password,
                 full_name=f"User {unique_suffix}",
+                club_name=f"User {unique_suffix} FC",
             ),
         )
         assert response.status_code == 201, response.text

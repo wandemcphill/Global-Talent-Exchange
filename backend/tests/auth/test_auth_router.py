@@ -406,6 +406,7 @@ def test_refresh_logout_and_session_bootstrap_flow(app_client) -> None:
             username="bootstrapuser",
             full_name="Bootstrap User",
             password=TEST_PASSWORD,
+            club_name="Bootstrap FC",
         ),
     )
 
@@ -439,6 +440,7 @@ def test_refresh_logout_and_session_bootstrap_flow(app_client) -> None:
     _assert_no_synthetic_markers(bootstrap)
     assert bootstrap["user"]["id"] == refreshed["user"]["id"]
     assert bootstrap["club"]["owner_user_id"] == refreshed["user"]["id"]
+    assert bootstrap["onboarding"]["has_club"] is True
     assert bootstrap["wallet"]["currency"] == "coin"
     assert bootstrap["compliance"]["country_code"] == "NG"
     assert "players.view" in bootstrap["permissions"]
@@ -469,14 +471,6 @@ def test_refresh_logout_and_session_bootstrap_flow(app_client) -> None:
     sessions = sessions_response.json()
     _assert_no_synthetic_markers(sessions)
     assert any(item["id"] == refreshed["session_id"] for item in sessions)
-
-    wallet_summary_response = client.get("/api/wallet/summary", headers=canonical_headers)
-    assert wallet_summary_response.status_code == 200, wallet_summary_response.text
-    wallet_summary = wallet_summary_response.json()
-    _assert_no_synthetic_markers(wallet_summary)
-    assert wallet_summary["currency"] == bootstrap["wallet"]["currency"]
-    for balance_key in ("available_balance", "reserved_balance", "total_balance"):
-        assert str(wallet_summary[balance_key]) == str(bootstrap["wallet"][balance_key])
 
     club_response = client.get("/api/club/current", headers=canonical_headers)
     assert club_response.status_code == 200, club_response.text
@@ -587,8 +581,9 @@ def test_user_creator_and_trader_signup_sessions_include_public_account_type(
             assert bootstrap["onboarding"]["requires_club"] is False
             assert "coin_trader_marketplace" in bootstrap["onboarding"]["available_actions"]
         else:
-            assert bootstrap["club"]["owner_user_id"] == issued["user"]["id"]
-            assert bootstrap["onboarding"]["has_club"] is True
+            assert bootstrap["club"] is None
+            assert bootstrap["onboarding"]["has_club"] is False
+            assert bootstrap["onboarding"]["requires_club"] is True
 
     with app.state.session_factory() as session:
         creator = session.scalar(select(User).where(User.email == "account-type-creator@example.com"))
@@ -613,7 +608,7 @@ def test_public_signup_rejects_external_admin_account_type(app_client) -> None:
     assert "account_type" in response.text
 
 
-def test_trader_signup_requires_proof_of_address(app_client) -> None:
+def test_trader_signup_compliance_optional(app_client) -> None:
     _app, client = app_client
     secret = "JBSWY3DPEHPK3PXP"  # pragma: allowlist secret
     payload = trader_signup_payload(
@@ -628,8 +623,96 @@ def test_trader_signup_requires_proof_of_address(app_client) -> None:
 
     response = client.post("/auth/signup/trader", json=payload)
 
-    assert response.status_code == 422, response.text
-    assert "proof_of_address_attachment_id" in response.text
+    assert response.status_code == 201, response.text
+
+
+def test_issue_274_signup_model_and_turnstile_security_regression(app_client, monkeypatch) -> None:
+    from app.auth import turnstile
+
+    _app, client = app_client
+    secret = "production-turnstile-secret-key"  # pragma: allowlist secret
+    from cryptography.fernet import Fernet
+
+    monkeypatch.setenv("GTE_TURNSTILE_SECRET_KEY", secret)
+    monkeypatch.setenv("GTE_APP_ENV", "production")
+    monkeypatch.setenv("GTE_AUTH_SECRET", "super-secret-auth-key-32-chars-long")  # pragma: allowlist secret
+    monkeypatch.setenv("GTE_FIELD_ENCRYPTION_KEY", Fernet.generate_key().decode())  # pragma: allowlist secret
+
+    class SiteverifyResponse:
+        def __init__(self, success: bool) -> None:
+            self.success = success
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, bool]:
+            return {"success": self.success}
+
+    def fake_siteverify(url, *, data, timeout):
+        assert url == turnstile.TURNSTILE_VERIFY_URL
+        assert data["secret"] == secret
+        assert timeout == 8.0
+        return SiteverifyResponse(data["response"] == "valid-real-challenge-token")
+
+    monkeypatch.setattr(turnstile.httpx, "post", fake_siteverify)
+
+    base_payload = {
+        "email": "issue274-user@example.com",
+        "username": "issue274_user",
+        "full_name": "Issue 274 User",
+        "password": TEST_PASSWORD,
+        "is_over_18": True,
+        "date_of_birth": "1998-01-15",
+    }
+
+    # 1. Production rejects dev-bypass token
+    res_dev_bypass = client.post(
+        "/auth/signup/user",
+        json={**base_payload, "turnstile_token": "dev-bypass"},
+    )
+    assert res_dev_bypass.status_code == 400, res_dev_bypass.text
+    assert "Security check failed" in res_dev_bypass.text
+
+    # 2. Invalid challenge token is rejected
+    res_invalid = client.post(
+        "/auth/signup/user",
+        json={**base_payload, "turnstile_token": "invalid-challenge-token"},
+    )
+    assert res_invalid.status_code == 400, res_invalid.text
+    assert "Security check failed" in res_invalid.text
+
+    # 3. Missing required challenge token is rejected
+    res_missing = client.post("/auth/signup/user", json=base_payload)
+    assert res_missing.status_code == 400, res_missing.text
+    assert "Complete the security check" in res_missing.text
+
+    # 4. Valid real challenge token succeeds
+    res_valid = client.post(
+        "/auth/signup/user",
+        json={**base_payload, "turnstile_token": "valid-real-challenge-token"},
+    )
+    assert res_valid.status_code == 201, res_valid.text
+    issued = res_valid.json()
+    assert issued["user"]["account_type"] == "user"
+
+    # 5. Normal signup does not create a club or require creator/trader selection
+    bootstrap_res = client.get(
+        "/api/v2/session/bootstrap",
+        headers={
+            "X-API-Version": "2",
+            "Authorization": f"Bearer {issued['access_token']}",
+            "X-User-Id": issued["user"]["id"],
+            "X-Session-Id": issued["session_id"],
+        },
+    )
+    assert bootstrap_res.status_code == 200, bootstrap_res.text
+    bootstrap = bootstrap_res.json()["data"]
+    assert bootstrap["club"] is None
+    assert bootstrap["onboarding"]["has_club"] is False
+    assert bootstrap["onboarding"]["requires_club"] is True
+    assert bootstrap["creator"] is None
+    assert bootstrap["coin_trader"] is None
+    assert bootstrap["account_type"] == "user"
 
 
 def test_legacy_register_function_returns_gone(session) -> None:

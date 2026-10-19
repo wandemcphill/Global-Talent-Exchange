@@ -432,7 +432,11 @@ class GteExchangeController extends ChangeNotifier {
     }
   }
 
-  Future<void> signIn({required String email, required String password}) async {
+  Future<void> signIn({
+    required String email,
+    required String password,
+    bool? refreshTradingState,
+  }) async {
     final int requestId = _authGate.begin();
     authError = null;
     isSigningIn = true;
@@ -447,17 +451,24 @@ class GteExchangeController extends ChangeNotifier {
         return;
       }
       session = nextSession;
-      unawaited(
-        _refreshTradingState(
-          playerId: selectedPlayer?.detail.playerId,
-          refreshPlayer: selectedPlayer != null,
-        ),
-      );
+      final Future<void> refreshTask = _refreshTradingState(
+        playerId: selectedPlayer?.detail.playerId,
+        refreshPlayer: selectedPlayer != null,
+      ).catchError((Object _) {});
       unawaited(refreshCompliance());
+
+      final bool shouldAwaitRefresh =
+          refreshTradingState ?? (_api.config.mode == GteBackendMode.fixture);
+      if (shouldAwaitRefresh) {
+        await refreshTask;
+      } else {
+        unawaited(refreshTask);
+      }
     } catch (error) {
       if (_authGate.isActive(requestId)) {
         authError = AppFeedback.messageFor(error);
       }
+      rethrow;
     } finally {
       if (_authGate.isActive(requestId)) {
         isSigningIn = false;
@@ -500,6 +511,7 @@ class GteExchangeController extends ChangeNotifier {
       if (_authGate.isActive(requestId)) {
         authError = AppFeedback.messageFor(error);
       }
+      rethrow;
     } finally {
       if (_authGate.isActive(requestId)) {
         isSigningIn = false;
