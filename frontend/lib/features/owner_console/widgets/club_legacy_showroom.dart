@@ -31,6 +31,7 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
   double _pitch = 0;
   double _zoom = 1;
   int _ticket = 0;
+  final Map<String, String> _purchaseIdempotencyKeys = <String, String>{};
   ShowroomGlb? _model;
   Object? _loadError;
 
@@ -54,6 +55,70 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
   }
 
   void _turn(double delta) => setState(() => _yaw += delta);
+
+  void _purchaseAsset(ShowroomExhibit exhibit) {
+    final String? sku = exhibit.sku;
+    final void Function(String, Map<String, Object?>)? onAction = widget.onAction;
+    if (sku == null || onAction == null) {
+      return;
+    }
+    // Keep the same key through retries/double taps for this purchase intent.
+    final String idempotencyKey = _purchaseIdempotencyKeys.putIfAbsent(
+      exhibit.id,
+      () => 'buy_${sku}_${DateTime.now().microsecondsSinceEpoch}',
+    );
+    onAction('purchase', <String, Object?>{
+      'sku': sku,
+      'idempotency_key': idempotencyKey,
+      'owner_class': 'club',
+    });
+  }
+
+  Future<void> _giftAsset(ShowroomExhibit exhibit) async {
+    final void Function(String, Map<String, Object?>)? onAction = widget.onAction;
+    if (onAction == null) {
+      return;
+    }
+    final TextEditingController recipientController = TextEditingController();
+    try {
+      final String? recipientRef = await showDialog<String>(
+        context: context,
+        builder: (BuildContext dialogContext) => AlertDialog(
+          title: Text('Gift ${exhibit.name}'),
+          content: TextField(
+            key: const Key('club-showroom-gift-recipient'),
+            controller: recipientController,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Recipient GTEX user ID',
+              hintText: 'Enter the intended recipient ID',
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const Key('club-showroom-gift-confirm'),
+              onPressed: () => Navigator.of(dialogContext).pop(recipientController.text.trim()),
+              child: const Text('Send gift'),
+            ),
+          ],
+        ),
+      );
+      final String normalizedRef = (recipientRef ?? '').trim();
+      if (!mounted || normalizedRef.isEmpty) {
+        return;
+      }
+      onAction('gift', <String, Object?>{
+        'asset_id': exhibit.id,
+        'recipient_ref': normalizedRef,
+      });
+    } finally {
+      recipientController.dispose();
+    }
+  }
 
   Future<void> _loadCurrent() async {
     final ShowroomExhibit? exhibit = _current;
@@ -178,11 +243,7 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
                     label: 'Buy ${exhibit.name}',
                     icon: Icons.shopping_cart_rounded,
                     compact: true,
-                    onPressed: () => widget.onAction!('purchase', <String, Object?>{
-                      'sku': exhibit.sku!,
-                      'idempotency_key': 'buy_${exhibit.sku}_${DateTime.now().millisecondsSinceEpoch}',
-                      'owner_class': 'club',
-                    }),
+                    onPressed: () => _purchaseAsset(exhibit),
                   ),
                 if (exhibit.owned && !exhibit.id.startsWith('facility:'))
                   GtexActionButton(
@@ -191,10 +252,7 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
                     icon: Icons.card_giftcard_rounded,
                     compact: true,
                     secondary: true,
-                    onPressed: () => widget.onAction!('gift', <String, Object?>{
-                      'asset_id': exhibit.id,
-                      'recipient_ref': 'player-1',
-                    }),
+                    onPressed: () => _giftAsset(exhibit),
                   ),
               ],
             ),
