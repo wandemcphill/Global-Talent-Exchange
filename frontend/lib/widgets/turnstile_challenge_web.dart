@@ -93,13 +93,19 @@ class _TurnstileChallengeState extends State<TurnstileChallenge> {
     final completer = Completer<void>();
     _scriptReady = completer.future;
     final existing = web.document.getElementById(_scriptId);
-    final script = existing is web.HTMLScriptElement
-        ? existing
-        : web.HTMLScriptElement()
-          ..id = _scriptId
-          ..src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
-          ..async = true
-          ..defer = true;
+    final web.Element script;
+    if (existing == null) {
+      final newScript = web.HTMLScriptElement()
+        ..id = _scriptId
+        ..src =
+            'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
+        ..async = true
+        ..defer = true;
+      script = newScript;
+      web.document.head?.append(newScript);
+    } else {
+      script = existing;
+    }
 
     script.addEventListener(
       'load',
@@ -115,7 +121,6 @@ class _TurnstileChallengeState extends State<TurnstileChallenge> {
         }
       }).toJS,
     );
-    if (existing == null) web.document.head?.append(script);
     await completer.future;
   }
 
