@@ -139,7 +139,10 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(
     )
     assert admin_settle.status_code == 200
     settle_payload = admin_settle.json()
-    assert settle_payload["champion"]["club_id"] == summary_payload["champion"]["club_id"]
+    assert (
+        settle_payload["champion"]["club_id"]
+        == summary_payload["champion"]["club_id"]
+    )
 
     payout_count_after_settle, ledger_count_after_settle = payout_counts()
     assert payout_count_after_settle > 0
