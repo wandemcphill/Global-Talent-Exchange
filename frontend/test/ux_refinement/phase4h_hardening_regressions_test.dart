@@ -7,6 +7,7 @@ import 'package:gte_frontend/features/club_redesign/widgets/gtex_club_ownership_
 import 'package:gte_frontend/features/home/home_screen.dart';
 import 'package:gte_frontend/features/navigation/presentation/gte_navigation_shell_screen.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
+import 'package:gte_frontend/features/owner_console/presentation/owner_console_screen.dart';
 import 'package:gte_frontend/features/player_market_redesign/widgets/gtex_market_movers_rail.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
@@ -250,13 +251,13 @@ void main() {
       }
 
       expect(
-        find.byType(HomeScreen),
+        find.byType(OwnerConsoleScreen),
         findsOneWidget,
         reason:
-            'Home handed club owners the club workspace, so Home and the '
-            'Club lane rendered the same screen and the personalised Home '
-            'was reachable only by users who owned no club',
+            'Signed-in Home mounts the Owner Console so club owners keep a '
+            'personalised board without duplicating the Club lane workspace',
       );
+      expect(find.byType(HomeScreen), findsNothing);
       tester.takeException();
     });
 
@@ -296,11 +297,11 @@ void main() {
       }
 
       expect(
-        find.byType(HomeScreen),
+        find.byType(OwnerConsoleScreen),
         findsOneWidget,
         reason:
-            'Home handed coin traders the wallet trader dashboard, so Home '
-            'and the Wallet lane rendered the same screen',
+            'Signed-in Home mounts the Owner Console so traders keep a '
+            'boardroom without duplicating the Wallet trader desk',
       );
       expect(
         find.byType(GtexWalletOverviewScreenV2),
@@ -345,11 +346,11 @@ void main() {
       }
 
       expect(
-        find.byType(HomeScreen),
+        find.byType(OwnerConsoleScreen),
         findsOneWidget,
         reason:
-            'Home rendered the admin command center, which the shell action '
-            'and the /admin route already reach',
+            'Signed-in Home mounts the Owner Console so admins keep a '
+            'boardroom without embedding the admin command center on Home',
       );
       expect(
         find.byType(AdminCommandCenterScreen),

@@ -85,7 +85,7 @@ void main() {
 
       await tester.tap(find.byTooltip('Club funds'));
       await _pumpUntilText(tester, 'GTC capital rail');
-      expect(find.text('Wallet & Capital'), findsWidgets);
+      expect(find.text('Capital'), findsWidgets);
       expect(find.text('Top up GTC'), findsOneWidget);
 
       expect(find.byTooltip('Creator community'), findsNothing);
@@ -122,7 +122,7 @@ void main() {
           ),
         ),
       );
-      await _pumpUntilText(tester, 'Wallet & Capital');
+      await _pumpUntilText(tester, 'Capital');
 
       expect(find.text('Wallet'), findsWidgets);
       final Finder walletNavChip = find.text('Wallet').last;

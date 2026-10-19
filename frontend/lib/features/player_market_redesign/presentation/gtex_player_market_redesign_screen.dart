@@ -269,49 +269,17 @@ class _GtexPlayerMarketRedesignScreenState
               return Column(
                 children: <Widget>[
                   if (showCommandPulse) ...<Widget>[
-                    GtexShellLaneHero(
+                    // Compact strip keeps the floodlit market identity without
+                    // overflowing the constrained Column used by the desk.
+                    GtexShellLaneHero.compactStrip(
                       key: const Key('market-lane-hero'),
-                      eyebrow: 'Transfer market',
-                      identity: 'GTEX Market',
-                      identityDetail:
-                          widget.activeMode == GtexMarketDeskMode.market
-                              ? 'Transfer intelligence'
-                              : 'My ownership',
+                      eyebrow:
+                          widget.controller.marketError == null
+                              ? 'Transfer market · LIVE · ${players.length}/${widget.controller.marketTotalPlayerCount} listings · ${widget.watchlistCount} watched'
+                              : 'Transfer market · DEGRADED · ${players.length}/${widget.controller.marketTotalPlayerCount} listings',
                       title: 'Sign the next name',
                       summary:
                           'Browse listings, shortlist talent, and move players through the live GTEX market.',
-                      statusLabel:
-                          widget.controller.marketError == null
-                              ? 'LIVE'
-                              : 'DEGRADED',
-                      status:
-                          widget.controller.marketError == null
-                              ? GtexCommandStatus.live
-                              : GtexCommandStatus.unavailable,
-                      metrics: <GtexCommandMetric>[
-                        GtexCommandMetric(
-                          label: 'Listings',
-                          value:
-                              '${players.length}/${widget.controller.marketTotalPlayerCount}',
-                          detail: 'Loaded',
-                          accent: GtexFloodlit.pitch,
-                          icon: Icons.groups_2_outlined,
-                        ),
-                        GtexCommandMetric(
-                          label: 'Watched',
-                          value: '${widget.watchlistCount}',
-                          detail: 'Scout board',
-                          accent: GtexCommandTokens.fan,
-                          icon: Icons.visibility_outlined,
-                        ),
-                        GtexCommandMetric(
-                          label: 'Shortlist',
-                          value: '${_basketState.items.length}',
-                          detail: 'Ready',
-                          accent: GtexFloodlit.gold,
-                          icon: Icons.playlist_add_check_outlined,
-                        ),
-                      ],
                     ),
                     const SizedBox(height: GtexSpacing.sm),
                   ],

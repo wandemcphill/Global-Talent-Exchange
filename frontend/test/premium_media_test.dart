@@ -67,11 +67,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('cup-lift-hero')), findsNothing);
-    // c45d422d replaced the hand-rolled workspace entry with HomeScreen's
-    // persona desk; a signed-in session without a club lands on the no-club
-    // desk and its club-creation prompt.
-    expect(find.text('No-club user command desk'), findsOneWidget);
-    expect(find.text('GET READY TO OWN A FOOTBALL OPERATION'), findsOneWidget);
+    // Signed-in Home opens the Owner Console (floodlit ownership chrome)
+    // instead of blocking on premium media hero wallpaper.
+    expect(find.byKey(const Key('owner-console')), findsOneWidget);
+    expect(find.byKey(const Key('owner-console-hero')), findsOneWidget);
     expect(find.text('Transfer Hub'), findsWidgets);
   });
 

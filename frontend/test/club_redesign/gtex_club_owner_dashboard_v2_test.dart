@@ -30,7 +30,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Club command'), findsOneWidget);
+    expect(find.text('Club HQ'), findsOneWidget);
     expect(find.text('Overview'), findsWidgets);
     expect(find.text('Squad'), findsWidgets);
     expect(find.text('Lagos Eclipse FC'), findsWidgets);
