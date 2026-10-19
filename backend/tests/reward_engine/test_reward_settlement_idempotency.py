@@ -84,8 +84,10 @@ def test_reward_settlement_is_idempotent_and_prevents_double_crediting(session) 
     # a fresh identity map/process request boundary, not just the original ORM session.
     RetrySession = sessionmaker(bind=session.get_bind(), autoflush=False, expire_on_commit=False)
     with RetrySession() as retry_session:
+        retry_actor = retry_session.get(type(admin), admin.id)
+        assert retry_actor is not None
         second = RewardEngineService(retry_session).settle_reward(
-            actor=admin,
+            actor=retry_actor,
             user_id=recipient.id,
             competition_key=comp_key,
             title="First Place Prize Retry",
