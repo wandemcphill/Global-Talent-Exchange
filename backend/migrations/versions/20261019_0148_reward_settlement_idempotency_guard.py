@@ -41,14 +41,19 @@ def upgrade() -> None:
         ).mappings().all()
         if duplicates:
             examples = "; ".join(
-                f"competition_key={row['competition_key']!r}, user_id={row['user_id']!r}, "
-                f"reward_source={row['reward_source']!r}, rows={row['duplicate_count']}"
+                (
+                    f"competition_key={row['competition_key']!r}, "
+                    f"user_id={row['user_id']!r}, "
+                    f"reward_source={row['reward_source']!r}, "
+                    f"rows={row['duplicate_count']}"
+                )
                 for row in duplicates
             )
             raise RuntimeError(
-                "Cannot add reward-settlement idempotency constraint: duplicate financial "
-                "settlement rows already exist. Reconcile them through the audited financial "
-                f"process before retrying this migration. Examples: {examples}"
+                "Cannot add reward-settlement idempotency constraint: "
+                "duplicate financial settlement rows already exist. "
+                "Reconcile them through the audited financial process "
+                f"before retrying this migration. Examples: {examples}"
             )
         op.create_unique_constraint(
             constraint_name,
