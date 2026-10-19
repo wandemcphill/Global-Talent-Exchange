@@ -647,6 +647,7 @@ class GteCreatorSignupRequest {
     required this.mainClubSupported,
     required this.primaryLanguage,
     required this.monetization,
+    this.turnstileToken,
   });
 
   final String creatorName;
@@ -658,6 +659,7 @@ class GteCreatorSignupRequest {
   final String mainClubSupported;
   final String primaryLanguage;
   final List<String> monetization;
+  final String? turnstileToken;
 
   Map<String, Object?> toJson() => <String, Object?>{
     'creator_name': creatorName,
@@ -669,6 +671,7 @@ class GteCreatorSignupRequest {
     'main_club_supported': mainClubSupported,
     'primary_language': primaryLanguage,
     'monetization': monetization,
+    if (turnstileToken != null) 'turnstile_token': turnstileToken,
   };
 }
 
@@ -687,6 +690,7 @@ class GteTraderSignupRequest {
     required this.totpCode,
     required this.recoveryPhraseHash,
     required this.securityPinHash,
+    this.turnstileToken,
     this.compliance,
   });
 
@@ -703,6 +707,7 @@ class GteTraderSignupRequest {
   final String totpCode;
   final String recoveryPhraseHash;
   final String securityPinHash;
+  final String? turnstileToken;
   final GteComplianceSignupPayload? compliance;
 
   Map<String, Object?> toJson() => <String, Object?>{
@@ -719,6 +724,7 @@ class GteTraderSignupRequest {
     'totp_code': totpCode,
     'recovery_phrase_hash': recoveryPhraseHash,
     'security_pin_hash': securityPinHash,
+    if (turnstileToken != null) 'turnstile_token': turnstileToken,
     if (compliance != null) 'compliance': compliance!.toJson(),
   };
 }

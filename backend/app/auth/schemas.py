@@ -254,6 +254,7 @@ class CreatorSignupRequest(BaseModel):
     avatar_asset_ref: str | None = Field(default=None, max_length=255)
     banner_asset_ref: str | None = Field(default=None, max_length=255)
     monetization: list[str] = Field(default_factory=list, max_length=4)
+    turnstile_token: str | None = Field(default=None, max_length=2048)
 
     @field_validator("email")
     @classmethod
@@ -289,6 +290,7 @@ class TraderSignupRequest(BaseModel):
     # KYC is no longer collected at signup (only required when a trader withdraws).
     # Optional so older clients that still POST compliance don't 400; it is ignored.
     compliance: ComplianceSubmissionRequest | None = None
+    turnstile_token: str | None = Field(default=None, max_length=2048)
 
     @field_validator("email")
     @classmethod
