@@ -267,6 +267,93 @@ def test_full_desk_rules(client, bootstrap_admin_headers, app):
             {"rule_code": "late_wages", "allegation": "Wages slipped", "evidence": "Ledger"},
         )
         assert acted["status"] == "open"
+
+        # Give club GTEX funds to test purchase
+        ledger.record(
+            session,
+            event_type="test_fund",
+            source=ledger.PLATFORM_GRANTS,
+            destination=ledger.club_account(club_id),
+            currency=ledger.GTEX,
+            gross=100000,
+            user_id=admin.id,
+            club_id=club_id,
+            memo="Prestige fund",
+        )
+
+        # 1. Idempotent purchase debits GTEX once, returns same asset
+        balance_before = ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)
+        purchased_watch = perform_desk_action(
+            session,
+            club_id,
+            admin.id,
+            "purchase",
+            {"sku": "gtex-watch-icon", "idempotency_key": "desk-watch-1"},
+        )
+        balance_after = ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)
+        assert Decimal(balance_before) - Decimal(balance_after) == Decimal("20000.00")
+
+        repeat_watch = perform_desk_action(
+            session,
+            club_id,
+            admin.id,
+            "purchase",
+            {"sku": "gtex-watch-icon", "idempotency_key": "desk-watch-1"},
+        )
+        assert repeat_watch["id"] == purchased_watch["id"]
+        assert ledger.balance(session, ledger.club_account(club_id), ledger.GTEX) == balance_after
+
+        # 2. Sold out cap test (Icon watch supply cap is 1)
+        with pytest.raises(LegacyError) as sold_out_exc:
+            perform_desk_action(
+                session,
+                club_id,
+                admin.id,
+                "purchase",
+                {"sku": "gtex-watch-icon", "idempotency_key": "desk-watch-2"},
+            )
+        assert sold_out_exc.value.code == "sold_out"
+
+        # 3. Gift of unowned asset rejected
+        with pytest.raises(LegacyError) as unowned_gift:
+            perform_desk_action(
+                session,
+                club_id,
+                rival.id,
+                "gift",
+                {"asset_id": purchased_watch["id"], "recipient_ref": "player-1"},
+            )
+        assert unowned_gift.value.code in {"not_asset_owner", "not_club_owner", "club_owner_required"}
+
+        # 4. Gifting owned asset & resolving gift
+        gift_res = perform_desk_action(
+            session,
+            club_id,
+            admin.id,
+            "gift",
+            {"asset_id": purchased_watch["id"], "recipient_ref": rival.id},
+        )
+        assert gift_res["status"] == "offered"
+
+        accept_res = perform_desk_action(
+            session,
+            rival_club.id,
+            rival.id,
+            "accept_gift",
+            {"gift_id": gift_res["id"]},
+        )
+        assert accept_res["status"] == "accepted"
+
+        with pytest.raises(LegacyError) as second_accept:
+            perform_desk_action(
+                session,
+                rival_club.id,
+                rival.id,
+                "accept_gift",
+                {"gift_id": gift_res["id"]},
+            )
+        assert second_accept.value.code == "gift_not_open"
+
         session.commit()
 
     page = client.get(f"/api/owner/legacy/{club_id}/desk", headers=bootstrap_admin_headers)

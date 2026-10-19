@@ -216,6 +216,60 @@ void main() {
     expect(find.text('Turn 0.0'), findsNothing);
   });
 
+  testWidgets('renders buy button for unowned items and gift button for owned items', (
+    WidgetTester tester,
+  ) async {
+    const ShowroomExhibit unownedJet = ShowroomExhibit(
+      id: 'catalogue:gtex-jet-harbour',
+      sku: 'gtex-jet-harbour',
+      name: 'Harbour Jet',
+      category: 'jet',
+      ownershipLabel: 'Not owned',
+      fallbackLabel: 'Static jet card',
+      owned: false,
+    );
+    String? actionTriggered;
+    Map<String, Object?>? actionPayload;
+
+    tester.view.physicalSize = const Size(900, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ClubLegacyShowroom(
+            exhibits: const <ShowroomExhibit>[unownedJet, _watch],
+            onAction: (String action, Map<String, Object?> payload) {
+              actionTriggered = action;
+              actionPayload = payload;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final Finder buyButton = find.byKey(const Key('club-showroom-buy-gtex-jet-harbour'));
+    expect(buyButton, findsOneWidget);
+    await tester.tap(buyButton);
+    await tester.pump();
+
+    expect(actionTriggered, equals('purchase'));
+    expect(actionPayload?['sku'], equals('gtex-jet-harbour'));
+
+    await tester.tap(find.byKey(const Key('club-showroom-pick-watch-1')));
+    await tester.pumpAndSettle();
+
+    final Finder giftButton = find.byKey(const Key('club-showroom-gift-watch-1'));
+    expect(giftButton, findsOneWidget);
+    await tester.tap(giftButton);
+    await tester.pump();
+
+    expect(actionTriggered, equals('gift'));
+    expect(actionPayload?['asset_id'], equals('watch-1'));
+  });
+
   test('all six starter models load at their source size', () async {
     TestWidgetsFlutterBinding.ensureInitialized();
     const Map<String, int> triangles = <String, int>{

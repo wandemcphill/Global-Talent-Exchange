@@ -14,10 +14,12 @@ class ClubLegacyShowroom extends StatefulWidget {
     super.key,
     required this.exhibits,
     this.forceStatic = false,
+    this.onAction,
   });
 
   final List<ShowroomExhibit> exhibits;
   final bool forceStatic;
+  final void Function(String action, Map<String, Object?> payload)? onAction;
 
   @override
   State<ClubLegacyShowroom> createState() => _ClubLegacyShowroomState();
@@ -165,6 +167,38 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
               fontSize: 12,
             ),
           ),
+          if (widget.onAction != null) ...<Widget>[
+            const SizedBox(height: GtexSpacing.sm),
+            Wrap(
+              spacing: GtexSpacing.xs,
+              children: <Widget>[
+                if (!exhibit.owned && exhibit.sku != null)
+                  GtexActionButton(
+                    key: Key('club-showroom-buy-${exhibit.sku}'),
+                    label: 'Buy ${exhibit.name}',
+                    icon: Icons.shopping_cart_rounded,
+                    compact: true,
+                    onPressed: () => widget.onAction!('purchase', <String, Object?>{
+                      'sku': exhibit.sku!,
+                      'idempotency_key': 'buy_${exhibit.sku}_${DateTime.now().millisecondsSinceEpoch}',
+                      'owner_class': 'club',
+                    }),
+                  ),
+                if (exhibit.owned && !exhibit.id.startsWith('facility:'))
+                  GtexActionButton(
+                    key: Key('club-showroom-gift-${exhibit.id}'),
+                    label: 'Gift ${exhibit.name}',
+                    icon: Icons.card_giftcard_rounded,
+                    compact: true,
+                    secondary: true,
+                    onPressed: () => widget.onAction!('gift', <String, Object?>{
+                      'asset_id': exhibit.id,
+                      'recipient_ref': 'player-1',
+                    }),
+                  ),
+              ],
+            ),
+          ],
           if (!reduceMotion) ...<Widget>[
             const SizedBox(height: GtexSpacing.sm),
             Wrap(
@@ -460,9 +494,10 @@ class _ShowroomFullscreenState extends State<_ShowroomFullscreen> {
 }
 
 class ShowroomSection extends StatefulWidget {
-  const ShowroomSection({super.key, required this.load});
+  const ShowroomSection({super.key, required this.load, this.onAction});
 
   final Future<List<ShowroomExhibit>> Function() load;
+  final Future<void> Function(String action, [Map<String, Object?> payload])? onAction;
 
   @override
   State<ShowroomSection> createState() => _ShowroomSectionState();
@@ -475,6 +510,21 @@ class _ShowroomSectionState extends State<ShowroomSection> {
   void initState() {
     super.initState();
     _exhibits = widget.load();
+  }
+
+  void _reload() {
+    setState(() {
+      _exhibits = widget.load();
+    });
+  }
+
+  Future<void> _handleAction(String action, Map<String, Object?> payload) async {
+    if (widget.onAction != null) {
+      await widget.onAction!(action, payload);
+      if (mounted) {
+        _reload();
+      }
+    }
   }
 
   @override
@@ -492,11 +542,13 @@ class _ShowroomSectionState extends State<ShowroomSection> {
           );
         }
         if (snap.hasError || snap.data == null) {
-          return const ClubLegacyShowroom(
+          return ClubLegacyShowroom(
             forceStatic: true,
-            exhibits: <ShowroomExhibit>[
+            onAction: (action, payload) => _handleAction(action, payload),
+            exhibits: const <ShowroomExhibit>[
               ShowroomExhibit(
                 id: 'catalogue:gtex-jet-harbour',
+                sku: 'gtex-jet-harbour',
                 name: 'Harbour Jet',
                 category: 'jet',
                 ownershipLabel: 'Not owned',
@@ -504,6 +556,7 @@ class _ShowroomSectionState extends State<ShowroomSection> {
               ),
               ShowroomExhibit(
                 id: 'catalogue:gtex-coach-lagoon',
+                sku: 'gtex-coach-lagoon',
                 name: 'Lagoon Coach',
                 category: 'coach',
                 ownershipLabel: 'Not owned',
@@ -511,6 +564,7 @@ class _ShowroomSectionState extends State<ShowroomSection> {
               ),
               ShowroomExhibit(
                 id: 'catalogue:gtex-watch-icon',
+                sku: 'gtex-watch-icon',
                 name: 'Icon Watch',
                 category: 'watch',
                 ownershipLabel: 'Not owned',
@@ -519,7 +573,10 @@ class _ShowroomSectionState extends State<ShowroomSection> {
             ],
           );
         }
-        return ClubLegacyShowroom(exhibits: snap.data!);
+        return ClubLegacyShowroom(
+          exhibits: snap.data!,
+          onAction: (action, payload) => _handleAction(action, payload),
+        );
       },
     );
   }
