@@ -160,9 +160,9 @@ class _GtexClubOwnerDashboardV2State extends State<GtexClubOwnerDashboardV2> {
       builder: (BuildContext context, _) {
         final GtexClubWorkspaceSnapshot snapshot = _controller.snapshot;
         return GtexMasterDetailScaffold(
-          title: 'Club command',
-          subtitle: '${snapshot.clubName} - owner workspace',
-          accent: GtexColors.pitch,
+          title: 'Club HQ',
+          subtitle: '${snapshot.clubName} · ownership desk',
+          accent: GtexFloodlit.pitch,
           mobileLeftTitle: 'Club sections',
           leftPanel: GtexClubSectionList<GtexClubOwnerSection>(
             items: GtexClubOwnerSection.values,
@@ -174,42 +174,20 @@ class _GtexClubOwnerDashboardV2State extends State<GtexClubOwnerDashboardV2> {
           ),
           detail: Column(
             children: <Widget>[
-              GtexFootballCommandPulse(
-                kicker: 'Football Command Centre',
-                title: 'Club owner operations cockpit',
-                accent: GtexColors.pitch,
-                metrics: <GtexCommandPulseMetric>[
-                  GtexCommandPulseMetric(
-                    label: 'Club wallet',
-                    value: gtexFormatCredits(snapshot.finances.walletCredits),
-                    icon: Icons.account_balance_wallet_outlined,
-                    accent: GtexColors.pitch,
-                  ),
-                  GtexCommandPulseMetric(
-                    label: 'Squad value',
-                    value: gtexFormatCredits(snapshot.finances.squadValueCredits),
-                    icon: Icons.groups_2_outlined,
-                    accent: GtexColors.cyan,
-                  ),
-                  GtexCommandPulseMetric(
-                    label: 'Open orders',
-                    value: gtexFormatCredits(snapshot.finances.openOrdersCredits),
-                    icon: Icons.receipt_long_outlined,
-                    accent: GtexColors.gold,
-                  ),
-                  GtexCommandPulseMetric(
-                    label: 'Monthly revenue',
-                    value: gtexFormatCredits(snapshot.finances.monthlyRevenueCredits),
-                    icon: Icons.trending_up_outlined,
-                    accent: GtexColors.mint,
-                  ),
-                ],
-                trailing: Text(
-                  'CLUB OWNER',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: GtexColors.textMuted,
-                    fontWeight: FontWeight.w900,
-                  ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  GtexSpacing.sm,
+                  GtexSpacing.sm,
+                  GtexSpacing.sm,
+                  0,
+                ),
+                child: GtexShellLaneHero.compactStrip(
+                  key: const Key('club-hq-hero'),
+                  eyebrow:
+                      'Club HQ · wallet ${gtexFormatCredits(snapshot.finances.walletCredits)} · squad ${gtexFormatCredits(snapshot.finances.squadValueCredits)}',
+                  title: snapshot.clubName,
+                  summary:
+                      'Squad, staff, facilities, and prestige for the club you own.',
                 ),
               ),
               const SizedBox(height: GtexSpacing.sm),

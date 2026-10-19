@@ -269,62 +269,49 @@ class _GtexPlayerMarketRedesignScreenState
               return Column(
                 children: <Widget>[
                   if (showCommandPulse) ...<Widget>[
-                    GtexFootballCommandPulse(
-                      kicker: 'Football Command Centre',
-                      title: 'Transfer market operations',
-                      accent: GtexColors.pitch,
-                      metrics: <GtexCommandPulseMetric>[
-                        GtexCommandPulseMetric(
-                          label: 'Listings loaded',
+                    GtexShellLaneHero(
+                      key: const Key('market-lane-hero'),
+                      eyebrow: 'Transfer market',
+                      identity: 'GTEX Market',
+                      identityDetail:
+                          widget.activeMode == GtexMarketDeskMode.market
+                              ? 'Transfer intelligence'
+                              : 'My ownership',
+                      title: 'Sign the next name',
+                      summary:
+                          'Browse listings, shortlist talent, and move players through the live GTEX market.',
+                      statusLabel:
+                          widget.controller.marketError == null
+                              ? 'LIVE'
+                              : 'DEGRADED',
+                      status:
+                          widget.controller.marketError == null
+                              ? GtexCommandStatus.live
+                              : GtexCommandStatus.unavailable,
+                      metrics: <GtexCommandMetric>[
+                        GtexCommandMetric(
+                          label: 'Listings',
                           value:
                               '${players.length}/${widget.controller.marketTotalPlayerCount}',
+                          detail: 'Loaded',
+                          accent: GtexFloodlit.pitch,
                           icon: Icons.groups_2_outlined,
-                          accent: GtexColors.pitch,
                         ),
-                        GtexCommandPulseMetric(
+                        GtexCommandMetric(
                           label: 'Watched',
                           value: '${widget.watchlistCount}',
+                          detail: 'Scout board',
+                          accent: GtexCommandTokens.fan,
                           icon: Icons.visibility_outlined,
-                          accent: GtexColors.cyan,
                         ),
-                        GtexCommandPulseMetric(
+                        GtexCommandMetric(
                           label: 'Shortlist',
                           value: '${_basketState.items.length}',
+                          detail: 'Ready',
+                          accent: GtexFloodlit.gold,
                           icon: Icons.playlist_add_check_outlined,
-                          accent: GtexColors.gold,
-                        ),
-                        GtexCommandPulseMetric(
-                          label: 'Market state',
-                          value:
-                              widget.controller.marketError == null
-                                  ? 'Live snapshot'
-                                  : 'Degraded',
-                          icon:
-                              widget.controller.marketError == null
-                                  ? Icons.radio_button_checked
-                                  : Icons.warning_amber_rounded,
-                          accent:
-                              widget.controller.marketError == null
-                                  ? GtexColors.pitch
-                                  : GtexColors.orange,
                         ),
                       ],
-                      // When mode chips are mounted above the desk, echoing the
-                      // same labels here duplicates TRANSFER INTELLIGENCE /
-                      // MY OWNERSHIP in the tree and breaks shell truth tests.
-                      trailing:
-                          widget.onSelectMode == null
-                              ? Text(
-                                widget.activeMode == GtexMarketDeskMode.market
-                                    ? 'TRANSFER INTELLIGENCE'
-                                    : 'MY OWNERSHIP',
-                                style: Theme.of(context).textTheme.labelSmall
-                                    ?.copyWith(
-                                      color: GtexColors.textMuted,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                              )
-                              : null,
                     ),
                     const SizedBox(height: GtexSpacing.sm),
                   ],

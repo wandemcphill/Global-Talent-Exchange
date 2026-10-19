@@ -39,42 +39,42 @@ class GtexCurrentRouteAdapter {
   static String titleFor(GtePrimaryDestination destination) {
     switch (destination) {
       case GtePrimaryDestination.home:
-        return 'GTEX Command';
+        return 'GTEX';
       case GtePrimaryDestination.market:
-        return 'Transfer Hub';
+        return 'Transfer Market';
       case GtePrimaryDestination.regens:
         return 'Regen World';
       case GtePrimaryDestination.competitions:
-        return 'Matchday & Tournaments';
+        return 'Matchday';
       case GtePrimaryDestination.club:
         return 'Club HQ';
       case GtePrimaryDestination.hub:
-        return 'Creator & World Hub';
+        return 'Studio';
       case GtePrimaryDestination.community:
-        return 'Community';
+        return 'Fan Community';
       case GtePrimaryDestination.wallet:
-        return 'Wallet & Capital';
+        return 'Capital';
     }
   }
 
   static String subtitleFor(GtePrimaryDestination destination) {
     switch (destination) {
       case GtePrimaryDestination.home:
-        return 'Your football operating system';
+        return 'Own the club. Run the economy.';
       case GtePrimaryDestination.market:
-        return 'Transfer, loan, swap, and loan-to-buy football operations';
+        return 'Sign, bid, shortlist, and trade talent';
       case GtePrimaryDestination.regens:
-        return 'Regen prospects, lineage, development, and Create-a-Son';
+        return 'Prospects, lineage, and youth development';
       case GtePrimaryDestination.competitions:
-        return 'Run, join, and monitor GTEX football competitions';
+        return 'Fixtures, cups, and tournament pressure';
       case GtePrimaryDestination.club:
-        return 'Own, build, brand, and grow your club';
+        return 'Squad, staff, facilities, and prestige';
       case GtePrimaryDestination.hub:
-        return 'Creator, regen, awards, and world activity';
+        return 'Creator desk and world activity';
       case GtePrimaryDestination.community:
-        return 'Fans, followers, discussions, and social activity';
+        return 'Fans, stories, and club noise';
       case GtePrimaryDestination.wallet:
-        return 'Coins, top-ups, withdrawals, orders, and treasury';
+        return 'FanCoin, GTEX Coin, orders, and payouts';
     }
   }
 }

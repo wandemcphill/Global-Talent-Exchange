@@ -12,14 +12,14 @@ enum OwnerConsoleSection { control, clubs, showroom, desk, market, squad, academ
 
 const Map<OwnerConsoleSection, (String, IconData)> _sectionMeta =
     <OwnerConsoleSection, (String, IconData)>{
-      OwnerConsoleSection.control: ('Control Center', Icons.space_dashboard_rounded),
+      OwnerConsoleSection.control: ('Today', Icons.bolt_rounded),
       OwnerConsoleSection.clubs: ('My Clubs', Icons.shield_rounded),
       OwnerConsoleSection.showroom: ('Showroom', Icons.museum_rounded),
       OwnerConsoleSection.desk: ('Club desk', Icons.account_balance_rounded),
-      OwnerConsoleSection.market: ('Market & Transfers', Icons.storefront_rounded),
-      OwnerConsoleSection.squad: ('Manager & Squad', Icons.groups_rounded),
-      OwnerConsoleSection.academy: ('Academy / Regens', Icons.auto_awesome_rounded),
-      OwnerConsoleSection.admin: ('Admin Review', Icons.admin_panel_settings_rounded),
+      OwnerConsoleSection.market: ('Transfers', Icons.storefront_rounded),
+      OwnerConsoleSection.squad: ('Squad', Icons.groups_rounded),
+      OwnerConsoleSection.academy: ('Academy', Icons.auto_awesome_rounded),
+      OwnerConsoleSection.admin: ('Trust desk', Icons.admin_panel_settings_rounded),
     };
 
 /// The signed-in owner's home: Control Center plus My Clubs, Market,
@@ -201,7 +201,8 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              _Header(
+              _OwnershipHeader(
+                center: _center,
                 role: widget.role,
                 walletBalance: widget.walletBalance ?? _wallet,
               ),
@@ -270,9 +271,14 @@ class _DeskLoaderState extends State<_DeskLoader> {
   }
 }
 
-class _Header extends StatelessWidget {
-  const _Header({required this.role, required this.walletBalance});
+class _OwnershipHeader extends StatelessWidget {
+  const _OwnershipHeader({
+    required this.center,
+    required this.role,
+    this.walletBalance,
+  });
 
+  final Future<OwnerControlCenter> center;
   final String role;
   final double? walletBalance;
 
@@ -285,40 +291,61 @@ class _Header extends StatelessWidget {
         GtexSpacing.md,
         GtexSpacing.sm,
       ),
-      child: Wrap(
-        alignment: WrapAlignment.spaceBetween,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: GtexSpacing.sm,
-        runSpacing: GtexSpacing.xs,
-        children: <Widget>[
-          const Text(
-            'Owner Console',
-            style: TextStyle(
-              color: GtexColors.text,
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          Wrap(
-            spacing: GtexSpacing.xs,
+      child: FutureBuilder<OwnerControlCenter>(
+        future: center,
+        builder: (BuildContext context, AsyncSnapshot<OwnerControlCenter> snap) {
+          final OwnerControlCenter? data = snap.data;
+          final OwnerClubCard? club =
+              data == null || data.clubs.isEmpty ? null : data.clubs.first;
+          final int decisions = data?.decisions.length ?? 0;
+          final String walletLabel =
+              walletBalance == null
+                  ? '—'
+                  : walletBalance!.toStringAsFixed(
+                    walletBalance! % 1 == 0 ? 0 : 2,
+                  );
+          final String title = club == null ? 'Claim your club' : club.name;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              GtexStatusChip(
-                key: const Key('owner-console-wallet-chip'),
-                label:
-                    walletBalance == null
-                        ? 'Wallet -'
-                        : '${walletBalance!.toStringAsFixed(walletBalance! % 1 == 0 ? 0 : 2)} GTX',
-                color: GtexColors.pitch,
-                icon: Icons.account_balance_wallet_outlined,
+              GtexShellLaneHero.compactStrip(
+                key: const Key('owner-console-hero'),
+                eyebrow: 'Club ownership',
+                title: title,
+                summary:
+                    club == null
+                        ? 'Start ownership with a club identity and today\'s decisions.'
+                        : 'Decisions, next fixture, and club capital.',
               ),
-              GtexStatusChip(
-                key: const Key('owner-console-role-chip'),
-                label: role.toUpperCase(),
-                color: GtexColors.gold,
+              const SizedBox(height: GtexSpacing.sm),
+              Wrap(
+                spacing: GtexSpacing.xs,
+                runSpacing: GtexSpacing.xs,
+                children: <Widget>[
+                  GtexStatusChip(
+                    key: const Key('owner-console-wallet-chip'),
+                    label: '$walletLabel GTX',
+                    color: GtexFloodlit.pitch,
+                    icon: Icons.account_balance_wallet_outlined,
+                  ),
+                  GtexStatusChip(
+                    key: const Key('owner-console-role-chip'),
+                    label: role.toUpperCase(),
+                    color: GtexFloodlit.gold,
+                  ),
+                  GtexStatusChip(
+                    label: '$decisions due',
+                    color:
+                        decisions == 0
+                            ? GtexFloodlit.pitch
+                            : GtexFloodlit.scoreboard,
+                    icon: Icons.bolt_rounded,
+                  ),
+                ],
               ),
             ],
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -359,11 +386,11 @@ class _SectionMenu extends StatelessWidget {
             decoration: BoxDecoration(
               color:
                   active
-                      ? GtexColors.pitch.withValues(alpha: 0.16)
-                      : GtexColors.panelStrong,
+                      ? GtexFloodlit.pitch.withValues(alpha: 0.16)
+                      : GtexFloodlit.card.withValues(alpha: 0.72),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: active ? GtexColors.pitch : GtexColors.line,
+                color: active ? GtexFloodlit.pitch : GtexFloodlit.line,
               ),
             ),
             child: Row(
@@ -372,7 +399,8 @@ class _SectionMenu extends StatelessWidget {
                 Icon(
                   icon,
                   size: 18,
-                  color: active ? GtexColors.pitch : GtexColors.textSecondary,
+                  color:
+                      active ? GtexFloodlit.pitch : GtexFloodlit.chalkMuted,
                 ),
                 const SizedBox(width: 8),
                 Flexible(
@@ -380,8 +408,10 @@ class _SectionMenu extends StatelessWidget {
                     label,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: active ? GtexColors.text : GtexColors.textSecondary,
+                      color:
+                          active ? GtexFloodlit.chalk : GtexFloodlit.chalkMuted,
                       fontWeight: FontWeight.w800,
+                      fontFamily: GtexFloodlit.display,
                     ),
                   ),
                 ),

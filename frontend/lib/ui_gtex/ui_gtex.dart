@@ -13,6 +13,7 @@ export 'components/gtex_blocked_state.dart';
 export 'components/gtex_button.dart';
 export 'components/gtex_card.dart';
 export 'components/gtex_command_center.dart';
+export 'components/gtex_shell_lane_hero.dart';
 export 'components/gtex_competition_command.dart';
 export 'components/gtex_coin_chip.dart';
 export 'components/gtex_empty_state.dart';

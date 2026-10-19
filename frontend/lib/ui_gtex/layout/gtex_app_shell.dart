@@ -132,9 +132,9 @@ class _LiveFootballPulseStrip extends StatelessWidget {
       height: 34,
       padding: const EdgeInsets.symmetric(horizontal: GtexSpacing.lg),
       decoration: BoxDecoration(
-        color: GtexColors.stadiumBlack.withValues(alpha: 0.38),
+        color: GtexFloodlit.turf.withValues(alpha: 0.72),
         border: Border(
-          bottom: BorderSide(color: GtexColors.line.withValues(alpha: 0.28)),
+          bottom: BorderSide(color: GtexFloodlit.line.withValues(alpha: 0.55)),
         ),
       ),
       child: Row(
@@ -142,14 +142,15 @@ class _LiveFootballPulseStrip extends StatelessWidget {
           Icon(
             Icons.sensors_rounded,
             size: 15,
-            color: active?.accent ?? GtexColors.pitch,
+            color: active?.accent ?? GtexFloodlit.pitch,
           ),
           const SizedBox(width: GtexSpacing.xs),
           Text(
             active == null ? 'GTEX world pulse' : '${active.label} live',
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: GtexColors.text,
+              color: GtexFloodlit.chalk,
               fontWeight: FontWeight.w900,
+              fontFamily: GtexFloodlit.display,
             ),
           ),
           const SizedBox(width: GtexSpacing.sm),
@@ -159,16 +160,22 @@ class _LiveFootballPulseStrip extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: GtexColors.textSecondary,
+                color: GtexFloodlit.chalkMuted,
                 fontWeight: FontWeight.w700,
               ),
             ),
           ),
-          Text(
-            'football OS',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: GtexColors.textMuted,
-              fontWeight: FontWeight.w800,
+          Flexible(
+            child: Text(
+              'ownership',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: GtexFloodlit.gold,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.6,
+              ),
             ),
           ),
         ],
@@ -196,12 +203,12 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 72,
+      height: 76,
       padding: const EdgeInsets.symmetric(horizontal: GtexSpacing.lg),
       decoration: BoxDecoration(
-        color: GtexColors.stadiumBlack.withValues(alpha: 0.56),
+        color: GtexFloodlit.night.withValues(alpha: 0.92),
         border: Border(
-          bottom: BorderSide(color: GtexColors.line.withValues(alpha: 0.48)),
+          bottom: BorderSide(color: GtexFloodlit.line.withValues(alpha: 0.85)),
         ),
       ),
       child: LayoutBuilder(
@@ -209,22 +216,23 @@ class _TopBar extends StatelessWidget {
           return Row(
             children: <Widget>[
               Container(
-                width: 42,
-                height: 42,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
-                  color: GtexColors.pitch,
+                  color: GtexFloodlit.pitch,
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: <BoxShadow>[
-                    GtexColors.glow(GtexColors.pitch, opacity: 0.28),
+                    GtexColors.glow(GtexFloodlit.pitch, opacity: 0.32),
                   ],
                 ),
                 child: const Center(
                   child: Text(
                     'G',
                     style: TextStyle(
-                      color: Colors.black,
+                      color: GtexFloodlit.night,
                       fontWeight: FontWeight.w900,
                       fontSize: 22,
+                      fontFamily: GtexFloodlit.display,
                     ),
                   ),
                 ),
@@ -240,8 +248,10 @@ class _TopBar extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: GtexColors.text,
+                        color: GtexFloodlit.chalk,
                         fontWeight: FontWeight.w900,
+                        fontFamily: GtexFloodlit.display,
+                        letterSpacing: 0.4,
                       ),
                     ),
                     Text(
@@ -249,7 +259,7 @@ class _TopBar extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: GtexColors.textMuted,
+                        color: GtexFloodlit.chalkMuted,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -301,9 +311,9 @@ class _NavRail extends StatelessWidget {
       width: 94,
       padding: const EdgeInsets.symmetric(vertical: GtexSpacing.md),
       decoration: BoxDecoration(
-        color: GtexColors.stadiumBlack.withValues(alpha: 0.72),
+        color: GtexFloodlit.night.withValues(alpha: 0.94),
         border: Border(
-          right: BorderSide(color: GtexColors.line.withValues(alpha: 0.5)),
+          right: BorderSide(color: GtexFloodlit.line.withValues(alpha: 0.7)),
         ),
       ),
       child: Column(

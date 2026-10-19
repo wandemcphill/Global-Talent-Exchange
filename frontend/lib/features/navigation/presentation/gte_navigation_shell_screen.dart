@@ -713,21 +713,21 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       return GtexCurrentRouteAdapter.titleFor(_route.primaryDestination);
     }
     if (_isAdminSession) {
-      return 'Admin Operations';
+      return 'GTEX Ops';
     }
     if (_isCoinTraderSession) {
-      return 'Trader Market Desk';
+      return 'Trader Desk';
     }
     if (_isCreatorSession) {
-      return 'Creator Media Desk';
+      return 'Creator Desk';
     }
     if (_canonicalClubId()?.trim().isNotEmpty ?? false) {
-      return 'Club Operations';
+      return 'Club Ownership';
     }
     if (widget.controller.isAuthenticated) {
-      return 'Fan & Scout Desk';
+      return 'GTEX';
     }
-    return 'GTEX Explore';
+    return 'GTEX';
   }
 
   String _routeSubtitle() {
@@ -735,21 +735,21 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       return GtexCurrentRouteAdapter.subtitleFor(_route.primaryDestination);
     }
     if (_isAdminSession) {
-      return 'Payments, competitions, queues, traders, and settlement pressure';
+      return 'Payments, competitions, queues, and settlement';
     }
     if (_isCoinTraderSession) {
-      return 'GTC and FNC liquidity, offers, wallet state, and buyer pressure';
+      return 'Liquidity, offers, and wallet pressure';
     }
     if (_isCreatorSession) {
-      return 'Newsroom, reactions, match stories, and creator wallet movement';
+      return 'Stories, reactions, and creator capital';
     }
     if (_canonicalClubId()?.trim().isNotEmpty ?? false) {
-      return 'Squad, fixtures, transfers, club wallet, and ranking movement';
+      return 'Today\'s decisions, next fixture, and club capital';
     }
     if (widget.controller.isAuthenticated) {
-      return 'Transfers, regens, national rentals, wallet, and club onboarding';
+      return 'Own the club. Run the economy.';
     }
-    return 'Browse clubs, transfers, competitions, regens, and GTEX economy news';
+    return 'Football ownership and the GTEX economy';
   }
 
   Map<GtePrimaryDestination, String> _destinationBadgesForWorkspace() {

@@ -347,11 +347,14 @@ class _GtexLiveWalletOverviewState extends State<_GtexLiveWalletOverview> {
     return AnimatedBuilder(
       animation: widget.controller,
       builder: (BuildContext context, Widget? child) {
+        final String available = widget.controller.walletSummary == null
+            ? '—'
+            : widget.controller.walletSummary!.availableBalance
+                .toStringAsFixed(2);
         return GtexMasterDetailScaffold(
-          title: 'Wallet & Capital',
-          subtitle:
-              'Live balances, transfer orders, player holdings and payment actions.',
-          accent: GtexColors.gold,
+          title: 'Capital',
+          subtitle: 'FanCoin, GTEX Coin, orders, and payouts.',
+          accent: GtexFloodlit.gold,
           mobileLeftTitle: 'Capital desk',
           leftPanelWidth: 300,
           rightPanelWidth: 350,
@@ -363,7 +366,28 @@ class _GtexLiveWalletOverviewState extends State<_GtexLiveWalletOverview> {
             ),
           ],
           leftPanel: _buildModuleList(context),
-          detail: _buildDetail(context),
+          detail: Column(
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  GtexSpacing.sm,
+                  GtexSpacing.sm,
+                  GtexSpacing.sm,
+                  0,
+                ),
+                child: GtexShellLaneHero.compactStrip(
+                  key: const Key('capital-lane-hero'),
+                  eyebrow:
+                      'Capital · $available available · ${widget.controller.openOrders.length} orders',
+                  title: 'Your football capital',
+                  summary:
+                      'Balances, holdings, and payment rails for club ownership.',
+                ),
+              ),
+              const SizedBox(height: GtexSpacing.sm),
+              Expanded(child: _buildDetail(context)),
+            ],
+          ),
           rightPanel: _WalletRightRail(
             controller: widget.controller,
             onTopUp: widget.onTopUp,

@@ -474,7 +474,10 @@ class ControlCenterSection extends StatelessWidget {
           GtexPanel(
             key: const Key('owner-console-decisions'),
             title: "Today's Decisions",
-            subtitle: '${decisions.length} waiting',
+            subtitle:
+                decisions.isEmpty
+                    ? 'Nothing waiting'
+                    : '${decisions.length} waiting',
             accent: GtexColors.gold,
             child: Column(
               children: <Widget>[

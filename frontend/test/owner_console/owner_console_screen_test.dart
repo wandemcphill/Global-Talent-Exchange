@@ -222,7 +222,7 @@ void main() {
     expect(find.text('Offer for your striker'), findsOneWidget);
     expect(find.text('#2 Lagos Lions'), findsOneWidget);
     expect(find.byKey(const Key('owner-board-next-fixture')), findsOneWidget);
-    expect(find.text('Inbox clear'), findsOneWidget);
+    expect(find.byKey(const Key('owner-console-inbox')), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('owner-decision-d1')));
     expect(visited.single, contains('market'));
@@ -271,7 +271,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(owner.suggestions, 1);
     expect(find.byKey(const Key('owner-squad-plan-summary')), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('owner-squad-review-confirm')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('owner-squad-review-confirm')));
+    await tester.pumpAndSettle();
+    expect(visited, isNotEmpty);
     expect(visited.last, '/national-team');
   });
 
