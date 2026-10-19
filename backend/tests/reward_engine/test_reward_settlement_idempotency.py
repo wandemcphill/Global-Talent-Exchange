@@ -13,7 +13,6 @@ from app.models import (
     AdminRewardRule,
     Base,
     LedgerEntry,
-    LedgerUnit,
     RewardSettlement,
 )
 from app.reward_engine.service import RewardEngineService
