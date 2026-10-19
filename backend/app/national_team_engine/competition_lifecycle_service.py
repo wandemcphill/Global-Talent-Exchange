@@ -107,10 +107,20 @@ class NationalCompetitionLifecycleService:
         profile = self._competition_profile(competition)
         representatives = self._default_representative_ids(entries)
         for entry in entries:
+            # Revalidate at lock time as well as submission time. This fails
+            # closed for legacy/corrupt entries and for rentals that expired
+            # while the entry was awaiting the competition lock.
+            entry_actor = self.session.get(User, entry.user_id)
+            if entry_actor is None:
+                raise NationalCompetitionLifecycleError(
+                    "Competition entry owner was not found.",
+                    reason="entry_owner_missing",
+                )
             normalized = self._normalize_squad(
                 entry.squad_json,
                 competition=competition,
                 country_code=entry.country_code,
+                actor=entry_actor,
             )
             entry.squad_json = normalized
             entry.locked = True
