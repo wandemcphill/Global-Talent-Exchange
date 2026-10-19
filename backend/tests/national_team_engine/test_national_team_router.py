@@ -914,7 +914,24 @@ def test_submit_squad_rejects_unrented_player(client, demo_seed, app_session_fac
         },
     ).json()
 
-    # Submit squad containing an unrented player ID
+    # A stale ACTIVE contract must not make an expired player eligible.
+    from app.models.national_team_tournament import RentalContract, RentalContractStatus
+
+    now = datetime.now(timezone.utc)
+    with app_session_factory() as session:
+        session.add(
+            RentalContract(
+                player_id=unrented_player_id,
+                user_id=first_user.user_id,
+                tournament_id=competition["id"],
+                start_date=now - timedelta(days=3),
+                end_date=now - timedelta(days=1),
+                status=RentalContractStatus.ACTIVE,
+            )
+        )
+        session.commit()
+
+    # Submit squad containing an expired rental record
     submit_response = client.post(
         f"/api/national-team-engine/competitions/{competition['id']}/entries",
         headers=user_headers,
@@ -987,3 +1004,10 @@ def test_rental_status_and_national_entry_auth_enforcement(client, demo_seed, na
     )
     assert national_entry.status_code == 200, national_entry.text
     assert national_entry.json()["id"] == entry["id"]
+
+    # Another authenticated user must not be able to read this entry.
+    forbidden_entry = client.get(
+        f"/api/national/entries/{entry['id']}",
+        headers=user_b_headers,
+    )
+    assert forbidden_entry.status_code == 403, forbidden_entry.text
