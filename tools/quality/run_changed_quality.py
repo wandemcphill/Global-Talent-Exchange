@@ -264,7 +264,7 @@ def main() -> int:
 
     run_check(
         "Python format check",
-        [sys.executable, "-m", "black", "--check", "--diff"],
+        [sys.executable, "-m", "black", "--check"],
         python_files,
     )
     run_check(
