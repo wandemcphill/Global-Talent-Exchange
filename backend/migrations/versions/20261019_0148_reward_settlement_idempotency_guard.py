@@ -22,7 +22,9 @@ def upgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
     constraint_name = "uq_reward_settlements_comp_user_source"
-    constraints = {c["name"] for c in inspector.get_unique_constraints("reward_settlements")}
+    constraints = {
+        c["name"] for c in inspector.get_unique_constraints("reward_settlements")
+    }
     if constraint_name not in constraints:
         # Never silently delete or rewrite existing financial settlement history.
         duplicates = bind.execute(
