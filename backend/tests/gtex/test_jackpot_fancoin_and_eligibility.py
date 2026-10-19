@@ -17,7 +17,6 @@ from app.models import (
     Base,
     GtexContributionSourceType,
     GtexJackpotRoundStatus,
-    GtexJackpotTriggerMode,
     LedgerEntry,
     LedgerEntryReason,
     LedgerSourceTag,
