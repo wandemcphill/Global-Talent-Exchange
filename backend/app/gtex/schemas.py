@@ -22,7 +22,7 @@ class JackpotContributionRequest(BaseModel):
     source_id: str | None = None
     entry_fee: Decimal = Field(gt=0)
     contribution_amount: Decimal | None = Field(default=None, gt=0)
-    eligibility_score: Decimal = Field(default=Decimal("1.0000"), gt=0)
+    eligibility_score: Decimal = Field(default=Decimal("1.0000"), gt=0, le=Decimal("5.0000"))
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
@@ -143,6 +144,7 @@ class RewardEngineService:
                     transaction_type=transaction_type,
                 )
             )
+        settlement_idempotency_key = f"reward-settlement:{competition_key}:{user.id}:{reward_source}"
         entries = self.wallet_service.append_transaction(
             self.session,
             postings=postings,
@@ -153,6 +155,7 @@ class RewardEngineService:
             external_reference=f"reward:{competition_key}:{user.id}",
             actor=actor,
             transaction_type=transaction_type,
+            idempotency_key=settlement_idempotency_key,
         )
         settlement = RewardSettlement(
             user_id=user.id,
@@ -167,8 +170,23 @@ class RewardEngineService:
             note=note,
             settled_by_user_id=actor.id,
         )
-        self.session.add(settlement)
-        self.session.flush()
+        savepoint = self.session.begin_nested()
+        try:
+            self.session.add(settlement)
+            self.session.flush()
+            savepoint.commit()
+        except IntegrityError:
+            savepoint.rollback()
+            existing_settlement = self.session.scalar(
+                select(RewardSettlement).where(
+                    RewardSettlement.competition_key == competition_key,
+                    RewardSettlement.user_id == user_id,
+                    RewardSettlement.reward_source == reward_source,
+                )
+            )
+            if existing_settlement is not None:
+                return existing_settlement
+            raise
         SpendingControlService(self.session).record_evaluation(
             control_evaluation,
             entity_id=settlement.id,

@@ -225,6 +225,36 @@ services:
       - key: GTE_OUTBOX_RELAY_ENABLED
         value: "true"
 
+  - name: gtex-worker
+    type: worker
+    runtime: python
+    region: frankfurt
+    plan: starter
+    buildCommand: "pip install -r backend/requirements.lock"
+    startCommand: "cd backend && python -m app.gtex.worker_main"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_ENABLED
+        value: "true"
+      - key: GTE_REDIS_URL
+        fromService:
+          type: keyvalue
+          name: gtex-cache
+          property: connectionString
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_FIELD_ENCRYPTION_KEY
+        sync: false
+      - key: GTE_MEDIA_SIGNING_SECRET
+        sync: false
+      - key: GTE_RUN_MIGRATION_CHECK
+        value: "true"
+      - key: GTE_GTEX_WORKERS
+        value: "valuation,matchmaker,brain,jackpot"
+
   - name: gtex-player-ingestion-worker
     type: worker
     runtime: node
