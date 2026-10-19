@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/gtex_colors.dart';
 import '../theme/gtex_command_center_tokens.dart';
 import '../theme/gtex_spacing.dart';
+import '../theme/gtex_typography.dart';
 import 'gtex_command_center.dart';
 
 /// Production lane hero for the signed-in Flutter shell.
@@ -89,32 +90,29 @@ class GtexShellLaneHero extends StatelessWidget {
           children: <Widget>[
             Text(
               eyebrow.toUpperCase(),
-              style: const TextStyle(
+              style: GtexText.labelSM.copyWith(
                 color: GtexFloodlit.gold,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
                 letterSpacing: 1.4,
                 fontFamily: GtexFloodlit.display,
+                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               title,
-              style: const TextStyle(
+              style: GtexText.displayMD.copyWith(
                 color: GtexFloodlit.chalk,
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
                 height: 1.05,
                 fontFamily: GtexFloodlit.display,
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               summary,
-              style: const TextStyle(
+              style: GtexText.bodySM.copyWith(
                 color: GtexFloodlit.chalkMuted,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ],

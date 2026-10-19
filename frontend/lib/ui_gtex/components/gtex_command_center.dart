@@ -120,7 +120,7 @@ class GtexCommandCenterMasthead extends StatelessWidget {
                       title,
                       style: GtexText.displayXL.copyWith(
                         fontFamily: GtexFloodlit.display,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         color: GtexFloodlit.chalk,
                         height: 0.92,
                       ),

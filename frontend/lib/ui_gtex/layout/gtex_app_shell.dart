@@ -149,7 +149,7 @@ class _LiveFootballPulseStrip extends StatelessWidget {
             active == null ? 'GTEX world pulse' : '${active.label} live',
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
               color: GtexFloodlit.chalk,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               fontFamily: GtexFloodlit.display,
             ),
           ),
@@ -161,7 +161,7 @@ class _LiveFootballPulseStrip extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: GtexFloodlit.chalkMuted,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -173,7 +173,7 @@ class _LiveFootballPulseStrip extends StatelessWidget {
               textAlign: TextAlign.right,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: GtexFloodlit.gold,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 letterSpacing: 0.6,
               ),
             ),
@@ -230,7 +230,7 @@ class _TopBar extends StatelessWidget {
                     'G',
                     style: TextStyle(
                       color: GtexFloodlit.night,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                       fontSize: 22,
                       fontFamily: GtexFloodlit.display,
                     ),
@@ -249,7 +249,7 @@ class _TopBar extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: GtexFloodlit.chalk,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                         fontFamily: GtexFloodlit.display,
                         letterSpacing: 0.4,
                       ),
@@ -260,7 +260,7 @@ class _TopBar extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
                         color: GtexFloodlit.chalkMuted,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
