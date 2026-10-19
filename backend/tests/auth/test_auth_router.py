@@ -849,9 +849,10 @@ def test_login_failure_analytics_stores_email_hash_not_email(
 def test_email_fingerprint_is_normalized_and_truncated() -> None:
     from app.auth.router import _email_fingerprint
 
-    assert _email_fingerprint(
-        "  Fan@Example.COM  "
-    ) == _email_fingerprint("fan@example.com")
+    assert (
+        _email_fingerprint("  Fan@Example.COM  ")
+        == _email_fingerprint("fan@example.com")
+    )
     assert len(_email_fingerprint("fan@example.com")) == 32
 
 
