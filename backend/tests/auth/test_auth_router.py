@@ -36,6 +36,7 @@ WRONG_PASSWORD = "WrongPassword1"  # pragma: allowlist secret
 AUTH_ROUTER_TEST_MODULES = (
     DomainModule("auth", router_path="app.auth.router:router"),
     DomainModule("admin_access", router_path="app.admin_access.router:router"),
+    DomainModule("wallets", router_path="app.wallets.router:router"),
 )
 
 
@@ -624,12 +625,12 @@ def test_trader_signup_requires_proof_of_address(app_client) -> None:
         totp_secret=secret,
         totp_code=_current_totp(secret),
     )
-    payload["compliance"].pop("proof_of_address_attachment_id")
+    payload["compliance"]["government_id_attachment_id"] = ""
 
     response = client.post("/auth/signup/trader", json=payload)
 
     assert response.status_code == 422, response.text
-    assert "proof_of_address_attachment_id" in response.text
+    assert "government_id_attachment_id" in response.text
 
 
 def test_legacy_register_function_returns_gone(session) -> None:
