@@ -32,6 +32,8 @@ from app.club_legacy.models import (
     ClubLegacySponsorContract,
     ClubLegacyStake,
 )
+# Backward-compatible re-exports used by existing callers and tests.
+from app.club_legacy.ratings import development_score, prestige_score  # noqa: F401
 from app.models.club_profile import ClubProfile
 from app.owner_console import ledger
 
