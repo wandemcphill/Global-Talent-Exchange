@@ -39,7 +39,6 @@ from app.ticketing.schemas import (
 )
 from app.wallets.service import InsufficientBalanceError, LedgerSourceTag, LedgerUnit, WalletService
 
-
 MONEY_QUANTUM = Decimal("0.0001")
 PRIMARY_PLATFORM_RATE = Decimal("0.1800")
 PRIMARY_CLUB_RATE = Decimal("0.6700")
@@ -119,7 +118,9 @@ class TicketingValidationError(TicketingError):
 
 
 class TicketingService:
-    def __init__(self, session: Session, *, app: FastAPI | None = None, wallet_service: WalletService | None = None) -> None:
+    def __init__(
+        self, session: Session, *, app: FastAPI | None = None, wallet_service: WalletService | None = None
+    ) -> None:
         self.session = session
         self.app = app
         self.wallet_service = wallet_service or WalletService(
@@ -133,13 +134,17 @@ class TicketingService:
         self._settle_rewards_if_due(event)
         my_ticket = self._find_user_ticket(event.id, user.id) if user is not None else None
         waitlist = self._find_waitlist(event.match_id, user.id) if user is not None else None
-        attendee_access = self._build_attendee_experience(my_ticket, event) if self._can_use_attendee_mode(my_ticket) else None
+        attendee_access = (
+            self._build_attendee_experience(my_ticket, event) if self._can_use_attendee_mode(my_ticket) else None
+        )
         return TicketEventResponse(
             event=self._build_event_view(event, user=user),
             my_ticket=self._build_ticket_view(my_ticket) if my_ticket is not None else None,
             attendee_access=attendee_access,
             waitlist=self._build_waitlist_view(waitlist) if waitlist is not None else None,
-            available_resale_tickets=[self._build_ticket_view(ticket) for ticket in self._list_resale_tickets(event.id)],
+            available_resale_tickets=[
+                self._build_ticket_view(ticket) for ticket in self._list_resale_tickets(event.id)
+            ],
         )
 
     def buy_ticket(
@@ -198,7 +203,9 @@ class TicketingService:
         minimum, maximum = self._resale_bounds(ticket=ticket, event=event)
         listing_price = _money(price)
         if listing_price < minimum or listing_price > maximum:
-            raise TicketingValidationError(f"Resale price must stay between {minimum} and {maximum} credits for this ticket.")
+            raise TicketingValidationError(
+                f"Resale price must stay between {minimum} and {maximum} credits for this ticket."
+            )
         was_listed = ticket.status == TicketStatus.AVAILABLE.value
         ticket.status = TicketStatus.AVAILABLE.value
         ticket.resale_listing_price = listing_price
@@ -215,7 +222,9 @@ class TicketingService:
             notified_waitlist_count=notified,
         )
 
-    def join_waitlist(self, *, user: User, match_id: str, seat_tier: TicketSeatTier | str | None = None) -> TicketWaitlistView:
+    def join_waitlist(
+        self, *, user: User, match_id: str, seat_tier: TicketSeatTier | str | None = None
+    ) -> TicketWaitlistView:
         event = self._get_or_create_event(match_id)
         if self._find_user_ticket(event.id, user.id) is not None:
             raise TicketingConflictError("Ticket owners cannot join the waitlist for the same event.")
@@ -327,7 +336,9 @@ class TicketingService:
             "reactions_enabled": True,
         }
 
-    def build_crowd_overlay(self, *, match_id: str, base_crowd: MatchCrowdStateView | None) -> MatchCrowdStateView | None:
+    def build_crowd_overlay(
+        self, *, match_id: str, base_crowd: MatchCrowdStateView | None
+    ) -> MatchCrowdStateView | None:
         event = self._find_event(match_id)
         if event is None:
             return base_crowd
@@ -342,18 +353,32 @@ class TicketingService:
         payload["profile"] = payload.get("profile") or self._crowd_profile_for_event(event.event_type)
         payload["stadium_name"] = event.venue_name
         payload["stadium_theme"] = "ceremony_gold" if event.event_type == "ceremony" else "ticketed_live"
-        payload["crowd_intensity"] = _clamp_float(float(payload.get("crowd_intensity") or 0.5) + overlay_score, 0.0, 1.0)
-        payload["chant_level"] = _clamp_float(float(payload.get("chant_level") or 0.5) + (overlay_score * 0.65), 0.0, 1.0)
-        payload["hostility"] = _clamp_float(float(payload.get("hostility") or 0.0) + (overlay_score * boo_ratio), 0.0, 1.0)
+        payload["crowd_intensity"] = _clamp_float(
+            float(payload.get("crowd_intensity") or 0.5) + overlay_score, 0.0, 1.0
+        )
+        payload["chant_level"] = _clamp_float(
+            float(payload.get("chant_level") or 0.5) + (overlay_score * 0.65), 0.0, 1.0
+        )
+        payload["hostility"] = _clamp_float(
+            float(payload.get("hostility") or 0.0) + (overlay_score * boo_ratio), 0.0, 1.0
+        )
         payload["spike"] = overlay_score >= 0.05
         payload["crowd_mood"] = "electric" if overlay_score >= 0.08 else payload.get("crowd_mood") or "tense"
         dominant_side = str(payload.get("dominant_side") or "home")
         if dominant_side == "away":
-            payload["away_intensity"] = _clamp_float(float(payload.get("away_intensity") or 0.5) + (overlay_score * 0.45), 0.0, 1.0)
-            payload["home_intensity"] = _clamp_float(float(payload.get("home_intensity") or 0.5) + (overlay_score * 0.18), 0.0, 1.0)
+            payload["away_intensity"] = _clamp_float(
+                float(payload.get("away_intensity") or 0.5) + (overlay_score * 0.45), 0.0, 1.0
+            )
+            payload["home_intensity"] = _clamp_float(
+                float(payload.get("home_intensity") or 0.5) + (overlay_score * 0.18), 0.0, 1.0
+            )
         else:
-            payload["home_intensity"] = _clamp_float(float(payload.get("home_intensity") or 0.5) + (overlay_score * 0.45), 0.0, 1.0)
-            payload["away_intensity"] = _clamp_float(float(payload.get("away_intensity") or 0.5) + (overlay_score * 0.18), 0.0, 1.0)
+            payload["home_intensity"] = _clamp_float(
+                float(payload.get("home_intensity") or 0.5) + (overlay_score * 0.45), 0.0, 1.0
+            )
+            payload["away_intensity"] = _clamp_float(
+                float(payload.get("away_intensity") or 0.5) + (overlay_score * 0.18), 0.0, 1.0
+            )
         return MatchCrowdStateView.model_validate(payload)
 
     def _buy_primary_ticket(self, *, event: StadiumEvent, buyer: User, seat_tier: str) -> StadiumTicket:
@@ -527,14 +552,18 @@ class TicketingService:
         event_type = self._event_type_for_match(match)
         stadium = self.session.scalar(select(ClubStadium).where(ClubStadium.club_id == match.home_club_id))
         global_event = self.session.scalar(
-            select(GlobalEvent).where(GlobalEvent.match_id == match.id).order_by(GlobalEvent.priority.desc(), GlobalEvent.start_time.asc())
+            select(GlobalEvent)
+            .where(GlobalEvent.match_id == match.id)
+            .order_by(GlobalEvent.priority.desc(), GlobalEvent.start_time.asc())
         )
         base_capacity = stadium.capacity if stadium is not None else 40000
         capacity = self._resolve_capacity(base_capacity=base_capacity, event_type=event_type)
         home_name, away_name = self._resolve_match_names(match)
         title = global_event.event_name if global_event is not None else f"{home_name} vs {away_name}"
         venue_name = stadium.name if stadium is not None else "GTEX Matchday Arena"
-        importance_score, rivalry_score, popularity_score = self._hype_scores_for_match(match=match, event_type=event_type)
+        importance_score, rivalry_score, popularity_score = self._hype_scores_for_match(
+            match=match, event_type=event_type
+        )
         now = _utcnow()
         return StadiumEvent(
             stadium_id=stadium.id if stadium is not None else f"virtual:{match.id}",
@@ -593,7 +622,9 @@ class TicketingService:
             player_popularity_score=Decimal("0.6600"),
             demand_multiplier=Decimal("1.0000"),
             metadata_json={
-                "experience": self._experience_payload(event_type=event_type, venue_name="GTEX Hyper Stadium", title=title),
+                "experience": self._experience_payload(
+                    event_type=event_type, venue_name="GTEX Hyper Stadium", title=title
+                ),
                 "crowd_overlay_score": 0.0,
                 "boo_ratio": 0.0,
             },
@@ -670,7 +701,11 @@ class TicketingService:
             return "closed"
         early_access_starts_at = _as_utc_datetime(event.early_access_starts_at)
         public_sales_starts_at = _as_utc_datetime(event.public_sales_starts_at)
-        if early_access_starts_at is not None and public_sales_starts_at is not None and early_access_starts_at <= now < public_sales_starts_at:
+        if (
+            early_access_starts_at is not None
+            and public_sales_starts_at is not None
+            and early_access_starts_at <= now < public_sales_starts_at
+        ):
             return "early_access"
         return "on_sale"
 
@@ -716,7 +751,9 @@ class TicketingService:
             ticket.xp_awarded = grant.amount
             ticket.rewarded_at = _utcnow()
             if ticket.seat_tier == TicketSeatTier.VIP.value or event.event_type in {"final", "ceremony"}:
-                ticket.exclusive_drop_code = ticket.exclusive_drop_code or f"DROP-{event.id[:6].upper()}-{ticket.id[:6].upper()}"
+                ticket.exclusive_drop_code = (
+                    ticket.exclusive_drop_code or f"DROP-{event.id[:6].upper()}-{ticket.id[:6].upper()}"
+                )
                 self.session.add(
                     NotificationRecord(
                         user_id=ticket.user_id,
@@ -725,7 +762,12 @@ class TicketingService:
                         resource_type="stadium_ticket",
                         resource_id=ticket.id,
                         message=f"{event.title} unlocked an exclusive stadium drop."[:255],
-                        metadata_json={"event_id": event.id, "match_id": event.match_id, "ticket_id": ticket.id, "drop_code": ticket.exclusive_drop_code},
+                        metadata_json={
+                            "event_id": event.id,
+                            "match_id": event.match_id,
+                            "ticket_id": ticket.id,
+                            "drop_code": ticket.exclusive_drop_code,
+                        },
                     )
                 )
             ticket.metadata_json = {
@@ -760,7 +802,11 @@ class TicketingService:
         early_access_starts_at = _as_utc_datetime(event.early_access_starts_at)
         public_sales_starts_at = _as_utc_datetime(event.public_sales_starts_at)
         sales_close_at = _as_utc_datetime(event.sales_close_at)
-        early_access_active = bool(early_access_starts_at is not None and public_sales_starts_at is not None and early_access_starts_at <= now < public_sales_starts_at)
+        early_access_active = bool(
+            early_access_starts_at is not None
+            and public_sales_starts_at is not None
+            and early_access_starts_at <= now < public_sales_starts_at
+        )
         sell_through = _money(Decimal(event.tickets_sold) / Decimal(max(event.capacity, 1)))
         return StadiumEventView(
             event_id=event.id,
@@ -821,7 +867,9 @@ class TicketingService:
             price=_money(ticket.price),
             original_price=_money(ticket.original_price),
             status=TicketStatus(ticket.status),
-            resale_listing_price=_money(ticket.resale_listing_price) if ticket.resale_listing_price is not None else None,
+            resale_listing_price=(
+                _money(ticket.resale_listing_price) if ticket.resale_listing_price is not None else None
+            ),
             listed_at=ticket.listed_at,
             sold_at=ticket.sold_at,
             used_at=ticket.used_at,
@@ -857,7 +905,11 @@ class TicketingService:
         )
 
     def _event_tickets(self, event_id: str) -> list[StadiumTicket]:
-        return list(self.session.scalars(select(StadiumTicket).where(StadiumTicket.event_id == event_id).order_by(StadiumTicket.created_at.asc())).all())
+        return list(
+            self.session.scalars(
+                select(StadiumTicket).where(StadiumTicket.event_id == event_id).order_by(StadiumTicket.created_at.asc())
+            ).all()
+        )
 
     def _list_resale_tickets(self, event_id: str) -> list[StadiumTicket]:
         return list(
@@ -871,12 +923,18 @@ class TicketingService:
     def _find_user_ticket(self, event_id: str, user_id: str) -> StadiumTicket | None:
         return self.session.scalar(
             select(StadiumTicket)
-            .where(StadiumTicket.event_id == event_id, StadiumTicket.user_id == user_id, StadiumTicket.status.in_(tuple(ACTIVE_TICKET_STATUSES)))
+            .where(
+                StadiumTicket.event_id == event_id,
+                StadiumTicket.user_id == user_id,
+                StadiumTicket.status.in_(tuple(ACTIVE_TICKET_STATUSES)),
+            )
             .order_by(StadiumTicket.created_at.desc())
         )
 
     def _find_waitlist(self, match_id: str, user_id: str) -> TicketWaitlist | None:
-        return self.session.scalar(select(TicketWaitlist).where(TicketWaitlist.match_id == match_id, TicketWaitlist.user_id == user_id))
+        return self.session.scalar(
+            select(TicketWaitlist).where(TicketWaitlist.match_id == match_id, TicketWaitlist.user_id == user_id)
+        )
 
     def _waitlist_position(self, waitlist: TicketWaitlist) -> int:
         entries = list(
@@ -917,8 +975,16 @@ class TicketingService:
     def _price_for_event(self, event: StadiumEvent, seat_tier: str) -> Decimal:
         base = self._event_base_prices(event)[seat_tier]
         sell_through = Decimal(event.tickets_sold) / Decimal(max(event.capacity, 1))
-        demand_component = max(Decimal("0.0000"), (_money(event.demand_multiplier) - Decimal("1.0000")) * (base * Decimal("0.4500")) + (_money(sell_through) * Decimal("8.0000")))
-        importance_component = (_bounded_ratio(event.importance_score) * (base * Decimal("0.3000"))) + (_bounded_ratio(event.rivalry_score) * Decimal("4.0000")) + (_bounded_ratio(event.player_popularity_score) * Decimal("3.0000"))
+        demand_component = max(
+            Decimal("0.0000"),
+            (_money(event.demand_multiplier) - Decimal("1.0000")) * (base * Decimal("0.4500"))
+            + (_money(sell_through) * Decimal("8.0000")),
+        )
+        importance_component = (
+            (_bounded_ratio(event.importance_score) * (base * Decimal("0.3000")))
+            + (_bounded_ratio(event.rivalry_score) * Decimal("4.0000"))
+            + (_bounded_ratio(event.player_popularity_score) * Decimal("3.0000"))
+        )
         return _money(base + demand_component + importance_component)
 
     def _base_prices_for_event(self, event_type: str) -> dict[str, Decimal]:
@@ -957,11 +1023,19 @@ class TicketingService:
     def _event_type_for_match(self, match: CompetitionMatch) -> str:
         metadata = dict(match.metadata_json or {})
         stage = str(match.stage or "").strip().lower()
-        if stage in {"final", "grand_final", "cup_final"} or ("final" in stage and "semi" not in stage and "quarter" not in stage):
+        if stage in {"final", "grand_final", "cup_final"} or (
+            "final" in stage and "semi" not in stage and "quarter" not in stage
+        ):
             return "final"
-        if bool(metadata.get("is_derby")) or float(metadata.get("rivalry_score") or metadata.get("rivalry_intensity") or 0.0) >= 0.75:
+        if (
+            bool(metadata.get("is_derby"))
+            or float(metadata.get("rivalry_score") or metadata.get("rivalry_intensity") or 0.0) >= 0.75
+        ):
             return "derby"
-        if bool(metadata.get("generated_match")) or str(metadata.get("competition_family") or "").strip().lower() == "ai":
+        if (
+            bool(metadata.get("generated_match"))
+            or str(metadata.get("competition_family") or "").strip().lower() == "ai"
+        ):
             return "ai_mega_match"
         return "league"
 
@@ -974,8 +1048,16 @@ class TicketingService:
             importance = Decimal("0.8600")
         elif event_type == "ai_mega_match":
             importance = Decimal("0.7600")
-        rivalry = _bounded_ratio(metadata.get("rivalry_score") or metadata.get("rivalry_intensity") or (0.84 if event_type == "derby" else 0.24))
-        popularity = _bounded_ratio(metadata.get("player_popularity_score") or metadata.get("star_power") or (0.86 if event_type == "final" else 0.58))
+        rivalry = _bounded_ratio(
+            metadata.get("rivalry_score")
+            or metadata.get("rivalry_intensity")
+            or (0.84 if event_type == "derby" else 0.24)
+        )
+        popularity = _bounded_ratio(
+            metadata.get("player_popularity_score")
+            or metadata.get("star_power")
+            or (0.86 if event_type == "final" else 0.58)
+        )
         return _bounded_ratio(importance), rivalry, popularity
 
     def _resolve_match_names(self, match: CompetitionMatch) -> tuple[str, str]:
@@ -994,7 +1076,9 @@ class TicketingService:
         text = str(fallback or "").strip()
         return text if text else "GTEX Club"
 
-    def _experience_payload(self, *, event_type: str, venue_name: str, title: str, ceremony: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _experience_payload(
+        self, *, event_type: str, venue_name: str, title: str, ceremony: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         payload = {
             "venue_name": venue_name,
             "title": title,
@@ -1016,7 +1100,9 @@ class TicketingService:
                 }
             )
         elif event_type == "final":
-            payload.update({"entry_sequence": ["anthem_lights", "trophy_walk", "kickoff_tunnel"], "finals_energy": True})
+            payload.update(
+                {"entry_sequence": ["anthem_lights", "trophy_walk", "kickoff_tunnel"], "finals_energy": True}
+            )
         elif event_type == "ai_mega_match":
             payload.update({"entry_sequence": ["grid_launch", "skybox_intro", "hyper_kickoff"], "ai_showcase": True})
         elif event_type == "derby":
@@ -1025,7 +1111,9 @@ class TicketingService:
 
     def _resale_bounds(self, *, ticket: StadiumTicket, event: StadiumEvent) -> tuple[Decimal, Decimal]:
         reference_price = max(_money(ticket.original_price), self._price_for_event(event, ticket.seat_tier))
-        return _money(max(reference_price * Decimal("0.8000"), Decimal("1.0000"))), _money(reference_price * Decimal("2.5000"))
+        return _money(max(reference_price * Decimal("0.8000"), Decimal("1.0000"))), _money(
+            reference_price * Decimal("2.5000")
+        )
 
     def _next_seat_code(self, *, event: StadiumEvent, seat_tier: str) -> str:
         next_position = 1 + sum(1 for ticket in self._event_tickets(event.id) if ticket.seat_tier == seat_tier)
@@ -1037,7 +1125,9 @@ class TicketingService:
         if user.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
             return True
         season_pass = self.session.scalar(
-            select(SeasonPass).where(SeasonPass.user_id == user.id).order_by(SeasonPass.tier.desc(), SeasonPass.level.desc(), SeasonPass.updated_at.desc())
+            select(SeasonPass)
+            .where(SeasonPass.user_id == user.id)
+            .order_by(SeasonPass.tier.desc(), SeasonPass.level.desc(), SeasonPass.updated_at.desc())
         )
         if season_pass is None:
             return False
@@ -1076,7 +1166,10 @@ class TicketingService:
         entries = list(
             self.session.scalars(
                 select(TicketWaitlist)
-                .where(TicketWaitlist.match_id == event.match_id, TicketWaitlist.status == TicketWaitlistStatus.QUEUED.value)
+                .where(
+                    TicketWaitlist.match_id == event.match_id,
+                    TicketWaitlist.status == TicketWaitlistStatus.QUEUED.value,
+                )
                 .order_by(TicketWaitlist.requested_at.asc(), TicketWaitlist.id.asc())
             ).all()
         )
@@ -1094,7 +1187,12 @@ class TicketingService:
                     resource_type="stadium_event",
                     resource_id=event.id,
                     message=f"{event.title} has a {seat_tier} resale ticket available."[:255],
-                    metadata_json={"event_id": event.id, "match_id": event.match_id, "seat_tier": seat_tier, "price": str(price)},
+                    metadata_json={
+                        "event_id": event.id,
+                        "match_id": event.match_id,
+                        "seat_tier": seat_tier,
+                        "price": str(price),
+                    },
                 )
             )
             notified += 1
@@ -1129,7 +1227,15 @@ class TicketingService:
             for table_name in ("notification_records", "notification_preferences", "users")
         )
 
-    def _record_jackpot_contribution(self, *, participant_user_id: str | None, source_id: str | None, entry_fee: Decimal, contribution_amount: Decimal, metadata: dict[str, Any]) -> None:
+    def _record_jackpot_contribution(
+        self,
+        *,
+        participant_user_id: str | None,
+        source_id: str | None,
+        entry_fee: Decimal,
+        contribution_amount: Decimal,
+        metadata: dict[str, Any],
+    ) -> None:
         if self.app is None or contribution_amount <= Decimal("0.0000"):
             return
         runtime = getattr(getattr(self.app, "state", None), "gtex_runtime", None)

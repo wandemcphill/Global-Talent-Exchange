@@ -93,11 +93,7 @@ def test_fancoin_jackpot_pool_uses_credit_unit(session) -> None:
 
     # Verify lottery pool funding entries are in LedgerUnit.CREDIT (FanCoin)
     fancoin_entries = list(
-        session.scalars(
-            select(LedgerEntry).where(
-                LedgerEntry.external_reference == "ticket-123"
-            )
-        ).all()
+        session.scalars(select(LedgerEntry).where(LedgerEntry.external_reference == "ticket-123")).all()
     )
     assert len(fancoin_entries) > 0
     for entry in fancoin_entries:

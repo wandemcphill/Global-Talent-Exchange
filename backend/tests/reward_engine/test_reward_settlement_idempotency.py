@@ -110,9 +110,7 @@ def test_reward_settlement_is_idempotent_and_prevents_double_crediting(session) 
     # Confirm ledger entries were only created once for this idempotency key
     ledger_entries = list(
         session.scalars(
-            select(LedgerEntry).where(
-                LedgerEntry.external_reference == f"reward:{comp_key}:{recipient.id}"
-            )
+            select(LedgerEntry).where(LedgerEntry.external_reference == f"reward:{comp_key}:{recipient.id}")
         ).all()
     )
     # 3 entries in posting (user_account, platform_account, promo_pool_account)
