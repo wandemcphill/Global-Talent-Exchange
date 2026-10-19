@@ -34,6 +34,7 @@ def _raise_http(exc: TournamentError) -> None:
         if exc.reason in {"not_a_participant", "actor_not_participant"}:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.detail) from exc
         conflict_reasons = {
+            "immutable_tournament",
             "insufficient_balance",
             "operation_busy",
             "registration_closed",
@@ -74,6 +75,27 @@ def create_tournament(
         )
     try:
         tournament = service.create_tournament(payload)
+        session.commit()
+    except TournamentError as exc:
+        session.rollback()
+        _raise_http(exc)
+    return TournamentView.model_validate(tournament)
+
+
+@router.post("/{tournament_id}/cancel", response_model=TournamentView)
+def cancel_tournament(
+    tournament_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+    service: TournamentService = Depends(_service),
+) -> TournamentView:
+    if current_user.role not in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators may cancel platform tournaments.",
+        )
+    try:
+        tournament = service.cancel_tournament(tournament_id, actor_user_id=current_user.id)
         session.commit()
     except TournamentError as exc:
         session.rollback()

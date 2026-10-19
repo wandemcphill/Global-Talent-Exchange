@@ -20,6 +20,7 @@ class TournamentStatus(StrEnum):
     REGISTRATION = "registration"
     ACTIVE = "active"
     COMPLETED = "completed"
+    CANCELLED = "cancelled"
 
 
 class TournamentPlayerStatus(StrEnum):
