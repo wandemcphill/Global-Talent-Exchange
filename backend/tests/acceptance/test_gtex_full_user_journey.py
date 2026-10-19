@@ -10,6 +10,7 @@ from app.models.player_contract import PlayerContract
 from app.models.transfer_window import TransferWindow
 from app.regen_universe.models import RegenSeason
 from backend.tests.players.test_player_share_market_routes import _seed_imported_real_player
+from backend.tests.support.club_treasury import fund_club_treasury
 
 PREFIX = "full-journey-20260915"
 
@@ -73,6 +74,8 @@ def test_gtex_full_user_journey(client, app_session_factory, auth_user_factory, 
 
     with app_session_factory() as session:
         club_ids = {item["user_id"]: _club(session, item["user_id"]).id for item in actors}
+        for club_id in club_ids.values():
+            fund_club_treasury(session, club_id, "1000000")
 
     # Coin Trader: apply -> approve -> quote -> order -> escrow -> proof -> release.
     application = _ok(

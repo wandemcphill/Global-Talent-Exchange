@@ -74,6 +74,7 @@ from app.services.player_lifecycle_service import (
 )
 from app.services.regen_transfer_addon import AUTO_CONVERSION_PREMIUM_BPS
 from app.wallets.service import LedgerPosting, WalletService
+from tests.support.club_treasury import fund_club_treasury
 
 
 @pytest.fixture()
@@ -258,6 +259,8 @@ def seed_base_context(session: Session) -> dict[str, str]:
         ]
     )
     session.commit()
+    for club_id in (club_profile.id, buyer_profile.id, prior_profile.id):
+        fund_club_treasury(session, club_id)
     return {
         "player_id": player.id,
         "club_profile_id": club_profile.id,

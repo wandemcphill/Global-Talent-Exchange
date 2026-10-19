@@ -25,8 +25,10 @@ from app.models.transfer_bid import TransferBid
 from app.models.transfer_market import CoachProfile, TransferHubOffer, TransferListing, TransferNegotiation
 from app.models.transfer_window import TransferWindow
 from app.models.user import KycStatus, User, UserRole
+from app.owner_console import ledger
 from app.regen_universe import models as _regen_universe_models  # noqa: F401
 from app.transfer_market.router import router
+from tests.support.club_treasury import fund_club_treasury
 
 
 @pytest.fixture()
@@ -200,6 +202,8 @@ def seed_transfer_market_context(session: Session) -> dict[str, str]:
     access_service.ensure_club_organization(seller_profile, owner_user_id=seller_user.id)
     access_service.ensure_club_organization(buyer_profile, owner_user_id=buyer_user.id)
     session.commit()
+    fund_club_treasury(session, seller_profile.id)
+    fund_club_treasury(session, buyer_profile.id)
     return {
         "player_id": player.id,
         "buyer_player_id": buyer_player.id,
@@ -251,6 +255,48 @@ def test_transfer_market_bid_extends_auction_window(
     assert payload["current_highest_bid"] == "1700000.00"
     assert payload["bid_count"] == 1
     assert datetime.fromisoformat(payload["expires_at"]) > expires_at
+
+
+def test_transfer_market_rejects_bid_the_bidder_club_treasury_cannot_cover(
+    transfer_market_api: TestClient, transfer_market_session: Session
+) -> None:
+    context = seed_transfer_market_context(transfer_market_session)
+    buyer_treasury = ledger.club_account(context["buyer_club_id"])
+    ledger.record(
+        transfer_market_session,
+        event_type="owner_distribution",
+        source=buyer_treasury,
+        destination=ledger.WORLD_CLUBS,
+        currency=ledger.GTEX,
+        gross=ledger.balance(transfer_market_session, buyer_treasury, ledger.GTEX) - Decimal("1600000.00"),
+    )
+    transfer_market_session.commit()
+    seller_headers = _auth_headers(transfer_market_session, user_id=context["seller_user_id"])
+    buyer_headers = _auth_headers(transfer_market_session, user_id=context["buyer_user_id"])
+    listing_response = transfer_market_api.post(
+        "/api/transfer-market/listings",
+        json={
+            "player_id": context["player_id"],
+            "base_price": "1500000.00",
+            "expires_at": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+            "window_id": context["window_id"],
+        },
+        headers=seller_headers,
+    )
+    assert listing_response.status_code == 201
+    listing_id = listing_response.json()["id"]
+
+    bid_response = transfer_market_api.post(
+        f"/api/transfer-market/listings/{listing_id}/bids",
+        json={"amount": "1700000.00"},
+        headers=buyer_headers,
+    )
+
+    assert bid_response.status_code == 400, bid_response.text
+    assert "treasury" in bid_response.json()["detail"]
+    listing = transfer_market_session.get(TransferListing, listing_id)
+    transfer_market_session.refresh(listing)
+    assert listing.bid_count == 0
 
 
 def test_transfer_hub_supports_loan_swap_offer_lifecycle(

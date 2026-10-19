@@ -21,6 +21,7 @@ WORLD_CLUBS = "world:clubs"
 PAYSTACK = "external:paystack"
 BANK_OUT = "external:bank_payout"
 HELD = "owner_console:held"
+TRANSFER_PLATFORM_FEE_BPS = 2_000
 LIVE_STATUSES = ("completed", "pending_review", "held")
 UNITS = {"GTEX_COIN": LedgerUnit.COIN, "FAN_COIN": LedgerUnit.CREDIT}
 REASONS = {
@@ -209,6 +210,50 @@ def record(
     session.flush()
     post_event(session, event)
     return event
+
+
+def assert_club_can_fund(session: Session, club_id: str, amount) -> None:
+    gross_amount = D(amount)
+    if gross_amount <= 0:
+        return
+    if balance(session, club_account(club_id), GTEX) < gross_amount:
+        raise LedgerError("insufficient_club_treasury")
+
+
+def settle_club_transfer(
+    session: Session,
+    *,
+    buying_club_id: str,
+    selling_club_id: str,
+    amount,
+    transfer_bid_id: str,
+    memo: str,
+) -> LedgerEvent | None:
+    """Pay a player transfer from the buying club treasury; the seller nets the fee less the platform cut."""
+    if D(amount) <= 0:
+        return None
+    existing = session.scalar(
+        select(LedgerEvent).where(
+            LedgerEvent.event_type == "transfer_purchase",
+            LedgerEvent.related_object_type == "transfer_bid",
+            LedgerEvent.related_object_id == transfer_bid_id,
+        )
+    )
+    if existing is not None:
+        return existing
+    return record(
+        session,
+        event_type="transfer_purchase",
+        source=club_account(buying_club_id),
+        destination=club_account(selling_club_id),
+        currency=GTEX,
+        gross=amount,
+        fee_bps=TRANSFER_PLATFORM_FEE_BPS,
+        club_id=buying_club_id,
+        related_type="transfer_bid",
+        related_id=transfer_bid_id,
+        memo=memo[:255],
+    )
 
 
 def balance(session: Session, account: str, currency: str) -> Decimal:
