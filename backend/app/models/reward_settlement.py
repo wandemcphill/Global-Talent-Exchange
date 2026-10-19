@@ -4,7 +4,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum, ForeignKey, Numeric, String, Text
+from sqlalchemy import Enum, ForeignKey, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -21,6 +21,14 @@ class RewardSettlementStatus(StrEnum):
 
 class RewardSettlement(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "reward_settlements"
+    __table_args__ = (
+        UniqueConstraint(
+            "competition_key",
+            "user_id",
+            "reward_source",
+            name="uq_reward_settlements_comp_user_source",
+        ),
+    )
 
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     competition_key: Mapped[str] = mapped_column(String(64), nullable=False, index=True)

@@ -91,7 +91,7 @@ def test_reward_controls_flag_near_limit_and_block_daily_count_limit(session) ->
         service.settle_reward(
             actor=admin,
             user_id=recipient.id,
-            competition_key="gtex-world-cup-2026",
+            competition_key="gtex-world-cup-2026-semi",
             title="Semi Final Bonus",
             gross_amount=Decimal("90.0000"),
             reward_source="gtex_promotional_pool",

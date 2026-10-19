@@ -116,6 +116,13 @@ class GtexBaseService:
         return Decimal(str(value or "0")).quantize(AMOUNT_QUANTUM)
 
     @staticmethod
+    def _unit_for_pool(pool_key: str) -> LedgerUnit:
+        normalized = (pool_key or "").strip().lower()
+        if "fancoin" in normalized or normalized == "fancoin":
+            return LedgerUnit.CREDIT
+        return LedgerUnit.COIN
+
+    @staticmethod
     def _subject_key(*, user: User | None = None, ai: GtexAIProfile | None = None) -> str:
         if user is not None:
             return f"user:{user.id}"
@@ -329,9 +336,10 @@ class JackpotService(GtexBaseService):
         current_round = self.ensure_open_round(session, pool_key=pool_key)
         previous_balance = self._amount(current_round.current_balance)
         delta = self._amount(target_balance - previous_balance)
+        unit = self._unit_for_pool(current_round.pool_key)
         if delta != Decimal("0.0000"):
-            lottery_pool = self.wallet_service.ensure_lottery_pool_account(session, LedgerUnit.COIN)
-            platform_clearing = self.wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
+            lottery_pool = self.wallet_service.ensure_lottery_pool_account(session, unit)
+            platform_clearing = self.wallet_service.ensure_platform_account(session, unit)
             if delta > Decimal("0.0000"):
                 postings = [
                     LedgerPosting(
@@ -467,6 +475,7 @@ class JackpotService(GtexBaseService):
         )
         if resolved_contribution_amount <= Decimal("0.0000"):
             raise GtexValidationError("Jackpot contribution amount must be greater than zero.")
+        bounded_eligibility_score = max(Decimal("0.0001"), min(self._amount(eligibility_score), Decimal("5.0000")))
         lottery_pool = self.wallet_service.ensure_lottery_pool_account(session, LedgerUnit.COIN)
         actor_account = self.wallet_service.get_user_account(session, actor, LedgerUnit.COIN)
         stable_reference = f"gtex-jackpot:{resolved_source_type.value}:{normalized_source_id or 'none'}:{actor.id}"
@@ -493,7 +502,7 @@ class JackpotService(GtexBaseService):
             source_id=normalized_source_id,
             entry_fee=entry_fee,
             contribution_amount=resolved_contribution_amount,
-            eligibility_score=eligibility_score,
+            eligibility_score=bounded_eligibility_score,
             fund_lottery_pool=False,
             metadata=metadata,
         )
@@ -510,8 +519,9 @@ class JackpotService(GtexBaseService):
         eligibility_score: Decimal = Decimal("1.0000"),
         metadata: dict[str, Any] | None = None,
         fund_lottery_pool: bool | None = None,
+        pool_key: str = "global",
     ) -> GtexJackpotContribution:
-        current_round = self.ensure_open_round(session)
+        current_round = self.ensure_open_round(session, pool_key=pool_key)
         try:
             resolved_source_type = GtexContributionSourceType(str(source_type))
         except ValueError as exc:
@@ -541,6 +551,7 @@ class JackpotService(GtexBaseService):
             raise GtexValidationError("Jackpot contribution amount must be greater than zero.")
         resolved_metadata = dict(metadata or {})
         resolved_metadata["ledger_funded"] = bool(should_fund_lottery_pool)
+        bounded_eligibility_score = max(Decimal("0.0001"), min(self._amount(eligibility_score), Decimal("5.0000")))
         contribution = GtexJackpotContribution(
             round_id=current_round.id,
             participant_user_id=participant_user_id,
@@ -548,7 +559,7 @@ class JackpotService(GtexBaseService):
             source_id=normalized_source_id,
             entry_fee=self._amount(entry_fee),
             contribution_amount=resolved_amount,
-            eligibility_score=self._amount(eligibility_score),
+            eligibility_score=bounded_eligibility_score,
             metadata_json=resolved_metadata,
         )
         current_round.current_balance = self._amount(current_round.current_balance + resolved_amount)
@@ -697,7 +708,8 @@ class JackpotService(GtexBaseService):
         round_record = locked_round
         if round_record.status != GtexJackpotRoundStatus.OPEN:
             raise GtexConflictError("Jackpot round is no longer open.")
-        lottery_pool = self.wallet_service.ensure_lottery_pool_account(session, LedgerUnit.COIN)
+        unit = self._unit_for_pool(round_record.pool_key)
+        lottery_pool = self.wallet_service.ensure_lottery_pool_account(session, unit)
         pool_balance = self._amount(self.wallet_service.get_balance(session, lottery_pool))
         # Never pay more than the lottery pool holds.
         if pool_balance >= Decimal("0.0000"):
@@ -761,7 +773,7 @@ class JackpotService(GtexBaseService):
             user = session.get(User, payout["user_id"])
             if user is None:
                 continue
-            user_account = self.wallet_service.get_user_account(session, user, LedgerUnit.COIN)
+            user_account = self.wallet_service.get_user_account(session, user, unit)
             postings.append(LedgerPosting(account=user_account, amount=self._amount(payout["amount"])))
         self.wallet_service.append_transaction(
             session,
@@ -901,8 +913,9 @@ class JackpotService(GtexBaseService):
         amount = self._amount(contribution.contribution_amount)
         if amount <= Decimal("0.0000"):
             return
-        platform_clearing = self.wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
-        lottery_pool = self.wallet_service.ensure_lottery_pool_account(session, LedgerUnit.COIN)
+        unit = self._unit_for_pool(contribution.round.pool_key)
+        platform_clearing = self.wallet_service.ensure_platform_account(session, unit)
+        lottery_pool = self.wallet_service.ensure_lottery_pool_account(session, unit)
         idempotency_material = (
             "gtex-jackpot-contribution-funding:"
             f"{contribution.source_type.value}:"

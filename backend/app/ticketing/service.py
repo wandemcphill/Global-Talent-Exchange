@@ -1143,6 +1143,7 @@ class TicketingService:
             entry_fee=entry_fee,
             contribution_amount=contribution_amount,
             metadata=dict(metadata),
+            pool_key="fancoin",
         )
 
     def _crowd_profile_for_event(self, event_type: str) -> str:
