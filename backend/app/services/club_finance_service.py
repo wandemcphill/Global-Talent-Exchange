@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import threading
 from functools import lru_cache
 from threading import RLock
 from uuid import uuid4
@@ -17,6 +18,7 @@ from app.schemas.club_finance_core import (
     ClubFinanceLedgerEntryView,
 )
 from app.schemas.club_ops_responses import ClubFinanceLedgerResponse, ClubFinanceOverviewResponse
+from app.services.club_ops_persistence import ClubOpsPersistenceLock
 
 _DEFAULT_CURRENCY = "USD"
 _OPENING_BALANCE_MINOR = 1_500_000
@@ -95,7 +97,15 @@ class ClubOpsStore:
     owner_son_pending_requests_by_club: dict[str, list[object]] = field(default_factory=dict)
     owner_son_fulfilled_requests_by_club: dict[str, list[object]] = field(default_factory=dict)
     club_labels: dict[str, str] = field(default_factory=dict)
-    lock: RLock = field(default_factory=RLock)
+    lock: object = field(default_factory=RLock, repr=False)
+    session_factory: object | None = field(default=None, repr=False)
+    _thread_lock: RLock = field(init=False, repr=False)
+    _local: threading.local = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._thread_lock = self.lock  # retain RLock semantics for nested service calls
+        self._local = threading.local()
+        self.lock = ClubOpsPersistenceLock(self)
 
 
 class ClubFinanceService:
@@ -469,11 +479,18 @@ class ClubFinanceService:
         )
 
 
-_STORE = ClubOpsStore()
+_STORE: ClubOpsStore | None = None
+_STORE_INIT_LOCK = RLock()
 
 
 def get_club_ops_store() -> ClubOpsStore:
-    return _STORE
+    global _STORE
+    with _STORE_INIT_LOCK:
+        if _STORE is None:
+            from app.core.database import get_session_factory
+
+            _STORE = ClubOpsStore(session_factory=get_session_factory())
+        return _STORE
 
 
 @lru_cache
