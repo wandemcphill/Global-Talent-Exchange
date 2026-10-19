@@ -240,7 +240,7 @@ void main() {
         home: Scaffold(
           body: ClubLegacyShowroom(
             exhibits: const <ShowroomExhibit>[unownedJet, _watch],
-            onAction: (String action, Map<String, Object?> payload) {
+            onAction: (String action, Map<String, Object?> payload) async {
               actionTriggered = action;
               actionPayload = payload;
             },
@@ -257,6 +257,16 @@ void main() {
 
     expect(actionTriggered, equals('purchase'));
     expect(actionPayload?['sku'], equals('gtex-jet-harbour'));
+    final Object? firstPurchaseKey = actionPayload?['idempotency_key'];
+    expect(firstPurchaseKey, isNotNull);
+
+    // A retry for the same item must reuse the intent key, even after the
+    // in-flight guard is released.
+    await tester.pumpAndSettle();
+    await tester.tap(buyButton);
+    await tester.pumpAndSettle();
+    expect(actionTriggered, equals('purchase'));
+    expect(actionPayload?['idempotency_key'], equals(firstPurchaseKey));
 
     await tester.tap(find.byKey(const Key('club-showroom-pick-watch-1')));
     await tester.pumpAndSettle();
@@ -264,10 +274,17 @@ void main() {
     final Finder giftButton = find.byKey(const Key('club-showroom-gift-watch-1'));
     expect(giftButton, findsOneWidget);
     await tester.tap(giftButton);
-    await tester.pump();
+    await tester.pumpAndSettle();
+
+    final Finder recipientField = find.byKey(const Key('club-showroom-gift-recipient'));
+    expect(recipientField, findsOneWidget);
+    await tester.enterText(recipientField, 'recipient-user-id');
+    await tester.tap(find.byKey(const Key('club-showroom-gift-confirm')));
+    await tester.pumpAndSettle();
 
     expect(actionTriggered, equals('gift'));
     expect(actionPayload?['asset_id'], equals('watch-1'));
+    expect(actionPayload?['recipient_ref'], equals('recipient-user-id'));
   });
 
   test('all six starter models load at their source size', () async {
