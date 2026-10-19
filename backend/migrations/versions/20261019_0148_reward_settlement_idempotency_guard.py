@@ -60,7 +60,9 @@ def upgrade() -> None:
 def downgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
-    constraints = {c["name"] for c in inspector.get_unique_constraints("reward_settlements")}
+    constraints = {
+        c["name"] for c in inspector.get_unique_constraints("reward_settlements")
+    }
     if "uq_reward_settlements_comp_user_source" in constraints:
         op.drop_constraint(
             "uq_reward_settlements_comp_user_source",
