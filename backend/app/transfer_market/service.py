@@ -89,6 +89,9 @@ AGENT_COUNTER_DEADLINE_HOURS = 12
 TRANSFER_MARKET_EXECUTION_ROLES = frozenset({OrganizationRole.ADMIN, OrganizationRole.CLUB})
 TRANSFER_MARKET_WATCHLIST_ROLES = frozenset({OrganizationRole.ADMIN, OrganizationRole.CLUB, OrganizationRole.SCOUT})
 
+# Hub offers that settle as a plain cash transfer; loan and swap terms are not executed yet.
+HUB_CASH_DEAL_TYPES = frozenset({"transfer", "open_offer", "private_negotiation"})
+
 
 class TransferMarketError(Exception):
     """Base transfer market error."""
@@ -532,6 +535,7 @@ class TransferMarketService:
         if resolved_bidder_club_id == listing.selling_club_id:
             raise TransferMarketValidationError("Selling club cannot offer on its own listing.")
         self._require_club(resolved_bidder_club_id)
+        self._assert_bidder_can_fund(resolved_bidder_club_id, payload.cash_amount, subject="offer")
         for player_id in payload.offered_player_ids:
             player = self._require_player(player_id)
             current_club_id = self._current_player_club_id(player.id, on_date=effective_at.date())
@@ -595,6 +599,15 @@ class TransferMarketService:
         )
         if offer.status not in {"open", "countered"}:
             raise TransferMarketValidationError("Only open or countered offers can be accepted.")
+        if (
+            offer.offer_type not in HUB_CASH_DEAL_TYPES
+            or listing.listing_type not in HUB_CASH_DEAL_TYPES
+            or offer.offered_player_ids_json
+        ):
+            raise TransferMarketValidationError(
+                "Loan and swap Transfer Hub offers cannot be accepted yet; only cash transfer offers settle."
+            )
+        self._assert_bidder_can_fund(offer.bidder_club_id, offer.cash_amount, subject="offer")
         effective_at = self._coerce_utc(reference_at or utcnow())
         # Claim the offer and the listing with guarded UPDATEs rather than
         # read-then-write. Two accepts racing on sibling offers of the same
@@ -799,10 +812,7 @@ class TransferMarketService:
         current_highest = listing.current_highest_bid or listing.base_price
         if amount <= current_highest:
             raise TransferMarketValidationError("Bid must exceed the current highest bid.")
-        try:
-            club_ledger.assert_club_can_fund(self.session, resolved_bidder_club_id, amount)
-        except club_ledger.LedgerError as exc:
-            raise TransferMarketValidationError("Bidder club treasury cannot cover this bid.") from exc
+        self._assert_bidder_can_fund(resolved_bidder_club_id, amount, subject="bid")
 
         previous_bidder_id = listing.highest_bidder_id
         previous_amount = listing.current_highest_bid
@@ -1809,7 +1819,7 @@ class TransferMarketService:
                 player_id=listing.player_id,
                 selling_club_id=listing.selling_club_id,
                 buying_club_id=payload.bidder_club_id,
-                bid_amount=listing.current_highest_bid,
+                bid_amount=self._negotiated_fee(listing, negotiation),
                 wage_offer_amount=payload.wage_offer_amount,
                 contract_years=payload.contract_years,
                 sell_on_clause_pct=self._sell_on_clause_pct(payload.clauses_json),
@@ -1847,6 +1857,19 @@ class TransferMarketService:
         if isinstance(getattr(accepted, "structured_terms_json", None), dict):
             contract_id = accepted.structured_terms_json.get("contract_id")
         return accepted, str(contract_id) if contract_id is not None else None
+
+    def _assert_bidder_can_fund(self, club_id: str, amount: Decimal, *, subject: str) -> None:
+        try:
+            club_ledger.assert_club_can_fund(self.session, club_id, amount)
+        except club_ledger.LedgerError as exc:
+            raise TransferMarketValidationError(f"Bidder club treasury cannot cover this {subject}.") from exc
+
+    @staticmethod
+    def _negotiated_fee(listing: TransferListing, negotiation: TransferNegotiation) -> Decimal:
+        hub_terms = dict(negotiation.metadata_json or {})
+        if hub_terms.get("hub_offer_id") and hub_terms.get("cash_amount") is not None:
+            return Decimal(str(hub_terms["cash_amount"]))
+        return listing.current_highest_bid
 
     def _ensure_negotiation(
         self,

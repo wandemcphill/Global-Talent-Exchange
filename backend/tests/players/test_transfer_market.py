@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.access_control.service import AccessControlService
+from app.club_finance import models as _club_finance_models  # noqa: F401
 from app.auth.dependencies import get_session
 from app.auth.service import AuthService
 from app.common.enums.contract_status import ContractStatus
@@ -362,13 +363,153 @@ def test_transfer_hub_supports_loan_swap_offer_lifecycle(
         f"/api/transfer-hub/offers/{offer_payload['id']}/accept",
         headers=seller_headers,
     )
-    assert accept_response.status_code == 200
-    assert accept_response.json()["status"] == "accepted"
+    assert accept_response.status_code == 400
+    assert "Loan and swap" in accept_response.json()["detail"]
     offer = transfer_market_session.get(TransferHubOffer, offer_payload["id"])
     assert offer is not None
+    transfer_market_session.refresh(offer)
+    assert offer.status == "open"
     listing = transfer_market_session.get(TransferListing, listing_payload["id"])
     assert listing is not None
-    assert listing.status == "accepted"
+    transfer_market_session.refresh(listing)
+    assert listing.status == "open"
+
+
+def _prime_player_and_coach_to_accept(api: TestClient, context: dict[str, str], seller_headers, buyer_headers) -> None:
+    responses = [
+        api.put(
+            f"/api/transfer-market/players/{context['player_id']}/decision-profile",
+            json={
+                "preferred_leagues_json": ["es"],
+                "preferred_play_style": "pressing",
+                "wage_expectation_amount": "1500.00",
+                "ambition_level": 82,
+                "happiness": 42,
+                "loyalty": 36,
+                "ambition": 84,
+                "frustration": 18,
+            },
+            headers=seller_headers,
+        ),
+        api.put(
+            f"/api/transfer-market/coaches/{context['buyer_club_id']}/profile",
+            json={
+                "personality_json": {"discipline": 62},
+                "tactical_philosophy": "pressing",
+                "authority_level": 84,
+                "transfer_preference": "pressing",
+            },
+            headers=buyer_headers,
+        ),
+        api.post(
+            f"/api/transfer-market/coaches/{context['buyer_club_id']}/demands",
+            json={"need": "forward", "urgency": "high"},
+            headers=buyer_headers,
+        ),
+        api.put(
+            f"/api/transfer-market/clubs/{context['buyer_club_id']}/team-dynamics",
+            json={"leaders_json": [], "cliques_json": [], "morale_groups_json": [], "chemistry_risk": 8},
+            headers=buyer_headers,
+        ),
+    ]
+    assert all(response.status_code in {200, 201} for response in responses), [r.text for r in responses]
+
+
+def test_transfer_hub_cash_offer_settles_at_the_agreed_amount(
+    transfer_market_api: TestClient, transfer_market_session: Session
+) -> None:
+    context = seed_transfer_market_context(transfer_market_session)
+    seller_headers = _auth_headers(transfer_market_session, user_id=context["seller_user_id"])
+    buyer_headers = _auth_headers(transfer_market_session, user_id=context["buyer_user_id"])
+    buyer_treasury = ledger.club_account(context["buyer_club_id"])
+    seller_treasury = ledger.club_account(context["seller_club_id"])
+    buyer_before = ledger.balance(transfer_market_session, buyer_treasury, ledger.GTEX)
+    seller_before = ledger.balance(transfer_market_session, seller_treasury, ledger.GTEX)
+    listing_response = transfer_market_api.post(
+        "/api/transfer-hub/listings",
+        json={
+            "player_id": context["player_id"],
+            "base_price": "2000000.00",
+            "expires_at": (datetime.now(UTC) + timedelta(hours=2)).isoformat(),
+            "window_id": context["window_id"],
+        },
+        headers=seller_headers,
+    )
+    assert listing_response.status_code == 201
+    listing_id = listing_response.json()["id"]
+    offer_response = transfer_market_api.post(
+        f"/api/transfer-hub/listings/{listing_id}/offers",
+        json={"offer_type": "transfer", "cash_amount": "1800000.00"},
+        headers=buyer_headers,
+    )
+    assert offer_response.status_code == 201, offer_response.text
+    accept_response = transfer_market_api.post(
+        f"/api/transfer-hub/offers/{offer_response.json()['id']}/accept",
+        headers=seller_headers,
+    )
+    assert accept_response.status_code == 200, accept_response.text
+
+    negotiation_response = transfer_market_api.get(
+        f"/api/transfer-market/listings/{listing_id}/negotiation", headers=buyer_headers
+    )
+    assert negotiation_response.status_code == 200, negotiation_response.text
+    assert negotiation_response.json()["status"] == "awaiting_contract_offer"
+
+    _prime_player_and_coach_to_accept(transfer_market_api, context, seller_headers, buyer_headers)
+    contract_offer_response = transfer_market_api.post(
+        f"/api/transfer-market/listings/{listing_id}/contract-offer",
+        json={
+            "wage_offer_amount": "2200.00",
+            "contract_years": 4,
+            "expected_role": "starter",
+            "release_clause_amount": "9000000.00",
+            "bonus_terms": "Goal bonus",
+            "notes": "Move fast",
+        },
+        headers=buyer_headers,
+    )
+    assert contract_offer_response.status_code == 200, contract_offer_response.text
+    assert contract_offer_response.json()["status"] == "completed"
+
+    transfer_market_session.expire_all()
+    assert ledger.balance(transfer_market_session, buyer_treasury, ledger.GTEX) == buyer_before - Decimal("1800000.00")
+    assert ledger.balance(transfer_market_session, seller_treasury, ledger.GTEX) == seller_before + Decimal(
+        "1440000.00"
+    )
+    lifecycle_bid = transfer_market_session.scalar(
+        select(TransferBid).where(TransferBid.player_id == context["player_id"]).order_by(TransferBid.created_at.desc())
+    )
+    assert lifecycle_bid is not None
+    assert lifecycle_bid.bid_amount == Decimal("1800000.00")
+
+
+def test_transfer_hub_rejects_offer_the_bidder_club_treasury_cannot_cover(
+    transfer_market_api: TestClient, transfer_market_session: Session
+) -> None:
+    context = seed_transfer_market_context(transfer_market_session)
+    buyer_treasury = ledger.club_account(context["buyer_club_id"])
+    available = ledger.balance(transfer_market_session, buyer_treasury, ledger.GTEX)
+    listing_response = transfer_market_api.post(
+        "/api/transfer-hub/listings",
+        json={
+            "player_id": context["player_id"],
+            "base_price": "1000.00",
+            "expires_at": (datetime.now(UTC) + timedelta(hours=2)).isoformat(),
+            "window_id": context["window_id"],
+        },
+        headers=_auth_headers(transfer_market_session, user_id=context["seller_user_id"]),
+    )
+    assert listing_response.status_code == 201
+
+    offer_response = transfer_market_api.post(
+        f"/api/transfer-hub/listings/{listing_response.json()['id']}/offers",
+        json={"offer_type": "transfer", "cash_amount": str(available + Decimal("1.00"))},
+        headers=_auth_headers(transfer_market_session, user_id=context["buyer_user_id"]),
+    )
+
+    assert offer_response.status_code == 400, offer_response.text
+    assert "treasury" in offer_response.json()["detail"]
+    assert transfer_market_session.scalars(select(TransferHubOffer)).all() == []
 
 
 def test_transfer_market_completes_transfer_after_player_and_coach_approval(
