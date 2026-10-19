@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import create_engine, select
@@ -22,6 +23,8 @@ from app.models import (
     LedgerSourceTag,
     LedgerUnit,
 )
+from app.core.events import InMemoryEventPublisher
+from app.gtex.worker_runtime import JackpotWorker, WorkerContext
 from app.wallets.service import LedgerPosting, WalletService
 
 
@@ -110,15 +113,26 @@ def test_fancoin_jackpot_pool_uses_credit_unit(session) -> None:
     )
     assert len(coin_entries) == 0
 
-    # Manually trigger round and verify payout is in LedgerUnit.CREDIT
+    # Force this pool due, then exercise the actual background worker. The
+    # worker must process FanCoin separately instead of only polling "global".
     round_record = contribution.round
     round_record.current_balance = Decimal("1.5000")
-    jackpot_service.trigger_round(
-        session,
-        round_record=round_record,
-        trigger_mode=GtexJackpotTriggerMode.MANUAL,
-    )
+    round_record.threshold_amount = Decimal("1.0000")
     session.commit()
+
+    SessionLocal = sessionmaker(bind=session.get_bind(), autoflush=False, expire_on_commit=False)
+    worker_context = WorkerContext(
+        database=SimpleNamespace(session_factory=SessionLocal),
+        runtime=SimpleNamespace(
+            state_store=state_store,
+            settings=settings,
+            jackpot=jackpot_service,
+        ),
+        event_publisher=InMemoryEventPublisher(),
+    )
+    worker = JackpotWorker(context=worker_context)
+    assert worker.run_once() is True
+    session.refresh(round_record)
 
     assert round_record.status == GtexJackpotRoundStatus.SETTLED
     assert round_record.winning_user_id == user.id
