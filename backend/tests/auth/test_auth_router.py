@@ -631,12 +631,8 @@ def test_issue_274_signup_model_and_turnstile_security_regression(app_client, mo
 
     _app, client = app_client
     secret = "production-turnstile-secret-key"  # pragma: allowlist secret
-    from cryptography.fernet import Fernet
-
     monkeypatch.setenv("GTE_TURNSTILE_SECRET_KEY", secret)
     monkeypatch.setenv("GTE_APP_ENV", "production")
-    monkeypatch.setenv("GTE_AUTH_SECRET", "super-secret-auth-key-32-chars-long")  # pragma: allowlist secret
-    monkeypatch.setenv("GTE_FIELD_ENCRYPTION_KEY", Fernet.generate_key().decode())  # pragma: allowlist secret
 
     class SiteverifyResponse:
         def __init__(self, success: bool) -> None:

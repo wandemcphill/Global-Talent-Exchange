@@ -156,6 +156,11 @@ GoRouter buildGtexAppRouter({
       ),
       GoRoute(
         path: gtexLoginRoute,
+        redirect:
+            (BuildContext context, GoRouterState state) =>
+                controller.isAuthenticated
+                    ? const GteNavigationRoute.home().path
+                    : null,
         pageBuilder:
             (BuildContext context, GoRouterState state) =>
                 NoTransitionPage<void>(
@@ -171,6 +176,11 @@ GoRouter buildGtexAppRouter({
       ),
       GoRoute(
         path: gtexUserSignupRoute,
+        redirect:
+            (BuildContext context, GoRouterState state) =>
+                controller.isAuthenticated
+                    ? const GteNavigationRoute.home().path
+                    : null,
         pageBuilder:
             (BuildContext context, GoRouterState state) =>
                 NoTransitionPage<void>(
