@@ -39,7 +39,8 @@ def verify_turnstile_token(
     tests and local signup keep working. When a secret is set, token is required.
     """
     candidate = (token or "").strip()
-    if candidate in DEV_BYPASS_TOKENS:
+    app_env = (os.environ.get("GTE_APP_ENV") or "development").strip().lower()
+    if app_env in {"development", "test", "local"} and candidate in DEV_BYPASS_TOKENS:
         return
 
     secret = turnstile_secret()
