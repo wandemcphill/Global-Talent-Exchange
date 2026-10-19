@@ -447,9 +447,11 @@ class GteExchangeController extends ChangeNotifier {
         return;
       }
       session = nextSession;
-      await _refreshTradingState(
-        playerId: selectedPlayer?.detail.playerId,
-        refreshPlayer: selectedPlayer != null,
+      unawaited(
+        _refreshTradingState(
+          playerId: selectedPlayer?.detail.playerId,
+          refreshPlayer: selectedPlayer != null,
+        ),
       );
       unawaited(refreshCompliance());
     } catch (error) {

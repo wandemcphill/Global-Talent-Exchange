@@ -156,15 +156,15 @@ class _FakeOwner implements OwnerConsoleReader {
   Future<double> fetchWalletBalance() async => 75;
 
   @override
-  Future<List<ShowroomExhibit>> fetchShowroom({String? clubId}) async => const <ShowroomExhibit>[
+  Future<List<ShowroomExhibit>> fetchShowroom() async => const <ShowroomExhibit>[
     ShowroomExhibit(id: 'jet-1', name: 'Harbour Jet', category: 'jet', ownershipLabel: 'Club', fallbackLabel: 'Static jet card', owned: true),
   ];
 
   @override
-  Future<ClubLegacyDeskData> fetchDesk({String? clubId}) async => const ClubLegacyDeskData(staff: [], policies: [], clubValuation: '0', equity: '0', preseason: [], sponsors: [], offers: [], cases: []);
+  Future<ClubLegacyDeskData> fetchDesk() async => const ClubLegacyDeskData(staff: [], policies: [], clubValuation: '0', equity: '0', preseason: [], sponsors: [], offers: [], cases: []);
 
   @override
-  Future<void> performDesk(String action, [Map<String, Object?> payload = const <String, Object?>{}, String? clubId]) async {}
+  Future<void> performDesk(String action, [Map<String, Object?> payload = const <String, Object?>{}]) async {}
 }
 
 class _FakeShare implements GtexShareMarketReader {

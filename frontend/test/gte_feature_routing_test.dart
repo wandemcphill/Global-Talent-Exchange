@@ -314,11 +314,38 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Home now renders OwnerConsoleScreen for authenticated sessions.
+      // c45d422d replaced the hand-rolled workspace entry with HomeScreen's
+      // persona desk. Hosted bare (no ProviderScope) the shell seeds its own
+      // container, so assert the shell-level onboarding contract here; the
+      // persona copy itself is covered by premium_media_test, which mounts
+      // Home the way production does.
       expect(find.text('Home sync'), findsOneWidget);
-      expect(find.text('Control Center'), findsWidgets);
+      expect(find.text('Create club'), findsWidgets);
+      expect(find.text('Transfer Hub'), findsWidgets);
       expect(find.text('No canonical club is selected'), findsNothing);
       expect(find.text('Create or join a club to unlock Home'), findsNothing);
+      expect(
+        find.widgetWithText(FilledButton, 'Create Club unavailable'),
+        findsNothing,
+      );
+      expect(
+        find.widgetWithText(FilledButton, 'Join Club unavailable'),
+        findsNothing,
+      );
+
+      final Finder browseClubMarketButton = find.text('Transfer Hub').first;
+      expect(browseClubMarketButton, findsOneWidget);
+
+      await _scrollUntilVisible(
+        tester,
+        browseClubMarketButton,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(browseClubMarketButton);
+      await _pumpUntilText(tester, 'Transfer Hub');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Transfer Hub'), findsWidgets);
     },
   );
 

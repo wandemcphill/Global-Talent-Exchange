@@ -149,17 +149,9 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
           claiming: _claiming,
         );
       case OwnerConsoleSection.showroom:
-        return ShowroomSection(
-          load: () => widget.reader.fetchShowroom(clubId: _clubId),
-          onAction: (String action, [Map<String, Object?> payload = const <String, Object?>{}]) =>
-              widget.reader.performDesk(action, payload, _clubId),
-        );
+        return ShowroomSection(load: widget.reader.fetchShowroom, onAction: widget.reader.performDesk);
       case OwnerConsoleSection.desk:
-        return _DeskLoader(
-          load: () => widget.reader.fetchDesk(clubId: _clubId),
-          act: (String action, [Map<String, Object?> payload = const <String, Object?>{}]) =>
-              widget.reader.performDesk(action, payload, _clubId),
-        );
+        return _DeskLoader(load: widget.reader.fetchDesk, act: widget.reader.performDesk);
       case OwnerConsoleSection.market:
         return MarketSection(onNavigate: widget.onNavigate);
       case OwnerConsoleSection.squad:

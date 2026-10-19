@@ -22,23 +22,17 @@ def upgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
     constraint_name = "uq_reward_settlements_comp_user_source"
-    constraints = {
-        c["name"] for c in inspector.get_unique_constraints("reward_settlements")
-    }
+    constraints = {c["name"] for c in inspector.get_unique_constraints("reward_settlements")}
     if constraint_name not in constraints:
         # Never silently delete or rewrite existing financial settlement history.
-        duplicates = bind.execute(
-            sa.text(
-                """
+        duplicates = bind.execute(sa.text("""
                 SELECT competition_key, user_id, reward_source, COUNT(*) AS duplicate_count
                 FROM reward_settlements
                 GROUP BY competition_key, user_id, reward_source
                 HAVING COUNT(*) > 1
                 ORDER BY duplicate_count DESC
                 LIMIT 10
-                """
-            )
-        ).mappings().all()
+                """)).mappings().all()
         if duplicates:
             examples = "; ".join(
                 (
@@ -65,9 +59,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
-    constraints = {
-        c["name"] for c in inspector.get_unique_constraints("reward_settlements")
-    }
+    constraints = {c["name"] for c in inspector.get_unique_constraints("reward_settlements")}
     if "uq_reward_settlements_comp_user_source" in constraints:
         op.drop_constraint(
             "uq_reward_settlements_comp_user_source",
