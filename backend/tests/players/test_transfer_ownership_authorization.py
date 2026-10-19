@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user, get_session
+from app.club_finance import models as _club_finance_models  # noqa: F401
 from app.common.enums.contract_status import ContractStatus
 from app.models.club_profile import ClubProfile
 from app.models.player_contract import PlayerContract
@@ -18,6 +19,7 @@ from app.routes.player_lifecycle import router
 from app.schemas.player_lifecycle import ContractCreateRequest, TransferBidCreateRequest
 from app.services.player_lifecycle_service import PlayerLifecycleService
 from tests.players.test_player_lifecycle import add_window, seed_base_context
+from tests.support.club_treasury import fund_club_treasury
 
 
 def _client(session: Session, *, user_id: str) -> TestClient:
@@ -58,6 +60,7 @@ def _add_user_and_club(session: Session, *, user_id: str, club_id: str) -> ClubP
     )
     session.add_all([user, club])
     session.commit()
+    fund_club_treasury(session, club.id)
     return club
 
 

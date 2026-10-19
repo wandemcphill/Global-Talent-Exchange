@@ -45,6 +45,7 @@ from app.schemas.player_agency import ContractDecisionRequest, TransferDecisionR
 from app.schemas.player_lifecycle import TransferBidAcceptRequest, TransferBidCreateRequest, TransferBidRejectRequest
 from app.services.player_agency_context_service import PlayerAgencyContextService, clamp, quantize_amount
 from app.services.player_agency_service import PlayerAgencyService
+from app.owner_console import ledger as club_ledger
 from app.services.player_lifecycle_service import (
     PlayerLifecycleError,
     PlayerLifecycleNotFoundError,
@@ -798,6 +799,10 @@ class TransferMarketService:
         current_highest = listing.current_highest_bid or listing.base_price
         if amount <= current_highest:
             raise TransferMarketValidationError("Bid must exceed the current highest bid.")
+        try:
+            club_ledger.assert_club_can_fund(self.session, resolved_bidder_club_id, amount)
+        except club_ledger.LedgerError as exc:
+            raise TransferMarketValidationError("Bidder club treasury cannot cover this bid.") from exc
 
         previous_bidder_id = listing.highest_bidder_id
         previous_amount = listing.current_highest_bid

@@ -117,6 +117,7 @@ from app.services.regen_transfer_addon import (
 )
 from app.services.player_agency_service import PlayerAgencyService
 from app.story_feed_engine.service import StoryFeedService
+from app.owner_console import ledger as club_ledger
 from app.wallets.service import LedgerPosting, WalletService
 
 CONTRACT_EXPIRING_SOON_DAYS = 90
@@ -1771,6 +1772,8 @@ class PlayerLifecycleService:
                 }
 
         proposed_bid_amount = offer_market.training_fee_gtex_coin if offer_market is not None else payload.bid_amount
+        if offer_market is None and selling_club_id is not None:
+            self._assert_buying_club_can_fund(payload.buying_club_id, proposed_bid_amount)
         from app.ownership_groups.service import OwnershipGroupService
 
         ownership_validation = OwnershipGroupService(self.session).validate_transfer(
@@ -1933,6 +1936,9 @@ class PlayerLifecycleService:
             raise PlayerLifecycleValidationError(
                 ownership_validation["reason"] or "Ownership-group transfer validation failed"
             )
+        treasury_funded = offer is None and bid.selling_club_id is not None
+        if treasury_funded:
+            self._assert_buying_club_can_fund(bid.buying_club_id, bid.bid_amount)
         if current_contract is not None:
             if bid.selling_club_id is not None and current_contract.club_id != bid.selling_club_id:
                 raise PlayerLifecycleValidationError(
@@ -2114,19 +2120,32 @@ class PlayerLifecycleService:
                 offer=offer,
                 contract=new_contract,
             )
-        from app.club_finance.service import ClubFinanceService
+        if treasury_funded:
+            try:
+                club_ledger.settle_club_transfer(
+                    self.session,
+                    buying_club_id=bid.buying_club_id,
+                    selling_club_id=bid.selling_club_id,
+                    amount=bid.bid_amount,
+                    transfer_bid_id=bid.id,
+                    memo=f"Transfer of {player.full_name}",
+                )
+            except club_ledger.LedgerError as exc:
+                raise PlayerLifecycleValidationError("Buying club treasury cannot cover this transfer fee") from exc
+        else:
+            from app.club_finance.service import ClubFinanceService
 
-        ClubFinanceService(self.session).record_transfer_movement(
-            buying_club_id=bid.buying_club_id,
-            selling_club_id=bid.selling_club_id,
-            amount=offer.training_fee_gtex_coin if offer is not None else bid.bid_amount,
-            reference_key=f"transfer:{bid.id}",
-            metadata={
-                "bid_id": bid.id,
-                "player_id": player.id,
-                "contract_id": new_contract.id,
-            },
-        )
+            ClubFinanceService(self.session).record_transfer_movement(
+                buying_club_id=bid.buying_club_id,
+                selling_club_id=bid.selling_club_id,
+                amount=offer.training_fee_gtex_coin if offer is not None else bid.bid_amount,
+                reference_key=f"transfer:{bid.id}",
+                metadata={
+                    "bid_id": bid.id,
+                    "player_id": player.id,
+                    "contract_id": new_contract.id,
+                },
+            )
         if (
             ownership_validation.get("group_id") is not None
             and bid.selling_club_id is not None
@@ -2483,6 +2502,12 @@ class PlayerLifecycleService:
         if injury is None or injury.player_id != player_id:
             raise PlayerLifecycleNotFoundError(f"Injury case {injury_id} was not found for player {player_id}")
         return injury
+
+    def _assert_buying_club_can_fund(self, club_id: str, amount: Decimal) -> None:
+        try:
+            club_ledger.assert_club_can_fund(self.session, club_id, amount)
+        except club_ledger.LedgerError as exc:
+            raise PlayerLifecycleValidationError("Buying club treasury cannot cover this transfer fee") from exc
 
     def _require_bid(self, window_id: str, bid_id: str) -> TransferBid:
         bid = self.session.get(TransferBid, bid_id)
