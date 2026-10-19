@@ -484,9 +484,11 @@ class NationalCompetitionLifecycleService:
         rented_player_ids: set[str] = set()
         if actor is not None:
             raw_player_ids = [
-                str(item.get("player_id") or "").strip()
-                if isinstance(item, dict)
-                else str(getattr(item, "player_id", None) or "").strip()
+                (
+                    str(item.get("player_id") or "").strip()
+                    if isinstance(item, dict)
+                    else str(getattr(item, "player_id", None) or "").strip()
+                )
                 for item in raw_squad
             ]
             valid_player_ids = [pid for pid in raw_player_ids if pid]
