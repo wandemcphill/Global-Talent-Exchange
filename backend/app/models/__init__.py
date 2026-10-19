@@ -57,6 +57,7 @@ from app.models.card_access import (
 from app.models.club_branding_asset import ClubBrandingAsset
 from app.models.club_budget_snapshot import ClubBudgetSnapshot
 from app.models.club_cashflow_summary import ClubCashflowSummary
+from app.models.club_ops_state_snapshot import ClubOpsStateSnapshot
 from app.models.club_cosmetic_catalog_item import ClubCosmeticCatalogItem
 from app.models.club_cosmetic_purchase import ClubCosmeticPurchase
 from app.models.club_dynasty_progress import ClubDynastyProgress
@@ -816,6 +817,7 @@ __all__ = [
     "ClubBrandingAsset",
     "ClubBudgetSnapshot",
     "ClubCashflowSummary",
+    "ClubOpsStateSnapshot",
     "ClubCosmeticCatalogItem",
     "ClubCosmeticPurchase",
     "ClubDynastyProgress",
