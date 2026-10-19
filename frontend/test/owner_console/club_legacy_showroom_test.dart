@@ -257,6 +257,16 @@ void main() {
 
     expect(actionTriggered, equals('purchase'));
     expect(actionPayload?['sku'], equals('gtex-jet-harbour'));
+    final Object? firstPurchaseKey = actionPayload?['idempotency_key'];
+    expect(firstPurchaseKey, isNotNull);
+
+    // A retry for the same item must reuse the intent key, even after the
+    // in-flight guard is released.
+    await tester.pumpAndSettle();
+    await tester.tap(buyButton);
+    await tester.pumpAndSettle();
+    expect(actionTriggered, equals('purchase'));
+    expect(actionPayload?['idempotency_key'], equals(firstPurchaseKey));
 
     await tester.tap(find.byKey(const Key('club-showroom-pick-watch-1')));
     await tester.pumpAndSettle();
