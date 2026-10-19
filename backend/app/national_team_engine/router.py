@@ -125,6 +125,7 @@ def _raise_lifecycle_http(exc: NationalCompetitionLifecycleError) -> None:
         "squad_too_small",
         "squad_too_large",
         "lifecycle_completed",
+        "player_not_rented",
     }:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.reason) from exc
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.reason) from exc
@@ -373,11 +374,12 @@ def _rent_player_detail(
 @router.get("/entries/{entry_id}/rental-status", response_model=NationalTeamRentalStatusResponse)
 def get_rental_status(
     entry_id: str,
+    current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
     service: NationalTeamTournamentService = Depends(_tournament_service),
 ):
     try:
-        payload = service.build_rental_status_payload(entry_id=entry_id)
+        payload = service.build_rental_status_payload(entry_id=entry_id, actor=current_user)
         session.commit()
     except NationalTeamTournamentError as exc:
         session.rollback()
@@ -509,10 +511,11 @@ def national_create_my_rental_entry(
 @national_router.get("/entries/{entry_id}", response_model=NationalTeamEntryDetailResponse)
 def national_get_entry(
     entry_id: str,
+    current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
     service: NationalTeamTournamentService = Depends(_tournament_service),
 ):
-    return get_entry(entry_id=entry_id, session=session, service=service)
+    return get_entry(entry_id=entry_id, current_user=current_user, session=session, service=service)
 
 
 @national_router.post("/entries/{entry_id}/rentals", response_model=NationalTeamEntryDetailResponse)

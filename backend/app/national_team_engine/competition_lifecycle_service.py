@@ -19,6 +19,7 @@ from app.ingestion.models import Country, Player
 from app.market.player_eligibility_policy import market_access_payload
 from app.models.base import utcnow
 from app.models.national_team import NationalTeamCompetition, NationalTeamCompetitionEntry
+from app.models.national_team_tournament import RentalContract, RentalContractStatus
 from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.user import User
 from app.national_team_engine.competition_profiles import infer_competition_family, profile_for
@@ -64,6 +65,7 @@ class NationalCompetitionLifecycleService:
             payload.squad,
             competition=competition,
             country_code=country_code,
+            actor=actor,
         )
 
         entry = existing or NationalTeamCompetitionEntry(
@@ -454,6 +456,7 @@ class NationalCompetitionLifecycleService:
         *,
         competition: NationalTeamCompetition,
         country_code: str,
+        actor: User | None = None,
     ) -> list[dict[str, Any]]:
         metadata = dict(competition.metadata_json or {})
         minimum_squad_size = max(1, int(metadata.get("minimum_squad_size", 18)))
@@ -477,6 +480,28 @@ class NationalCompetitionLifecycleService:
         seen_player_ids: set[str] = set()
         normalized: list[dict[str, Any]] = []
         country_tokens = self._country_identity_tokens(country_code)
+
+        rented_player_ids: set[str] = set()
+        if actor is not None:
+            raw_player_ids = [
+                str(item.get("player_id") or "").strip()
+                if isinstance(item, dict)
+                else str(getattr(item, "player_id", None) or "").strip()
+                for item in raw_squad
+            ]
+            valid_player_ids = [pid for pid in raw_player_ids if pid]
+            if valid_player_ids:
+                rented_player_ids = set(
+                    self.session.scalars(
+                        select(RentalContract.player_id).where(
+                            RentalContract.tournament_id == competition.id,
+                            RentalContract.user_id == actor.id,
+                            RentalContract.status == RentalContractStatus.ACTIVE,
+                            RentalContract.player_id.in_(valid_player_ids),
+                        )
+                    ).all()
+                )
+
         for index, item in enumerate(raw_squad, start=1):
             record = item.model_dump() if hasattr(item, "model_dump") else dict(item)
             player_id = str(record.get("player_id") or "").strip() or None
@@ -494,6 +519,11 @@ class NationalCompetitionLifecycleService:
                     raise NationalCompetitionLifecycleError(
                         f"Player '{player_id}' was not found.",
                         reason="player_not_found",
+                    )
+                if actor is not None and player_id not in rented_player_ids:
+                    raise NationalCompetitionLifecycleError(
+                        f"Player '{player_id}' was not rented for this entry.",
+                        reason="player_not_rented",
                     )
                 if player_id in seen_player_ids:
                     raise NationalCompetitionLifecycleError(

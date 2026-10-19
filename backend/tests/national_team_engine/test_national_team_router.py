@@ -880,3 +880,110 @@ def test_qualifier_lock_blocks_new_entries_and_updates_country_rankings(
     assert rankings_by_country["NG"]["matches_played"] >= 1
     assert rankings_by_country["GH"]["matches_played"] >= 1
     assert rankings_by_country["NG"]["elo_rating"] != 1500.0 or rankings_by_country["GH"]["elo_rating"] != 1500.0
+
+
+def test_submit_squad_rejects_unrented_player(client, demo_seed, app_session_factory, national_admin_headers) -> None:
+    first_user = demo_seed.demo_users[0]
+    user_headers = _login(client, email=first_user.email, password=first_user.password)
+    player_ids = _seed_national_pool(
+        app_session_factory,
+        prefix="unrented-squad",
+        funded_user_id=first_user.user_id,
+        home_code="NG",
+        home_name="Nigeria",
+        away_code="GH",
+        away_name="Ghana",
+    )
+    unrented_player_id = player_ids["home-st"]
+
+    competition = client.post(
+        "/api/admin/national-team-engine/competitions",
+        headers=national_admin_headers,
+        json={
+            "key": "unrented-squad-test",
+            "title": "Unrented Squad Test",
+            "season_label": "2030",
+            "region_type": "global",
+            "age_band": "senior",
+            "format_type": "cup",
+            "status": "published",
+            "metadata_json": {
+                "minimum_squad_size": 1,
+                "maximum_squad_size": 11,
+            },
+        },
+    ).json()
+
+    # Submit squad containing an unrented player ID
+    submit_response = client.post(
+        f"/api/national-team-engine/competitions/{competition['id']}/entries",
+        headers=user_headers,
+        json={
+            "country_code": "NG",
+            "country_name": "Nigeria",
+            "squad": [
+                {
+                    "player_id": unrented_player_id,
+                    "player_name": "Unrented Striker",
+                    "overall_rating": 80,
+                    "position": "ST",
+                }
+            ],
+        },
+    )
+    assert submit_response.status_code == 409, submit_response.text
+    assert _error_message(submit_response) == "player_not_rented"
+
+
+def test_rental_status_and_national_entry_auth_enforcement(client, demo_seed, national_admin_headers) -> None:
+    user_a = demo_seed.demo_users[0]
+    user_b = demo_seed.demo_users[1]
+    user_a_headers = _login(client, email=user_a.email, password=user_a.password)
+    user_b_headers = _login(client, email=user_b.email, password=user_b.password)
+
+    competition = client.post(
+        "/api/admin/national-team-engine/competitions",
+        headers=national_admin_headers,
+        json={
+            "key": "rental-status-auth-test",
+            "title": "Rental Status Auth Test",
+            "season_label": "2030",
+            "region_type": "global",
+            "age_band": "senior",
+            "format_type": "cup",
+            "status": "published",
+        },
+    ).json()
+
+    entry = client.post(
+        f"/api/national-team-engine/competitions/{competition['id']}/rental-entry",
+        headers=user_a_headers,
+        json={"country_code": "NG", "country_name": "Nigeria"},
+    ).json()
+
+    # 1. Anonymous rental-status read should fail with 401
+    anon_status = client.get(f"/api/national-team-engine/entries/{entry['id']}/rental-status")
+    assert anon_status.status_code == 401, anon_status.text
+
+    # 2. Unauthorized user rental-status read should fail with 403
+    unauth_status = client.get(
+        f"/api/national-team-engine/entries/{entry['id']}/rental-status",
+        headers=user_b_headers,
+    )
+    assert unauth_status.status_code == 403, unauth_status.text
+
+    # 3. Authorized owner rental-status read should succeed (200 OK)
+    auth_status = client.get(
+        f"/api/national-team-engine/entries/{entry['id']}/rental-status",
+        headers=user_a_headers,
+    )
+    assert auth_status.status_code == 200, auth_status.text
+    assert auth_status.json()["entry"]["id"] == entry["id"]
+
+    # 4. GET /api/v2/national/entries/{entry_id} with auth should succeed with 200 OK (no 500 error)
+    national_entry = client.get(
+        f"/api/national/entries/{entry['id']}",
+        headers=user_a_headers,
+    )
+    assert national_entry.status_code == 200, national_entry.text
+    assert national_entry.json()["id"] == entry["id"]
