@@ -18,7 +18,6 @@ from app.club_legacy.operations import (
     club_page,
     club_valuation,
     decide_manager_offer,
-    development_score,
     economic_interest,
     hire_executive,
     invite_preseason,
@@ -43,6 +42,7 @@ from app.club_legacy.operations import (
     settle_preseason,
     simulate_season,
 )
+from app.club_legacy.ratings import development_score
 from app.club_legacy.delegation import LegacyError
 from app.models.admin_rules import AdminFeatureFlag
 from app.models.club_profile import ClubLifecycleStatus, ClubProfile, ClubType
