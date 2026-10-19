@@ -173,8 +173,10 @@ def _replace_store_state(store: object, payload: Any) -> None:
 def _attr(value: Any, *names: str, default: Any = None) -> Any:
     for name in names:
         if isinstance(value, dict) and name in value:
-            return value[name]
-        if hasattr(value, name):
+            result = value[name]
+            if result is not None:
+                return result
+        elif hasattr(value, name):
             result = getattr(value, name)
             if result is not None:
                 return result
@@ -276,7 +278,7 @@ def _persist_finance_projection(session: Any, store: object) -> None:
             values = {
                 "club_id": club_id,
                 "account_type": enum_value,
-                "currency": str(_attr(record, "currency", default="USD")),
+                "currency": str(_attr(record, "currency", default="USD"))[:12],
                 "balance_minor": _integer(_attr(record, "balance_minor")),
                 "allow_negative": bool(_attr(record, "allow_negative", default=False)),
                 "is_active": bool(_attr(record, "is_active", default=True)),
@@ -308,15 +310,19 @@ def _persist_finance_projection(session: Any, store: object) -> None:
                 continue
             created_at = _time(_attr(entry, "created_at"))
             values = {
-                "transaction_id": str(_attr(entry, "transaction_id", default=entry_id)),
+                "transaction_id": str(_attr(entry, "transaction_id", default=entry_id))[:64],
                 "club_id": club_id,
                 "account_id": account_id,
                 "account_type": account_type,
                 "entry_type": entry_type,
                 "amount_minor": _integer(_attr(entry, "amount_minor")),
-                "currency": str(_attr(entry, "currency", default="USD")),
-                "description": _attr(entry, "description"),
-                "reference_id": _attr(entry, "reference_id"),
+                "currency": str(_attr(entry, "currency", default="USD"))[:12],
+                "description": (
+                    str(_attr(entry, "description"))[:255] if _attr(entry, "description") is not None else None
+                ),
+                "reference_id": (
+                    str(_attr(entry, "reference_id"))[:64] if _attr(entry, "reference_id") is not None else None
+                ),
                 "metadata_json": _plain(_attr(entry, "metadata", default={})),
             }
             if created_at is not None:
@@ -630,11 +636,14 @@ def _persist_scouting_projection(session: Any, store: object) -> None:
 
 
 def _persist_relational_projections(session: Any, store: object) -> None:
-    # These are normalized read models for existing ClubOps consumers. Each
-    # projection runs in its own savepoint so legacy record variants that do not
-    # map to a normalized schema cannot discard the authoritative snapshot.
+    # Finance projections are integrity-critical: a snapshot must not commit if
+    # the account/ledger rows cannot also be written in the same transaction.
+    _persist_finance_projection(session, store)
+
+    # These are normalized read models for the existing feature services. Each
+    # optional projection uses a savepoint so a legacy shape mismatch cannot
+    # discard the authoritative durable snapshot.
     for projector, name in (
-        (_persist_finance_projection, "finance"),
         (_persist_sponsorship_projection, "sponsorship"),
         (_persist_academy_projection, "academy"),
         (_persist_scouting_projection, "scouting"),
@@ -667,6 +676,7 @@ class ClubOpsPersistenceLock:
 
             session = self.store.session_factory()
             session.begin()
+            self.store._local.session = session
             row = session.scalar(
                 select(ClubOpsStateSnapshot)
                 .where(ClubOpsStateSnapshot.state_key == "global")
@@ -677,7 +687,6 @@ class ClubOpsPersistenceLock:
                 session.add(row)
                 session.flush()
             original_payload = row.payload or {}
-            self.store._local.session = session
             self.store._local.row = row
             self.store._local.original_payload = original_payload
             _replace_store_state(self.store, _decode(original_payload) if original_payload else {})
@@ -687,6 +696,9 @@ class ClubOpsPersistenceLock:
             if session is not None:
                 session.rollback()
                 session.close()
+                self.store._local.session = None
+                self.store._local.row = None
+                self.store._local.original_payload = None
             self.store._local.depth = 0
             self.store._thread_lock.release()
             raise
