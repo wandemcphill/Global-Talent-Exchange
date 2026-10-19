@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from decimal import Decimal
-import random
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.club_legacy.delegation import (
@@ -14,7 +13,6 @@ from app.club_legacy.delegation import (
     policy_for,
     require_owner,
 )
-from app.club_legacy.ledger import post_club_legacy_transfer
 from app.club_legacy.models import (
     ClubLegacyAsset,
     ClubLegacyBid,
@@ -34,10 +32,8 @@ from app.club_legacy.models import (
     ClubLegacySponsorContract,
     ClubLegacyStake,
 )
-from app.club_legacy.ratings import development_score, prestige_score
 from app.models.club_profile import ClubProfile
 from app.owner_console import ledger
-from app.owner_console.models import OwnerClubState
 
 CATALOGUE = (
     {
@@ -325,9 +321,7 @@ def offer_gift(session: Session, *, asset_id: str, user_id: str, recipient_ref: 
     return impl(session, asset_id=asset_id, user_id=user_id, recipient_ref=recipient_ref)
 
 
-def resolve_gift(
-    session: Session, *, gift_id: str, accept: bool, actor_user_id: str | None = None
-) -> ClubLegacyGift:
+def resolve_gift(session: Session, *, gift_id: str, accept: bool, actor_user_id: str | None = None) -> ClubLegacyGift:
     from app.club_legacy.full.phase4 import resolve_gift as impl
 
     return impl(session, gift_id=gift_id, accept=accept, actor_user_id=actor_user_id)
@@ -435,7 +429,14 @@ def settle_preseason(session: Session, *, invite_id: str, tv_pool, gift_pool=0) 
 
 
 def offer_sponsor(
-    session: Session, *, club_id: str, user_id: str, sponsor_name: str, placement: str, fee, zones: list[str] | None = None
+    session: Session,
+    *,
+    club_id: str,
+    user_id: str,
+    sponsor_name: str,
+    placement: str,
+    fee,
+    zones: list[str] | None = None,
 ) -> ClubLegacySponsorContract:
     from app.club_legacy.full.phase6 import offer_sponsor as impl
 
