@@ -264,10 +264,17 @@ void main() {
     final Finder giftButton = find.byKey(const Key('club-showroom-gift-watch-1'));
     expect(giftButton, findsOneWidget);
     await tester.tap(giftButton);
-    await tester.pump();
+    await tester.pumpAndSettle();
+
+    final Finder recipientField = find.byKey(const Key('club-showroom-gift-recipient'));
+    expect(recipientField, findsOneWidget);
+    await tester.enterText(recipientField, 'recipient-user-id');
+    await tester.tap(find.byKey(const Key('club-showroom-gift-confirm')));
+    await tester.pumpAndSettle();
 
     expect(actionTriggered, equals('gift'));
     expect(actionPayload?['asset_id'], equals('watch-1'));
+    expect(actionPayload?['recipient_ref'], equals('recipient-user-id'));
   });
 
   test('all six starter models load at their source size', () async {
