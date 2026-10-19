@@ -493,12 +493,15 @@ class NationalCompetitionLifecycleService:
             ]
             valid_player_ids = [pid for pid in raw_player_ids if pid]
             if valid_player_ids:
+                rental_now = utcnow()
                 rented_player_ids = set(
                     self.session.scalars(
                         select(RentalContract.player_id).where(
                             RentalContract.tournament_id == competition.id,
                             RentalContract.user_id == actor.id,
                             RentalContract.status == RentalContractStatus.ACTIVE,
+                            RentalContract.start_date <= rental_now,
+                            RentalContract.end_date >= rental_now,
                             RentalContract.player_id.in_(valid_player_ids),
                         )
                     ).all()
