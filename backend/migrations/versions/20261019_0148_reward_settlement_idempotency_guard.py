@@ -21,10 +21,35 @@ depends_on = None
 def upgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
+    constraint_name = "uq_reward_settlements_comp_user_source"
     constraints = {c["name"] for c in inspector.get_unique_constraints("reward_settlements")}
-    if "uq_reward_settlements_comp_user_source" not in constraints:
+    if constraint_name not in constraints:
+        # Never silently delete or rewrite existing financial settlement history.
+        duplicates = bind.execute(
+            sa.text(
+                """
+                SELECT competition_key, user_id, reward_source, COUNT(*) AS duplicate_count
+                FROM reward_settlements
+                GROUP BY competition_key, user_id, reward_source
+                HAVING COUNT(*) > 1
+                ORDER BY duplicate_count DESC
+                LIMIT 10
+                """
+            )
+        ).mappings().all()
+        if duplicates:
+            examples = "; ".join(
+                f"competition_key={row['competition_key']!r}, user_id={row['user_id']!r}, "
+                f"reward_source={row['reward_source']!r}, rows={row['duplicate_count']}"
+                for row in duplicates
+            )
+            raise RuntimeError(
+                "Cannot add reward-settlement idempotency constraint: duplicate financial "
+                "settlement rows already exist. Reconcile them through the audited financial "
+                f"process before retrying this migration. Examples: {examples}"
+            )
         op.create_unique_constraint(
-            "uq_reward_settlements_comp_user_source",
+            constraint_name,
             "reward_settlements",
             ["competition_key", "user_id", "reward_source"],
         )
