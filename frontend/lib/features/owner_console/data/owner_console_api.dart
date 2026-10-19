@@ -692,11 +692,11 @@ abstract class OwnerConsoleReader {
 
   Future<double> fetchWalletBalance();
 
-  Future<List<ShowroomExhibit>> fetchShowroom();
+  Future<List<ShowroomExhibit>> fetchShowroom({String? clubId});
 
-  Future<ClubLegacyDeskData> fetchDesk();
+  Future<ClubLegacyDeskData> fetchDesk({String? clubId});
 
-  Future<void> performDesk(String action, [Map<String, Object?> payload = const <String, Object?>{}]);
+  Future<void> performDesk(String action, [Map<String, Object?> payload = const <String, Object?>{}, String? clubId]);
 }
 
 class OwnerConsoleApi implements OwnerConsoleReader {
@@ -789,36 +789,53 @@ class OwnerConsoleApi implements OwnerConsoleReader {
       PublicClubCard.fromJson(await client.getMap('/owner/public/showroom/$code', auth: false));
 
   @override
-  Future<List<ShowroomExhibit>> fetchShowroom() async {
-    final Map<String, dynamic> center = await client.getMap('/owner/control-center');
-    final List<Map<String, dynamic>> clubs = _maps(center['clubs']);
-    if (clubs.isEmpty) {
-      return const <ShowroomExhibit>[];
+  Future<List<ShowroomExhibit>> fetchShowroom({String? clubId}) async {
+    final String targetClubId;
+    if (clubId != null && clubId.trim().isNotEmpty) {
+      targetClubId = clubId.trim();
+    } else {
+      final Map<String, dynamic> center = await client.getMap('/owner/control-center');
+      final List<Map<String, dynamic>> clubs = _maps(center['clubs']);
+      if (clubs.isEmpty) {
+        return const <ShowroomExhibit>[];
+      }
+      targetClubId = '${clubs.first['club_id']}';
     }
-    final String clubId = '${clubs.first['club_id']}';
-    final Map<String, dynamic> room = await client.getMap('/owner/legacy/$clubId/showroom');
+    final Map<String, dynamic> room = await client.getMap('/owner/legacy/$targetClubId/showroom');
     return _maps(room['exhibits']).map(ShowroomExhibit.fromJson).toList();
   }
 
   @override
-  Future<ClubLegacyDeskData> fetchDesk() async {
-    final Map<String, dynamic> center = await client.getMap('/owner/control-center');
-    final List<Map<String, dynamic>> clubs = _maps(center['clubs']);
-    if (clubs.isEmpty) {
-      return ClubLegacyDeskData.fromJson(const <String, dynamic>{});
+  Future<ClubLegacyDeskData> fetchDesk({String? clubId}) async {
+    final String targetClubId;
+    if (clubId != null && clubId.trim().isNotEmpty) {
+      targetClubId = clubId.trim();
+    } else {
+      final Map<String, dynamic> center = await client.getMap('/owner/control-center');
+      final List<Map<String, dynamic>> clubs = _maps(center['clubs']);
+      if (clubs.isEmpty) {
+        return ClubLegacyDeskData.fromJson(const <String, dynamic>{});
+      }
+      targetClubId = '${clubs.first['club_id']}';
     }
-    return ClubLegacyDeskData.fromJson(await client.getMap('/owner/legacy/${clubs.first['club_id']}/desk'));
+    return ClubLegacyDeskData.fromJson(await client.getMap('/owner/legacy/$targetClubId/desk'));
   }
 
   @override
-  Future<void> performDesk(String action, [Map<String, Object?> payload = const <String, Object?>{}]) async {
-    final Map<String, dynamic> center = await client.getMap('/owner/control-center');
-    final List<Map<String, dynamic>> clubs = _maps(center['clubs']);
-    if (clubs.isEmpty) {
-      return;
+  Future<void> performDesk(String action, [Map<String, Object?> payload = const <String, Object?>{}, String? clubId]) async {
+    final String targetClubId;
+    if (clubId != null && clubId.trim().isNotEmpty) {
+      targetClubId = clubId.trim();
+    } else {
+      final Map<String, dynamic> center = await client.getMap('/owner/control-center');
+      final List<Map<String, dynamic>> clubs = _maps(center['clubs']);
+      if (clubs.isEmpty) {
+        return;
+      }
+      targetClubId = '${clubs.first['club_id']}';
     }
     final Map<String, Object?> body = <String, Object?>{..._deskPayload(action), ...payload};
-    await client.post('/owner/legacy/${clubs.first['club_id']}/desk', body: <String, Object?>{'action': action, 'payload': body});
+    await client.post('/owner/legacy/$targetClubId/desk', body: <String, Object?>{'action': action, 'payload': body});
   }
 
   @override

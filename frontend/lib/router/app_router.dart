@@ -912,8 +912,7 @@ List<RouteBase> _buildLegacyAliasRoutes({
     GoRoute(
       path: '/inbox',
       redirect:
-          (BuildContext context, GoRouterState state) =>
-              const GteNavigationRoute.community().path,
+          (BuildContext context, GoRouterState state) => '/notifications',
     ),
     GoRoute(
       path: '/matches',
