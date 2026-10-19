@@ -29,14 +29,13 @@ def upgrade() -> None:
         # Never silently delete or rewrite existing financial settlement history.
         duplicates = bind.execute(
             sa.text(
-                """
-                SELECT competition_key, user_id, reward_source, COUNT(*) AS duplicate_count
-                FROM reward_settlements
-                GROUP BY competition_key, user_id, reward_source
-                HAVING COUNT(*) > 1
-                ORDER BY duplicate_count DESC
-                LIMIT 10
-                """
+                "SELECT competition_key, user_id, reward_source, "
+                "COUNT(*) AS duplicate_count "
+                "FROM reward_settlements "
+                "GROUP BY competition_key, user_id, reward_source "
+                "HAVING COUNT(*) > 1 "
+                "ORDER BY duplicate_count DESC "
+                "LIMIT 10"
             )
         ).mappings().all()
         if duplicates:
