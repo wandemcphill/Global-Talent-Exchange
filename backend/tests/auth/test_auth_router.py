@@ -838,7 +838,7 @@ def test_turnstile_enforced_on_all_signup_routes(app_client, monkeypatch) -> Non
 
     monkeypatch.setattr(turnstile.httpx, "post", fake_siteverify)
 
-    trader_secret = "JBSWY3DP" + "EHPK3PXP"
+    trader_secret = "JBSWY3DP" + "EHPK3PXP"  # pragma: allowlist secret
     routes_and_payloads = [
         (
             "/auth/signup/user",
