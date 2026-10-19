@@ -208,6 +208,22 @@ class TournamentService:
             self._synchronize_prize_pool(tournament)
             return self._build_view(tournament)
 
+    def cancel_tournament(self, tournament_id: str, *, actor_user_id: str) -> dict[str, object]:
+        with self._state_lock(tournament_id) as acquired:
+            if not acquired:
+                raise TournamentValidationError("Tournament state is busy. Retry shortly.", reason="operation_busy")
+            tournament = self._get_tournament(tournament_id, for_update=True)
+            if tournament.status in {TournamentStatus.COMPLETED.value, TournamentStatus.CANCELLED.value}:
+                raise TournamentValidationError(
+                    "Completed or cancelled tournaments cannot be cancelled.", reason="immutable_tournament"
+                )
+
+            tournament.status = TournamentStatus.CANCELLED.value
+            tournament.completed_at = utcnow()
+            self._refund_tournament_entries(tournament)
+            self._synchronize_prize_pool(tournament)
+            return self._build_view(tournament)
+
     def generate_bracket(self, players: list[str]) -> list[tuple[str | None, str | None]]:
         bracket_size = self._next_power_of_two(len(players))
         seeded: list[str | None] = list(players)
@@ -321,7 +337,7 @@ class TournamentService:
         return entries[0].transaction_id if entries else None
 
     def _synchronize_prize_pool(self, tournament: Tournament) -> None:
-        if tournament.entry_fee <= 0:
+        if tournament.entry_fee <= 0 or tournament.status == TournamentStatus.CANCELLED.value:
             tournament.prize_pool = 0
             return
         paid_entries = self.session.scalar(
@@ -522,6 +538,8 @@ class TournamentService:
                 loser.status = TournamentPlayerStatus.ELIMINATED.value
 
     def _complete_tournament(self, tournament: Tournament, *, winner_user_id: str | None) -> None:
+        if tournament.status == TournamentStatus.COMPLETED.value:
+            return
         tournament.status = TournamentStatus.COMPLETED.value
         tournament.completed_at = utcnow()
         tournament.winner_user_id = winner_user_id
@@ -529,6 +547,85 @@ class TournamentService:
             winner = self._get_player(tournament.id, winner_user_id)
             if winner is not None:
                 winner.status = TournamentPlayerStatus.WINNER.value
+
+        self._disburse_prize_pool(tournament, winner_user_id=winner_user_id)
+
+    def _disburse_prize_pool(self, tournament: Tournament, *, winner_user_id: str | None) -> None:
+        if tournament.prize_pool <= 0:
+            return
+        assert self.wallet_service is not None
+        pool_account = self._ensure_tournament_pool_account(tournament)
+        if winner_user_id is not None:
+            winner_user = self.session.get(User, winner_user_id)
+            if winner_user is not None:
+                winner_account = self.wallet_service.get_user_account(self.session, winner_user, LedgerUnit.CREDIT)
+                payout_amount = Decimal(str(tournament.prize_pool))
+                reference = f"tournament:{tournament.id}:payout:{winner_user_id}"
+                self.wallet_service.append_transaction(
+                    self.session,
+                    postings=[
+                        LedgerPosting(
+                            account=pool_account,
+                            amount=-payout_amount,
+                            source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD,
+                            transaction_type=LedgerTransactionType.MATCH_REWARD,
+                        ),
+                        LedgerPosting(
+                            account=winner_account,
+                            amount=payout_amount,
+                            source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD,
+                            transaction_type=LedgerTransactionType.MATCH_REWARD,
+                        ),
+                    ],
+                    reason=LedgerEntryReason.COMPETITION_REWARD,
+                    source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD,
+                    transaction_type=LedgerTransactionType.MATCH_REWARD,
+                    reference=reference,
+                    description=f"Winner prize pool payout for tournament {tournament.name}",
+                    idempotency_key=reference,
+                    metadata={"tournament_id": tournament.id, "winner_user_id": winner_user_id},
+                )
+        else:
+            self._refund_tournament_entries(tournament)
+
+    def _refund_tournament_entries(self, tournament: Tournament) -> None:
+        if tournament.entry_fee <= 0:
+            return
+        assert self.wallet_service is not None
+        pool_account = self._ensure_tournament_pool_account(tournament)
+        players = self._list_players(tournament.id)
+        for player in players:
+            if player.entry_transaction_id is not None:
+                player_user = self.session.get(User, player.user_id)
+                if player_user is None:
+                    continue
+                player_account = self.wallet_service.get_user_account(self.session, player_user, LedgerUnit.CREDIT)
+                refund_amount = Decimal(str(tournament.entry_fee))
+                reference = f"tournament:{tournament.id}:refund:{player.user_id}"
+                self.wallet_service.append_transaction(
+                    self.session,
+                    postings=[
+                        LedgerPosting(
+                            account=pool_account,
+                            amount=-refund_amount,
+                            source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND,
+                            transaction_type=LedgerTransactionType.MATCH_ENTRY_FEE,
+                        ),
+                        LedgerPosting(
+                            account=player_account,
+                            amount=refund_amount,
+                            source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND,
+                            transaction_type=LedgerTransactionType.MATCH_ENTRY_FEE,
+                        ),
+                    ],
+                    reason=LedgerEntryReason.COMPETITION_ENTRY,
+                    source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND,
+                    transaction_type=LedgerTransactionType.MATCH_ENTRY_FEE,
+                    reference=reference,
+                    description=f"Refund entry fee for tournament {tournament.name}",
+                    idempotency_key=reference,
+                    metadata={"tournament_id": tournament.id, "user_id": player.user_id},
+                )
 
     def _supports_row_locks(self) -> bool:
         bind = self.session.get_bind()

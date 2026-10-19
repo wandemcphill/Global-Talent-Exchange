@@ -294,3 +294,99 @@ def test_timeout_advances_unfinished_round_using_bracket_priority(tournament_cli
     final_match = next(match for match in advanced["matches"] if match["round_number"] == 2)
     assert final_match["player_one_user_id"] == users[0].id
     assert final_match["player_two_user_id"] == users[1].id
+
+
+def test_tournament_completion_disburses_prize_pool_to_winner(tournament_client) -> None:
+    client, session_factory = tournament_client
+    users = _seed_users(session_factory, count=4, balance=1_000)
+    tournament = _create_tournament(client, entry_fee=500)
+    payload = _join_all(client, tournament["tournament_id"], users)
+    tournament_id = payload["tournament_id"]
+
+    round_one_matches = [match for match in payload["matches"] if match["round_number"] == 1]
+    client.post(
+        f"/api/tournaments/{tournament_id}/matches/{round_one_matches[0]['match_id']}/result",
+        json={"winner_user_id": users[0].id, "player_one_score": 3, "player_two_score": 1},
+        headers=_actor_headers(users[0].id),
+    )
+    advanced = client.post(
+        f"/api/tournaments/{tournament_id}/matches/{round_one_matches[1]['match_id']}/result",
+        json={"winner_user_id": users[1].id, "player_one_score": 2, "player_two_score": 0},
+        headers=_actor_headers(users[1].id),
+    ).json()
+
+    final_match = next(match for match in advanced["matches"] if match["round_number"] == 2)
+    final_result = client.post(
+        f"/api/tournaments/{tournament_id}/matches/{final_match['match_id']}/result",
+        json={"winner_user_id": users[0].id, "player_one_score": 1, "player_two_score": 0},
+        headers=_actor_headers(users[0].id),
+    )
+    assert final_result.status_code == 200, final_result.text
+    completed = final_result.json()
+    assert completed["status"] == "completed"
+    assert completed["winner_user_id"] == users[0].id
+
+    # Winner users[0] initial balance 1000 - entry fee 500 + prize pool 2000 = 2500
+    # Other users initial balance 1000 - entry fee 500 = 500
+    with session_factory() as session:
+        winner_balance = _get_credit_balance(session, session.get(User, users[0].id))
+        other_balances = [_get_credit_balance(session, session.get(User, u.id)) for u in users[1:]]
+
+    assert winner_balance == Decimal("2500.0000")
+    assert other_balances == [Decimal("500.0000")] * 3
+
+
+def test_cancel_tournament_refunds_entry_fees(tournament_client) -> None:
+    client, session_factory = tournament_client
+    users = _seed_users(session_factory, count=4, balance=1_000)
+    tournament = _create_tournament(client, entry_fee=500)
+    payload = _join_all(client, tournament["tournament_id"], users)
+    tournament_id = payload["tournament_id"]
+
+    # Verify balances after joining are 500
+    with session_factory() as session:
+        balances_after_join = [_get_credit_balance(session, session.get(User, u.id)) for u in users]
+    assert balances_after_join == [Decimal("500.0000")] * 4
+
+    cancel_res = client.post(
+        f"/api/tournaments/{tournament_id}/cancel",
+        headers=_actor_headers("admin-user"),
+    )
+    assert cancel_res.status_code == 200, cancel_res.text
+    cancelled_data = cancel_res.json()
+    assert cancelled_data["status"] == "cancelled"
+    assert cancelled_data["prize_pool"] == 0
+
+    # Verify balances after cancellation are restored to 1,000
+    with session_factory() as session:
+        balances_after_cancel = [_get_credit_balance(session, session.get(User, u.id)) for u in users]
+    assert balances_after_cancel == [Decimal("1000.0000")] * 4
+
+    # Duplicate cancel attempt should return 409 Conflict
+    re_cancel = client.post(
+        f"/api/tournaments/{tournament_id}/cancel",
+        headers=_actor_headers("admin-user"),
+    )
+    assert re_cancel.status_code == 409, re_cancel.text
+
+
+def test_tournament_completion_without_winner_refunds_entry_fees(tournament_client) -> None:
+    client, session_factory = tournament_client
+    users = _seed_users(session_factory, count=2, balance=1_000)
+    tournament = _create_tournament(client, max_players=2, entry_fee=300)
+    payload = _join_all(client, tournament["tournament_id"], users)
+    tournament_id = payload["tournament_id"]
+
+    with session_factory() as session:
+        from app.tournaments.service import TournamentService
+
+        service = TournamentService(session)
+        tourn_obj = service._get_tournament(tournament_id, for_update=True)
+        # Complete tournament with winner_user_id = None
+        service._complete_tournament(tourn_obj, winner_user_id=None)
+        session.commit()
+
+    # Verify balances were refunded (from 700 back to 1000)
+    with session_factory() as session:
+        refunded_balances = [_get_credit_balance(session, session.get(User, u.id)) for u in users]
+    assert refunded_balances == [Decimal("1000.0000")] * 2
