@@ -951,6 +951,32 @@ def test_submit_squad_rejects_unrented_player(client, demo_seed, app_session_fac
     assert submit_response.status_code == 409, submit_response.text
     assert _error_message(submit_response) == "player_not_rented"
 
+    # A future ACTIVE rental is also not valid before its start time.
+    with app_session_factory() as session:
+        contract = session.query(RentalContract).filter_by(player_id=unrented_player_id).one()
+        contract.start_date = now + timedelta(days=1)
+        contract.end_date = now + timedelta(days=2)
+        session.commit()
+
+    future_response = client.post(
+        f"/api/national-team-engine/competitions/{competition['id']}/entries",
+        headers=user_headers,
+        json={
+            "country_code": "NG",
+            "country_name": "Nigeria",
+            "squad": [
+                {
+                    "player_id": unrented_player_id,
+                    "player_name": "Unrented Striker",
+                    "overall_rating": 80,
+                    "position": "ST",
+                }
+            ],
+        },
+    )
+    assert future_response.status_code == 409, future_response.text
+    assert _error_message(future_response) == "player_not_rented"
+
 
 def test_rental_status_and_national_entry_auth_enforcement(client, demo_seed, national_admin_headers) -> None:
     user_a = demo_seed.demo_users[0]
