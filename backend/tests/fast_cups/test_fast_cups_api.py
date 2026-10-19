@@ -12,9 +12,7 @@ from app.models.user import User, UserRole
 from app.models.wallet import LedgerTransaction
 
 
-def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(
-    api_client, base_now
-) -> None:
+def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(api_client, base_now) -> None:
     upcoming_response = api_client.get(
         "/fast-cups/upcoming",
         params={"now": base_now.isoformat(), "horizon_intervals": 1},
@@ -24,9 +22,7 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(
     cups = upcoming_response.json()["cups"]
     assert len(cups) == 8
 
-    senior_32 = next(
-        cup for cup in cups if cup["division"] == "senior" and cup["size"] == 32
-    )
+    senior_32 = next(cup for cup in cups if cup["division"] == "senior" and cup["size"] == 32)
 
     for index in range(1, 33):
         response = api_client.post(
@@ -87,18 +83,12 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(
     def payout_counts() -> tuple[int, int]:
         session.expire_all()
         payout_count = session.scalar(
-            select(func.count())
-            .select_from(FastCupPayout)
-            .where(FastCupPayout.cup_id == senior_32["cup_id"])
+            select(func.count()).select_from(FastCupPayout).where(FastCupPayout.cup_id == senior_32["cup_id"])
         )
         ledger_count = session.scalar(
             select(func.count())
             .select_from(LedgerTransaction)
-            .where(
-                LedgerTransaction.idempotency_key.like(
-                    f"fast-cup-payout:{senior_32['cup_id']}:%"
-                )
-            )
+            .where(LedgerTransaction.idempotency_key.like(f"fast-cup-payout:{senior_32['cup_id']}:%"))
         )
         return int(payout_count or 0), int(ledger_count or 0)
 
@@ -139,10 +129,7 @@ def test_fast_cup_api_surfaces_upcoming_join_bracket_countdown_and_summary(
     )
     assert admin_settle.status_code == 200
     settle_payload = admin_settle.json()
-    assert (
-        settle_payload["champion"]["club_id"]
-        == summary_payload["champion"]["club_id"]
-    )
+    assert settle_payload["champion"]["club_id"] == summary_payload["champion"]["club_id"]
 
     payout_count_after_settle, ledger_count_after_settle = payout_counts()
     assert payout_count_after_settle > 0
