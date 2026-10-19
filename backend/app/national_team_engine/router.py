@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_optional_current_user, get_session
@@ -8,6 +8,8 @@ from app.models.user import User
 from app.national_team_engine.schemas import (
     NationalTeamAutoBuildRequest,
     NationalTeamAutoBuildResponse,
+    NationalTeamChampionRewardSettleRequest,
+    NationalTeamChampionRewardSettlementResponse,
     NationalTeamCompetitionCreateRequest,
     NationalTeamCompetitionEntryResponse,
     NationalTeamCompetitionEntrySubmitRequest,
@@ -111,6 +113,8 @@ def _raise_tournament_http(exc: NationalTeamTournamentError) -> None:
 def _raise_lifecycle_http(exc: NationalCompetitionLifecycleError) -> None:
     if exc.reason in {"competition_not_found"}:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.reason) from exc
+    if exc.reason in {"settlement_forbidden"}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.reason) from exc
     if exc.reason in {"entry_locked"}:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.reason) from exc
     if exc.reason in {
@@ -125,6 +129,13 @@ def _raise_lifecycle_http(exc: NationalCompetitionLifecycleError) -> None:
         "squad_too_small",
         "squad_too_large",
         "lifecycle_completed",
+        "lifecycle_not_completed",
+        "champion_not_found",
+        "champion_not_eligible",
+        "champion_user_invalid",
+        "promo_pool_insufficient",
+        "spending_controls_blocked",
+        "economic_policy_unavailable",
         "player_not_rented",
     }:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.reason) from exc
@@ -160,14 +171,11 @@ def list_country_rankings(
 @router.get("/competitions/{competition_id}/lifecycle", response_model=NationalTeamCompetitionLifecycleResponse)
 def get_competition_lifecycle(
     competition_id: str,
-    session: Session = Depends(get_session),
     service: NationalCompetitionLifecycleService = Depends(_lifecycle_service),
 ):
     try:
         payload = service.get_lifecycle_payload(competition_id=competition_id)
-        session.commit()
     except NationalCompetitionLifecycleError as exc:
-        session.rollback()
         _raise_lifecycle_http(exc)
     return _lifecycle_detail(payload)
 
@@ -600,16 +608,41 @@ def lock_competition_entries(
 def advance_competition_lifecycle(
     competition_id: str,
     session: Session = Depends(get_session),
-    _admin: User = Depends(get_current_admin),
+    current_admin: User = Depends(get_current_admin),
     service: NationalCompetitionLifecycleService = Depends(_lifecycle_service),
 ):
     try:
-        payload = service.advance_lifecycle(competition_id=competition_id)
+        payload = service.advance_lifecycle(competition_id=competition_id, actor=current_admin)
         session.commit()
     except NationalCompetitionLifecycleError as exc:
         session.rollback()
         _raise_lifecycle_http(exc)
     return _lifecycle_detail(payload)
+
+
+@admin_router.post(
+    "/competitions/{competition_id}/champion-reward/settle",
+    response_model=NationalTeamChampionRewardSettlementResponse,
+)
+def settle_competition_champion_reward(
+    competition_id: str,
+    payload: NationalTeamChampionRewardSettleRequest | None = Body(default=None),
+    session: Session = Depends(get_session),
+    current_admin: User = Depends(get_current_admin),
+    service: NationalCompetitionLifecycleService = Depends(_lifecycle_service),
+):
+    try:
+        settlement = service.settle_champion_reward(
+            competition_id=competition_id,
+            actor=current_admin,
+            gross_amount=payload.gross_amount if payload is not None else None,
+            note=payload.note if payload is not None else None,
+        )
+        session.commit()
+    except NationalCompetitionLifecycleError as exc:
+        session.rollback()
+        _raise_lifecycle_http(exc)
+    return NationalTeamChampionRewardSettlementResponse.model_validate(settlement)
 
 
 @admin_router.post("/competitions/{competition_id}/entries", response_model=NationalTeamEntryResponse)

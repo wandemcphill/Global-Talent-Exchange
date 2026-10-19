@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 import uuid
@@ -375,7 +375,7 @@ def test_legendary_player_in_competition_lifecycle(tmp_path: Path):
 
         competition = _create_competition(session, key="euro_legend_cup", title="Euro Legend Cup", age_band="senior")
 
-        now = datetime.now()
+        now = datetime.now(UTC)
         session.add(
             RentalContract(
                 player_id=zidane.id,

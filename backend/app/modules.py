@@ -553,6 +553,8 @@ DOMAIN_MODULES = (
         "national_team_engine",
         router_path="app.national_team_engine.router:router",
         api_only=True,
+        on_startup=("app.national_team_engine.worker:bind_national_team_scheduler",),
+        on_shutdown=("app.national_team_engine.worker:shutdown_national_team_scheduler",),
     ),
     _module(
         "national_team_engine_admin",
