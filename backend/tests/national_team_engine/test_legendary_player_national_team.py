@@ -13,6 +13,7 @@ from app.ingestion.models import Country, InjuryStatus, Player
 from app.models import Base
 from app.models.federation import FederationSanction, FederationSanctionType
 from app.models.national_team import NationalTeamCompetition, NationalTeamEntry
+from app.models.national_team_tournament import RentalContract, RentalContractStatus
 from app.models.player_contract import PlayerContract
 from app.models.user import User
 from app.models.wallet import (
@@ -373,6 +374,39 @@ def test_legendary_player_in_competition_lifecycle(tmp_path: Path):
         user_es = _create_user(session, "es_manager")
 
         competition = _create_competition(session, key="euro_legend_cup", title="Euro Legend Cup", age_band="senior")
+
+        now = datetime.now()
+        session.add(
+            RentalContract(
+                player_id=zidane.id,
+                user_id=user_fr.id,
+                tournament_id=competition.id,
+                start_date=now,
+                end_date=now + timedelta(days=2),
+                status=RentalContractStatus.ACTIVE,
+            )
+        )
+        session.add(
+            RentalContract(
+                player_id=iniesta.id,
+                user_id=user_fr.id,
+                tournament_id=competition.id,
+                start_date=now,
+                end_date=now + timedelta(days=2),
+                status=RentalContractStatus.ACTIVE,
+            )
+        )
+        session.add(
+            RentalContract(
+                player_id=iniesta.id,
+                user_id=user_es.id,
+                tournament_id=competition.id,
+                start_date=now,
+                end_date=now + timedelta(days=2),
+                status=RentalContractStatus.ACTIVE,
+            )
+        )
+        session.flush()
 
         # 1. Submit France squad with Zidane
         fr_entry = lifecycle_service.submit_entry(

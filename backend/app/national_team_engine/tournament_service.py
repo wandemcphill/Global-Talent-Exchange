@@ -3183,8 +3183,8 @@ class NationalTeamTournamentService:
             "story_events": self.list_story_events(competition_id=competition_id, limit=limit_story_events),
         }
 
-    def build_rental_status_payload(self, *, entry_id: str) -> dict[str, Any]:
-        entry = self._require_entry(entry_id)
+    def build_rental_status_payload(self, *, entry_id: str, actor: User) -> dict[str, Any]:
+        entry = self._require_managed_entry(entry_id, actor)
         self._refresh_entry_squad_size(entry)
         competition = entry.competition
         assert competition is not None
