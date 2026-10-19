@@ -102,9 +102,7 @@ class TournamentPlayer(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class TournamentRound(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "tournament_rounds"
-    __table_args__ = (
-        UniqueConstraint("tournament_id", "round_number", name="uq_tournament_rounds_tournament_round"),
-    )
+    __table_args__ = (UniqueConstraint("tournament_id", "round_number", name="uq_tournament_rounds_tournament_round"),)
 
     tournament_id: Mapped[str] = mapped_column(
         String(36),

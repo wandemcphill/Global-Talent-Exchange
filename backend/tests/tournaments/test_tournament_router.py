@@ -379,6 +379,7 @@ def test_tournament_completion_without_winner_refunds_entry_fees(tournament_clie
 
     with session_factory() as session:
         from app.tournaments.service import TournamentService
+
         service = TournamentService(session)
         tourn_obj = service._get_tournament(tournament_id, for_update=True)
         # Complete tournament with winner_user_id = None
