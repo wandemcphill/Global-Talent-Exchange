@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_admin, get_current_user
 from app.db import get_session
 from app.models.user import User, UserRole
 from app.tournaments.schemas import (
@@ -41,6 +41,8 @@ def _raise_http(exc: TournamentError) -> None:
             "round_not_ready",
             "tournament_full",
         }
+        if exc.reason == "paid_tournaments_retired":
+            raise HTTPException(status_code=status.HTTP_410_GONE, detail=exc.detail) from exc
         status_code = status.HTTP_409_CONFLICT if exc.reason in conflict_reasons else status.HTTP_400_BAD_REQUEST
         raise HTTPException(status_code=status_code, detail=exc.detail) from exc
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.detail) from exc
@@ -150,6 +152,22 @@ def advance_tournament(
 ) -> TournamentView:
     try:
         tournament = service.advance_tournament(tournament_id, actor_user_id=current_user.id)
+        session.commit()
+    except TournamentError as exc:
+        session.rollback()
+        _raise_http(exc)
+    return TournamentView.model_validate(tournament)
+
+
+@router.post("/{tournament_id}/refund-entries", response_model=TournamentView)
+def refund_tournament_entries(
+    tournament_id: str,
+    _admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+    service: TournamentService = Depends(_service),
+) -> TournamentView:
+    try:
+        tournament = service.refund_entry_fees(tournament_id)
         session.commit()
     except TournamentError as exc:
         session.rollback()

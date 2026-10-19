@@ -151,7 +151,7 @@ def _create_tournament(
     *,
     name: str = "Weekend Clash",
     max_players: int = 4,
-    entry_fee: int = 500,
+    entry_fee: int = 0,
     actor_id: str = "tournament-organizer",
 ) -> dict:
     response = client.post(
@@ -183,7 +183,7 @@ def _join_all(client: TestClient, tournament_id: str, users: list[User]) -> dict
     return latest_payload
 
 
-def test_join_flow_deducts_entry_fee_and_starts_when_full(tournament_client) -> None:
+def test_join_flow_starts_when_full(tournament_client) -> None:
     client, session_factory = tournament_client
     users = _seed_users(session_factory, count=4)
     tournament = _create_tournament(client)
@@ -191,7 +191,7 @@ def test_join_flow_deducts_entry_fee_and_starts_when_full(tournament_client) -> 
     payload = _join_all(client, tournament["tournament_id"], users)
 
     assert payload["status"] == "active"
-    assert payload["prize_pool"] == 2_000
+    assert payload["prize_pool"] == 0
     assert payload["player_count"] == 4
     assert payload["current_round"] == 1
     assert [player["bracket_slot"] for player in payload["players"]] == [1, 2, 3, 4]
@@ -209,7 +209,7 @@ def test_join_flow_deducts_entry_fee_and_starts_when_full(tournament_client) -> 
 
     with session_factory() as session:
         balances = [_get_credit_balance(session, session.get(User, user.id)) for user in users]
-    assert balances == [Decimal("500.0000")] * 4
+    assert balances == [Decimal("1000.0000")] * 4
 
 
 def test_completed_matches_advance_and_finish_tournament(tournament_client) -> None:
@@ -294,3 +294,72 @@ def test_timeout_advances_unfinished_round_using_bracket_priority(tournament_cli
     final_match = next(match for match in advanced["matches"] if match["round_number"] == 2)
     assert final_match["player_one_user_id"] == users[0].id
     assert final_match["player_two_user_id"] == users[1].id
+
+
+def test_paid_tournament_creation_is_retired(tournament_client) -> None:
+    client, _ = tournament_client
+    response = client.post(
+        "/api/tournaments",
+        json={
+            "name": "Paid Clash",
+            "game_type": "prediction",
+            "entry_fee": 500,
+            "max_players": 4,
+            "round_timeout_minutes": 60,
+        },
+        headers=_actor_headers("tournament-organizer"),
+    )
+    assert response.status_code == 410, response.text
+
+
+def test_admin_refund_returns_legacy_entry_fees_and_blocks_new_paid_joins(tournament_client) -> None:
+    from app.tournaments.service import TournamentService
+
+    client, session_factory = tournament_client
+    users = _seed_users(session_factory, count=3)
+    with session_factory() as session:
+        tournament = Tournament(
+            name="Legacy Paid Cup",
+            game_type="prediction",
+            entry_fee=500,
+            max_players=4,
+            status="registration",
+            rounds=2,
+            current_round=1,
+            prize_pool=0,
+            round_timeout_minutes=60,
+            metadata_json={},
+        )
+        session.add(tournament)
+        session.flush()
+        service = TournamentService(session=session)
+        for slot, user in enumerate(users[:2], start=1):
+            transaction_id = service._charge_entry_fee(tournament=tournament, user=session.get(User, user.id))
+            session.add(
+                TournamentPlayer(
+                    tournament_id=tournament.id,
+                    user_id=user.id,
+                    bracket_slot=slot,
+                    status="registered",
+                    entry_transaction_id=transaction_id,
+                )
+            )
+        session.commit()
+        tournament_id = tournament.id
+
+    blocked = client.post(
+        f"/api/tournaments/{tournament_id}/join",
+        json={"user_id": users[2].id},
+        headers=_actor_headers(users[2].id),
+    )
+    assert blocked.status_code == 410, blocked.text
+
+    first = client.post(f"/api/tournaments/{tournament_id}/refund-entries", headers=_actor_headers("admin"))
+    second = client.post(f"/api/tournaments/{tournament_id}/refund-entries", headers=_actor_headers("admin"))
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert second.json()["prize_pool"] == 0
+
+    with session_factory() as session:
+        balances = [_get_credit_balance(session, session.get(User, user.id)) for user in users]
+    assert balances == [Decimal("1000.0000")] * 3

@@ -34,6 +34,13 @@ from app.tournaments.schemas import TournamentCreateRequest, TournamentMatchResu
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 
+def _paid_tournaments_retired() -> "TournamentValidationError":
+    return TournamentValidationError(
+        "Paid tournaments on /api/tournaments are retired; use hosted competitions instead.",
+        reason="paid_tournaments_retired",
+    )
+
+
 class TournamentError(Exception):
     def __init__(self, detail: str, *, reason: str) -> None:
         super().__init__(detail)
@@ -70,6 +77,8 @@ class TournamentService:
         return views
 
     def create_tournament(self, payload: TournamentCreateRequest) -> dict[str, object]:
+        if payload.entry_fee > 0:
+            raise _paid_tournaments_retired()
         tournament = Tournament(
             name=payload.name,
             game_type=payload.game_type.value,
@@ -122,6 +131,8 @@ class TournamentService:
             if len(players) >= tournament.max_players:
                 raise TournamentValidationError("Tournament is already full.", reason="tournament_full")
 
+            if tournament.entry_fee > 0:
+                raise _paid_tournaments_retired()
             entry_transaction_id = self._charge_entry_fee(tournament=tournament, user=user)
             player = TournamentPlayer(
                 tournament_id=tournament.id,
@@ -281,6 +292,46 @@ class TournamentService:
                 TournamentRound.round_number == round_number,
             )
         )
+
+    def refund_entry_fees(self, tournament_id: str) -> dict[str, object]:
+        """Return every collected entry fee from the tournament pool to its payer (idempotent per player)."""
+        tournament = self._get_tournament(tournament_id, for_update=True)
+        assert self.wallet_service is not None
+        pool_account = self._ensure_tournament_pool_account(tournament)
+        refunded: list[str] = []
+        for player in self._list_players(tournament.id):
+            if player.entry_transaction_id is None:
+                continue
+            user = self.session.get(User, player.user_id)
+            if user is None:
+                continue
+            reference = f"tournament:{tournament.id}:refund:{user.id}"
+            self.wallet_service.append_transaction(
+                self.session,
+                postings=[
+                    LedgerPosting(account=pool_account, amount=Decimal(str(-tournament.entry_fee))),
+                    LedgerPosting(
+                        account=self.wallet_service.get_user_account(self.session, user, LedgerUnit.CREDIT),
+                        amount=Decimal(str(tournament.entry_fee)),
+                    ),
+                ],
+                reason=LedgerEntryReason.ADJUSTMENT,
+                reference=reference,
+                description=f"Refund of entry fee for retired tournament {tournament.name}",
+                idempotency_key=reference,
+                metadata={"tournament_id": tournament.id},
+            )
+            player.entry_transaction_id = None
+            refunded.append(user.id)
+        tournament.metadata_json = {
+            **dict(tournament.metadata_json or {}),
+            "entry_fees_refunded_user_ids": sorted(
+                {*(tournament.metadata_json or {}).get("entry_fees_refunded_user_ids", []), *refunded}
+            ),
+        }
+        self.session.flush()
+        self._synchronize_prize_pool(tournament)
+        return self._build_view(tournament)
 
     def _charge_entry_fee(self, *, tournament: Tournament, user: User) -> str | None:
         if tournament.entry_fee <= 0:
