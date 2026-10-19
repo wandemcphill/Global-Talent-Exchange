@@ -64,12 +64,17 @@ class JackpotWorker:
         with self.context.runtime.state_store.distributed_lock("gtex:jackpot:trigger_lock", ttl_seconds=30) as acquired:
             if not acquired:
                 return False
-            with self.context.database.session_factory() as session:
-                result = self.context.runtime.jackpot.process_due_round(session)
-                session.commit()
-                for message in messages:
-                    self.context.runtime.state_store.ack(message.stream, "gtex-jackpot", message.message_id)
-                return result is not None
+            processed = False
+            # Jackpot pools are isolated by currency. Process both the existing
+            # GTEX Coin pool and the FanCoin pool so neither can remain stranded.
+            for pool_key in ("global", "fancoin"):
+                with self.context.database.session_factory() as session:
+                    result = self.context.runtime.jackpot.process_due_round(session, pool_key=pool_key)
+                    session.commit()
+                    processed = processed or result is not None
+            for message in messages:
+                self.context.runtime.state_store.ack(message.stream, "gtex-jackpot", message.message_id)
+            return processed
 
 
 @dataclass(slots=True)
