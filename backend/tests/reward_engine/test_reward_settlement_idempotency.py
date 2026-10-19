@@ -80,16 +80,19 @@ def test_reward_settlement_is_idempotent_and_prevents_double_crediting(session) 
     )
     session.commit()
 
-    # Second settlement call with exact same user, competition, reward_source
-    second = service.settle_reward(
-        actor=admin,
-        user_id=recipient.id,
-        competition_key=comp_key,
-        title="First Place Prize Retry",
-        gross_amount=Decimal("100.0000"),
-        reward_source=reward_src,
-    )
-    session.commit()
+    # Retry from a separate database session to verify idempotency survives
+    # a fresh identity map/process request boundary, not just the original ORM session.
+    RetrySession = sessionmaker(bind=session.get_bind(), autoflush=False, expire_on_commit=False)
+    with RetrySession() as retry_session:
+        second = RewardEngineService(retry_session).settle_reward(
+            actor=admin,
+            user_id=recipient.id,
+            competition_key=comp_key,
+            title="First Place Prize Retry",
+            gross_amount=Decimal("100.0000"),
+            reward_source=reward_src,
+        )
+        retry_session.commit()
 
     assert first.id == second.id
     assert first.net_amount == second.net_amount
