@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 ROLE_FIRST_TEAM_MANAGER = "first_team_manager"
 ROLE_YOUTH_COACH = "youth_coach"
 ROLE_FIRST_TEAM_COACH = "first_team_coach"
@@ -11,20 +10,24 @@ ROLE_AGENT = "agent"
 ROLE_MEDICAL = "medical"
 ROLE_PERFORMANCE_ANALYST = "performance_analyst"
 
-COACH_SPECIALISATIONS = frozenset({
-    "coach",
-    "youth_coach",
-    "goalkeeping_coach",
-    "fitness_coach",
-    "technical_coach",
-    "tactical_coach",
-})
-MEDICAL_SPECIALISATIONS = frozenset({
-    "medical",
-    "physio",
-    "doctor",
-    "sports_scientist",
-})
+COACH_SPECIALISATIONS = frozenset(
+    {
+        "coach",
+        "youth_coach",
+        "goalkeeping_coach",
+        "fitness_coach",
+        "technical_coach",
+        "tactical_coach",
+    }
+)
+MEDICAL_SPECIALISATIONS = frozenset(
+    {
+        "medical",
+        "physio",
+        "doctor",
+        "sports_scientist",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,8 +44,15 @@ def normalise_staff_role(role_key: str | None) -> str:
         "manager": ROLE_FIRST_TEAM_MANAGER,
         "head_coach": ROLE_FIRST_TEAM_MANAGER,
         "first_team_manager": ROLE_FIRST_TEAM_MANAGER,
+        "gm": ROLE_FIRST_TEAM_MANAGER,
+        "general_manager": ROLE_FIRST_TEAM_MANAGER,
+        "legacy_gm": ROLE_FIRST_TEAM_MANAGER,
         "youth_coach": ROLE_YOUTH_COACH,
         "academy_coach": ROLE_YOUTH_COACH,
+        "academy_director": ROLE_YOUTH_COACH,
+        "hoyd": ROLE_YOUTH_COACH,
+        "head_of_youth_development": ROLE_YOUTH_COACH,
+        "legacy_hoyd": ROLE_YOUTH_COACH,
         "coach": ROLE_FIRST_TEAM_COACH,
         "first_team_coach": ROLE_FIRST_TEAM_COACH,
         "medical_staff": ROLE_MEDICAL,
@@ -74,6 +84,9 @@ def evaluate_staff_role(
         if role != ROLE_FIRST_TEAM_MANAGER:
             return StaffRoleDecision(role, False, "personal_manager_only_supports_first_team_manager")
         return StaffRoleDecision(role, True, "personal_manager_is_profile_bound", consumes_salary=False)
+
+    if role in {"club", "general"}:
+        return StaffRoleDecision(role, True, "general_club_staff_appointment")
 
     if role == ROLE_FIRST_TEAM_MANAGER:
         if retired_regen or staff in COACH_SPECIALISATIONS or staff == "manager" or skills & COACH_SPECIALISATIONS:

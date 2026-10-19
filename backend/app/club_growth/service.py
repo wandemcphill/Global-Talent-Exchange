@@ -361,6 +361,13 @@ class ClubGrowthService:
             staff = self.session.get(ClubStaffProfile, staff_id)
         if staff is None or not staff.active:
             raise ClubGrowthError("staff_profile_not_found")
+        decision = evaluate_staff_role(
+            role_key=payload.role_scope,
+            staff_type=staff.staff_type,
+            specialisations=staff.skills_json,
+        )
+        if not decision.allowed:
+            raise ClubGrowthError(decision.reason)
         if payload.exclusive:
             active_exclusive = self.session.scalar(
                 select(ClubStaffContract).where(
@@ -396,6 +403,13 @@ class ClubGrowthService:
         contract = self._get_contract(club_id=club_id, contract_id=contract_id)
         if contract.status != "offered":
             raise ClubGrowthError("staff_contract_not_offered")
+        decision = evaluate_staff_role(
+            role_key=contract.role_scope,
+            staff_type=contract.staff_profile.staff_type if contract.staff_profile is not None else None,
+            specialisations=contract.staff_profile.skills_json if contract.staff_profile is not None else None,
+        )
+        if not decision.allowed:
+            raise ClubGrowthError(decision.reason)
         now = utcnow()
         previous = self._staff_contract_snapshot(contract)
         contract.status = "active"
