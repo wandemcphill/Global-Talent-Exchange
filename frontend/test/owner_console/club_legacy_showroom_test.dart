@@ -216,6 +216,77 @@ void main() {
     expect(find.text('Turn 0.0'), findsNothing);
   });
 
+  testWidgets('renders buy button for unowned items and gift button for owned items', (
+    WidgetTester tester,
+  ) async {
+    const ShowroomExhibit unownedJet = ShowroomExhibit(
+      id: 'catalogue:gtex-jet-harbour',
+      sku: 'gtex-jet-harbour',
+      name: 'Harbour Jet',
+      category: 'jet',
+      ownershipLabel: 'Not owned',
+      fallbackLabel: 'Static jet card',
+      owned: false,
+    );
+    String? actionTriggered;
+    Map<String, Object?>? actionPayload;
+
+    tester.view.physicalSize = const Size(900, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ClubLegacyShowroom(
+            exhibits: const <ShowroomExhibit>[unownedJet, _watch],
+            onAction: (String action, Map<String, Object?> payload) async {
+              actionTriggered = action;
+              actionPayload = payload;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final Finder buyButton = find.byKey(const Key('club-showroom-buy-gtex-jet-harbour'));
+    expect(buyButton, findsOneWidget);
+    await tester.tap(buyButton);
+    await tester.pump();
+
+    expect(actionTriggered, equals('purchase'));
+    expect(actionPayload?['sku'], equals('gtex-jet-harbour'));
+    final Object? firstPurchaseKey = actionPayload?['idempotency_key'];
+    expect(firstPurchaseKey, isNotNull);
+
+    // A retry for the same item must reuse the intent key, even after the
+    // in-flight guard is released.
+    await tester.pumpAndSettle();
+    await tester.tap(buyButton);
+    await tester.pumpAndSettle();
+    expect(actionTriggered, equals('purchase'));
+    expect(actionPayload?['idempotency_key'], equals(firstPurchaseKey));
+
+    await tester.tap(find.byKey(const Key('club-showroom-pick-watch-1')));
+    await tester.pumpAndSettle();
+
+    final Finder giftButton = find.byKey(const Key('club-showroom-gift-watch-1'));
+    expect(giftButton, findsOneWidget);
+    await tester.tap(giftButton);
+    await tester.pumpAndSettle();
+
+    final Finder recipientField = find.byKey(const Key('club-showroom-gift-recipient'));
+    expect(recipientField, findsOneWidget);
+    await tester.enterText(recipientField, 'recipient-user-id');
+    await tester.tap(find.byKey(const Key('club-showroom-gift-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(actionTriggered, equals('gift'));
+    expect(actionPayload?['asset_id'], equals('watch-1'));
+    expect(actionPayload?['recipient_ref'], equals('recipient-user-id'));
+  });
+
   test('all six starter models load at their source size', () async {
     TestWidgetsFlutterBinding.ensureInitialized();
     const Map<String, int> triangles = <String, int>{

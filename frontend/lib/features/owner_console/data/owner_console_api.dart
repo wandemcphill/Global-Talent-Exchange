@@ -8,6 +8,10 @@ class ShowroomExhibit {
     required this.category,
     required this.ownershipLabel,
     required this.fallbackLabel,
+    this.sku,
+    this.price,
+    this.supplyCap,
+    this.mintedCount,
     this.modelFile,
     this.previewFile,
     this.owned = false,
@@ -19,6 +23,10 @@ class ShowroomExhibit {
     category: '${json['category'] ?? 'watch'}',
     ownershipLabel: '${json['ownership_label'] ?? 'Not owned'}',
     fallbackLabel: '${json['fallback_label'] ?? 'Static card'}',
+    sku: _text(json['sku']),
+    price: _text(json['price']),
+    supplyCap: json['supply_cap'] == null ? null : _int(json['supply_cap']),
+    mintedCount: json['minted_count'] == null ? null : _int(json['minted_count']),
     modelFile: _text(json['model_file']),
     previewFile: _text(json['preview_file']),
     owned: json['owned'] == true,
@@ -29,6 +37,10 @@ class ShowroomExhibit {
   final String category;
   final String ownershipLabel;
   final String fallbackLabel;
+  final String? sku;
+  final String? price;
+  final int? supplyCap;
+  final int? mintedCount;
   final String? modelFile;
   final String? previewFile;
   final bool owned;
@@ -819,6 +831,8 @@ class OwnerConsoleApi implements OwnerConsoleReader {
       'case' => <String, Object?>{'rule_code': 'late_wages', 'allegation': 'Wages slipped', 'evidence': 'Ledger'},
       'list_auction' => <String, Object?>{'price': '1500'},
       'place_bid' => <String, Object?>{'amount': '2000'},
+      'purchase' => <String, Object?>{'owner_class': 'club'},
+      'gift' => <String, Object?>{},
       _ => <String, Object?>{},
     };
   }

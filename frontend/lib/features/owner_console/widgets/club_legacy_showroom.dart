@@ -14,10 +14,12 @@ class ClubLegacyShowroom extends StatefulWidget {
     super.key,
     required this.exhibits,
     this.forceStatic = false,
+    this.onAction,
   });
 
   final List<ShowroomExhibit> exhibits;
   final bool forceStatic;
+  final Future<void> Function(String action, Map<String, Object?> payload)? onAction;
 
   @override
   State<ClubLegacyShowroom> createState() => _ClubLegacyShowroomState();
@@ -29,6 +31,8 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
   double _pitch = 0;
   double _zoom = 1;
   int _ticket = 0;
+  final Map<String, String> _purchaseIdempotencyKeys = <String, String>{};
+  final Set<String> _pendingPurchases = <String>{};
   ShowroomGlb? _model;
   Object? _loadError;
 
@@ -52,6 +56,87 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
   }
 
   void _turn(double delta) => setState(() => _yaw += delta);
+
+  Future<void> _purchaseAsset(ShowroomExhibit exhibit) async {
+    final String? sku = exhibit.sku;
+    final Future<void> Function(String, Map<String, Object?>)? onAction = widget.onAction;
+    if (sku == null || onAction == null || _pendingPurchases.contains(exhibit.id)) {
+      return;
+    }
+    // Reuse the idempotency key across retries for this purchase intent.
+    final String idempotencyKey = _purchaseIdempotencyKeys.putIfAbsent(
+      exhibit.id,
+      () => 'buy_${sku}_${DateTime.now().microsecondsSinceEpoch}',
+    );
+    setState(() => _pendingPurchases.add(exhibit.id));
+    try {
+      await onAction('purchase', <String, Object?>{
+        'sku': sku,
+        'idempotency_key': idempotencyKey,
+        'owner_class': 'club',
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Purchase failed. Please try again.')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _pendingPurchases.remove(exhibit.id));
+      }
+    }
+  }
+
+  Future<void> _giftAsset(ShowroomExhibit exhibit) async {
+    final Future<void> Function(String, Map<String, Object?>)? onAction = widget.onAction;
+    if (onAction == null) {
+      return;
+    }
+    String recipientInput = '';
+    final String? recipientRef = await showDialog<String>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: Text('Gift ${exhibit.name}'),
+        content: TextField(
+          key: const Key('club-showroom-gift-recipient'),
+          autofocus: true,
+          onChanged: (String value) => recipientInput = value,
+          decoration: const InputDecoration(
+            labelText: 'Recipient GTEX user ID',
+            hintText: 'Enter the intended recipient ID',
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('club-showroom-gift-confirm'),
+            onPressed: () => Navigator.of(dialogContext).pop(recipientInput.trim()),
+            child: const Text('Send gift'),
+          ),
+        ],
+      ),
+    );
+    final String normalizedRef = (recipientRef ?? '').trim();
+    if (!mounted || normalizedRef.isEmpty) {
+      return;
+    }
+    try {
+      await onAction('gift', <String, Object?>{
+        'asset_id': exhibit.id,
+        'recipient_ref': normalizedRef,
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gift failed. Please check the recipient and try again.')),
+        );
+      }
+    }
+  }
 
   Future<void> _loadCurrent() async {
     final ShowroomExhibit? exhibit = _current;
@@ -165,6 +250,33 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
               fontSize: 12,
             ),
           ),
+          if (widget.onAction != null) ...<Widget>[
+            const SizedBox(height: GtexSpacing.sm),
+            Wrap(
+              spacing: GtexSpacing.xs,
+              children: <Widget>[
+                if (!exhibit.owned && exhibit.sku != null)
+                  GtexActionButton(
+                    key: Key('club-showroom-buy-${exhibit.sku}'),
+                    label: 'Buy ${exhibit.name}',
+                    icon: Icons.shopping_cart_rounded,
+                    compact: true,
+                    onPressed: _pendingPurchases.contains(exhibit.id)
+                        ? null
+                        : () => _purchaseAsset(exhibit),
+                  ),
+                if (exhibit.owned && !exhibit.id.startsWith('facility:'))
+                  GtexActionButton(
+                    key: Key('club-showroom-gift-${exhibit.id}'),
+                    label: 'Gift ${exhibit.name}',
+                    icon: Icons.card_giftcard_rounded,
+                    compact: true,
+                    secondary: true,
+                    onPressed: () => _giftAsset(exhibit),
+                  ),
+              ],
+            ),
+          ],
           if (!reduceMotion) ...<Widget>[
             const SizedBox(height: GtexSpacing.sm),
             Wrap(
@@ -460,9 +572,10 @@ class _ShowroomFullscreenState extends State<_ShowroomFullscreen> {
 }
 
 class ShowroomSection extends StatefulWidget {
-  const ShowroomSection({super.key, required this.load});
+  const ShowroomSection({super.key, required this.load, this.onAction});
 
   final Future<List<ShowroomExhibit>> Function() load;
+  final Future<void> Function(String action, [Map<String, Object?> payload])? onAction;
 
   @override
   State<ShowroomSection> createState() => _ShowroomSectionState();
@@ -475,6 +588,21 @@ class _ShowroomSectionState extends State<ShowroomSection> {
   void initState() {
     super.initState();
     _exhibits = widget.load();
+  }
+
+  void _reload() {
+    setState(() {
+      _exhibits = widget.load();
+    });
+  }
+
+  Future<void> _handleAction(String action, Map<String, Object?> payload) async {
+    if (widget.onAction != null) {
+      await widget.onAction!(action, payload);
+      if (mounted) {
+        _reload();
+      }
+    }
   }
 
   @override
@@ -492,11 +620,13 @@ class _ShowroomSectionState extends State<ShowroomSection> {
           );
         }
         if (snap.hasError || snap.data == null) {
-          return const ClubLegacyShowroom(
+          return ClubLegacyShowroom(
             forceStatic: true,
-            exhibits: <ShowroomExhibit>[
+            onAction: _handleAction,
+            exhibits: const <ShowroomExhibit>[
               ShowroomExhibit(
                 id: 'catalogue:gtex-jet-harbour',
+                sku: 'gtex-jet-harbour',
                 name: 'Harbour Jet',
                 category: 'jet',
                 ownershipLabel: 'Not owned',
@@ -504,6 +634,7 @@ class _ShowroomSectionState extends State<ShowroomSection> {
               ),
               ShowroomExhibit(
                 id: 'catalogue:gtex-coach-lagoon',
+                sku: 'gtex-coach-lagoon',
                 name: 'Lagoon Coach',
                 category: 'coach',
                 ownershipLabel: 'Not owned',
@@ -511,6 +642,7 @@ class _ShowroomSectionState extends State<ShowroomSection> {
               ),
               ShowroomExhibit(
                 id: 'catalogue:gtex-watch-icon',
+                sku: 'gtex-watch-icon',
                 name: 'Icon Watch',
                 category: 'watch',
                 ownershipLabel: 'Not owned',
@@ -519,7 +651,10 @@ class _ShowroomSectionState extends State<ShowroomSection> {
             ],
           );
         }
-        return ClubLegacyShowroom(exhibits: snap.data!);
+        return ClubLegacyShowroom(
+          exhibits: snap.data!,
+          onAction: _handleAction,
+        );
       },
     );
   }

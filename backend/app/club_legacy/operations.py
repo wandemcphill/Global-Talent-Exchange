@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from decimal import Decimal
-import random
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.club_legacy.delegation import (
@@ -14,7 +13,6 @@ from app.club_legacy.delegation import (
     policy_for,
     require_owner,
 )
-from app.club_legacy.ledger import post_club_legacy_transfer
 from app.club_legacy.models import (
     ClubLegacyAsset,
     ClubLegacyBid,
@@ -34,10 +32,8 @@ from app.club_legacy.models import (
     ClubLegacySponsorContract,
     ClubLegacyStake,
 )
-from app.club_legacy.ratings import development_score, prestige_score
 from app.models.club_profile import ClubProfile
 from app.owner_console import ledger
-from app.owner_console.models import OwnerClubState
 
 CATALOGUE = (
     {
@@ -179,8 +175,12 @@ def showroom(session: Session, club_id: str) -> dict:
         exhibits.append(
             {
                 "id": f"catalogue:{item.sku}",
+                "sku": item.sku,
                 "name": item.name,
                 "category": item.category,
+                "price": str(item.price),
+                "supply_cap": item.supply_cap,
+                "minted_count": item.minted_count,
                 "owner_class": None,
                 "ownership_label": "Not owned",
                 "status": "available",
@@ -219,8 +219,12 @@ def _asset_dict(session: Session, asset: ClubLegacyAsset) -> dict:
     item = session.get(ClubLegacyCatalogueItem, asset.catalogue_id)
     return {
         "id": asset.id,
+        "sku": item.sku if item else None,
         "name": item.name if item else "Asset",
         "category": item.category if item else None,
+        "price": str(item.price) if item else None,
+        "supply_cap": item.supply_cap if item else None,
+        "minted_count": item.minted_count if item else None,
         "owner_class": asset.owner_class,
         "owner_ref": asset.owner_ref,
         "status": asset.status,
@@ -317,9 +321,7 @@ def offer_gift(session: Session, *, asset_id: str, user_id: str, recipient_ref: 
     return impl(session, asset_id=asset_id, user_id=user_id, recipient_ref=recipient_ref)
 
 
-def resolve_gift(
-    session: Session, *, gift_id: str, accept: bool, actor_user_id: str | None = None
-) -> ClubLegacyGift:
+def resolve_gift(session: Session, *, gift_id: str, accept: bool, actor_user_id: str | None = None) -> ClubLegacyGift:
     from app.club_legacy.full.phase4 import resolve_gift as impl
 
     return impl(session, gift_id=gift_id, accept=accept, actor_user_id=actor_user_id)
@@ -427,7 +429,14 @@ def settle_preseason(session: Session, *, invite_id: str, tv_pool, gift_pool=0) 
 
 
 def offer_sponsor(
-    session: Session, *, club_id: str, user_id: str, sponsor_name: str, placement: str, fee, zones: list[str] | None = None
+    session: Session,
+    *,
+    club_id: str,
+    user_id: str,
+    sponsor_name: str,
+    placement: str,
+    fee,
+    zones: list[str] | None = None,
 ) -> ClubLegacySponsorContract:
     from app.club_legacy.full.phase6 import offer_sponsor as impl
 
@@ -811,6 +820,49 @@ def perform_desk_action(session: Session, club_id: str, user_id: str, action: st
             amount=payload.get("amount", "2000"),
         )
         return {"id": bid.id, "amount": str(bid.amount), "status": bid.status}
+    if action == "purchase":
+        sku = str(payload.get("sku") or "").strip()
+        if not sku:
+            raise LegacyError("sku_required", 400, "Choose the SKU to purchase.")
+        idempotency_key = str(payload.get("idempotency_key") or "").strip()
+        if not idempotency_key:
+            raise LegacyError("idempotency_key_required", 400, "An idempotency key is required.")
+        owner_class = str(payload.get("owner_class") or "club").strip()
+        asset = purchase_asset(
+            session,
+            club_id=club_id,
+            user_id=user_id,
+            sku=sku,
+            owner_class=owner_class,
+            idempotency_key=idempotency_key,
+        )
+        return {
+            "id": asset.id,
+            "status": asset.status,
+            "edition_number": asset.edition_number,
+            "owner_class": asset.owner_class,
+            "owner_ref": asset.owner_ref,
+        }
+    if action == "gift":
+        asset_id = str(payload.get("asset_id") or "").strip()
+        if not asset_id:
+            raise LegacyError("asset_required", 400, "Choose the asset to gift.")
+        recipient_ref = str(payload.get("recipient_ref") or "").strip()
+        if not recipient_ref:
+            raise LegacyError("recipient_required", 400, "Recipient reference is required.")
+        gift = offer_gift(
+            session,
+            asset_id=asset_id,
+            user_id=user_id,
+            recipient_ref=recipient_ref,
+        )
+        return {"id": gift.id, "asset_id": gift.asset_id, "status": gift.status, "recipient_ref": gift.recipient_ref}
+    if action == "accept_gift":
+        gift_id = str(payload.get("gift_id") or "").strip()
+        if not gift_id:
+            raise LegacyError("gift_required", 400, "Choose the gift to accept.")
+        gift = resolve_gift(session, gift_id=gift_id, accept=True, actor_user_id=user_id)
+        return {"id": gift.id, "asset_id": gift.asset_id, "status": gift.status, "recipient_ref": gift.recipient_ref}
     raise LegacyError("unknown_action", 404)
 
 
