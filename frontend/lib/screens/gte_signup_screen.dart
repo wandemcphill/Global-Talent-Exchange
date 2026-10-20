@@ -11,15 +11,6 @@ class GteSignupScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GtexAccountSelectorScreen(
-      onOpenCreatorAccessRequest: () {
-        Navigator.of(context).push<void>(
-          MaterialPageRoute<void>(
-            builder: (BuildContext context) =>
-                CreatorAccessRequestScreen(exchangeController: controller),
-          ),
-        );
-      },
-    );
+    return GtexUserSignupScreen(controller: controller);
   }
 }

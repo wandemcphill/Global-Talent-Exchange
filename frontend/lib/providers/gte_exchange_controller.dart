@@ -447,17 +447,20 @@ class GteExchangeController extends ChangeNotifier {
         return;
       }
       session = nextSession;
-      unawaited(
-        _refreshTradingState(
+      try {
+        await _refreshTradingState(
           playerId: selectedPlayer?.detail.playerId,
           refreshPlayer: selectedPlayer != null,
-        ),
-      );
+        );
+      } catch (_) {
+        // Non-critical background refresh failure does not block sign-in.
+      }
       unawaited(refreshCompliance());
     } catch (error) {
       if (_authGate.isActive(requestId)) {
         authError = AppFeedback.messageFor(error);
       }
+      rethrow;
     } finally {
       if (_authGate.isActive(requestId)) {
         isSigningIn = false;
@@ -500,6 +503,7 @@ class GteExchangeController extends ChangeNotifier {
       if (_authGate.isActive(requestId)) {
         authError = AppFeedback.messageFor(error);
       }
+      rethrow;
     } finally {
       if (_authGate.isActive(requestId)) {
         isSigningIn = false;

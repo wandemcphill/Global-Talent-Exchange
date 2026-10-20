@@ -457,7 +457,9 @@ class _CreatorAccessRequestScreenState
   Future<void> _openSignup() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => const GtexAccountSelectorScreen(),
+        builder: (BuildContext context) => GtexUserSignupScreen(
+          controller: widget.exchangeController,
+        ),
       ),
     );
     if (!mounted) {

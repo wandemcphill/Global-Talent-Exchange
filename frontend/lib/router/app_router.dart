@@ -146,18 +146,21 @@ GoRouter buildGtexAppRouter({
         path: '/auth',
         redirect:
             (BuildContext context, GoRouterState state) =>
-                gtexAccountSelectRoute,
+                gtexUserSignupRoute,
       ),
       GoRoute(
         path: gtexAccountSelectRoute,
-        pageBuilder:
+        redirect:
             (BuildContext context, GoRouterState state) =>
-                const NoTransitionPage<void>(
-                  child: GtexAccountSelectorScreen(),
-                ),
+                gtexUserSignupRoute,
       ),
       GoRoute(
         path: gtexLoginRoute,
+        redirect:
+            (BuildContext context, GoRouterState state) =>
+                controller.isAuthenticated
+                    ? const GteNavigationRoute.home().path
+                    : null,
         pageBuilder:
             (BuildContext context, GoRouterState state) =>
                 NoTransitionPage<void>(
@@ -169,10 +172,15 @@ GoRouter buildGtexAppRouter({
         path: gtexLegacyAccountSelectRoute,
         redirect:
             (BuildContext context, GoRouterState state) =>
-                gtexAccountSelectRoute,
+                gtexUserSignupRoute,
       ),
       GoRoute(
         path: gtexUserSignupRoute,
+        redirect:
+            (BuildContext context, GoRouterState state) =>
+                controller.isAuthenticated
+                    ? const GteNavigationRoute.home().path
+                    : null,
         pageBuilder:
             (BuildContext context, GoRouterState state) =>
                 NoTransitionPage<void>(
@@ -185,27 +193,15 @@ GoRouter buildGtexAppRouter({
       ),
       GoRoute(
         path: gtexCreatorSignupRoute,
-        pageBuilder:
+        redirect:
             (BuildContext context, GoRouterState state) =>
-                NoTransitionPage<void>(
-                  key: state.pageKey,
-                  child: GtexCreatorSignupScreen(
-                    controller: controller,
-                    config: config,
-                  ),
-                ),
+                gtexUserSignupRoute,
       ),
       GoRoute(
         path: gtexTraderSignupRoute,
-        pageBuilder:
+        redirect:
             (BuildContext context, GoRouterState state) =>
-                NoTransitionPage<void>(
-                  key: state.pageKey,
-                  child: GtexTraderSignupScreen(
-                    controller: controller,
-                    config: config,
-                  ),
-                ),
+                gtexUserSignupRoute,
       ),
       GoRoute(
         path: '/trader',

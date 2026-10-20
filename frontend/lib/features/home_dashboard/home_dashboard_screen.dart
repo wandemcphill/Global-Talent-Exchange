@@ -984,24 +984,18 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   Widget _buildNoClubState() {
     final bool isAuthenticated = widget.exchangeController.isAuthenticated;
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
-      child: Column(
-        children: <Widget>[
-          GteNoClubOnboardingView(
-            isAuthenticated: isAuthenticated,
-            onCreateClub: _createClubOnboardingAction(),
-            onBrowseClubMarket: _browseClubMarketOnboardingAction(),
-            onExploreArena: _arenaOnboardingAction(),
-            onOpenMatchday: _matchdayOnboardingAction(),
-            onOpenPlayerUniverse: _playerUniverseOnboardingAction(),
-            onOpenWorld: _worldOnboardingAction(),
-            onOpenWallet: _walletOnboardingAction(),
-            onEnterClub: widget.onOpenClubTab,
-          ),
-        ],
-      ),
+    return GteNoClubOnboardingView(
+      isAuthenticated: isAuthenticated,
+      onCreateClub: _createClubOnboardingAction(),
+      onBrowseClubMarket: _browseClubMarketOnboardingAction(),
+      onExploreArena: _arenaOnboardingAction(),
+      onOpenMatchday: _matchdayOnboardingAction(),
+      onOpenPlayerUniverse: _playerUniverseOnboardingAction(),
+      onOpenWorld: _worldOnboardingAction(),
+      onOpenWallet: _walletOnboardingAction(),
+      onEnterClub: widget.onOpenClubTab,
+      scrollable: false,
+      padding: EdgeInsets.zero,
     );
   }
 
