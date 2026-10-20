@@ -54,6 +54,14 @@ def response_hours(kind: str) -> int:
 
 
 def respond_by(item: OwnerInboxItem) -> datetime | None:
+    if getattr(item, "deadline_at", None):
+        return service.aware(item.deadline_at)
+    payload = item.payload_json or {}
+    if payload.get("respond_by"):
+        try:
+            return service.aware(datetime.fromisoformat(payload["respond_by"]))
+        except Exception:
+            pass
     if not item.is_decision or item.created_at is None:
         return None
     opened = service.aware(item.created_at)

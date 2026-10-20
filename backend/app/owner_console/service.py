@@ -270,11 +270,13 @@ def squad(session: Session, club_id: str, include_inactive: bool = False) -> lis
     return list(session.scalars(stmt.order_by(OwnerSquadPlayer.rating.desc())).all())
 
 
-def player_dict(p: OwnerSquadPlayer) -> dict[str, Any]:
+def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str, Any]:
+    from app.owner_console import storytelling
     return {
         "id": p.id,
         "player_ref": p.player_ref,
         "name": p.name,
+        "portrait_url": storytelling.resolve_player_portrait_url(session, p.id, p.name),
         "position": p.position,
         "age": p.age,
         "rating": p.rating,
@@ -497,6 +499,18 @@ def upgrade_facility(session: Session, user_id: str, club_id: str, kind: str) ->
         raise OwnerError(str(exc), 402) from exc
     facilities[kind] = level + 1
     state.facilities_json = facilities
+    from app.owner_console import storytelling
+    storytelling.record_verified_broadcast_event(
+        session,
+        event_type="facility_upgrade",
+        club_id=club_id,
+        owner_user_id=user_id,
+        item_name=f"{kind.title()} Facility Level {level + 1}",
+        item_image_url=storytelling.resolve_showroom_image_url(kind),
+        verified_price_gtex=cost,
+        idempotency_key=f"facility:{club_id}:{kind}:{level + 1}",
+        payload_json={"facility_kind": kind, "facility_level": level + 1},
+    )
     manager = dict(state.manager_json or {})
     if manager:
         manager["mood"] = int(engine.clamp(manager.get("mood", 70) + 6, 0, 100))
@@ -647,9 +661,27 @@ def _item(
     priority: str = "normal",
     prompt: str | None = None,
 ) -> tuple[OwnerInboxItem, str | None]:
+    from app.owner_console import storytelling
+    cat_map = {
+        "manager_meeting": "staff_recommendations",
+        "manager_request": "staff_recommendations",
+        "facility_request": "staff_recommendations",
+        "player_unrest": "player_issues",
+        "regen_breakthrough": "player_issues",
+        "scouting_report": "scouting_reports",
+        "contract_negotiation": "negotiations",
+        "transfer_bid": "negotiations",
+        "competition_invite": "scheduling",
+        "match_schedule": "scheduling",
+        "sponsor_opportunity": "requests",
+        "regen_endorsement": "requests",
+    }
+    resolved_category = cat_map.get(kind, "requests")
     item = OwnerInboxItem(
         user_id=user_id,
         club_id=club_id,
+        save_context_id=f"club:{club_id}" if club_id else None,
+        category=resolved_category,
         kind=kind,
         sender=sender,
         title=title,
@@ -1116,6 +1148,29 @@ def resolve_item(session: Session, user_id: str, item_id: str, action: str) -> O
     return item
 
 
+def mark_inbox_read(session: Session, user_id: str, item_id: str, is_read: bool = True) -> OwnerInboxItem:
+    item = session.get(OwnerInboxItem, item_id)
+    if not item or item.user_id != user_id:
+        raise OwnerError("item_not_found", 404, "Inbox item not found.")
+    item.is_read = is_read
+    item.read_at = datetime.now(timezone.utc) if is_read else None
+    session.flush()
+    return item
+
+
+def archive_inbox_item(session: Session, user_id: str, item_id: str, archive: bool = True) -> OwnerInboxItem:
+    item = session.get(OwnerInboxItem, item_id)
+    if not item or item.user_id != user_id:
+        raise OwnerError("item_not_found", 404, "Inbox item not found.")
+    item.archived_at = datetime.now(timezone.utc) if archive else None
+    if archive and item.status == "open":
+        item.status = "archived"
+    elif not archive and item.status == "archived":
+        item.status = "open"
+    session.flush()
+    return item
+
+
 def inbox_dict(item: OwnerInboxItem) -> dict[str, Any]:
     from app.owner_console.alerts import respond_by
 
@@ -1124,6 +1179,8 @@ def inbox_dict(item: OwnerInboxItem) -> dict[str, Any]:
         "respond_by": due.isoformat() if due else None,
         "id": item.id,
         "club_id": item.club_id,
+        "save_context_id": item.save_context_id or (f"club:{item.club_id}" if item.club_id else None),
+        "category": item.category or "requests",
         "kind": item.kind,
         "priority": item.priority,
         "sender": item.sender,
@@ -1135,6 +1192,10 @@ def inbox_dict(item: OwnerInboxItem) -> dict[str, Any]:
         "actions": item.actions_json,
         "payload": item.payload_json,
         "is_decision": item.is_decision,
+        "is_read": bool(item.is_read),
+        "read_at": item.read_at.isoformat() if item.read_at else None,
+        "archived_at": item.archived_at.isoformat() if item.archived_at else None,
+        "deadline_at": item.deadline_at.isoformat() if item.deadline_at else (due.isoformat() if due else None),
         "status": item.status,
         "resolution": item.resolution,
         "outcome": item.outcome_text,
@@ -1202,6 +1263,7 @@ def club_card(session: Session, state: OwnerClubState) -> dict[str, Any]:
 
 
 def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
+    from app.owner_console import storytelling
     state = require_state(session, club_id, user_id)
     deals = session.scalars(
         select(OwnerSponsorDeal).where(OwnerSponsorDeal.club_id == club_id).order_by(OwnerSponsorDeal.created_at.desc())
@@ -1217,7 +1279,7 @@ def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
             }
             for k in engine.FACILITY_KINDS
         },
-        "squad": [player_dict(p) for p in squad(session, club_id)],
+        "squad": [player_dict(p, session) for p in squad(session, club_id)],
         "health": club_health(session, state),
         "economy": ledger.club_economy(session, club_id),
         "sponsors": [
@@ -1235,6 +1297,7 @@ def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
         ],
         "disclosures": disclosures(session, club_id),
         "ownership_group": group_label(session, user_id),
+        "showroom": storytelling.get_club_showroom(session, user_id, club_id),
     }
 
 

@@ -106,6 +106,17 @@ def purchase_asset(
         amount=Decimal(item.price),
         description=f"Buy {item.name}",
     )
+    if item.category == "jet":
+        from app.owner_console import storytelling
+        storytelling.record_verified_broadcast_event(
+            session,
+            event_type="private_jet_purchase",
+            club_id=club_id,
+            owner_user_id=user_id,
+            item_name=item.name,
+            verified_price_gtex=Decimal(item.price),
+            idempotency_key=idempotency_key,
+        )
     session.flush()
     return asset
 
@@ -330,6 +341,23 @@ def resolve_gift(session: Session, *, gift_id: str, accept: bool, actor_user_id:
                 morale=RELATIONSHIP_MORALE,
             )
         )
+        from app.owner_console import storytelling
+        from app.owner_console.models import OwnerSquadPlayer
+        player = session.get(OwnerSquadPlayer, gift.recipient_ref)
+        catalogue_item = session.get(ClubLegacyCatalogueItem, asset.catalogue_id)
+        club_id = asset.club_id or (player.club_id if player else None)
+        if club_id and catalogue_item:
+            storytelling.record_verified_broadcast_event(
+                session,
+                event_type="player_gift",
+                club_id=club_id,
+                owner_user_id=gift.sender_user_id,
+                item_name=catalogue_item.name,
+                player_id=player.id if player else gift.recipient_ref,
+                player_name=player.name if player else None,
+                verified_price_gtex=Decimal(catalogue_item.price),
+                idempotency_key=f"legacy-gift:{gift.id}",
+            )
     else:
         asset.status = "owned"
         gift.status = "declined"

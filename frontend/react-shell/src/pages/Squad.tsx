@@ -76,6 +76,7 @@ function SquadCards({ club }: any) {
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3" data-testid="squad-cards">
       {club.squad.map((p: any) => (
         <PlayerCard key={p.id} testid={`squad-card-${p.id}`} name={p.name} rating={p.rating} potential={p.potential} position={p.position} age={p.age} regen={p.is_regen}
+          image={p.portrait_url}
           badge={p.status === "listed" ? "Listed" : p.injured_days > 0 ? "Injured" : undefined}
           onClick={!p.is_regen && p.player_ref ? () => setOpen(p.player_ref) : undefined}
           stats={[{ k: "Morale", v: p.morale }, { k: "Mins", v: p.minutes }, { k: "Value", v: fmt(p.value_coin) }]} />
@@ -108,9 +109,9 @@ function SquadTable({ club }: any) {
                 <td className="capitalize">{p.position}</td>
                 <td className="gx-mono">{p.age}</td>
                 <td className="gx-mono">{p.rating}<span className="text-slate-500">/{p.potential}</span></td>
-                <td className={`gx-mono ${p.morale >= 65 ? "text-emerald-300" : p.morale >= 45 ? "text-amber-300" : "text-red-300"}`}>{p.morale}</td>
+                <td className="gx-mono">{p.morale}</td>
                 <td className="gx-mono">{p.minutes}</td>
-                <td><Coin amount={p.value_coin} /></td>
+                <td className="gx-mono font-medium text-emerald-300">{fmt(p.value_coin)}</td>
               </tr>
             ))}
           </tbody>
@@ -127,7 +128,7 @@ export default function Squad() {
   if (isLoading || !club) return <Loading />;
   return (
     <div data-testid="squad-page">
-      <PageHeader eyebrow="Manager & squad" title={club.club_name} sub="Decisions are structural: appoint the right football brain, set the default mentality, and keep morale healthy." />
+      <PageHeader eyebrow="Tactics & roster" title={club.club_name} sub={`${club.squad.length} registered players · Wage bill ${fmt(club.wage_bill)} GTX / match`} />
       <div className="grid gap-6 lg:grid-cols-12">
         <ManagerSheet club={club} />
         <SquadTable club={club} />

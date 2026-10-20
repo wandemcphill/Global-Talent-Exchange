@@ -1,13 +1,16 @@
 import React from "react";
 import { NavLink, Navigate, Outlet, useNavigate } from "react-router-dom";
-import { Building2, Flag, Gauge, Inbox, LogOut, Shield, Shirt, ShoppingBag, Sprout, Trophy, Wallet } from "lucide-react";
+import { BookOpen, Building2, Flag, Gauge, Inbox, LogOut, Newspaper, Shield, Shirt, ShoppingBag, Sprout, Trophy, Wallet } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { fmt, useActiveClub, useControlCenter } from "@/lib/owner";
 import { Loading } from "@/components/gtex/ui";
+import { GlobalLiveTicker } from "@/components/gtex/GlobalLiveTicker";
 
 const NAV = [
   { to: "/app", label: "Control Center", icon: Gauge, end: true, id: "home" },
   { to: "/app/clubs", label: "My Clubs", icon: Building2, id: "clubs" },
+  { to: "/app/story", label: "Club Story", icon: BookOpen, id: "story" },
+  { to: "/app/newsroom", label: "Newsroom", icon: Newspaper, id: "newsroom" },
   { to: "/app/market", label: "Market & Transfers", icon: ShoppingBag, id: "market" },
   { to: "/app/competitions", label: "Competitions", icon: Trophy, id: "competitions" },
   { to: "/app/squad", label: "Manager & Squad", icon: Shirt, id: "squad" },
@@ -100,6 +103,8 @@ export default function AppShell() {
             ))}
           </nav>
         </header>
+        {/* Global Live Wire Ticker */}
+        <GlobalLiveTicker />
         <main className="mx-auto max-w-[1400px] px-4 py-8 sm:px-8">
           <Outlet />
         </main>

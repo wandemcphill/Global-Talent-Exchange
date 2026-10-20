@@ -61,6 +61,14 @@ def commentary_topic(match_id: str) -> str:
     return f"commentary:{match_id}"
 
 
+def global_ticker_topic() -> str:
+    return "global_ticker"
+
+
+def save_context_topic(save_context_id: str) -> str:
+    return f"save:{save_context_id}"
+
+
 class RealtimeHub:
     def __init__(self) -> None:
         self.total_events = 0
@@ -266,6 +274,21 @@ class RealtimeHub:
 
     def _map_domain_event(self, event: DomainEvent) -> list[RealtimeDispatch]:
         payload = dict(event.payload or {})
+        if event.name == "storytelling.ticker.broadcast":
+            topics = ["global_ticker"]
+            save_ctx = _optional_string(payload.get("save_context_id"))
+            if save_ctx:
+                topics.append(f"save:{save_ctx}")
+            club_id = _optional_string(payload.get("club_id"))
+            if club_id:
+                topics.append(f"club:{club_id}")
+            return [
+                RealtimeDispatch(
+                    type="global_ticker_announcement",
+                    topics=tuple(topics),
+                    data=payload,
+                )
+            ]
         if event.name == "wallet.balance.updated":
             owner_user_id = _optional_string(payload.get("owner_user_id"))
             if owner_user_id is None:
@@ -494,6 +517,15 @@ def _payload_for_dispatch(dispatch: RealtimeDispatch) -> dict[str, Any]:
         "source_tag": REALTIME_SOURCE_TAG,
         "published_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+
+
+def publish_realtime_domain_event(name: str, payload: dict[str, Any], **kwargs: Any) -> None:
+    from app.core.container import container
+    from app.core.events import DomainEvent
+    if container and container.realtime:
+        container.realtime.handle_event(DomainEvent(name=name, payload={**payload, **kwargs}))
 
 
 __all__ = [

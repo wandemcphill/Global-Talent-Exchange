@@ -145,12 +145,15 @@ def post_event(session: Session, event: LedgerEvent) -> None:
 def transition(session: Session, event: LedgerEvent, new_status: str) -> LedgerEvent:
     if event.status == new_status:
         return event
-    if event.status not in ("pending_review", "held"):
+    if event.status not in ("pending_review", "held", "completed"):
         raise LedgerError("event_not_pending")
     if new_status == "completed":
         _post(session, event, HELD, event.destination_account, D(event.net_amount), D(event.platform_fee), "release")
     elif new_status == "reversed":
-        _post(session, event, HELD, event.source_account, D(event.gross_amount), D(0), "reverse")
+        source = event.destination_account if event.status == "completed" else HELD
+        _post(session, event, source, event.source_account, D(event.gross_amount), D(0), "reverse")
+        from app.owner_console import storytelling
+        storytelling.reverse_broadcast_events_for_ledger(session, event.id)
     elif new_status not in ("pending_review", "held"):
         raise LedgerError("invalid_transition")
     event.status = new_status

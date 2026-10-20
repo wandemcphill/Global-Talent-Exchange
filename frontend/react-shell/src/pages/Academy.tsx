@@ -21,6 +21,7 @@ function RegenCard({ p }: any) {
   return (
     <div data-testid={`regen-card-${p.id}`} className="grid gap-4 rounded-md border border-white/10 bg-slate-950/40 p-4 sm:grid-cols-[180px_1fr]">
       <PlayerCard name={p.name} rating={p.rating} potential={p.potential} position={p.position} age={p.age} regen
+        image={p.portrait_url}
         badge={pressure >= 60 ? "Unsettled" : ceiling >= 15 ? "Wonderkid" : "Academy"}
         stats={[{ k: "Ceiling", v: `+${ceiling}` }, { k: "Morale", v: p.morale }, { k: "Value", v: fmt(p.value_coin) }]} />
       <div className="min-w-0">
@@ -61,20 +62,17 @@ export default function Academy() {
   }, [club]);
   if (isLoading || !club) return <Loading />;
   const regens = club.squad.filter((p: any) => p.is_regen);
-  const closePack = () => {
-    localStorage.setItem(seenKey(club.club_id), JSON.stringify(Array.from(new Set([...readSeen(club.club_id), ...regens.map((r: any) => r.id)]))));
+  const dismissPack = () => {
+    const next = Array.from(new Set([...readSeen(club.club_id), ...pack.map((p) => p.id)]));
+    localStorage.setItem(seenKey(club.club_id), JSON.stringify(next));
     setPack([]);
   };
-  const run = async (kind: string) => {
-    setBusy(kind);
+  const scoutIntake = async () => {
+    setBusy("intake");
     try {
-      if (kind === "intake") {
-        const { data } = await api.post(`/owner/clubs/${club.club_id}/academy/intake`);
-        toast.success(`${data.regens.length} new regens joined the academy`);
-      } else {
-        await api.post(`/owner/clubs/${club.club_id}/advance`);
-        toast.success("World day advanced: growth applied");
-      }
+      const { data } = await api.post(`/owner/clubs/${club.club_id}/academy/intake`);
+      toast.success(`Academy intake signed ${data.regens.length} new youth regens.`);
+      setPack(data.regens);
       refresh();
     } catch (e) {
       toast.error(errMsg(e));
@@ -82,24 +80,18 @@ export default function Academy() {
       setBusy("");
     }
   };
-  const academyLevel = club.facilities.academy.level;
   return (
     <div data-testid="academy-page">
-      {pack.length > 0 && <PackReveal regens={pack} onClose={closePack} />}
-      <PageHeader eyebrow="Academy / regens" title="The youth pipeline" sub="Regens grow from facilities, manager youth skill, playing time, competition quality, morale and club prestige. Ambitious regens left on the bench will push for a move."
-        action={<div className="flex gap-2"><Btn variant="secondary" disabled={!!busy} onClick={() => run("advance")} data-testid="academy-advance-button">Advance world day</Btn><Btn disabled={!!busy} onClick={() => run("intake")} data-testid="academy-intake-button"><Sprout size={14} />Scout intake · {fmt(1500 * academyLevel)} GTX</Btn></div>} />
-      <Panel className="mb-6" testid="growth-inputs">
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-5 text-sm">
-          <div><p className="gx-label">Training</p><p className="gx-mono text-white">L{club.facilities.training.level}</p></div>
-          <div><p className="gx-label">Academy</p><p className="gx-mono text-white">L{academyLevel}</p></div>
-          <div><p className="gx-label">Manager youth skill</p><p className="gx-mono text-white">{club.manager_profile?.youth_development}/20</p></div>
-          <div><p className="gx-label">Prestige</p><p className="gx-mono text-white">{club.health.prestige}</p></div>
-          <div><p className="gx-label">Academy value</p><Coin amount={regens.reduce((s: number, p: any) => s + Number(p.value_coin), 0)} /></div>
-        </div>
-      </Panel>
-      {regens.length === 0 ? <Empty title="No regens yet" body="Run a scouting intake to bring in your first academy prospects." /> : (
-        <div className="grid gap-4 xl:grid-cols-2">{regens.map((p: any) => <RegenCard key={p.id} p={p} />)}</div>
-      )}
+      <PageHeader eyebrow="Regen incubator" title="Youth academy" sub="AI-generated regen players enter your academy. Facility levels decide the size and potential ceiling of your intake class."
+        action={<Btn variant="primary" disabled={!!busy} onClick={scoutIntake} data-testid="scout-intake-button"><Sprout size={14} />{busy === "intake" ? "Signing…" : "Scout new intake"}</Btn>} />
+      {pack.length > 0 && <PackReveal players={pack} onDismiss={dismissPack} />}
+      <div className="space-y-4">
+        {regens.length === 0 ? <Empty title="No academy players yet" body="Run an intake to discover new talent." /> : (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {regens.map((p: any) => <RegenCard key={p.id} p={p} />)}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

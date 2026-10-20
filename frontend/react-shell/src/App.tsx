@@ -19,6 +19,8 @@ import InboxPage from "@/pages/Inbox";
 import Admin from "@/pages/Admin";
 import PaymentCallback from "@/pages/PaymentCallback";
 import NationalTeam from "@/pages/NationalTeam";
+import { ClubStory } from "@/pages/ClubStory";
+import { Newsroom } from "@/pages/Newsroom";
 import { ROUTER_BASENAME } from "@/lib/publicPath";
 
 export default function App() {
@@ -34,6 +36,9 @@ export default function App() {
           <Route path="/app" element={<AppShell />}>
             <Route index element={<ControlCenter />} />
             <Route path="clubs" element={<MyClubs />} />
+            <Route path="story" element={<ClubStory />} />
+            <Route path="clubs/:clubId/story" element={<ClubStory />} />
+            <Route path="newsroom" element={<Newsroom />} />
             <Route path="market" element={<Market />} />
             <Route path="competitions" element={<Competitions />} />
             <Route path="competitions/:id" element={<CompetitionDetail />} />

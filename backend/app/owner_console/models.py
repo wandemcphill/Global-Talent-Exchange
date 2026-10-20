@@ -67,7 +67,13 @@ class OwnerInboxItem(UUIDPrimaryKeyMixin, Base):
     ai_generated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     actions_json: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    save_context_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    category: Mapped[str] = mapped_column(String(40), nullable=False, default="requests", index=True)
     is_decision: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="open")
     resolution: Mapped[str | None] = mapped_column(String(40), nullable=True)
     outcome_text: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -224,6 +230,75 @@ class SupportUnitHolding(UUIDPrimaryKeyMixin, Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
 
+
+
+class OwnerBroadcastEvent(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "owner_broadcast_events"
+
+    save_context_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    club_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    club_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    club_crest_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    owner_user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    owner_display_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(48), nullable=False, index=True)
+    item_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    item_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    item_image_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    player_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    player_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    player_portrait_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    verified_price_gtex: Mapped[Decimal | None] = mapped_column(Numeric(20, 4), nullable=True)
+    currency: Mapped[str] = mapped_column(String(16), nullable=False, default="GTEX")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active", index=True)
+    headline: Mapped[str] = mapped_column(String(200), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    ledger_event_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, unique=True, index=True)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class OwnerNewsroomArticle(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "owner_newsroom_articles"
+
+    save_context_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    club_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    visibility: Mapped[str] = mapped_column(String(16), nullable=False, default="global", index=True)
+    category: Mapped[str] = mapped_column(String(40), nullable=False, default="editorial", index=True)
+    headline: Mapped[str] = mapped_column(String(220), nullable=False)
+    subheadline: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    hero_image_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    club_crest_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    player_portrait_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    established_facts_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    editorial_narration: Mapped[str] = mapped_column(Text, nullable=False)
+    grounding_report_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    verified_price_gtex: Mapped[Decimal | None] = mapped_column(Numeric(20, 4), nullable=True)
+    source_event_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="published", index=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class OwnerScoutingWatchlist(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "owner_scouting_watchlists"
+
+    club_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    save_context_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    player_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    player_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    position: Mapped[str] = mapped_column(String(16), nullable=False, default="MID")
+    age: Mapped[int] = mapped_column(Integer, nullable=False, default=18)
+    current_rating: Mapped[int] = mapped_column(Integer, nullable=False, default=65)
+    potential_rating: Mapped[int] = mapped_column(Integer, nullable=False, default=80)
+    estimated_value_gtex: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False, default=Decimal("100"))
+    priority: Mapped[str] = mapped_column(String(16), nullable=False, default="medium")
+    scout_notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    recommendation: Mapped[str] = mapped_column(String(120), nullable=False, default="Monitor")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
 OWNER_CONSOLE_TABLES = (
     OwnerClubState.__table__,
     OwnerSquadPlayer.__table__,
@@ -237,4 +312,7 @@ OWNER_CONSOLE_TABLES = (
     OwnerMatch.__table__,
     OwnerSponsorDeal.__table__,
     SupportUnitHolding.__table__,
+    OwnerBroadcastEvent.__table__,
+    OwnerNewsroomArticle.__table__,
+    OwnerScoutingWatchlist.__table__,
 )
