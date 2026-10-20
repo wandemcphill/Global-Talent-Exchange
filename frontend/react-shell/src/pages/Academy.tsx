@@ -84,7 +84,7 @@ export default function Academy() {
     <div data-testid="academy-page">
       <PageHeader eyebrow="Regen incubator" title="Youth academy" sub="AI-generated regen players enter your academy. Facility levels decide the size and potential ceiling of your intake class."
         action={<Btn variant="primary" disabled={!!busy} onClick={scoutIntake} data-testid="scout-intake-button"><Sprout size={14} />{busy === "intake" ? "Signing…" : "Scout new intake"}</Btn>} />
-      {pack.length > 0 && <PackReveal players={pack} onDismiss={dismissPack} />}
+      {pack.length > 0 && <PackReveal regens={pack} players={pack} onClose={dismissPack} onDismiss={dismissPack} />}
       <div className="space-y-4">
         {regens.length === 0 ? <Empty title="No academy players yet" body="Run an intake to discover new talent." /> : (
           <div className="grid gap-4 lg:grid-cols-2">

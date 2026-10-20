@@ -32,15 +32,24 @@ def upgrade() -> None:
         if "save_context_id" not in inbox_cols:
             op.add_column("owner_inbox_items", sa.Column("save_context_id", sa.String(64), nullable=True, index=True))
         if "category" not in inbox_cols:
-            op.add_column("owner_inbox_items", sa.Column("category", sa.String(40), nullable=False, server_default="requests", index=True))
+            op.add_column(
+                "owner_inbox_items",
+                sa.Column("category", sa.String(40), nullable=False, server_default="requests", index=True),
+            )
         if "is_read" not in inbox_cols:
-            op.add_column("owner_inbox_items", sa.Column("is_read", sa.Boolean(), nullable=False, server_default=sa.text("false")))
+            op.add_column(
+                "owner_inbox_items", sa.Column("is_read", sa.Boolean(), nullable=False, server_default=sa.text("false"))
+            )
         if "read_at" not in inbox_cols:
             op.add_column("owner_inbox_items", sa.Column("read_at", sa.DateTime(timezone=True), nullable=True))
         if "archived_at" not in inbox_cols:
-            op.add_column("owner_inbox_items", sa.Column("archived_at", sa.DateTime(timezone=True), nullable=True, index=True))
+            op.add_column(
+                "owner_inbox_items", sa.Column("archived_at", sa.DateTime(timezone=True), nullable=True, index=True)
+            )
         if "deadline_at" not in inbox_cols:
-            op.add_column("owner_inbox_items", sa.Column("deadline_at", sa.DateTime(timezone=True), nullable=True, index=True))
+            op.add_column(
+                "owner_inbox_items", sa.Column("deadline_at", sa.DateTime(timezone=True), nullable=True, index=True)
+            )
 
     # 2. owner_broadcast_events table
     if "owner_broadcast_events" not in tables:

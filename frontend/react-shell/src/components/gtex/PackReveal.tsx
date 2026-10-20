@@ -28,21 +28,30 @@ function Burst() {
   );
 }
 
-export function PackReveal({ regens, onClose }: { regens: any[]; onClose: () => void }) {
+export interface PackRevealProps {
+  regens?: any[];
+  players?: any[];
+  onClose?: () => void;
+  onDismiss?: () => void;
+}
+
+export function PackReveal({ regens, players, onClose, onDismiss }: PackRevealProps) {
+  const items = regens ?? players ?? [];
+  const handleClose = onClose ?? onDismiss ?? (() => {});
   const [step, setStep] = useState(-1);
-  const done = step >= regens.length;
-  const current = regens[step];
+  const done = step >= items.length;
+  const current = items[step];
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") handleClose(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  if (!regens.length) return null;
+  }, [handleClose]);
+  if (!items.length) return null;
   const star = current && current.potential - current.rating >= 15;
   return (
     <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-black/85 px-4 backdrop-blur-md" data-testid="pack-reveal">
       <AnimatePresence mode="wait">
-        {step === -1 && <SealedPack key="pack" count={regens.length} onOpen={() => setStep(0)} />}
+        {step === -1 && <SealedPack key="pack" count={items.length} onOpen={() => setStep(0)} />}
         {current && (
           <motion.div key={current.id} className="relative flex flex-col items-center" data-testid={`pack-reveal-card-${current.id}`}
             initial={{ rotateY: 90, scale: 0.7, opacity: 0 }} animate={{ rotateY: 0, scale: 1, opacity: 1 }} exit={{ x: -120, opacity: 0, scale: 0.8 }}
@@ -53,14 +62,14 @@ export function PackReveal({ regens, onClose }: { regens: any[]; onClose: () => 
               <PlayerCard name={current.name} rating={current.rating} potential={current.potential} position={current.position} age={current.age} regen badge={star ? "Wonderkid" : "Academy"}
                 stats={[{ k: "Ceiling", v: `+${Math.max(0, current.potential - current.rating)}` }, { k: "Morale", v: current.morale }, { k: "Value", v: fmt(current.value_coin) }]} />
             </div>
-            <p className="gx-mono mt-4 text-xs text-slate-400">{step + 1} / {regens.length}</p>
+            <p className="gx-mono mt-4 text-xs text-slate-400">{step + 1} / {items.length}</p>
           </motion.div>
         )}
         {done && (
           <motion.div key="summary" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-4xl text-center" data-testid="pack-summary">
             <p className="gx-display mb-5 text-2xl font-black uppercase text-white">Your new academy intake</p>
             <div className="mx-auto grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              {regens.map((r, i) => (
+              {items.map((r, i) => (
                 <motion.div key={r.id} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}>
                   <PlayerCard name={r.name} rating={r.rating} potential={r.potential} position={r.position} age={r.age} regen />
                 </motion.div>
@@ -70,9 +79,9 @@ export function PackReveal({ regens, onClose }: { regens: any[]; onClose: () => 
         )}
       </AnimatePresence>
       <div className="mt-8 flex gap-3">
-        {step >= 0 && !done && <Btn onClick={() => setStep(step + 1)} data-testid="pack-next">{step + 1 === regens.length ? "See all" : "Next prospect"}</Btn>}
-        {step >= 0 && !done && <Btn variant="ghost" onClick={() => setStep(regens.length)} data-testid="pack-skip">Skip</Btn>}
-        {(done || step === -1) && <Btn variant={done ? "primary" : "ghost"} onClick={onClose} data-testid="pack-close">{done ? "Welcome them to the club" : "Later"}</Btn>}
+        {step >= 0 && !done && <Btn onClick={() => setStep(step + 1)} data-testid="pack-next">{step + 1 === items.length ? "See all" : "Next prospect"}</Btn>}
+        {step >= 0 && !done && <Btn variant="ghost" onClick={() => setStep(items.length)} data-testid="pack-skip">Skip</Btn>}
+        {(done || step === -1) && <Btn variant={done ? "primary" : "ghost"} onClick={handleClose} data-testid="pack-close">{done ? "Welcome them to the club" : "Later"}</Btn>}
       </div>
     </div>
   );

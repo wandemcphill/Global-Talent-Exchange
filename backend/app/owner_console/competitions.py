@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import secrets
 from decimal import Decimal
 from typing import Any
@@ -16,6 +17,10 @@ from app.owner_console.models import (
     OwnerSponsorDeal,
 )
 from app.owner_console.engine import club_strength
+
+logger = logging.getLogger(__name__)
+
+
 from app.owner_console.service import (
     OwnerError,
     get_state,
@@ -580,6 +585,7 @@ def play_next(
             (away_e if winner_home else home_e).eliminated = True
         m.narrative_json = narrative
         from app.owner_console import storytelling
+
         if home.get("state") and away.get("state"):
             try:
                 storytelling.record_match_news_article(session, m, home["state"], away["state"])

@@ -9,7 +9,6 @@ import pytest
 from sqlalchemy import select
 
 from app.admin_engine.service import AdminEngineService
-from app.club_legacy.full.phase4 import offer_gift, purchase_asset, resolve_gift
 from app.club_legacy.operations import seed_catalogue
 from app.models.admin_rules import AdminFeatureFlag
 from app.models.user import User
@@ -19,7 +18,6 @@ from app.owner_console.models import (
     OwnerBroadcastEvent,
     OwnerInboxItem,
     OwnerNewsroomArticle,
-    OwnerSquadPlayer,
 )
 from app.owner_console.service import OwnerError
 
@@ -437,7 +435,9 @@ def test_club_story_and_shared_save_privacy_isolation(client, bootstrap_admin_he
         open_comp = session.scalar(select(comps.OwnerCompetition).where(comps.OwnerCompetition.status == "open"))
         if open_comp:
             try:
-                comps.enter_competition(session, service.get_state(session, club_a_id).owner_user_id, open_comp.id, club_a_id)
+                comps.enter_competition(
+                    session, service.get_state(session, club_a_id).owner_user_id, open_comp.id, club_a_id
+                )
             except Exception:
                 pass
             try:

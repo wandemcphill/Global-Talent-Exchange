@@ -153,6 +153,7 @@ def transition(session: Session, event: LedgerEvent, new_status: str) -> LedgerE
         source = event.destination_account if event.status == "completed" else HELD
         _post(session, event, source, event.source_account, D(event.gross_amount), D(0), "reverse")
         from app.owner_console import storytelling
+
         storytelling.reverse_broadcast_events_for_ledger(session, event.id)
     elif new_status not in ("pending_review", "held"):
         raise LedgerError("invalid_transition")

@@ -272,6 +272,7 @@ def squad(session: Session, club_id: str, include_inactive: bool = False) -> lis
 
 def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str, Any]:
     from app.owner_console import storytelling
+
     return {
         "id": p.id,
         "player_ref": p.player_ref,
@@ -500,6 +501,7 @@ def upgrade_facility(session: Session, user_id: str, club_id: str, kind: str) ->
     facilities[kind] = level + 1
     state.facilities_json = facilities
     from app.owner_console import storytelling
+
     storytelling.record_verified_broadcast_event(
         session,
         event_type="facility_upgrade",
@@ -661,7 +663,7 @@ def _item(
     priority: str = "normal",
     prompt: str | None = None,
 ) -> tuple[OwnerInboxItem, str | None]:
-    from app.owner_console import storytelling
+
     cat_map = {
         "manager_meeting": "staff_recommendations",
         "manager_request": "staff_recommendations",
@@ -1264,6 +1266,7 @@ def club_card(session: Session, state: OwnerClubState) -> dict[str, Any]:
 
 def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
     from app.owner_console import storytelling
+
     state = require_state(session, club_id, user_id)
     deals = session.scalars(
         select(OwnerSponsorDeal).where(OwnerSponsorDeal.club_id == club_id).order_by(OwnerSponsorDeal.created_at.desc())

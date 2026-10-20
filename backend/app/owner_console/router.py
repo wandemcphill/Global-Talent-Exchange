@@ -93,7 +93,7 @@ class WatchlistAddRequest(BaseModel):
     estimated_value_gtex: float = 120.0
     priority: str = "medium"
     scout_notes: str = ""
-    recommendation: str = "Monitor closely" 
+    recommendation: str = "Monitor closely"
 
 
 class EnterRequest(BaseModel):

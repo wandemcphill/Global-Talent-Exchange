@@ -519,11 +519,10 @@ def _payload_for_dispatch(dispatch: RealtimeDispatch) -> dict[str, Any]:
     }
 
 
-
-
 def publish_realtime_domain_event(name: str, payload: dict[str, Any], **kwargs: Any) -> None:
     from app.core.container import container
     from app.core.events import DomainEvent
+
     if container and container.realtime:
         container.realtime.handle_event(DomainEvent(name=name, payload={**payload, **kwargs}))
 

@@ -108,6 +108,7 @@ def purchase_asset(
     )
     if item.category == "jet":
         from app.owner_console import storytelling
+
         storytelling.record_verified_broadcast_event(
             session,
             event_type="private_jet_purchase",
@@ -343,6 +344,7 @@ def resolve_gift(session: Session, *, gift_id: str, accept: bool, actor_user_id:
         )
         from app.owner_console import storytelling
         from app.owner_console.models import OwnerSquadPlayer
+
         player = session.get(OwnerSquadPlayer, gift.recipient_ref)
         catalogue_item = session.get(ClubLegacyCatalogueItem, asset.catalogue_id)
         club_id = asset.club_id or (player.club_id if player else None)

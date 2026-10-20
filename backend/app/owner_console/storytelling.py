@@ -183,6 +183,7 @@ def resolve_club_crest_url(session: Session, club_id: str, club_name: str | None
         f"</svg>"
     )
     import urllib.parse
+
     return f"data:image/svg+xml;utf8,{urllib.parse.quote(svg)}"
 
 
@@ -212,6 +213,7 @@ def resolve_player_portrait_url(session: Session | None, player_id: str, player_
         f"</svg>"
     )
     import urllib.parse
+
     return f"data:image/svg+xml;utf8,{urllib.parse.quote(svg)}"
 
 
@@ -340,7 +342,7 @@ def build_grounded_editorial(
         hc = established_facts.get("home_club", "Home")
         ac = established_facts.get("away_club", "Away")
         headline = f"Full Time: {hc} {hg} – {ag} {ac}"
-        subheadline = f"Fixture committed to official competition standings."
+        subheadline = "Fixture committed to official competition standings."
         narration = (
             f"The final whistle blew on a contested fixture between {hc} and {ac}, concluding at {hg}–{ag}. "
             f"Match points and official matchday performance logs have committed to the league table."
@@ -386,16 +388,10 @@ def record_verified_broadcast_event(
     state = _get_club_state(session, club_id)
     club_name = state.club_name if state else "GTEX Club"
     owner_user = session.get(User, owner_user_id)
-    owner_display = (
-        (owner_user.display_name or owner_user.username) if owner_user else "Club Ownership"
-    )
+    owner_display = (owner_user.display_name or owner_user.username) if owner_user else "Club Ownership"
     save_ctx = save_context_id or resolve_save_context_id(session, club_id)
 
-    price_dec = (
-        Decimal(str(verified_price_gtex))
-        if verified_price_gtex is not None
-        else Decimal("0.0000")
-    )
+    price_dec = Decimal(str(verified_price_gtex)) if verified_price_gtex is not None else Decimal("0.0000")
 
     if not headline:
         if event_type == "private_jet_purchase":
@@ -648,7 +644,11 @@ def record_match_news_article(
         "away_club": away_name,
         "home_goals": match.home_score,
         "away_goals": match.away_score,
-        "winner": home_name if match.home_score > match.away_score else (away_name if match.away_score > match.home_score else "Draw"),
+        "winner": (
+            home_name
+            if match.home_score > match.away_score
+            else (away_name if match.away_score > match.home_score else "Draw")
+        ),
     }
     hl, sub, narr = build_grounded_editorial("match_report", facts)
     grounding = validate_article_grounding(facts, narr)
@@ -674,32 +674,38 @@ def record_match_news_article(
 
 
 def get_club_showroom(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
-    state = require_state(session, club_id, user_id)
+    require_state(session, club_id, user_id)
     items = []
     for k, v in SHOWROOM_CATALOG.items():
-        items.append({
-            **v,
-            "image_url": resolve_showroom_image_url(k),
-        })
+        items.append(
+            {
+                **v,
+                "image_url": resolve_showroom_image_url(k),
+            }
+        )
     owned = []
     # Fetch from OwnerBroadcastEvent or asset table
     b_rows = session.scalars(
-        select(OwnerBroadcastEvent).where(
+        select(OwnerBroadcastEvent)
+        .where(
             OwnerBroadcastEvent.club_id == club_id,
             OwnerBroadcastEvent.status == "active",
-        ).order_by(OwnerBroadcastEvent.created_at.desc())
+        )
+        .order_by(OwnerBroadcastEvent.created_at.desc())
     ).all()
     for b in b_rows:
-        owned.append({
-            "id": b.id,
-            "catalog_key": b.event_type,
-            "custom_name": b.item_name,
-            "category": "jet" if b.event_type == "private_jet_purchase" else b.event_type,
-            "purchase_price_gtex": float(b.verified_price_gtex or 0),
-            "gifted_to_player_name": b.player_name,
-            "image_url": b.item_image_url,
-            "created_at": b.created_at.isoformat() if b.created_at else None,
-        })
+        owned.append(
+            {
+                "id": b.id,
+                "catalog_key": b.event_type,
+                "custom_name": b.item_name,
+                "category": "jet" if b.event_type == "private_jet_purchase" else b.event_type,
+                "purchase_price_gtex": float(b.verified_price_gtex or 0),
+                "gifted_to_player_name": b.player_name,
+                "image_url": b.item_image_url,
+                "created_at": b.created_at.isoformat() if b.created_at else None,
+            }
+        )
     return {
         "catalog": items,
         "owned_assets": owned,
@@ -725,7 +731,6 @@ def purchase_showroom_asset(
     if bal < price:
         raise OwnerError("insufficient_club_cash", 400, f"Club cash {bal} GTX is insufficient for {price} GTX.")
 
-    tx_key = idempotency_key or f"showroom:{club_id}:{catalog_key}:{datetime.now(timezone.utc).timestamp()}"
     leg = ledger.record(
         session,
         event_type="showroom_asset_purchase",
@@ -782,7 +787,7 @@ def gift_asset_to_squad_player(
     note: str = "",
     idempotency_key: str | None = None,
 ) -> dict[str, Any]:
-    state = require_state(session, club_id, user_id)
+    require_state(session, club_id, user_id)
     player = session.get(OwnerSquadPlayer, player_id)
     if not player or player.club_id != club_id:
         raise OwnerError("player_not_found", 404, "Player not in club squad.")
@@ -798,7 +803,6 @@ def gift_asset_to_squad_player(
     if bal < price:
         raise OwnerError("insufficient_club_cash", 400, f"Club cash {bal} GTX is insufficient for {price} GTX gift.")
 
-    tx_key = idempotency_key or f"gift:{club_id}:{player_id}:{datetime.now(timezone.utc).timestamp()}"
     leg = ledger.record(
         session,
         event_type="squad_player_gift",
@@ -953,7 +957,7 @@ def add_to_watchlist(
     scout_notes: str = "",
     recommendation: str = "Monitor closely",
 ) -> dict[str, Any]:
-    state = require_state(session, club_id, user_id)
+    require_state(session, club_id, user_id)
     save_ctx = resolve_save_context_id(session, club_id)
     name = player_name or "Target Prospect"
     item = OwnerScoutingWatchlist(
@@ -1008,16 +1012,18 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
         .limit(20)
     ).all()
     for b in b_rows:
-        timeline.append({
-            "id": b.id,
-            "type": "broadcast",
-            "category": b.event_type,
-            "title": b.headline,
-            "summary": b.summary,
-            "verified_price_gtex": str(b.verified_price_gtex) if b.verified_price_gtex is not None else None,
-            "image_url": b.item_image_url,
-            "created_at": b.created_at.isoformat() if b.created_at else None,
-        })
+        timeline.append(
+            {
+                "id": b.id,
+                "type": "broadcast",
+                "category": b.event_type,
+                "title": b.headline,
+                "summary": b.summary,
+                "verified_price_gtex": str(b.verified_price_gtex) if b.verified_price_gtex is not None else None,
+                "image_url": b.item_image_url,
+                "created_at": b.created_at.isoformat() if b.created_at else None,
+            }
+        )
 
     # Add matches
     match_rows = session.scalars(
@@ -1027,15 +1033,21 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
         .limit(10)
     ).all()
     for m in match_rows:
-        timeline.append({
-            "id": m.id,
-            "type": "match",
-            "category": "match_result" if m.status == "completed" else "fixture",
-            "title": f"Match Round {m.round_number}: {m.home_goals} - {m.away_goals}" if m.status == "completed" else f"Scheduled vs Round {m.round_number}",
-            "summary": f"{m.status.capitalize()} fixture in competition.",
-            "image_url": resolve_stadium_image_url("stadium"),
-            "created_at": m.created_at.isoformat() if m.created_at else None,
-        })
+        timeline.append(
+            {
+                "id": m.id,
+                "type": "match",
+                "category": "match_result" if m.status == "completed" else "fixture",
+                "title": (
+                    f"Match Round {m.round_number}: {m.home_goals} - {m.away_goals}"
+                    if m.status == "completed"
+                    else f"Scheduled vs Round {m.round_number}"
+                ),
+                "summary": f"{m.status.capitalize()} fixture in competition.",
+                "image_url": resolve_stadium_image_url("stadium"),
+                "created_at": m.created_at.isoformat() if m.created_at else None,
+            }
+        )
     timeline.sort(key=lambda x: x.get("created_at") or "", reverse=True)
 
     # 2. Unresolved Issues (Redacted for non-owners)
@@ -1052,14 +1064,13 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
             .limit(10)
         ).all()
         from app.owner_console.service import inbox_dict
+
         unresolved_issues = [inbox_dict(i) for i in items]
 
     # 3. Staff & Player Relationships
     manager_data = state.manager_json or {}
     squad_players = session.scalars(
-        select(OwnerSquadPlayer)
-        .where(OwnerSquadPlayer.club_id == club_id)
-        .order_by(OwnerSquadPlayer.rating.desc())
+        select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id).order_by(OwnerSquadPlayer.rating.desc())
     ).all()
 
     relationships = {
@@ -1079,7 +1090,7 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
                 "rating": p.rating,
                 "morale": p.morale,
                 "trust_level": "devoted" if p.morale >= 80 else "committed" if p.morale >= 60 else "cautious",
-                "contract_expectation": f"Wants first-team guarantees" if can_private and p.morale < 60 else None,
+                "contract_expectation": "Wants first-team guarantees" if can_private and p.morale < 60 else None,
                 "portrait_url": resolve_player_portrait_url(session, p.id, p.name),
             }
             for p in squad_players[:12]
@@ -1093,17 +1104,13 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
         scouting_watchlist = [watchlist_dict(w) for w in w_rows]
 
     # 5. Upcoming Schedule & Recent Results
-    entries = session.scalars(
-        select(OwnerCompetitionEntry).where(OwnerCompetitionEntry.club_id == club_id)
-    ).all()
+    entries = session.scalars(select(OwnerCompetitionEntry).where(OwnerCompetitionEntry.club_id == club_id)).all()
     comp_ids = list({e.competition_id for e in entries})
     upcoming: list[dict[str, Any]] = []
     recent: list[dict[str, Any]] = []
     if comp_ids:
         for m in session.scalars(
-            select(OwnerMatch)
-            .where(OwnerMatch.competition_id.in_(comp_ids))
-            .order_by(OwnerMatch.round_number.asc())
+            select(OwnerMatch).where(OwnerMatch.competition_id.in_(comp_ids)).order_by(OwnerMatch.round_number.asc())
         ).all():
             if m.home_club_id == club_id or m.away_club_id == club_id:
                 m_card = {
@@ -1112,8 +1119,16 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
                     "round": m.round_number,
                     "home_club_id": m.home_club_id,
                     "away_club_id": m.away_club_id,
-                    "home_name": _get_club_state(session, m.home_club_id).club_name if _get_club_state(session, m.home_club_id) else "Home Club",
-                    "away_name": _get_club_state(session, m.away_club_id).club_name if _get_club_state(session, m.away_club_id) else "Away Club",
+                    "home_name": (
+                        _get_club_state(session, m.home_club_id).club_name
+                        if _get_club_state(session, m.home_club_id)
+                        else "Home Club"
+                    ),
+                    "away_name": (
+                        _get_club_state(session, m.away_club_id).club_name
+                        if _get_club_state(session, m.away_club_id)
+                        else "Away Club"
+                    ),
                     "status": m.status,
                     "home_goals": m.home_score,
                     "away_goals": m.away_score,
@@ -1125,15 +1140,44 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
 
     # 7. Achievements & Owner Legacy
     achievements = [
-        {"id": "starter-foundation", "title": "Foundation Formed", "detail": f"Official club charter ratified on World Day 1.", "badge": "milestone"},
-        {"id": "prestige-tier", "title": f"Prestige Level {state.prestige}", "detail": f"Boardroom reputation benchmark achieved.", "badge": "reputation"},
+        {
+            "id": "starter-foundation",
+            "title": "Foundation Formed",
+            "detail": "Official club charter ratified on World Day 1.",
+            "badge": "milestone",
+        },
+        {
+            "id": "prestige-tier",
+            "title": f"Prestige Level {state.prestige}",
+            "detail": "Boardroom reputation benchmark achieved.",
+            "badge": "reputation",
+        },
     ]
     if len(squad_players) >= 16:
-        achievements.append({"id": "squad-ready", "title": "Squad Depth Certified", "detail": f"Roster of {len(squad_players)} players registered.", "badge": "squad"})
+        achievements.append(
+            {
+                "id": "squad-ready",
+                "title": "Squad Depth Certified",
+                "detail": f"Roster of {len(squad_players)} players registered.",
+                "badge": "squad",
+            }
+        )
     if any(b.event_type == "private_jet_purchase" for b in b_rows):
-        achievements.append({"id": "aviation-tier", "title": "Fleet Aviation Owner", "detail": "Executive private jet commissioned for squad transit.", "badge": "luxury"})
+        achievements.append(
+            {
+                "id": "aviation-tier",
+                "title": "Fleet Aviation Owner",
+                "detail": "Executive private jet commissioned for squad transit.",
+                "badge": "luxury",
+            }
+        )
 
-    wins = sum(1 for m in recent if (m["home_club_id"] == club_id and m["home_goals"] > m["away_goals"]) or (m["away_club_id"] == club_id and m["away_goals"] > m["home_goals"]))
+    wins = sum(
+        1
+        for m in recent
+        if (m["home_club_id"] == club_id and m["home_goals"] > m["away_goals"])
+        or (m["away_club_id"] == club_id and m["away_goals"] > m["home_goals"])
+    )
     total_played = len(recent)
     win_rate = int((wins / total_played) * 100) if total_played > 0 else 0
 
@@ -1145,7 +1189,11 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
         "win_rate_pct": win_rate,
         "trophies_count": len([a for a in achievements if a.get("badge") == "silverware"]),
         "prestige_assets_owned": len(b_rows),
-        "tier": "Continental Contender" if state.prestige >= 60 else "Emerging Force" if state.prestige >= 40 else "Developing Club",
+        "tier": (
+            "Continental Contender"
+            if state.prestige >= 60
+            else "Emerging Force" if state.prestige >= 40 else "Developing Club"
+        ),
         "composite_score": int(state.prestige * 0.4 + win_rate * 0.3 + min(100, len(squad_players) * 4) * 0.3),
         "era_label": f"Day {state.world_day} Era",
         "on_pitch": win_rate,
@@ -1153,7 +1201,16 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
         "commercial": min(100, int((state.facilities_json or {}).get("commercial", 1) * 20)),
         "culture": min(100, int((state.facilities_json or {}).get("training", 1) * 20)),
         "ownership_group": {
-            "label": f"Multi-Club Group ({state.owner_user_id[:6]})" if len(session.scalars(select(OwnerClubState).where(OwnerClubState.owner_user_id == state.owner_user_id)).all()) > 1 else "Independent Ownership",
+            "label": (
+                f"Multi-Club Group ({state.owner_user_id[:6]})"
+                if len(
+                    session.scalars(
+                        select(OwnerClubState).where(OwnerClubState.owner_user_id == state.owner_user_id)
+                    ).all()
+                )
+                > 1
+                else "Independent Ownership"
+            ),
         },
     }
 
