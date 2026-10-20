@@ -531,41 +531,6 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
 
   Widget _buildHomeDestination() {
     // Home is the personalised command surface for every session state.
-    //
-    // Three personas used to be sent somewhere else from here - club owners
-    // to the club owner dashboard, coin traders to the wallet desk's trader
-    // module, admins to the admin command center - and every one of those
-    // screens is already reachable in its own right: the Club lane, the
-    // Wallet lane's trader dashboard, and for admins both the `/admin` route
-    // and the shell's own admin action. So Home rendered a second copy of a
-    // surface the session could already open, and the whole personalised
-    // Home (your players, what moved, your clubs, your prospects, what needs
-    // your attention) was reachable only by sessions that were none of the
-    // three.
-    //
-    // `HomeScreen` resolves all three personas itself - a club owner gets a
-    // clubs panel, a coin trader gets the trader desk copy, an admin gets the
-    // operations desk copy - each with its own capabilities and quick
-    // actions, and none of it could be reached before. No workspace is lost:
-    // Club for owners, Wallet for traders (its module rail carries the trader
-    // dashboard), and the admin action in the shell bar for admins, which now
-    // shows at every viewport width rather than only the wide one.
-    // Signed-in sessions land on the Owner Console; visitors keep Home.
-    if (widget.controller.isAuthenticated) {
-      final GteAuthedApi authed = _createShellAuthedApi();
-      final user = widget.controller.session?.user;
-      return OwnerConsoleScreen(
-        key: ValueKey<String>(
-          'owner-console-${widget.controller.accessToken ?? ''}',
-        ),
-        reader: OwnerConsoleApi(client: authed),
-        shareMarket: GtexShareMarketApi(client: authed),
-        role: user?.role ?? 'user',
-        signedInAs: user?.displayName ?? user?.username ?? 'Owner',
-        walletBalance: widget.controller.walletSummary?.availableBalance,
-        onNavigate: (String path) => context.go(path),
-      );
-    }
     return const HomeScreen(key: PageStorageKey<String>('home-command'));
   }
 

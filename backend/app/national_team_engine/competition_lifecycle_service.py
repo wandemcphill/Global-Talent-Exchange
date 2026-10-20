@@ -2,27 +2,39 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
+from decimal import Decimal, ROUND_HALF_UP
 from hashlib import sha256
 import math
 import random
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, inspect, or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.admin_engine.service import AdminEngineService
 from app.core.event_backbone import build_outbox_event, defer_event_publish_until_commit
 from app.core.events import DomainEvent, EventPublisher
 from app.core.global_ids import global_competition_id, global_match_id
+from app.economy.governor_service import EconomyGovernorService
 from app.global_memory.constants import COMPETITION_ADVANCED
 from app.global_memory.models import NationalTeamCountryRanking
 from app.ingestion.models import Country, Player
 from app.market.player_eligibility_policy import market_access_payload
+from app.models.admin_rules import AdminRewardRule
 from app.models.base import utcnow
 from app.models.national_team import NationalTeamCompetition, NationalTeamCompetitionEntry
 from app.models.national_team_tournament import RentalContract, RentalContractStatus
 from app.models.regen_ecosystem import NationalRegenSeed
-from app.models.user import User
+from app.models.reward_settlement import RewardSettlement
+from app.models.user import User, UserRole
+from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
 from app.national_team_engine.competition_profiles import infer_competition_family, profile_for
+from app.national_team_engine.tournament_service import NationalTeamTournamentService
+from app.reward_engine.service import RewardEngineError, RewardEngineService
+from app.wallets.service import LedgerPosting, WalletService
+
+AMOUNT_QUANTUM = Decimal("0.0001")
+NATIONAL_CHAMPION_REWARD_SOURCE = "national_competition_champion"
 
 
 class NationalCompetitionLifecycleError(ValueError):
@@ -36,6 +48,11 @@ class NationalCompetitionLifecycleError(ValueError):
 class NationalCompetitionLifecycleService:
     session: Session
     event_publisher: EventPublisher | None = None
+    wallet_service: WalletService | None = None
+
+    def __post_init__(self) -> None:
+        if self.wallet_service is None:
+            self.wallet_service = WalletService(event_publisher=self.event_publisher)
 
     def submit_entry(self, *, competition_id: str, actor: User, payload) -> dict[str, Any]:
         competition = self._require_competition(competition_id)
@@ -155,7 +172,12 @@ class NationalCompetitionLifecycleService:
         self.session.flush()
         return self.get_lifecycle_payload(competition_id=competition_id)
 
-    def advance_lifecycle(self, *, competition_id: str) -> dict[str, Any]:
+    def advance_lifecycle(
+        self,
+        *,
+        competition_id: str,
+        actor: User | None = None,
+    ) -> dict[str, Any]:
         competition = self._require_competition(competition_id)
         if not competition.submitted_entries:
             raise NationalCompetitionLifecycleError(
@@ -246,6 +268,9 @@ class NationalCompetitionLifecycleService:
                     entry.qualified = True
                 else:
                     entry.status = "eliminated"
+            rental_cleanup = self._cleanup_completed_competition_rentals(competition)
+            if rental_cleanup is not None:
+                lifecycle_state["rental_cleanup"] = rental_cleanup
         else:
             raise NationalCompetitionLifecycleError(
                 f"Unsupported lifecycle stage '{current_stage}'.",
@@ -271,7 +296,149 @@ class NationalCompetitionLifecycleService:
             champion_entry=entry_map.get(lifecycle_state.get("champion_entry_id")),
         )
         self.session.flush()
+        if (
+            current_stage == "tournament"
+            and actor is not None
+            and self._is_authorized_settlement_actor(actor)
+            and self._can_auto_settle_champion_reward(competition)
+        ):
+            self.settle_champion_reward(competition_id=competition_id, actor=actor)
         return self.get_lifecycle_payload(competition_id=competition_id)
+
+    def settle_champion_reward(
+        self,
+        *,
+        competition_id: str,
+        actor: User | None,
+        gross_amount: Decimal | int | float | str | None = None,
+        note: str | None = None,
+    ) -> dict[str, Any]:
+        if not self._is_authorized_settlement_actor(actor):
+            raise NationalCompetitionLifecycleError(
+                "Administrator privileges are required to settle national champion rewards.",
+                reason="settlement_forbidden",
+            )
+        assert actor is not None
+
+        competition = self._require_competition(competition_id, for_update=True)
+        lifecycle_state = self._lifecycle_state(competition)
+        current_stage = str(lifecycle_state.get("current_stage") or "registration")
+        if (
+            current_stage != "completed"
+            or competition.completed_at is None
+            or str(competition.status or "").strip().lower() != "completed"
+        ):
+            raise NationalCompetitionLifecycleError(
+                "Competition lifecycle must be completed before settling champion rewards.",
+                reason="lifecycle_not_completed",
+            )
+
+        champion_entry_id = lifecycle_state.get("champion_entry_id")
+        if not champion_entry_id:
+            raise NationalCompetitionLifecycleError(
+                "No champion entry is recorded for this competition.",
+                reason="champion_not_found",
+            )
+        tournament_result = dict((lifecycle_state.get("stage_results") or {}).get("tournament") or {})
+        tournament_winner_id = tournament_result.get("champion_entry_id")
+        if tournament_winner_id and tournament_winner_id != champion_entry_id:
+            raise NationalCompetitionLifecycleError(
+                "Champion entry does not match the tournament stage winner.",
+                reason="champion_not_eligible",
+            )
+
+        entry_map = {entry.id: entry for entry in competition.submitted_entries}
+        champion_entry = entry_map.get(str(champion_entry_id))
+        if (
+            champion_entry is None
+            or champion_entry.competition_id != competition.id
+            or not champion_entry.locked
+            or not champion_entry.qualified
+            or str(champion_entry.status or "").strip().lower() != "champion"
+        ):
+            raise NationalCompetitionLifecycleError(
+                "Entry is not an eligible champion for this competition.",
+                reason="champion_not_eligible",
+            )
+
+        recipient_user = self.session.get(User, champion_entry.user_id)
+        if recipient_user is None or not getattr(recipient_user, "is_active", True):
+            raise NationalCompetitionLifecycleError(
+                "Champion entry owner is not an active user.",
+                reason="champion_user_invalid",
+            )
+
+        competition_key = self._champion_reward_competition_key(competition)
+        existing_stmt = select(RewardSettlement).where(
+            RewardSettlement.competition_key == competition_key,
+            RewardSettlement.reward_source == NATIONAL_CHAMPION_REWARD_SOURCE,
+        )
+        if self._supports_row_locks():
+            existing_stmt = existing_stmt.with_for_update()
+        existing_settlement = self.session.scalar(existing_stmt)
+        if existing_settlement is not None:
+            payload = self._settlement_payload(
+                settlement=existing_settlement,
+                competition=competition,
+                champion_entry=champion_entry,
+            )
+            self._record_settlement_in_lifecycle(
+                competition=competition,
+                champion_entry=champion_entry,
+                settlement_payload=payload,
+            )
+            return payload
+
+        resolved_gross = self._resolve_champion_reward_gross_amount(
+            competition,
+            explicit_gross_amount=gross_amount,
+        )
+        if resolved_gross <= Decimal("0.0000"):
+            raise NationalCompetitionLifecycleError(
+                "Champion reward amount must be positive.",
+                reason="reward_amount_invalid",
+            )
+
+        self._ensure_reward_rule_seeded()
+        self._ensure_promo_pool_funded_for_champion(
+            competition=competition,
+            champion_entry=champion_entry,
+            actor=actor,
+            gross_amount=resolved_gross,
+        )
+
+        reward_service = RewardEngineService(
+            self.session,
+            wallet_service=self.wallet_service,
+            event_publisher=self.event_publisher,
+        )
+        try:
+            settlement = reward_service.settle_reward(
+                actor=actor,
+                user_id=recipient_user.id,
+                competition_key=competition_key,
+                title=f"{competition.title} ({competition.season_label}) Champion",
+                gross_amount=resolved_gross,
+                reward_source=NATIONAL_CHAMPION_REWARD_SOURCE,
+                note=note
+                or f"National competition champion payout for {champion_entry.country_name} ({champion_entry.country_code}).",
+                ledger_unit=LedgerUnit.COIN,
+            )
+        except RewardEngineError as exc:
+            raise NationalCompetitionLifecycleError(exc.detail, reason=exc.reason) from exc
+
+        payload = self._settlement_payload(
+            settlement=settlement,
+            competition=competition,
+            champion_entry=champion_entry,
+        )
+        self._record_settlement_in_lifecycle(
+            competition=competition,
+            champion_entry=champion_entry,
+            settlement_payload=payload,
+        )
+        self.session.flush()
+        return payload
 
     def get_lifecycle_payload(self, *, competition_id: str) -> dict[str, Any]:
         competition = self._require_competition(competition_id)
@@ -296,6 +463,8 @@ class NationalCompetitionLifecycleService:
             "schedule_plan": list(lifecycle_state.get("schedule_plan") or []),
             "stage_history": list(lifecycle_state.get("stage_history") or []),
             "stage_results": dict(lifecycle_state.get("stage_results") or {}),
+            "rental_cleanup": lifecycle_state.get("rental_cleanup"),
+            "champion_reward_settlement": lifecycle_state.get("champion_reward_settlement"),
         }
 
     def list_country_rankings(self, *, limit: int = 50) -> list[dict[str, Any]]:
@@ -324,19 +493,258 @@ class NationalCompetitionLifecycleService:
             for item in rows
         ]
 
-    def _require_competition(self, competition_id: str) -> NationalTeamCompetition:
-        competition = self.session.scalar(
+    def _require_competition(
+        self,
+        competition_id: str,
+        *,
+        for_update: bool = False,
+    ) -> NationalTeamCompetition:
+        stmt = (
             select(NationalTeamCompetition)
             .where(NationalTeamCompetition.id == competition_id)
             .options(selectinload(NationalTeamCompetition.submitted_entries))
             .execution_options(populate_existing=True)
         )
+        if for_update and self._supports_row_locks():
+            stmt = stmt.with_for_update()
+        competition = self.session.scalar(stmt)
         if competition is None:
             raise NationalCompetitionLifecycleError(
                 "National team competition was not found.",
                 reason="competition_not_found",
             )
         return competition
+
+    @staticmethod
+    def _normalize_amount(value: Decimal | int | float | str | None) -> Decimal:
+        if value is None:
+            return Decimal("0.0000")
+        return Decimal(str(value)).quantize(AMOUNT_QUANTUM, rounding=ROUND_HALF_UP)
+
+    @staticmethod
+    def _is_authorized_settlement_actor(actor: User | None) -> bool:
+        if actor is None or not getattr(actor, "is_active", True):
+            return False
+        role = getattr(actor, "role", None)
+        if role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+            return True
+        return str(role or "").strip().lower() in {"admin", "super_admin"}
+
+    def _supports_row_locks(self) -> bool:
+        bind = self.session.get_bind()
+        return bind is not None and bind.dialect.name != "sqlite"
+
+    def _has_tables(self, *table_names: str) -> bool:
+        bind = self.session.get_bind()
+        if bind is None:
+            return False
+        inspector = inspect(bind)
+        return all(inspector.has_table(table_name) for table_name in table_names)
+
+    def _cleanup_completed_competition_rentals(
+        self,
+        competition: NationalTeamCompetition,
+    ) -> dict[str, Any] | None:
+        if not self._has_tables(
+            "national_team_rental_contracts",
+            "national_team_rental_squad_members",
+            "national_team_entries",
+        ):
+            return None
+        return NationalTeamTournamentService(
+            self.session,
+            wallet_service=self.wallet_service,
+        ).cleanup_expired_rentals(
+            competition_id=competition.id,
+            now=competition.completed_at,
+        )
+
+    @staticmethod
+    def _champion_reward_competition_key(competition: NationalTeamCompetition) -> str:
+        return f"national-competition:{competition.id}"
+
+    def _resolve_champion_reward_gross_amount(
+        self,
+        competition: NationalTeamCompetition,
+        *,
+        explicit_gross_amount: Decimal | int | float | str | None = None,
+    ) -> Decimal:
+        if explicit_gross_amount is not None:
+            try:
+                return self._normalize_amount(explicit_gross_amount)
+            except Exception as exc:
+                raise NationalCompetitionLifecycleError(
+                    "Champion reward amount must be a valid decimal.",
+                    reason="reward_amount_invalid",
+                ) from exc
+
+        metadata = dict(competition.metadata_json or {})
+        reward_config = (
+            dict(metadata.get("reward_config") or {}) if isinstance(metadata.get("reward_config"), dict) else {}
+        )
+        for candidate in (
+            metadata.get("champion_reward_coin"),
+            metadata.get("champion_prize_coin"),
+            metadata.get("prize_pool_coin"),
+            metadata.get("reward_pool_coin"),
+            reward_config.get("champion_reward_coin"),
+            reward_config.get("champion_prize_coin"),
+            reward_config.get("prize_pool_coin"),
+            reward_config.get("reward_pool_coin"),
+        ):
+            if candidate is None:
+                continue
+            try:
+                normalized = self._normalize_amount(candidate)
+            except Exception:
+                continue
+            if normalized > Decimal("0.0000"):
+                return normalized
+
+        if self._has_tables("national_team_rental_contracts"):
+            collected_rental_pool = self._normalize_amount(
+                self.session.scalar(
+                    select(func.coalesce(func.sum(RentalContract.loan_price_coin), 0)).where(
+                        RentalContract.tournament_id == competition.id
+                    )
+                )
+                or 0
+            )
+            if collected_rental_pool > Decimal("0.0000"):
+                share_bps = int(metadata.get("champion_prize_share_bps", 10_000) or 10_000)
+                share_bps = max(0, min(share_bps, 10_000))
+                return self._normalize_amount((collected_rental_pool * Decimal(share_bps)) / Decimal(10_000))
+        return Decimal("0.0000")
+
+    def _can_auto_settle_champion_reward(self, competition: NationalTeamCompetition) -> bool:
+        metadata = dict(competition.metadata_json or {})
+        if metadata.get("auto_settle_champion_reward") is False:
+            return False
+        if not self._has_tables(
+            "reward_settlements",
+            "ledger_accounts",
+            "ledger_entries",
+            "admin_reward_rules",
+            "economy_governor_policies",
+            "economy_daily_stats",
+            "spending_control_audit_events",
+            "economy_burn_events",
+        ):
+            return False
+        return self._resolve_champion_reward_gross_amount(competition) > Decimal("0.0000")
+
+    def _ensure_reward_rule_seeded(self) -> None:
+        if not self._has_tables("admin_reward_rules"):
+            return
+        active_rule = self.session.scalar(select(AdminRewardRule).where(AdminRewardRule.active.is_(True)).limit(1))
+        if active_rule is None:
+            AdminEngineService(self.session)._seed_reward_rules()
+            self.session.flush()
+
+    def _ensure_promo_pool_funded_for_champion(
+        self,
+        *,
+        competition: NationalTeamCompetition,
+        champion_entry: NationalTeamCompetitionEntry,
+        actor: User,
+        gross_amount: Decimal,
+    ) -> None:
+        assert self.wallet_service is not None
+        governor = EconomyGovernorService(self.session, wallet_service=self.wallet_service)
+        effective_gross = self._normalize_amount(Decimal(gross_amount) * governor.reward_multiplier())
+        required_balance = max(self._normalize_amount(gross_amount), effective_gross)
+        promo_pool_account = self.wallet_service.ensure_promo_pool_account(self.session, LedgerUnit.COIN)
+        current_balance = self.wallet_service.get_balance(self.session, promo_pool_account)
+        if current_balance >= required_balance:
+            return
+        shortfall = self._normalize_amount(required_balance - current_balance)
+        platform_account = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.COIN)
+        self.wallet_service.append_transaction(
+            self.session,
+            postings=[
+                LedgerPosting(
+                    account=platform_account,
+                    amount=-shortfall,
+                    source_tag=LedgerSourceTag.PROMO_POOL_CREDIT,
+                    transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT,
+                ),
+                LedgerPosting(
+                    account=promo_pool_account,
+                    amount=shortfall,
+                    source_tag=LedgerSourceTag.PROMO_POOL_CREDIT,
+                    transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT,
+                ),
+            ],
+            reason=LedgerEntryReason.ADJUSTMENT,
+            source_tag=LedgerSourceTag.PROMO_POOL_CREDIT,
+            reference=f"national-promo-pool:{competition.id}:{champion_entry.id}",
+            description=f"National champion prize pool allocation for {competition.title}",
+            external_reference=f"national-promo-pool:{competition.id}:{champion_entry.id}",
+            actor=actor,
+            transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT,
+            idempotency_key=f"national-promo-pool-topup:{competition.id}:{champion_entry.id}",
+        )
+
+    @staticmethod
+    def _settlement_payload(
+        *,
+        settlement: RewardSettlement,
+        competition: NationalTeamCompetition,
+        champion_entry: NationalTeamCompetitionEntry,
+    ) -> dict[str, Any]:
+        unit_value = (
+            settlement.ledger_unit.value
+            if isinstance(settlement.ledger_unit, LedgerUnit)
+            else str(settlement.ledger_unit)
+        )
+        return {
+            "settlement_id": settlement.id,
+            "competition_id": competition.id,
+            "competition_key": settlement.competition_key,
+            "champion_entry_id": champion_entry.id,
+            "champion_user_id": settlement.user_id,
+            "country_code": champion_entry.country_code,
+            "country_name": champion_entry.country_name,
+            "reward_source": settlement.reward_source,
+            "title": settlement.title,
+            "gross_amount": settlement.gross_amount,
+            "platform_fee_amount": settlement.platform_fee_amount,
+            "net_amount": settlement.net_amount,
+            "ledger_unit": unit_value,
+            "ledger_transaction_id": settlement.ledger_transaction_id,
+            "note": settlement.note,
+            "settled_by_user_id": settlement.settled_by_user_id,
+            "created_at": settlement.created_at,
+        }
+
+    def _record_settlement_in_lifecycle(
+        self,
+        *,
+        competition: NationalTeamCompetition,
+        champion_entry: NationalTeamCompetitionEntry,
+        settlement_payload: dict[str, Any],
+    ) -> None:
+        serializable = {
+            **settlement_payload,
+            "gross_amount": str(settlement_payload["gross_amount"]),
+            "platform_fee_amount": str(settlement_payload["platform_fee_amount"]),
+            "net_amount": str(settlement_payload["net_amount"]),
+            "created_at": (
+                settlement_payload["created_at"].isoformat()
+                if hasattr(settlement_payload["created_at"], "isoformat")
+                else str(settlement_payload["created_at"])
+            ),
+        }
+        lifecycle_state = self._lifecycle_state(competition)
+        lifecycle_state["champion_reward_settlement"] = serializable
+        competition.metadata_json = {
+            **dict(competition.metadata_json or {}),
+            "lifecycle_state": lifecycle_state,
+        }
+        champion_entry.metadata_json = {
+            **dict(champion_entry.metadata_json or {}),
+            "champion_reward_settlement": serializable,
+        }
 
     @staticmethod
     def _validate_submission_window(competition: NationalTeamCompetition) -> None:
@@ -511,7 +919,7 @@ class NationalCompetitionLifecycleService:
                             RentalContract.user_id == actor.id,
                             RentalContract.status == RentalContractStatus.ACTIVE,
                             RentalContract.start_date <= rental_now,
-                            RentalContract.end_date >= rental_now,
+                            RentalContract.end_date > rental_now,
                             RentalContract.player_id.in_(valid_player_ids),
                         )
                     ).all()

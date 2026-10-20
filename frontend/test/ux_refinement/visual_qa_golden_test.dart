@@ -63,7 +63,7 @@ void main() {
     );
   }
 
-  testWidgets('market browse grid - mobile', (WidgetTester tester) async {
+  testWidgets('market browse grid - mobile', tags: <String>['golden'], (WidgetTester tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -90,7 +90,7 @@ void main() {
     );
   });
 
-  testWidgets('market browse grid - desktop', (WidgetTester tester) async {
+  testWidgets('market browse grid - desktop', tags: <String>['golden'], (WidgetTester tester) async {
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -116,7 +116,7 @@ void main() {
     );
   });
 
-  testWidgets('master detail - tablet keeps summary reachable', (
+  testWidgets('master detail - tablet keeps summary reachable', tags: <String>['golden'], (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(900, 700);

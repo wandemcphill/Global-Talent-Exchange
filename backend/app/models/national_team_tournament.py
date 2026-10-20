@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import (
     Boolean,
-    DateTime,
     Enum,
     ForeignKey,
     Index,
@@ -18,9 +17,10 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, reconstructor
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.national_team import UTCAwareDateTime
 
 
 def _enum_values(enum_type: type[StrEnum]) -> list[str]:
@@ -81,8 +81,8 @@ class RentalContract(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("national_team_entries.id", ondelete="SET NULL"),
         nullable=True,
     )
-    start_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    end_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    start_date: Mapped[datetime] = mapped_column(UTCAwareDateTime(), nullable=False)
+    end_date: Mapped[datetime] = mapped_column(UTCAwareDateTime(), nullable=False)
     loan_price_coin: Mapped[Decimal] = mapped_column(
         Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0.0000"
     )
@@ -100,6 +100,17 @@ class RentalContract(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         server_default=RentalContractStatus.ACTIVE.value,
     )
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+    @reconstructor
+    def _normalize_loaded_timestamps(self) -> None:
+        for field_name in ("start_date", "end_date"):
+            value = getattr(self, field_name, None)
+            if isinstance(value, datetime):
+                setattr(
+                    self,
+                    field_name,
+                    value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC),
+                )
 
 
 class NationalTeamRentalSquadMember(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -197,11 +208,22 @@ class StadiumAd(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Enum(StadiumAdPlacement, name="stadium_ad_placement", native_enum=False, values_callable=_enum_values),
         nullable=False,
     )
-    start_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    end_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    start_date: Mapped[datetime] = mapped_column(UTCAwareDateTime(), nullable=False)
+    end_date: Mapped[datetime] = mapped_column(UTCAwareDateTime(), nullable=False)
     priority: Mapped[int] = mapped_column(Integer, nullable=False, default=100, server_default="100")
     rotation_interval_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=30, server_default="30")
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+    @reconstructor
+    def _normalize_loaded_timestamps(self) -> None:
+        for field_name in ("start_date", "end_date"):
+            value = getattr(self, field_name, None)
+            if isinstance(value, datetime):
+                setattr(
+                    self,
+                    field_name,
+                    value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC),
+                )
 
 
 __all__ = [

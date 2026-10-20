@@ -94,6 +94,10 @@ services:
         value: https://res.cloudinary.com/dvxiniqew/image/upload
       - key: GTE_MARKET_RECORDS_CACHE_TTL_SECONDS
         value: "300"
+      - key: GTE_NATIONAL_TEAM_WORKER_ENABLED
+        value: "true"
+      - key: GTE_NATIONAL_TEAM_WORKER_INTERVAL_SECONDS
+        value: "300"
       - key: GTE_KAFKA_BROKERS
         value: ""
 

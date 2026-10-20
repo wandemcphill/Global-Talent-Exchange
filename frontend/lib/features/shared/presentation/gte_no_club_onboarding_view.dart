@@ -15,6 +15,7 @@ class GteNoClubOnboardingView extends StatelessWidget {
     this.onOpenWallet,
     this.onEnterClub,
     this.padding = const EdgeInsets.fromLTRB(20, 12, 20, 120),
+    this.scrollable = true,
   });
 
   final bool isAuthenticated;
@@ -27,6 +28,7 @@ class GteNoClubOnboardingView extends StatelessWidget {
   final VoidCallback? onOpenWallet;
   final VoidCallback? onEnterClub;
   final EdgeInsetsGeometry padding;
+  final bool scrollable;
 
   @override
   Widget build(BuildContext context) {
@@ -149,8 +151,7 @@ class GteNoClubOnboardingView extends StatelessWidget {
         )
         .toList(growable: false);
     final bool compactViewport = MediaQuery.sizeOf(context).height < 720;
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
+    final Widget content = Padding(
       padding: padding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -245,6 +246,15 @@ class GteNoClubOnboardingView extends StatelessWidget {
           ),
         ],
       ),
+    );
+
+    if (!scrollable) {
+      return content;
+    }
+
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: content,
     );
   }
 }
