@@ -327,9 +327,9 @@ class _Gtex22LoginScreenState extends State<Gtex22LoginScreen> {
                 return narrow
                     ? Column(
                       children: <Widget>[
-                        story,
-                        const SizedBox(height: 34),
                         form,
+                        const SizedBox(height: 34),
+                        story,
                       ],
                     )
                     : Row(

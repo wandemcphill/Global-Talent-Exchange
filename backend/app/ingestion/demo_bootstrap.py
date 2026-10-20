@@ -16,7 +16,9 @@ from app.auth.service import AuthService
 from app.core.config import DEFAULT_DATABASE_URL, Settings, load_settings
 from app.core.database import create_database_engine, create_session_factory, ensure_database_schema_current
 from app.core.events import EventPublisher, InMemoryEventPublisher
-from app.ingestion.models import LiquidityBand, MarketSignal, Player, SupplyTier
+from app.ingestion.models import Club, LiquidityBand, MarketSignal, Player, SupplyTier
+from app.models.access_control import Organization, OrganizationMembership, OrganizationRole, OrganizationType
+from app.models.club_profile import ClubProfile
 from app.market.service import MarketEngine
 from app.models.user import User, UserRole
 from app.models.wallet import (
@@ -597,6 +599,7 @@ class DemoBootstrapService:
             self._ensure_demo_users(
                 session, auth_service=auth_service, wallet_service=wallet_service, demo_password=demo_password
             )
+            self._ensure_demo_club_memberships(session)
             demo_users = self._load_demo_user_summaries(
                 session,
                 wallet_service=wallet_service,
@@ -641,6 +644,75 @@ class DemoBootstrapService:
             sample_holdings=sample_holdings,
             liquidity_seed=liquidity_seed,
         )
+
+    def _ensure_demo_club_memberships(self, session: Session) -> None:
+        first_club = session.scalar(select(Club).order_by(Club.name.asc()))
+        if first_club is None:
+            return
+        scout_user = session.scalar(select(User).where(User.email == "seed.scout@gte.local"))
+        if scout_user is None:
+            return
+
+        club_profile = session.get(ClubProfile, first_club.id)
+        if club_profile is None:
+            club_profile = session.scalar(select(ClubProfile).where(ClubProfile.slug == first_club.slug))
+        if club_profile is None:
+            club_profile = ClubProfile(
+                id=first_club.id,
+                owner_user_id=scout_user.id,
+                club_name=first_club.name,
+                slug=first_club.slug,
+                primary_color="#10B981",
+                secondary_color="#0F172A",
+                accent_color="#F59E0B",
+            )
+            session.add(club_profile)
+        else:
+            club_profile.owner_user_id = scout_user.id
+
+        org = session.get(Organization, first_club.id)
+        if org is None:
+            org = session.scalar(select(Organization).where(Organization.club_profile_id == club_profile.id))
+        if org is None:
+            org = Organization(
+                id=first_club.id,
+                name=first_club.name,
+                organization_type=OrganizationType.CLUB,
+                club_profile_id=club_profile.id,
+                metadata_json={},
+            )
+            session.add(org)
+        else:
+            org.club_profile_id = club_profile.id
+
+        membership = session.scalar(
+            select(OrganizationMembership).where(
+                OrganizationMembership.user_id == scout_user.id,
+                OrganizationMembership.organization_id == org.id,
+            )
+        )
+        if membership is None:
+            membership = OrganizationMembership(
+                user_id=scout_user.id,
+                organization_id=org.id,
+                role=OrganizationRole.CLUB,
+                is_primary=True,
+            )
+            session.add(membership)
+        else:
+            membership.is_primary = True
+            membership.role = OrganizationRole.CLUB
+
+        other_memberships = session.scalars(
+            select(OrganizationMembership).where(
+                OrganizationMembership.user_id == scout_user.id,
+                OrganizationMembership.id != membership.id,
+            )
+        ).all()
+        for other in other_memberships:
+            other.is_primary = False
+
+        session.flush()
 
     def _ensure_demo_users(
         self,

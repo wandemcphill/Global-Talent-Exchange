@@ -695,7 +695,7 @@ List<RouteBase> _buildLegacyAliasRoutes({
         final GteNavigationDependencies dependencies = dependenciesBuilder(
           context,
         );
-        final String clubId = dependencies.currentClubId ?? '';
+        final String clubId = (dependencies.currentClubId ?? state.uri.queryParameters['club_id'] ?? '').trim();
         return NoTransitionPage<void>(
           key: state.pageKey,
           child:
