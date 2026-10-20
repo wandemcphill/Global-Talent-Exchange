@@ -1,7 +1,7 @@
 """Event storytelling, AI newsroom, luxury showroom, and club management schema.
 
 Revision ID: 20261020_0149_event_storytelling_and_club_management
-Revises: 20261019_0148_reward_settlement_idempotency_guard
+Revises: 20261019_0149_club_ops_state_snapshot
 
 Adds:
 - owner_broadcast_events: durable verified global announcements (jets, facility upgrades, player gifts)
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "20261020_0149_event_storytelling_and_club_management"
-down_revision = "20261019_0148_reward_settlement_idempotency_guard"
+down_revision = "20261019_0149_club_ops_state_snapshot"
 branch_labels = None
 depends_on = None
 
