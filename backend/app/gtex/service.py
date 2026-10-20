@@ -685,8 +685,8 @@ class JackpotService(GtexBaseService):
             return True
         return False
 
-    def process_due_round(self, session: Session) -> GtexJackpotRound | None:
-        outcome = self.evaluate_trigger(session)
+    def process_due_round(self, session: Session, *, pool_key: str = "global") -> GtexJackpotRound | None:
+        outcome = self.evaluate_trigger(session, pool_key=pool_key)
         if outcome is None:
             return None
         current_round, trigger_mode = outcome
