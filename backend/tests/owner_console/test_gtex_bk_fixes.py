@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal
 import json
 from pathlib import Path
@@ -13,9 +13,8 @@ from app.ingestion.models import Player
 from app.models.notification_record import NotificationRecord
 from app.models.regen import RegenProfile
 from app.models.user import User
-from app.owner_console import ledger, service, storytelling
+from app.owner_console import ledger, storytelling
 from app.owner_console.models import (
-    OwnerBroadcastEvent,
     OwnerNewsroomArticle,
     OwnerSquadPlayer,
 )
@@ -43,7 +42,7 @@ def test_b1_save_scoped_newsroom_authorization(client, bootstrap_admin_headers, 
         other_user = User(
             email="bk_other_owner@test.gtex.local",
             username="bk_other_owner",
-            password_hash="hash",
+            password_hash="hash",  # pragma: allowlist secret
         )
         session.add(other_user)
         session.flush()
@@ -244,10 +243,7 @@ def test_b3_canonical_regen_portrait_resolution(app, monkeypatch):
         delegated_url = storytelling.resolve_player_portrait_url(session, squad_player.id, squad_player.name)
         assert delegated_url
         assert not delegated_url.startswith("/api/media/regen-faces/")
-        assert (
-            delegated_url.startswith("https://res.cloudinary.com/")
-            or "/generated-media/" in delegated_url
-        )
+        assert delegated_url.startswith("https://res.cloudinary.com/") or "/generated-media/" in delegated_url
         session.rollback()
 
 
@@ -341,5 +337,7 @@ def test_o16_gap_j1_owner_routes_registered_in_contract_and_dart_bindings():
         canonical = f"/api/v2{route_alias[len('/api'):]}"
         assert route_alias in all_contract_aliases, f"Missing {route_alias} in shared/api_contract.json"
         assert canonical in contract.get("canonical_paths", {}), f"Missing {canonical} in shared/api_contract.json"
-        assert f"'{route_alias}': '{canonical}'" in dart_source, f"Missing {route_alias} alias in gte_api_contract.g.dart"
+        assert (
+            f"'{route_alias}': '{canonical}'" in dart_source
+        ), f"Missing {route_alias} alias in gte_api_contract.g.dart"
         assert f"'{canonical}'," in dart_source, f"Missing {canonical} canonical path in gte_api_contract.g.dart"

@@ -24,7 +24,11 @@ from app.notifications.schemas import (
     PlatformAnnouncementCreate,
     PlatformAnnouncementView,
 )
-from app.notifications.service import NotificationEventMatrixService, NotificationServiceError, NotificationSettingsService
+from app.notifications.service import (
+    NotificationEventMatrixService,
+    NotificationServiceError,
+    NotificationSettingsService,
+)
 from app.replay_archive.router import router as replay_router
 from app.replay_archive.service import ensure_replay_archive
 
@@ -68,8 +72,7 @@ def _extract_routing_fields(
     )
 
     target_type = (
-        _first_non_empty_str(meta, "target_type", "targetType", "resource_type", "resourceType")
-        or clean_resource_type
+        _first_non_empty_str(meta, "target_type", "targetType", "resource_type", "resourceType") or clean_resource_type
     )
     if not target_type:
         if match_ref:
@@ -103,7 +106,9 @@ def _extract_routing_fields(
     )
     if not deep_link_route:
         if match_ref or (
-            target_type and target_type.lower() in {"match", "fixture", "competition_match"} and (clean_resource_id or target_id)
+            target_type
+            and target_type.lower() in {"match", "fixture", "competition_match"}
+            and (clean_resource_id or target_id)
         ):
             resolved_match_id = clean_resource_id or match_ref or target_id
             deep_link_route = f"/matches/{resolved_match_id}"
@@ -255,7 +260,9 @@ def mark_all_notifications_read(
 
 
 @notifications_router.get("/preferences", response_model=NotificationPreferenceView)
-def get_preferences(current_user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> NotificationPreferenceView:
+def get_preferences(
+    current_user: User = Depends(get_current_user), session: Session = Depends(get_session)
+) -> NotificationPreferenceView:
     service = NotificationSettingsService(session)
     pref = service.get_or_create_preferences(actor=current_user)
     session.commit()
@@ -264,7 +271,11 @@ def get_preferences(current_user: User = Depends(get_current_user), session: Ses
 
 
 @notifications_router.put("/preferences", response_model=NotificationPreferenceView)
-def update_preferences(payload: NotificationPreferenceUpdate, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> NotificationPreferenceView:
+def update_preferences(
+    payload: NotificationPreferenceUpdate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> NotificationPreferenceView:
     service = NotificationSettingsService(session)
     pref = service.update_preferences(actor=current_user, payload=payload)
     session.commit()
@@ -273,13 +284,23 @@ def update_preferences(payload: NotificationPreferenceUpdate, current_user: User
 
 
 @notifications_router.get("/subscriptions", response_model=list[NotificationSubscriptionView])
-def list_subscriptions(current_user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> list[NotificationSubscriptionView]:
+def list_subscriptions(
+    current_user: User = Depends(get_current_user), session: Session = Depends(get_session)
+) -> list[NotificationSubscriptionView]:
     service = NotificationSettingsService(session)
-    return [NotificationSubscriptionView.model_validate(item) for item in service.list_subscriptions(actor=current_user)]
+    return [
+        NotificationSubscriptionView.model_validate(item) for item in service.list_subscriptions(actor=current_user)
+    ]
 
 
-@notifications_router.post("/subscriptions", response_model=NotificationSubscriptionView, status_code=status.HTTP_201_CREATED)
-def upsert_subscription(payload: NotificationSubscriptionCreate, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> NotificationSubscriptionView:
+@notifications_router.post(
+    "/subscriptions", response_model=NotificationSubscriptionView, status_code=status.HTTP_201_CREATED
+)
+def upsert_subscription(
+    payload: NotificationSubscriptionCreate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> NotificationSubscriptionView:
     service = NotificationSettingsService(session)
     item = service.upsert_subscription(actor=current_user, payload=payload)
     session.commit()
@@ -288,7 +309,9 @@ def upsert_subscription(payload: NotificationSubscriptionCreate, current_user: U
 
 
 @notifications_router.delete("/subscriptions/{subscription_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_subscription(subscription_id: str, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> None:
+def delete_subscription(
+    subscription_id: str, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)
+) -> None:
     service = NotificationSettingsService(session)
     service.remove_subscription(actor=current_user, subscription_id=subscription_id)
     session.commit()
@@ -301,13 +324,19 @@ def list_announcements(session: Session = Depends(get_session)) -> list[Platform
 
 
 @admin_router.get("/announcements", response_model=list[PlatformAnnouncementView])
-def admin_list_announcements(_: User = Depends(get_current_admin), session: Session = Depends(get_session)) -> list[PlatformAnnouncementView]:
+def admin_list_announcements(
+    _: User = Depends(get_current_admin), session: Session = Depends(get_session)
+) -> list[PlatformAnnouncementView]:
     service = NotificationSettingsService(session)
     return [PlatformAnnouncementView.model_validate(item) for item in service.list_announcements(active_only=False)]
 
 
 @admin_router.post("/announcements", response_model=PlatformAnnouncementView)
-def publish_announcement(payload: PlatformAnnouncementCreate, actor: User = Depends(get_current_admin), session: Session = Depends(get_session)) -> PlatformAnnouncementView:
+def publish_announcement(
+    payload: PlatformAnnouncementCreate,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> PlatformAnnouncementView:
     service = NotificationSettingsService(session)
     item = service.publish_announcement(actor=actor, payload=payload)
     session.commit()
