@@ -107,7 +107,9 @@ export async function visitAuthedRoute(page, route) {
         urlObj.pathname === route ||
         (route === "/app/home" && urlObj.pathname.includes("/app/home"));
     }
-  } catch {}
+  } catch {
+    // Current URL may not be valid or parseable; fall through to navigate.
+  }
 
   if (!isAlreadyAtRoute) {
     await page.goto(targetRoute, { waitUntil: "domcontentloaded", timeout: 120_000 });
