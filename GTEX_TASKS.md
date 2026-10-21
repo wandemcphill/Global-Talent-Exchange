@@ -13,13 +13,13 @@ Rules:
 - Visual product bar is locked to Football Manager 23 class — see `Docs/GTEX_VISUAL_QUALITY_BAR.md`
 - Flutter 2.5D / canvas broadcast is **not** the product match visual and must not be reintroduced
 - `P5` is complete
-- `P6` remains `READY` for current-engine production hardening
-- `P6V` is `READY` and is the active path to the FM23-class bar via `GTEX_OriginalVisualRuntime`
+- `P6` is `COMPLETE` for current-engine production hardening (`P6-01` through `P6-11` verified)
+- `P6V` is `COMPLETE` and is the active path to the FM23-class bar via `GTEX_OriginalVisualRuntime`
 - `P6V` supersedes the old P6/P7/P8 current-engine-only restriction for this isolated visual-runtime pivot only
 - The pivot is not a rewrite: GTEX remains the match authority and the original simulator owns football visuals in a separate scene
 - Batchmode build stability and the current `Gtex_MainScene` path remain required acceptance gates
 - `P7-FE` is `COMPLETE`
-- `P7-FEV` is `READY`
+- `P7-FEV` is `COMPLETE`
 - `P9-SHELL` is `COMPLETE`
 - P7-FE/P7-FEV/P9-SHELL do not change the Unity P6/P6V sequence, scope, or completion status
 
@@ -99,7 +99,7 @@ Exit gate:
 - Local sim mode is explicit, stable, and does not break live mode
 
 ### P6 GTEX Current-Engine Integration Hardening
-Status: `READY`
+Status: `COMPLETE`
 
 Source prompt:
 - `Prompt C` in `GTEX_PHASED_PROMPTS.md`
@@ -129,7 +129,7 @@ Exit gate:
 - Staging passes a 15-minute soak run and production has actionable observability plus rollback-ready procedures
 
 ### P6V Original Visual Runtime Pivot
-Status: `READY`
+Status: `COMPLETE`
 
 Source prompt:
 - `Prompt C2` in `GTEX_PHASED_PROMPTS.md`
@@ -188,7 +188,7 @@ Exit gate:
 - Critical completed-scope P0/P1 workflows are traceable end-to-end and have no known dead controls.
 
 ### P7-FEV GTEX Frontend Visual & Browser Verification
-Status: `READY`
+Status: `COMPLETE`
 
 Gate:
 - P7-FE exit gate is satisfied for the surfaces under verification.
@@ -204,7 +204,7 @@ Exit gate:
 - No known critical dead buttons, unintentionally hidden major backend capabilities, or fake/demo production functionality remain within completed scope.
 
 ### P7 Evidence For Engine Replacement
-Status: `BLOCKED`
+Status: `READY`
 
 Gate:
 - `P6` exit gate satisfied

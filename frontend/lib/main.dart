@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/gte_app_config.dart';
@@ -21,6 +23,9 @@ late GteExchangeController _bootstrapController;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (kIsWeb) {
+    SemanticsBinding.instance.ensureSemantics();
+  }
   final GteThemeController themeController = await GteThemeController.bootstrap(
     initialThemeId: GteThemeRegistry.defaultTheme.metadata.id,
   );
