@@ -20,7 +20,8 @@ Rules:
 - Batchmode build stability and the current `Gtex_MainScene` path remain required acceptance gates
 - `P7-FE` is `COMPLETE`
 - `P7-FEV` is `READY`
-- P7-FE/P7-FEV do not change the Unity P6/P6V sequence, scope, or completion status
+- `P9-SHELL` is `READY`
+- P7-FE/P7-FEV/P9-SHELL do not change the Unity P6/P6V sequence, scope, or completion status
 
 ## Phases
 
@@ -241,3 +242,50 @@ Exit gate:
 - Replacement delivers measurable benefit against the current-engine baseline
 - Rollback remains available until the replacement path is proven in staging and production-like verification
 - No build, live-runtime, or deploy regressions are introduced by the targeted replacement
+
+### P9-SHELL GTEX Flutter Shell Upgrade
+Status: `READY`
+
+Independence:
+- Independent Flutter shell, navigation, design-system, and workflow-coherence upgrade. Does not change Unity `P6`, `P6V`, `P7`, or `P8` status, scope, or sequencing, and does not change `P7-FE` or `P7-FEV` task definitions.
+- GTEX remains a single canonical Flutter application (`frontend/`) with Unity (`GTEX_OriginalVisualRuntime` + `VisualBridge`) owning 3D match visuals.
+
+Source of truth:
+- Master Plan Documents A–O (`GTEX_MASTER_PLAN_PART1_A-E.md` through `GTEX_MASTER_PLAN_PART5_O_and_Review.md`).
+- Current repository code, `shared/api_contract.json`, and verified backend API contracts take precedence over stale audits.
+
+Recorded Phase A0 Product Decisions:
+- **O-01 (Club & Boardroom stack separation):** Main club stack (`/api/clubs/*`, growth, lifecycle) powers sporting operations under the **Club** lane; owner console stack (`/api/v2/owner/*` via `api_only=True`) powers executive storytelling, inbox decisions, showroom, facilities, and delegation under **Boardroom**, linked by canonical club ID (`OwnerClubState.club_id == ClubProfile.id`).
+- **O-02 (Currencies & competition systems):** Keep main ledger currencies (`GTC` / `FNC`) and owner-console ledger currencies (`GTX` / `FAN`), as well as main competitions vs owner mini-league competitions, explicitly labelled and separated until backend convergence.
+- **O-05 (Multi-role navigation):** Provide an explicit workspace switcher (`Club` · `Scouting` · `Trading` · `Creator` · `Explore` · `Admin`) for users holding multiple roles instead of hiding club navigation behind a rigid precedence ladder.
+- **O-06 (Theme migration):** Adopt **GTEX Navy** (`#070D18` canvas, `#0E1729` surface, `#132038` card, `#E5A823` primary gold) as the canonical brand theme via a reversible theme migration (legacy theme picker gated behind a flag for one release cycle).
+- **O-09 (Public ticker & privacy rules):** Public private-jet, facility-upgrade, and player-gift broadcast announcements **include** the verified purchase price (`verified_price_gtex`), as specified by the product owner. Never expose `owner_user_id`, private club cash/budgets, confidential inbox items, or scouting dossiers on public surfaces.
+
+Recorded Pre-E1/E2 Backend Blockers (Phase `BK`, requires separate backend approval before Flutter exposes Inbox/Newsroom):
+- **B1 (Save-scoped newsroom authorization):** `GET /owner/newsroom` (`backend/app/owner_console/router.py:667-682`) does not pass `save_context_id` to `storytelling.list_newsroom_articles`, leaking `visibility="save"` match reports across saves.
+- **B2 (Owner identifier exposure):** `storytelling.broadcast_dict` (`backend/app/owner_console/storytelling.py:509-532`) includes raw `owner_user_id` in public ticker payloads; must be stripped while retaining `owner_display_name` and `verified_price_gtex`.
+- **B3 (Canonical regen portrait resolution):** `storytelling.resolve_player_portrait_url` (`backend/app/owner_console/storytelling.py:190-217`) reads `manifest.get("items")` (actual manifest key is `"assets"`) and emits unmounted `/api/media/regen-faces/...` URLs; must delegate to `RegenPortraitService` via `player_ref`.
+- **O-11 / J-M4 (Notification deep links):** `NotificationRecord` (`backend/app/notifications/router.py`) only routes `fixture_id` unless `metadata_json` contains an explicit route key (`deep_link_route`/`route`), and `Notification` (`backend/app/models/competitive_integrity.py:206`) is an outbox model without route fields.
+- **O-16 / GAP-J1 (Owner API prefix & contract sync):** `owner_console` and `club_legacy` mount with `api_only=True` (`/api/*` and `/api/v2/*`); newer storytelling routes (`/owner/ticker`, `/owner/newsroom`, `/owner/inbox/{item_id}/read`, `/owner/inbox/{item_id}/archive`, `/owner/clubs/{club_id}/story`, `/owner/clubs/{club_id}/showroom*`, `/owner/clubs/{club_id}/watchlist*`) must be synced into `shared/api_contract.json` and `frontend/lib/data/generated/gte_api_contract.g.dart` before `GteAuthedApi` calls them.
+
+Phase Sequence & Dependencies:
+- `A0` (Governance & Decisions) -> `A1` (Safe Repository Baseline)
+- `A1` -> `A2` (GTEX Navy Tokens & Reversible Theme Migration) and `A3` (Shell Navigation Model, Workspace Switcher Model & Deep-Link Resolver)
+- `A3` -> `B1` (Shell Decomposition, `StatefulShellRoute`, Session Gate Caching, `shell_v3` Flag)
+- `A2` -> `B2` (Canonical UI Components: `GtexPortrait`, `GtexStatusPresenter`, `GtexConfirmSheet`, `GtexAttentionCard`)
+- `B1` + `B2` -> `B3` (Top Bar, Club Switcher, Workspace Switcher, More Sheet)
+- `B2` + `B3` -> `C1` (Role Dashboards on Home)
+- `B1` + `B2` -> `C2` (Club Lane Tabs & Re-homing Orphaned Club Screens), `C4` (Matchday Lane), `C5` (Market & Wallet Status Flows)
+- `C2` -> `C3` (Transfers Hub) and `D1` (Staff, Academy & Recruitment Journeys)
+- `C1` -> `D2` (Role Workspaces & Admin Owner Review)
+- `BK` (Approved Backend Fixes for `B1`, `B2`, `B3`, `O-11`, `O-16`) + `C2` -> `E1` (Unified Attention & Owner Inbox) and `E2` (Grounded Newsroom & Global Ticker)
+- `E1` -> `F1` (Boardroom, Showroom, Facilities & Flagged Delegation UI)
+- `C1`..`F1` -> `F2` (Responsive, Accessibility & Performance Polish) -> `G1` (Full Regression & Legacy Retirement)
+
+Rules:
+- Keep changes small, reviewable, and reversible (one phase/sub-phase per PR).
+- Do not delete legacy screens until replacement routes and parity gates are verified in `G1`.
+- Do not modify backend business rules, database schemas, financial authority, regen generation, face-bank mapping, or Unity integration during shell phases without explicit separate approval.
+
+Exit gate:
+- Each sub-phase satisfies its unit, widget, integration, accessibility, and responsive browser verification criteria (`360`, `390`, `768`, `1280` px) with zero new analyzer errors or test regressions.
