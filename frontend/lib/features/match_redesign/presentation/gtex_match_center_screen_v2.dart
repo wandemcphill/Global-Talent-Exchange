@@ -211,37 +211,39 @@ class _MainPitchWorkspace extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool isFullTime = match.phase == GtexMatchPhase.fullTime;
     if (isFullTime) {
-      return ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          GtexMatchScoreboard(match: match),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 280,
-            child: _BroadcastPanel(
-              title: 'MATCH CAM',
-              trailing: '${match.home.formation} / ${match.away.formation}',
-              child: Center(
-                child: _PitchViewStack(
-                  match: match,
-                  onPlayerSelected: controller.selectPitchPlayer,
+      return SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            GtexMatchScoreboard(match: match),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 220,
+              child: _BroadcastPanel(
+                title: 'MATCH CAM',
+                trailing: '${match.home.formation} / ${match.away.formation}',
+                child: Center(
+                  child: _PitchViewStack(
+                    match: match,
+                    onPlayerSelected: controller.selectPitchPlayer,
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          _HorizontalTimelineScrub(match: match),
-          const SizedBox(height: 12),
-          _LineupStrip(home: match.home, away: match.away),
-          const SizedBox(height: 12),
-          GtexPostMatchPanel(
-            match: match,
-            onOpenPortfolio: onOpenPortfolio,
-            onOpenMarket: onOpenMarket,
-            onOpenNewsroomReport: onOpenNewsroomReport,
-          ),
-          _ReplayEntryBar(matchId: match.matchId, onOpenReplay: onOpenReplay),
-        ],
+            const SizedBox(height: 12),
+            _HorizontalTimelineScrub(match: match),
+            const SizedBox(height: 12),
+            _LineupStrip(home: match.home, away: match.away),
+            _ReplayEntryBar(matchId: match.matchId, onOpenReplay: onOpenReplay),
+            const SizedBox(height: 12),
+            GtexPostMatchPanel(
+              match: match,
+              onOpenPortfolio: onOpenPortfolio,
+              onOpenMarket: onOpenMarket,
+              onOpenNewsroomReport: onOpenNewsroomReport,
+            ),
+          ],
+        ),
       );
     }
     return Column(

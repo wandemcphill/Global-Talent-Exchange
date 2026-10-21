@@ -4,11 +4,7 @@ import importlib.util
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-MODULE_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "scripts"
-    / "audit_group6_production_readiness.py"
-)
+MODULE_PATH = Path(__file__).resolve().parents[2] / "scripts" / "audit_group6_production_readiness.py"
 SPEC = importlib.util.spec_from_file_location("audit_group6_production_readiness", MODULE_PATH)
 assert SPEC is not None and SPEC.loader is not None
 MODULE = importlib.util.module_from_spec(SPEC)
@@ -62,8 +58,6 @@ def test_p6_unblock_checklist_and_gap_backlog_record_final_gate_review() -> None
     assert "P6 final gate review (`P6-11`)" in group6_status
 
     for item_id in (f"P6-{index:02d}" for index in range(1, 12)):
-        matching_rows = [
-            line for line in checklist.splitlines() if line.startswith(f"| {item_id} |")
-        ]
+        matching_rows = [line for line in checklist.splitlines() if line.startswith(f"| {item_id} |")]
         assert len(matching_rows) == 1, f"Missing row for {item_id}"
         assert matching_rows[0].endswith("| `PASSED` |"), f"Row {item_id} is not PASSED: {matching_rows[0]}"
