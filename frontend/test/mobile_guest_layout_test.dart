@@ -44,7 +44,7 @@ void main() {
     await pumpGuestShell(tester, initialPath: '/app/home');
 
     final Object? exception = tester.takeException();
-    expect(find.text('Home'), findsWidgets);
+    expect(find.text('Explore'), findsWidgets);
     expect(exception, isNull, reason: '$exception');
   });
 

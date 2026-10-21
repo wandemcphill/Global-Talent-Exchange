@@ -46,7 +46,7 @@ void main() {
     expect(find.text('Home'), findsWidgets);
     expect(find.textContaining('matchday'), findsWidgets);
     expect(find.text('Home sync'), findsOneWidget);
-    expect(find.text('Studio'), findsWidgets);
+    expect(find.text('Market'), findsWidgets);
     expect(find.text('Club'), findsWidgets);
   });
 

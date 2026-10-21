@@ -38,7 +38,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Home sync'), findsOneWidget);
-    expect(find.text('Transfer Hub'), findsWidgets);
+    expect(find.text('Market'), findsWidgets);
     await tester.pumpAndSettle();
   });
 
