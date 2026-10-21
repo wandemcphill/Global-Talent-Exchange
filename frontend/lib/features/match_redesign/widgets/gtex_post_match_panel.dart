@@ -9,11 +9,15 @@ class GtexPostMatchPanel extends StatelessWidget {
     required this.match,
     this.onOpenPortfolio,
     this.onOpenMarket,
+    this.onOpenNewsroomReport,
+    this.onOpenReplay,
   });
 
   final GtexLiveMatchState match;
   final VoidCallback? onOpenPortfolio;
   final VoidCallback? onOpenMarket;
+  final VoidCallback? onOpenNewsroomReport;
+  final VoidCallback? onOpenReplay;
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +35,7 @@ class GtexPostMatchPanel extends StatelessWidget {
         background: GtexMatchVisualTokens.surfaceOverlay,
         borderColor:
             finalWhistle
-                ? const Color(0x6600E87A)
+                ? GtexMatchVisualTokens.live.withValues(alpha: 0.40)
                 : GtexMatchVisualTokens.borderStrong,
       ),
       child: Column(
@@ -136,7 +140,10 @@ class GtexPostMatchPanel extends StatelessWidget {
                   FilledButton.icon(
                     key: const Key('gtex-post-match-portfolio-btn'),
                     onPressed: onOpenPortfolio,
-                    icon: const Icon(Icons.account_balance_wallet_outlined, size: 16),
+                    icon: const Icon(
+                      Icons.account_balance_wallet_outlined,
+                      size: 16,
+                    ),
                     label: const Text('Review Portfolio'),
                   ),
                 if (onOpenMarket != null)
@@ -145,6 +152,23 @@ class GtexPostMatchPanel extends StatelessWidget {
                     onPressed: onOpenMarket,
                     icon: const Icon(Icons.storefront_outlined, size: 16),
                     label: const Text('Explore Transfer Hub'),
+                  ),
+                if (onOpenNewsroomReport != null)
+                  OutlinedButton.icon(
+                    key: const Key('gtex-post-match-newsroom-btn'),
+                    onPressed: onOpenNewsroomReport,
+                    icon: const Icon(Icons.article_outlined, size: 16),
+                    label: const Text('Open Newsroom Match Report'),
+                  ),
+                if (onOpenReplay != null)
+                  TextButton.icon(
+                    key: const Key('gtex-post-match-replay-btn'),
+                    onPressed: onOpenReplay,
+                    icon: const Icon(
+                      Icons.replay_circle_filled_outlined,
+                      size: 16,
+                    ),
+                    label: const Text('Open 2D Replay'),
                   ),
               ],
             ),
@@ -166,9 +190,9 @@ class _StatusTag extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withOpacity(.10),
+        color: color.withValues(alpha: .10),
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withOpacity(.30)),
+        border: Border.all(color: color.withValues(alpha: .30)),
       ),
       child: Text(
         label,

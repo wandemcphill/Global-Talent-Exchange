@@ -12,21 +12,22 @@ import '../widgets/gtex_match_lineups.dart';
 import '../widgets/gtex_match_scoreboard.dart';
 import '../widgets/gtex_match_stats_panel.dart';
 import '../widgets/gtex_match_timeline.dart';
+import '../widgets/gtex_match_visual_tokens.dart';
 import '../widgets/gtex_post_match_panel.dart';
 import '../widgets/gtex_tactics_panel.dart';
 import 'gtex_match_center_controller.dart';
 
 class _GtexMatchColors {
-  static const Color shell = Color(0xFF0A0C0F);
-  static const Color panel = Color(0xFF111418);
-  static const Color overlay = Color(0xFF181C22);
-  static const Color border = Color(0xFF252D38);
-  static const Color text = Color(0xFFE8EDF4);
-  static const Color muted = Color(0xFF8A97A8);
-  static const Color primary = Color(0xFF00E87A);
-  static const Color amber = Color(0xFFFFB800);
-  static const Color red = Color(0xFFFF3D3D);
-  static const Color blue = Color(0xFF2F80ED);
+  static const Color shell = GtexMatchVisualTokens.surfaceBase;
+  static const Color panel = GtexMatchVisualTokens.surfaceRaised;
+  static const Color overlay = GtexMatchVisualTokens.surfaceOverlay;
+  static const Color border = GtexMatchVisualTokens.border;
+  static const Color text = GtexMatchVisualTokens.textPrimary;
+  static const Color muted = GtexMatchVisualTokens.textSecondary;
+  static const Color primary = GtexMatchVisualTokens.live;
+  static const Color amber = GtexMatchVisualTokens.amber;
+  static const Color red = GtexMatchVisualTokens.red;
+  static const Color blue = GtexMatchVisualTokens.blue;
 }
 
 class GtexMatchCenterScreenV2 extends StatefulWidget {
@@ -38,11 +39,13 @@ class GtexMatchCenterScreenV2 extends StatefulWidget {
     this.onExit,
     this.onOpenPortfolio,
     this.onOpenMarket,
+    this.onOpenNewsroomReport,
   });
 
   final String matchId;
   final VoidCallback? onOpenPortfolio;
   final VoidCallback? onOpenMarket;
+  final VoidCallback? onOpenNewsroomReport;
   final GtexMatchRepository? repository;
 
   /// Opens the replay archive for this fixture. When null the replay CTA is
@@ -143,8 +146,15 @@ class _GtexMatchCenterScreenV2State extends State<GtexMatchCenterScreenV2> {
                                   match: match,
                                   controller: controller,
                                   onOpenReplay: widget.onOpenReplay,
-                                onOpenPortfolio: widget.onOpenPortfolio ?? () => context.go('/app/portfolio'),
-                                onOpenMarket: widget.onOpenMarket ?? () => context.go('/app/market'),
+                                  onOpenPortfolio:
+                                      widget.onOpenPortfolio ??
+                                      () => context.go('/app/portfolio'),
+                                  onOpenMarket:
+                                      widget.onOpenMarket ??
+                                      () => context.go('/app/market'),
+                                  onOpenNewsroomReport:
+                                      widget.onOpenNewsroomReport ??
+                                      () => context.go('/world'),
                                 ),
                               ),
                               const SizedBox(width: 16),
@@ -187,6 +197,7 @@ class _MainPitchWorkspace extends StatelessWidget {
     this.onOpenReplay,
     this.onOpenPortfolio,
     this.onOpenMarket,
+    this.onOpenNewsroomReport,
   });
 
   final GtexLiveMatchState match;
@@ -194,6 +205,7 @@ class _MainPitchWorkspace extends StatelessWidget {
   final ValueChanged<String>? onOpenReplay;
   final VoidCallback? onOpenPortfolio;
   final VoidCallback? onOpenMarket;
+  final VoidCallback? onOpenNewsroomReport;
 
   @override
   Widget build(BuildContext context) {
@@ -222,6 +234,7 @@ class _MainPitchWorkspace extends StatelessWidget {
             match: match,
             onOpenPortfolio: onOpenPortfolio,
             onOpenMarket: onOpenMarket,
+            onOpenNewsroomReport: onOpenNewsroomReport,
           ),
           _ReplayEntryBar(matchId: match.matchId, onOpenReplay: onOpenReplay),
         ],
@@ -1250,14 +1263,14 @@ class _TabButton extends StatelessWidget {
           decoration: BoxDecoration(
             color:
                 selected
-                    ? const Color(0xFF00E87A).withOpacity(.14)
-                    : const Color(0xFF101713),
+                    ? GtexMatchVisualTokens.live.withValues(alpha: 0.14)
+                    : GtexMatchVisualTokens.surfaceOverlay,
             borderRadius: BorderRadius.circular(6),
             border: Border.all(
               color:
                   selected
-                      ? const Color(0xFF00E87A).withOpacity(.48)
-                      : const Color(0xFF2A3A31),
+                      ? GtexMatchVisualTokens.live.withValues(alpha: 0.48)
+                      : GtexMatchVisualTokens.border,
             ),
           ),
           child: Row(
@@ -1267,7 +1280,9 @@ class _TabButton extends StatelessWidget {
                 icon,
                 size: 18,
                 color:
-                    selected ? const Color(0xFF00E87A) : _GtexMatchColors.muted,
+                    selected
+                        ? GtexMatchVisualTokens.live
+                        : _GtexMatchColors.muted,
               ),
               const SizedBox(width: 10),
               Text(

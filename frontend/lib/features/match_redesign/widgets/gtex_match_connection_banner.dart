@@ -112,7 +112,7 @@ class GtexMatchConnectionBanner extends StatelessWidget {
               'Showing the last confirmed state while the live feed recovers.',
           semanticLabel: 'reconnecting, showing last confirmed state',
           icon: Icons.sync,
-          accent: Color(0xFFFFB800),
+          accent: GtexMatchVisualTokens.amber,
           showSpinner: true,
           allowRetry: false,
         );
@@ -123,7 +123,7 @@ class GtexMatchConnectionBanner extends StatelessWidget {
               'The live feed could not be restored. Data below may be behind.',
           semanticLabel: 'feed offline, data may be out of date',
           icon: Icons.cloud_off_outlined,
-          accent: Color(0xFFFF3D3D),
+          accent: GtexMatchVisualTokens.red,
           allowRetry: true,
         );
       case GtexMatchConnectionStatus.connecting:
@@ -132,7 +132,7 @@ class GtexMatchConnectionBanner extends StatelessWidget {
           message: 'Attaching to the live match authority.',
           semanticLabel: 'connecting to live match feed',
           icon: Icons.podcasts_outlined,
-          accent: Color(0xFF2F80ED),
+          accent: GtexMatchVisualTokens.blue,
           showSpinner: true,
           allowRetry: false,
         );
@@ -144,7 +144,7 @@ class GtexMatchConnectionBanner extends StatelessWidget {
           message: 'This match has finished. The result below is final.',
           semanticLabel: 'match finished, live feed closed, result is final',
           icon: Icons.verified_outlined,
-          accent: Color(0xFF00E87A),
+          accent: GtexMatchVisualTokens.live,
           allowRetry: false,
         );
       case GtexMatchConnectionStatus.live:

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../data/gte_api_repository.dart';
 import '../../data/match_gift_api.dart';
@@ -11,17 +12,35 @@ import 'live_match_viewer_route_support.dart';
 import 'match_viewer_capability.dart';
 
 class MatchViewerRouteScreen extends ConsumerWidget {
-  const MatchViewerRouteScreen({super.key, required this.matchKey});
+  const MatchViewerRouteScreen({
+    super.key,
+    required this.matchKey,
+    this.onOpenMatchCenter,
+  });
 
   final String matchKey;
+  final VoidCallback? onOpenMatchCenter;
+
+  void _defaultOpenMatchCenter(BuildContext context) {
+    if (onOpenMatchCenter != null) {
+      onOpenMatchCenter!();
+      return;
+    }
+    final GoRouter? router = GoRouter.maybeOf(context);
+    if (router != null) {
+      router.go('/app/play/overview');
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final String resolvedMatchKey = matchKey.trim();
     final bool allowFixtureFallback =
         ref.watch(criticalBackendModeProvider) == GteBackendMode.fixture;
+    final bool canNavigateMatchCenter =
+        onOpenMatchCenter != null || GoRouter.maybeOf(context) != null;
     if (resolvedMatchKey.isEmpty) {
-      return const MatchRouteBlockedScreen(
+      return MatchRouteBlockedScreen(
         title: '2D Match Viewer',
         subtitle:
             'This 2D route opens only after the selected match is identified from the active viewer contract.',
@@ -30,6 +49,11 @@ class MatchViewerRouteScreen extends ConsumerWidget {
         detailTitle: 'Match unavailable',
         detailSubtitle:
             'Pick a routed match to open the live 2D viewer or its truthful demo fallback.',
+        actionLabel: 'Open Match Center',
+        onAction:
+            canNavigateMatchCenter
+                ? () => _defaultOpenMatchCenter(context)
+                : null,
       );
     }
 
@@ -75,6 +99,8 @@ class MatchViewerRouteScreen extends ConsumerWidget {
         final _MatchViewerRouteFailure failure = _MatchViewerRouteFailure.from(
           error,
         );
+        final bool canNavigateMatchCenter =
+            onOpenMatchCenter != null || GoRouter.maybeOf(context) != null;
         return MatchRouteBlockedScreen(
           title: '2D Match Viewer',
           subtitle: failure.subtitle,
@@ -87,6 +113,8 @@ class MatchViewerRouteScreen extends ConsumerWidget {
                   ? () => ref.invalidate(
                     liveMatchViewerQualifiedRouteProvider(resolvedMatchKey),
                   )
+                  : canNavigateMatchCenter
+                  ? () => _defaultOpenMatchCenter(context)
                   : null,
         );
       },
@@ -248,8 +276,8 @@ class _FallbackMatchViewerRouteView extends StatelessWidget {
         'title': '2D Match Viewer',
       }),
       matchKey: matchKey,
-      preferFallback: true,
       titleOverride: '2D Match Viewer',
+      preferFallback: true,
     );
   }
 }

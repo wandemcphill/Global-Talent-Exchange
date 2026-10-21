@@ -275,7 +275,7 @@ Phase Sequence, Status & Dependencies:
 - `A2` -> `B2` (`COMPLETE` — Canonical UI Components: `GtexPortrait`, `GtexStatusPresenter`, `GtexConfirmSheet`, `GtexAttentionCard`, `GtexMoney`, `GtexPolicyChip`)
 - `B1` + `B2` -> `B3` (`COMPLETE` — Top Bar, Club Switcher, Workspace Switcher, More Sheet, `GtexShellScaffold`)
 - `B2` + `B3` -> `C1` (`COMPLETE` — Role Dashboards on Home)
-- `B1` + `B2` -> `C2` (`COMPLETE` — Club Lane Tabs & Re-homing Orphaned Club Screens), `C4` (`READY` — Matchday Lane), `C5` (Market & Wallet Status Flows)
+- `B1` + `B2` -> `C2` (`COMPLETE` — Club Lane Tabs & Re-homing Orphaned Club Screens), `C4` (`COMPLETE` — Matchday Lane), `C5` (`READY` — Market & Wallet Status Flows)
 - `C2` -> `C3` (`COMPLETE` — Transfers Hub) and `D1` (Staff, Academy & Recruitment Journeys)
 - `C1` -> `D2` (Role Workspaces & Admin Owner Review)
 - `BK` (Approved Backend Fixes for `B1`, `B2`, `B3`, `O-11`, `O-16`) + `C2` -> `E1` (Unified Attention & Owner Inbox) and `E2` (Grounded Newsroom & Global Ticker)
