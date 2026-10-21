@@ -38,6 +38,10 @@ class GtexClubOwnerDashboardV2 extends StatefulWidget {
     this.onPromoteAcademyProspect,
     this.onOpenMarket,
     this.onCreateCompetition,
+    this.onOpenLineup,
+    this.onOpenCoachMarket,
+    this.initialSection = GtexClubOwnerSection.overview,
+    this.confirmConsequentialLifecycleActions = false,
     this.clubOwnership,
     this.clubOwnershipLoading = false,
     this.clubOwnershipError,
@@ -70,6 +74,10 @@ class GtexClubOwnerDashboardV2 extends StatefulWidget {
   final ValueChanged<String>? onPromoteAcademyProspect;
   final VoidCallback? onOpenMarket;
   final VoidCallback? onCreateCompetition;
+  final VoidCallback? onOpenLineup;
+  final VoidCallback? onOpenCoachMarket;
+  final GtexClubOwnerSection initialSection;
+  final bool confirmConsequentialLifecycleActions;
 
   /// The signed-in user's live-valued club-share book (`GET /api/portfolio/clubs`).
   final GtexClubOwnershipPortfolio? clubOwnership;
@@ -93,7 +101,7 @@ class _GtexClubOwnerDashboardV2State extends State<GtexClubOwnerDashboardV2> {
       clubId: widget.clubId,
       clubName: widget.clubName,
       initialSnapshot: widget.initialSnapshot,
-    );
+    )..selectOwnerSection(widget.initialSection);
   }
 
   @override
@@ -238,6 +246,11 @@ class _GtexClubOwnerDashboardV2State extends State<GtexClubOwnerDashboardV2> {
                   clubOwnershipError: widget.clubOwnershipError,
                   onRefreshClubOwnership: widget.onRefreshClubOwnership,
                   onOpenClubShareMarket: widget.onOpenClubShareMarket,
+                  onOpenLineup: widget.onOpenLineup,
+                  onOpenCoachMarket: widget.onOpenCoachMarket,
+                  onSelectSection: _controller.selectOwnerSection,
+                  confirmConsequentialLifecycleActions:
+                      widget.confirmConsequentialLifecycleActions,
                 ),
               ),
             ],
@@ -328,6 +341,10 @@ class _OwnerDetail extends StatelessWidget {
     required this.clubOwnershipError,
     required this.onRefreshClubOwnership,
     required this.onOpenClubShareMarket,
+    required this.onOpenLineup,
+    required this.onOpenCoachMarket,
+    required this.onSelectSection,
+    required this.confirmConsequentialLifecycleActions,
   });
 
   final GtexClubWorkspaceSnapshot snapshot;
@@ -353,6 +370,10 @@ class _OwnerDetail extends StatelessWidget {
   final String? clubOwnershipError;
   final VoidCallback? onRefreshClubOwnership;
   final VoidCallback? onOpenClubShareMarket;
+  final VoidCallback? onOpenLineup;
+  final VoidCallback? onOpenCoachMarket;
+  final ValueChanged<GtexClubOwnerSection> onSelectSection;
+  final bool confirmConsequentialLifecycleActions;
 
   @override
   Widget build(BuildContext context) {
@@ -421,6 +442,15 @@ class _OwnerDetail extends StatelessWidget {
             icon: Icons.groups_2_outlined,
           ),
           const SizedBox(height: GtexSpacing.md),
+          _SquadLineupAndRegistrationBanner(
+            dashboard: lifecycleDashboard,
+            loading: lifecycleLoading,
+            onOpenLineup: onOpenLineup,
+            onSubmitSquadRegistration: onSubmitSquadRegistration,
+            onLockSquadRegistration: onLockSquadRegistration,
+            confirmConsequentialActions: confirmConsequentialLifecycleActions,
+          ),
+          const SizedBox(height: GtexSpacing.md),
           GtexClubSquadList(squad: snapshot.squad),
         ] else if (section == GtexClubOwnerSection.staff) ...<Widget>[
           _StaffMarketplacePanel(
@@ -429,6 +459,7 @@ class _OwnerDetail extends StatelessWidget {
             error: growthError,
             onRefresh: onRefreshGrowth,
             onHireStaff: onHireStaff,
+            onOpenCoachMarket: onOpenCoachMarket,
           ),
         ] else if (section == GtexClubOwnerSection.academy) ...<Widget>[
           _AcademyPipelinePanel(
@@ -439,6 +470,14 @@ class _OwnerDetail extends StatelessWidget {
             onGenerateProspects: onGenerateAcademyProspects,
             onOfferContract: onOfferAcademyContract,
             onPromoteProspect: onPromoteAcademyProspect,
+          ),
+        ] else if (section == GtexClubOwnerSection.recruitment) ...<Widget>[
+          _RecruitmentPipelinePanel(
+            snapshot: snapshot,
+            growthDashboard: growthDashboard,
+            onMoveToTransfers:
+                () => onSelectSection(GtexClubOwnerSection.transfers),
+            onOpenMarket: onOpenClubShareMarket,
           ),
         ] else if (section == GtexClubOwnerSection.sponsorships) ...<Widget>[
           _SponsorshipGrowthPanel(
@@ -495,6 +534,27 @@ class _OwnerDetail extends StatelessWidget {
             onRetry: onRefreshClubOwnership,
             onBrowseClubMarket: onOpenClubShareMarket,
           ),
+          if (growthDashboard != null) ...<Widget>[
+            const SizedBox(height: GtexSpacing.md),
+            _SponsorshipGrowthPanel(
+              dashboard: growthDashboard,
+              loading: growthLoading,
+              error: growthError,
+              onRefresh: onRefreshGrowth,
+            ),
+          ],
+          if (snapshot.orders.isNotEmpty) ...<Widget>[
+            const SizedBox(height: GtexSpacing.md),
+            _OrdersList(snapshot: snapshot),
+          ],
+        ] else if (section == GtexClubOwnerSection.boardroom) ...<Widget>[
+          _BoardroomExecutivePanel(
+            snapshot: snapshot,
+            lifecycleDashboard: lifecycleDashboard,
+            lifecycleLoading: lifecycleLoading,
+            lifecycleError: lifecycleError,
+            onRefreshLifecycle: onRefreshLifecycle,
+          ),
         ] else if (section == GtexClubOwnerSection.competitions) ...<Widget>[
           _CompetitionOpsPanel(snapshot: snapshot),
         ] else if (section == GtexClubOwnerSection.identity) ...<Widget>[
@@ -506,6 +566,10 @@ class _OwnerDetail extends StatelessWidget {
           ),
           const SizedBox(height: GtexSpacing.md),
           GtexClubHero(snapshot: snapshot, ownerFacing: true),
+          if (snapshot.trophies.isNotEmpty) ...<Widget>[
+            const SizedBox(height: GtexSpacing.md),
+            GtexClubTrophyGrid(trophies: snapshot.trophies),
+          ],
         ] else if (section == GtexClubOwnerSection.trophies) ...<Widget>[
           _SectionHeader(
             title: 'Trophy cabinet',
@@ -745,6 +809,7 @@ class _StaffMarketplacePanel extends StatelessWidget {
     required this.error,
     required this.onRefresh,
     required this.onHireStaff,
+    this.onOpenCoachMarket,
   });
 
   final GtexClubGrowthDashboard? dashboard;
@@ -752,6 +817,7 @@ class _StaffMarketplacePanel extends StatelessWidget {
   final String? error;
   final VoidCallback? onRefresh;
   final ValueChanged<String>? onHireStaff;
+  final VoidCallback? onOpenCoachMarket;
 
   @override
   Widget build(BuildContext context) {
@@ -778,6 +844,18 @@ class _StaffMarketplacePanel extends StatelessWidget {
               'Hire managers, agents, scouts, and coaches into Fan Coin payroll contracts.',
           icon: Icons.badge_outlined,
         ),
+        if (onOpenCoachMarket != null) ...<Widget>[
+          const SizedBox(height: GtexSpacing.sm),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              key: const Key('gtex-club-open-coaches-btn'),
+              onPressed: onOpenCoachMarket,
+              icon: const Icon(Icons.sports_rounded, size: 18),
+              label: const Text('Open Manager & Coach Market'),
+            ),
+          ),
+        ],
         const SizedBox(height: GtexSpacing.md),
         GtexPanel(
           title: 'Staff effects',
@@ -1597,6 +1675,8 @@ class _OrdersList extends StatelessWidget {
                         ],
                       ),
                     ),
+                    GtexStatusChip.fromBackendStatus(order.status),
+                    const SizedBox(width: GtexSpacing.sm),
                     Text(
                       gtexFormatCredits(order.amountCredits),
                       style: const TextStyle(
@@ -1844,6 +1924,254 @@ class _MiniLine extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+
+class _SquadLineupAndRegistrationBanner extends StatelessWidget {
+  const _SquadLineupAndRegistrationBanner({
+    required this.dashboard,
+    required this.loading,
+    required this.onOpenLineup,
+    required this.onSubmitSquadRegistration,
+    required this.onLockSquadRegistration,
+    required this.confirmConsequentialActions,
+  });
+
+  final GtexClubOperatingDashboard? dashboard;
+  final bool loading;
+  final VoidCallback? onOpenLineup;
+  final VoidCallback? onSubmitSquadRegistration;
+  final VoidCallback? onLockSquadRegistration;
+  final bool confirmConsequentialActions;
+
+  Future<void> _handleLock(BuildContext context) async {
+    final VoidCallback? callback = onLockSquadRegistration;
+    if (callback == null) {
+      return;
+    }
+    if (!confirmConsequentialActions) {
+      callback();
+      return;
+    }
+    await GtexConfirmSheet.show(
+      context,
+      title: 'Lock squad registration?',
+      summary:
+          'Locking the squad finalizes your registered competition roster for the current window.',
+      confirmLabel: 'Lock squad',
+      variant: GtexConfirmVariant.destructive,
+      onConfirm: (_) async => callback(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final GtexClubSquadRegistration? registration =
+        dashboard?.squadRegistration;
+    return GtexPanel(
+      title: 'Lineup & squad registration',
+      subtitle:
+          'Configure tactics and starting XI, or submit and lock your competition roster.',
+      accent: GtexColors.cyan,
+      trailing:
+          registration == null
+              ? null
+              : GtexStatusChip.fromBackendStatus(registration.status.name),
+      child: Wrap(
+        spacing: GtexSpacing.sm,
+        runSpacing: GtexSpacing.sm,
+        children: <Widget>[
+          FilledButton.icon(
+            key: const Key('gtex-club-open-lineup-btn'),
+            onPressed: onOpenLineup,
+            icon: const Icon(Icons.dashboard_customize_outlined, size: 18),
+            label: const Text('Open Lineup & Tactics'),
+          ),
+          if (onSubmitSquadRegistration != null)
+            OutlinedButton.icon(
+              key: const Key('gtex-club-squad-submit-btn'),
+              onPressed:
+                  loading || registration?.isLocked == true
+                      ? null
+                      : onSubmitSquadRegistration,
+              icon: const Icon(Icons.outbox_outlined, size: 18),
+              label: const Text('Submit registration'),
+            ),
+          if (onLockSquadRegistration != null)
+            OutlinedButton.icon(
+              key: const Key('gtex-club-squad-lock-btn'),
+              onPressed:
+                  loading || registration?.isLocked == true
+                      ? null
+                      : () => _handleLock(context),
+              icon: const Icon(Icons.lock_outline, size: 18),
+              label: const Text('Lock registration'),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecruitmentPipelinePanel extends StatelessWidget {
+  const _RecruitmentPipelinePanel({
+    required this.snapshot,
+    required this.growthDashboard,
+    required this.onMoveToTransfers,
+    this.onOpenMarket,
+  });
+
+  final GtexClubWorkspaceSnapshot snapshot;
+  final GtexClubGrowthDashboard? growthDashboard;
+  final VoidCallback onMoveToTransfers;
+  final VoidCallback? onOpenMarket;
+
+  @override
+  Widget build(BuildContext context) {
+    final int prospectCount = growthDashboard?.academyProspects.length ?? 0;
+    final int activeScouts =
+        growthDashboard?.staffContracts
+            .where((GtexStaffContract c) => c.active)
+            .length ??
+        0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const _SectionHeader(
+          title: 'Recruitment & scouting',
+          subtitle:
+              'Scouting assignments, prospect evaluation, and shortlist-to-transfer pipeline.',
+          icon: Icons.radar_outlined,
+        ),
+        const SizedBox(height: GtexSpacing.md),
+        Wrap(
+          spacing: GtexSpacing.sm,
+          runSpacing: GtexSpacing.sm,
+          children: <Widget>[
+            SizedBox(
+              width: 210,
+              child: GtexMetricTile(
+                label: 'Active staff & scouts',
+                value: '$activeScouts',
+                icon: Icons.badge_outlined,
+                accent: GtexColors.pitch,
+              ),
+            ),
+            SizedBox(
+              width: 210,
+              child: GtexMetricTile(
+                label: 'Tracked prospects',
+                value: '$prospectCount',
+                icon: Icons.school_outlined,
+                accent: GtexColors.cyan,
+              ),
+            ),
+            SizedBox(
+              width: 210,
+              child: GtexMetricTile(
+                label: 'Shortlist orders',
+                value: '${snapshot.orders.length}',
+                icon: Icons.playlist_add_check_outlined,
+                accent: GtexColors.gold,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: GtexSpacing.md),
+        GtexPanel(
+          title: 'Discovery to bid pipeline',
+          subtitle:
+              'Move shortlisted targets directly into the club transfer room to place bids or review open offers.',
+          accent: GtexColors.gold,
+          child: Wrap(
+            spacing: GtexSpacing.sm,
+            runSpacing: GtexSpacing.sm,
+            children: <Widget>[
+              FilledButton.icon(
+                key: const Key('gtex-club-recruitment-to-transfers-btn'),
+                onPressed: onMoveToTransfers,
+                icon: const Icon(Icons.swap_horiz_rounded, size: 18),
+                label: const Text('Move to Transfers'),
+              ),
+              if (onOpenMarket != null)
+                OutlinedButton.icon(
+                  onPressed: onOpenMarket,
+                  icon: const Icon(Icons.storefront_outlined, size: 18),
+                  label: const Text('Browse Market'),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BoardroomExecutivePanel extends StatelessWidget {
+  const _BoardroomExecutivePanel({
+    required this.snapshot,
+    required this.lifecycleDashboard,
+    required this.lifecycleLoading,
+    required this.lifecycleError,
+    required this.onRefreshLifecycle,
+  });
+
+  final GtexClubWorkspaceSnapshot snapshot;
+  final GtexClubOperatingDashboard? lifecycleDashboard;
+  final bool lifecycleLoading;
+  final String? lifecycleError;
+  final VoidCallback? onRefreshLifecycle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const _SectionHeader(
+          title: 'Boardroom & executive desk',
+          subtitle:
+              'Executive governance, delegation posture, silverware showroom, and club story.',
+          icon: Icons.apartment_rounded,
+        ),
+        const SizedBox(height: GtexSpacing.md),
+        GtexPanel(
+          title: 'Delegation & executive policies',
+          subtitle:
+              'Sporting operations run on the main club stack; executive decisions require owner confirmation.',
+          accent: GtexColors.gold,
+          child: const Wrap(
+            spacing: GtexSpacing.sm,
+            runSpacing: GtexSpacing.sm,
+            children: <Widget>[
+              GtexPolicyChip(
+                mode: GtexDelegationPolicyMode.ownerOnly,
+                capLabel: 'Transfers & Squad Lock',
+              ),
+              GtexPolicyChip(
+                mode: GtexDelegationPolicyMode.approvalRequired,
+                capLabel: 'Scouting & Academy Intake',
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: GtexSpacing.md),
+        _LifecycleOverviewPanel(
+          dashboard: lifecycleDashboard,
+          loading: lifecycleLoading,
+          error: lifecycleError,
+          onRefresh: onRefreshLifecycle,
+        ),
+        if (snapshot.trophies.isNotEmpty) ...<Widget>[
+          const SizedBox(height: GtexSpacing.md),
+          GtexClubTrophyGrid(trophies: snapshot.trophies),
+        ],
+        if (snapshot.news.isNotEmpty) ...<Widget>[
+          const SizedBox(height: GtexSpacing.md),
+          GtexClubNewsList(news: snapshot.news),
+        ],
+      ],
     );
   }
 }

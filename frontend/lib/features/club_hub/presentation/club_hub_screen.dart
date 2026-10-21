@@ -22,6 +22,7 @@ class ClubHubScreen extends StatelessWidget {
     this.onOpenLogin,
     this.initialTab = ClubNavigationTab.squad,
     this.navigationDependencies,
+    this.showAiAssistant = false,
   });
 
   final String clubId;
@@ -33,6 +34,10 @@ class ClubHubScreen extends StatelessWidget {
   final VoidCallback? onOpenLogin;
   final ClubNavigationTab initialTab;
   final GteNavigationDependencies? navigationDependencies;
+
+  /// Decision O-12: AI-manager autopilot/assistant stays hidden in the new IA
+  /// until reviewed.
+  final bool showAiAssistant;
 
   GteNavigationDependencies get _dependencies =>
       navigationDependencies ??
@@ -257,18 +262,19 @@ class ClubHubScreen extends StatelessWidget {
                         icon: Icons.auto_graph_outlined,
                         label: 'Dynasty',
                       ),
-                      _buildRouteButton(
-                        onPressed:
-                            () => _openRoute(
-                              context,
-                              ClubAiAssistantRouteData(
-                                clubId: clubId,
-                                clubName: _resolvedClubName,
+                      if (showAiAssistant)
+                        _buildRouteButton(
+                          onPressed:
+                              () => _openRoute(
+                                context,
+                                ClubAiAssistantRouteData(
+                                  clubId: clubId,
+                                  clubName: _resolvedClubName,
+                                ),
                               ),
-                            ),
-                        icon: Icons.smart_toy_outlined,
-                        label: 'AI assistant',
-                      ),
+                          icon: Icons.smart_toy_outlined,
+                          label: 'AI assistant',
+                        ),
                       _buildRouteButton(
                         onPressed:
                             () => _openRoute(
