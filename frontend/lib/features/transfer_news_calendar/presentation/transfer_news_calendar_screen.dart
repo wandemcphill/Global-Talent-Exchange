@@ -4,6 +4,11 @@ import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/features/shared/data/gte_feature_support.dart';
 import 'package:gte_frontend/features/shared/presentation/gte_feature_forms.dart';
+import 'package:gte_frontend/features/transfer_center/live_transfer_center_provider.dart';
+import 'package:gte_frontend/features/transfer_center/presentation/gtex_transfers_hub_panel.dart';
+import 'package:gte_frontend/ui_gtex/components/gtex_status_chip.dart';
+import 'package:gte_frontend/ui_gtex/components/gtex_status_presenter.dart';
+import 'package:gte_frontend/ui_gtex/theme/gtex_colors.dart';
 import 'package:gte_frontend/widgets/gte_metric_chip.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
@@ -19,16 +24,22 @@ class TransferNewsCalendarScreen extends StatefulWidget {
     required this.backendMode,
     this.accessToken,
     this.currentUserRole,
+    this.activeClubId,
     this.initialTab = 'windows',
     this.onOpenLogin,
+    this.onOpenPlayer,
+    this.onOpenFinancialMarket,
   });
 
   final String baseUrl;
   final GteBackendMode backendMode;
   final String? accessToken;
   final String? currentUserRole;
+  final String? activeClubId;
   final String initialTab;
   final VoidCallback? onOpenLogin;
+  final ValueChanged<String>? onOpenPlayer;
+  final VoidCallback? onOpenFinancialMarket;
 
   @override
   State<TransferNewsCalendarScreen> createState() =>
@@ -39,7 +50,16 @@ class _TransferNewsCalendarScreenState
     extends State<TransferNewsCalendarScreen> {
   late TransferNewsCalendarController _controller;
   late GteAuthedApi _api;
+  late TransferCenterApi _transferCenterApi;
+  late GtexTransferHubSegment _selectedSegment;
 
+  List<TransferCenterListingRecord> _listings =
+      const <TransferCenterListingRecord>[];
+  List<TransferHubOfferRecord> _offers = const <TransferHubOfferRecord>[];
+  List<TransferNegotiationRecord> _negotiations =
+      const <TransferNegotiationRecord>[];
+  List<TransferShortlistEntryRecord> _shortlist =
+      const <TransferShortlistEntryRecord>[];
   List<_TransferWindowRecord> _windows = const <_TransferWindowRecord>[];
   List<_TransferBidRecord> _bids = const <_TransferBidRecord>[];
   String? _selectedWindowId;
@@ -58,6 +78,7 @@ class _TransferNewsCalendarScreenState
   @override
   void initState() {
     super.initState();
+    _selectedSegment = GtexTransferHubSegment.fromSlug(widget.initialTab);
     _hydrateClients();
     _load();
   }
@@ -68,7 +89,8 @@ class _TransferNewsCalendarScreenState
     if (oldWidget.baseUrl != widget.baseUrl ||
         oldWidget.backendMode != widget.backendMode ||
         oldWidget.accessToken != widget.accessToken ||
-        oldWidget.currentUserRole != widget.currentUserRole) {
+        oldWidget.currentUserRole != widget.currentUserRole ||
+        oldWidget.activeClubId != widget.activeClubId) {
       _controller.dispose();
       _hydrateClients();
       _load();
@@ -92,6 +114,7 @@ class _TransferNewsCalendarScreenState
       mode: widget.backendMode,
       accessToken: widget.accessToken,
     );
+    _transferCenterApi = TransferCenterApi(client: _api);
   }
 
   Future<void> _load() async {
@@ -99,7 +122,40 @@ class _TransferNewsCalendarScreenState
     if (_isAdmin) {
       await _controller.loadAdminEvents();
     }
-    await _loadWindows();
+    await Future.wait<void>(<Future<void>>[
+      _loadWindows(),
+      _loadTransferHubData(),
+    ]);
+  }
+
+  Future<void> _loadTransferHubData() async {
+    try {
+      final List<TransferCenterListingRecord> listings =
+          await _transferCenterApi.listListings(status: 'open');
+      if (mounted) {
+        setState(() {
+          _listings = listings;
+        });
+      }
+    } catch (_) {
+      // Preserve last known listings when unconfigured in test/offline mode.
+    }
+
+    if (!_isAuthenticated) {
+      return;
+    }
+
+    try {
+      final List<TransferHubOfferRecord> offers = await _transferCenterApi
+          .listOffers(clubId: widget.activeClubId);
+      if (mounted) {
+        setState(() {
+          _offers = offers;
+        });
+      }
+    } catch (_) {
+      // Non-fatal in guest/limited test environments.
+    }
   }
 
   Future<void> _loadWindows() async {
@@ -207,7 +263,7 @@ class _TransferNewsCalendarScreenState
 
   Future<void> _acceptBid(_TransferBidRecord bid) async {
     final String? windowId = _selectedWindowId;
-    if (windowId == null) {
+    if (windowId == null || bid.isTerminal) {
       return;
     }
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
@@ -233,7 +289,7 @@ class _TransferNewsCalendarScreenState
 
   Future<void> _rejectBid(_TransferBidRecord bid) async {
     final String? windowId = _selectedWindowId;
-    if (windowId == null) {
+    if (windowId == null || bid.isTerminal) {
       return;
     }
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
@@ -250,6 +306,130 @@ class _TransferNewsCalendarScreenState
     } catch (error) {
       messenger.showSnackBar(
         SnackBar(content: Text(AppFeedback.messageFor(error))),
+      );
+    }
+  }
+
+  Future<void> _acceptHubOffer(TransferHubOfferRecord offer) async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    try {
+      await _transferCenterApi.acceptOffer(offer.id);
+      await _loadTransferHubData();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Transfer offer accepted.')),
+      );
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(AppFeedback.messageFor(error))),
+      );
+    }
+  }
+
+  Future<void> _rejectHubOffer(TransferHubOfferRecord offer) async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    try {
+      await _transferCenterApi.rejectOffer(offer.id);
+      await _loadTransferHubData();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Transfer offer rejected.')),
+      );
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(AppFeedback.messageFor(error))),
+      );
+    }
+  }
+
+  Future<void> _cancelHubOffer(TransferHubOfferRecord offer) async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    try {
+      await _transferCenterApi.cancelOffer(offer.id);
+      await _loadTransferHubData();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Transfer offer cancelled.')),
+      );
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(AppFeedback.messageFor(error))),
+      );
+    }
+  }
+
+  Future<void> _counterHubOffer(TransferHubOfferRecord offer) async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    await showGteFormSheet(
+      context,
+      title: 'Counter transfer offer #${offer.id}',
+      fields: const <GteFormFieldSpec>[
+        GteFormFieldSpec(
+          key: 'amount',
+          label: 'Counter cash amount',
+          keyboardType: TextInputType.number,
+        ),
+        GteFormFieldSpec(key: 'message', label: 'Message'),
+      ],
+      onSubmit: (Map<String, String> values) async {
+        final double? amount = double.tryParse(values['amount'] ?? '');
+        if (amount == null || amount < 0) {
+          AppFeedback.showError(context, 'Enter a valid counter amount.');
+          return false;
+        }
+        try {
+          await _transferCenterApi.counterOffer(
+            offer.id,
+            cashAmount: amount,
+            message: values['message'],
+          );
+          await _loadTransferHubData();
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Counter-offer sent.')),
+          );
+          return true;
+        } catch (error) {
+          messenger.showSnackBar(
+            SnackBar(content: Text(AppFeedback.messageFor(error))),
+          );
+          return false;
+        }
+      },
+    );
+  }
+
+  Future<void> _shortlistListing(TransferCenterListingRecord listing) async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final String clubId = (widget.activeClubId ?? '').trim();
+    if (clubId.isNotEmpty && _isAuthenticated) {
+      try {
+        await _transferCenterApi.addToWatchlist(
+          clubId: clubId,
+          playerId: listing.playerId,
+          listingId: listing.id,
+        );
+      } catch (_) {
+        // Fall through to local shortlist sync if offline.
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _shortlist = <TransferShortlistEntryRecord>[
+          ..._shortlist.where(
+            (TransferShortlistEntryRecord item) =>
+                item.playerId != listing.playerId,
+          ),
+          TransferShortlistEntryRecord(
+            id: 'shortlist-${listing.id}',
+            clubId: clubId.isEmpty ? 'active-club' : clubId,
+            playerId: listing.playerId,
+            playerName: listing.playerName,
+            source: 'transfer_center',
+            discoveryScore: 84,
+            listingId: listing.id,
+            estimatedFeeCredits: listing.basePrice,
+          ),
+        ];
+      });
+      messenger.showSnackBar(
+        SnackBar(content: Text('${listing.playerName} added to shortlist.')),
       );
     }
   }
@@ -295,7 +475,7 @@ class _TransferNewsCalendarScreenState
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
-          title: const Text('Transfer center / calendar'),
+          title: const Text('Sporting Transfers / Calendar'),
           actions: <Widget>[
             IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
           ],
@@ -309,8 +489,27 @@ class _TransferNewsCalendarScreenState
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
                 children: <Widget>[
+                  GtexTransfersHubPanel(
+                    selectedSegment: _selectedSegment,
+                    onSelectSegment:
+                        (GtexTransferHubSegment segment) =>
+                            setState(() => _selectedSegment = segment),
+                    activeClubId: widget.activeClubId,
+                    listings: _listings,
+                    offers: _offers,
+                    negotiations: _negotiations,
+                    shortlist: _shortlist,
+                    onAcceptOffer: _acceptHubOffer,
+                    onRejectOffer: _rejectHubOffer,
+                    onCounterOffer: _counterHubOffer,
+                    onCancelOffer: _cancelHubOffer,
+                    onShortlistListing: _shortlistListing,
+                    onOpenPlayer: widget.onOpenPlayer,
+                    onOpenFinancialMarket: widget.onOpenFinancialMarket,
+                  ),
+                  const SizedBox(height: 18),
                   GteSurfacePanel(
-                    accentColor: const Color(0xFF8ED8FF),
+                    accentColor: GtexNavyColors.info,
                     emphasized: true,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -326,7 +525,7 @@ class _TransferNewsCalendarScreenState
                           children: <Widget>[
                             GteMetricChip(
                               label: 'Tab',
-                              value: widget.initialTab.toUpperCase(),
+                              value: _selectedSegment.label.toUpperCase(),
                             ),
                             GteMetricChip(
                               label: 'Windows',
@@ -388,15 +587,27 @@ class _TransferNewsCalendarScreenState
                                       child: GteSurfacePanel(
                                         accentColor:
                                             _selectedWindowId == item.id
-                                                ? const Color(0xFF8ED8FF)
+                                                ? GtexNavyColors.info
                                                 : null,
                                         onTap: () => _loadBids(item.id),
-                                        child: Text(
-                                          '${item.label}\n${item.status} • ${item.territoryCode} • ${item.opensOn} to ${item.closesOn}',
-                                          style:
-                                              Theme.of(
-                                                context,
-                                              ).textTheme.bodyMedium,
+                                        child: Row(
+                                          children: <Widget>[
+                                            Expanded(
+                                              child: Text(
+                                                '${item.label}\n${item.status} • ${item.territoryCode} • ${item.opensOn} to ${item.closesOn}',
+                                                style:
+                                                    Theme.of(
+                                                      context,
+                                                    ).textTheme.bodyMedium,
+                                              ),
+                                            ),
+                                            GtexStatusChip.fromBackendStatus(
+                                              item.status,
+                                              context:
+                                                  GtexStatusContext.transfer,
+                                              compact: true,
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ),
@@ -426,12 +637,24 @@ class _TransferNewsCalendarScreenState
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
                                           children: <Widget>[
-                                            Text(
-                                              '${item.playerId} • ${item.status} • ${item.bidAmount}',
-                                              style:
-                                                  Theme.of(
-                                                    context,
-                                                  ).textTheme.bodyMedium,
+                                            Row(
+                                              children: <Widget>[
+                                                Expanded(
+                                                  child: Text(
+                                                    '${item.playerId} • ${item.status} • ${item.bidAmount}',
+                                                    style:
+                                                        Theme.of(
+                                                          context,
+                                                        ).textTheme.bodyMedium,
+                                                  ),
+                                                ),
+                                                GtexStatusChip.fromBackendStatus(
+                                                  item.status,
+                                                  context:
+                                                      GtexStatusContext.offer,
+                                                  compact: true,
+                                                ),
+                                              ],
                                             ),
                                             if (_isAuthenticated) ...<Widget>[
                                               const SizedBox(height: 10),
@@ -441,12 +664,20 @@ class _TransferNewsCalendarScreenState
                                                 children: <Widget>[
                                                   FilledButton.tonal(
                                                     onPressed:
-                                                        () => _acceptBid(item),
+                                                        item.isTerminal
+                                                            ? null
+                                                            : () => _acceptBid(
+                                                              item,
+                                                            ),
                                                     child: const Text('Accept'),
                                                   ),
                                                   FilledButton.tonal(
                                                     onPressed:
-                                                        () => _rejectBid(item),
+                                                        item.isTerminal
+                                                            ? null
+                                                            : () => _rejectBid(
+                                                              item,
+                                                            ),
                                                     child: const Text('Reject'),
                                                   ),
                                                 ],
@@ -580,6 +811,12 @@ class _TransferBidRecord {
   final String playerId;
   final String status;
   final String bidAmount;
+
+  bool get isTerminal =>
+      GtexStatusPresenter.present(
+        status,
+        context: GtexStatusContext.offer,
+      ).isTerminal;
 
   factory _TransferBidRecord.fromJson(Object? value) {
     final JsonMap json = jsonMap(value, label: 'transfer bid');

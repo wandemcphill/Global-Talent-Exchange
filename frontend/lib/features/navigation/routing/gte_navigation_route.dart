@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/features/competitions_hub/routing/competition_hub_destination.dart';
+import 'package:gte_frontend/ui_gtex/theme/gtex_colors.dart';
 
 enum GtexMarketDeskMode { market, ownership }
 
@@ -65,6 +66,21 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
     }
   }
 
+  /// Canonical Shell V3 label (Phase C3 — distinguishes the Financial Market
+  /// lane `/app/market` from Sporting Transfers `/app/club/:id/transfers`).
+  String get canonicalShellLabel {
+    switch (this) {
+      case GtePrimaryDestination.market:
+        return 'Market';
+      default:
+        return label;
+    }
+  }
+
+  /// Resolves the destination label for the active shell generation.
+  String labelForShell({bool enableShellV3 = false}) =>
+      enableShellV3 ? canonicalShellLabel : label;
+
   String get pathSegment {
     switch (this) {
       case GtePrimaryDestination.home:
@@ -112,20 +128,20 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
   Color get accentColor {
     switch (this) {
       case GtePrimaryDestination.home:
-        return const Color(0xFF72F0D8);
+        return GtexColors.pitch;
       case GtePrimaryDestination.competitions:
-        return const Color(0xFFB26DFF);
+        return GtexNavyColors.info;
       case GtePrimaryDestination.market:
-        return const Color(0xFFFFA860);
+        return GtexNavyColors.warning;
       case GtePrimaryDestination.regens:
-        return const Color(0xFFC79BFF);
+        return GtexNavyColors.gold300;
       case GtePrimaryDestination.hub:
       case GtePrimaryDestination.community:
-        return const Color(0xFF5FE3A1);
+        return GtexNavyColors.success;
       case GtePrimaryDestination.club:
-        return const Color(0xFF85B8FF);
+        return GtexNavyColors.info;
       case GtePrimaryDestination.wallet:
-        return const Color(0xFFFFD66B);
+        return GtexNavyColors.gold500;
     }
   }
 

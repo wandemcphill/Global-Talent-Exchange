@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/features/club_growth_redesign/club_growth_redesign.dart';
 import 'package:gte_frontend/features/club_lifecycle_redesign/club_lifecycle_redesign.dart';
+import 'package:gte_frontend/features/transfer_center/presentation/gtex_transfers_hub_panel.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 import 'package:gte_frontend/ui_gtex/components/gtex_football_command_pulse.dart';
 
@@ -491,6 +492,11 @@ class _OwnerDetail extends StatelessWidget {
             title: 'Transfer room',
             subtitle: 'Shortlist basket, open orders, and market next actions.',
             icon: Icons.swap_horiz_outlined,
+          ),
+          const SizedBox(height: GtexSpacing.md),
+          GtexTransfersHubPanel(
+            activeClubId: snapshot.clubId,
+            onOpenFinancialMarket: onOpenClubShareMarket,
           ),
           const SizedBox(height: GtexSpacing.md),
           GtexPanel(
