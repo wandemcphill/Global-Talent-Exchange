@@ -49,6 +49,12 @@ class GtexClubGrowthController extends ChangeNotifier {
     });
   }
 
+  Future<void> fireStaff(String contractId, {String? reason}) {
+    return _mutate(() async {
+      await _api.terminateStaffContract(_clubId, contractId, reason: reason);
+    });
+  }
+
   Future<void> generateProspects() {
     return _mutate(() async {
       await _api.generateProspects(_clubId);

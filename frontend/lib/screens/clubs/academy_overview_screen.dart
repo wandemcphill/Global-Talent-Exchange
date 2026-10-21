@@ -2,15 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:gte_frontend/controllers/club_ops_controller.dart';
 import 'package:gte_frontend/data/club_ops_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
+import 'package:gte_frontend/features/club_growth_redesign/club_growth_redesign.dart';
 import 'package:gte_frontend/models/academy_models.dart';
 import 'package:gte_frontend/screens/clubs/academy_players_screen.dart';
 import 'package:gte_frontend/screens/clubs/academy_programs_screen.dart';
 import 'package:gte_frontend/screens/clubs/academy_training_screen.dart';
 import 'package:gte_frontend/screens/clubs/club_ops_screen_host.dart';
+import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 import 'package:gte_frontend/widgets/clubs/academy_program_card.dart';
 import 'package:gte_frontend/widgets/clubs/club_ops_formatters.dart';
 import 'package:gte_frontend/widgets/clubs/club_ops_scaffold.dart';
-import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
 
@@ -23,6 +24,7 @@ class AcademyOverviewScreen extends StatelessWidget {
     this.mode = GteBackendMode.live,
     this.api,
     this.controller,
+    this.growthController,
   });
 
   final String clubId;
@@ -31,6 +33,7 @@ class AcademyOverviewScreen extends StatelessWidget {
   final GteBackendMode mode;
   final ClubOpsApi? api;
   final ClubOpsController? controller;
+  final GtexClubGrowthController? growthController;
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +98,10 @@ class AcademyOverviewScreen extends StatelessWidget {
                 ],
               ),
             ),
+            if (growthController != null) ...<Widget>[
+              const SizedBox(height: 16),
+              GtexClubGrowthJourneyPanel(controller: growthController!),
+            ],
             const SizedBox(height: 16),
             ClubOpsSectionHeader(
               title: 'Academy surfaces',

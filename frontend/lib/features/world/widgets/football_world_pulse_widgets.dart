@@ -3,19 +3,32 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../models/story_feed_models.dart';
 import '../../../ui_gtex/theme/gtex_colors.dart';
 import '../../../ui_gtex/theme/gtex_spacing.dart';
+import '../../home/data/gtex_story_feed_ticker_provider.dart';
 import '../football_world_pulse_provider.dart';
 
 class FootballWorldPulseTicker extends ConsumerWidget {
-  const FootballWorldPulseTicker({super.key});
+  const FootballWorldPulseTicker({
+    super.key,
+    this.storyFeedItems,
+  });
+
+  final List<StoryFeedItem>? storyFeedItems;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<FootballWorldPulseData> value = ref.watch(
       footballWorldPulseProvider,
     );
-    if (!value.hasValue) {
+    final AsyncValue<List<StoryFeedItem>> storyFeedValue = ref.watch(
+      storyFeedTickerProvider,
+    );
+    final List<StoryFeedItem> resolvedStories = normalizeStoryFeedTickerItems(
+      storyFeedItems ?? storyFeedValue.asData?.value ?? const <StoryFeedItem>[],
+    );
+    if (!value.hasValue && resolvedStories.isEmpty) {
       return _TickerStatusBar(
         status: value.hasError ? 'ERROR' : 'LOADING',
         detail:
@@ -24,12 +37,14 @@ class FootballWorldPulseTicker extends ConsumerWidget {
                 : 'Syncing live world pulse',
       );
     }
-    final FootballWorldPulseData pulse = value.requireValue;
+    final FootballWorldPulseData pulse =
+        value.asData?.value ?? FootballWorldPulseData.empty;
     final List<FootballPulseItem> items = <FootballPulseItem>[
+      ...resolvedStories.map(_pulseItemFromStory),
       ...pulse.transferTicker.take(4),
       ...pulse.competitionCountdowns.take(2),
       ...pulse.globalActivity.take(2),
-    ];
+    ].take(kGtexMaxTickerItems).toList(growable: false);
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final bool compact = constraints.maxWidth < 560;
@@ -75,6 +90,20 @@ class FootballWorldPulseTicker extends ConsumerWidget {
       },
     );
   }
+}
+
+FootballPulseItem _pulseItemFromStory(StoryFeedItem item) {
+  final String? formattedPrice = formatVerifiedPriceGtex(
+    item.metadata['verified_price_gtex'] ?? item.metadata['verifiedPriceGtex'],
+  );
+  final String metric =
+      formattedPrice ?? item.storyType.replaceAll('_', ' ').toUpperCase();
+  return FootballPulseItem(
+    label: item.title,
+    detail: item.body,
+    metric: metric,
+    intensity: item.featured ? 0.85 : 0.62,
+  );
 }
 
 class FootballWorldPulseRail extends ConsumerWidget {

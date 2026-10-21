@@ -20,7 +20,7 @@ Rules:
 - Batchmode build stability and the current `Gtex_MainScene` path remain required acceptance gates
 - `P7-FE` is `COMPLETE`
 - `P7-FEV` is `READY`
-- `P9-SHELL` is `READY`
+- `P9-SHELL` is `COMPLETE`
 - P7-FE/P7-FEV/P9-SHELL do not change the Unity P6/P6V sequence, scope, or completion status
 
 ## Phases
@@ -244,7 +244,7 @@ Exit gate:
 - No build, live-runtime, or deploy regressions are introduced by the targeted replacement
 
 ### P9-SHELL GTEX Flutter Shell Upgrade
-Status: `READY`
+Status: `COMPLETE`
 
 Independence:
 - Independent Flutter shell, navigation, design-system, and workflow-coherence upgrade. Does not change Unity `P6`, `P6V`, `P7`, or `P8` status, scope, or sequencing, and does not change `P7-FE` or `P7-FEV` task definitions.
@@ -276,11 +276,11 @@ Phase Sequence, Status & Dependencies:
 - `B1` + `B2` -> `B3` (`COMPLETE` — Top Bar, Club Switcher, Workspace Switcher, More Sheet, `GtexShellScaffold`)
 - `B2` + `B3` -> `C1` (`COMPLETE` — Role Dashboards on Home)
 - `B1` + `B2` -> `C2` (`COMPLETE` — Club Lane Tabs & Re-homing Orphaned Club Screens), `C4` (`COMPLETE` — Matchday Lane), `C5` (`COMPLETE` — Market & Wallet Status Flows)
-- `C2` -> `C3` (`COMPLETE` — Transfers Hub) and `D1` (`READY` — Staff, Academy & Recruitment Journeys)
-- `C1` -> `D2` (`READY` — Role Workspaces & Admin Owner Review)
-- `BK` (Approved Backend Fixes for `B1`, `B2`, `B3`, `O-11`, `O-16`) + `C2` -> `E1` (Unified Attention & Owner Inbox) and `E2` (Grounded Newsroom & Global Ticker)
-- `E1` -> `F1` (Boardroom, Showroom, Facilities & Flagged Delegation UI)
-- `C1`..`F1` -> `F2` (Responsive, Accessibility & Performance Polish) -> `G1` (Full Regression & Legacy Retirement)
+- `C2` -> `C3` (`COMPLETE` — Transfers Hub) and `D1` (`COMPLETE` — Staff, Academy & Recruitment Journeys)
+- `C1` -> `D2` (`COMPLETE` — Role Workspaces & Admin Owner Review)
+- `BK` (`COMPLETE` — Approved Backend Fixes for `B1`, `B2`, `B3`, `O-11`, `O-16`) + `C2` -> `E1` (`COMPLETE` — Unified Attention & Owner Inbox) and `E2` (`COMPLETE` — Grounded Newsroom & Global Ticker)
+- `E1` -> `F1` (`COMPLETE` — Boardroom, Showroom, Facilities & Flagged Delegation UI)
+- `C1`..`F1` -> `F2` (`COMPLETE` — Responsive, Accessibility & Performance Polish) -> `G1` (`COMPLETE` — Full Regression & Legacy Retirement)
 
 Rules:
 - Keep changes small, reviewable, and reversible (one phase/sub-phase per PR).

@@ -187,24 +187,65 @@ def resolve_club_crest_url(session: Session, club_id: str, club_name: str | None
     return f"data:image/svg+xml;utf8,{urllib.parse.quote(svg)}"
 
 
+def _normalize_portrait_url(url: str) -> str:
+    cleaned = str(url).strip()
+    if cleaned.startswith("/api/media/regen-faces/"):
+        suffix = cleaned[len("/api/media/regen-faces/") :].lstrip("/")
+        return f"/generated-media/regen_newgen_faces/{suffix}"
+    return cleaned
+
+
 def resolve_player_portrait_url(session: Session | None, player_id: str, player_name: str | None = None) -> str:
+    import urllib.parse
+
     player = session.get(OwnerSquadPlayer, player_id) if session else None
     name = (player.name if player else player_name) or "Player"
-    # 1. Check if face-bank manifest has a mapped static portrait
+    seed_key = (player.player_ref if player and player.player_ref else player_id) or "player"
+
+    # 1. Delegate to RegenPortraitService when a canonical Player / player_ref exists
+    if session is not None and seed_key:
+        try:
+            from app.ingestion.models import Player
+            from app.services.regen_portrait_service import RegenPortraitError, RegenPortraitService
+
+            canonical_player = session.get(Player, seed_key)
+            if canonical_player is not None:
+                try:
+                    portrait_result = RegenPortraitService(session).ensure_player_portrait(canonical_player)
+                    if portrait_result.portrait_url:
+                        return _normalize_portrait_url(portrait_result.portrait_url)
+                except RegenPortraitError:
+                    dna = canonical_player.dna_profile if isinstance(canonical_player.dna_profile, dict) else {}
+                    for key in ("portraitUrl", "portrait_url", "image_url"):
+                        val = dna.get(key)
+                        if isinstance(val, str) and val.strip():
+                            return _normalize_portrait_url(val)
+        except Exception as err:
+            logger.debug("RegenPortraitService lookup skipped for %s: %s", seed_key, err)
+
+    # 2. Check if face-bank manifest has a mapped static portrait ("assets" or "items" fallback)
     manifest = _load_face_manifest()
     items = manifest.get("assets") or manifest.get("items") or []
     if items:
-        h = int(hashlib.md5(player_id.encode("utf-8")).hexdigest()[:8], 16)
+        h = int(hashlib.md5(str(seed_key).encode("utf-8")).hexdigest()[:8], 16)
         chosen = items[h % len(items)]
-        if chosen.get("cloudinary_secure_url"):
-            return str(chosen["cloudinary_secure_url"])
-        rel = chosen.get("storage_key") or chosen.get("source_path") or chosen.get("relative_path")
-        if rel:
-            import urllib.parse
+        if isinstance(chosen, dict):
+            if chosen.get("cloudinary_secure_url"):
+                return _normalize_portrait_url(str(chosen["cloudinary_secure_url"]))
+            rel = (
+                chosen.get("storage_key")
+                or chosen.get("source_path")
+                or chosen.get("relative_path")
+                or chosen.get("path")
+            )
+            if rel:
+                rel_norm = str(rel).replace("\\", "/").lstrip("/")
+                if rel_norm.startswith("api/media/regen-faces/"):
+                    rel_norm = "regen_newgen_faces/" + rel_norm[len("api/media/regen-faces/") :].lstrip("/")
+                rel_clean = urllib.parse.quote(rel_norm, safe="/")
+                return f"/generated-media/{rel_clean}"
 
-            rel_clean = urllib.parse.quote(str(rel).replace("\\", "/").lstrip("/"), safe="/")
-            return f"/generated-media/{rel_clean}"
-    # 2. Deterministic high-quality vector portrait fallback
+    # 3. Deterministic high-quality vector portrait fallback
     initials = "".join([part[0] for part in name.split()[:2]]).upper() or "P"
     palette = ["#0F766E", "#1E3A8A", "#831843", "#14532D", "#7C2D12", "#4C1D95"]
     h_idx = int(hashlib.md5(name.encode("utf-8")).hexdigest()[:4], 16) % len(palette)
@@ -217,8 +258,6 @@ def resolve_player_portrait_url(session: Session | None, player_id: str, player_
         f"<text x='60' y='52' font-family='sans-serif' font-weight='900' font-size='16' fill='{color}' text-anchor='middle'>{initials}</text>"
         f"</svg>"
     )
-    import urllib.parse
-
     return f"data:image/svg+xml;utf8,{urllib.parse.quote(svg)}"
 
 
@@ -624,6 +663,8 @@ def list_newsroom_articles(
             )
         else:
             stmt = stmt.where(OwnerNewsroomArticle.visibility == "global")
+    else:
+        stmt = stmt.where(OwnerNewsroomArticle.visibility == "global")
 
     if category and category != "all":
         stmt = stmt.where(OwnerNewsroomArticle.category == category)
@@ -1165,7 +1206,13 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
                 (upcoming if m.status == "scheduled" else recent).append(m_card)
 
     # 6. Club News (Public & Save news)
-    club_news = list_newsroom_articles(session, club_id=club_id, limit=8)
+    club_news = list_newsroom_articles(
+        session,
+        user_id=user_id,
+        club_id=club_id,
+        save_context_id=save_ctx,
+        limit=8,
+    )
 
     # 7. Achievements & Owner Legacy
     achievements = [

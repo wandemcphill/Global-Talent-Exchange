@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../lib/ui_gtex/football/gtex_regen_portrait.dart';
+import 'package:gte_frontend/ui_gtex/football/gtex_regen_portrait.dart';
 
 void main() {
   testWidgets('renders a Cloudinary regen face-bank portrait URL', (

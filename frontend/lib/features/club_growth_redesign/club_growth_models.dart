@@ -27,6 +27,24 @@ class GtexStaffProfile {
   final bool active;
   final Map<String, Object?> metadata;
 
+  /// Server-supplied suitability label (H7: shown only if returned field exists).
+  String? get suitabilityLabel {
+    final String? raw = metadata['suitability']?.toString().trim();
+    return (raw != null && raw.isNotEmpty) ? raw : null;
+  }
+
+  /// Server-supplied personality label (H7: shown only if returned field exists).
+  String? get personalityLabel {
+    final String? raw = metadata['personality']?.toString().trim();
+    return (raw != null && raw.isNotEmpty) ? raw : null;
+  }
+
+  /// Server-supplied reputation label (H7: shown only if returned field exists).
+  String? get reputationLabel {
+    final String? raw = metadata['reputation']?.toString().trim();
+    return (raw != null && raw.isNotEmpty) ? raw : null;
+  }
+
   factory GtexStaffProfile.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(
       value,
@@ -245,6 +263,28 @@ class GtexAcademyProspect {
   bool get promoted => status == 'promoted_to_senior';
   bool get hasApprovedPortrait => portraitAssetRef?.trim().isNotEmpty == true;
 
+  /// Canonical server portrait URL for [GtexPortrait.regen] (H6: regen identity
+  /// and portrait come from server `portrait_url` / `portraitAssetRef`, never
+  /// generated in UI).
+  String? get resolvedPortraitUrl {
+    final String? explicitUrl =
+        metadata['portrait_url']?.toString().trim() ??
+        metadata['portraitUrl']?.toString().trim();
+    if (explicitUrl != null && explicitUrl.isNotEmpty) {
+      return explicitUrl;
+    }
+    final String? ref = portraitAssetRef?.trim();
+    if (ref == null || ref.isEmpty) {
+      return null;
+    }
+    if (ref.startsWith('http://') ||
+        ref.startsWith('https://') ||
+        ref.startsWith('/generated-media/')) {
+      return ref;
+    }
+    return '/generated-media/$ref';
+  }
+
   factory GtexAcademyProspect.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(
       value,
@@ -273,6 +313,8 @@ class GtexAcademyProspect {
       portraitAssetRef: GteJson.stringOrNull(json, const <String>[
         'portrait_asset_ref',
         'portraitAssetRef',
+        'portrait_url',
+        'portraitUrl',
       ]),
       status: GteJson.string(json, const <String>['status']),
       metadata: GteJson.map(

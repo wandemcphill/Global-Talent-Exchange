@@ -14,12 +14,37 @@ class ClubLegacyShowroom extends StatefulWidget {
     super.key,
     required this.exhibits,
     this.forceStatic = false,
+    this.requirePurchaseConfirm = false,
     this.onAction,
   });
 
   final List<ShowroomExhibit> exhibits;
   final bool forceStatic;
+  final bool requirePurchaseConfirm;
   final Future<void> Function(String action, Map<String, Object?> payload)? onAction;
+
+  /// Resolves the H9 visibility / broadcast classification label for an exhibit.
+  static String visibilityBadgeLabel(ShowroomExhibit exhibit) {
+    if (exhibit.category == 'jet') {
+      return 'Public Broadcast · Fleet Aviation';
+    }
+    if (exhibit.id.startsWith('facility:')) {
+      return 'Club Facility · Infrastructure Broadcast';
+    }
+    return 'Private Collection · No Global Broadcast';
+  }
+
+  /// Resolves the H9 public broadcast notice shown in [GtexConfirmSheet] when
+  /// purchasing an asset that triggers a global broadcast (`jet` or `facility:*`).
+  static String? publicBroadcastNoticeFor(ShowroomExhibit exhibit) {
+    if (exhibit.category == 'jet') {
+      return 'Private jet purchases broadcast globally to the ticker and newsroom with verified price.';
+    }
+    if (exhibit.id.startsWith('facility:')) {
+      return 'Facility upgrades debit the club ledger and publish a global infrastructure broadcast and newsroom article.';
+    }
+    return null;
+  }
 
   @override
   State<ClubLegacyShowroom> createState() => _ClubLegacyShowroomState();
@@ -57,22 +82,65 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
 
   void _turn(double delta) => setState(() => _yaw += delta);
 
-  Future<void> _purchaseAsset(ShowroomExhibit exhibit) async {
+  Future<void> _handleBuyTap(ShowroomExhibit exhibit) async {
+    final String? sku = exhibit.sku;
+    if (sku == null ||
+        widget.onAction == null ||
+        _pendingPurchases.contains(exhibit.id)) {
+      return;
+    }
+    final String idempotencyKey = _purchaseIdempotencyKeys.putIfAbsent(
+      exhibit.id,
+      () => 'buy_${sku}_${DateTime.now().microsecondsSinceEpoch}',
+    );
+    if (!widget.requirePurchaseConfirm) {
+      await _purchaseAsset(exhibit, idempotencyKey: idempotencyKey);
+      return;
+    }
+
+    final String? broadcastNotice =
+        ClubLegacyShowroom.publicBroadcastNoticeFor(exhibit);
+    await GtexConfirmSheet.show(
+      context,
+      title: 'Purchase ${exhibit.name}',
+      summary:
+          'Acquire ${exhibit.name} (${ClubLegacyShowroom.visibilityBadgeLabel(exhibit)}).',
+      confirmLabel: 'Buy ${exhibit.name}',
+      variant: GtexConfirmVariant.financial,
+      idempotencyKey: idempotencyKey,
+      publicAnnouncementNotice: broadcastNotice,
+      financialDetails: GtexConfirmFinancialDetails(
+        amountLabel: exhibit.price ?? '1,500',
+        currencyCode: 'GTX',
+        idempotencyKey: idempotencyKey,
+      ),
+      onConfirm: (String resolvedKey) async {
+        await _purchaseAsset(exhibit, idempotencyKey: resolvedKey);
+      },
+    );
+  }
+
+  Future<void> _purchaseAsset(
+    ShowroomExhibit exhibit, {
+    String? idempotencyKey,
+  }) async {
     final String? sku = exhibit.sku;
     final Future<void> Function(String, Map<String, Object?>)? onAction = widget.onAction;
     if (sku == null || onAction == null || _pendingPurchases.contains(exhibit.id)) {
       return;
     }
     // Reuse the idempotency key across retries for this purchase intent.
-    final String idempotencyKey = _purchaseIdempotencyKeys.putIfAbsent(
-      exhibit.id,
-      () => 'buy_${sku}_${DateTime.now().microsecondsSinceEpoch}',
-    );
+    final String resolvedKey =
+        idempotencyKey ??
+        _purchaseIdempotencyKeys.putIfAbsent(
+          exhibit.id,
+          () => 'buy_${sku}_${DateTime.now().microsecondsSinceEpoch}',
+        );
     setState(() => _pendingPurchases.add(exhibit.id));
     try {
       await onAction('purchase', <String, Object?>{
         'sku': sku,
-        'idempotency_key': idempotencyKey,
+        'idempotency_key': resolvedKey,
         'owner_class': 'club',
       });
     } catch (_) {
@@ -217,6 +285,12 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
   Widget _stage(ShowroomExhibit exhibit, bool reduceMotion) {
     final Widget card =
         reduceMotion ? _staticCard(exhibit) : _turntable(exhibit);
+    final String visibilityBadge =
+        ClubLegacyShowroom.visibilityBadgeLabel(exhibit);
+    final bool isPublicBroadcast =
+        ClubLegacyShowroom.publicBroadcastNoticeFor(exhibit) != null;
+    final GtexColorTokens navy = GtexColors.navy;
+
     return GtexPanel(
       key: Key(reduceMotion ? 'club-showroom-static' : 'club-showroom-stage'),
       title: exhibit.name,
@@ -227,14 +301,44 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
         children: <Widget>[
           SizedBox(height: 220, child: card),
           const SizedBox(height: GtexSpacing.sm),
-          Text(
-            exhibit.ownershipLabel,
-            key: const Key('club-showroom-ownership'),
-            style: const TextStyle(
-              color: GtexColors.text,
-              fontWeight: FontWeight.w900,
-            ),
+          Wrap(
+            spacing: GtexSpacing.xs,
+            runSpacing: GtexSpacing.xs,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: <Widget>[
+              Text(
+                exhibit.ownershipLabel,
+                key: const Key('club-showroom-ownership'),
+                style: const TextStyle(
+                  color: GtexColors.text,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              Container(
+                key: const Key('club-showroom-category-badge'),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: GtexSpacing.xs,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color:
+                      (isPublicBroadcast ? navy.gold500 : navy.info)
+                          .withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(GtexRadius.pill),
+                  border: Border.all(
+                    color: isPublicBroadcast ? navy.gold500 : navy.lineSubtle,
+                  ),
+                ),
+                child: Text(
+                  visibilityBadge,
+                  style: GtexTypography.bodyS(
+                    color: isPublicBroadcast ? navy.gold300 : navy.textSecondary,
+                  ),
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 4),
           Text(
             _statusLine(exhibit),
             key: const Key('club-showroom-model-file'),
@@ -263,7 +367,7 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
                     compact: true,
                     onPressed: _pendingPurchases.contains(exhibit.id)
                         ? null
-                        : () => _purchaseAsset(exhibit),
+                        : () => _handleBuyTap(exhibit),
                   ),
                 if (exhibit.owned && !exhibit.id.startsWith('facility:'))
                   GtexActionButton(
@@ -762,7 +866,7 @@ class _MeshPainter extends CustomPainter {
     for (final ({Path path, double depth, Color color}) triangle in drawn) {
       final double shade = (0.45 + 0.55 * ((triangle.depth - far) / span))
           .clamp(0.35, 1.0);
-      fill.color = Color.lerp(const Color(0xFF1A1408), triangle.color, shade)!;
+      fill.color = Color.lerp(GtexColors.navy.bgInset, triangle.color, shade)!;
       canvas.drawPath(triangle.path, fill);
     }
   }

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, status
 from sqlalchemy import select
@@ -18,14 +19,112 @@ from app.notifications.schemas import (
     NotificationSubscriptionCreate,
     NotificationSubscriptionView,
     NotificationTestEventRequest,
-    NotificationTestEventView,
-    NotificationView,
+    NotificationTestEventView as _SchemaNotificationTestEventView,
+    NotificationView as _SchemaNotificationView,
     PlatformAnnouncementCreate,
     PlatformAnnouncementView,
 )
 from app.notifications.service import NotificationEventMatrixService, NotificationServiceError, NotificationSettingsService
 from app.replay_archive.router import router as replay_router
 from app.replay_archive.service import ensure_replay_archive
+
+
+class NotificationView(_SchemaNotificationView):
+    deep_link_route: str | None = None
+    target_type: str | None = None
+    target_id: str | None = None
+
+
+class NotificationTestEventView(_SchemaNotificationTestEventView):
+    notification: NotificationView
+
+
+def _first_non_empty_str(mapping: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = mapping.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _extract_routing_fields(
+    *,
+    raw_metadata: dict[str, Any] | None,
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+    fixture_id: str | None = None,
+    competition_id: str | None = None,
+    topic: str | None = None,
+) -> tuple[str | None, str | None, str | None, dict[str, Any]]:
+    meta = dict(raw_metadata or {})
+    clean_resource_type = (resource_type or "").strip() or None
+    clean_resource_id = (resource_id or "").strip() or None
+    clean_fixture_id = (fixture_id or "").strip() or None
+    clean_competition_id = (competition_id or "").strip() or None
+    clean_topic = (topic or "").strip() or None
+
+    match_ref = clean_fixture_id or _first_non_empty_str(
+        meta, "fixture_id", "fixtureId", "match_id", "matchId", "match_key", "matchKey"
+    )
+
+    target_type = (
+        _first_non_empty_str(meta, "target_type", "targetType", "resource_type", "resourceType")
+        or clean_resource_type
+    )
+    if not target_type:
+        if match_ref:
+            target_type = "match"
+        elif clean_competition_id or _first_non_empty_str(meta, "competition_id", "competitionId"):
+            target_type = "competition"
+        elif _first_non_empty_str(meta, "player_id", "playerId"):
+            target_type = "player"
+        elif _first_non_empty_str(meta, "club_id", "clubId"):
+            target_type = "club"
+        elif clean_resource_id:
+            target_type = clean_topic or "resource"
+
+    target_id = (
+        _first_non_empty_str(meta, "target_id", "targetId", "resource_id", "resourceId")
+        or clean_resource_id
+        or match_ref
+        or clean_competition_id
+        or _first_non_empty_str(meta, "competition_id", "competitionId", "player_id", "playerId", "club_id", "clubId")
+    )
+
+    deep_link_route = _first_non_empty_str(
+        meta,
+        "deep_link_route",
+        "deepLinkRoute",
+        "deep_link",
+        "deepLink",
+        "action_route",
+        "actionRoute",
+        "route",
+    )
+    if not deep_link_route:
+        if match_ref or (
+            target_type and target_type.lower() in {"match", "fixture", "competition_match"} and (clean_resource_id or target_id)
+        ):
+            resolved_match_id = clean_resource_id or match_ref or target_id
+            deep_link_route = f"/matches/{resolved_match_id}"
+        elif clean_competition_id or _first_non_empty_str(meta, "competition_id", "competitionId"):
+            resolved_comp_id = clean_competition_id or _first_non_empty_str(meta, "competition_id", "competitionId")
+            deep_link_route = f"/competitions/{resolved_comp_id}"
+        elif target_type and target_type.lower() == "player" and target_id:
+            deep_link_route = f"/players/{target_id}"
+        elif target_type and target_type.lower() == "club" and target_id:
+            deep_link_route = f"/clubs/{target_id}"
+
+    if deep_link_route is not None and not _first_non_empty_str(meta, "deep_link_route"):
+        meta["deep_link_route"] = deep_link_route
+    if target_type is not None and not _first_non_empty_str(meta, "target_type"):
+        meta["target_type"] = target_type
+    if target_id is not None and not _first_non_empty_str(meta, "target_id"):
+        meta["target_id"] = target_id
+    if clean_resource_type is not None and not _first_non_empty_str(meta, "resource_type"):
+        meta["resource_type"] = clean_resource_type
+
+    return deep_link_route, target_type, target_id, meta
 
 
 @asynccontextmanager
@@ -48,40 +147,35 @@ def _map_records(request: Request, current_user: User, session: Session, limit: 
         .limit(limit)
     ).all()
     live_items = request.app.state.notifications.list_for_user(current_user.id, limit=limit)
-    combined: list[NotificationView] = [
-        NotificationView(
-            notification_id=item.id,
-            user_id=item.user_id,
-            topic=item.topic,
-            template_key=item.template_key,
+    combined: list[NotificationView] = [_notification_record_view(item) for item in db_items]
+    for item in live_items:
+        deep_link_route, target_type, target_id, metadata = _extract_routing_fields(
+            raw_metadata=item.metadata,
+            resource_type=getattr(item, "resource_type", None),
             resource_id=item.resource_id,
             fixture_id=item.fixture_id,
             competition_id=item.competition_id,
-            message=item.message,
-            metadata=item.metadata_json,
-            created_at=item.created_at,
-            read_at=item.read_at,
-            is_read=item.read_at is not None,
-        )
-        for item in db_items
-    ]
-    combined.extend(
-        NotificationView(
-            notification_id=item.notification_id,
-            user_id=item.user_id,
             topic=item.topic,
-            template_key=item.template_key,
-            resource_id=item.resource_id,
-            fixture_id=item.fixture_id,
-            competition_id=item.competition_id,
-            message=item.message,
-            metadata=item.metadata,
-            created_at=item.created_at,
-            read_at=None,
-            is_read=False,
         )
-        for item in live_items
-    )
+        combined.append(
+            NotificationView(
+                notification_id=item.notification_id,
+                user_id=item.user_id,
+                topic=item.topic,
+                template_key=item.template_key,
+                resource_id=item.resource_id,
+                fixture_id=item.fixture_id,
+                competition_id=item.competition_id,
+                message=item.message,
+                metadata=metadata,
+                deep_link_route=deep_link_route,
+                target_type=target_type,
+                target_id=target_id,
+                created_at=item.created_at,
+                read_at=None,
+                is_read=False,
+            )
+        )
     combined.sort(key=_notification_created_at_key, reverse=True)
     return combined[:limit]
 
@@ -94,6 +188,14 @@ def _notification_created_at_key(item: NotificationView) -> datetime:
 
 
 def _notification_record_view(item: NotificationRecord) -> NotificationView:
+    deep_link_route, target_type, target_id, metadata = _extract_routing_fields(
+        raw_metadata=item.metadata_json,
+        resource_type=item.resource_type,
+        resource_id=item.resource_id,
+        fixture_id=item.fixture_id,
+        competition_id=item.competition_id,
+        topic=item.topic,
+    )
     return NotificationView(
         notification_id=item.id,
         user_id=item.user_id,
@@ -103,7 +205,10 @@ def _notification_record_view(item: NotificationRecord) -> NotificationView:
         fixture_id=item.fixture_id,
         competition_id=item.competition_id,
         message=item.message,
-        metadata=item.metadata_json,
+        metadata=metadata,
+        deep_link_route=deep_link_route,
+        target_type=target_type,
+        target_id=target_id,
         created_at=item.created_at,
         read_at=item.read_at,
         is_read=item.read_at is not None,

@@ -6,7 +6,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -648,9 +648,9 @@ def archive_item(
 
 @router.get("/ticker")
 def global_ticker(
-    club_id: str | None = None,
-    save_context_id: str | None = None,
-    limit: int = 30,
+    club_id: str | None = Query(default=None),
+    save_context_id: str | None = Query(default=None),
+    limit: int = Query(default=30, ge=1, le=100),
     user=Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
@@ -666,18 +666,21 @@ def global_ticker(
 
 @router.get("/newsroom")
 def newsroom_feed(
-    club_id: str | None = None,
-    save_context_id: str | None = None,
-    category: str | None = None,
-    limit: int = 30,
+    club_id: str | None = Query(default=None),
+    save_context_id: str | None = Query(default=None),
+    category: str | None = Query(default=None),
+    limit: int = Query(default=30, ge=1, le=100),
     user=Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
+    resolved_save_context_id = save_context_id
+    if resolved_save_context_id is None and club_id:
+        resolved_save_context_id = storytelling.resolve_save_context_id(session, club_id)
     articles = storytelling.list_newsroom_articles(
         session,
         user_id=user.id,
         club_id=club_id,
-        save_context_id=save_context_id,
+        save_context_id=resolved_save_context_id,
         category=category,
         limit=max(1, min(limit, 100)),
     )

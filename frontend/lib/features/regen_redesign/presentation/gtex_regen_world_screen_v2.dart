@@ -811,9 +811,9 @@ class _SelectedProspectHero extends StatelessWidget {
                       color: GtexColors.purple,
                       compact: true,
                     ),
-                    if (prospect.ageLabel != null)
+                    if (prospect.ageLabel.isNotEmpty)
                       GtexStatusChip(
-                        label: prospect.ageLabel!,
+                        label: prospect.ageLabel,
                         color: GtexColors.gold,
                         compact: true,
                       ),

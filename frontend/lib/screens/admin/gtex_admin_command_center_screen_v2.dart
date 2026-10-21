@@ -10,12 +10,22 @@ import '../../features/admin_command_redesign/widgets/gtex_admin_visuals.dart';
 import '../../features/admin_command_redesign/widgets/gtex_coin_economy_panel.dart';
 import '../../features/admin_command_redesign/widgets/gtex_jackpot_admin_panel.dart';
 import '../../features/admin_command_redesign/widgets/gtex_system_health_panel.dart';
+import '../../features/owner_console/data/owner_console_api.dart';
+import '../../features/owner_console/widgets/owner_admin_review_section.dart';
+import '../../ui_gtex/ui_gtex.dart';
 import 'gtex_admin_newsroom_screen_v2.dart';
 
 class GtexAdminCommandCenterScreenV2 extends StatefulWidget {
-  const GtexAdminCommandCenterScreenV2({super.key, this.controller});
+  const GtexAdminCommandCenterScreenV2({
+    super.key,
+    this.controller,
+    this.ownerConsoleReader,
+    this.canReviewOwnerQueue = true,
+  });
 
   final GtexAdminCommandController? controller;
+  final OwnerConsoleReader? ownerConsoleReader;
+  final bool canReviewOwnerQueue;
 
   @override
   State<GtexAdminCommandCenterScreenV2> createState() =>
@@ -40,17 +50,18 @@ class _GtexAdminCommandCenterScreenV2State
 
   @override
   Widget build(BuildContext context) {
+    final GtexColorTokens navy = GtexColors.navy;
     final GtexAdminCommandController? activeController = controller;
     if (activeController == null) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF070B12),
+      return Scaffold(
+        backgroundColor: navy.bgBase,
         body: Center(
           child: Padding(
-            padding: EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
             child: Text(
               'Live admin command data required. Use the production admin command center with authenticated API wiring.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white70),
+              style: TextStyle(color: navy.textSecondary),
             ),
           ),
         ),
@@ -61,20 +72,24 @@ class _GtexAdminCommandCenterScreenV2State
       builder: (context, _) {
         return Theme(
           data: Theme.of(context).copyWith(
-            scaffoldBackgroundColor: const Color(0xFF070B12),
+            scaffoldBackgroundColor: navy.bgBase,
             textTheme: Theme.of(context).textTheme.apply(
-              bodyColor: Colors.white,
-              displayColor: Colors.white,
+              bodyColor: navy.textPrimary,
+              displayColor: navy.textPrimary,
             ),
           ),
           child: Scaffold(
-            backgroundColor: const Color(0xFF070B12),
+            backgroundColor: navy.bgBase,
             body: SafeArea(
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final isWide = constraints.maxWidth >= 1100;
                   if (!isWide) {
-                    return _MobileAdminCommand(controller: activeController);
+                    return _MobileAdminCommand(
+                      controller: activeController,
+                      ownerConsoleReader: widget.ownerConsoleReader,
+                      canReviewOwnerQueue: widget.canReviewOwnerQueue,
+                    );
                   }
 
                   return Row(
@@ -84,7 +99,11 @@ class _GtexAdminCommandCenterScreenV2State
                         child: _LeftPanel(controller: activeController),
                       ),
                       Expanded(
-                        child: _MainWorkspace(controller: activeController),
+                        child: _MainWorkspace(
+                          controller: activeController,
+                          ownerConsoleReader: widget.ownerConsoleReader,
+                          canReviewOwnerQueue: widget.canReviewOwnerQueue,
+                        ),
                       ),
                       SizedBox(
                         width: 360,
@@ -109,11 +128,12 @@ class _LeftPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final GtexColorTokens navy = GtexColors.navy;
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 18, 12, 18),
       decoration: BoxDecoration(
-        color: const Color(0xFF090F19),
-        border: Border(right: BorderSide(color: Colors.white.withOpacity(.07))),
+        color: navy.bgRaised,
+        border: Border(right: BorderSide(color: navy.lineSubtle)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -123,7 +143,7 @@ class _LeftPanel extends StatelessWidget {
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 4),
-          const Text('Command center', style: TextStyle(color: Colors.white60)),
+          Text('Command center', style: TextStyle(color: navy.textSecondary)),
           const SizedBox(height: 18),
           TextField(
             onChanged: controller.updateSearch,
@@ -131,7 +151,7 @@ class _LeftPanel extends StatelessWidget {
               hintText: 'Search modules, users, orders...',
               prefixIcon: const Icon(Icons.search_rounded),
               filled: true,
-              fillColor: const Color(0xFF0E1624),
+              fillColor: navy.bgInset,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(18),
                 borderSide: BorderSide.none,
@@ -153,12 +173,19 @@ class _LeftPanel extends StatelessWidget {
 }
 
 class _MainWorkspace extends StatelessWidget {
-  const _MainWorkspace({required this.controller});
+  const _MainWorkspace({
+    required this.controller,
+    this.ownerConsoleReader,
+    this.canReviewOwnerQueue = true,
+  });
 
   final GtexAdminCommandController controller;
+  final OwnerConsoleReader? ownerConsoleReader;
+  final bool canReviewOwnerQueue;
 
   @override
   Widget build(BuildContext context) {
+    final GtexColorTokens navy = GtexColors.navy;
     final snapshot = controller.snapshot;
 
     return SingleChildScrollView(
@@ -181,7 +208,7 @@ class _MainWorkspace extends StatelessWidget {
                       const SizedBox(height: 6),
                       Text(
                         _subtitleFor(controller.selectedModule),
-                        style: const TextStyle(color: Colors.white70),
+                        style: TextStyle(color: navy.textSecondary),
                       ),
                     ],
                   ),
@@ -231,6 +258,17 @@ class _MainWorkspace extends StatelessWidget {
               actionMessage: controller.actionMessage,
               actionError: controller.actionError,
             ),
+          if (ownerConsoleReader != null) ...[
+            const SizedBox(height: 16),
+            SizedBox(
+              key: const Key('gtex-admin-owner-review-panel'),
+              height: 520,
+              child: AdminReviewSection(
+                reader: ownerConsoleReader!,
+                canReviewOwnerQueue: canReviewOwnerQueue,
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           _OperationalPlaybook(module: controller.selectedModule),
         ],
@@ -328,11 +366,12 @@ class _RightPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final GtexColorTokens navy = GtexColors.navy;
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 18, 18, 18),
       decoration: BoxDecoration(
-        color: const Color(0xFF090F19),
-        border: Border(left: BorderSide(color: Colors.white.withOpacity(.07))),
+        color: navy.bgRaised,
+        border: Border(left: BorderSide(color: navy.lineSubtle)),
       ),
       child: Column(
         children: [
@@ -343,7 +382,7 @@ class _RightPanel extends StatelessWidget {
                 const GtexAdminSectionHeader(
                   title: 'Critical controls',
                   subtitle:
-                      'Restricted admin actions. Codex must wire these to existing permission checks.',
+                      'Restricted admin actions. Wired to existing permission checks.',
                 ),
                 const SizedBox(height: 14),
                 _QuickControl(
@@ -436,6 +475,7 @@ class _QuickControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final GtexColorTokens navy = GtexColors.navy;
     return Container(
       margin: const EdgeInsets.only(bottom: 9),
       child: OutlinedButton.icon(
@@ -443,8 +483,8 @@ class _QuickControl extends StatelessWidget {
         icon: Icon(icon, size: 18),
         label: Align(alignment: Alignment.centerLeft, child: Text(label)),
         style: OutlinedButton.styleFrom(
-          foregroundColor: Colors.white,
-          side: BorderSide(color: Colors.white.withOpacity(.12)),
+          foregroundColor: navy.textPrimary,
+          side: BorderSide(color: navy.lineSubtle),
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -462,18 +502,19 @@ class _OperationalPlaybook extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final GtexColorTokens navy = GtexColors.navy;
     return GtexAdminPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const GtexAdminSectionHeader(
             title: 'Operational playbook',
-            subtitle: 'Route-safe notes for Codex integration.',
+            subtitle: 'Route-safe notes for production integration.',
           ),
           const SizedBox(height: 12),
           Text(
             _copyFor(module),
-            style: const TextStyle(color: Colors.white70, height: 1.45),
+            style: TextStyle(color: navy.textSecondary, height: 1.45),
           ),
         ],
       ),
@@ -497,12 +538,19 @@ class _OperationalPlaybook extends StatelessWidget {
 }
 
 class _MobileAdminCommand extends StatelessWidget {
-  const _MobileAdminCommand({required this.controller});
+  const _MobileAdminCommand({
+    required this.controller,
+    this.ownerConsoleReader,
+    this.canReviewOwnerQueue = true,
+  });
 
   final GtexAdminCommandController controller;
+  final OwnerConsoleReader? ownerConsoleReader;
+  final bool canReviewOwnerQueue;
 
   @override
   Widget build(BuildContext context) {
+    final GtexColorTokens navy = GtexColors.navy;
     final snapshot = controller.snapshot;
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -512,7 +560,7 @@ class _MobileAdminCommand extends StatelessWidget {
           style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 4),
-        const Text('Command center', style: TextStyle(color: Colors.white60)),
+        Text('Command center', style: TextStyle(color: navy.textSecondary)),
         const SizedBox(height: 16),
         GtexAdminModuleList(
           modules: controller.modules,
@@ -534,6 +582,17 @@ class _MobileAdminCommand extends StatelessWidget {
           actionMessage: controller.actionMessage,
           actionError: controller.actionError,
         ),
+        if (ownerConsoleReader != null) ...[
+          const SizedBox(height: 16),
+          SizedBox(
+            key: const Key('gtex-admin-owner-review-panel'),
+            height: 480,
+            child: AdminReviewSection(
+              reader: ownerConsoleReader!,
+              canReviewOwnerQueue: canReviewOwnerQueue,
+            ),
+          ),
+        ],
       ],
     );
   }
