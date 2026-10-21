@@ -26,10 +26,14 @@ import 'package:gte_frontend/features/competitions_hub/routing/competition_hub_d
 import 'package:gte_frontend/features/global_search_redesign/global_search_redesign.dart';
 import 'package:gte_frontend/features/home/home_screen.dart';
 import 'package:gte_frontend/features/launch_control_redesign/launch_control_feature_gate.dart';
+import 'package:gte_frontend/features/club_redesign/widgets/gtex_empire_club_switcher.dart';
+import 'package:gte_frontend/features/navigation/model/gtex_shell_navigation_model.dart';
 import 'package:gte_frontend/features/navigation/presentation/gtex_shell_command_home_entry.dart';
 import 'package:gte_frontend/features/navigation/presentation/gtex_shell_feature_flag.dart';
 import 'package:gte_frontend/features/navigation/presentation/gtex_shell_sync_status_builder.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
+import 'package:gte_frontend/ui_gtex/layout/gtex_shell_scaffold.dart';
+import 'package:gte_frontend/ui_gtex/layout/gtex_top_bar.dart';
 import 'package:gte_frontend/features/owner_console/data/owner_console_api.dart';
 import 'package:gte_frontend/features/owner_console/presentation/owner_console_screen.dart';
 import 'package:gte_frontend/features/regen_redesign/data/gtex_share_market_api.dart';
@@ -87,6 +91,8 @@ class GteNavigationShellScreen extends StatefulWidget {
     this.navigationDependencies,
     this.enableShellV3,
     this.customLaneBuilders,
+    this.initialOwnedClubs = const <GtexOwnedClubOption>[],
+    this.attentionBadgeCount = 0,
   });
 
   factory GteNavigationShellScreen.fromPath({
@@ -120,6 +126,8 @@ class GteNavigationShellScreen extends StatefulWidget {
   final GteNavigationDependencies? navigationDependencies;
   final bool? enableShellV3;
   final Map<GtePrimaryDestination, WidgetBuilder>? customLaneBuilders;
+  final List<GtexOwnedClubOption> initialOwnedClubs;
+  final int attentionBadgeCount;
 
   @override
   State<GteNavigationShellScreen> createState() =>
@@ -204,6 +212,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   final PageStorageBucket _pageStorageBucket = PageStorageBucket();
   final Map<GtePrimaryDestination, Widget> _retainedLaneWidgets =
       <GtePrimaryDestination, Widget>{};
+  late List<GtexOwnedClubOption> _ownedClubs;
+  GtexWorkspaceKind? _selectedWorkspaceOverride;
   bool _startupWorkScheduled = false;
   Timer? _liveRefreshTimer;
 
@@ -217,6 +227,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   void initState() {
     super.initState();
     _route = widget.initialRoute;
+    _ownedClubs = List<GtexOwnedClubOption>.from(widget.initialOwnedClubs);
     widget.controller.addListener(_handleExchangeControllerChanged);
     _competitionUserId = _resolveCompetitionUserId();
     _competitionUserName = _resolveCompetitionUserName();
@@ -316,6 +327,50 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                       ),
             ),
           );
+
+          if (_isShellV3Enabled) {
+            final ShellNavigationModel navModel = _buildShellNavigationModel();
+            return GtexShellScaffold(
+              navigationModel: navModel,
+              selectedSlotId: _selectedSlotIdForRoute(navModel),
+              onSelectSlot: _handleSelectShellSlot,
+              onSelectSecondary: _handleSelectSecondaryDestination,
+              activeRoute: _route.path,
+              livePulseStrip: const FootballWorldPulseTicker(),
+              worldPulseRail:
+                  showWorldPulseRail ? const FootballWorldPulseRail() : null,
+              topBar: GtexTopBar(
+                title: _routeTitle(),
+                subtitle: '${_routeSubtitle()} - ${_routeContextLine()}',
+                availableWorkspaces: navModel.availableWorkspaces,
+                activeWorkspace: navModel.activeWorkspace,
+                onWorkspaceSelected: (GtexWorkspaceKind nextWorkspace) {
+                  setState(() {
+                    _selectedWorkspaceOverride = nextWorkspace;
+                  });
+                },
+                ownedClubs: _effectiveOwnedClubs(),
+                activeClubId: _canonicalClubId(),
+                activeClubName: _canonicalClubName(),
+                onClubSelected: (GtexOwnedClubOption club) {
+                  unawaited(_handleTopBarClubSwitch(club));
+                },
+                attentionCount: navModel.topBarAttentionCount,
+                onOpenAttention: _openNotifications,
+                onOpenSearch: _openGlobalSearch,
+                walletBalanceGtc:
+                    widget.controller.walletSummary?.availableBalance,
+                onOpenWallet:
+                    () => _openPrimaryDestination(GtePrimaryDestination.wallet),
+                onOpenProfile:
+                    widget.controller.isAuthenticated
+                        ? _openProfileSettings
+                        : () => _openLogin(),
+                isAuthenticated: widget.controller.isAuthenticated,
+              ),
+              child: workspace,
+            );
+          }
 
           return GtexAppShell(
             destinations: GtexCurrentRouteAdapter.destinations(
@@ -524,6 +579,14 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       activeClubId: canonicalClubId,
       activeClubName: _canonicalClubName(),
       authedApi: shellApi,
+      onClubsLoaded: (List<GtexOwnedClubOption> loadedClubs) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _ownedClubs = loadedClubs;
+        });
+      },
       child: GtexClubOwnerDashboardScreenV2(
         key: const PageStorageKey<String>('club-owner-dashboard-v2'),
         clubId: canonicalClubId,
@@ -1544,6 +1607,163 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       return widget.controller.session?.user.username ?? 'Signed in';
     }
     return 'Preview mode';
+  }
+
+  List<GtexOwnedClubOption> _effectiveOwnedClubs() {
+    if (_ownedClubs.isNotEmpty) {
+      return _ownedClubs;
+    }
+    final String? clubId = _canonicalClubId()?.trim();
+    if (clubId == null || clubId.isEmpty) {
+      return const <GtexOwnedClubOption>[];
+    }
+    return <GtexOwnedClubOption>[
+      GtexOwnedClubOption(
+        id: clubId,
+        name: _canonicalClubName()?.trim().isNotEmpty == true
+            ? _canonicalClubName()!.trim()
+            : clubId,
+      ),
+    ];
+  }
+
+  ShellNavigationModel _buildShellNavigationModel() {
+    final List<String> ownedIds = _effectiveOwnedClubs()
+        .map((GtexOwnedClubOption club) => club.id)
+        .toList(growable: false);
+    final GtexShellCapabilities capabilities = GtexShellCapabilities(
+      isAuthenticated: widget.controller.isAuthenticated,
+      ownedClubIds: ownedIds,
+      activeClubId: _canonicalClubId(),
+      isOrgScoutOrAgent: _isStaffSession,
+      isCoinTrader: _isCoinTraderSession,
+      isCreator: _isCreatorSession,
+      isAdmin: _isAdminSession,
+      unreadNotificationCount: widget.attentionBadgeCount,
+    );
+    return ShellNavigationModel(
+      capabilities: capabilities,
+      selectedWorkspace: _selectedWorkspaceOverride,
+    );
+  }
+
+  GtexShellSlotId _selectedSlotIdForRoute(ShellNavigationModel model) {
+    final GtexShellSlotId candidate = switch (_route.primaryDestination) {
+      GtePrimaryDestination.home =>
+        model.activeWorkspace == GtexWorkspaceKind.admin
+            ? GtexShellSlotId.ops
+            : model.activeWorkspace == GtexWorkspaceKind.explore
+            ? GtexShellSlotId.explore
+            : GtexShellSlotId.home,
+      GtePrimaryDestination.club =>
+        model.activeWorkspace == GtexWorkspaceKind.scouting
+            ? GtexShellSlotId.recruitment
+            : GtexShellSlotId.club,
+      GtePrimaryDestination.competitions => GtexShellSlotId.matchday,
+      GtePrimaryDestination.market => GtexShellSlotId.market,
+      GtePrimaryDestination.regens => GtexShellSlotId.world,
+      GtePrimaryDestination.hub => GtexShellSlotId.studio,
+      GtePrimaryDestination.community => GtexShellSlotId.community,
+      GtePrimaryDestination.wallet =>
+        model.activeWorkspace == GtexWorkspaceKind.admin
+            ? GtexShellSlotId.treasury
+            : GtexShellSlotId.wallet,
+    };
+    final bool existsInPrimary = model.primarySlots.any(
+      (GtexShellSlotSpec slot) => slot.id == candidate,
+    );
+    return existsInPrimary ? candidate : GtexShellSlotId.more;
+  }
+
+  void _handleSelectShellSlot(GtexShellSlotSpec slot) {
+    switch (slot.id) {
+      case GtexShellSlotId.home:
+      case GtexShellSlotId.explore:
+      case GtexShellSlotId.ops:
+      case GtexShellSlotId.queues:
+        _openPrimaryDestination(GtePrimaryDestination.home);
+        return;
+      case GtexShellSlotId.club:
+      case GtexShellSlotId.recruitment:
+        _openPrimaryDestination(GtePrimaryDestination.club);
+        return;
+      case GtexShellSlotId.matchday:
+        _openPrimaryDestination(GtePrimaryDestination.competitions);
+        return;
+      case GtexShellSlotId.market:
+        _openPrimaryDestination(GtePrimaryDestination.market);
+        return;
+      case GtexShellSlotId.world:
+        _openPrimaryDestination(GtePrimaryDestination.regens);
+        return;
+      case GtexShellSlotId.studio:
+        _openPrimaryDestination(GtePrimaryDestination.hub);
+        return;
+      case GtexShellSlotId.community:
+        _openPrimaryDestination(GtePrimaryDestination.community);
+        return;
+      case GtexShellSlotId.traderDesk:
+      case GtexShellSlotId.wallet:
+      case GtexShellSlotId.treasury:
+        _openPrimaryDestination(GtePrimaryDestination.wallet);
+        return;
+      case GtexShellSlotId.signIn:
+        unawaited(_openLogin());
+        return;
+      case GtexShellSlotId.more:
+        return;
+    }
+  }
+
+  void _handleSelectSecondaryDestination(GtexSecondaryDestinationSpec item) {
+    switch (item.id) {
+      case GtexSecondaryDestinationId.world:
+        _openPrimaryDestination(GtePrimaryDestination.regens);
+        return;
+      case GtexSecondaryDestinationId.community:
+        _openPrimaryDestination(GtePrimaryDestination.community);
+        return;
+      case GtexSecondaryDestinationId.wallet:
+        _openPrimaryDestination(GtePrimaryDestination.wallet);
+        return;
+      case GtexSecondaryDestinationId.boardroom:
+        _openPrimaryDestination(GtePrimaryDestination.club);
+        return;
+      case GtexSecondaryDestinationId.you:
+      case GtexSecondaryDestinationId.rewards:
+        _openProfileSettings();
+        return;
+      case GtexSecondaryDestinationId.admin:
+        _openAdminCommandCenter();
+        return;
+      case GtexSecondaryDestinationId.newsroom:
+        _openPrimaryDestination(GtePrimaryDestination.home);
+        return;
+    }
+  }
+
+  Future<void> _handleTopBarClubSwitch(GtexOwnedClubOption club) async {
+    try {
+      await GtexEmpireClubWorkspace.activateClub(
+        api: _createShellAuthedApi(),
+        controller: widget.controller,
+        club: club,
+      );
+    } catch (_) {
+      // Fallback to local binding in fixture/offline test contexts where
+      // `/api/clubs/owned/{id}/activate` is not mounted.
+      widget.controller.bindCurrentClub(
+        clubId: club.id,
+        clubName: club.name,
+        clubSlug: club.slug,
+      );
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _retainedLaneWidgets.remove(GtePrimaryDestination.club);
+    });
   }
 
   Widget _buildRetainedLaneStack(BuildContext context) {

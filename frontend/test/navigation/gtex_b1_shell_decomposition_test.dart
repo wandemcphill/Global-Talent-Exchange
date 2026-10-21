@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
+import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/features/launch_control_redesign/launch_control_feature_gate.dart';
 import 'package:gte_frontend/features/launch_control_redesign/launch_control_models.dart';
 import 'package:gte_frontend/features/navigation/presentation/gte_navigation_shell_screen.dart';
@@ -146,6 +147,20 @@ void main() {
         final GteExchangeController controller = GteExchangeController(
           api: GteExchangeApiClient.fixture(),
         );
+        controller.session = GteAuthSession.fromJson(<String, Object?>{
+          'access_token': 'b1-owner-token',
+          'token_type': 'bearer',
+          'expires_in': 3600,
+          'current_club_id': 'club-lagos',
+          'user': <String, Object?>{
+            'id': 'user-b1-owner',
+            'email': 'owner@gtex.test',
+            'username': 'ade_owner',
+            'display_name': 'Ade Owner',
+            'role': 'user',
+            'current_club_id': 'club-lagos',
+          },
+        });
 
         await tester.pumpWidget(
           MaterialApp(

@@ -9,6 +9,9 @@ import '../widgets/gtex_empire_club_switcher.dart';
 import '../widgets/gtex_empire_group_panel.dart';
 
 /// Loads owned clubs + ownership groups, then hosts the active club desk.
+///
+/// Phase B3: Exposes `onClubsLoaded` and `onClubActivated` so the shell top bar
+/// and club-scoped surfaces stay synchronized with `/api/clubs/owned/{id}/activate`.
 class GtexEmpireClubWorkspace extends StatefulWidget {
   const GtexEmpireClubWorkspace({
     super.key,
@@ -17,6 +20,8 @@ class GtexEmpireClubWorkspace extends StatefulWidget {
     required this.activeClubName,
     required this.child,
     this.authedApi,
+    this.onClubsLoaded,
+    this.onClubActivated,
   });
 
   final GteExchangeController controller;
@@ -24,6 +29,23 @@ class GtexEmpireClubWorkspace extends StatefulWidget {
   final String? activeClubName;
   final Widget child;
   final GteAuthedApi? authedApi;
+  final ValueChanged<List<GtexOwnedClubOption>>? onClubsLoaded;
+  final ValueChanged<GtexOwnedClubOption>? onClubActivated;
+
+  /// Shared helper to activate a club via `/api/clubs/owned/{id}/activate`
+  /// and bind it to [GteExchangeController].
+  static Future<void> activateClub({
+    required GteAuthedApi api,
+    required GteExchangeController controller,
+    required GtexOwnedClubOption club,
+  }) async {
+    await api.post('/api/clubs/owned/${club.id}/activate');
+    controller.bindCurrentClub(
+      clubId: club.id,
+      clubName: club.name,
+      clubSlug: club.slug,
+    );
+  }
 
   @override
   State<GtexEmpireClubWorkspace> createState() =>
@@ -94,6 +116,7 @@ class _GtexEmpireClubWorkspaceState extends State<GtexEmpireClubWorkspace> {
         _groupError = groupError;
         _loading = false;
       });
+      widget.onClubsLoaded?.call(clubs);
     } catch (error) {
       if (!mounted) {
         return;
@@ -115,16 +138,16 @@ class _GtexEmpireClubWorkspaceState extends State<GtexEmpireClubWorkspace> {
       _error = null;
     });
     try {
-      await api.post('/api/clubs/owned/${club.id}/activate');
-      widget.controller.bindCurrentClub(
-        clubId: club.id,
-        clubName: club.name,
-        clubSlug: club.slug,
+      await GtexEmpireClubWorkspace.activateClub(
+        api: api,
+        controller: widget.controller,
+        club: club,
       );
       if (!mounted) {
         return;
       }
       setState(() => _switching = false);
+      widget.onClubActivated?.call(club);
     } catch (error) {
       if (!mounted) {
         return;
