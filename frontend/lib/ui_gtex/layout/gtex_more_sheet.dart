@@ -32,6 +32,7 @@ class GtexMoreSheet extends StatelessWidget {
   }) {
     return showModalBottomSheet<GtexSecondaryDestinationSpec>(
       context: context,
+      isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: GtexColors.navy.bgRaised,
       shape: const RoundedRectangleBorder(
@@ -102,7 +103,8 @@ class GtexMoreSheet extends StatelessWidget {
                       activeRoute!.trim() == item.canonicalRoute;
                   return ListTile(
                     key: Key('gtex-more-destination-${item.id.name}'),
-                    minVerticalPadding: GtexSpacing.sm,
+                    dense: true,
+                    minVerticalPadding: GtexSpacing.xs,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(GtexRadius.card),
                     ),

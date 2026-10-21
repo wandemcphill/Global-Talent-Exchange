@@ -1,40 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
-
-import '../layout/gtex_app_shell.dart';
 
 class GtexCurrentRouteAdapter {
   const GtexCurrentRouteAdapter._();
-
-  static List<GtexShellDestination> destinations({
-    required GtePrimaryDestination current,
-    required ValueChanged<GtePrimaryDestination> onOpen,
-    Map<GtePrimaryDestination, String> badgeLabels =
-        const <GtePrimaryDestination, String>{},
-    List<GtePrimaryDestination> items = const <GtePrimaryDestination>[
-      GtePrimaryDestination.home,
-      GtePrimaryDestination.market,
-      GtePrimaryDestination.competitions,
-      GtePrimaryDestination.club,
-      GtePrimaryDestination.wallet,
-      GtePrimaryDestination.hub,
-      GtePrimaryDestination.community,
-    ],
-  }) {
-    return items
-        .map((GtePrimaryDestination destination) {
-          return GtexShellDestination(
-            label: destination.label,
-            icon: destination.icon,
-            selectedIcon: destination.selectedIcon,
-            isSelected: destination == current,
-            accent: destination.accentColor,
-            badgeLabel: badgeLabels[destination],
-            onTap: () => onOpen(destination),
-          );
-        })
-        .toList(growable: false);
-  }
 
   static String titleFor(GtePrimaryDestination destination) {
     switch (destination) {

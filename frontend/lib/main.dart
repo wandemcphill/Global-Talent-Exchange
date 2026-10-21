@@ -28,6 +28,7 @@ Future<void> main() async {
   }
   final GteThemeController themeController = await GteThemeController.bootstrap(
     initialThemeId: GteThemeRegistry.defaultTheme.metadata.id,
+    useGtexNavyShell: true,
   );
   try {
     final GteAppConfig appConfig = GteAppConfig.fromEnvironment();

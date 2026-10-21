@@ -199,9 +199,10 @@ class _GtexPlayerMarketRedesignScreenState
         // Ownership comes from PHASE4-B's published contract (§4.3); before it
         // loads, or when signed out, the market simply does not claim
         // ownership.
-        final Set<String> ownedPlayerIds = GtexOwnershipBook.fromPortfolio(
-          widget.controller.portfolio,
-        ).stakes.map((GtexOwnershipStake s) => s.playerId).toSet();
+        final Set<String> ownedPlayerIds =
+            GtexOwnershipBook.fromPortfolio(
+              widget.controller.portfolio,
+            ).stakes.map((GtexOwnershipStake s) => s.playerId).toSet();
 
         final Widget scaffold = GtexMasterDetailScaffold(
           title: 'Transfer Hub',
@@ -283,6 +284,7 @@ class _GtexPlayerMarketRedesignScreenState
                       ? paneConstraints.maxHeight
                       : viewport.height;
               final bool showMoversRail =
+                  !GtexBreakpoints.isCompact(context) &&
                   paneWidth >= _moversRailMinPaneWidth &&
                   paneHeight >= _moversRailMinPaneHeight;
               final bool showCommandPulse =
@@ -339,11 +341,12 @@ class _GtexPlayerMarketRedesignScreenState
                                 widget.activeMode == GtexMarketDeskMode.market
                                     ? 'TRANSFER INTELLIGENCE'
                                     : 'MY OWNERSHIP',
-                                style: Theme.of(context).textTheme.labelSmall
-                                    ?.copyWith(
-                                      color: GtexColors.textMuted,
-                                      fontWeight: FontWeight.w900,
-                                    ),
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.labelSmall?.copyWith(
+                                  color: GtexColors.textMuted,
+                                  fontWeight: FontWeight.w900,
+                                ),
                               )
                               : null,
                     ),
@@ -351,14 +354,15 @@ class _GtexPlayerMarketRedesignScreenState
                   ],
                   Expanded(
                     child: GtexMarketPlayerGrid(
-                      header: showMoversRail
-                          ? GtexMarketMoversRail(
-                            movers: _movers,
-                            isLoading: _isLoadingMovers,
-                            error: _moversError,
-                            onOpenPlayer: widget.onOpenPlayer,
-                          )
-                          : null,
+                      header:
+                          showMoversRail
+                              ? GtexMarketMoversRail(
+                                movers: _movers,
+                                isLoading: _isLoadingMovers,
+                                error: _moversError,
+                                onOpenPlayer: widget.onOpenPlayer,
+                              )
+                              : null,
                       // Same height gate as the command pulse: when the board
                       // is too short for pulse chrome, a multi-row Wrap would
                       // also push browse cards off-stage.
