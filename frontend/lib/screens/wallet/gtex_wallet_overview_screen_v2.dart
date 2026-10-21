@@ -271,13 +271,34 @@ class _GtexLiveWalletOverviewState extends State<_GtexLiveWalletOverview> {
   }
 
   Future<void> _cancelOrder(GteOrderRecord order) async {
+    final String label = widget.controller.playerLabel(order.playerId);
+    final String idempotencyKey = 'cancel-order-${order.id}';
+    final bool confirmed =
+        (await GtexConfirmSheet.show(
+          context,
+          title: 'Cancel ${order.side.name.toUpperCase()} Order',
+          summary:
+              'Release reserved GTC for $label (${order.quantity.toStringAsFixed(2)} units) back to your Main Ledger balance.',
+          confirmLabel: 'Confirm Cancellation',
+          variant: GtexConfirmVariant.financial,
+          idempotencyKey: idempotencyKey,
+          financialDetails: GtexConfirmFinancialDetails(
+            amountLabel: gteFormatGtc(order.reservedAmount),
+            currencyCode: 'GTC',
+            idempotencyKey: idempotencyKey,
+          ),
+          onConfirm: (String _) async {},
+        )) ??
+        false;
+    if (!confirmed || !mounted) {
+      return;
+    }
     final GteOrderRecord? cancelled = await widget.controller.cancelOrder(
       order.id,
     );
     if (!mounted) {
       return;
     }
-    final String label = widget.controller.playerLabel(order.playerId);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: GtexColors.surfaceOverlay,
@@ -621,12 +642,50 @@ class _WalletBalancePanel extends StatelessWidget {
       );
     }
 
+    final String rawKycStatus =
+        controller.complianceStatus == null
+            ? 'pending_kyc'
+            : (controller.complianceStatus!.canDeposit &&
+                    controller.complianceStatus!.canWithdrawPlatformRewards
+                ? 'verified'
+                : 'pending_kyc');
+    final GtexPresentedStatus kycPresented = GtexStatusPresenter.present(
+      rawKycStatus,
+      context: GtexStatusContext.review,
+    );
+
     return ListView(
       children: <Widget>[
+        Container(
+          key: const Key('gtex-wallet-currency-separation-banner'),
+          padding: const EdgeInsets.all(GtexSpacing.md),
+          decoration: BoxDecoration(
+            color: GtexColors.surfaceRaised,
+            borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
+            border: Border.all(color: GtexColors.gold.withValues(alpha: 0.45)),
+          ),
+          child: const Row(
+            children: <Widget>[
+              Icon(Icons.info_outline_rounded, color: GtexColors.gold, size: 18),
+              SizedBox(width: GtexSpacing.sm),
+              Expanded(
+                child: Text(
+                  'Main ledger (GTC / FNC) is separate from Owner Console ledger (GTX / FAN). Balances are never merged across stacks.',
+                  style: TextStyle(
+                    color: GtexColors.text,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: GtexSpacing.md),
         GtexPanel(
-          title: 'GTC capital rail',
+          title: 'GTC capital rail (Main Ledger)',
           subtitle:
-              'GTEX Coin is live transfer capital for trades, signings, escrow and withdrawals.',
+              'GTEX Coin (GTC) is live transfer capital for trades, signings, escrow and withdrawals.',
           accent: GtexColors.gold,
           child: Wrap(
             spacing: GtexSpacing.md,
@@ -635,7 +694,7 @@ class _WalletBalancePanel extends StatelessWidget {
               SizedBox(
                 width: 210,
                 child: GtexMetricTile(
-                  label: 'Available',
+                  label: 'Available (GTC)',
                   value: gteFormatGtc(wallet.availableBalance),
                   icon: Icons.flash_on_outlined,
                   accent: GtexColors.gold,
@@ -644,7 +703,7 @@ class _WalletBalancePanel extends StatelessWidget {
               SizedBox(
                 width: 210,
                 child: GtexMetricTile(
-                  label: 'Reserved',
+                  label: 'Reserved (GTC)',
                   value: gteFormatGtc(wallet.reservedBalance),
                   icon: Icons.lock_clock_outlined,
                   accent: GtexColors.cyan,
@@ -653,10 +712,35 @@ class _WalletBalancePanel extends StatelessWidget {
               SizedBox(
                 width: 210,
                 child: GtexMetricTile(
-                  label: 'Total balance',
+                  label: 'Total balance (GTC)',
                   value: gteFormatGtc(wallet.totalBalance),
                   icon: Icons.account_balance_outlined,
                   accent: GtexColors.pitch,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: GtexSpacing.md),
+        GtexPanel(
+          key: const Key('gtex-wallet-kyc-posture-panel'),
+          title: 'Compliance & KYC posture',
+          subtitle:
+              'Withdrawals and fiat rails require verified compliance status.',
+          accent: kycPresented.color,
+          child: Row(
+            children: <Widget>[
+              GtexStatusChip.fromBackendStatus(
+                rawKycStatus,
+                context: GtexStatusContext.review,
+              ),
+              const SizedBox(width: GtexSpacing.sm),
+              Expanded(
+                child: Text(
+                  kycPresented.isPendingLike
+                      ? 'Pending verification — complete KYC before requesting fiat withdrawals.'
+                      : 'Compliance verified for capital operations.',
+                  style: const TextStyle(color: GtexColors.textMuted),
                 ),
               ),
             ],
@@ -900,15 +984,29 @@ class _WalletRightRail extends StatelessWidget {
               if (deposits.isNotEmpty) ...<Widget>[
                 const SizedBox(height: GtexSpacing.sm),
                 ...deposits
-                    .take(2)
+                    .take(3)
                     .map(
                       (GteDepositRequest deposit) => Padding(
                         padding: const EdgeInsets.only(bottom: GtexSpacing.xs),
-                        child: Text(
-                          '${deposit.reference} - ${_statusLabelForDeposit(deposit.status)}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: GtexColors.textMuted),
+                        child: Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: Text(
+                                '${deposit.reference} - ${_statusLabelForDeposit(deposit.status)}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: GtexColors.textMuted,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: GtexSpacing.xs),
+                            GtexStatusChip.fromBackendStatus(
+                              _rawStatusForDeposit(deposit.status),
+                              context: GtexStatusContext.financial,
+                              compact: true,
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -953,23 +1051,30 @@ int _activeDepositCount(List<GteDepositRequest> deposits) {
       .length;
 }
 
-String _statusLabelForDeposit(GteDepositStatus status) {
+String _rawStatusForDeposit(GteDepositStatus status) {
   switch (status) {
     case GteDepositStatus.awaitingPayment:
-      return 'Awaiting payment';
+      return 'awaiting_payment';
     case GteDepositStatus.paymentSubmitted:
-      return 'Payment submitted';
+      return 'payment_submitted';
     case GteDepositStatus.underReview:
-      return 'Under review';
+      return 'under_review';
     case GteDepositStatus.confirmed:
-      return 'Confirmed';
+      return 'confirmed';
     case GteDepositStatus.rejected:
-      return 'Rejected';
+      return 'rejected';
     case GteDepositStatus.expired:
-      return 'Expired';
+      return 'expired';
     case GteDepositStatus.disputed:
-      return 'Disputed';
+      return 'disputed';
   }
+}
+
+String _statusLabelForDeposit(GteDepositStatus status) {
+  return GtexStatusPresenter.present(
+    _rawStatusForDeposit(status),
+    context: GtexStatusContext.financial,
+  ).label;
 }
 
 String _statusLabel(GteOrderStatus status) {

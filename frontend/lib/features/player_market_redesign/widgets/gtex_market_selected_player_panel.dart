@@ -15,6 +15,7 @@ class GtexMarketSelectedPlayerPanel extends StatelessWidget {
     required this.onRemoveFromBasket,
     required this.onCheckout,
     this.selectedPlayerOwned = false,
+    this.onQuickTradeConfirmed,
   });
 
   /// True when the signed-in user already holds the selected player.
@@ -27,6 +28,8 @@ class GtexMarketSelectedPlayerPanel extends StatelessWidget {
   final ValueChanged<GtexMarketPlayerView> onToggleBasket;
   final ValueChanged<String> onRemoveFromBasket;
   final VoidCallback onCheckout;
+  final void Function(GtexMarketPlayerView player, String idempotencyKey)?
+  onQuickTradeConfirmed;
 
   @override
   Widget build(BuildContext context) {
@@ -45,6 +48,7 @@ class GtexMarketSelectedPlayerPanel extends StatelessWidget {
                     onOpenLogin: onOpenLogin,
                     onOpenPlayer: () => onOpenPlayer(selectedPlayer!),
                     onToggleBasket: () => onToggleBasket(selectedPlayer!),
+                    onQuickTradeConfirmed: onQuickTradeConfirmed,
                   ),
         ),
         const Divider(height: 1, color: GtexColors.line),
@@ -110,6 +114,7 @@ class _SelectedPlayerDetail extends StatelessWidget {
     required this.onOpenLogin,
     required this.onOpenPlayer,
     required this.onToggleBasket,
+    this.onQuickTradeConfirmed,
   });
 
   final GtexMarketPlayerView player;
@@ -119,6 +124,45 @@ class _SelectedPlayerDetail extends StatelessWidget {
   final VoidCallback onOpenLogin;
   final VoidCallback onOpenPlayer;
   final VoidCallback onToggleBasket;
+  final void Function(GtexMarketPlayerView player, String idempotencyKey)?
+  onQuickTradeConfirmed;
+
+  Future<void> _confirmShareTrade(BuildContext context) async {
+    final String idempotencyKey =
+        'mkt-share-${player.playerId}-${DateTime.now().microsecondsSinceEpoch}';
+    String? confirmedKey;
+    final bool confirmed =
+        (await GtexConfirmSheet.show(
+          context,
+          title:
+              isOwned
+                  ? 'Sell / Manage ${player.name} Shares'
+                  : 'Buy ${player.name} Shares',
+          summary:
+              'Financial market trade (GTC) — separate from club sporting transfers.',
+          confirmLabel:
+              isOwned ? 'Confirm Sell Order' : 'Confirm Share Purchase',
+          variant: GtexConfirmVariant.financial,
+          idempotencyKey: idempotencyKey,
+          financialDetails: GtexConfirmFinancialDetails(
+            amountLabel: player.sharePriceLabel,
+            currencyCode: 'GTC',
+            idempotencyKey: idempotencyKey,
+          ),
+          onConfirm: (String resolvedKey) async {
+            confirmedKey = resolvedKey;
+          },
+        )) ??
+        false;
+    if (!confirmed) {
+      return;
+    }
+    if (onQuickTradeConfirmed != null) {
+      onQuickTradeConfirmed!(player, confirmedKey ?? idempotencyKey);
+    } else {
+      onOpenPlayer();
+    }
+  }
 
   /// The pane is short: the preview sits above the shortlist basket, so it
   /// gets roughly a third of the workspace height. Below the height the
@@ -237,6 +281,19 @@ class _SelectedPlayerDetail extends StatelessWidget {
                 secondary: true,
               ),
             ),
+            if (isAuthenticated && player.isTradable) ...<Widget>[
+              const SizedBox(width: GtexSpacing.xs),
+              Expanded(
+                child: GtexActionButton(
+                  key: const Key('gtex-market-confirm-share-trade-btn'),
+                  label: isOwned ? 'Sell shares' : 'Buy shares',
+                  icon: Icons.candlestick_chart_outlined,
+                  accent: GtexColors.gold,
+                  secondary: true,
+                  onPressed: () => _confirmShareTrade(context),
+                ),
+              ),
+            ],
           ],
         ),
       ],

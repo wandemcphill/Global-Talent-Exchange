@@ -31,6 +31,18 @@ const double _moversRailMinPaneHeight = 330;
 /// listing stays on-stage inside the shell (nav + mode chips + status).
 const double _commandPulseMinPaneHeight = 460;
 
+/// Canonical G16 Market sub-tabs: `Player shares · Cards · Creators`.
+enum GtexMarketSubTab {
+  playerShares('Player shares', Icons.candlestick_chart_outlined),
+  cards('Cards', Icons.style_outlined),
+  creators('Creators', Icons.podcasts_outlined);
+
+  const GtexMarketSubTab(this.label, this.icon);
+
+  final String label;
+  final IconData icon;
+}
+
 class GtexPlayerMarketRedesignScreen extends StatefulWidget {
   const GtexPlayerMarketRedesignScreen({
     super.key,
@@ -43,6 +55,10 @@ class GtexPlayerMarketRedesignScreen extends StatefulWidget {
     this.squadCount = 0,
     this.watchlistCount = 0,
     this.onSelectMode,
+    this.selectedSubTab = GtexMarketSubTab.playerShares,
+    this.onSelectSubTab,
+    this.onOpenWallet,
+    this.onQuickTradeConfirmed,
   });
 
   final GteExchangeController controller;
@@ -54,6 +70,11 @@ class GtexPlayerMarketRedesignScreen extends StatefulWidget {
   final int squadCount;
   final int watchlistCount;
   final ValueChanged<GtexMarketDeskMode>? onSelectMode;
+  final GtexMarketSubTab selectedSubTab;
+  final ValueChanged<GtexMarketSubTab>? onSelectSubTab;
+  final VoidCallback? onOpenWallet;
+  final void Function(GtexMarketPlayerView player, String idempotencyKey)?
+  onQuickTradeConfirmed;
 
   @override
   State<GtexPlayerMarketRedesignScreen> createState() =>
@@ -380,10 +401,11 @@ class _GtexPlayerMarketRedesignScreenState
             onToggleBasket: _toggleBasket,
             onRemoveFromBasket: _removeFromBasket,
             onCheckout: _reviewBasket,
+            onQuickTradeConfirmed: widget.onQuickTradeConfirmed,
           ),
         );
 
-        if (widget.onSelectMode == null) {
+        if (widget.onSelectMode == null && widget.onSelectSubTab == null) {
           return scaffold;
         }
 
@@ -397,23 +419,95 @@ class _GtexPlayerMarketRedesignScreenState
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: <Widget>[
-                      ModeChipButton(
-                        label: 'TRANSFER INTELLIGENCE',
-                        icon: Icons.radar_rounded,
-                        badge: widget.watchlistCount > 0 ? '${widget.watchlistCount} watched' : null,
-                        accent: GtexColors.cyan,
-                        isActive: widget.activeMode == GtexMarketDeskMode.market,
-                        onPressed: () => widget.onSelectMode!(GtexMarketDeskMode.market),
+                      if (widget.onSelectMode != null) ...<Widget>[
+                        ModeChipButton(
+                          label: 'TRANSFER INTELLIGENCE',
+                          icon: Icons.radar_rounded,
+                          badge:
+                              widget.watchlistCount > 0
+                                  ? '${widget.watchlistCount} watched'
+                                  : null,
+                          accent: GtexColors.cyan,
+                          isActive:
+                              widget.activeMode == GtexMarketDeskMode.market,
+                          onPressed:
+                              () => widget.onSelectMode!(
+                                GtexMarketDeskMode.market,
+                              ),
+                        ),
+                        const SizedBox(width: 8),
+                        ModeChipButton(
+                          label: 'MY OWNERSHIP',
+                          icon: Icons.groups_2_outlined,
+                          badge:
+                              widget.squadCount > 0
+                                  ? '${widget.squadCount} owned'
+                                  : '0 owned',
+                          accent: GtexColors.pitch,
+                          isActive:
+                              widget.activeMode == GtexMarketDeskMode.ownership,
+                          onPressed:
+                              () => widget.onSelectMode!(
+                                GtexMarketDeskMode.ownership,
+                              ),
+                        ),
+                        const SizedBox(width: 12),
+                      ],
+                      if (widget.onSelectSubTab != null)
+                        for (final GtexMarketSubTab tab
+                            in GtexMarketSubTab.values) ...<Widget>[
+                          ChoiceChip(
+                            key: Key('gtex-market-subtab-${tab.name}'),
+                            avatar: Icon(
+                              tab.icon,
+                              size: 15,
+                              color:
+                                  widget.selectedSubTab == tab
+                                      ? GtexColors.gold
+                                      : GtexColors.textMuted,
+                            ),
+                            label: Text(tab.label),
+                            selected: widget.selectedSubTab == tab,
+                            onSelected: (_) => widget.onSelectSubTab!(tab),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                      Container(
+                        key: const Key('gtex-market-financial-banner'),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: GtexColors.surfaceRaised,
+                          borderRadius: BorderRadius.circular(
+                            GtexSpacing.radiusSm,
+                          ),
+                          border: Border.all(
+                            color: GtexColors.gold.withValues(alpha: 0.45),
+                          ),
+                        ),
+                        child: const Text(
+                          'Financial market — not sporting transfers',
+                          style: TextStyle(
+                            color: GtexColors.gold,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                       ),
-                      const SizedBox(width: 8),
-                      ModeChipButton(
-                        label: 'MY OWNERSHIP',
-                        icon: Icons.groups_2_outlined,
-                        badge: widget.squadCount > 0 ? '${widget.squadCount} owned' : '0 owned',
-                        accent: GtexColors.pitch,
-                        isActive: widget.activeMode == GtexMarketDeskMode.ownership,
-                        onPressed: () => widget.onSelectMode!(GtexMarketDeskMode.ownership),
-                      ),
+                      if (widget.onOpenWallet != null) ...<Widget>[
+                        const SizedBox(width: 8),
+                        TextButton.icon(
+                          key: const Key('gtex-market-open-wallet-btn'),
+                          onPressed: widget.onOpenWallet,
+                          icon: const Icon(
+                            Icons.account_balance_wallet_outlined,
+                            size: 16,
+                          ),
+                          label: const Text('Wallet'),
+                        ),
+                      ],
                     ],
                   ),
                 ),
