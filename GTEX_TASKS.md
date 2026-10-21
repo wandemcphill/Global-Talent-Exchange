@@ -271,9 +271,9 @@ Recorded Pre-E1/E2 Backend Blockers (Phase `BK`, requires separate backend appro
 Phase Sequence, Status & Dependencies:
 - `A0` (`COMPLETE` — Governance & Decisions) -> `A1` (`COMPLETE` — Safe Repository Baseline)
 - `A1` -> `A2` (`COMPLETE` — GTEX Navy Tokens & Reversible Theme Migration) and `A3` (`COMPLETE` — Shell Navigation Model, Workspace Switcher Model & Deep-Link Resolver)
-- `A3` -> `B1` (`READY` — Shell Decomposition, `StatefulShellRoute`, Session Gate Caching, `shell_v3` Flag)
-- `A2` -> `B2` (`READY` — Canonical UI Components: `GtexPortrait`, `GtexStatusPresenter`, `GtexConfirmSheet`, `GtexAttentionCard`)
-- `B1` + `B2` -> `B3` (Top Bar, Club Switcher, Workspace Switcher, More Sheet)
+- `A3` -> `B1` (`COMPLETE` — Shell Decomposition, Per-Lane State Retention, Session Gate Caching, `shell_v3` Flag)
+- `A2` -> `B2` (`COMPLETE` — Canonical UI Components: `GtexPortrait`, `GtexStatusPresenter`, `GtexConfirmSheet`, `GtexAttentionCard`, `GtexMoney`, `GtexPolicyChip`)
+- `B1` + `B2` -> `B3` (`READY` — Top Bar, Club Switcher, Workspace Switcher, More Sheet)
 - `B2` + `B3` -> `C1` (Role Dashboards on Home)
 - `B1` + `B2` -> `C2` (Club Lane Tabs & Re-homing Orphaned Club Screens), `C4` (Matchday Lane), `C5` (Market & Wallet Status Flows)
 - `C2` -> `C3` (Transfers Hub) and `D1` (Staff, Academy & Recruitment Journeys)

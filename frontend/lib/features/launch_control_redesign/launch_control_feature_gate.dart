@@ -33,8 +33,97 @@ class GtexFeatureGateDecision {
   bool get blocked => !allowed;
 }
 
+class _CachedClientFlagsEntry {
+  const _CachedClientFlagsEntry({
+    required this.flags,
+    required this.fetchedAt,
+  });
+
+  final List<GtexClientFeatureFlag> flags;
+  final DateTime fetchedAt;
+}
+
 class GtexLaunchControlFeatureGate {
   const GtexLaunchControlFeatureGate._();
+
+  static const Duration _defaultCacheTtl = Duration(minutes: 5);
+  static final Map<String, _CachedClientFlagsEntry> _sessionFlagCache =
+      <String, _CachedClientFlagsEntry>{};
+  static int _networkFetchCountForTesting = 0;
+
+  /// Number of network/API flag fetches executed since last [clearCache].
+  static int get networkFetchCountForTesting => _networkFetchCountForTesting;
+
+  /// Clear all session-cached launch-control flags.
+  static void clearCache() {
+    _sessionFlagCache.clear();
+    _networkFetchCountForTesting = 0;
+  }
+
+  /// Prime the session-scoped launch-control flag cache (useful for initial
+  /// shell bootstrap or deterministic tests).
+  static void primeFlags({
+    required String baseUrl,
+    required GteBackendMode backendMode,
+    required String? accessToken,
+    required List<GtexClientFeatureFlag> flags,
+    DateTime? now,
+  }) {
+    final String key = _cacheKey(
+      baseUrl: baseUrl,
+      backendMode: backendMode,
+      accessToken: accessToken,
+    );
+    _sessionFlagCache[key] = _CachedClientFlagsEntry(
+      flags: List<GtexClientFeatureFlag>.unmodifiable(flags),
+      fetchedAt: now ?? DateTime.now(),
+    );
+  }
+
+  static String _cacheKey({
+    required String baseUrl,
+    required GteBackendMode backendMode,
+    required String? accessToken,
+  }) {
+    return '${baseUrl.trim()}|${backendMode.name}|${(accessToken ?? '').trim()}';
+  }
+
+  static Future<List<GtexClientFeatureFlag>> _fetchOrReadCachedFlags({
+    required String baseUrl,
+    required GteBackendMode backendMode,
+    required String? accessToken,
+    bool forceRefresh = false,
+  }) async {
+    final String key = _cacheKey(
+      baseUrl: baseUrl,
+      backendMode: backendMode,
+      accessToken: accessToken,
+    );
+    final DateTime now = DateTime.now();
+    if (!forceRefresh) {
+      final _CachedClientFlagsEntry? cached = _sessionFlagCache[key];
+      if (cached != null &&
+          now.difference(cached.fetchedAt) <= _defaultCacheTtl) {
+        return cached.flags;
+      }
+    }
+
+    _networkFetchCountForTesting += 1;
+    final GtexLaunchControlApi api =
+        backendMode == GteBackendMode.fixture
+            ? GtexLaunchControlApi.fixture()
+            : GtexLaunchControlApi.standard(
+              baseUrl: baseUrl,
+              accessToken: accessToken,
+              mode: backendMode,
+            );
+    final List<GtexClientFeatureFlag> flags = await api.fetchClientFlags();
+    _sessionFlagCache[key] = _CachedClientFlagsEntry(
+      flags: List<GtexClientFeatureFlag>.unmodifiable(flags),
+      fetchedAt: now,
+    );
+    return flags;
+  }
 
   static String? featureKeyForRouteData(GteAppRouteData route) {
     switch (route.name) {
@@ -116,6 +205,7 @@ class GtexLaunchControlFeatureGate {
     required GteBackendMode backendMode,
     required String? accessToken,
     required bool isAdmin,
+    bool forceRefresh = false,
   }) async {
     final String routePath = route.toUri().toString();
     return resolveFeatureKey(
@@ -125,6 +215,7 @@ class GtexLaunchControlFeatureGate {
       backendMode: backendMode,
       accessToken: accessToken,
       isAdmin: isAdmin,
+      forceRefresh: forceRefresh,
     );
   }
 
@@ -134,6 +225,7 @@ class GtexLaunchControlFeatureGate {
     required GteBackendMode backendMode,
     required String? accessToken,
     required bool isAdmin,
+    bool forceRefresh = false,
   }) {
     return resolveFeatureKey(
       featureKey: featureKeyForPath(route),
@@ -142,6 +234,7 @@ class GtexLaunchControlFeatureGate {
       backendMode: backendMode,
       accessToken: accessToken,
       isAdmin: isAdmin,
+      forceRefresh: forceRefresh,
     );
   }
 
@@ -152,6 +245,7 @@ class GtexLaunchControlFeatureGate {
     required GteBackendMode backendMode,
     required String? accessToken,
     required bool isAdmin,
+    bool forceRefresh = false,
   }) async {
     if (featureKey == null) {
       return GtexFeatureGateDecision(
@@ -170,15 +264,12 @@ class GtexLaunchControlFeatureGate {
       );
     }
     try {
-      final GtexLaunchControlApi api =
-          backendMode == GteBackendMode.fixture
-              ? GtexLaunchControlApi.fixture()
-              : GtexLaunchControlApi.standard(
-                baseUrl: baseUrl,
-                accessToken: accessToken,
-                mode: backendMode,
-              );
-      final List<GtexClientFeatureFlag> flags = await api.fetchClientFlags();
+      final List<GtexClientFeatureFlag> flags = await _fetchOrReadCachedFlags(
+        baseUrl: baseUrl,
+        backendMode: backendMode,
+        accessToken: accessToken,
+        forceRefresh: forceRefresh,
+      );
       return resolveFromClientFlags(
         featureKey: featureKey,
         route: route,

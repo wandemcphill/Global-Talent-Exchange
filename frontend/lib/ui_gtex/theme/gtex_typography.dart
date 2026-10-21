@@ -172,3 +172,42 @@ class GtexText {
     fontFeatures: <FontFeature>[FontFeature.tabularFigures()],
   );
 }
+
+
+/// Canonical Document F4 typography helper (`GtexTypography`).
+class GtexTypography {
+  const GtexTypography._();
+
+  static TextStyle displayL({Color? color}) =>
+      color == null ? GtexText.displayL : GtexText.displayL.copyWith(color: color);
+
+  static TextStyle displayM({Color? color}) =>
+      color == null ? GtexText.displayM : GtexText.displayM.copyWith(color: color);
+
+  static TextStyle titleL({Color? color}) =>
+      color == null ? GtexText.titleL : GtexText.titleL.copyWith(color: color);
+
+  static TextStyle titleM({Color? color}) =>
+      color == null ? GtexText.titleM : GtexText.titleM.copyWith(color: color);
+
+  static TextStyle titleS({Color? color}) =>
+      color == null ? GtexText.titleS : GtexText.titleS.copyWith(color: color);
+
+  static TextStyle body({Color? color}) =>
+      color == null ? GtexText.body : GtexText.body.copyWith(color: color);
+
+  static TextStyle bodyS({Color? color}) =>
+      color == null ? GtexText.bodyS : GtexText.bodyS.copyWith(color: color);
+
+  static TextStyle label({Color? color}) =>
+      color == null ? GtexText.label : GtexText.label.copyWith(color: color);
+
+  static TextStyle numericL({Color? color}) =>
+      color == null ? GtexText.numericL : GtexText.numericL.copyWith(color: color);
+
+  static TextStyle numericM({Color? color}) =>
+      color == null ? GtexText.numericM : GtexText.numericM.copyWith(color: color);
+
+  static TextStyle numericS({Color? color}) =>
+      color == null ? GtexText.numericS : GtexText.numericS.copyWith(color: color);
+}

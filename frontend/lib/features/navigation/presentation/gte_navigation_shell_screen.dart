@@ -26,6 +26,9 @@ import 'package:gte_frontend/features/competitions_hub/routing/competition_hub_d
 import 'package:gte_frontend/features/global_search_redesign/global_search_redesign.dart';
 import 'package:gte_frontend/features/home/home_screen.dart';
 import 'package:gte_frontend/features/launch_control_redesign/launch_control_feature_gate.dart';
+import 'package:gte_frontend/features/navigation/presentation/gtex_shell_command_home_entry.dart';
+import 'package:gte_frontend/features/navigation/presentation/gtex_shell_feature_flag.dart';
+import 'package:gte_frontend/features/navigation/presentation/gtex_shell_sync_status_builder.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/features/owner_console/data/owner_console_api.dart';
 import 'package:gte_frontend/features/owner_console/presentation/owner_console_screen.dart';
@@ -56,8 +59,6 @@ import 'package:gte_frontend/services/audio/gtex_audio_context.dart';
 import 'package:gte_frontend/shared/providers/auth_provider.dart';
 import 'package:gte_frontend/theme/gte_theme_picker_sheet.dart';
 import 'package:gte_frontend/ui_gtex/components/gtex_button.dart';
-import 'package:gte_frontend/ui_gtex/components/gtex_metric_tile.dart';
-import 'package:gte_frontend/ui_gtex/components/gtex_panel.dart';
 import 'package:gte_frontend/ui_gtex/layout/gtex_app_shell.dart';
 import 'package:gte_frontend/ui_gtex/routes/gtex_current_route_adapter.dart';
 import 'package:gte_frontend/ui_gtex/theme/gtex_colors.dart';
@@ -84,6 +85,8 @@ class GteNavigationShellScreen extends StatefulWidget {
     this.initialRoute = const GteNavigationRoute.home(),
     this.onRouteChanged,
     this.navigationDependencies,
+    this.enableShellV3,
+    this.customLaneBuilders,
   });
 
   factory GteNavigationShellScreen.fromPath({
@@ -115,6 +118,8 @@ class GteNavigationShellScreen extends StatefulWidget {
   final GteNavigationRoute initialRoute;
   final ValueChanged<GteNavigationRoute>? onRouteChanged;
   final GteNavigationDependencies? navigationDependencies;
+  final bool? enableShellV3;
+  final Map<GtePrimaryDestination, WidgetBuilder>? customLaneBuilders;
 
   @override
   State<GteNavigationShellScreen> createState() =>
@@ -197,8 +202,13 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   late String? _competitionUserName;
   late String? _creatorAccessToken;
   final PageStorageBucket _pageStorageBucket = PageStorageBucket();
+  final Map<GtePrimaryDestination, Widget> _retainedLaneWidgets =
+      <GtePrimaryDestination, Widget>{};
   bool _startupWorkScheduled = false;
   Timer? _liveRefreshTimer;
+
+  bool get _isShellV3Enabled =>
+      GtexShellFeatureFlag.isEnabled(explicitOverride: widget.enableShellV3);
 
   bool get _isTestBinding =>
       WidgetsBinding.instance.runtimeType.toString().contains('Test');
@@ -295,12 +305,15 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
             openPlayer: _openPlayer,
             child: PageStorage(
               bucket: _pageStorageBucket,
-              child: KeyedSubtree(
-                key: ValueKey<String>(
-                  'shell-${_route.primaryDestination.name}',
-                ),
-                child: _buildCurrentDestination(),
-              ),
+              child:
+                  _isShellV3Enabled
+                      ? _buildRetainedLaneStack(context)
+                      : KeyedSubtree(
+                        key: ValueKey<String>(
+                          'shell-${_route.primaryDestination.name}',
+                        ),
+                        child: _buildCurrentDestination(),
+                      ),
             ),
           );
 
@@ -485,7 +498,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   Widget _buildClubDestination() {
     final String? canonicalClubId = _canonicalClubId()?.trim();
     if (canonicalClubId == null || canonicalClubId.isEmpty) {
-      return _GtexCommandHomeEntry(
+      return GtexCommandHomeEntry(
         isAuthenticated: widget.controller.isAuthenticated,
         userLabel: widget.controller.session?.user.username ?? 'Preview scout',
         onSignIn:
@@ -1015,7 +1028,16 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   }
 
   Widget _buildCurrentDestination() {
-    switch (_route.primaryDestination) {
+    final WidgetBuilder? customBuilder =
+        widget.customLaneBuilders?[_route.primaryDestination];
+    if (customBuilder != null) {
+      return customBuilder(context);
+    }
+    return _buildCurrentDestinationFor(_route.primaryDestination);
+  }
+
+  Widget _buildCurrentDestinationFor(GtePrimaryDestination destination) {
+    switch (destination) {
       case GtePrimaryDestination.home:
         return _buildHomeDestination();
       case GtePrimaryDestination.competitions:
@@ -1524,120 +1546,57 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     return 'Preview mode';
   }
 
+  Widget _buildRetainedLaneStack(BuildContext context) {
+    final List<GtePrimaryDestination> destinations =
+        _primaryDestinationsForWorkspace();
+    final GtePrimaryDestination active = _route.primaryDestination;
+    final List<GtePrimaryDestination> stackOrder =
+        destinations.contains(active)
+            ? destinations
+            : <GtePrimaryDestination>[...destinations, active];
+    _retainedLaneWidgets[active] ??= KeyedSubtree(
+      key: ValueKey<String>('shell-retained-${active.name}'),
+      child: _buildDestinationFor(context, active),
+    );
+    final int activeIndex = stackOrder.indexOf(active);
+    return IndexedStack(
+      index: activeIndex < 0 ? 0 : activeIndex,
+      children: stackOrder
+          .map(
+            (GtePrimaryDestination destination) =>
+                _retainedLaneWidgets[destination] ??
+                const SizedBox.shrink(),
+          )
+          .toList(growable: false),
+    );
+  }
+
+  Widget _buildDestinationFor(
+    BuildContext context,
+    GtePrimaryDestination destination,
+  ) {
+    final WidgetBuilder? customBuilder =
+        widget.customLaneBuilders?[destination];
+    if (customBuilder != null) {
+      return customBuilder(context);
+    }
+    return _buildCurrentDestinationFor(destination);
+  }
+
   GteSyncStatusCard _buildModeSyncCard(BuildContext context) {
     final Color accent = _routeAccentFor(context, _route.primaryDestination);
-    switch (_route.primaryDestination) {
-      case GtePrimaryDestination.competitions:
-        return GteSyncStatusCard(
-          title: 'Competitions',
-          status:
-              _competitionController.discoveryError == null
-                  ? 'Fixtures, brackets, and competition updates are synced.'
-                  : 'Competition feed degraded. Showing the latest available snapshot.',
-          syncedAt: _competitionController.discoverySyncedAt,
-          accent: accent,
-          isRefreshing: _competitionController.isLoadingDiscovery,
-          onRefresh: _competitionController.loadDiscovery,
-        );
-      case GtePrimaryDestination.market:
-        return GteSyncStatusCard(
-          title: 'Transfer Hub',
-          status:
-              widget.controller.marketError == null
-                  ? 'Listings, prices, clubs, and negotiation context are ready.'
-                  : 'Transfer board degraded. The last confirmed board is still visible.',
-          syncedAt: widget.controller.marketSyncedAt,
-          accent: accent,
-          isRefreshing: widget.controller.isLoadingMarket,
-          onRefresh: () => widget.controller.loadMarket(reset: true),
-        );
-      case GtePrimaryDestination.regens:
-        return GteSyncStatusCard(
-          title: 'Regen World',
-          status:
-              'Regen prospects, lineage, contracts, and Create-a-Son orders '
-              'load from the live regen universe.',
-          syncedAt: null,
-          accent: accent,
-          isRefreshing: false,
-          onRefresh: null,
-        );
-      case GtePrimaryDestination.hub:
-        final bool creatorHealthy = _creatorController.errorMessage == null;
-        return GteSyncStatusCard(
-          title: 'Community',
-          status:
-              creatorHealthy
-                  ? _isReferralRuntimeAvailable
-                      ? 'Creator tools, referral activity, and community signals are synced.'
-                      : 'Creator tools are live. Referral rewards will appear here once that runtime is enabled.'
-                  : 'Community feed degraded. Showing the latest available snapshot.',
-          syncedAt: _creatorController.syncedAt,
-          accent: accent,
-          isRefreshing:
-              _referralController.isLoading || _creatorController.isLoading,
-          onRefresh:
-              widget.controller.isAuthenticated
-                  ? () {
-                    _referralController.load();
-                    _creatorController.load();
-                  }
-                  : null,
-        );
-      case GtePrimaryDestination.community:
-        return GteSyncStatusCard(
-          title: 'Community',
-          status:
-              widget.controller.isAuthenticated
-                  ? 'Watchlists, live threads, direct messages, and creator-club follows are wired to live community endpoints.'
-                  : 'Public live threads are visible. Sign in to manage watchlists, follows, and direct messages.',
-          syncedAt: null,
-          accent: accent,
-          isRefreshing: false,
-          onRefresh: null,
-        );
-      case GtePrimaryDestination.club:
-        return GteSyncStatusCard(
-          title: 'Club operations',
-          status:
-              'Club management opens here once this account owns or is linked to a club.',
-          syncedAt: widget.controller.marketSyncedAt,
-          accent: accent,
-          isRefreshing: false,
-          onRefresh: null,
-        );
-      case GtePrimaryDestination.wallet:
-        return GteSyncStatusCard(
-          title: 'Club funds',
-          status:
-              widget.controller.isAuthenticated
-                  ? 'Balance, player holdings, and activity records are up to date.'
-                  : 'Sign in to view funds, holdings, and account activity.',
-          syncedAt:
-              widget.controller.portfolioSyncedAt ??
-              widget.controller.ordersSyncedAt,
-          accent: accent,
-          isRefreshing:
-              widget.controller.isLoadingPortfolio ||
-              widget.controller.isLoadingOrders,
-          onRefresh:
-              widget.controller.isAuthenticated
-                  ? widget.controller.refreshAccount
-                  : null,
-        );
-      case GtePrimaryDestination.home:
-        return GteSyncStatusCard(
-          title: 'Home sync',
-          status:
-              'Home keeps your club, matchday, scouting, and world routes aligned.',
-          detail:
-              'Runtime ${_runtimeModeLabel()} on ${_apiHostLabel()} - ${_runtimeAudienceLabel()}',
-          syncedAt: widget.controller.marketSyncedAt,
-          accent: accent,
-          isRefreshing: widget.controller.isBootstrapping,
-          onRefresh: widget.controller.bootstrap,
-        );
-    }
+    return GtexShellSyncStatusBuilder.build(
+      destination: _route.primaryDestination,
+      accent: accent,
+      exchangeController: widget.controller,
+      competitionController: _competitionController,
+      creatorController: _creatorController,
+      referralController: _referralController,
+      isReferralRuntimeAvailable: _isReferralRuntimeAvailable,
+      runtimeModeLabel: _runtimeModeLabel(),
+      apiHostLabel: _apiHostLabel(),
+      runtimeAudienceLabel: _runtimeAudienceLabel(),
+    );
   }
 
   GteSessionIdentity _identity() {
@@ -1736,263 +1695,3 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   }
 }
 
-class _GtexCommandHomeEntry extends StatelessWidget {
-  const _GtexCommandHomeEntry({
-    required this.isAuthenticated,
-    required this.userLabel,
-    required this.onSignIn,
-    required this.onCreateClub,
-    required this.onOpenMarket,
-    required this.onOpenCompetitions,
-    required this.onOpenWorld,
-  });
-
-  final bool isAuthenticated;
-  final String userLabel;
-  final VoidCallback onSignIn;
-  final VoidCallback onCreateClub;
-  final VoidCallback onOpenMarket;
-  final VoidCallback onOpenCompetitions;
-  final VoidCallback onOpenWorld;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final bool compact = constraints.maxWidth < 760;
-        final double metricWidth = compact ? constraints.maxWidth : 210;
-        return SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(
-            compact ? GtexSpacing.md : GtexSpacing.xl,
-            GtexSpacing.lg,
-            compact ? GtexSpacing.md : GtexSpacing.xl,
-            120,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(compact ? GtexSpacing.lg : 30),
-                decoration: BoxDecoration(
-                  gradient: GtexColors.panelGlow(accent: GtexColors.pitch),
-                  borderRadius: BorderRadius.circular(GtexSpacing.radiusLg),
-                  border: Border.all(
-                    color: GtexColors.pitch.withValues(alpha: 0.34),
-                  ),
-                  boxShadow: <BoxShadow>[
-                    GtexColors.glow(GtexColors.pitch, opacity: 0.14),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'THE GLOBAL FOOTBALL TALENT MARKETPLACE',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: GtexColors.pitch,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                    const SizedBox(height: GtexSpacing.sm),
-                    Text(
-                      isAuthenticated
-                          ? 'Build your club command center'
-                          : 'Enter the football operating system',
-                      maxLines: compact ? 3 : 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                        color: GtexColors.text,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: GtexSpacing.sm),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 860),
-                      child: Text(
-                        isAuthenticated
-                            ? '$userLabel, create your club to unlock squad ownership, transfer trading, finances, competitions, news, and regen world activity from one GTEX command surface.'
-                            : 'Create and own clubs, discover real players, browse the transfer universe, rent national-team talent, follow tournaments, and watch the GTEX news world move around the market.',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.titleMedium?.copyWith(
-                          color: GtexColors.textSecondary,
-                          height: 1.42,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: GtexSpacing.lg),
-                    Wrap(
-                      spacing: GtexSpacing.sm,
-                      runSpacing: GtexSpacing.sm,
-                      children: <Widget>[
-                        if (!isAuthenticated)
-                          GtexButton(
-                            label: 'Sign in',
-                            icon: Icons.login,
-                            onPressed: onSignIn,
-                          ),
-                        GtexButton(
-                          label:
-                              isAuthenticated
-                                  ? 'Create club'
-                                  : 'Create or join club',
-                          icon: Icons.shield_outlined,
-                          variant:
-                              isAuthenticated
-                                  ? GtexButtonVariant.primary
-                                  : GtexButtonVariant.secondary,
-                          onPressed: onCreateClub,
-                        ),
-                        GtexButton(
-                          label: 'Transfer Hub',
-                          icon: Icons.storefront_outlined,
-                          variant: GtexButtonVariant.secondary,
-                          onPressed: onOpenMarket,
-                        ),
-                        GtexButton(
-                          label: 'Matchday',
-                          icon: Icons.emoji_events_outlined,
-                          variant: GtexButtonVariant.ghost,
-                          onPressed: onOpenCompetitions,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: GtexSpacing.lg),
-              Wrap(
-                spacing: GtexSpacing.md,
-                runSpacing: GtexSpacing.md,
-                children: <Widget>[
-                  SizedBox(
-                    width: metricWidth,
-                    child: const GtexMetricTile(
-                      label: 'Player universe',
-                      value: '17K+',
-                      helper: 'Tradeable real players',
-                      icon: Icons.groups_2_outlined,
-                      accent: GtexColors.pitch,
-                    ),
-                  ),
-                  SizedBox(
-                    width: metricWidth,
-                    child: const GtexMetricTile(
-                      label: 'Transfer route',
-                      value: 'Live',
-                      helper: 'Country to club browsing',
-                      icon: Icons.account_tree_outlined,
-                      accent: GtexColors.cyan,
-                    ),
-                  ),
-                  SizedBox(
-                    width: metricWidth,
-                    child: const GtexMetricTile(
-                      label: 'Club layer',
-                      value: 'Owner',
-                      helper: 'Squad, wallet, orders',
-                      icon: Icons.shield_outlined,
-                      accent: GtexColors.gold,
-                    ),
-                  ),
-                  SizedBox(
-                    width: metricWidth,
-                    child: const GtexMetricTile(
-                      label: 'World state',
-                      value: 'Active',
-                      helper: 'Regens, news, awards',
-                      icon: Icons.public_outlined,
-                      accent: GtexColors.mint,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: GtexSpacing.lg),
-              Wrap(
-                spacing: GtexSpacing.md,
-                runSpacing: GtexSpacing.md,
-                children: <Widget>[
-                  _HomeLanePanel(
-                    width: compact ? constraints.maxWidth : 360,
-                    title: 'Transfer room',
-                    subtitle:
-                        'Browse country, league, division, club, then shortlist real football assets.',
-                    icon: Icons.compare_arrows_outlined,
-                    accent: GtexColors.pitch,
-                    onTap: onOpenMarket,
-                  ),
-                  _HomeLanePanel(
-                    width: compact ? constraints.maxWidth : 360,
-                    title: 'Club ownership',
-                    subtitle:
-                        'Create a badge, build a squad, manage finances, and enter competitions.',
-                    icon: Icons.stadium_outlined,
-                    accent: GtexColors.gold,
-                    onTap: onCreateClub,
-                  ),
-                  _HomeLanePanel(
-                    width: compact ? constraints.maxWidth : 360,
-                    title: 'GTEX world',
-                    subtitle:
-                        'Follow regens, creator activity, football news, awards, and community signals.',
-                    icon: Icons.auto_awesome_outlined,
-                    accent: GtexColors.mint,
-                    onTap: onOpenWorld,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _HomeLanePanel extends StatelessWidget {
-  const _HomeLanePanel({
-    required this.width,
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.accent,
-    required this.onTap,
-  });
-
-  final double width;
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Color accent;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: width,
-      child: GtexPanel(
-        title: title,
-        subtitle: subtitle,
-        accent: accent,
-        onTap: onTap,
-        trailing: Icon(icon, color: accent),
-        child: Row(
-          children: <Widget>[
-            Text(
-              'Open lane',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: accent,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const Spacer(),
-            Icon(Icons.arrow_forward, color: accent, size: 18),
-          ],
-        ),
-      ),
-    );
-  }
-}

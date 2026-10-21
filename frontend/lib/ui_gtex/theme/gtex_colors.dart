@@ -69,6 +69,10 @@ class GtexColorTokens {
   Color get coinGtx => info;
   Color get coinFnc => gold300;
   Color get coinFanToken => gold300;
+  Color get currencyGtc => info;
+  Color get currencyGtx => info;
+  Color get currencyFnc => gold300;
+  Color get currencyFan => gold300;
 }
 
 /// Canonical "GTEX Navy" colour palette (Master Plan Document F3, Decision O-06).
