@@ -667,6 +667,7 @@ def global_ticker(
 @router.get("/newsroom")
 def newsroom_feed(
     club_id: str | None = None,
+    save_context_id: str | None = None,
     category: str | None = None,
     limit: int = 30,
     user=Depends(get_current_user),
@@ -676,10 +677,14 @@ def newsroom_feed(
         session,
         user_id=user.id,
         club_id=club_id,
+        save_context_id=save_context_id,
         category=category,
         limit=max(1, min(limit, 100)),
     )
     return {"articles": articles}
+
+
+get_owner_newsroom = newsroom_feed
 
 
 def _run_alert_sweep() -> None:

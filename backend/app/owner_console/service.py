@@ -1309,3 +1309,9 @@ def maybe_auto_tick(session: Session, user_id: str) -> None:
         last = aware(state.last_tick_at)
         if state.stage in ("competition", "active") and (last is None or now() - last > timedelta(hours=6)):
             tick_club(session, state, use_ai=False)
+
+
+def get_owner_newsroom(*args, **kwargs):
+    from app.owner_console import storytelling
+    return storytelling.list_newsroom_articles(*args, **kwargs)
+

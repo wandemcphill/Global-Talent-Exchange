@@ -152,6 +152,9 @@ def _mount_generated_media(app: FastAPI) -> None:
     media_root = os.environ.get("GTE_GENERATED_MEDIA_ROOT")
     directory = Path(media_root) if media_root else Path(__file__).resolve().parents[1] / "generated_media"
     app.mount("/generated-media", StaticFiles(directory=str(directory), check_dir=False), name="generated_media")
+    faces_dir = directory / "regen_newgen_faces"
+    if faces_dir.exists():
+        app.mount("/api/media/regen-faces", StaticFiles(directory=str(faces_dir), check_dir=False), name="regen_faces_media")
 
 async def _startup_app(app: FastAPI) -> None:
     runtime_context: Container = app.state.container
