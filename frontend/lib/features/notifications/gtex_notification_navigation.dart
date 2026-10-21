@@ -25,22 +25,105 @@ class GtexNotificationNavigation {
       return _fromExplicitRoute(explicitRoute, isAdmin: isAdmin);
     }
 
-    // `fixture_id` is the one legacy identifier with an exact, registered
-    // route convention. Other IDs require an explicit backend route so that
-    // an offer, club, or competition is never sent to an invented surface.
-    final String fixtureId = notification.fixtureId?.trim() ?? '';
-    if (fixtureId.isEmpty) {
-      return null;
+    // `fixture_id` from legacy identifier or metadata
+    final String fixtureId = notification.fixtureId?.trim().isNotEmpty == true
+        ? notification.fixtureId!.trim()
+        : (_firstMetadataString(notification.metadata, const <String>[
+              'fixture_id',
+              'fixtureId',
+              'match_id',
+              'matchId',
+              'match_key',
+              'matchKey',
+            ])?.trim() ??
+            '');
+    if (fixtureId.isNotEmpty) {
+      return GtexNotificationNavigationTarget(
+        route: '/matches/viewer/${Uri.encodeComponent(fixtureId)}',
+        source: GtexNotificationNavigationSource.fixtureId,
+      );
     }
-    return GtexNotificationNavigationTarget(
-      route: '/matches/viewer/${Uri.encodeComponent(fixtureId)}',
-      source: GtexNotificationNavigationSource.fixtureId,
-    );
+
+    // `competition_id` payload resolution beyond fixture_id
+    final String competitionId =
+        notification.competitionId?.trim().isNotEmpty == true
+            ? notification.competitionId!.trim()
+            : (_firstMetadataString(notification.metadata, const <String>[
+                  'competition_id',
+                  'competitionId',
+                ])?.trim() ??
+                '');
+    if (competitionId.isNotEmpty) {
+      return _fromExplicitRoute(
+        '/app/play?competition=${Uri.encodeComponent(competitionId)}',
+        isAdmin: isAdmin,
+        source: GtexNotificationNavigationSource.competitionId,
+      );
+    }
+
+    // `resource_id` payload resolution beyond fixture_id
+    final String resourceId = notification.resourceId?.trim().isNotEmpty == true
+        ? notification.resourceId!.trim()
+        : (_firstMetadataString(notification.metadata, const <String>[
+              'resource_id',
+              'resourceId',
+              'player_id',
+              'playerId',
+              'club_id',
+              'clubId',
+            ])?.trim() ??
+            '');
+    if (resourceId.isNotEmpty) {
+      final String resourceType =
+          _firstMetadataString(notification.metadata, const <String>[
+            'resource_type',
+            'resourceType',
+          ])?.trim().toLowerCase() ??
+          (notification.topic?.trim().toLowerCase() ?? '');
+
+      if (resourceType.contains('player') ||
+          notification.metadata.containsKey('player_id') ||
+          notification.metadata.containsKey('playerId')) {
+        return _fromExplicitRoute(
+          '/players/${Uri.encodeComponent(resourceId)}/profile',
+          isAdmin: isAdmin,
+          source: GtexNotificationNavigationSource.resourceId,
+        );
+      }
+      if (resourceType.contains('club') ||
+          notification.metadata.containsKey('club_id') ||
+          notification.metadata.containsKey('clubId')) {
+        return _fromExplicitRoute(
+          '/world/clubs/${Uri.encodeComponent(resourceId)}',
+          isAdmin: isAdmin,
+          source: GtexNotificationNavigationSource.resourceId,
+        );
+      }
+      if (resourceType.contains('match') ||
+          resourceType.contains('fixture') ||
+          resourceType == 'competition_match') {
+        return GtexNotificationNavigationTarget(
+          route: '/matches/viewer/${Uri.encodeComponent(resourceId)}',
+          source: GtexNotificationNavigationSource.resourceId,
+        );
+      }
+      if (resourceType.contains('federation')) {
+        return _fromExplicitRoute(
+          '/world/federations/${Uri.encodeComponent(resourceId)}',
+          isAdmin: isAdmin,
+          source: GtexNotificationNavigationSource.resourceId,
+        );
+      }
+    }
+
+    return null;
   }
 
   static GtexNotificationNavigationTarget? _fromExplicitRoute(
     String route, {
     required bool isAdmin,
+    GtexNotificationNavigationSource source =
+        GtexNotificationNavigationSource.explicitRoute,
   }) {
     final String trimmed = route.trim();
     if (trimmed.isEmpty ||
@@ -66,7 +149,7 @@ class GtexNotificationNavigation {
     }
     return GtexNotificationNavigationTarget(
       route: canonical,
-      source: GtexNotificationNavigationSource.explicitRoute,
+      source: source,
     );
   }
 
@@ -94,4 +177,9 @@ class GtexNotificationNavigationTarget {
   final GtexNotificationNavigationSource source;
 }
 
-enum GtexNotificationNavigationSource { explicitRoute, fixtureId }
+enum GtexNotificationNavigationSource {
+  explicitRoute,
+  fixtureId,
+  competitionId,
+  resourceId,
+}

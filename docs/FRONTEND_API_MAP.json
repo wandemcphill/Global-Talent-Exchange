@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "call_count": 682,
+  "call_count": 683,
   "calls": [
     {
       "file": "frontend/lib/core/runtime/gtex_realtime_client.dart",
@@ -8181,6 +8181,18 @@
       "endpoint": "/generated-media/regen_newgen_faces/script_skin_hair/",
       "expected_shape": null,
       "base_url_source": "runtime_env",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/widgets/turnstile_challenge_web.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit",
+      "expected_shape": null,
+      "base_url_source": "injected",
       "platforms": [
         "web",
         "mobile"

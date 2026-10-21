@@ -192,13 +192,18 @@ def resolve_player_portrait_url(session: Session | None, player_id: str, player_
     name = (player.name if player else player_name) or "Player"
     # 1. Check if face-bank manifest has a mapped static portrait
     manifest = _load_face_manifest()
-    items = manifest.get("items") or []
+    items = manifest.get("assets") or manifest.get("items") or []
     if items:
         h = int(hashlib.md5(player_id.encode("utf-8")).hexdigest()[:8], 16)
         chosen = items[h % len(items)]
-        rel = chosen.get("relative_path")
+        if chosen.get("cloudinary_secure_url"):
+            return str(chosen["cloudinary_secure_url"])
+        rel = chosen.get("storage_key") or chosen.get("source_path") or chosen.get("relative_path")
         if rel:
-            return f"/api/media/regen-faces/{rel.replace(chr(92), '/')}"
+            import urllib.parse
+
+            rel_clean = urllib.parse.quote(str(rel).replace("\\", "/").lstrip("/"), safe="/")
+            return f"/generated-media/{rel_clean}"
     # 2. Deterministic high-quality vector portrait fallback
     initials = "".join([part[0] for part in name.split()[:2]]).upper() or "P"
     palette = ["#0F766E", "#1E3A8A", "#831843", "#14532D", "#7C2D12", "#4C1D95"]
@@ -513,7 +518,6 @@ def broadcast_dict(ev: OwnerBroadcastEvent) -> dict[str, Any]:
         "club_id": ev.club_id,
         "club_name": ev.club_name,
         "club_crest_url": ev.club_crest_url,
-        "owner_user_id": ev.owner_user_id,
         "owner_display_name": ev.owner_display_name,
         "event_type": ev.event_type,
         "item_name": ev.item_name,
@@ -592,17 +596,42 @@ def list_newsroom_articles(
     )
     if club_id:
         stmt = stmt.where(OwnerNewsroomArticle.club_id == club_id)
+        if user_id and not can_view_private_club_data(session, user_id, club_id):
+            stmt = stmt.where(OwnerNewsroomArticle.visibility == "global")
+
+    allowed_saves = set(user_save_context_ids(session, user_id)) if user_id else None
+
     if save_context_id:
-        stmt = stmt.where(
-            or_(
+        if allowed_saves is not None and save_context_id not in allowed_saves:
+            stmt = stmt.where(
                 OwnerNewsroomArticle.save_context_id == save_context_id,
                 OwnerNewsroomArticle.visibility == "global",
             )
-        )
+        else:
+            stmt = stmt.where(
+                or_(
+                    OwnerNewsroomArticle.save_context_id == save_context_id,
+                    OwnerNewsroomArticle.visibility == "global",
+                )
+            )
+    elif allowed_saves is not None:
+        if allowed_saves:
+            stmt = stmt.where(
+                or_(
+                    OwnerNewsroomArticle.visibility == "global",
+                    OwnerNewsroomArticle.save_context_id.in_(allowed_saves),
+                )
+            )
+        else:
+            stmt = stmt.where(OwnerNewsroomArticle.visibility == "global")
+
     if category and category != "all":
         stmt = stmt.where(OwnerNewsroomArticle.category == category)
     rows = session.scalars(stmt.limit(limit)).all()
     return [newsroom_dict(r) for r in rows]
+
+
+get_owner_newsroom = list_newsroom_articles
 
 
 def newsroom_dict(art: OwnerNewsroomArticle) -> dict[str, Any]:

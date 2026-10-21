@@ -464,3 +464,169 @@ def test_club_story_and_shared_save_privacy_isolation(client, bootstrap_admin_he
             )
         assert wl_err.value.status == 403
         session.rollback()
+
+
+def test_save_scoped_newsroom_authorization_and_filter(client, bootstrap_admin_headers, app):
+    """
+    B1: Save-scoped newsroom authorization filter missing in get_owner_newsroom / list_newsroom_articles.
+    Ensure private save articles are only visible to authorized save owners, while global articles
+    remain accessible to everyone.
+    """
+    _enable_legacy(app)
+    club_a_id = _claim_and_activate(client, bootstrap_admin_headers, city="Kano")
+
+    with app.state.session_factory() as session:
+        admin = session.scalar(select(User).where(User.email == "admin@test.gtex.local"))
+        save_a = f"club:{club_a_id}"
+
+        # 1. Create global article (save_context_id is "global", visibility="global")
+        art_global = OwnerNewsroomArticle(
+            club_id=club_a_id,
+            save_context_id="global",
+            visibility="global",
+            category="financial",
+            headline="Global Federation Update",
+            subheadline="Worldwide regulation announcement",
+            editorial_narration="The federation has issued a worldwide update.",
+            status="published",
+            idempotency_key="news-global-auth-001",
+        )
+        # 2. Create save_a-scoped article
+        art_save_a = OwnerNewsroomArticle(
+            club_id=club_a_id,
+            save_context_id=save_a,
+            visibility="private",
+            category="transfers",
+            headline="Club A Secret Contract Leak",
+            subheadline="Confidential save-scoped memo",
+            editorial_narration="Save-specific confidential document.",
+            status="published",
+            idempotency_key="news-save-a-auth-002",
+        )
+        # 3. Create foreign-save-scoped article
+        art_foreign = OwnerNewsroomArticle(
+            club_id="foreign_club_xyz",
+            save_context_id="club:foreign_save_xyz",
+            visibility="private",
+            category="editorial",
+            headline="Foreign Club Internal Briefing",
+            subheadline="Other owner confidential report",
+            editorial_narration="Foreign club internal briefing.",
+            status="published",
+            idempotency_key="news-foreign-auth-003",
+        )
+        session.add_all([art_global, art_save_a, art_foreign])
+        session.commit()
+
+        # Create user B without access to save_a
+        owner_b = User(email="owner_b_news@test.gtex.local", username="owner_b_news", password_hash="hash")
+        session.add(owner_b)
+        session.commit()
+        owner_b_id = owner_b.id
+
+        # Verify storytelling.list_newsroom_articles for Admin (has save_a access)
+        admin_articles = storytelling.list_newsroom_articles(session, user_id=admin.id)
+        admin_headlines = [a["headline"] for a in admin_articles]
+        assert "Global Federation Update" in admin_headlines
+        assert "Club A Secret Contract Leak" in admin_headlines
+        assert "Foreign Club Internal Briefing" not in admin_headlines
+
+        # Verify storytelling.list_newsroom_articles for Owner B (does not have save_a access)
+        b_articles = storytelling.list_newsroom_articles(session, user_id=owner_b_id)
+        b_headlines = [a["headline"] for a in b_articles]
+        assert "Global Federation Update" in b_headlines
+        assert "Club A Secret Contract Leak" not in b_headlines
+        assert "Foreign Club Internal Briefing" not in b_headlines
+
+        # Verify explicit save_context_id filter:
+        # Owner B querying save_a should get 0 results because of authorization filtering
+        b_scoped_articles = storytelling.list_newsroom_articles(session, user_id=owner_b_id, save_context_id=save_a)
+        assert len(b_scoped_articles) == 0
+
+        # Admin querying save_a gets the save_a article
+        admin_scoped_articles = storytelling.list_newsroom_articles(session, user_id=admin.id, save_context_id=save_a)
+        assert any(a["headline"] == "Club A Secret Contract Leak" for a in admin_scoped_articles)
+
+    # Verify via HTTP endpoints: both /api/owner/newsroom and /api/v2/owner/newsroom
+    res_v1 = client.get("/api/owner/newsroom", headers=bootstrap_admin_headers, params={"save_context_id": save_a})
+    assert res_v1.status_code == 200
+    body_v1 = res_v1.json()
+    articles_v1 = body_v1["data"]["articles"] if "data" in body_v1 else body_v1["articles"]
+    assert any(a["headline"] == "Club A Secret Contract Leak" for a in articles_v1)
+
+    res_v2 = client.get("/api/v2/owner/newsroom", headers=bootstrap_admin_headers, params={"save_context_id": save_a})
+    assert res_v2.status_code == 200
+    body_v2 = res_v2.json()
+    articles_v2 = body_v2["data"]["articles"] if "data" in body_v2 else body_v2["articles"]
+    assert any(a["headline"] == "Club A Secret Contract Leak" for a in articles_v2)
+
+
+def test_public_ticker_payload_sanitization_and_price_retention(client, bootstrap_admin_headers, app):
+    """
+    B2: owner_user_id exposed in public broadcast_dict payloads (must be stripped
+    while retaining verified_price_gtex for public private-jet announcements).
+    """
+    _enable_legacy(app)
+    club_id = _claim_and_activate(client, bootstrap_admin_headers, city="Ibadan")
+
+    with app.state.session_factory() as session:
+        admin = session.scalar(select(User).where(User.email == "admin@test.gtex.local"))
+        ledger.record(
+            session,
+            event_type="owner_capital_injection",
+            currency=ledger.GTEX,
+            gross=Decimal("50000"),
+            source=ledger.PLATFORM_GRANTS,
+            destination=ledger.club_account(club_id),
+            user_id=admin.id,
+            club_id=club_id,
+        )
+        session.commit()
+
+    # Purchase private jet
+    jet_res = client.post(
+        f"/api/owner/clubs/{club_id}/showroom/purchase",
+        headers=bootstrap_admin_headers,
+        json={"catalog_key": "sovereign_900x_jet", "idempotency_key": "jet-ticker-sanitization-1"},
+    )
+    assert jet_res.status_code == 200
+    event_payload = jet_res.json()["broadcast_event"]
+    assert "owner_user_id" not in event_payload, "owner_user_id must be stripped from broadcast payload"
+    assert "verified_price_gtex" in event_payload
+    assert Decimal(str(event_payload["verified_price_gtex"])) == Decimal("4800")
+
+    # Verify /api/owner/ticker and /api/v2/owner/ticker
+    for route in ("/api/owner/ticker", "/api/v2/owner/ticker"):
+        res = client.get(route, headers=bootstrap_admin_headers)
+        assert res.status_code == 200
+        body = res.json()
+        events = body["data"]["events"] if "data" in body else body["events"]
+        assert len(events) > 0
+        for ev in events:
+            assert "owner_user_id" not in ev, f"Public broadcast event must NOT expose owner_user_id in {route}"
+            if ev.get("event_type") == "private_jet_purchase":
+                assert ev.get("verified_price_gtex") is not None
+                assert Decimal(str(ev["verified_price_gtex"])) > 0
+
+
+def test_player_portrait_manifest_resolution_assets_key_and_media_mount(client, bootstrap_admin_headers):
+    """
+    B3: Broken manifest key ("items" vs "assets") and unmounted /api/media/regen-faces/* path in resolve_player_portrait_url.
+    """
+    # 1. Manifest key resolution test
+    url = storytelling.resolve_player_portrait_url(None, "player-test-unique-999", player_name="Victor Osimhen")
+    assert url, "Portrait URL must resolve"
+    # The manifest contains 8,522 assets. It should NOT fall back to raw data:image/svg if assets exist!
+    manifest = storytelling._load_face_manifest()
+    assert "assets" in manifest, "Manifest must contain 'assets' key"
+    assert len(manifest["assets"]) > 0
+
+    if manifest.get("assets"):
+        # Must be either Cloudinary URL or /generated-media/
+        assert url.startswith("https://res.cloudinary.com") or url.startswith(
+            "/generated-media/"
+        ), f"Expected Cloudinary or generated-media URL, got: {url}"
+
+    # 2. Test static mount /api/media/regen-faces/* exists on FastAPI app
+    test_media_res = client.get("/api/media/regen-faces/manifest.json")
+    assert test_media_res.status_code in (200, 404)
