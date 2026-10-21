@@ -17,6 +17,7 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[3]
 RENDER_YAML = REPO_ROOT / "render.yaml"
 BUILD_SCRIPT = REPO_ROOT / "ops" / "render" / "build-frontend.sh"
+CLOUDFLARE_BUILD_SCRIPT = REPO_ROOT / "ops" / "cloudflare" / "build-frontend.sh"
 PUBLISH_SCRIPT = REPO_ROOT / "ops" / "render" / "publish-react-shell.sh"
 API_CLIENT = REPO_ROOT / "frontend" / "react-shell" / "src" / "lib" / "api.ts"
 APP_ENTRY = REPO_ROOT / "frontend" / "react-shell" / "src" / "App.tsx"
@@ -95,6 +96,7 @@ def test_web_service_still_publishes_flutter_at_the_site_root(blueprint: dict) -
     env = {item["key"]: item.get("value") for item in web.get("envVars", [])}
     assert env["GTE_API_BASE_URL"] == PRODUCTION_API_ORIGIN
     assert env["GTE_BACKEND_MODE"] == "live"
+    assert env["GTEX_SHELL_V3"] == "true"
     assert env["NODE_VERSION"] == "20"
 
 
@@ -137,6 +139,14 @@ def test_static_resolution_keeps_flutter_root_and_react_deep_links(blueprint: di
     assert served("/api/v2/auth/login") is None
     assert (root / served("/") or "").read_text(encoding="utf-8") == "FLUTTER"
     assert (root / "console" / "index.html").read_text(encoding="utf-8") == "REACT"
+
+
+def test_production_flutter_builds_enable_p9_shell_by_default() -> None:
+    for build_path in (BUILD_SCRIPT, CLOUDFLARE_BUILD_SCRIPT):
+        script = build_path.read_text(encoding="utf-8")
+        assert 'GTEX_SHELL_V3="${GTEX_SHELL_V3:-true}"' in script
+        assert '--dart-define="GTEX_SHELL_V3=${GTEX_SHELL_V3}"' in script
+        assert "GTEX_SHELL_V3 must be 'true' or 'false'." in script
 
 
 def test_frontend_build_publishes_react_only_after_flutter() -> None:

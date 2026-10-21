@@ -9,6 +9,15 @@ FLUTTER_REVISION="ff37bef603469fb030f2b72995ab929ccfc227f0"
 
 : "${GTE_API_BASE_URL:?GTE_API_BASE_URL must be set for the frontend build.}"
 GTE_BACKEND_MODE="${GTE_BACKEND_MODE:-live}"
+# P9-SHELL is the canonical production shell. Default it on; allow an explicit false for rollback.
+GTEX_SHELL_V3="${GTEX_SHELL_V3:-true}"
+case "${GTEX_SHELL_V3}" in
+  true|false) ;;
+  *)
+    echo "GTEX_SHELL_V3 must be 'true' or 'false'." >&2
+    exit 1
+    ;;
+esac
 
 if ! git -C "${FLUTTER_ROOT}" rev-parse --git-dir >/dev/null 2>&1; then
   # A cached FLUTTER_ROOT can exist with a partial/corrupt .git (e.g. an
@@ -30,8 +39,9 @@ cd "${FRONTEND_DIR}"
 flutter pub get
 flutter build web --release \
   --dart-define="GTE_API_BASE_URL=${GTE_API_BASE_URL}" \
-  --dart-define="GTE_BACKEND_MODE=${GTE_BACKEND_MODE}" \\
-  --dart-define="GTE_TURNSTILE_SITE_KEY=${GTE_TURNSTILE_SITE_KEY:-}"
+  --dart-define="GTE_BACKEND_MODE=${GTE_BACKEND_MODE}" \
+  --dart-define="GTE_TURNSTILE_SITE_KEY=${GTE_TURNSTILE_SITE_KEY:-}" \
+  --dart-define="GTEX_SHELL_V3=${GTEX_SHELL_V3}"
 
 # Flutter remains the site root. The React shell is published only under console/.
 # set -e above fails the Render build if this step fails.

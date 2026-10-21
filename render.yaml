@@ -127,6 +127,9 @@ services:
         sync: false
       - key: GTE_BACKEND_MODE
         value: live
+      # Keep P9-SHELL active in the production Flutter build; false is an explicit rollback only.
+      - key: GTEX_SHELL_V3
+        value: "true"
       # Pins the static-site build image so the React shell matches CI (Node 20).
       - key: NODE_VERSION
         value: "20"
