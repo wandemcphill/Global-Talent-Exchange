@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:gte_frontend/features/club_redesign/widgets/gtex_empire_club_switcher.dart';
 import 'package:gte_frontend/features/navigation/model/gtex_shell_navigation_model.dart';
 
 import '../components/gtex_money.dart';
@@ -543,6 +542,53 @@ class _AttentionBellButton extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Lightweight ownership option for top bar and workspace club switchers.
+class GtexOwnedClubOption {
+  const GtexOwnedClubOption({
+    required this.id,
+    required this.name,
+    this.slug,
+  });
+
+  final String id;
+  final String name;
+  final String? slug;
+
+  factory GtexOwnedClubOption.fromJson(Object? value) {
+    final Map<String, Object?> root =
+        value is Map<String, Object?>
+            ? value
+            : value is Map
+            ? Map<String, Object?>.from(value)
+            : const <String, Object?>{};
+    final Object? profileRaw = root['profile'] ?? root;
+    final Map<String, Object?> profile =
+        profileRaw is Map
+            ? Map<String, Object?>.from(profileRaw)
+            : const <String, Object?>{};
+    final String id =
+        (profile['id'] ?? profile['club_id'] ?? profile['clubId'] ?? '')
+            .toString()
+            .trim();
+    final String name =
+        (profile['club_name'] ??
+                profile['clubName'] ??
+                profile['name'] ??
+                id)
+            .toString()
+            .trim();
+    final String? slug =
+        (profile['slug'] ?? profile['club_slug'] ?? profile['clubSlug'])
+            ?.toString()
+            .trim();
+    return GtexOwnedClubOption(
+      id: id,
+      name: name.isEmpty ? id : name,
+      slug: (slug == null || slug.isEmpty) ? null : slug,
     );
   }
 }
