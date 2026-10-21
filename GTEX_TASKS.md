@@ -258,7 +258,7 @@ Recorded Phase A0 Product Decisions:
 - **O-01 (Club & Boardroom stack separation):** Main club stack (`/api/clubs/*`, growth, lifecycle) powers sporting operations under the **Club** lane; owner console stack (`/api/v2/owner/*` via `api_only=True`) powers executive storytelling, inbox decisions, showroom, facilities, and delegation under **Boardroom**, linked by canonical club ID (`OwnerClubState.club_id == ClubProfile.id`).
 - **O-02 (Currencies & competition systems):** Keep main ledger currencies (`GTC` / `FNC`) and owner-console ledger currencies (`GTX` / `FAN`), as well as main competitions vs owner mini-league competitions, explicitly labelled and separated until backend convergence.
 - **O-05 (Multi-role navigation):** Provide an explicit workspace switcher (`Club` · `Scouting` · `Trading` · `Creator` · `Explore` · `Admin`) for users holding multiple roles instead of hiding club navigation behind a rigid precedence ladder.
-- **O-06 (Theme migration):** Adopt **GTEX Navy** (`#070D18` canvas, `#0E1729` surface, `#132038` card, `#E5A823` primary gold) as the canonical brand theme via a reversible theme migration (legacy theme picker gated behind a flag for one release cycle).
+- **O-06 (Theme migration):** Adopt **GTEX Navy** (`#0B1626` base, `#13233A` raised, `#1A2E4A` overlay, `#D4AF37` primary gold) as the canonical brand theme via a reversible theme migration (legacy theme picker gated behind a flag for one release cycle).
 - **O-09 (Public ticker & privacy rules):** Public private-jet, facility-upgrade, and player-gift broadcast announcements **include** the verified purchase price (`verified_price_gtex`), as specified by the product owner. Never expose `owner_user_id`, private club cash/budgets, confidential inbox items, or scouting dossiers on public surfaces.
 
 Recorded Pre-E1/E2 Backend Blockers (Phase `BK`, requires separate backend approval before Flutter exposes Inbox/Newsroom):
@@ -268,11 +268,11 @@ Recorded Pre-E1/E2 Backend Blockers (Phase `BK`, requires separate backend appro
 - **O-11 / J-M4 (Notification deep links):** `NotificationRecord` (`backend/app/notifications/router.py`) only routes `fixture_id` unless `metadata_json` contains an explicit route key (`deep_link_route`/`route`), and `Notification` (`backend/app/models/competitive_integrity.py:206`) is an outbox model without route fields.
 - **O-16 / GAP-J1 (Owner API prefix & contract sync):** `owner_console` and `club_legacy` mount with `api_only=True` (`/api/*` and `/api/v2/*`); newer storytelling routes (`/owner/ticker`, `/owner/newsroom`, `/owner/inbox/{item_id}/read`, `/owner/inbox/{item_id}/archive`, `/owner/clubs/{club_id}/story`, `/owner/clubs/{club_id}/showroom*`, `/owner/clubs/{club_id}/watchlist*`) must be synced into `shared/api_contract.json` and `frontend/lib/data/generated/gte_api_contract.g.dart` before `GteAuthedApi` calls them.
 
-Phase Sequence & Dependencies:
-- `A0` (Governance & Decisions) -> `A1` (Safe Repository Baseline)
-- `A1` -> `A2` (GTEX Navy Tokens & Reversible Theme Migration) and `A3` (Shell Navigation Model, Workspace Switcher Model & Deep-Link Resolver)
-- `A3` -> `B1` (Shell Decomposition, `StatefulShellRoute`, Session Gate Caching, `shell_v3` Flag)
-- `A2` -> `B2` (Canonical UI Components: `GtexPortrait`, `GtexStatusPresenter`, `GtexConfirmSheet`, `GtexAttentionCard`)
+Phase Sequence, Status & Dependencies:
+- `A0` (`COMPLETE` — Governance & Decisions) -> `A1` (`COMPLETE` — Safe Repository Baseline)
+- `A1` -> `A2` (`COMPLETE` — GTEX Navy Tokens & Reversible Theme Migration) and `A3` (`COMPLETE` — Shell Navigation Model, Workspace Switcher Model & Deep-Link Resolver)
+- `A3` -> `B1` (`READY` — Shell Decomposition, `StatefulShellRoute`, Session Gate Caching, `shell_v3` Flag)
+- `A2` -> `B2` (`READY` — Canonical UI Components: `GtexPortrait`, `GtexStatusPresenter`, `GtexConfirmSheet`, `GtexAttentionCard`)
 - `B1` + `B2` -> `B3` (Top Bar, Club Switcher, Workspace Switcher, More Sheet)
 - `B2` + `B3` -> `C1` (Role Dashboards on Home)
 - `B1` + `B2` -> `C2` (Club Lane Tabs & Re-homing Orphaned Club Screens), `C4` (Matchday Lane), `C5` (Market & Wallet Status Flows)

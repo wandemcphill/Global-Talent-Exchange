@@ -22,6 +22,13 @@ class GtexColorTokens {
     required this.neutral,
     required this.pending,
     required this.scrim,
+    this.bgInset = const Color(0xFF081120),
+    this.lineStrong = const Color(0xFF2F4C75),
+    this.gold300 = const Color(0xFFE8C766),
+    this.gold500 = const Color(0xFFD4AF37),
+    this.gold700 = const Color(0xFFA8862A),
+    this.info = const Color(0xFF5B8DEF),
+    this.live = const Color(0xFFFF5B3A),
   });
 
   final Color bgBase;
@@ -29,11 +36,18 @@ class GtexColorTokens {
   final Color bgElevated;
   final Color bgOverlay;
   final Color bgBorder;
+  final Color bgInset;
+  final Color lineStrong;
   final Color brandPitch;
   final Color brandCoin;
   final Color brandFan;
   final Color brandAlert;
   final Color brandWarn;
+  final Color gold300;
+  final Color gold500;
+  final Color gold700;
+  final Color info;
+  final Color live;
   final Color textPrimary;
   final Color textSecondary;
   final Color textMuted;
@@ -43,6 +57,54 @@ class GtexColorTokens {
   final Color neutral;
   final Color pending;
   final Color scrim;
+
+  /// Canonical Document F3 aliases.
+  Color get bgRaised => bgSurface;
+  Color get lineSubtle => bgBorder;
+  Color get textTertiary => textMuted;
+  Color get success => positive;
+  Color get warning => brandWarn;
+  Color get danger => negative;
+  Color get coinGtc => info;
+  Color get coinGtx => info;
+  Color get coinFnc => gold300;
+  Color get coinFanToken => gold300;
+}
+
+/// Canonical "GTEX Navy" colour palette (Master Plan Document F3, Decision O-06).
+///
+/// Deep navy surfaces (`#0B1626` -> `#13233A` -> `#1A2E4A`), warm gold signal
+/// accents (`#D4AF37`), and WCAG 2.x AA-verified text/status pairings.
+class GtexNavyColors {
+  const GtexNavyColors._();
+
+  static const Color bgBase = Color(0xFF0B1626);
+  static const Color bgRaised = Color(0xFF13233A);
+  static const Color bgOverlay = Color(0xFF1A2E4A);
+  static const Color bgInset = Color(0xFF081120);
+  static const Color lineSubtle = Color(0xFF22385A);
+  static const Color lineStrong = Color(0xFF2F4C75);
+
+  static const Color textPrimary = Color(0xFFF2F4F8);
+  static const Color textSecondary = Color(0xFF9AA7BD);
+  static const Color textTertiary = Color(0xFF6B7A93);
+  static const Color textInverse = Color(0xFF081120);
+
+  static const Color gold500 = Color(0xFFD4AF37);
+  static const Color gold300 = Color(0xFFE8C766);
+  static const Color gold700 = Color(0xFFA8862A);
+
+  static const Color info = Color(0xFF5B8DEF);
+  static const Color success = Color(0xFF3DBE8B);
+  static const Color warning = Color(0xFFF0A93B);
+  static const Color danger = Color(0xFFE5534B);
+  static const Color live = Color(0xFFFF5B3A);
+
+  static const Color currencyGtc = info;
+  static const Color currencyGtx = info;
+  static const Color currencyFnc = gold300;
+  static const Color currencyFan = gold300;
+  static const Color scrim = Color(0xCC081120);
 }
 
 enum GtexRoleAccent { admin, clubOwner, trader, creator, user, guest }
@@ -72,6 +134,36 @@ class GtexFloodlit {
 /// institutional surfaces, semantic accents, and no decorative neon/gloss.
 class GtexColors {
   const GtexColors._();
+
+  /// Canonical "GTEX Navy" token set (Master Plan Document F3, Decision O-06).
+  static const GtexColorTokens navy = GtexColorTokens(
+    bgBase: GtexNavyColors.bgBase,
+    bgSurface: GtexNavyColors.bgRaised,
+    bgElevated: GtexNavyColors.bgOverlay,
+    bgOverlay: GtexNavyColors.bgOverlay,
+    bgBorder: GtexNavyColors.lineSubtle,
+    bgInset: GtexNavyColors.bgInset,
+    lineStrong: GtexNavyColors.lineStrong,
+    brandPitch: GtexNavyColors.success,
+    brandCoin: GtexNavyColors.gold500,
+    brandFan: GtexNavyColors.info,
+    brandAlert: GtexNavyColors.danger,
+    brandWarn: GtexNavyColors.warning,
+    gold300: GtexNavyColors.gold300,
+    gold500: GtexNavyColors.gold500,
+    gold700: GtexNavyColors.gold700,
+    info: GtexNavyColors.info,
+    live: GtexNavyColors.live,
+    textPrimary: GtexNavyColors.textPrimary,
+    textSecondary: GtexNavyColors.textSecondary,
+    textMuted: GtexNavyColors.textTertiary,
+    textInverse: GtexNavyColors.textInverse,
+    positive: GtexNavyColors.success,
+    negative: GtexNavyColors.danger,
+    neutral: GtexNavyColors.textSecondary,
+    pending: GtexNavyColors.warning,
+    scrim: GtexNavyColors.scrim,
+  );
 
   static const GtexColorTokens dark = GtexColorTokens(
     bgBase: Color(0xFF0A0C0F),
@@ -117,8 +209,15 @@ class GtexColors {
     scrim: Color(0xCC1A1F2B),
   );
 
-  static GtexColorTokens of(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.light ? light : dark;
+  static GtexColorTokens of(BuildContext context, {bool preferNavy = false}) {
+    if (Theme.of(context).brightness == Brightness.light) {
+      return light;
+    }
+    if (preferNavy ||
+        Theme.of(context).scaffoldBackgroundColor == GtexNavyColors.bgBase) {
+      return navy;
+    }
+    return dark;
   }
 
   static const Color surfaceBase = Color(0xFF0A0C0F);

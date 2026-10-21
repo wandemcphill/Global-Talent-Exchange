@@ -1,5 +1,6 @@
 export 'theme/gtex_colors.dart';
 export 'theme/gtex_command_center_tokens.dart';
+export 'theme/gtex_motion.dart';
 export 'theme/gtex_spacing.dart';
 export 'theme/gtex_typography.dart';
 export 'backgrounds/living_football_os_background.dart';
