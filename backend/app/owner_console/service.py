@@ -1313,5 +1313,5 @@ def maybe_auto_tick(session: Session, user_id: str) -> None:
 
 def get_owner_newsroom(*args, **kwargs):
     from app.owner_console import storytelling
-    return storytelling.list_newsroom_articles(*args, **kwargs)
 
+    return storytelling.list_newsroom_articles(*args, **kwargs)

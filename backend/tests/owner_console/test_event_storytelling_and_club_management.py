@@ -623,9 +623,9 @@ def test_player_portrait_manifest_resolution_assets_key_and_media_mount(client, 
 
     if manifest.get("assets"):
         # Must be either Cloudinary URL or /generated-media/
-        assert url.startswith("https://res.cloudinary.com") or url.startswith("/generated-media/"), (
-            f"Expected Cloudinary or generated-media URL, got: {url}"
-        )
+        assert url.startswith("https://res.cloudinary.com") or url.startswith(
+            "/generated-media/"
+        ), f"Expected Cloudinary or generated-media URL, got: {url}"
 
     # 2. Test static mount /api/media/regen-faces/* exists on FastAPI app
     test_media_res = client.get("/api/media/regen-faces/manifest.json")
