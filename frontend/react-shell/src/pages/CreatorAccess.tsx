@@ -115,6 +115,9 @@ export default function CreatorAccess() {
 
       {canSubmit && (
         <Panel eyebrow={application ? "Resubmission" : "Next step"} title={application ? "Update your creator application" : "Apply for creator access"}>
+          <div className="mb-5 rounded-lg border border-amber-400/25 bg-amber-500/[0.05] p-3 text-sm leading-5 text-amber-100" data-testid="creator-verification-blocker">
+            Creator applications require verified account email and phone. Email must be confirmed through GTEX's signup-confirmation flow. Secure phone verification is not currently available, so the backend will reject this application until a trusted phone-verification process is configured. This page will not mark either contact verified on your behalf.
+          </div>
           <form onSubmit={submit} className="grid gap-4 md:grid-cols-2">
             <label className="block">
               <span className="gx-label">Requested handle</span>
