@@ -1097,27 +1097,82 @@ class GtexLineupSubstitutes extends StatelessWidget {
                             ),
                             child: Row(
                               children: <Widget>[
+                                Container(
+                                  width: 30,
+                                  height: 38,
+                                  clipBehavior: Clip.antiAlias,
+                                  decoration: BoxDecoration(
+                                    color: _green.withValues(alpha: 0.10),
+                                    borderRadius: BorderRadius.circular(7),
+                                    border: Border.all(color: _border),
+                                  ),
+                                  child: player.portraitUrl?.trim().isNotEmpty == true
+                                      ? Image.network(
+                                          player.portraitUrl!,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) =>
+                                              const Icon(Icons.person_outline_rounded, color: _textMuted, size: 18),
+                                        )
+                                      : const Icon(Icons.person_outline_rounded, color: _textMuted, size: 18),
+                                ),
+                                const SizedBox(width: 7),
                                 Expanded(
-                                  child: Text(
-                                    player.name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: _text,
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      Text(
+                                        player.name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: _text,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 10,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        <String>[
+                                          if (player.position?.trim().isNotEmpty == true) player.position!,
+                                          if (player.rating != null) 'OVR ${player.rating!.round()}',
+                                        ].join(' · ').isEmpty
+                                            ? 'Squad player'
+                                            : <String>[
+                                                if (player.position?.trim().isNotEmpty == true) player.position!,
+                                                if (player.rating != null) 'OVR ${player.rating!.round()}',
+                                              ].join(' · '),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(color: _textSecondary, fontSize: 9),
+                                      ),
+                                      if (player.form?.trim().isNotEmpty == true ||
+                                          player.fitnessPct != null ||
+                                          player.morale != null) ...<Widget>[
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          <String>[
+                                            if (player.form?.trim().isNotEmpty == true) 'FORM ${player.form!.trim()}',
+                                            if (player.fitnessPct != null) 'FIT ${player.fitnessPct!.round()}%',
+                                            if (player.morale != null) 'MOR ${player.morale!.round()}',
+                                          ].join(' · '),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: Color(0xFFF0C66B),
+                                            fontSize: 8,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                 ),
-                                if (player.position != null) ...<Widget>[
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    player.position!,
-                                    style: const TextStyle(
-                                      color: _textMuted,
-                                      fontSize: 11,
-                                    ),
+                                if (selected)
+                                  const Padding(
+                                    padding: EdgeInsets.only(left: 4),
+                                    child: Icon(Icons.check_circle, color: _green, size: 15),
                                   ),
-                                ],
                               ],
                             ),
                           ),
