@@ -259,6 +259,22 @@ def test_public_club_dossier_has_rich_club_details_and_redacts_private_economics
 def test_public_owner_profile_lists_clubs_and_assets_without_wallet_details(client, app):
     with app.state.session_factory() as session:
         owner_id, club_id = _seed_public_club(session)
+        # Private clubs must not be reflected in the public owner club count.
+        session.add(
+            ClubProfile(
+                owner_user_id=owner_id,
+                club_name="Private Side Project",
+                short_name="PSP",
+                club_type=ClubType.COMMUNITY,
+                lifecycle_status=ClubLifecycleStatus.ACTIVE,
+                slug=f"private-side-project-{uuid4().hex}",
+                primary_color="#101B32",
+                secondary_color="#D5B46A",
+                accent_color="#24D18F",
+                visibility="private",
+            )
+        )
+        session.commit()
 
     response = client.get(f"/api/owner/public/profile/{owner_id}")
     assert response.status_code == 200, response.text
