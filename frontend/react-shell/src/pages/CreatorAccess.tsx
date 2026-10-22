@@ -27,11 +27,12 @@ export default function CreatorAccess() {
 
   const status = String(application?.status || "").toLowerCase();
   const accountType = String(user?.account_type || user?.accountType || "user").toLowerCase();
-  const isLegacyCreatorAccount = accountType === "creator";
+  const isCreatorAccount = accountType === "creator";
+  const isCoinTraderAccount = accountType === "coin_trader";
   const emailVerified = Boolean(user?.email_verified_at || user?.emailVerifiedAt);
   const phoneVerified = Boolean(user?.phone_verified_at || user?.phoneVerifiedAt);
   const contactsReady = emailVerified && phoneVerified;
-  const canSubmit = !isLegacyCreatorAccount && (!application || status === "rejected");
+  const canSubmit = !isCreatorAccount && !isCoinTraderAccount && (!application || status === "rejected");
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -87,21 +88,29 @@ export default function CreatorAccess() {
             <Video size={24} />
           </span>
           <div>
-            <p className="gx-eyebrow mb-2 text-pink-300">Creator tools · existing GTEX account</p>
+            <p className="gx-eyebrow mb-2 text-pink-300">Creator account promotion</p>
             <h1 className="gx-display text-3xl font-black uppercase text-white sm:text-4xl">Turn your football voice into a platform.</h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
-              Creator access is an optional capability on your normal GTEX account—not a separate login or account type. Submit your public creator identity for review; accepted creators can use the creator tools enabled for their profile.
+              Normal GTEX member accounts, including club owners, can apply for promotion to a dedicated Creator account. Approval moves the account into the Creator lane; it cannot be switched back to a normal or club-owner account. Coin Trader accounts cannot apply.
             </p>
           </div>
         </div>
       </section>
 
-      {isLegacyCreatorAccount && (
-        <Panel eyebrow="Existing account" title="Legacy Creator profile detected">
+      {isCreatorAccount && (
+        <Panel eyebrow="Dedicated account" title="Creator account active">
           <p className="text-sm leading-6 text-slate-300">
-            This GTEX ID already uses the legacy Creator account type. New creator access is now requested from a normal GTEX member account after signup, rather than by creating a separate Creator login. This React console does not yet include the full Creator Hub; continue using the existing Creator Hub in the main GTEX app.
+            This GTEX ID is now a dedicated Creator account. Creator is a separate account lane, not a switchable workspace, and it cannot be changed back to a normal or club-owner account.
           </p>
-          <Link to="/app" className="mt-4 inline-block text-xs font-bold uppercase tracking-wider text-pink-300 hover:text-pink-200">Return to GTEX member workspace →</Link>
+          <a href="/app/hub" data-testid="open-creator-studio" className="mt-4 inline-block text-xs font-bold uppercase tracking-wider text-pink-300 hover:text-pink-200">Open Creator Studio →</a>
+        </Panel>
+      )}
+
+      {isCoinTraderAccount && (
+        <Panel eyebrow="Dedicated account" title="Coin Trader accounts cannot promote to Creator">
+          <p className="text-sm leading-6 text-slate-300">
+            Coin Trader accounts stay in the coin-trading lane. Creator promotion is available only to a normal GTEX member or club-owner account.
+          </p>
         </Panel>
       )}
 
