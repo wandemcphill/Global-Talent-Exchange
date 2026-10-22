@@ -88,7 +88,8 @@ function SquadStep({ clubId, onDone }: any) {
     setUnsigningId(p.id);
     try {
       const { data } = await api.post(`/owner/clubs/${clubId}/unsign`, { player_id: p.id || p.player_ref });
-      toast.success(`Removed ${p.name}. Refunded ${fmt(data.refund_amount)} GTX to club treasury.`);
+      const refund = data?.refunded ?? data?.refund_amount ?? p.value_coin ?? 0;
+      toast.success(`Removed ${p.name}. Refunded ${fmt(refund)} GTX to club treasury.`);
       refetch();
     } catch (e) {
       toast.error(errMsg(e));
@@ -101,8 +102,12 @@ function SquadStep({ clubId, onDone }: any) {
     setAutopicking(true);
     try {
       const { data } = await api.post(`/owner/clubs/${clubId}/autopick`);
+      const count = data?.signed?.length ?? data?.signed_count ?? 0;
       toast.success(
-        data.message || `Auto-picked ${data.signed_count} player(s) within budget! Remaining cash: ${fmt(data.cash)} GTX`
+        data?.message ||
+          (count > 0
+            ? `Auto-picked ${count} player(s) within budget! Remaining cash: ${fmt(data.cash)} GTX`
+            : "No affordable players found within current budget.")
       );
       refetch();
     } catch (e) {
@@ -412,7 +417,7 @@ function CompetitionStep({ clubId, onDone }: any) {
   );
 }
 
-function CreateFirstClub({ onDone }: any) {
+function CreateFirstClub({ onDone, onCancel }: any) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const create = async () => {
@@ -458,6 +463,15 @@ function CreateFirstClub({ onDone }: any) {
         >
           Create club
         </Btn>
+        <Btn
+          className="mt-2 w-full"
+          variant="ghost"
+          disabled={busy}
+          onClick={onCancel}
+          data-testid="skip-club-creation-button"
+        >
+          Not now — explore GTEX first
+        </Btn>
       </Panel>
     </div>
   );
@@ -475,7 +489,9 @@ export default function Onboarding() {
   if (loading || (user && isLoading)) return <Loading label="Preparing your club" />;
   if (!user) return <Navigate to="/login" replace />;
   const club = (data?.clubs || []).find((c: any) => !["active"].includes(c.stage)) || null;
-  if (!club && !(data?.clubs || []).length) return <CreateFirstClub onDone={() => refetch()} />;
+  if (!club && !(data?.clubs || []).length) {
+    return <CreateFirstClub onDone={() => refetch()} onCancel={() => navigate("/app")} />;
+  }
   if (!club) return <Navigate to="/app" replace />;
   const index = { not_started: 0, squad: 1, manager: 2, competition: 3 }[club.stage as string] ?? 3;
   const next = () => refetch();
