@@ -12,6 +12,7 @@ class GtexPostMatchPanel extends StatelessWidget {
     this.onOpenMarket,
     this.onOpenNewsroomReport,
     this.onOpenReplay,
+    this.onReplayGoal,
   });
 
   final GtexLiveMatchState match;
@@ -19,6 +20,7 @@ class GtexPostMatchPanel extends StatelessWidget {
   final VoidCallback? onOpenMarket;
   final VoidCallback? onOpenNewsroomReport;
   final VoidCallback? onOpenReplay;
+  final ValueChanged<int>? onReplayGoal;
 
   @override
   Widget build(BuildContext context) {
@@ -111,6 +113,92 @@ class GtexPostMatchPanel extends StatelessWidget {
             ],
           ),
           if (finalWhistle) ...[
+            if (onReplayGoal != null &&
+                match.timeline.any(
+                  (GtexMatchTimelineEvent event) =>
+                      event.type == GtexPitchEventType.goal,
+                )) ...<Widget>[
+              const SizedBox(height: 14),
+              const Text(
+                'GOAL REPLAYS',
+                style: TextStyle(
+                  color: GtexMatchVisualTokens.amber,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.1,
+                ),
+              ),
+              const SizedBox(height: 8),
+              for (final GtexMatchTimelineEvent event in match.timeline.where(
+                (GtexMatchTimelineEvent event) =>
+                    event.type == GtexPitchEventType.goal,
+              ))
+                Container(
+                  margin: const EdgeInsets.only(bottom: 7),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: GtexMatchVisualTokens.surfaceRaised,
+                    borderRadius: BorderRadius.circular(7),
+                    border: Border.all(color: GtexMatchVisualTokens.border),
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      Container(
+                        width: 34,
+                        height: 34,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: GtexMatchVisualTokens.amber.withValues(alpha: .12),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: GtexMatchVisualTokens.amber.withValues(alpha: .35),
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.sports_soccer_rounded,
+                          color: GtexMatchVisualTokens.amber,
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              "${event.minute}' · ${event.playerName?.trim().isNotEmpty == true ? event.playerName!.trim() : event.title}",
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: GtexMatchVisualTokens.textPrimary,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 12,
+                              ),
+                            ),
+                            if (event.description.trim().isNotEmpty)
+                              Text(
+                                event.description,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: GtexMatchVisualTokens.textSecondary,
+                                  fontSize: 10,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        key: Key('gtex-post-match-goal-replay-${event.minute}'),
+                        onPressed: () => onReplayGoal!(event.minute),
+                        icon: const Icon(Icons.replay_rounded, size: 15),
+                        label: const Text('Replay'),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
             const SizedBox(height: 14),
             const GtexMatchdayAdSlot(
               placement: 'Full-time match report & replay',
