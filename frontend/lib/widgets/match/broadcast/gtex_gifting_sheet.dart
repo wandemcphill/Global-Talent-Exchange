@@ -194,6 +194,13 @@ class _GtexGiftingSheetState extends State<GtexGiftingSheet> {
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(color: Color(0xFFAAB7CA), fontSize: 12),
                             ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'Wallet context · ${widget.unitLabel}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Color(0xFF7F90A7), fontSize: 10),
+                            ),
                           ],
                         ),
                       ),
