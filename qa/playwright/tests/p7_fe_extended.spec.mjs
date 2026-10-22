@@ -75,42 +75,40 @@ test("Club squad route loads the roster or explicit no-club state", async ({
   await captureScreenshot(page, testInfo, "lineup");
 });
 
-test(
-  "A targeted notification opens its supplied target",
-  async ({ page }, testInfo) => {
-    test.skip(
-      !process.env.GTEX_E2E_NOTIFICATION_TEXT ||
-        !process.env.GTEX_E2E_NOTIFICATION_TARGET,
-      "Provide a seeded notification text and its expected route.",
-    );
-    await visitAuthedRoute(page, "/notifications");
-    const notification = page
-      .getByText(process.env.GTEX_E2E_NOTIFICATION_TEXT)
-      .first();
-    await notification.click();
-    await page.getByRole("button", { name: /open/i }).click();
-    await expect(page).toHaveURL(
-      new RegExp(process.env.GTEX_E2E_NOTIFICATION_TARGET),
-    );
-    await captureScreenshot(page, testInfo, "notifications-targeted");
-  },
-);
+test("A targeted notification opens its supplied target", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    !process.env.GTEX_E2E_NOTIFICATION_TEXT ||
+      !process.env.GTEX_E2E_NOTIFICATION_TARGET,
+    "Provide a seeded notification text and its expected route.",
+  );
+  await visitAuthedRoute(page, "/notifications");
+  const notification = page
+    .getByText(process.env.GTEX_E2E_NOTIFICATION_TEXT)
+    .first();
+  await notification.click();
+  await page.getByRole("button", { name: /open/i }).click();
+  await expect(page).toHaveURL(
+    new RegExp(process.env.GTEX_E2E_NOTIFICATION_TARGET),
+  );
+  await captureScreenshot(page, testInfo, "notifications-targeted");
+});
 
-test(
-  "An untargeted notification leaves navigation unavailable",
-  async ({ page }) => {
-    test.skip(
-      !process.env.GTEX_E2E_UNTARGETED_NOTIFICATION_TEXT,
-      "Provide a real notification without routing metadata.",
-    );
-    await visitAuthedRoute(page, "/notifications");
-    await page
-      .getByText(process.env.GTEX_E2E_UNTARGETED_NOTIFICATION_TEXT)
-      .first()
-      .click();
-    await expect(page.getByRole("button", { name: /open/i })).toBeDisabled();
-  },
-);
+test("An untargeted notification leaves navigation unavailable", async ({
+  page,
+}) => {
+  test.skip(
+    !process.env.GTEX_E2E_UNTARGETED_NOTIFICATION_TEXT,
+    "Provide a real notification without routing metadata.",
+  );
+  await visitAuthedRoute(page, "/notifications");
+  await page
+    .getByText(process.env.GTEX_E2E_UNTARGETED_NOTIFICATION_TEXT)
+    .first()
+    .click();
+  await expect(page.getByRole("button", { name: /open/i })).toBeDisabled();
+});
 
 test(
   "Match Viewer settles to an authoritative or truthful unavailable state",
