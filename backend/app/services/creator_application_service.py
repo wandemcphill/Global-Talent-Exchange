@@ -51,13 +51,16 @@ class CreatorApplicationService:
         raise CreatorApplicationError("secure_phone_verification_unavailable")
 
     def submit_application(self, *, actor: User, payload) -> CreatorApplication:
-        if actor.account_type != PublicAccountType.USER:
-            raise CreatorApplicationConflictError("creator_promotion_requires_normal_account")
         trader_profile = self.session.scalar(
             select(CoinTraderProfile).where(CoinTraderProfile.user_id == actor.id)
         )
-        if trader_profile is not None:
+        if (
+            actor.account_type == PublicAccountType.COIN_TRADER
+            or trader_profile is not None
+        ):
             raise CreatorApplicationConflictError("coin_trader_account_cannot_be_promoted_to_creator")
+        if actor.account_type != PublicAccountType.USER:
+            raise CreatorApplicationConflictError("creator_promotion_requires_normal_account")
         if actor.email_verified_at is None:
             raise CreatorApplicationError("email_verification_required")
         if actor.phone_verified_at is None:
