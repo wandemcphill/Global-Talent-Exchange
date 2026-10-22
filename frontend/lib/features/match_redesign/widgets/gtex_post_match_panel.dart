@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/gtex_match_models.dart';
+import '../../match/widgets/gtex_matchday_ad_slot.dart';
 import 'gtex_match_visual_tokens.dart';
 
 class GtexPostMatchPanel extends StatelessWidget {
@@ -110,6 +111,11 @@ class GtexPostMatchPanel extends StatelessWidget {
             ],
           ),
           if (finalWhistle) ...[
+            const SizedBox(height: 14),
+            const GtexMatchdayAdSlot(
+              placement: 'Full-time match report & replay',
+              compact: true,
+            ),
             const SizedBox(height: 16),
             const Divider(color: GtexMatchVisualTokens.border),
             const SizedBox(height: 12),
