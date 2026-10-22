@@ -76,9 +76,12 @@ function ShowroomPanel({ club }: any) {
 
   // Current API returns {catalog, owned_assets}; accept the older transformed
   // shape too so this panel remains compatible with existing deployed builds.
-  const items: any[] = data?.catalog || data?.showroom?.catalog || data?.showroom || [];
-  const ownedAssets: any[] = data?.owned_assets || data?.showroom?.owned_assets || [];
-  const squad: any[] = data?.squad || clubDetail?.squad || club.squad || [];
+  const rawCatalog = data?.catalog ?? data?.showroom?.catalog ?? data?.showroom;
+  const rawOwnedAssets = data?.owned_assets ?? data?.showroom?.owned_assets;
+  const rawSquad = data?.squad ?? clubDetail?.squad ?? club.squad;
+  const items: any[] = Array.isArray(rawCatalog) ? rawCatalog : [];
+  const ownedAssets: any[] = Array.isArray(rawOwnedAssets) ? rawOwnedAssets : [];
+  const squad: any[] = Array.isArray(rawSquad) ? rawSquad : [];
   const keyOf = (item: any) => String(item?.catalog_key || item?.key || item?.id || "");
   const selectedPlayer = squad.find((p: any) => p.id === selectedPlayerId);
   const formatPrice = (item: any) => fmt(item?.price_gtex, 2);
