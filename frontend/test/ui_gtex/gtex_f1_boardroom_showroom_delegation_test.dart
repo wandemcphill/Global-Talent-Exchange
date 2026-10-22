@@ -297,6 +297,11 @@ void main() {
         expect(purchases, hasLength(1));
         expect(purchases.first['sku'], 'gtex-jet-harbour');
 
+        // Acquisition now has an explicit success receipt before returning
+        // to the showroom, so dismiss it before switching exhibits.
+        await tester.tap(find.byKey(const Key('club-showroom-arrival-close')));
+        await tester.pumpAndSettle();
+
         // 2. Switch to Watch: shows 'Private Collection · No Global Broadcast' and NO public broadcast notice
         await tester.tap(
           find.byKey(const Key('club-showroom-pick-catalogue:gtex-watch-icon')),

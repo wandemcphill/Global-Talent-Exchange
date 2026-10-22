@@ -151,6 +151,7 @@ class MatchPlaybackController extends ChangeNotifier {
   }
 
   void restart() {
+    _replayStopAtSeconds = null;
     _positionSeconds = 0;
     _lastElapsed = null;
     notifyListeners();
@@ -161,7 +162,30 @@ class MatchPlaybackController extends ChangeNotifier {
     notifyListeners();
   }
 
+  double? _replayStopAtSeconds;
+
+  /// Replays a specific timeline moment with a short lead-in and aftermath.
+  /// Goal events use this rather than inventing a separate clip or simulation.
+  void replayEvent(
+    MatchEvent event, {
+    double leadInSeconds = 5,
+    double tailSeconds = 6,
+  }) {
+    _positionSeconds = math.max(0, event.timeSeconds - leadInSeconds);
+    _replayStopAtSeconds = math.min(
+      viewState.durationSeconds.toDouble(),
+      event.timeSeconds + tailSeconds,
+    );
+    _lastElapsed = null;
+    if (!_isPlaying) {
+      _isPlaying = true;
+      _ticker.start();
+    }
+    notifyListeners();
+  }
+
   void jumpToNextEvent() {
+    _replayStopAtSeconds = null;
     for (final MatchEvent event in viewState.events) {
       if (event.timeSeconds > _positionSeconds + 0.2) {
         _positionSeconds = event.timeSeconds;
@@ -193,8 +217,11 @@ class MatchPlaybackController extends ChangeNotifier {
       return;
     }
     _positionSeconds += deltaSeconds * speed;
-    if (_positionSeconds >= viewState.durationSeconds) {
-      _positionSeconds = viewState.durationSeconds.toDouble();
+    final double stopAt = _replayStopAtSeconds ??
+        viewState.durationSeconds.toDouble();
+    if (_positionSeconds >= stopAt) {
+      _positionSeconds = stopAt;
+      _replayStopAtSeconds = null;
       pause();
     } else {
       notifyListeners();

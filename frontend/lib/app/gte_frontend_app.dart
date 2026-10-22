@@ -91,7 +91,8 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
       },
       canSend: () => _controller.isAuthenticated,
     );
-    _themeController = widget.themeController ?? GteThemeController();
+    _themeController =
+        widget.themeController ?? GteThemeController(useGtexNavyShell: true);
     _ambientAudioController = AmbientAudioController();
     unawaited(_ambientAudioController.bootstrap());
     _controller.addListener(_handleControllerChanged);

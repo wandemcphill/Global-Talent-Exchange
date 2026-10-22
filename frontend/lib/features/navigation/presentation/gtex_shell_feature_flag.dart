@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 /// Compile-time default for the `shell_v3` flag (Master Plan Document K5).
 const bool kGtexShellV3EnvironmentDefault = bool.fromEnvironment(
   'GTEX_SHELL_V3',
-  defaultValue: false,
+  defaultValue: true,
 );
 
 /// Runtime controller for the `shell_v3` feature flag (Master Plan Document K5).

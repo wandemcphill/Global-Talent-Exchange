@@ -41,6 +41,7 @@ flutter:
   assets:
     - assets/branding/
     - assets/media/
+    - assets/media/players/
     - assets/showroom/
   fonts:
     - family: BarlowCondensed

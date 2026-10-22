@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/gte_api_repository.dart';
 import '../../data/match_gift_api.dart';
 import '../../models/match_view_state.dart';
+import '../../models/match_viewer_presentation.dart';
 import '../../screens/match/gtex_match_viewer_screen.dart';
 import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
@@ -15,10 +16,12 @@ class MatchViewerRouteScreen extends ConsumerWidget {
   const MatchViewerRouteScreen({
     super.key,
     required this.matchKey,
+    this.initialReplayMinute,
     this.onOpenMatchCenter,
   });
 
   final String matchKey;
+  final int? initialReplayMinute;
   final VoidCallback? onOpenMatchCenter;
 
   void _defaultOpenMatchCenter(BuildContext context) {
@@ -73,12 +76,13 @@ class MatchViewerRouteScreen extends ConsumerWidget {
         return MatchRouteCapabilityOverlay(
           capability: MatchViewerCapability.twoD,
           child: _QualifiedMatchViewerRouteView(
-            key: ValueKey<String>('match-viewer-route-$resolvedMatchKey'),
+            key: ValueKey<String>('match-viewer-route-$resolvedMatchKey-${initialReplayMinute ?? 'live'}'),
             matchKey: resolvedMatchKey,
             bootstrap: value.bootstrap,
             initialViewState: value.initialViewState,
             repository: repository,
             giftClient: giftClient,
+            initialReplayMinute: initialReplayMinute,
           ),
         );
       },
@@ -201,6 +205,7 @@ class _QualifiedMatchViewerRouteView extends StatefulWidget {
     required this.initialViewState,
     required this.repository,
     required this.giftClient,
+    this.initialReplayMinute,
   });
 
   final String matchKey;
@@ -208,6 +213,7 @@ class _QualifiedMatchViewerRouteView extends StatefulWidget {
   final MatchViewState initialViewState;
   final LiveMatchViewerRepository repository;
   final MatchGiftClient? giftClient;
+  final int? initialReplayMinute;
 
   @override
   State<_QualifiedMatchViewerRouteView> createState() =>
@@ -233,6 +239,10 @@ class _QualifiedMatchViewerRouteViewState
       competition: widget.bootstrap.competition,
       matchKey: widget.matchKey,
       titleOverride: '2D Match Viewer',
+      initialReplayMinute: widget.initialReplayMinute,
+      presentationMode: widget.initialReplayMinute == null
+          ? MatchViewerPresentationMode.broadcast
+          : MatchViewerPresentationMode.replay,
       viewStateLoader: _loadInitialViewState,
       continuationLoader: _loadContinuation,
       giftClient: widget.giftClient,

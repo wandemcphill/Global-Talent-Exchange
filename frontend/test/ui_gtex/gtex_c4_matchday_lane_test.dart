@@ -274,6 +274,8 @@ void main() {
         expect(newsroomBtn, findsOneWidget);
         expect(find.text('Open Newsroom Match Report'), findsOneWidget);
 
+        await tester.ensureVisible(newsroomBtn);
+        await tester.pumpAndSettle();
         await tester.tap(newsroomBtn);
         await tester.pump();
         expect(openedNewsroom, isTrue);

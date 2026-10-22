@@ -507,10 +507,12 @@ MatchViewerPlayerFrame _playerFrameFromEventPosition({
   final String teamId =
       position.teamId ??
       (side == MatchViewerSide.home ? homeTeam.teamId : awayTeam.teamId);
-  final String label =
-      position.shirtNumber?.toString() ??
-      _shortPlayerLabel(position.playerName) ??
-      '?';
+  // Keep the full name in the frame model so the 2D broadcast can
+  // reveal the correct player when they receive the ball. The shirt number
+  // remains a separate field and is still used for the token itself.
+  final String label = (position.playerName?.trim().isNotEmpty ?? false)
+      ? position.playerName!.trim()
+      : position.shirtNumber?.toString() ?? '?';
   final bool highlighted =
       event.highlightedPlayerIds.contains(position.playerId) ||
       event.primaryPlayerId == position.playerId ||

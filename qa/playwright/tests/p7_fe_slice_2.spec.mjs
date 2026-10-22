@@ -96,11 +96,9 @@ test.afterEach(async (_fixtures, testInfo) => {
 test("lineup keeps every substitute reachable without horizontal page overflow", async ({
   page,
 }, testInfo) => {
-  await visitAuthedRoute(page, process.env.GTEX_E2E_LINEUP_ROUTE ?? "/lineup");
-  await expect(page.getByText("SUBSTITUTES")).toBeVisible();
-  await expect(
-    page.getByText("Select a substitute, then tap a starter position to assign them."),
-  ).toBeVisible();
+  await visitAuthedRoute(page, process.env.GTEX_E2E_SQUAD_ROUTE ?? "/app/squad");
+  await expect(page.getByTestId("squad-page")).toBeVisible();
+  await expect(page.getByTestId("squad-table-panel")).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
     .toBeTruthy();

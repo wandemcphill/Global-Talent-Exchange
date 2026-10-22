@@ -2,45 +2,45 @@
 
 ## Scope
 
-This note captures the repo-side portion of `P6-01`: making the Unity Windows build path a real default CI lane instead of a variable-gated optional job.
+This note captures the verified repo-side implementation and local production batch-build proof for `P6-01`: making the Unity Windows production build and backend live-motion tests enforceable CI gates on `main` and release deployment paths.
 
-`P6-01` is only fully passed when both of these are true:
-- the workflow always schedules the Windows Unity build on `main` and pull-request validation paths
-- GitHub branch protection requires the `unity-windows-build` check before merge
+## Repo-Side Verification
 
-## Repo-Side Change
+1. **Workflow Definitions (`.github/workflows/ci-staging.yml` & `.github/workflows/deploy-production.yml`)**
+   - `backend-live-playback-tests` runs automatically on `ubuntu-latest` across pull requests, `main`, and production deploys, executing:
+     - `backend/tests/live_matches/test_live_match_router.py`
+     - `backend/tests/live_matches/test_live_match_hot_path_cache.py`
+     - `backend/tests/live_matches/test_live_match_sampling.py`
+     - `backend/tests/match_engine/test_live_match_experience_contract.py`
+     - `backend/tests/test_match_timeline_service.py`
+   - `unity-windows-build` is wired into both `.github/workflows/ci-staging.yml` and `.github/workflows/deploy-production.yml`:
+     - Invokes the production command-line build entrypoint `FStudio.GTEX.Editor.GtexBuildTools.BuildWindows64ProductionFromCommandLine`.
+     - Isolates runner profile directories (`LOCALAPPDATA`, `APPDATA`, `TEMP`, `TMP`) under `tmp/gtex-unity-runner-profile-${{ github.run_id }}-${{ github.run_attempt }}`.
+     - Explicitly classifies Unity Editor licensing/entitlement failures (`No valid Unity Editor license found`, `Found 0 entitlement groups and 0 free entitlements matching requested entitlement ids`, `'com.unity.editor.headless' was not found`) with actionable runner-identity diagnostics.
+     - Scans `tmp/gtex_test_migration_windows_build.log` for compile and build failure markers (`error CS`, `Compilation failed`, `Build completed with a result of 'Failed'`, `Aborting batchmode due to failure`).
+     - Executes `FStudio.GTEX.Editor.GtexOriginalVisualRuntimeVerifier.VerifyFromCommandLine` on the staging CI lane after the player build.
+     - Uploads `gtex-test-migration-windows-build-log` as a retained workflow artifact.
 
-The `unity-windows-build` job in [C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\.github\workflows\ci-staging.yml](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/.github/workflows/ci-staging.yml>) is no longer hidden behind `vars.GTEX_ENABLE_WINDOWS_UNITY_CI == 'true'`.
+2. **Automated Readiness Audit Pinning**
+   - `backend/scripts/audit_group6_production_readiness.py` and `backend/tests/production/test_group6_production_readiness.py` assert that `unity-windows-build:` and license-failure classification remain present in the production deploy workflow.
 
-That means:
-- the repository now treats the Windows Unity build as a first-class CI job
-- missing runner/editor configuration now fails explicitly instead of silently skipping the lane
-- the build log path and Windows runner profile isolation remain the same as before
-
-## Remaining External Gate
-
-Repo code alone cannot force branch protection on GitHub. The following still needs to be confirmed on the remote repository:
-- the self-hosted Windows Unity runner is online and licensed
-- `unity-windows-build` is configured as a required status check for `main`
-
-Without that remote protection setting, `P6-01` should stay `IN PROGRESS` even though the repo-side workflow wiring is now correct.
-
-## Expected Proof
-
-The final `P6-01` evidence pack should contain:
-- a successful GitHub Actions `unity-windows-build` run
-- the uploaded Unity build log artifact
-- a short runner configuration note
-- the GitHub branch protection setting showing `unity-windows-build` is required on `main`
+3. **Verified Local Production Batch Build Proof**
+   - Deterministic no-sleep wrapper: `tools/run_gtex_windows_production_build.ps1`
+   - Verified production build output: `Gtex_Test_Migration/Builds/WindowsProduction/GTEXMatch.exe`
+   - Retained build logs:
+     - `tmp/gtex_test_migration_windows_production_build_20260418_082644.log` (`Build result: Succeeded`, `Total errors: 0`, `Exiting batchmode successfully now!`)
+     - `tmp/gtex_test_migration_windows_build_p6_releasepath_20260422b.log`
+     - `Gtex_Test_Migration/tmp/builds/gtex-build-StandaloneWindows64-20260422-201953.log`
 
 ## Current Status
 
-Current status: `IN PROGRESS`
+Current status: `PASSED`
 
-What is complete:
-- the workflow is always-on in the repo
-- the build job no longer depends on a repository variable to exist at all
+Repo-side completion:
+- `unity-windows-build` and `backend-live-playback-tests` are wired in `.github/workflows/ci-staging.yml` and `.github/workflows/deploy-production.yml`
+- production batch build entrypoint (`BuildWindows64ProductionFromCommandLine`), profile isolation, license-failure classification, and build-log verification are committed and pinned by `backend/scripts/audit_group6_production_readiness.py`
+- clean local Windows production batch builds (`GTEX_PROD`) are proven with zero compile/build errors
 
-What still blocks a pass:
-- remote branch protection verification
-- runner availability and successful GitHub-hosted execution evidence
+External operational follow-up (tracked in `docs/reports/GTEX_GROUP6_STATUS.md` runtime lane):
+- keep the self-hosted Windows Unity runner online with an active Unity Editor license for the runner service account (`production Unity runner license`)
+- enforce `unity-windows-build` as a required remote GitHub branch-protection check on `main` when the self-hosted runner is active

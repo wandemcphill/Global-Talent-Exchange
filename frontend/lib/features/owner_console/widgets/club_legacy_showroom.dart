@@ -16,12 +16,19 @@ class ClubLegacyShowroom extends StatefulWidget {
     this.forceStatic = false,
     this.requirePurchaseConfirm = false,
     this.onAction,
+    this.loadGiftRecipients,
+    this.giftOwnedAsset,
+    this.onGiftCompleted,
   });
 
   final List<ShowroomExhibit> exhibits;
   final bool forceStatic;
   final bool requirePurchaseConfirm;
   final Future<void> Function(String action, Map<String, Object?> payload)? onAction;
+  final Future<List<OwnerGiftRecipient>> Function()? loadGiftRecipients;
+  final Future<void> Function({required String assetId, required String playerId})?
+      giftOwnedAsset;
+  final Future<void> Function()? onGiftCompleted;
 
   /// Resolves the H9 visibility / broadcast classification label for an exhibit.
   static String visibilityBadgeLabel(ShowroomExhibit exhibit) {
@@ -94,42 +101,47 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
       () => 'buy_${sku}_${DateTime.now().microsecondsSinceEpoch}',
     );
     if (!widget.requirePurchaseConfirm) {
-      await _purchaseAsset(exhibit, idempotencyKey: idempotencyKey);
+      final bool purchased = await _purchaseAsset(
+        exhibit,
+        idempotencyKey: idempotencyKey,
+      );
+      if (purchased && mounted) await _showAssetAcquired(exhibit);
       return;
     }
 
     final String? broadcastNotice =
         ClubLegacyShowroom.publicBroadcastNoticeFor(exhibit);
+    bool purchased = false;
     await GtexConfirmSheet.show(
       context,
-      title: 'Purchase ${exhibit.name}',
+      title: 'Acquire ${exhibit.name}',
       summary:
-          'Acquire ${exhibit.name} (${ClubLegacyShowroom.visibilityBadgeLabel(exhibit)}).',
-      confirmLabel: 'Buy ${exhibit.name}',
+          'Buy this asset for your club collection. The club treasury pays the verified showroom price.',
+      confirmLabel: 'Confirm acquisition',
       variant: GtexConfirmVariant.financial,
       idempotencyKey: idempotencyKey,
       publicAnnouncementNotice: broadcastNotice,
       financialDetails: GtexConfirmFinancialDetails(
-        amountLabel: exhibit.price ?? '1,500',
+        amountLabel: exhibit.price ?? 'Price shown by the club asset catalogue',
         currencyCode: 'GTX',
         idempotencyKey: idempotencyKey,
       ),
       onConfirm: (String resolvedKey) async {
-        await _purchaseAsset(exhibit, idempotencyKey: resolvedKey);
+        purchased = await _purchaseAsset(exhibit, idempotencyKey: resolvedKey);
       },
     );
+    if (purchased && mounted) await _showAssetAcquired(exhibit);
   }
 
-  Future<void> _purchaseAsset(
+  Future<bool> _purchaseAsset(
     ShowroomExhibit exhibit, {
     String? idempotencyKey,
   }) async {
     final String? sku = exhibit.sku;
     final Future<void> Function(String, Map<String, Object?>)? onAction = widget.onAction;
     if (sku == null || onAction == null || _pendingPurchases.contains(exhibit.id)) {
-      return;
+      return false;
     }
-    // Reuse the idempotency key across retries for this purchase intent.
     final String resolvedKey =
         idempotencyKey ??
         _purchaseIdempotencyKeys.putIfAbsent(
@@ -143,12 +155,14 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
         'idempotency_key': resolvedKey,
         'owner_class': 'club',
       });
-    } catch (_) {
+      return true;
+    } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Purchase failed. Please try again.')),
+          SnackBar(content: Text('Purchase failed: ${_friendlyOwnerActionError(error)}')),
         );
       }
+      return false;
     } finally {
       if (mounted) {
         setState(() => _pendingPurchases.remove(exhibit.id));
@@ -158,9 +172,23 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
 
   Future<void> _giftAsset(ShowroomExhibit exhibit) async {
     final Future<void> Function(String, Map<String, Object?>)? onAction = widget.onAction;
-    if (onAction == null) {
+    if (onAction == null) return;
+
+    final Future<List<OwnerGiftRecipient>> Function()? loadRecipients =
+        widget.loadGiftRecipients;
+    final Future<void> Function({required String assetId, required String playerId})?
+        giftOwnedAsset = widget.giftOwnedAsset;
+    if (loadRecipients != null && giftOwnedAsset != null) {
+      await _giftToSquadPlayer(
+        exhibit,
+        loadRecipients: loadRecipients,
+        giftOwnedAsset: giftOwnedAsset,
+      );
       return;
     }
+
+    // Compatibility for standalone legacy showroom consumers that haven't
+    // supplied the live squad gateway. The owner console uses the roster picker.
     String recipientInput = '';
     final String? recipientRef = await showDialog<String>(
       context: context,
@@ -189,21 +217,264 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
       ),
     );
     final String normalizedRef = (recipientRef ?? '').trim();
-    if (!mounted || normalizedRef.isEmpty) {
-      return;
-    }
+    if (!mounted || normalizedRef.isEmpty) return;
     try {
       await onAction('gift', <String, Object?>{
         'asset_id': exhibit.id,
         'recipient_ref': normalizedRef,
       });
-    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Gift failed. Please check the recipient and try again.')),
+          SnackBar(content: Text('${exhibit.name} gift offered to ${normalizedRef.substring(0, normalizedRef.length > 8 ? 8 : normalizedRef.length)}.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gift failed: ${_friendlyOwnerActionError(error)}')),
         );
       }
     }
+  }
+
+  Future<void> _giftToSquadPlayer(
+    ShowroomExhibit exhibit, {
+    required Future<List<OwnerGiftRecipient>> Function() loadRecipients,
+    required Future<void> Function({required String assetId, required String playerId})
+        giftOwnedAsset,
+  }) async {
+    late final Future<List<OwnerGiftRecipient>> recipientsFuture;
+    try {
+      recipientsFuture = loadRecipients();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load your squad: ${_friendlyOwnerActionError(error)}')),
+        );
+      }
+      return;
+    }
+
+    OwnerGiftRecipient? selectedPlayer;
+    final OwnerGiftRecipient? recipient = await showDialog<OwnerGiftRecipient>(
+      context: context,
+      builder: (BuildContext dialogContext) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF0D1726),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+            side: BorderSide(color: GtexColors.gold.withValues(alpha: 0.34)),
+          ),
+          titlePadding: const EdgeInsets.fromLTRB(20, 20, 12, 8),
+          contentPadding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          title: Row(
+            children: <Widget>[
+              const Icon(Icons.card_giftcard_rounded, color: GtexColors.gold),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Choose an academy regen',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 460,
+            child: FutureBuilder<List<OwnerGiftRecipient>>(
+              future: recipientsFuture,
+              builder: (BuildContext context, AsyncSnapshot<List<OwnerGiftRecipient>> snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const SizedBox(
+                    height: 180,
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                if (snapshot.hasError) {
+                  return const Padding(
+                    padding: EdgeInsets.all(18),
+                    child: Text(
+                      'Your squad could not be loaded. Close this window and try again.',
+                      style: TextStyle(color: Color(0xFFB9C5D7)),
+                    ),
+                  );
+                }
+                final List<OwnerGiftRecipient> players = (snapshot.data ?? const <OwnerGiftRecipient>[])
+                    .where((OwnerGiftRecipient player) => player.isRegen)
+                    .toList(growable: false);
+                if (players.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.all(18),
+                    child: Text(
+                      'No eligible regen players are available yet. Add an academy regen before gifting luxury items.',
+                      style: TextStyle(color: Color(0xFFB9C5D7)),
+                    ),
+                  );
+                }
+                return SizedBox(
+                  height: players.length > 4 ? 340 : players.length * 82.0,
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: players.length,
+                    separatorBuilder: (_, __) => Divider(
+                      height: 1,
+                      color: Colors.white.withValues(alpha: 0.07),
+                    ),
+                    itemBuilder: (BuildContext context, int index) {
+                      final OwnerGiftRecipient player = players[index];
+                      final bool chosen = selectedPlayer?.id == player.id;
+                      return InkWell(
+                        key: Key('club-showroom-recipient-${player.id}'),
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () => setDialogState(() => selectedPlayer = player),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          padding: const EdgeInsets.all(9),
+                          decoration: BoxDecoration(
+                            color: chosen ? GtexColors.gold.withValues(alpha: 0.12) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: chosen ? GtexColors.gold : Colors.transparent,
+                            ),
+                          ),
+                          child: Row(
+                            children: <Widget>[
+                              CircleAvatar(
+                                radius: 24,
+                                backgroundColor: const Color(0xFF1C2B40),
+                                foregroundImage: (player.portraitUrl ?? '').startsWith('http')
+                                    ? NetworkImage(player.portraitUrl!)
+                                    : null,
+                                child: Text(
+                                  player.name.isEmpty ? '?' : player.name.substring(0, 1).toUpperCase(),
+                                  style: const TextStyle(color: GtexColors.gold, fontWeight: FontWeight.w900),
+                                ),
+                              ),
+                              const SizedBox(width: 11),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: <Widget>[
+                                    Row(
+                                      children: <Widget>[
+                                        Expanded(
+                                          child: Text(
+                                            player.name,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: GtexColors.gold.withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(5),
+                                            border: Border.all(color: GtexColors.gold.withValues(alpha: 0.35)),
+                                          ),
+                                          child: const Text(
+                                            'REGEN',
+                                            style: TextStyle(color: GtexColors.gold, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 0.7),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      '${player.position}  ·  OVR ${player.rating}  ·  Morale ${player.morale}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(color: Color(0xFFAAB8CB), fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                chosen ? Icons.check_circle_rounded : Icons.circle_outlined,
+                                color: chosen ? GtexColors.gold : const Color(0xFF75859A),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              key: const Key('club-showroom-gift-confirm'),
+              onPressed: selectedPlayer == null ? null : () => Navigator.of(dialogContext).pop(selectedPlayer),
+              icon: const Icon(Icons.redeem_rounded),
+              label: const Text('Gift selected player'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || recipient == null) return;
+
+    try {
+      setState(() => _pendingPurchases.add('gift:${exhibit.id}'));
+      await giftOwnedAsset(assetId: exhibit.id, playerId: recipient.id);
+      if (!mounted) return;
+      await widget.onGiftCompleted?.call();
+      if (!mounted) return;
+      await _showGiftArrived(exhibit, recipient);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gift could not be delivered: ${_friendlyOwnerActionError(error)}')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _pendingPurchases.remove('gift:${exhibit.id}'));
+    }
+  }
+
+  Future<void> _showAssetAcquired(ShowroomExhibit exhibit) async {
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.72),
+      builder: (BuildContext context) => _LuxuryArrivalDialog(
+        eyebrow: 'ADDED TO YOUR COLLECTION',
+        title: exhibit.name,
+        subtitle: 'The acquisition has been recorded for your club.',
+        preview: _staticCard(exhibit),
+        actionLabel: 'Back to showroom',
+      ),
+    );
+  }
+
+  Future<void> _showGiftArrived(
+    ShowroomExhibit exhibit,
+    OwnerGiftRecipient recipient,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.78),
+      builder: (BuildContext context) => _LuxuryArrivalDialog(
+        eyebrow: 'A MOMENT FOR THE HISTORY BOOKS',
+        title: '${exhibit.name} gifted',
+        subtitle: '${recipient.name} has received the luxury gift from the club owner. Player morale and the gift event are recorded by GTEX.',
+        preview: _staticCard(exhibit),
+        recipient: recipient,
+        actionLabel: 'Return to collection',
+      ),
+    );
   }
 
   Future<void> _loadCurrent() async {
@@ -282,6 +553,53 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
     );
   }
 
+  Widget _assetDetails(ShowroomExhibit exhibit) {
+    final String price = exhibit.price?.trim() ?? '';
+    final bool hasScarcity = exhibit.supplyCap != null || exhibit.mintedCount != null;
+    if (price.isEmpty && !hasScarcity) return const SizedBox.shrink();
+    final String scarcity = exhibit.supplyCap != null && exhibit.mintedCount != null
+        ? '${exhibit.mintedCount} of ${exhibit.supplyCap} editions minted'
+        : exhibit.supplyCap != null
+            ? '${exhibit.supplyCap} editions maximum'
+            : exhibit.mintedCount != null
+                ? '${exhibit.mintedCount} editions minted'
+                : '';
+    return Container(
+      key: const Key('club-showroom-asset-details'),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0B1422),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: GtexColors.gold.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        children: <Widget>[
+          const Icon(Icons.diamond_outlined, color: GtexColors.gold, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                if (price.isNotEmpty)
+                  Text(
+                    '$price GTX',
+                    style: const TextStyle(color: Color(0xFFEBD28E), fontWeight: FontWeight.w900, fontSize: 15),
+                  ),
+                if (scarcity.isNotEmpty)
+                  Text(
+                    scarcity,
+                    style: const TextStyle(color: Color(0xFF9EACC0), fontSize: 10),
+                  ),
+              ],
+            ),
+          ),
+          if (exhibit.owned)
+            const Icon(Icons.verified_rounded, color: Color(0xFF79D8A4), size: 20),
+        ],
+      ),
+    );
+  }
+
   Widget _stage(ShowroomExhibit exhibit, bool reduceMotion) {
     final Widget card =
         reduceMotion ? _staticCard(exhibit) : _turntable(exhibit);
@@ -354,6 +672,7 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
               fontSize: 12,
             ),
           ),
+          _assetDetails(exhibit),
           if (widget.onAction != null) ...<Widget>[
             const SizedBox(height: GtexSpacing.sm),
             Wrap(
@@ -369,14 +688,19 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
                         ? null
                         : () => _handleBuyTap(exhibit),
                   ),
-                if (exhibit.owned && !exhibit.id.startsWith('facility:'))
+                if (exhibit.owned &&
+                    exhibit.ownerClass != 'player' &&
+                    exhibit.status != 'offered' &&
+                    !exhibit.id.startsWith('facility:'))
                   GtexActionButton(
                     key: Key('club-showroom-gift-${exhibit.id}'),
                     label: 'Gift ${exhibit.name}',
                     icon: Icons.card_giftcard_rounded,
                     compact: true,
                     secondary: true,
-                    onPressed: () => _giftAsset(exhibit),
+                    onPressed: _pendingPurchases.contains('gift:${exhibit.id}')
+                        ? null
+                        : () => _giftAsset(exhibit),
                   ),
               ],
             ),
@@ -676,10 +1000,19 @@ class _ShowroomFullscreenState extends State<_ShowroomFullscreen> {
 }
 
 class ShowroomSection extends StatefulWidget {
-  const ShowroomSection({super.key, required this.load, this.onAction});
+  const ShowroomSection({
+    super.key,
+    required this.load,
+    this.onAction,
+    this.loadGiftRecipients,
+    this.giftOwnedAsset,
+  });
 
   final Future<List<ShowroomExhibit>> Function() load;
   final Future<void> Function(String action, [Map<String, Object?> payload])? onAction;
+  final Future<List<OwnerGiftRecipient>> Function()? loadGiftRecipients;
+  final Future<void> Function({required String assetId, required String playerId})?
+      giftOwnedAsset;
 
   @override
   State<ShowroomSection> createState() => _ShowroomSectionState();
@@ -726,7 +1059,7 @@ class _ShowroomSectionState extends State<ShowroomSection> {
         if (snap.hasError || snap.data == null) {
           return ClubLegacyShowroom(
             forceStatic: true,
-            onAction: _handleAction,
+            onAction: null,
             exhibits: const <ShowroomExhibit>[
               ShowroomExhibit(
                 id: 'catalogue:gtex-jet-harbour',
@@ -757,7 +1090,13 @@ class _ShowroomSectionState extends State<ShowroomSection> {
         }
         return ClubLegacyShowroom(
           exhibits: snap.data!,
+          requirePurchaseConfirm: true,
           onAction: _handleAction,
+          loadGiftRecipients: widget.loadGiftRecipients,
+          giftOwnedAsset: widget.giftOwnedAsset,
+          onGiftCompleted: () async {
+            if (mounted) _reload();
+          },
         );
       },
     );
@@ -876,4 +1215,129 @@ class _MeshPainter extends CustomPainter {
       oldDelegate.yaw != yaw ||
       oldDelegate.pitch != pitch ||
       oldDelegate.parts != parts;
+}
+
+
+String _friendlyOwnerActionError(Object error) {
+  final String text = error.toString().replaceFirst(RegExp(r'^(Exception|StateError|FormatException):\\s*'), '').trim();
+  return text.isEmpty ? 'please try again' : text;
+}
+
+class _LuxuryArrivalDialog extends StatelessWidget {
+  const _LuxuryArrivalDialog({
+    required this.eyebrow,
+    required this.title,
+    required this.subtitle,
+    required this.preview,
+    required this.actionLabel,
+    this.recipient,
+  });
+
+  final String eyebrow;
+  final String title;
+  final String subtitle;
+  final Widget preview;
+  final OwnerGiftRecipient? recipient;
+  final String actionLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 0.84, end: 1),
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOutBack,
+        builder: (BuildContext context, double value, Widget? child) =>
+            Transform.scale(scale: value, child: child),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[Color(0xFF1A2A41), Color(0xFF0A1220)],
+            ),
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(color: GtexColors.gold.withValues(alpha: 0.68), width: 1.3),
+            boxShadow: <BoxShadow>[
+              BoxShadow(color: GtexColors.gold.withValues(alpha: 0.18), blurRadius: 36),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const Icon(Icons.auto_awesome_rounded, color: GtexColors.gold, size: 24),
+              const SizedBox(height: 9),
+              Text(
+                eyebrow,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Color(0xFFEAD18E), fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 2),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(height: 150, width: double.infinity, child: preview),
+              if (recipient != null) ...<Widget>[
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    CircleAvatar(
+                      radius: 24,
+                      backgroundColor: const Color(0xFF20324A),
+                      foregroundImage: (recipient!.portraitUrl ?? '').startsWith('http')
+                          ? NetworkImage(recipient!.portraitUrl!)
+                          : null,
+                      child: Text(
+                        recipient!.name.isEmpty ? '?' : recipient!.name.substring(0, 1).toUpperCase(),
+                        style: const TextStyle(color: GtexColors.gold, fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(recipient!.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14)),
+                          Text('${recipient!.position} · OVR ${recipient!.rating}', style: const TextStyle(color: Color(0xFFABBAD0), fontSize: 11)),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.check_circle_rounded, color: Color(0xFF79D8A4)),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 17),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Color(0xFFB4C1D4), fontSize: 12, height: 1.5),
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: GtexColors.gold,
+                    foregroundColor: const Color(0xFF15120B),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+                  ),
+                  key: const Key('club-showroom-arrival-close'),
+                  child: Text(actionLabel, style: const TextStyle(fontWeight: FontWeight.w900)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

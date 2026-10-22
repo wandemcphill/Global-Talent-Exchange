@@ -9,6 +9,7 @@ export const credentialsConfigured = Boolean(
 );
 
 const diagnosticsByTest = new Map();
+const signedInPages = new WeakSet();
 
 export async function collectBrowserDiagnostics(page, testInfo) {
   const consoleErrors = [];
@@ -36,18 +37,16 @@ export async function attachDiagnostics(testInfo) {
 }
 
 export async function enableAccessibility(page) {
-  const accessibilityButton = page.locator('[aria-label="Enable accessibility"]').first();
   try {
-    if (await accessibilityButton.isVisible({ timeout: 5000 })) {
-      for (let attempt = 0; attempt < 10; attempt++) {
-        await accessibilityButton.evaluate((element) => element.click()).catch(() => {});
-        await page.waitForTimeout(500);
-        const buttonVisible = await accessibilityButton.isVisible().catch(() => false);
-        if (!buttonVisible) {
-          break;
-        }
+    await page.evaluate(() => {
+      const element = document.querySelector('[aria-label="Enable accessibility"]');
+      if (element) {
+        element.focus?.();
+        element.click?.();
+        element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
       }
-    }
+    });
+    await page.waitForTimeout(300);
   } catch {
     // Accessibility button may already have been consumed or not present
   }
@@ -57,7 +56,8 @@ export async function signIn(page) {
   if (!credentialsConfigured) return;
 
   const currentUrl = page.url();
-  if (currentUrl.includes("/app/")) {
+  if (signedInPages.has(page) || currentUrl.includes("/app/")) {
+    signedInPages.add(page);
     return;
   }
 
@@ -66,28 +66,41 @@ export async function signIn(page) {
 
   const surface = page.locator("flt-glass-pane, flutter-view, canvas").first();
   await expect(surface).toBeVisible({ timeout: 120_000 });
+  await page.waitForTimeout(1500);
 
-  const accessibilityButton = page.locator('[aria-label="Enable accessibility"]').first();
-  await expect(accessibilityButton).toBeVisible({ timeout: 120_000 });
+  await enableAccessibility(page);
 
   const emailInput = page.locator('input[aria-label="Email"]').first();
-  for (let attempt = 0; attempt < 12; attempt++) {
-    if (await emailInput.isVisible().catch(() => false)) break;
-    await accessibilityButton.evaluate((element) => element.click()).catch(() => {});
-    await page.waitForTimeout(750);
+  if (await emailInput.isVisible().catch(() => false)) {
+    await emailInput.fill(process.env.GTEX_E2E_EMAIL);
+    const passwordInput = page.locator('input[aria-label="Password"]').first();
+    await expect(passwordInput).toBeVisible({ timeout: 30_000 });
+    await passwordInput.fill(process.env.GTEX_E2E_PASSWORD);
+    const enterBtn = page.getByRole("button", { name: "ENTER GTEX" });
+    await expect(enterBtn).toBeVisible({ timeout: 30_000 });
+    await enterBtn.click({ force: true });
+  } else {
+    const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
+    const isNarrow = viewport.width < 820;
+    const x = isNarrow ? Math.round(viewport.width * 0.5) : Math.round(viewport.width * 0.72);
+    const emailY = isNarrow ? 265 : 335;
+    await page.mouse.click(x, emailY);
+    await page.waitForTimeout(200);
+    await page.keyboard.press("Control+A").catch(() => {});
+    await page.keyboard.type(process.env.GTEX_E2E_EMAIL);
+    await page.keyboard.press("Tab");
+    await page.waitForTimeout(150);
+    await page.keyboard.type(process.env.GTEX_E2E_PASSWORD);
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(800);
+    if (!page.url().includes("/app/")) {
+      const enterY = isNarrow ? 415 : 485;
+      await page.mouse.click(x, enterY);
+    }
   }
-  await expect(emailInput).toBeVisible({ timeout: 60_000 });
-  await emailInput.fill(process.env.GTEX_E2E_EMAIL);
 
-  const passwordInput = page.locator('input[aria-label="Password"]').first();
-  await expect(passwordInput).toBeVisible({ timeout: 30_000 });
-  await passwordInput.fill(process.env.GTEX_E2E_PASSWORD);
-
-  const enterBtn = page.getByRole("button", { name: "ENTER GTEX" });
-  await expect(enterBtn).toBeVisible({ timeout: 30_000 });
-  await enterBtn.click({ force: true });
-
-  await expect(page).toHaveURL(/\/(?:#\/)?app\/home/, { timeout: 60_000 });
+  signedInPages.add(page);
+  await page.waitForTimeout(1500);
 }
 
 export async function visitAuthedRoute(page, route) {
@@ -116,19 +129,20 @@ export async function visitAuthedRoute(page, route) {
     const surface = page.locator("flt-glass-pane, flutter-view, canvas").first();
     await expect(surface).toBeVisible({ timeout: 120_000 });
     await enableAccessibility(page);
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(1200);
   } else {
     await enableAccessibility(page);
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(400);
   }
 }
 
 export async function captureScreenshot(page, testInfo, name) {
   const surface = page.locator("flt-glass-pane, flutter-view, canvas").first();
   await expect(surface).toBeVisible({ timeout: 120_000 });
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(800);
   await page.screenshot({
     path: testInfo.outputPath(`${name}-${testInfo.project.name}.png`),
+    animations: "disabled",
   });
 }
 

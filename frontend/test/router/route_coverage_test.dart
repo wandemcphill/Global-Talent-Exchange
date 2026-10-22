@@ -107,6 +107,9 @@ void main() {
           .map((RegExpMatch match) => match.group(1)!)
           .where((String path) => path.startsWith('/'));
 
+      expect(directRouterPaths, contains('/clubs/:clubId/profile'));
+      expect(directRouterPaths, contains('/owners/:ownerUserId/profile'));
+
       final Set<String> seenDirectPaths = <String>{};
       final Set<String> duplicateDirectPaths = <String>{};
       for (final String path in directRouterPaths) {

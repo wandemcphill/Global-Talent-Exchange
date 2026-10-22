@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../player_detail/gtex_player_navigator.dart';
+import '../../match/widgets/gtex_matchday_ad_slot.dart';
 import '../data/gtex_match_models.dart';
 import 'gtex_match_visual_tokens.dart';
 
@@ -27,6 +28,11 @@ class GtexMatchLineups extends StatelessWidget {
         _LineupTeam(team: home),
         const SizedBox(height: 14),
         _LineupTeam(team: away),
+        const SizedBox(height: 14),
+        const GtexMatchdayAdSlot(
+          placement: 'Official team-sheet bulletin',
+          compact: true,
+        ),
       ],
     );
   }
@@ -80,6 +86,33 @@ class _LineupTeam extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 7,
+            runSpacing: 7,
+            children: <Widget>[
+              if (team.managerName?.trim().isNotEmpty == true)
+                _MicroTag(
+                  label: 'MANAGER · ${team.managerName!.trim()}',
+                  color: GtexMatchVisualTokens.amber,
+                ),
+              if (team.recentFormPercent != null)
+                _MicroTag(
+                  label: 'FORM · ${team.recentFormPercent}%',
+                  color: GtexMatchVisualTokens.live,
+                ),
+              if (team.mentality?.trim().isNotEmpty == true)
+                _MicroTag(
+                  label: team.mentality!.replaceAll('_', ' '),
+                  color: GtexMatchVisualTokens.blue,
+                ),
+              for (final String instruction in team.instructionSummary.take(2))
+                _MicroTag(
+                  label: instruction,
+                  color: GtexMatchVisualTokens.textSecondary,
+                ),
+            ],
+          ),
           const SizedBox(height: 12),
           if (team.players.isEmpty)
             const Padding(
@@ -122,26 +155,54 @@ class _LineupTeam extends StatelessWidget {
                         ),
                       ),
                       Expanded(
-                        child: Text(
-                          player.name,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: GtexMatchVisualTokens.textPrimary,
-                            fontWeight: FontWeight.w800,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Row(
+                              children: <Widget>[
+                                Expanded(
+                                  child: Text(
+                                    player.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: GtexMatchVisualTokens.textPrimary,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                                if (player.isRegen) ...<Widget>[
+                                  const SizedBox(width: 6),
+                                  const _MicroTag(
+                                    label: 'REGEN',
+                                    color: GtexMatchVisualTokens.regen,
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 5),
+                            Wrap(
+                              spacing: 5,
+                              runSpacing: 4,
+                              children: <Widget>[
+                                _MicroTag(
+                                  label: player.position,
+                                  color: GtexMatchVisualTokens.textSecondary,
+                                ),
+                                if (player.formLabel?.trim().isNotEmpty == true)
+                                  _MicroTag(
+                                    label: player.formLabel!.trim(),
+                                    color: GtexMatchVisualTokens.amber,
+                                  ),
+                                if (player.fitnessPct != null)
+                                  _MicroTag(
+                                    label: 'FIT ${player.fitnessPct!.round()}%',
+                                    color: GtexMatchVisualTokens.live,
+                                  ),
+                              ],
+                            ),
+                          ],
                         ),
-                      ),
-                      if (player.isRegen) ...[
-                        const SizedBox(width: 8),
-                        const _MicroTag(
-                          label: 'REGEN',
-                          color: GtexMatchVisualTokens.regen,
-                        ),
-                      ],
-                      const SizedBox(width: 8),
-                      _MicroTag(
-                        label: player.position,
-                        color: GtexMatchVisualTokens.textSecondary,
                       ),
                       const SizedBox(width: 8),
                       Text(
@@ -158,6 +219,79 @@ class _LineupTeam extends StatelessWidget {
                   ),
                 ),
               ),
+          if (team.bench.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 10),
+            const Divider(color: GtexMatchVisualTokens.border),
+            const SizedBox(height: 8),
+            Row(
+              children: <Widget>[
+                const Icon(Icons.sync_alt_rounded, color: GtexMatchVisualTokens.amber, size: 16),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'SUBSTITUTES',
+                    style: TextStyle(
+                      color: GtexMatchVisualTokens.textPrimary,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 11,
+                      letterSpacing: .7,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${team.bench.length} listed',
+                  style: const TextStyle(color: GtexMatchVisualTokens.textSecondary, fontSize: 11),
+                ),
+              ],
+            ),
+            const SizedBox(height: 7),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: team.bench.map((GtexLineupPlayer player) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: GtexMatchVisualTokens.surfaceRaised,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: GtexMatchVisualTokens.border),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        '#${player.shirtNumber}',
+                        style: const TextStyle(
+                          color: GtexMatchVisualTokens.amber,
+                          fontWeight: FontWeight.w900,
+                          fontFamily: 'JetBrains Mono',
+                          fontSize: 10,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 150),
+                        child: Text(
+                          player.name,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: GtexMatchVisualTokens.textPrimary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      _MicroTag(
+                        label: player.position,
+                        color: GtexMatchVisualTokens.textSecondary,
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(growable: false),
+            ),
+          ],
         ],
       ),
     );

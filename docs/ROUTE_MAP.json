@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1852,
+  "route_count": 1854,
   "routes": [
     {
       "method": "POST",
@@ -29605,6 +29605,32 @@
     },
     {
       "method": "GET",
+      "path": "/owner/public/profile/{owner_user_id}",
+      "effective_paths": [
+        "/api/owner/public/profile/{owner_user_id}"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "get_public_owner_profile",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "owner_user_id",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "GET",
       "path": "/owner/public/showroom/{code}",
       "effective_paths": [
         "/api/owner/public/showroom/{code}"
@@ -39705,6 +39731,30 @@
       "response_shape": {
         "response_model": "ClubJerseysView",
         "returns": "ClubJerseysView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/clubs/{club_id}/public-profile",
+      "effective_paths": [
+        "/api/clubs/{club_id}/public-profile"
+      ],
+      "file": "backend/app/segments/clubs/segment_clubs.py",
+      "handler": "get_public_club_profile",
+      "router_variable": "router",
+      "module_path": "app.segments.clubs.segment_clubs",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
       },
       "version": "canonical",
       "domain": "segment"

@@ -184,7 +184,7 @@ GtexMatchTeam _parseTeam(
     formation: _string(json, const <String>[
       'formation',
     ], fallback: 'unavailable'),
-    players: _list(json['players'] ?? json['lineup'])
+    players: _list(json['players'] ?? json['lineup'] ?? json['starters'])
         .map((Object? value) => _parseLineupPlayer(_asMap(value)))
         .toList(growable: false),
     badgeUrl: _nullableString(json, const <String>['badge_url', 'badgeUrl']),
@@ -192,6 +192,20 @@ GtexMatchTeam _parseTeam(
       'primary_color_hex',
       'primaryColorHex',
     ]),
+    managerName: _nullableString(json, const <String>[
+      'manager_name', 'managerName', 'coach_name', 'coachName',
+    ]),
+    recentFormPercent: _nullableInt(json, const <String>[
+      'recent_form_percent', 'recentFormPercent', 'recent_form', 'recentForm',
+    ]),
+    mentality: _nullableString(json, const <String>['mentality', 'manager_mentality']),
+    instructionSummary: _list(
+      json['instruction_summary'] ?? json['instructionSummary'] ?? json['tactical_instructions'],
+    ).map((Object? value) => value?.toString().trim() ?? '')
+      .where((String value) => value.isNotEmpty).toList(growable: false),
+    bench: _list(json['bench'] ?? json['bench_players'] ?? json['substitutes'])
+        .map((Object? value) => _parseLineupPlayer(_asMap(value)))
+        .toList(growable: false),
   );
 }
 
@@ -215,9 +229,11 @@ GtexLineupPlayer _parseLineupPlayer(Map<String, Object?> json) {
       'shirt_number',
       'shirtNumber',
     ], fallback: 0),
-    rating: _double(json, const <String>['rating'], fallback: 0),
-    imageUrl: _nullableString(json, const <String>['image_url', 'imageUrl']),
+    rating: _double(json, const <String>['rating', 'overall', 'overall_rating'], fallback: 0),
+    imageUrl: _nullableString(json, const <String>['image_url', 'imageUrl', 'portrait_url', 'portraitUrl']),
     isRegen: _bool(json, const <String>['is_regen', 'isRegen']),
+    formLabel: _nullableString(json, const <String>['form', 'form_label', 'formLabel']),
+    fitnessPct: _nullableDouble(json, const <String>['fitness_pct', 'fitnessPct', 'fitness']),
   );
 }
 

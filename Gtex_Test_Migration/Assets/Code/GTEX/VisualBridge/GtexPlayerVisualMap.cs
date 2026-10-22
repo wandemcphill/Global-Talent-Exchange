@@ -246,13 +246,16 @@ namespace FStudio.GTEX.VisualBridge
                 yield return statePlayer.playerId;
                 yield return statePlayer.entityId;
                 yield return statePlayer.teamSide + "-" + statePlayer.shirtNumber;
+                yield return statePlayer.teamSide + "-" + statePlayer.shirtNumber.ToString("00");
                 yield return statePlayer.teamId + "-" + statePlayer.shirtNumber;
+                yield return statePlayer.teamId + "-" + statePlayer.shirtNumber.ToString("00");
             }
 
             if (player.MatchPlayer != null)
             {
                 yield return player.MatchPlayer.Number.ToString();
                 yield return teamSide + "-" + player.MatchPlayer.Number;
+                yield return teamSide + "-" + player.MatchPlayer.Number.ToString("00");
 
                 if (player.MatchPlayer.Player != null)
                 {
@@ -264,7 +267,9 @@ namespace FStudio.GTEX.VisualBridge
             if (team != null)
             {
                 yield return team.TeamId.ToString() + "-" + (index + 1);
+                yield return team.TeamId.ToString() + "-" + (index + 1).ToString("00");
                 yield return teamSide + "-" + (index + 1);
+                yield return teamSide + "-" + (index + 1).ToString("00");
                 yield return teamSide + "_" + index;
             }
         }

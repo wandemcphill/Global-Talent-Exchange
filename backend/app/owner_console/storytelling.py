@@ -3,7 +3,7 @@
 Provides:
 1. Transaction-safe Global Live Ticker (verified private jets, facility upgrades, player gifts ONLY).
 2. AI Grounded Newsroom (strict separation of established facts from editorial narration, read-only).
-3. Rich static imagery resolvers (face-bank player portraits, club crests, stadium and showroom PNGs).
+3. Rich static imagery resolvers (face-bank player portraits, club crests, stadium and showroom WebP assets).
 4. Shared-save context resolution & confidential owner data isolation.
 5. Luxury Showroom & Squad Player Gifting.
 6. Club Story & Legacy Chronicle builder.
@@ -60,7 +60,7 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "price_gtex": 4800.0,
         "prestige_bonus": 8,
         "broadcast_on_purchase": True,
-        "image_file": "sovereign_900x_jet.png",
+        "image_file": "sovereign_900x_jet.webp",
         "description": "Executive intercontinental aircraft for continental away fixtures and owner mobility.",
         "can_gift_to_player": True,
     },
@@ -72,7 +72,7 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "price_gtex": 6200.0,
         "prestige_bonus": 10,
         "broadcast_on_purchase": True,
-        "image_file": "sovereign_900x_jet.png",
+        "image_file": "sovereign_900x_jet.webp",
         "description": "Ultra-long-range boardroom in the sky featuring bespoke club livery and recovery suites.",
         "can_gift_to_player": True,
     },
@@ -84,7 +84,7 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "price_gtex": 320.0,
         "prestige_bonus": 2,
         "broadcast_on_purchase": False,
-        "image_file": "vanguard_xii_coach.png",
+        "image_file": "vanguard_xii_coach.webp",
         "description": "Armored luxury transit for matchday squad arrivals with custom tactical review screens.",
         "can_gift_to_player": False,
     },
@@ -96,7 +96,7 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "price_gtex": 850.0,
         "prestige_bonus": 4,
         "broadcast_on_purchase": False,
-        "image_file": "veloce_gt9_hypercar.png",
+        "image_file": "veloce_gt9_hypercar.webp",
         "description": "Hand-built performance vehicle. Kept in private owner collection unless gifted to a star player.",
         "can_gift_to_player": True,
     },
@@ -108,7 +108,7 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "price_gtex": 220.0,
         "prestige_bonus": 2,
         "broadcast_on_purchase": False,
-        "image_file": "chronos_tourbillon_watch.png",
+        "image_file": "chronos_tourbillon_watch.webp",
         "description": "Haute horlogerie timepiece. Perfect personal milestone gift for squad leaders and regens.",
         "can_gift_to_player": True,
     },
@@ -120,18 +120,18 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "price_gtex": 500.0,
         "prestige_bonus": 3,
         "broadcast_on_purchase": False,
-        "image_file": "arena_imperiale_stadium.png",
+        "image_file": "arena_imperiale_stadium.webp",
         "description": "VIP private salon inside the stadium for high-stakes investor hosting and sponsor meetings.",
         "can_gift_to_player": False,
     },
 }
 
 FACILITY_IMAGES = {
-    "stadium": "/console/img/showroom/arena_imperiale_stadium.png",
-    "training": "/console/img/showroom/apex_performance_campus.png",
-    "academy": "/console/img/showroom/apex_performance_campus.png",
-    "commercial": "/console/img/showroom/arena_imperiale_stadium.png",
-    "medical": "/console/img/showroom/apex_performance_campus.png",
+    "stadium": "/console/img/showroom/arena_imperiale_stadium.webp",
+    "training": "/console/img/showroom/apex_performance_campus.webp",
+    "academy": "/console/img/showroom/apex_performance_campus.webp",
+    "commercial": "/console/img/showroom/arena_imperiale_stadium.webp",
+    "medical": "/console/img/showroom/apex_performance_campus.webp",
 }
 
 # Manifest face-bank path for fallback static portraits
@@ -161,11 +161,11 @@ def resolve_showroom_image_url(catalog_key: str) -> str:
         return f"/console/img/showroom/{item['image_file']}"
     if catalog_key in FACILITY_IMAGES:
         return FACILITY_IMAGES[catalog_key]
-    return "/console/img/showroom/sovereign_900x_jet.png"
+    return "/console/img/showroom/sovereign_900x_jet.webp"
 
 
 def resolve_stadium_image_url(stadium_style: str = "stadium") -> str:
-    return "/console/img/showroom/arena_imperiale_stadium.png"
+    return "/console/img/showroom/arena_imperiale_stadium.webp"
 
 
 def resolve_club_crest_url(session: Session, club_id: str, club_name: str | None = None) -> str:
@@ -861,6 +861,12 @@ def gift_asset_to_squad_player(
     player = session.get(OwnerSquadPlayer, player_id)
     if not player or player.club_id != club_id:
         raise OwnerError("player_not_found", 404, "Player not in club squad.")
+    if not player.is_regen:
+        raise OwnerError(
+            "player_not_eligible_for_gift",
+            400,
+            "Luxury gifts can only be given to academy regens.",
+        )
 
     item_key = catalog_key or "chronos_tourbillon_watch"
     item = SHOWROOM_CATALOG.get(item_key)

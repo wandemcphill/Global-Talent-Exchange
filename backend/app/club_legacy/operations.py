@@ -275,7 +275,7 @@ def _model_file(category: str | None) -> str:
 
 
 def _preview_file(category: str | None) -> str:
-    return _model_file(category).removesuffix(".glb") + ".png"
+    return _model_file(category).removesuffix(".glb") + ".webp"
 
 
 def club_valuation(session: Session, club_id: str) -> Decimal:

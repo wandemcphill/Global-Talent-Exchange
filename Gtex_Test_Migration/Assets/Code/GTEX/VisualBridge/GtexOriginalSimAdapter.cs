@@ -175,6 +175,12 @@ namespace FStudio.GTEX.VisualBridge
             }
 
             PrepareForCommandAction();
+            GtexVisualAuthority.AllowCommandBallParticipants(
+                new GtexVisualCommand
+                {
+                    type = GtexVisualCommandType.AssignPossession,
+                    actorPlayerId = player.GtexPlayerId
+                });
             player.GiveBall();
             UpdateCameraBallOwner(player.GtexPlayerId);
             ClearCameraPassTarget();
@@ -560,6 +566,10 @@ namespace FStudio.GTEX.VisualBridge
             ConfigureOriginalRuntime();
             if (MatchManager.Current != null)
             {
+                // Always pulse command-driven hold true first so any pending StartKickoffCounter()
+                // from a preceding PrePositionTeamsForKickOff() is cancelled before we transition to Playing.
+                MatchManager.SetGlobalCommandDrivenVisualHold(true);
+
                 // Native autonomous play: drop the command-driven hold so the asset AI runs freely.
                 // Force Playing so out-of-play detection (throw-ins/corners) and AI decisions are live
                 // immediately; the asset's nearest player picks up the centre ball and open play emerges.

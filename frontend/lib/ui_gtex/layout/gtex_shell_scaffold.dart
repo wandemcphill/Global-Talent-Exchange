@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/features/navigation/model/gtex_shell_navigation_model.dart';
 
+import '../backgrounds/living_football_os_background.dart';
 import '../theme/gtex_colors.dart';
 import '../theme/gtex_spacing.dart';
 import '../theme/gtex_typography.dart';
@@ -25,6 +26,7 @@ class GtexShellScaffold extends StatelessWidget {
     this.selectedSecondaryId,
     this.onSelectSecondary,
     this.activeRoute,
+    this.status,
     this.livePulseStrip,
     this.worldPulseRail,
     this.offlineBannerMessage,
@@ -38,6 +40,7 @@ class GtexShellScaffold extends StatelessWidget {
   final GtexSecondaryDestinationId? selectedSecondaryId;
   final ValueChanged<GtexSecondaryDestinationSpec>? onSelectSecondary;
   final String? activeRoute;
+  final Widget? status;
   final Widget? livePulseStrip;
   final Widget? worldPulseRail;
   final String? offlineBannerMessage;
@@ -64,65 +67,68 @@ class GtexShellScaffold extends StatelessWidget {
             ? _OfflineMaintenanceBanner(message: offlineBannerMessage!.trim())
             : null;
 
-    return Scaffold(
-      key: const Key('gtex-shell-scaffold'),
-      backgroundColor: navy.bgBase,
-      body: SafeArea(
-        child:
-            compact
-                ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    topBar,
-                    if (banner != null) banner,
-                    if (livePulseStrip != null) livePulseStrip!,
-                    Expanded(child: child),
-                  ],
-                )
-                : Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    GtexNavRail(
-                      primarySlots: navigationModel.primarySlots,
-                      selectedSlotId: selectedSlotId,
-                      onSelectSlot: onSelectSlot,
-                      secondaryDestinations: navigationModel.moreDestinations,
-                      selectedSecondaryId: selectedSecondaryId,
-                      onSelectSecondary: onSelectSecondary,
-                      onOpenMoreSheet: () => _openMoreSheet(context),
-                    ),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: <Widget>[
-                          topBar,
-                          if (banner != null) banner,
-                          if (livePulseStrip != null) livePulseStrip!,
-                          Expanded(
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: <Widget>[
-                                Expanded(child: child),
-                                if (expanded && worldPulseRail != null)
-                                  worldPulseRail!,
-                              ],
-                            ),
-                          ),
-                        ],
+    return LivingFootballOSBackground(
+      child: Scaffold(
+        key: const Key('gtex-shell-scaffold'),
+        backgroundColor: navy.bgBase,
+        body: SafeArea(
+          child:
+              compact
+                  ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      topBar,
+                      if (banner != null) banner,
+                      if (livePulseStrip != null) livePulseStrip!,
+                      Expanded(child: child),
+                    ],
+                  )
+                  : Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      GtexNavRail(
+                        primarySlots: navigationModel.primarySlots,
+                        selectedSlotId: selectedSlotId,
+                        onSelectSlot: onSelectSlot,
+                        secondaryDestinations: navigationModel.moreDestinations,
+                        selectedSecondaryId: selectedSecondaryId,
+                        onSelectSecondary: onSelectSecondary,
+                        onOpenMoreSheet: () => _openMoreSheet(context),
                       ),
-                    ),
-                  ],
-                ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: <Widget>[
+                            topBar,
+                            if (banner != null) banner,
+                            if (livePulseStrip != null) livePulseStrip!,
+                            if (status != null) status!,
+                            Expanded(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: <Widget>[
+                                  Expanded(child: child),
+                                  if (expanded && worldPulseRail != null)
+                                    worldPulseRail!,
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+        ),
+        bottomNavigationBar:
+            compact
+                ? GtexNavBar(
+                  slots: navigationModel.primarySlots,
+                  selectedSlotId: selectedSlotId,
+                  onSelectSlot: onSelectSlot,
+                  onOpenMoreSheet: () => _openMoreSheet(context),
+                )
+                : null,
       ),
-      bottomNavigationBar:
-          compact
-              ? GtexNavBar(
-                slots: navigationModel.primarySlots,
-                selectedSlotId: selectedSlotId,
-                onSelectSlot: onSelectSlot,
-                onOpenMoreSheet: () => _openMoreSheet(context),
-              )
-              : null,
     );
   }
 }

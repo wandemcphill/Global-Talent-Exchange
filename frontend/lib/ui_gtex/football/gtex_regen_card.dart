@@ -195,7 +195,12 @@ class GtexRegenCard extends StatelessWidget {
                       const SizedBox(width: GtexSpacing.sm),
                       portrait,
                       const SizedBox(width: GtexSpacing.sm),
-                      Expanded(child: details),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          physics: const ClampingScrollPhysics(),
+                          child: details,
+                        ),
+                      ),
                     ],
                   );
                 },
@@ -320,6 +325,13 @@ class _RegenCardDetails extends StatelessWidget {
           ],
         ),
         SizedBox(height: isDense ? GtexSpacing.xs : GtexSpacing.sm),
+        if (!isDense && !isMedium) ...<Widget>[
+          _RegenPotentialBar(
+            currentRating: ratingLabel ?? gsiLabel,
+            potentialLabel: potentialLabel,
+          ),
+          const SizedBox(height: 4),
+        ],
         Wrap(
           spacing: 6,
           runSpacing: 6,
@@ -611,6 +623,122 @@ class _GsiPlate extends StatelessWidget {
                 height: 1.1,
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RegenPotentialBar extends StatelessWidget {
+  const _RegenPotentialBar({
+    required this.currentRating,
+    required this.potentialLabel,
+  });
+
+  final String? currentRating;
+  final String potentialLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    int cur = 70;
+    if (currentRating != null) {
+      final Match? m = RegExp(r'\d+').firstMatch(currentRating!);
+      if (m != null) cur = int.tryParse(m.group(0)!) ?? 70;
+    }
+    final List<int> pots = RegExp(r'\d+')
+        .allMatches(potentialLabel)
+        .map((m) => int.tryParse(m.group(0)!) ?? 0)
+        .where((n) => n > 50)
+        .toList();
+    final int minPot = pots.isNotEmpty ? pots.first : cur + 10;
+    final int maxPot = pots.length > 1 ? pots.last : minPot;
+
+    final double curPct = (cur / 99.0).clamp(0.0, 1.0);
+    final double potMaxPct = (maxPot / 99.0).clamp(0.0, 1.0);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFF071220),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFF1E3557)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: <Widget>[
+              const Flexible(
+                child: Text(
+                  'PROJECTED CEILING',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '$cur -> $minPot${maxPot > minPot ? '-$maxPot' : ''}',
+                style: const TextStyle(
+                  color: Color(0xFFFBBF24),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'DMMono',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: 5,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final double w = constraints.maxWidth;
+                return Stack(
+                  children: <Widget>[
+                    Container(
+                      width: w,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F172A),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                    Positioned(
+                      left: w * curPct,
+                      width: (w * (potMaxPct - curPct)).clamp(0.0, w),
+                      top: 0,
+                      bottom: 0,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: <Color>[Color(0xFFD97706), Color(0xFFF59E0B)],
+                          ),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: (w * curPct).clamp(0.0, w),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: <Color>[Color(0xFF0284C7), Color(0xFF38BDF8)],
+                        ),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
         ],
       ),
     );

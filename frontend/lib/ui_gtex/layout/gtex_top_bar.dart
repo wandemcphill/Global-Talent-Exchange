@@ -33,6 +33,7 @@ class GtexTopBar extends StatelessWidget {
     this.onOpenSearch,
     this.walletBalanceGtc,
     this.onOpenWallet,
+    this.onOpenAdmin,
     this.onOpenProfile,
     this.isAuthenticated = false,
     this.userInitials,
@@ -53,6 +54,7 @@ class GtexTopBar extends StatelessWidget {
   final VoidCallback? onOpenSearch;
   final num? walletBalanceGtc;
   final VoidCallback? onOpenWallet;
+  final VoidCallback? onOpenAdmin;
   final VoidCallback? onOpenProfile;
   final bool isAuthenticated;
   final String? userInitials;
@@ -61,8 +63,7 @@ class GtexTopBar extends StatelessWidget {
   bool get _showWorkspaceSwitcher =>
       availableWorkspaces.length > 1 && onWorkspaceSelected != null;
 
-  bool get _showClubSwitcher =>
-      ownedClubs.isNotEmpty && onClubSelected != null;
+  bool get _showClubSwitcher => ownedClubs.isNotEmpty && onClubSelected != null;
 
   @override
   Widget build(BuildContext context) {
@@ -73,7 +74,8 @@ class GtexTopBar extends StatelessWidget {
       key: const Key('gtex-top-bar'),
       height: compact ? 64 : 72,
       padding: EdgeInsets.symmetric(
-        horizontal: compact ? GtexSpacing.marginPhone : GtexSpacing.marginTablet,
+        horizontal:
+            compact ? GtexSpacing.marginPhone : GtexSpacing.marginTablet,
       ),
       decoration: BoxDecoration(
         color: navy.bgBase,
@@ -135,8 +137,7 @@ class GtexTopBar extends StatelessWidget {
                                 color: navy.textPrimary,
                               ),
                             ),
-                            if (!compact &&
-                                (subtitle ?? '').trim().isNotEmpty)
+                            if (!compact && (subtitle ?? '').trim().isNotEmpty)
                               Text(
                                 subtitle!.trim(),
                                 maxLines: 1,
@@ -180,10 +181,7 @@ class GtexTopBar extends StatelessWidget {
         border: Border.all(color: navy.gold700),
       ),
       alignment: Alignment.center,
-      child: Text(
-        'G',
-        style: GtexTypography.titleL(color: navy.gold500),
-      ),
+      child: Text('G', style: GtexTypography.titleL(color: navy.gold500)),
     );
   }
 
@@ -205,6 +203,17 @@ class GtexTopBar extends StatelessWidget {
       );
     }
 
+    if (onOpenAdmin != null) {
+      items.add(
+        IconButton(
+          key: const Key('gtex-top-bar-admin-button'),
+          tooltip: 'Admin dashboard',
+          onPressed: onOpenAdmin,
+          icon: Icon(Icons.admin_panel_settings_outlined, color: navy.gold500),
+        ),
+      );
+    }
+
     if (onOpenAttention != null) {
       items.add(
         _AttentionBellButton(
@@ -214,32 +223,51 @@ class GtexTopBar extends StatelessWidget {
       );
     }
 
-    if (walletBalanceGtc != null && onOpenWallet != null) {
-      items.add(
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: GtexSpacing.xxs),
-          child: InkWell(
-            key: const Key('gtex-top-bar-wallet-chip'),
-            borderRadius: BorderRadius.circular(GtexRadius.pill),
-            onTap: onOpenWallet,
-            child: Container(
-              height: 36,
-              padding: const EdgeInsets.symmetric(horizontal: GtexSpacing.sm),
-              decoration: BoxDecoration(
-                color: navy.bgRaised,
+    if (onOpenWallet != null) {
+      if (walletBalanceGtc != null) {
+        items.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: GtexSpacing.xxs),
+            child: Tooltip(
+              message: 'Club funds',
+              child: InkWell(
+                key: const Key('gtex-top-bar-wallet-chip'),
                 borderRadius: BorderRadius.circular(GtexRadius.pill),
-                border: Border.all(color: navy.lineSubtle),
-              ),
-              alignment: Alignment.center,
-              child: GtexMoney(
-                amount: walletBalanceGtc!,
-                unit: GtexCurrencyUnit.gtc,
-                size: GtexMoneySize.small,
+                onTap: onOpenWallet,
+                child: Container(
+                  height: 36,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: GtexSpacing.sm,
+                  ),
+                  decoration: BoxDecoration(
+                    color: navy.bgRaised,
+                    borderRadius: BorderRadius.circular(GtexRadius.pill),
+                    border: Border.all(color: navy.lineSubtle),
+                  ),
+                  alignment: Alignment.center,
+                  child: GtexMoney(
+                    amount: walletBalanceGtc!,
+                    unit: GtexCurrencyUnit.gtc,
+                    size: GtexMoneySize.small,
+                  ),
+                ),
               ),
             ),
           ),
-        ),
-      );
+        );
+      } else if (!compact) {
+        items.add(
+          IconButton(
+            key: const Key('gtex-top-bar-wallet-chip'),
+            tooltip: 'Club funds',
+            onPressed: onOpenWallet,
+            icon: Icon(
+              Icons.account_balance_wallet_outlined,
+              color: navy.textPrimary,
+            ),
+          ),
+        );
+      }
     }
 
     if (onOpenProfile != null) {
@@ -304,41 +332,36 @@ class _WorkspaceSwitcherButton extends StatelessWidget {
       itemBuilder: (BuildContext context) {
         return availableWorkspaces
             .map(
-              (GtexWorkspaceKind workspace) =>
-                  PopupMenuItem<GtexWorkspaceKind>(
-                    key: Key('gtex-workspace-option-${workspace.name}'),
-                    value: workspace,
-                    child: Row(
-                      children: <Widget>[
-                        Icon(
-                          workspace.icon,
-                          size: 18,
+              (GtexWorkspaceKind workspace) => PopupMenuItem<GtexWorkspaceKind>(
+                key: Key('gtex-workspace-option-${workspace.name}'),
+                value: workspace,
+                child: Row(
+                  children: <Widget>[
+                    Icon(
+                      workspace.icon,
+                      size: 18,
+                      color:
+                          workspace == activeWorkspace
+                              ? navy.gold500
+                              : navy.textSecondary,
+                    ),
+                    const SizedBox(width: GtexSpacing.xs),
+                    Expanded(
+                      child: Text(
+                        workspace.switcherTitle,
+                        style: GtexTypography.body(
                           color:
                               workspace == activeWorkspace
                                   ? navy.gold500
-                                  : navy.textSecondary,
+                                  : navy.textPrimary,
                         ),
-                        const SizedBox(width: GtexSpacing.xs),
-                        Expanded(
-                          child: Text(
-                            workspace.switcherTitle,
-                            style: GtexTypography.body(
-                              color:
-                                  workspace == activeWorkspace
-                                      ? navy.gold500
-                                      : navy.textPrimary,
-                            ),
-                          ),
-                        ),
-                        if (workspace == activeWorkspace)
-                          Icon(
-                            Icons.check_rounded,
-                            size: 16,
-                            color: navy.gold500,
-                          ),
-                      ],
+                      ),
                     ),
-                  ),
+                    if (workspace == activeWorkspace)
+                      Icon(Icons.check_rounded, size: 16, color: navy.gold500),
+                  ],
+                ),
+              ),
             )
             .toList(growable: false);
       },
@@ -409,41 +432,36 @@ class _ClubSwitcherButton extends StatelessWidget {
       itemBuilder: (BuildContext context) {
         return clubs
             .map(
-              (GtexOwnedClubOption club) =>
-                  PopupMenuItem<GtexOwnedClubOption>(
-                    key: Key('gtex-club-option-${club.id}'),
-                    value: club,
-                    child: Row(
-                      children: <Widget>[
-                        Icon(
-                          Icons.shield_outlined,
-                          size: 18,
+              (GtexOwnedClubOption club) => PopupMenuItem<GtexOwnedClubOption>(
+                key: Key('gtex-club-option-${club.id}'),
+                value: club,
+                child: Row(
+                  children: <Widget>[
+                    Icon(
+                      Icons.shield_outlined,
+                      size: 18,
+                      color:
+                          club.id == resolvedActive.id
+                              ? navy.gold500
+                              : navy.textSecondary,
+                    ),
+                    const SizedBox(width: GtexSpacing.xs),
+                    Expanded(
+                      child: Text(
+                        club.name,
+                        style: GtexTypography.body(
                           color:
                               club.id == resolvedActive.id
                                   ? navy.gold500
-                                  : navy.textSecondary,
+                                  : navy.textPrimary,
                         ),
-                        const SizedBox(width: GtexSpacing.xs),
-                        Expanded(
-                          child: Text(
-                            club.name,
-                            style: GtexTypography.body(
-                              color:
-                                  club.id == resolvedActive.id
-                                      ? navy.gold500
-                                      : navy.textPrimary,
-                            ),
-                          ),
-                        ),
-                        if (club.id == resolvedActive.id)
-                          Icon(
-                            Icons.check_rounded,
-                            size: 16,
-                            color: navy.gold500,
-                          ),
-                      ],
+                      ),
                     ),
-                  ),
+                    if (club.id == resolvedActive.id)
+                      Icon(Icons.check_rounded, size: 16, color: navy.gold500),
+                  ],
+                ),
+              ),
             )
             .toList(growable: false);
       },
@@ -548,11 +566,7 @@ class _AttentionBellButton extends StatelessWidget {
 
 /// Lightweight ownership option for top bar and workspace club switchers.
 class GtexOwnedClubOption {
-  const GtexOwnedClubOption({
-    required this.id,
-    required this.name,
-    this.slug,
-  });
+  const GtexOwnedClubOption({required this.id, required this.name, this.slug});
 
   final String id;
   final String name;
@@ -575,10 +589,7 @@ class GtexOwnedClubOption {
             .toString()
             .trim();
     final String name =
-        (profile['club_name'] ??
-                profile['clubName'] ??
-                profile['name'] ??
-                id)
+        (profile['club_name'] ?? profile['clubName'] ?? profile['name'] ?? id)
             .toString()
             .trim();
     final String? slug =

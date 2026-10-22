@@ -12783,6 +12783,19 @@
         "source_file": "backend/app/owner_console/router.py",
         "response_model": null
       },
+      "get_api_v2_owner_public_profile_owner_user_id": {
+        "method": "GET",
+        "canonical_path": "/api/v2/owner/public/profile/{owner_user_id}",
+        "aliases": [
+          "/api/owner/public/profile/{owner_user_id}",
+          "/api/v1/owner/public/profile/{owner_user_id}",
+          "/api/v2/owner/public/profile/{owner_user_id}",
+          "/owner/public/profile/{owner_user_id}"
+        ],
+        "handler": "get_public_owner_profile",
+        "source_file": "backend/app/owner_console/router.py",
+        "response_model": null
+      },
       "get_api_v2_owner_public_showroom_code": {
         "method": "GET",
         "canonical_path": "/api/v2/owner/public/showroom/{code}",
@@ -17434,6 +17447,18 @@
         "handler": "list_jerseys",
         "source_file": "backend/app/segments/clubs/segment_clubs.py",
         "response_model": "ClubJerseysView"
+      },
+      "get_api_v2_clubs_club_id_public_profile": {
+        "method": "GET",
+        "canonical_path": "/api/v2/clubs/{club_id}/public-profile",
+        "aliases": [
+          "/api/clubs/{club_id}/public-profile",
+          "/api/v1/clubs/{club_id}/public-profile",
+          "/api/v2/clubs/{club_id}/public-profile"
+        ],
+        "handler": "get_public_club_profile",
+        "source_file": "backend/app/segments/clubs/segment_clubs.py",
+        "response_model": null
       },
       "get_api_v2_clubs_club_id_purchases": {
         "method": "GET",
@@ -23054,6 +23079,7 @@
     "/api/v2/clubs/{club_id}/ownership": "get_api_v2_clubs_club_id_ownership",
     "/api/v2/clubs/{club_id}/prestige": "get_api_v2_clubs_club_id_prestige",
     "/api/v2/clubs/{club_id}/proposals": "post_api_v2_clubs_club_id_proposals",
+    "/api/v2/clubs/{club_id}/public-profile": "get_api_v2_clubs_club_id_public_profile",
     "/api/v2/clubs/{club_id}/purchases": "get_api_v2_clubs_club_id_purchases",
     "/api/v2/clubs/{club_id}/ranking-events": "get_api_v2_clubs_club_id_ranking_events",
     "/api/v2/clubs/{club_id}/readiness": "get_api_v2_clubs_club_id_readiness",
@@ -23680,6 +23706,7 @@
     "/api/v2/owner/matches/{match_id}/forfeit": "post_api_v2_owner_matches_match_id_forfeit",
     "/api/v2/owner/newsroom": "get_api_v2_owner_newsroom",
     "/api/v2/owner/onboarding": "get_api_v2_owner_onboarding",
+    "/api/v2/owner/public/profile/{owner_user_id}": "get_api_v2_owner_public_profile_owner_user_id",
     "/api/v2/owner/public/showroom/{code}": "get_api_v2_owner_public_showroom_code",
     "/api/v2/owner/support-units/buy": "post_api_v2_owner_support_units_buy",
     "/api/v2/owner/ticker": "get_api_v2_owner_ticker",
@@ -24864,6 +24891,7 @@
     "/api/clubs/{club_id}/ownership": "/api/v2/clubs/{club_id}/ownership",
     "/api/clubs/{club_id}/prestige": "/api/v2/clubs/{club_id}/prestige",
     "/api/clubs/{club_id}/proposals": "/api/v2/clubs/{club_id}/proposals",
+    "/api/clubs/{club_id}/public-profile": "/api/v2/clubs/{club_id}/public-profile",
     "/api/clubs/{club_id}/purchases": "/api/v2/clubs/{club_id}/purchases",
     "/api/clubs/{club_id}/ranking-events": "/api/v2/clubs/{club_id}/ranking-events",
     "/api/clubs/{club_id}/readiness": "/api/v2/clubs/{club_id}/readiness",
@@ -25497,6 +25525,7 @@
     "/api/owner/matches/{match_id}/forfeit": "/api/v2/owner/matches/{match_id}/forfeit",
     "/api/owner/newsroom": "/api/v2/owner/newsroom",
     "/api/owner/onboarding": "/api/v2/owner/onboarding",
+    "/api/owner/public/profile/{owner_user_id}": "/api/v2/owner/public/profile/{owner_user_id}",
     "/api/owner/public/showroom/{code}": "/api/v2/owner/public/showroom/{code}",
     "/api/owner/support-units/buy": "/api/v2/owner/support-units/buy",
     "/api/owner/ticker": "/api/v2/owner/ticker",
@@ -26315,6 +26344,7 @@
     "/api/v1/clubs/{club_id}/ownership": "/api/v2/clubs/{club_id}/ownership",
     "/api/v1/clubs/{club_id}/prestige": "/api/v2/clubs/{club_id}/prestige",
     "/api/v1/clubs/{club_id}/proposals": "/api/v2/clubs/{club_id}/proposals",
+    "/api/v1/clubs/{club_id}/public-profile": "/api/v2/clubs/{club_id}/public-profile",
     "/api/v1/clubs/{club_id}/purchases": "/api/v2/clubs/{club_id}/purchases",
     "/api/v1/clubs/{club_id}/ranking-events": "/api/v2/clubs/{club_id}/ranking-events",
     "/api/v1/clubs/{club_id}/readiness": "/api/v2/clubs/{club_id}/readiness",
@@ -26948,6 +26978,7 @@
     "/api/v1/owner/matches/{match_id}/forfeit": "/api/v2/owner/matches/{match_id}/forfeit",
     "/api/v1/owner/newsroom": "/api/v2/owner/newsroom",
     "/api/v1/owner/onboarding": "/api/v2/owner/onboarding",
+    "/api/v1/owner/public/profile/{owner_user_id}": "/api/v2/owner/public/profile/{owner_user_id}",
     "/api/v1/owner/public/showroom/{code}": "/api/v2/owner/public/showroom/{code}",
     "/api/v1/owner/support-units/buy": "/api/v2/owner/support-units/buy",
     "/api/v1/owner/ticker": "/api/v2/owner/ticker",
@@ -28389,6 +28420,7 @@
     "/owner/matches/{match_id}/forfeit": "/api/v2/owner/matches/{match_id}/forfeit",
     "/owner/newsroom": "/api/v2/owner/newsroom",
     "/owner/onboarding": "/api/v2/owner/onboarding",
+    "/owner/public/profile/{owner_user_id}": "/api/v2/owner/public/profile/{owner_user_id}",
     "/owner/public/showroom/{code}": "/api/v2/owner/public/showroom/{code}",
     "/owner/support-units/buy": "/api/v2/owner/support-units/buy",
     "/owner/ticker": "/api/v2/owner/ticker",

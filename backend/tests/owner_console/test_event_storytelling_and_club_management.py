@@ -18,6 +18,7 @@ from app.owner_console.models import (
     OwnerBroadcastEvent,
     OwnerInboxItem,
     OwnerNewsroomArticle,
+    OwnerSquadPlayer,
 )
 from app.owner_console.service import OwnerError
 
@@ -93,7 +94,7 @@ def test_global_live_ticker_eligibility_and_luxury_isolation(client, bootstrap_a
     assert jet_data["broadcast_globally"] is True
     assert jet_data["broadcast_event"]["event_type"] == "private_jet_purchase"
     assert Decimal(str(jet_data["broadcast_event"]["verified_price_gtex"])) == Decimal("4800")
-    assert "sovereign_900x_jet.png" in jet_data["broadcast_event"]["item_image_url"]
+    assert "sovereign_900x_jet.webp" in jet_data["broadcast_event"]["item_image_url"]
 
     # 3. Facility upgrade MUST broadcast globally with verified price and facility image
     fac_res = client.post(
@@ -102,16 +103,52 @@ def test_global_live_ticker_eligibility_and_luxury_isolation(client, bootstrap_a
     )
     assert fac_res.status_code == 200, fac_res.text
 
-    # 4. Club-owner gift to a squad player MUST broadcast globally with player name, portrait, and verified price
+    # 4. Luxury gifts are reserved for academy regens. A normal first-team
+    # player must be rejected before any gift ledger or broadcast event is written.
+    with app.state.session_factory() as session:
+        session.add(
+            OwnerSquadPlayer(
+                club_id=club_id,
+                name="First-Team Player",
+                position="ST",
+                is_regen=False,
+            )
+        )
+        session.commit()
+
     club_detail = client.get(f"/api/owner/clubs/{club_id}", headers=bootstrap_admin_headers).json()
-    first_player = club_detail["squad"][0]
-    assert first_player.get("portrait_url"), "Squad player must have resolved static portrait URL"
+    first_team_player = next(player for player in club_detail["squad"] if not player.get("is_regen", False))
+    rejected_gift = client.post(
+        f"/api/owner/clubs/{club_id}/showroom/gift",
+        headers=bootstrap_admin_headers,
+        json={
+            "player_id": first_team_player["id"],
+            "catalog_key": "chronos_tourbillon_watch",
+            "note": "Golden Boot bonus",
+            "idempotency_key": "gift-nonregen-rejected",
+        },
+    )
+    assert rejected_gift.status_code == 400, rejected_gift.text
+    assert rejected_gift.json()["detail"]["code"] == "player_not_eligible_for_gift"
+
+    # Generate a canonical academy regen through the existing intake path, then
+    # prove the same luxury gift flow succeeds for that eligible recipient.
+    intake_res = client.post(
+        f"/api/owner/clubs/{club_id}/academy/intake",
+        headers=bootstrap_admin_headers,
+    )
+    assert intake_res.status_code == 200, intake_res.text
+    eligible_regens = intake_res.json()["regens"]
+    assert eligible_regens
+    regen_player = eligible_regens[0]
+    assert regen_player["is_regen"] is True
+    assert regen_player.get("portrait_url"), "Regen player must have resolved static portrait URL"
 
     gift_res = client.post(
         f"/api/owner/clubs/{club_id}/showroom/gift",
         headers=bootstrap_admin_headers,
         json={
-            "player_id": first_player["id"],
+            "player_id": regen_player["id"],
             "catalog_key": "chronos_tourbillon_watch",
             "note": "Golden Boot bonus",
             "idempotency_key": "gift-player-1",
@@ -120,7 +157,7 @@ def test_global_live_ticker_eligibility_and_luxury_isolation(client, bootstrap_a
     assert gift_res.status_code == 200, gift_res.text
     gift_data = gift_res.json()
     assert gift_data["broadcast_event"]["event_type"] == "player_gift"
-    assert gift_data["broadcast_event"]["player_name"] == first_player["name"]
+    assert gift_data["broadcast_event"]["player_name"] == regen_player["name"]
     assert gift_data["broadcast_event"]["player_portrait_url"]
     assert Decimal(str(gift_data["broadcast_event"]["verified_price_gtex"])) == Decimal("220")
 

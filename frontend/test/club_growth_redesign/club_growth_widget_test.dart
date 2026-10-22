@@ -7,6 +7,13 @@ void main() {
   testWidgets('club dashboard renders growth loops inside existing shell', (
     WidgetTester tester,
   ) async {
+    tester.view.physicalSize = const Size(1440, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
     final GtexClubGrowthDashboard dashboard =
         await GtexClubGrowthFixtures.seed().dashboard('fixture-club');
 
@@ -31,6 +38,7 @@ void main() {
     expect(find.text('Staff effects'), findsOneWidget);
     expect(find.text('Available staff'), findsOneWidget);
 
+    expect(find.text('Academy'), findsOneWidget);
     await tester.tap(find.text('Academy'));
     await tester.pumpAndSettle();
 

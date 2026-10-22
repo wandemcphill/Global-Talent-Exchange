@@ -162,25 +162,24 @@ void main() {
       // the current lane.
       final bool hasRail = find.byType(NavigationBar).evaluate().isEmpty;
       if (hasRail) {
-        // The market lane is labelled "Transfer Hub" in the shell's own
+        // The market lane is labelled "Market" in the canonical P9-SHELL
         // destination model - the rail must carry it at every rail width.
         expect(
-          find.text(GtePrimaryDestination.market.label),
+          find.text(GtePrimaryDestination.market.canonicalShellLabel),
           findsWidgets,
           reason: 'the nav rail lost its destinations at ${width}px',
         );
       } else {
         expect(
           find.byType(NavigationDestination),
-          findsWidgets,
+          findsNWidgets(5),
           reason: 'the bottom nav lost its destinations at ${width}px',
         );
         expect(
-          find.byKey(const Key('gtex-shell-more-destination')),
+          find.byKey(const Key('gtex-nav-slot-market')),
           findsOneWidget,
           reason:
-              'the overflow destinations became unreachable at ${width}px - '
-              'the shell has more lanes than the bar can show',
+              'primary market destination became unreachable at ${width}px',
         );
       }
       tester.takeException();
