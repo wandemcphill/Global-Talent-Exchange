@@ -5,6 +5,7 @@ snapshot. They expose football identity and the owner's explicitly requested
 public portfolio summary without returning wallet balances, staff wages,
 internal notes, or private club records.
 """
+
 from __future__ import annotations
 
 from datetime import date
@@ -49,9 +50,7 @@ def _preview(category: str | None) -> str | None:
     return _preview_file(category)
 
 
-def _portrait(
-    session: Session, player_id: str, player_name: str
-) -> str | None:
+def _portrait(session: Session, player_id: str, player_name: str) -> str | None:
     try:
         from app.owner_console.storytelling import resolve_player_portrait_url
 
@@ -65,11 +64,7 @@ def _canonical_player_rating(player: Player) -> int | None:
     dna = player.dna_profile if isinstance(player.dna_profile, dict) else {}
     for key in ("current_rating", "overall", "sofifa_overall", "club_rating"):
         value = dna.get(key)
-        if (
-            isinstance(value, (int, float))
-            and not isinstance(value, bool)
-            and value > 0
-        ):
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
             return int(round(value))
     return None
 
@@ -80,11 +75,7 @@ def _canonical_player_potential(player: Player) -> int | None:
     dna = player.dna_profile if isinstance(player.dna_profile, dict) else {}
     for key in ("potential", "potential_rating", "sofifa_potential"):
         value = dna.get(key)
-        if (
-            isinstance(value, (int, float))
-            and not isinstance(value, bool)
-            and value > 0
-        ):
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
             return int(round(value))
     return None
 
@@ -93,14 +84,10 @@ def _player_age(birth_date: date | None) -> int | None:
     if birth_date is None:
         return None
     today = date.today()
-    return today.year - birth_date.year - (
-        (today.month, today.day) < (birth_date.month, birth_date.day)
-    )
+    return today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
 
 
-def _public_player_card(
-    session: Session, player: dict[str, Any] | None
-) -> dict[str, Any] | None:
+def _public_player_card(session: Session, player: dict[str, Any] | None) -> dict[str, Any] | None:
     if player is None:
         return None
     return {
@@ -111,9 +98,7 @@ def _public_player_card(
         "rating": player["rating"],
         "potential": player["potential"],
         "is_regen": player["is_regen"],
-        "portrait_url": _portrait(
-            session, player["portrait_source_id"], player["name"]
-        ),
+        "portrait_url": _portrait(session, player["portrait_source_id"], player["name"]),
     }
 
 
@@ -173,9 +158,7 @@ def _owner_summary(session: Session, owner_id: str) -> dict[str, Any]:
     return {
         "id": owner_id,
         "display_name": (
-            getattr(owner, "display_name", None)
-            or getattr(owner, "username", None)
-            or "GTEX Club Owner"
+            getattr(owner, "display_name", None) or getattr(owner, "username", None) or "GTEX Club Owner"
             if owner is not None
             else "GTEX Club Owner"
         ),
@@ -213,22 +196,13 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
         raise ClubPublicProfileNotFound("public_club_profile_not_found")
 
     stadium = session.scalar(select(ClubStadium).where(ClubStadium.club_id == club.id))
-    facilities = session.scalar(
-        select(ClubFacility).where(ClubFacility.club_id == club.id)
-    )
-    academy = session.scalar(
-        select(AcademyProfile).where(AcademyProfile.club_id == club.id)
-    )
+    facilities = session.scalar(select(ClubFacility).where(ClubFacility.club_id == club.id))
+    academy = session.scalar(select(AcademyProfile).where(AcademyProfile.club_id == club.id))
     active_prospect_filter = (
         AcademyProspect.club_id == club.id,
         AcademyProspect.status.notin_(("released", "poached")),
     )
-    prospect_count = int(
-        session.scalar(
-            select(func.count(AcademyProspect.id)).where(*active_prospect_filter)
-        )
-        or 0
-    )
+    prospect_count = int(session.scalar(select(func.count(AcademyProspect.id)).where(*active_prospect_filter)) or 0)
     prospects = session.scalars(
         select(AcademyProspect)
         .where(*active_prospect_filter)
@@ -283,11 +257,7 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
             "position": player.position,
             "age": int(player.age) if player.age is not None else None,
             "rating": int(round(player.rating)) if player.rating is not None else None,
-            "potential": (
-                int(round(player.potential))
-                if player.potential is not None
-                else None
-            ),
+            "potential": (int(round(player.potential)) if player.potential is not None else None),
             "is_regen": bool(player.is_regen),
             "portrait_source_id": player.id,
         }
@@ -301,12 +271,8 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
         ),
         reverse=True,
     )[:60]
-    rated_players = [
-        player for player in squad_players if player["rating"] is not None
-    ]
-    potential_players = [
-        player for player in squad_players if player["potential"] is not None
-    ]
+    rated_players = [player for player in squad_players if player["rating"] is not None]
+    potential_players = [player for player in squad_players if player["potential"] is not None]
     best_player = max(
         rated_players,
         key=lambda player: (
@@ -345,11 +311,7 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
     for assignment, _contract, staff_profile in assignments:
         role_key = assignment.role_key.lower()
         kind = staff_profile.staff_type.lower()
-        if (
-            "manager" in role_key
-            or role_key in {"head_coach", "first_team_manager"}
-            or kind == "manager"
-        ):
+        if "manager" in role_key or role_key in {"head_coach", "first_team_manager"} or kind == "manager":
             role = "manager"
         elif "youth" in role_key or "hoyd" in role_key:
             role = "head_of_youth_development"
@@ -362,11 +324,7 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
         people[role] = {
             "role": role,
             "name": staff_profile.display_name,
-            "rating": (
-                int(staff_profile.rating)
-                if staff_profile.rating is not None
-                else None
-            ),
+            "rating": (int(staff_profile.rating) if staff_profile.rating is not None else None),
         }
 
     # The legacy executive roster is the canonical source for the GM and HOYD
@@ -389,9 +347,7 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
             continue
         people.setdefault(role, {"role": role, "name": executive.name, "rating": None})
 
-    state = session.scalar(
-        select(OwnerClubState).where(OwnerClubState.club_id == club.id)
-    )
+    state = session.scalar(select(OwnerClubState).where(OwnerClubState.club_id == club.id))
     if "manager" not in people and state is not None:
         name = _person_name(state.manager_json)
         if name:
@@ -433,10 +389,7 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
             buses.append(row)
 
     trophies = session.scalars(
-        select(ClubTrophy)
-        .where(ClubTrophy.club_id == club.id)
-        .order_by(ClubTrophy.awarded_at.desc())
-        .limit(8)
+        select(ClubTrophy).where(ClubTrophy.club_id == club.id).order_by(ClubTrophy.awarded_at.desc()).limit(8)
     ).all()
 
     owner = _owner_summary(session, club.owner_user_id)
@@ -459,32 +412,18 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
         },
         "owner": owner,
         "stadium": {
-            "name": (
-                stadium.name
-                if stadium is not None
-                else (club.home_venue_name or "Stadium details unavailable")
-            ),
+            "name": (stadium.name if stadium is not None else (club.home_venue_name or "Stadium details unavailable")),
             "level": int(stadium.level) if stadium is not None else None,
             "capacity": int(stadium.capacity) if stadium is not None else None,
             "theme_key": stadium.theme_key if stadium is not None else None,
             "image_asset": "assets/showroom/arena_imperiale_stadium.webp",
         },
         "facilities": {
-            "training_level": (
-                int(facilities.training_level) if facilities is not None else None
-            ),
+            "training_level": (int(facilities.training_level) if facilities is not None else None),
             "academy_level": academy_facility_level,
-            "medical_level": (
-                int(facilities.medical_level) if facilities is not None else None
-            ),
-            "branding_level": (
-                int(facilities.branding_level) if facilities is not None else None
-            ),
-            "youth_recruitment_level": (
-                int(facilities.youth_recruitment_level)
-                if facilities is not None
-                else None
-            ),
+            "medical_level": (int(facilities.medical_level) if facilities is not None else None),
+            "branding_level": (int(facilities.branding_level) if facilities is not None else None),
+            "youth_recruitment_level": (int(facilities.youth_recruitment_level) if facilities is not None else None),
             "academy_image_asset": "assets/showroom/apex_performance_campus.webp",
         },
         "academy": {

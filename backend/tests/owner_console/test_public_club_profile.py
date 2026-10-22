@@ -214,9 +214,7 @@ def _seed_public_club(session):
     return owner.id, club.id
 
 
-def test_public_club_dossier_has_rich_club_details_and_redacts_private_economics(
-    client, app
-):
+def test_public_club_dossier_has_rich_club_details_and_redacts_private_economics(client, app):
     with app.state.session_factory() as session:
         owner_id, club_id = _seed_public_club(session)
 
@@ -234,24 +232,15 @@ def test_public_club_dossier_has_rich_club_details_and_redacts_private_economics
     assert len(data["academy"]["prospects"]) == 3
     assert data["academy"]["prospects"][0]["name"] == "Tunde Bello"
     assert data["squad"]["player_count"] == 3
-    assert any(
-        player["name"] == "Ifeanyi Obi" for player in data["squad"]["players"]
-    )
+    assert any(player["name"] == "Ifeanyi Obi" for player in data["squad"]["players"])
     assert data["squad"]["best_player"]["name"] == "Samuel Okoro"
     assert data["squad"]["most_promising_player"]["name"] == "Kaito Mensah"
     assert data["staff"] is not None
-    staff_by_role = {
-        person["role"]: person["name"] for person in data["staff"]
-    }
+    staff_by_role = {person["role"]: person["name"] for person in data["staff"]}
     assert staff_by_role["manager"] == "Ayo Balogun"
     assert staff_by_role["general_manager"] == "Nneka Manager"
-    assert (
-        staff_by_role["head_of_youth_development"] == "Chidi Youth Director"
-    )
-    assert any(
-        asset["name"] == "Vanguard First-Team Coach"
-        for asset in data["coach_buses"]
-    )
+    assert staff_by_role["head_of_youth_development"] == "Chidi Youth Director"
+    assert any(asset["name"] == "Vanguard First-Team Coach" for asset in data["coach_buses"])
     assert data["trophies"][0]["name"] == "GTEX Champions Cup"
 
     # Public pages carry the aggregate chosen by the product, not the private
@@ -267,9 +256,7 @@ def test_public_club_dossier_has_rich_club_details_and_redacts_private_economics
         assert forbidden not in public_payload
 
 
-def test_public_owner_profile_lists_clubs_and_assets_without_wallet_details(
-    client, app
-):
+def test_public_owner_profile_lists_clubs_and_assets_without_wallet_details(client, app):
     with app.state.session_factory() as session:
         owner_id, club_id = _seed_public_club(session)
 
@@ -291,9 +278,7 @@ def test_public_owner_profile_lists_clubs_and_assets_without_wallet_details(
     assert "password_hash" not in response.text
 
 
-def test_public_dossiers_return_404_for_private_clubs_and_nonexistent_owners(
-    client, app
-):
+def test_public_dossiers_return_404_for_private_clubs_and_nonexistent_owners(client, app):
     with app.state.session_factory() as session:
         owner = User(
             email=f"private-profile-{uuid4().hex[:8]}@example.test",

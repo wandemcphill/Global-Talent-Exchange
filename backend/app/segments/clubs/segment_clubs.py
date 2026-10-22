@@ -599,7 +599,9 @@ def create_scouting_intelligence_mission(
     return mission
 
 
-@router.post("/{club_id}/scouting-intelligence/missions/{mission_id}/complete", response_model=CompletedScoutMissionView)
+@router.post(
+    "/{club_id}/scouting-intelligence/missions/{mission_id}/complete", response_model=CompletedScoutMissionView
+)
 def complete_scouting_intelligence_mission(
     club_id: str,
     mission_id: str,
@@ -617,7 +619,9 @@ def complete_scouting_intelligence_mission(
     return completed
 
 
-@router.get("/{club_id}/scouting-intelligence/academy-supply-signals", response_model=tuple[AcademySupplySignalView, ...])
+@router.get(
+    "/{club_id}/scouting-intelligence/academy-supply-signals", response_model=tuple[AcademySupplySignalView, ...]
+)
 def list_scouting_intelligence_academy_supply_signals(
     club_id: str,
     refresh: bool = Query(default=False),
