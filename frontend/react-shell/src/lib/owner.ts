@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 
 export function useControlCenter() {
+  const { user, loading } = useAuth();
+  const userId = user?.id ? String(user.id) : null;
   return useQuery({
-    queryKey: ["cc"],
+    queryKey: ["cc", userId],
     queryFn: async () => (await api.get("/owner/control-center")).data,
+    enabled: !loading && Boolean(userId),
     staleTime: 15_000,
   });
 }
