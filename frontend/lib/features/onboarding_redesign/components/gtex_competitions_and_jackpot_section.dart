@@ -20,40 +20,50 @@ class GtexCompetitionsAndJackpotSection extends StatefulWidget {
 
 class _GtexCompetitionsAndJackpotSectionState extends State<GtexCompetitionsAndJackpotSection> {
   Timer? _countdownTimer;
-  Duration _remaining = const Duration(hours: 3, minutes: 26, seconds: 40);
+  Duration _remaining = Duration.zero;
+  DateTime? _targetAt;
 
   @override
   void initState() {
     super.initState();
-    _initCountdown();
+    _syncCountdown();
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) {
-        setState(() {
-          if (_remaining.inSeconds > 0) {
-            _remaining = _remaining - const Duration(seconds: 1);
-          } else {
-            _remaining = const Duration(hours: 6); // resets to 6-hour cycle
-          }
-        });
+      if (!mounted) {
+        return;
       }
+      setState(() {
+        final DateTime now = DateTime.now().toUtc();
+        if (_targetAt == null || !_targetAt!.isAfter(now)) {
+          _targetAt = _nextScheduledDrop(now);
+        }
+        _remaining = _targetAt!.difference(now);
+      });
     });
   }
 
-  void _initCountdown() {
-    if (widget.initialFailsafeAt != null) {
-      final Duration diff = widget.initialFailsafeAt!.difference(DateTime.now().toUtc());
-      if (!diff.isNegative) {
-        _remaining = diff;
-        return;
-      }
+  @override
+  void didUpdateWidget(covariant GtexCompetitionsAndJackpotSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialFailsafeAt != oldWidget.initialFailsafeAt) {
+      _syncCountdown();
     }
-    // Default to active 6-hour cycle window
+  }
+
+  void _syncCountdown() {
     final DateTime now = DateTime.now().toUtc();
-    final int hour = now.hour;
-    final int nextDropHour = ((hour ~/ 6) + 1) * 6;
-    final DateTime nextDrop = DateTime.utc(now.year, now.month, now.day, nextDropHour % 24);
-    final Duration diff = nextDrop.difference(now);
-    _remaining = diff.isNegative ? const Duration(hours: 3, minutes: 26) : diff;
+    final DateTime? serverTarget = widget.initialFailsafeAt?.toUtc();
+    _targetAt = serverTarget != null && serverTarget.isAfter(now)
+        ? serverTarget
+        : _nextScheduledDrop(now);
+    _remaining = _targetAt!.difference(now);
+  }
+
+  DateTime _nextScheduledDrop(DateTime now) {
+    final int nextDropHour = ((now.hour ~/ 6) + 1) * 6;
+    if (nextDropHour >= 24) {
+      return DateTime.utc(now.year, now.month, now.day + 1);
+    }
+    return DateTime.utc(now.year, now.month, now.day, nextDropHour);
   }
 
   @override
@@ -87,7 +97,7 @@ class _GtexCompetitionsAndJackpotSectionState extends State<GtexCompetitionsAndJ
           const GtexSectionHeader(
             eyebrow: 'Competitions & Prize Drops',
             title: 'Continental Glory & 4 Scheduled Daily Jackpots',
-            subtitle: 'Compete in tiered league circuits, weekend knockout tournaments, and user-hosted cups with genuine prize pools. Every match activity feeds into the four scheduled daily jackpot drops with mathematically verified triggers.',
+            subtitle: 'Enter league circuits, knockout tournaments and user-hosted cups. Published event rules define eligibility and prize pools, alongside the four scheduled daily jackpot drops.',
             accentColor: kGoldPrimary,
           ),
 
@@ -125,23 +135,10 @@ class _GtexCompetitionsAndJackpotSectionState extends State<GtexCompetitionsAndJ
                           color: kGoldPrimary,
                           icon: Icons.access_time_filled_rounded,
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: kPitchGreen.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: kPitchGreen),
-                          ),
-                          child: const Text(
-                            'FAILSAFE SECURED',
-                            style: TextStyle(
-                              color: kPitchGreenBright,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              fontFamily: kFontCondensed,
-                              letterSpacing: 1,
-                            ),
-                          ),
+                        const GtexTagPill(
+                          label: 'UTC SCHEDULE',
+                          color: kSkyBlue,
+                          icon: Icons.schedule_rounded,
                         ),
                       ],
                     ),
@@ -154,7 +151,7 @@ class _GtexCompetitionsAndJackpotSectionState extends State<GtexCompetitionsAndJ
                             flex: 6,
                             child: _JackpotCountdownBlock(
                               countdownStr: _formatDuration(_remaining),
-                              balanceStr: widget.initialJackpotBalance ?? '14,850.00 GTC',
+                              balanceStr: widget.initialJackpotBalance ?? 'Pool unavailable',
                             ),
                           ),
                           const SizedBox(width: 28),
@@ -170,7 +167,7 @@ class _GtexCompetitionsAndJackpotSectionState extends State<GtexCompetitionsAndJ
                         children: <Widget>[
                           _JackpotCountdownBlock(
                             countdownStr: _formatDuration(_remaining),
-                            balanceStr: widget.initialJackpotBalance ?? '14,850.00 GTC',
+                            balanceStr: widget.initialJackpotBalance ?? 'Pool unavailable',
                           ),
                           const SizedBox(height: 20),
                           const Divider(color: kNavyLine),
@@ -199,7 +196,7 @@ class _GtexCompetitionsAndJackpotSectionState extends State<GtexCompetitionsAndJ
                 children: const <Widget>[
                   Icon(Icons.emoji_events_rounded, color: kGoldPrimary, size: 20),
                   Text(
-                    'FEATURED ACTIVE TOURNAMENTS & CUPS',
+                    'FEATURED COMPETITION FORMATS',
                     style: TextStyle(
                       color: kGoldPrimary,
                       fontSize: 14,
@@ -211,7 +208,7 @@ class _GtexCompetitionsAndJackpotSectionState extends State<GtexCompetitionsAndJ
                 ],
               ),
               const Text(
-                'VERIFIED PLATFORM FIXTURES',
+                'ILLUSTRATIVE • NOT LIVE FIXTURES',
                 style: TextStyle(
                   color: kTextTertiary,
                   fontSize: 11,
@@ -234,7 +231,7 @@ class _GtexCompetitionsAndJackpotSectionState extends State<GtexCompetitionsAndJ
               return Wrap(
                 spacing: 16,
                 runSpacing: 16,
-                children: kActiveCompetitions.map((ActiveCompetitionItem comp) {
+                children: kCompetitionFormatPreviews.map((ActiveCompetitionItem comp) {
                   return SizedBox(
                     width: cardWidth,
                     child: _TournamentCard(comp: comp),
@@ -286,7 +283,7 @@ class _JackpotCountdownBlock extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         const Text(
-          'TIME TO NEXT SCHEDULED DROP (FAILSAFE 6-HR CAP)',
+          'TIME TO NEXT SCHEDULED DROP',
           style: TextStyle(
             color: kPitchGreenBright,
             fontSize: 11,
@@ -446,31 +443,10 @@ class _TournamentCard extends StatelessWidget {
             children: <Widget>[
               GtexTagPill(label: comp.type, color: comp.accentColor),
               const Spacer(),
-              if (comp.broadcastAvailable)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: kPitchGreen.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: kPitchGreen),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: const <Widget>[
-                      Icon(Icons.tv_rounded, size: 11, color: kPitchGreenBright),
-                      SizedBox(width: 4),
-                      Text(
-                        'TV',
-                        style: TextStyle(
-                          color: kPitchGreenBright,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                          fontFamily: kFontCondensed,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              GtexTagPill(
+                label: comp.status,
+                color: comp.accentColor,
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -493,66 +469,27 @@ class _TournamentCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Container(
-            padding: const EdgeInsets.all(10),
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: kNavyInset,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: kNavyLine),
             ),
-            child: Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              spacing: 12,
-              runSpacing: 6,
+            child: const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    const Text(
-                      'PRIZE POOL',
-                      style: TextStyle(
-                        color: kTextTertiary,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1,
-                        fontFamily: kFontCondensed,
-                      ),
+                Icon(Icons.info_outline_rounded, size: 16, color: kGoldPrimary),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Format preview. Live entry status, prize pools and broadcast availability must come from the published event data.',
+                    style: TextStyle(
+                      color: kTextSecondary,
+                      fontSize: 11,
+                      height: 1.4,
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      comp.prizePool,
-                      style: TextStyle(
-                        color: comp.accentColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        fontFamily: kFontMono,
-                      ),
-                    ),
-                  ],
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: <Widget>[
-                    const Text(
-                      'SLOTS',
-                      style: TextStyle(
-                        color: kTextTertiary,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1,
-                        fontFamily: kFontCondensed,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${comp.slotsFilled}/${comp.slotsTotal}',
-                      style: const TextStyle(
-                        color: kTextPrimary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        fontFamily: kFontMono,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ],
             ),
