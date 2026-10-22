@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:gte_frontend/features/club_growth_redesign/club_growth_redesign.dart';
 import 'package:gte_frontend/features/club_lifecycle_redesign/club_lifecycle_redesign.dart';
 import 'package:gte_frontend/features/transfer_center/presentation/gtex_transfers_hub_panel.dart';
@@ -127,21 +128,8 @@ class _GtexClubOwnerDashboardV2State extends State<GtexClubOwnerDashboardV2> {
     if (apiBaseUrl == null || apiBaseUrl.trim().isEmpty) {
       return;
     }
-    final GteBackendMode? mode =
-        widget.backendMode is GteBackendMode
-            ? widget.backendMode as GteBackendMode
-            : null;
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => GtexPublicClubProfileScreenV2(
-          clubId: widget.clubId,
-          clubName: widget.clubName ?? _controller.snapshot.clubName,
-          baseUrl: apiBaseUrl,
-          backendMode: mode,
-          isAuthenticated: widget.isAuthenticated,
-          onOpenLogin: widget.onOpenLogin,
-        ),
-      ),
+    context.push(
+      '/clubs/${Uri.encodeComponent(widget.clubId)}/profile',
     );
   }
 
