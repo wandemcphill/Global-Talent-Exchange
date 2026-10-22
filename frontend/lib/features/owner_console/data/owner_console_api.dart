@@ -49,6 +49,44 @@ class ShowroomExhibit {
   final bool owned;
 }
 
+class OwnerGiftRecipient {
+  const OwnerGiftRecipient({
+    required this.id,
+    required this.name,
+    required this.position,
+    required this.rating,
+    required this.morale,
+    this.portraitUrl,
+  });
+
+  factory OwnerGiftRecipient.fromJson(Map<String, dynamic> json) =>
+      OwnerGiftRecipient(
+        id: _text(json['id']) ?? _text(json['player_id']) ?? '',
+        name: _text(json['name']) ?? _text(json['player_name']) ?? 'Squad player',
+        position: _text(json['position']) ?? 'Player',
+        rating: _int(json['rating'] ?? json['overall_rating']),
+        morale: _int(json['morale']),
+        portraitUrl: _text(json['portrait_url']),
+      );
+
+  final String id;
+  final String name;
+  final String position;
+  final int rating;
+  final int morale;
+  final String? portraitUrl;
+}
+
+/// Optional, player-aware showroom actions. Keeping this separate leaves the
+/// general OwnerConsoleReader contract intact for existing callers and tests.
+abstract interface class OwnerLegacyGiftGateway {
+  Future<List<OwnerGiftRecipient>> fetchGiftRecipients();
+  Future<void> giftOwnedAssetToPlayer({
+    required String assetId,
+    required String playerId,
+  });
+}
+
 double _num(Object? v) =>
     v is num ? v.toDouble() : double.tryParse('${v ?? ''}') ?? 0;
 
@@ -641,7 +679,7 @@ abstract class OwnerConsoleReader {
   Future<void> performDesk(String action, [Map<String, Object?> payload = const <String, Object?>{}]);
 }
 
-class OwnerConsoleApi implements OwnerConsoleReader, GtexOwnerInboxDataSource {
+class OwnerConsoleApi implements OwnerConsoleReader, GtexOwnerInboxDataSource, OwnerLegacyGiftGateway {
   const OwnerConsoleApi({required this.client, this.activeClubId});
 
   final GteAuthedApi client;
@@ -855,6 +893,57 @@ class OwnerConsoleApi implements OwnerConsoleReader, GtexOwnerInboxDataSource {
       return _text(clubs.first['club_id']);
     }
     return null;
+  }
+
+  @override
+  Future<List<OwnerGiftRecipient>> fetchGiftRecipients() async {
+    final String? clubId = await resolveClubId();
+    if (clubId == null) return const <OwnerGiftRecipient>[];
+    final Map<String, dynamic> detail = await client.getMap('/owner/clubs/$clubId');
+    return _maps(detail['squad'])
+        .map(OwnerGiftRecipient.fromJson)
+        .where((OwnerGiftRecipient player) => player.id.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> giftOwnedAssetToPlayer({
+    required String assetId,
+    required String playerId,
+  }) async {
+    final String? clubId = await resolveClubId();
+    if (clubId == null) {
+      throw StateError('Select an active club before gifting a luxury item.');
+    }
+
+    // The existing legacy inventory uses an offer/accept ownership transfer.
+    // The club owner is authorized to accept a gift addressed to a player in
+    // their own squad, which invokes the canonical player-gift broadcast path.
+    final Object? offeredPayload = await client.post(
+      '/owner/legacy/$clubId/desk',
+      body: <String, Object?>{
+        'action': 'gift',
+        'payload': <String, Object?>{
+          'asset_id': assetId,
+          'recipient_ref': playerId,
+        },
+      },
+    );
+    final Map<String, dynamic> offered = _map(offeredPayload);
+    final String? giftId = _text(offered['id']) ?? _text(_map(offered['gift'])['id']);
+    if (giftId == null) {
+      throw const FormatException(
+        'GTEX did not return a gift reference. The asset transfer could not be confirmed.',
+      );
+    }
+
+    await client.post(
+      '/owner/legacy/$clubId/desk',
+      body: <String, Object?>{
+        'action': 'accept_gift',
+        'payload': <String, Object?>{'gift_id': giftId},
+      },
+    );
   }
 
   @override
