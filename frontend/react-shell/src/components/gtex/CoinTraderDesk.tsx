@@ -152,7 +152,7 @@ export function CoinTraderDesk() {
   return (
     <Panel eyebrow="GTEX Coin · P2P marketplace" title="Coin Traders" testid="coin-traders-panel" className="lg:col-span-12">
       <p className="mb-4 text-sm text-slate-400">
-        User and Creator accounts can buy or sell GTEX Coin with approved Naira traders through escrow-protected orders. Operating a trader desk requires a dedicated Coin Trader account created through the Coin Trader signup path; a User or Creator account cannot be promoted into that lane.
+        User accounts can buy or sell GTEX Coin with approved Naira traders through escrow-protected orders. Operating a trader desk requires a dedicated Coin Trader account created through the Coin Trader signup path; a User account cannot be promoted into that lane.
       </p>
       {!isDedicatedTraderAccount && (
         <div className="mb-5 rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm text-slate-400" data-testid="dedicated-trader-signup-notice">
