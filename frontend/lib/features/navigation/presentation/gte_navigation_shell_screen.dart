@@ -341,9 +341,14 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                   _selectedWorkspaceOverride = nextWorkspace;
                 });
               },
-              ownedClubs: _effectiveOwnedClubs(),
-              activeClubId: _canonicalClubId(),
-              activeClubName: _canonicalClubName(),
+              ownedClubs:
+                  navModel.capabilities.isClubOwner
+                      ? _effectiveOwnedClubs()
+                      : const <GtexOwnedClubOption>[],
+              activeClubId:
+                  navModel.capabilities.isClubOwner ? _canonicalClubId() : null,
+              activeClubName:
+                  navModel.capabilities.isClubOwner ? _canonicalClubName() : null,
               onClubSelected: (GtexOwnedClubOption club) {
                 unawaited(_handleTopBarClubSwitch(club));
               },
@@ -370,6 +375,17 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   }
 
   Widget _buildClubDestination() {
+    if (_isCoinTraderSession || _isCreatorSession) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(GtexSpacing.lg),
+          child: Text(
+            'Club ownership tools belong to normal GTEX member accounts. This account remains in its dedicated lane.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
     final String? canonicalClubId = _canonicalClubId()?.trim();
     if (canonicalClubId == null || canonicalClubId.isEmpty) {
       return GtexCommandHomeEntry(
@@ -518,42 +534,15 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     }.contains(_sessionRole);
   }
 
-  bool get _isCoinTraderSession {
-    final Set<String> permissions =
-        widget.controller.session?.permissions
-            .map((String value) => value.trim().toLowerCase())
-            .where((String value) => value.isNotEmpty)
-            .toSet() ??
-        const <String>{};
-    return <String>{
-          'coin_trader',
-          'coin-trader',
-          'trader',
-          'liquidity_partner',
-        }.contains(_sessionRole) ||
-        permissions.contains('coin_trader') ||
-        permissions.contains('manage_coin_trades') ||
-        permissions.contains('manage_coin_trader_rates');
-  }
+  String get _accountType =>
+      widget.controller.session?.user.accountType.trim().toLowerCase() ?? 'user';
 
-  bool get _isCreatorSession {
-    final Set<String> permissions =
-        widget.controller.session?.permissions
-            .map((String value) => value.trim().toLowerCase())
-            .where((String value) => value.isNotEmpty)
-            .toSet() ??
-        const <String>{};
-    return _hasApprovedCreatorAccess ||
-        <String>{
-          'creator',
-          'publisher',
-          'content_creator',
-          'creator_operator',
-        }.contains(_sessionRole) ||
-        permissions.contains('creator') ||
-        permissions.contains('publish_content') ||
-        permissions.contains('manage_creator_profile');
-  }
+  bool get _isCoinTraderSession =>
+      _accountType == 'coin_trader' ||
+      <String>{'coin_trader', 'coin-trader', 'trader'}.contains(_sessionRole);
+
+  bool get _isCreatorSession =>
+      _accountType == 'creator' || _sessionRole == 'creator';
 
   bool get _isStaffSession {
     return <String>{
@@ -1375,6 +1364,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         .toList(growable: false);
     final GtexShellCapabilities capabilities = GtexShellCapabilities(
       isAuthenticated: widget.controller.isAuthenticated,
+      accountType: _accountType,
       ownedClubIds: ownedIds,
       activeClubId: _canonicalClubId(),
       isOrgScoutOrAgent: _isStaffSession,
