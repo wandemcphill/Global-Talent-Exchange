@@ -519,6 +519,16 @@ def test_user_and_trader_signup_sessions_include_dedicated_account_type(
             "user",
         ),
         (
+            "/auth/signup/creator",
+            lambda: creator_signup_payload(
+                email="account-type-creator@example.com",
+                username="account_type_creator",
+                creator_name="Account Type Creator",
+                password=TEST_PASSWORD,
+            ),
+            "creator",
+        ),
+        (
             "/auth/signup/trader",
             lambda: trader_signup_payload(
                 email="account-type-trader@example.com",
@@ -559,7 +569,14 @@ def test_user_and_trader_signup_sessions_include_dedicated_account_type(
             "agent",
         }
         assert bootstrap["onboarding"]["suggested_route"].startswith("/app/")
-        if expected_account_type == "coin_trader":
+        if expected_account_type == "creator":
+            assert bootstrap["creator"]["status"] == "active"
+            assert bootstrap["coin_trader"] is None
+            assert bootstrap["club"] is None
+            assert "club_owner" not in bootstrap["roles"]
+            assert bootstrap["onboarding"]["requires_club"] is False
+            assert bootstrap["onboarding"]["suggested_route"] == "/app/hub"
+        elif expected_account_type == "coin_trader":
             assert bootstrap["creator"] is None
             assert bootstrap["club"] is None
             assert "club_owner" not in bootstrap["roles"]
@@ -574,6 +591,49 @@ def test_user_and_trader_signup_sessions_include_dedicated_account_type(
             assert "national_team_rentals" in bootstrap["onboarding"]["available_actions"]
             assert "create_club" in bootstrap["onboarding"]["available_actions"]
             assert "club_owner" not in bootstrap["roles"]
+
+def test_direct_creator_signup_creates_a_dedicated_creator_account(app_client) -> None:
+    app, client = app_client
+    response = client.post(
+        "/api/v2/auth/signup/creator",
+        json=creator_signup_payload(
+            email="direct-creator@example.com",
+            username="direct_creator",
+            creator_name="Direct Creator",
+            password=TEST_PASSWORD,
+        ),
+    )
+    assert response.status_code == 201, response.text
+    issued = response.json()
+    assert issued["user"]["account_type"] == "creator"
+    assert issued["landing_route"] == "/app/hub"
+
+    bootstrap_response = client.get(
+        "/api/v2/session/bootstrap",
+        headers={
+            "X-API-Version": "2",
+            "Authorization": f"Bearer {issued['access_token']}",
+            "X-User-Id": issued["user"]["id"],
+            "X-Session-Id": issued["session_id"],
+            "X-Device-Id": "direct-creator-account-test",
+        },
+    )
+    assert bootstrap_response.status_code == 200, bootstrap_response.text
+    bootstrap = bootstrap_response.json()["data"]
+    assert bootstrap["account_type"] == "creator"
+    assert bootstrap["creator"]["status"] == "active"
+    assert bootstrap["club"] is None
+    assert "creator" in bootstrap["roles"]
+    assert "club_owner" not in bootstrap["roles"]
+    assert bootstrap["onboarding"]["suggested_route"] == "/app/hub"
+
+    with app.state.session_factory() as session:
+        user = session.scalar(select(User).where(User.email == "direct-creator@example.com"))
+        assert user is not None
+        assert user.account_type.value == "creator"
+        assert session.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id)) is not None
+        assert session.scalar(select(ClubProfile).where(ClubProfile.owner_user_id == user.id)) is None
+
 
 def test_stale_trader_profile_and_role_do_not_promote_a_normal_account(app_client) -> None:
     app, client = app_client
@@ -985,6 +1045,14 @@ def test_turnstile_enforced_on_all_signup_routes(app_client, monkeypatch) -> Non
             user_signup_payload(
                 email="turnstile-user@example.com",
                 username="turnstile_user",
+                password=TEST_PASSWORD,
+            ),
+        ),
+        (
+            "/auth/signup/creator",
+            creator_signup_payload(
+                email="turnstile-creator@example.com",
+                username="turnstile_creator",
                 password=TEST_PASSWORD,
             ),
         ),
