@@ -25,7 +25,7 @@ from app.models.base import Base
 from app.models.coin_trader import CoinTradeOrderStatus, CoinTraderProfileStatus, CoinTraderRate
 from app.models.notification_record import NotificationRecord
 from app.models.risk_ops import SystemEvent
-from app.models.user import KycStatus, User, UserRole
+from app.models.user import KycStatus, PublicAccountType, User, UserRole
 from app.models.wallet import LedgerSourceTag, LedgerUnit
 from app.wallets.service import WalletService
 
@@ -63,6 +63,7 @@ def _seed_users(session: Session) -> dict[str, User]:
         display_name="Trader",
         password_hash="x",
         role=UserRole.USER,
+        account_type=PublicAccountType.COIN_TRADER,
         kyc_status=KycStatus.FULLY_VERIFIED,
     )
     buyer = User(
@@ -144,7 +145,7 @@ def test_coin_trader_buy_order_locks_and_releases_escrow(coin_trader_session: Se
     coin_trader_session.commit()
 
     profile = _approve_trader_with_rate(service, users)
-    assert users["trader"].role == UserRole.COIN_TRADER
+    assert users["trader"].account_type == PublicAccountType.COIN_TRADER
     assert service.get_my_profile(users["trader"]).status == CoinTraderProfileStatus.APPROVED.value
 
     order = service.create_order(
