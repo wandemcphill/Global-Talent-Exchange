@@ -378,7 +378,7 @@ def _build_session_roles(
         str(getattr(user.role, "value", user.role)),
         str(getattr(user.account_type, "value", user.account_type)),
     }
-    if club_present:
+    if user.account_type == PublicAccountType.USER and club_present:
         role_values.add("club_owner")
     if user.account_type == PublicAccountType.CREATOR and creator is not None and creator.is_active:
         role_values.add("creator")
@@ -464,7 +464,11 @@ def _build_session_bootstrap_response(
     coin_trader = _build_coin_trader_bootstrap(session, user)
     session_records = _list_user_auth_sessions(session, user)
     now = datetime.now(UTC)
-    club_present = bootstrap.club is not None
+    is_dedicated_account = user.account_type in {
+        PublicAccountType.CREATOR,
+        PublicAccountType.COIN_TRADER,
+    }
+    club_present = not is_dedicated_account and bootstrap.club is not None
     return SessionBootstrapResponse(
         user=bootstrap.user,
         roles=_build_session_roles(
@@ -473,7 +477,11 @@ def _build_session_bootstrap_response(
             creator=creator,
             coin_trader=coin_trader,
         ),
-        club=None if bootstrap.club is None else ClubProfileCore.model_validate(bootstrap.club),
+        club=(
+            ClubProfileCore.model_validate(bootstrap.club)
+            if club_present and bootstrap.club is not None
+            else None
+        ),
         wallet=wallet,
         compliance=compliance,
         permissions=bootstrap.permissions,
