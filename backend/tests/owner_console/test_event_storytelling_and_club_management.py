@@ -93,7 +93,7 @@ def test_global_live_ticker_eligibility_and_luxury_isolation(client, bootstrap_a
     assert jet_data["broadcast_globally"] is True
     assert jet_data["broadcast_event"]["event_type"] == "private_jet_purchase"
     assert Decimal(str(jet_data["broadcast_event"]["verified_price_gtex"])) == Decimal("4800")
-    assert "sovereign_900x_jet.png" in jet_data["broadcast_event"]["item_image_url"]
+    assert "sovereign_900x_jet.webp" in jet_data["broadcast_event"]["item_image_url"]
 
     # 3. Facility upgrade MUST broadcast globally with verified price and facility image
     fac_res = client.post(

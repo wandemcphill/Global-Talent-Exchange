@@ -178,7 +178,7 @@ void main() {
                 ownershipLabel: 'Club',
                 fallbackLabel: 'Static jet card',
                 modelFile: 'assets/showroom/does_not_exist.glb',
-                previewFile: 'assets/showroom/sovereign_900x_jet.png',
+                previewFile: 'assets/showroom/sovereign_900x_jet.webp',
                 owned: true,
               ),
             ],

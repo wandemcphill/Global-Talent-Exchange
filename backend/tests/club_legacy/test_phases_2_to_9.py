@@ -447,7 +447,7 @@ def test_showroom_labels_club_ownership_and_keeps_a_static_fallback(client, boot
         assert personal
         assert personal[0]["owner_class"] == "owner"
         assert personal[0]["model_file"] == "assets/showroom/chronos_tourbillon_watch.glb"
-        assert personal[0]["preview_file"] == "assets/showroom/chronos_tourbillon_watch.png"
+        assert personal[0]["preview_file"] == "assets/showroom/chronos_tourbillon_watch.webp"
         assert all(
             item["ownership_label"] == "Club"
             for item in room["exhibits"]
