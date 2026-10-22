@@ -537,14 +537,9 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   String get _accountType =>
       widget.controller.session?.user.accountType.trim().toLowerCase() ?? 'user';
 
-  bool get _isCoinTraderSession =>
-      _accountType == 'coin_trader' ||
-      (_accountType != 'creator' &&
-          <String>{'coin_trader', 'coin-trader', 'trader'}.contains(_sessionRole));
+  bool get _isCoinTraderSession => _accountType == 'coin_trader';
 
-  bool get _isCreatorSession =>
-      _accountType == 'creator' ||
-      (_accountType != 'coin_trader' && _sessionRole == 'creator');
+  bool get _isCreatorSession => _accountType == 'creator';
 
   bool get _isStaffSession {
     return <String>{
