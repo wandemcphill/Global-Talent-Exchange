@@ -462,8 +462,24 @@ class AuthService:
             return "/app/coin-traders"
         return "/app/home"
 
+    @staticmethod
+    def _account_aware_public_role(user: User, effective_role: UserRole) -> UserRole:
+        # Public account type is authoritative for the dedicated Creator and
+        # Coin Trader lanes. Historic additive Trader role rows on a normal
+        # User account must not leak a Trader persona through session bootstrap.
+        if effective_role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+            return effective_role
+        if user.account_type == PublicAccountType.COIN_TRADER:
+            return UserRole.COIN_TRADER
+        if user.account_type == PublicAccountType.CREATOR:
+            return UserRole.USER
+        if effective_role == UserRole.COIN_TRADER:
+            return UserRole.USER
+        return effective_role
+
     def build_user_public(self, session: Session, user: User) -> UserPublic:
         access_context = AccessControlService(session).bind_user_access_context(user)
+        public_role = self._account_aware_public_role(user, access_context.effective_role)
         return UserPublic(
             id=user.id,
             email=user.email,
@@ -471,7 +487,7 @@ class AuthService:
             full_name=user.full_name,
             phone_number=user.phone_number,
             display_name=user.display_name,
-            role=access_context.effective_role,
+            role=public_role,
             account_type=user.account_type,
             kyc_status=user.kyc_status,
             is_active=user.is_active,
@@ -487,6 +503,7 @@ class AuthService:
         profile_fields = self._get_profile_fields(session, user.id)
         region_code = PolicyService(session).resolve_country_code_for_user(user=user)
         access_context = AccessControlService(session).bind_user_access_context(user)
+        public_role = self._account_aware_public_role(user, access_context.effective_role)
         return CurrentUserResponse(
             id=user.id,
             email=user.email,
