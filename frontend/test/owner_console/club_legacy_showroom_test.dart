@@ -260,13 +260,19 @@ void main() {
     final Object? firstPurchaseKey = actionPayload?['idempotency_key'];
     expect(firstPurchaseKey, isNotNull);
 
+    // A purchase confirmation now includes a visible arrival receipt.
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('club-showroom-arrival-close')));
+    await tester.pumpAndSettle();
+
     // A retry for the same item must reuse the intent key, even after the
     // in-flight guard is released.
-    await tester.pumpAndSettle();
     await tester.tap(buyButton);
     await tester.pumpAndSettle();
     expect(actionTriggered, equals('purchase'));
     expect(actionPayload?['idempotency_key'], equals(firstPurchaseKey));
+    await tester.tap(find.byKey(const Key('club-showroom-arrival-close')));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('club-showroom-pick-watch-1')));
     await tester.pumpAndSettle();
@@ -285,6 +291,63 @@ void main() {
     expect(actionTriggered, equals('gift'));
     expect(actionPayload?['asset_id'], equals('watch-1'));
     expect(actionPayload?['recipient_ref'], equals('recipient-user-id'));
+  });
+
+  testWidgets('owner can select a real squad player and confirm luxury gift delivery', (
+    WidgetTester tester,
+  ) async {
+    String? giftedAssetId;
+    String? giftedPlayerId;
+    tester.view.physicalSize = const Size(900, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ClubLegacyShowroom(
+            exhibits: const <ShowroomExhibit>[_watch],
+            onAction: (String action, Map<String, Object?> payload) async {},
+            loadGiftRecipients: () async => const <OwnerGiftRecipient>[
+              OwnerGiftRecipient(
+                id: 'player-9',
+                name: 'Darius Vale',
+                position: 'ST',
+                rating: 91,
+                morale: 76,
+              ),
+            ],
+            giftOwnedAsset: ({
+              required String assetId,
+              required String playerId,
+            }) async {
+              giftedAssetId = assetId;
+              giftedPlayerId = playerId;
+            },
+            onGiftCompleted: () async {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('club-showroom-gift-watch-1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose the recipient'), findsOneWidget);
+    expect(find.text('Darius Vale'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('club-showroom-recipient-player-9')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('club-showroom-gift-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(giftedAssetId, equals('watch-1'));
+    expect(giftedPlayerId, equals('player-9'));
+    expect(find.text('Icon Watch gifted'), findsOneWidget);
+    expect(find.text('Darius Vale'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('club-showroom-arrival-close')));
+    await tester.pumpAndSettle();
   });
 
   test('all six starter models load at their source size', () async {
