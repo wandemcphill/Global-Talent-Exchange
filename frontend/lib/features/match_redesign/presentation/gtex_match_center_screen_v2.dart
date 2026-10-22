@@ -502,7 +502,12 @@ class _RightLivePanel extends StatelessWidget {
           onSubmit: controller.sendInstruction,
         );
       case 4:
-        return GtexHighlightsPanel(highlights: match.highlights);
+        return GtexHighlightsPanel(
+          highlights: match.highlights,
+          onReplayGoal: (int minute) => context.push(
+            '/matches/viewer/${Uri.encodeComponent(match.matchId)}?minute=$minute',
+          ),
+        );
       case 0:
       default:
         return GtexMatchTimeline(events: match.timeline);
