@@ -3,7 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/data/club_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
-import 'package:gte_frontend/features/club_redesign/club_redesign.dart';
+import 'package:gte_frontend/features/club_redesign/models/gtex_public_club_profile_models.dart';
+import 'package:gte_frontend/features/club_redesign/presentation/gtex_public_club_home_v3.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
 class GtexPublicClubProfileScreenV2 extends StatefulWidget {
@@ -36,7 +37,7 @@ class GtexPublicClubProfileScreenV2 extends StatefulWidget {
 class _GtexPublicClubProfileScreenV2State
     extends State<GtexPublicClubProfileScreenV2> {
   ClubApi? _snapshotApi;
-  GtexClubWorkspaceSnapshot? _snapshot;
+  GtexPublicClubProfileData? _profile;
   String? _snapshotError;
   bool _snapshotLoading = false;
   int _snapshotRequestId = 0;
@@ -70,7 +71,7 @@ class _GtexPublicClubProfileScreenV2State
   void _resetSnapshotState() {
     _snapshotRequestId += 1;
     _snapshotApi = null;
-    _snapshot = null;
+    _profile = null;
     _snapshotError = null;
     _snapshotLoading = false;
   }
@@ -108,20 +109,18 @@ class _GtexPublicClubProfileScreenV2State
     update(() {
       _snapshotLoading = true;
       _snapshotError = null;
-      _snapshot = null;
+      _profile = null;
     });
     return () async {
       try {
-        final GtexClubWorkspaceSnapshot snapshot = await api
-            .fetchV2WorkspaceSnapshot(
-              clubId: widget.clubId,
-              clubName: widget.clubName,
-            );
+        final GtexPublicClubProfileData profile = await api.fetchPublicClubProfile(
+          clubId: widget.clubId,
+        );
         if (!mounted || requestId != _snapshotRequestId) {
           return;
         }
         setState(() {
-          _snapshot = snapshot;
+          _profile = profile;
           _snapshotError = null;
           _snapshotLoading = false;
         });
@@ -130,7 +129,7 @@ class _GtexPublicClubProfileScreenV2State
           return;
         }
         setState(() {
-          _snapshot = null;
+          _profile = null;
           _snapshotError = _snapshotErrorMessage(error);
           _snapshotLoading = false;
         });
@@ -142,7 +141,7 @@ class _GtexPublicClubProfileScreenV2State
     if (error is GteApiException) {
       return error.message;
     }
-    return 'GTEX could not load this live Club V2 snapshot. $error';
+    return 'GTEX could not load this public club dossier. $error';
   }
 
   @override
@@ -159,33 +158,29 @@ class _GtexPublicClubProfileScreenV2State
       );
     }
 
-    final GtexClubWorkspaceSnapshot? snapshot = _snapshot;
-    if (_snapshotLoading && snapshot == null) {
+    final GtexPublicClubProfileData? profile = _profile;
+    if (_snapshotLoading && profile == null) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (snapshot == null) {
+    if (profile == null) {
       return Padding(
         padding: const EdgeInsets.all(GtexSpacing.lg),
         child: GtexEmptyState(
           title: 'Live club profile unavailable',
           message:
               _snapshotError ??
-              'GTEX could not load this public Club V2 snapshot from the live backend.',
+              'GTEX could not load this public club dossier from the live backend.',
           icon: Icons.shield_outlined,
           actionLabel: 'Retry club',
           onAction: () => unawaited(_loadSnapshot()),
         ),
       );
     }
-    return GtexPublicClubProfileV2(
-      clubId: widget.clubId,
-      clubName: widget.clubName,
-      baseUrl: widget.baseUrl,
+    return GtexPublicClubHomeV3(
+      profile: profile,
+      baseUrl: widget.baseUrl!,
       backendMode: widget.backendMode,
       accessToken: widget.accessToken,
-      initialSnapshot: snapshot,
-      isAuthenticated: widget.isAuthenticated,
-      onOpenLogin: widget.onOpenLogin,
     );
   }
 }
