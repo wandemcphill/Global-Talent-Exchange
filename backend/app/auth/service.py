@@ -455,26 +455,13 @@ class AuthService:
             if normalized_permissions & GOD_MODE_LANDING_PERMISSIONS:
                 return PROFILE_GOD_MODE_ROUTE
             return PROFILE_ADMIN_ROUTE
-        # New creator and trader access is granted on a regular GTEX ID.
-        # Route according to the approved capability profile, not only the
-        # legacy account_type selected by older signup screens.
-        if effective_role == UserRole.COIN_TRADER:
-            return "/app/trader-dashboard"
-        if session is not None:
-            trader_profile = session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id))
-            trader_status = "" if trader_profile is None else str(trader_profile.status)
-            if trader_status == "approved" and user.is_active:
-                return "/app/trader-dashboard"
-            creator_profile = session.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
-            creator_status = "" if creator_profile is None else str(
-                getattr(creator_profile.status, "value", creator_profile.status)
-            )
-            if creator_status == "active":
-                return "/app/hub"
+        # Dedicated account types determine their lane. Approved creator
+        # promotion updates account_type; profiles alone never create a
+        # switchable creator/trader capability on a normal account.
+        if user.account_type == PublicAccountType.COIN_TRADER or effective_role == UserRole.COIN_TRADER:
+            return "/app/coin-traders"
         if user.account_type == PublicAccountType.CREATOR:
             return "/app/hub"
-        if user.account_type == PublicAccountType.COIN_TRADER:
-            return "/app/coin-traders"
         return "/app/home"
 
     def build_user_public(self, session: Session, user: User) -> UserPublic:
