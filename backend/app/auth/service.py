@@ -30,6 +30,8 @@ from app.models.auth_email_token import AuthEmailToken, AuthEmailTokenPurpose
 from app.models.auth_session import AuthSession
 from app.models.base import generate_uuid, utcnow
 from app.models.club_profile import ClubLifecycleStatus, ClubProfile, ClubType
+from app.models.coin_trader import CoinTraderProfile
+from app.models.creator_profile import CreatorProfile
 from app.models.user import PublicAccountType, User, UserRole
 from app.policies.service import PolicyService
 from app.services.club_dynasty_service import ClubDynastyService
@@ -453,10 +455,26 @@ class AuthService:
             if normalized_permissions & GOD_MODE_LANDING_PERMISSIONS:
                 return PROFILE_GOD_MODE_ROUTE
             return PROFILE_ADMIN_ROUTE
+        # New creator and trader access is granted on a regular GTEX ID.
+        # Route according to the approved capability profile, not only the
+        # legacy account_type selected by older signup screens.
+        if effective_role == UserRole.COIN_TRADER:
+            return "/trader"
+        if session is not None:
+            trader_profile = session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id))
+            trader_status = "" if trader_profile is None else str(trader_profile.status)
+            if trader_status == "approved" and user.is_active:
+                return "/trader"
+            creator_profile = session.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
+            creator_status = "" if creator_profile is None else str(
+                getattr(creator_profile.status, "value", creator_profile.status)
+            )
+            if creator_status == "active":
+                return "/app/hub"
         if user.account_type == PublicAccountType.CREATOR:
             return "/app/hub"
         if user.account_type == PublicAccountType.COIN_TRADER:
-            return "/trader"
+            return "/app/coin-traders"
         return "/app/home"
 
     def build_user_public(self, session: Session, user: User) -> UserPublic:
