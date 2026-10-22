@@ -21,31 +21,54 @@ test.afterEach(async ({ page: _page }, testInfo) => {
   await attachDiagnostics(testInfo);
 });
 
-test("Squad route shows the owner roster or a no-club gate without horizontal overflow", async ({
+test("Flutter Club HQ exposes the squad workspace or a clear create-club state without overflow", async ({
   page,
 }, testInfo) => {
-  await visitAuthedRoute(page, process.env.GTEX_E2E_SQUAD_ROUTE ?? "/app/squad");
+  // This workflow launches Flutter Web, not the separately hosted React shell
+  // at /console. Use the Flutter Club HQ route and its semantic UI.
+  await visitAuthedRoute(page, process.env.GTEX_E2E_SQUAD_ROUTE ?? "/app/club");
 
-  const squadPage = page.getByTestId("squad-page");
-  const noClubGate = page.getByTestId("squad-no-club");
+  const noClubEntry = page.getByText("Build your club command center", {
+    exact: true,
+  });
+  const clubCommand = page.getByText("Club command", { exact: true });
   await expect
-    .poll(async () => (await squadPage.count()) + (await noClubGate.count()))
+    .poll(
+      async () =>
+        Number(await noClubEntry.isVisible().catch(() => false)) +
+        Number(await clubCommand.isVisible().catch(() => false)),
+      { timeout: 60_000 },
+    )
     .toBeGreaterThan(0);
 
-  if (await noClubGate.isVisible().catch(() => false)) {
-    await expect(page.getByTestId("squad-choose-club-link")).toBeVisible();
-    await expect(
-      page.getByText(/explore GTEX and manage eligible national-team activities/i),
-    ).toBeVisible();
+  if (await noClubEntry.isVisible().catch(() => false)) {
+    await expect(page.getByText("Create club", { exact: true })).toBeVisible();
   } else {
-    await expect(squadPage).toBeVisible();
-    await expect(page.getByTestId("squad-table-panel")).toBeVisible();
+    const squadSectionDescription = page.getByText("Owned players and regens", {
+      exact: true,
+    });
+    let browseSheetOpened = false;
+    if (!(await squadSectionDescription.isVisible().catch(() => false))) {
+      await page.getByTestId("gtex-master-detail-browse-action").click();
+      browseSheetOpened = true;
+    }
+    await expect(squadSectionDescription).toBeVisible();
+    await squadSectionDescription.click();
+
+    if (browseSheetOpened) {
+      await page.getByRole("button", { name: "Close Club sections" }).click();
+    }
+
+    await expect(page.getByText("Squad room", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("Lineup & squad registration", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("Open Lineup & Tactics", { exact: true })).toBeVisible();
   }
 
   await verifyNoHorizontalOverflow(page);
   await captureScreenshot(page, testInfo, "lineup");
 });
-
 test("A targeted notification opens its supplied target", async ({ page }, testInfo) => {
   test.skip(
     !process.env.GTEX_E2E_NOTIFICATION_TEXT || !process.env.GTEX_E2E_NOTIFICATION_TARGET,
