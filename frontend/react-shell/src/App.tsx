@@ -5,6 +5,8 @@ import { AuthProvider } from "@/lib/auth";
 import AppShell from "@/components/gtex/AppShell";
 import Landing from "@/pages/Landing";
 import AuthPage from "@/pages/AuthPage";
+import CreatorAccess from "@/pages/CreatorAccess";
+import CoinTraders from "@/pages/CoinTraders";
 import Onboarding from "@/pages/Onboarding";
 import ControlCenter from "@/pages/ControlCenter";
 import MyClubs from "@/pages/MyClubs";
@@ -55,6 +57,8 @@ export default function App() {
             <Route path="academy" element={<Academy />} />
             <Route path="national" element={<NationalTeam />} />
             <Route path="finance" element={<Finance />} />
+            <Route path="creator-access" element={<CreatorAccess />} />
+            <Route path="coin-traders" element={<CoinTraders />} />
             <Route path="inbox" element={<InboxPage />} />
             <Route path="admin" element={<Admin />} />
           </Route>
