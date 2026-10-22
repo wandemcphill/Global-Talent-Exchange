@@ -121,7 +121,11 @@ def test_creator_application_submission_requires_verification_and_persists_appli
     assert apply_response.json()["requested_handle"] == "creator.one"
 
     with app.state.session_factory() as session:
-        application = session.scalar(select(CreatorApplication).where(CreatorApplication.requested_handle == "creator.one"))
+        application = session.scalar(
+            select(CreatorApplication).where(
+                CreatorApplication.requested_handle == "creator.one"
+            )
+        )
         assert application is not None
         assert application.platform == "youtube"
         assert application.email_verified_at is not None
