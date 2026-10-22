@@ -594,6 +594,7 @@ class _MatchInsightPanel extends StatelessWidget {
     required this.activeEvent,
     required this.positionSeconds,
     required this.compact,
+    required this.controller,
   });
 
   final MatchViewState viewState;
@@ -601,6 +602,7 @@ class _MatchInsightPanel extends StatelessWidget {
   final MatchEvent? activeEvent;
   final double positionSeconds;
   final bool compact;
+  final MatchPlaybackController controller;
 
   @override
   Widget build(BuildContext context) {
@@ -612,6 +614,11 @@ class _MatchInsightPanel extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   _TacticalSummary(viewState: viewState, frame: frame),
+                  const SizedBox(height: 8),
+                  _MatchTeamSheetExpansion(
+                    viewState: viewState,
+                    compact: true,
+                  ),
                   const SizedBox(height: 8),
                   _PlayerPanels(
                     viewState: viewState,
@@ -645,6 +652,11 @@ class _MatchInsightPanel extends StatelessWidget {
                     compact: false,
                   ),
                   const SizedBox(height: 8),
+                  _MatchTeamSheetExpansion(
+                    viewState: viewState,
+                    compact: false,
+                  ),
+                  const SizedBox(height: 8),
                   Expanded(
                     child: _EventFeed(
                       events: _feedEventsForPosition(
@@ -669,6 +681,65 @@ class _MatchInsightPanel extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: body,
+    );
+  }
+}
+
+class _MatchTeamSheetExpansion extends StatelessWidget {
+  const _MatchTeamSheetExpansion({
+    required this.viewState,
+    required this.compact,
+  });
+
+  final MatchViewState viewState;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final MatchPresentationPackage package =
+        BroadcastPackageRepository().resolve(viewState);
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.035),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: ExpansionTile(
+        key: const Key('match-2d-official-team-sheets'),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 10),
+        childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
+        iconColor: const Color(0xFFF0C66B),
+        collapsedIconColor: Colors.white70,
+        title: const Text(
+          'Official lineups & bench',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        subtitle: Text(
+          '${package.home.formation} · ${package.home.coachName ?? 'Home manager'}  /  '
+          '${package.away.formation} · ${package.away.coachName ?? 'Away manager'}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: Color(0xFFB7C3D0), fontSize: 10),
+        ),
+        children: <Widget>[
+          SizedBox(
+            height: compact ? 245 : 225,
+            child: SingleChildScrollView(
+              child: Column(
+                children: <Widget>[
+                  _PreMatchTeamSheet(team: package.home),
+                  const SizedBox(height: 8),
+                  _PreMatchTeamSheet(team: package.away),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
