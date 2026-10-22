@@ -385,7 +385,103 @@ class _MatchPitch2DPainter extends CustomPainter {
         textColor,
         FontWeight.w800,
       );
+
+      // Keep the pitch clean by labelling only the active ball carrier and
+      // players involved in the current event. This makes possession readable
+      // without covering all 22 players with permanent nameplates.
+      final bool eventParticipant =
+          activeEvent?.primaryPlayerId == player.playerId ||
+          activeEvent?.secondaryPlayerId == player.playerId;
+      if (hasBall || eventParticipant) {
+        final String name = _resolvedPlayerName(player);
+        if (name.isNotEmpty) {
+          _paintPlayerNameTag(
+            canvas,
+            playArea,
+            center,
+            name,
+            radius,
+            emphasize: hasBall,
+          );
+        }
+      }
     }
+  }
+
+  String _resolvedPlayerName(MatchViewerPlayerFrame player) {
+    if (activeEvent?.primaryPlayerId == player.playerId) {
+      final String? name = activeEvent?.primaryPlayerName;
+      if (name != null && name.trim().isNotEmpty) return name.trim();
+    }
+    if (activeEvent?.secondaryPlayerId == player.playerId) {
+      final String? name = activeEvent?.secondaryPlayerName;
+      if (name != null && name.trim().isNotEmpty) return name.trim();
+    }
+    final String label = player.label.trim();
+    if (label.isEmpty || int.tryParse(label) != null) return '';
+    return label;
+  }
+
+  void _paintPlayerNameTag(
+    Canvas canvas,
+    Rect playArea,
+    Offset center,
+    String name,
+    double radius, {
+    required bool emphasize,
+  }) {
+    final double maxTextWidth = math.min(108, playArea.width * 0.34);
+    final TextPainter textPainter = TextPainter(
+      text: TextSpan(
+        text: name,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+      ellipsis: '…',
+    )..layout(maxWidth: maxTextWidth);
+
+    final double tagWidth = (textPainter.width + 14).clamp(54, maxTextWidth + 14);
+    const double tagHeight = 19;
+    final double preferredTop = center.dy < playArea.center.dy
+        ? center.dy + radius + 4
+        : center.dy - radius - tagHeight - 4;
+    final double tagTop = preferredTop
+        .clamp(playArea.top + 2, playArea.bottom - tagHeight - 2)
+        .toDouble();
+    final double tagLeft = (center.dx - tagWidth / 2)
+        .clamp(playArea.left + 2, playArea.right - tagWidth - 2)
+        .toDouble();
+    final Rect tagRect = Rect.fromLTWH(tagLeft, tagTop, tagWidth, tagHeight);
+    final RRect rounded = RRect.fromRectAndRadius(
+      tagRect,
+      const Radius.circular(5),
+    );
+    canvas.drawRRect(
+      rounded,
+      Paint()..color = const Color(0xEE07111D),
+    );
+    canvas.drawRRect(
+      rounded,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = emphasize
+            ? const Color(0xFFFDE68A)
+            : Colors.white.withValues(alpha: 0.30),
+    );
+    textPainter.paint(
+      canvas,
+      Offset(
+        tagRect.center.dx - textPainter.width / 2,
+        tagRect.center.dy - textPainter.height / 2,
+      ),
+    );
   }
 
   void _drawBall(Canvas canvas, Rect playArea) {
