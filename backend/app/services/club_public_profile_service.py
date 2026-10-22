@@ -9,12 +9,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.club_growth.models import AcademyProfile, AcademyProspect
 from app.club_legacy.models import ClubLegacyAsset, ClubLegacyCatalogueItem, ClubLegacyExecutive
-from app.models.club_growth import ClubStaffAssignment, ClubStaffContract, ClubStaffProfile
+from app.models.club_growth import (
+    AcademyProfile,
+    AcademyProspect,
+    ClubStaffAssignment,
+    ClubStaffContract,
+    ClubStaffProfile,
+)
 from app.models.club_infra import ClubFacility, ClubStadium
 from app.models.club_profile import ClubLifecycleStatus, ClubProfile
 from app.models.club_trophy import ClubTrophy
