@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.club_legacy.models import (
@@ -47,14 +47,64 @@ def _preview(category: str | None) -> str | None:
     return _preview_file(category)
 
 
-def _portrait(session: Session, player: OwnerSquadPlayer) -> str | None:
+def _portrait(
+    session: Session, player_id: str, player_name: str
+) -> str | None:
     try:
         from app.owner_console.storytelling import resolve_player_portrait_url
 
-        return resolve_player_portrait_url(session, player.id, player.name)
+        return resolve_player_portrait_url(session, player_id, player_name)
     except Exception:
         # Image delivery must not take the public club profile down.
         return None
+
+
+def _canonical_player_rating(player: Player) -> int | None:
+    dna = player.dna_profile if isinstance(player.dna_profile, dict) else {}
+    for key in ("current_rating", "overall", "sofifa_overall", "club_rating"):
+        value = dna.get(key)
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+            return int(round(value))
+    return None
+
+
+def _canonical_player_potential(player: Player) -> int | None:
+    if player.potential is not None and player.potential > 0:
+        return int(player.potential)
+    dna = player.dna_profile if isinstance(player.dna_profile, dict) else {}
+    for key in ("potential", "potential_rating", "sofifa_potential"):
+        value = dna.get(key)
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+            return int(round(value))
+    return None
+
+
+def _player_age(birth_date: date | None) -> int | None:
+    if birth_date is None:
+        return None
+    today = date.today()
+    return today.year - birth_date.year - (
+        (today.month, today.day) < (birth_date.month, birth_date.day)
+    )
+
+
+def _public_player_card(
+    session: Session, player: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    if player is None:
+        return None
+    return {
+        "id": player["id"],
+        "name": player["name"],
+        "position": player["position"],
+        "age": player["age"],
+        "rating": player["rating"],
+        "potential": player["potential"],
+        "is_regen": player["is_regen"],
+        "portrait_url": _portrait(
+            session, player["portrait_source_id"], player["name"]
+        ),
+    }
 
 
 def _asset_summary(session: Session, asset: ClubLegacyAsset) -> dict[str, Any] | None:
@@ -159,32 +209,102 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
     academy = session.scalar(
         select(AcademyProfile).where(AcademyProfile.club_id == club.id)
     )
+    active_prospect_filter = (
+        AcademyProspect.club_id == club.id,
+        AcademyProspect.status.notin_(("released", "poached")),
+    )
+    prospect_count = int(
+        session.scalar(
+            select(func.count(AcademyProspect.id)).where(*active_prospect_filter)
+        )
+        or 0
+    )
     prospects = session.scalars(
         select(AcademyProspect)
-        .where(AcademyProspect.club_id == club.id)
-        .where(AcademyProspect.status.notin_(("released", "poached")))
+        .where(*active_prospect_filter)
         .order_by(AcademyProspect.potential.desc(), AcademyProspect.age.asc())
         .limit(3)
     ).all()
+    academy_facility_level = None
+    if facilities is not None:
+        academy_facility_level = int(facilities.academy_level)
+    elif academy is not None:
+        academy_facility_level = int(academy.level)
 
-    squad = session.scalars(
+    canonical_players = session.scalars(
+        select(Player)
+        .where(Player.current_club_profile_id == club.id)
+        .order_by(Player.normalized_position.asc(), Player.full_name.asc())
+        .limit(60)
+    ).all()
+    squad_by_id: dict[str, dict[str, Any]] = {}
+    for player in canonical_players:
+        squad_by_id[player.id] = {
+            "id": player.id,
+            "name": player.canonical_display_name or player.full_name,
+            "position": player.normalized_position or player.position,
+            "age": _player_age(player.date_of_birth),
+            "rating": _canonical_player_rating(player),
+            "potential": _canonical_player_potential(player),
+            "is_regen": not bool(player.is_real_player),
+            "portrait_source_id": player.id,
+        }
+
+    legacy_squad = session.scalars(
         select(OwnerSquadPlayer)
         .where(OwnerSquadPlayer.club_id == club.id)
         .where(OwnerSquadPlayer.status.in_(("active", "listed")))
         .order_by(OwnerSquadPlayer.rating.desc(), OwnerSquadPlayer.potential.desc())
         .limit(60)
     ).all()
+    for player in legacy_squad:
+        linked_player_id = (player.player_ref or "").strip()
+        linked = squad_by_id.get(linked_player_id) if linked_player_id else None
+        if linked is not None:
+            if linked["rating"] is None and player.rating is not None:
+                linked["rating"] = int(round(player.rating))
+            if linked["potential"] is None and player.potential is not None:
+                linked["potential"] = int(round(player.potential))
+            linked["portrait_source_id"] = player.id
+            continue
+        squad_by_id[player.id] = {
+            "id": player.id,
+            "name": player.name,
+            "position": player.position,
+            "age": int(player.age) if player.age is not None else None,
+            "rating": int(round(player.rating)) if player.rating is not None else None,
+            "potential": (
+                int(round(player.potential))
+                if player.potential is not None
+                else None
+            ),
+            "is_regen": bool(player.is_regen),
+            "portrait_source_id": player.id,
+        }
+
+    squad_players = sorted(
+        squad_by_id.values(),
+        key=lambda player: (
+            player["rating"] is not None,
+            player["rating"] or 0,
+            player["potential"] or 0,
+        ),
+        reverse=True,
+    )[:60]
     best_player = max(
-        squad,
-        key=lambda player: (player.rating, player.potential),
+        squad_players,
+        key=lambda player: (
+            player["rating"] or 0,
+            player["potential"] or 0,
+        ),
         default=None,
     )
     promising_player = max(
-        squad,
+        squad_players,
         key=lambda player: (
-            player.potential,
-            -player.age,
-            player.potential - player.rating,
+            player["potential"] or 0,
+            -(player["age"] or 100),
+            (player["potential"] or 0) - (player["rating"] or 0),
         ),
         default=None,
     )
@@ -337,12 +457,7 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
             "training_level": (
                 int(facilities.training_level) if facilities is not None else None
             ),
-            "academy_level": (
-                int(facilities.academy_level)
-                if facilities is not None
-                else (
-                int(academy.level) if academy is not None else None
-            ),
+            "academy_level": academy_facility_level,
             "medical_level": (
                 int(facilities.medical_level) if facilities is not None else None
             ),
@@ -359,7 +474,7 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
         "academy": {
             "level": int(academy.level) if academy is not None else None,
             "capacity": int(academy.capacity_limit) if academy is not None else None,
-            "prospect_count": len(prospects),
+            "prospect_count": prospect_count,
             "prospects": [
                 {
                     "id": prospect.id,
@@ -373,35 +488,21 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
             ],
         },
         "squad": {
-            "player_count": len(squad),
-            "best_player": (
+            "player_count": len(squad_players),
+            "players": [
                 {
-                    "id": best_player.id,
-                    "name": best_player.name,
-                    "position": best_player.position,
-                    "age": best_player.age,
-                    "rating": best_player.rating,
-                    "potential": best_player.potential,
-                    "is_regen": best_player.is_regen,
-                    "portrait_url": _portrait(session, best_player),
+                    "id": player["id"],
+                    "name": player["name"],
+                    "position": player["position"],
+                    "age": player["age"],
+                    "rating": player["rating"],
+                    "potential": player["potential"],
+                    "is_regen": player["is_regen"],
                 }
-                if best_player is not None
-                else None
-            ),
-            "most_promising_player": (
-                {
-                    "id": promising_player.id,
-                    "name": promising_player.name,
-                    "position": promising_player.position,
-                    "age": promising_player.age,
-                    "rating": promising_player.rating,
-                    "potential": promising_player.potential,
-                    "is_regen": promising_player.is_regen,
-                    "portrait_url": _portrait(session, promising_player),
-                }
-                if promising_player is not None
-                else None
-            ),
+                for player in squad_players
+            ],
+            "best_player": _public_player_card(session, best_player),
+            "most_promising_player": _public_player_card(session, promising_player),
         },
         "staff": staff,
         "coach_buses": buses,
