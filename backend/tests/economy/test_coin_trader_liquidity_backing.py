@@ -11,7 +11,7 @@ from app.coin_traders.schemas import CoinTraderAdminLiquidityRequest
 from app.coin_traders.service import CoinTraderService, CoinTraderValidationError
 from app.models.base import Base
 from app.models.coin_trader import CoinTraderProfile, CoinTraderProfileStatus, CoinTraderTier
-from app.models.user import User, UserRole
+from app.models.user import PublicAccountType, User, UserRole
 from app.models.wallet import (
     LedgerAccount,
     LedgerAccountKind,
@@ -47,6 +47,11 @@ def _create_user(session, *, user_id: str, role: UserRole) -> User:
         username=user_id,
         password_hash="test-hash",  # pragma: allowlist secret
         role=role,
+        account_type=(
+            PublicAccountType.COIN_TRADER
+            if role == UserRole.COIN_TRADER
+            else PublicAccountType.USER
+        ),
     )
     session.add(user)
     session.flush()
