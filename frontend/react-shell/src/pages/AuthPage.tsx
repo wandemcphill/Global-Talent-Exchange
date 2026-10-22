@@ -32,7 +32,9 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
       } else {
         if (!f.over18) throw new Error("You must be 18 or older to sign up for a GTEX account.");
         await signup({ full_name: f.full_name, username: f.username, email: f.email, password: f.password, is_over_18: true });
-        navigate("/onboarding");
+        // Registration creates a GTEX user account. Club ownership is optional
+        // and can be started later from the authenticated workspace.
+        navigate("/app");
       }
     } catch (err: any) {
       toast.error(err?.response ? errMsg(err) : err.message);
