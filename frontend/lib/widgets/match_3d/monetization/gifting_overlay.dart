@@ -220,7 +220,7 @@ class _OverlayBurstChip extends StatelessWidget {
       tween: Tween<double>(begin: 0, end: 1),
       builder: (BuildContext context, double value, Widget? child) {
         return Opacity(
-          opacity: value.clamp(0.0, 1.0),
+          opacity: value.clamp(0.0, 1.0).toDouble(),
           child: Transform.translate(
             offset: Offset((1 - value) * 46, (1 - value) * -9),
             child: Transform.scale(
