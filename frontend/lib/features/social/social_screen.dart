@@ -2664,7 +2664,7 @@ class _GiftDrawerSheetState extends State<_GiftDrawerSheet> {
                     return _CommunityGiftCard(
                       gift: gift,
                       selected: selected?.code == gift.code,
-                      onTap: () => setState(() => _selectedGift = gift),
+                      onTap: () => setState(() { _selectedGift = gift; _confirmPremiumGift = false; }),
                     );
                   },
                 ),
