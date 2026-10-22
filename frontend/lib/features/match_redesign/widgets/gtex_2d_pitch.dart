@@ -62,11 +62,17 @@ class Gtex2dPitch extends StatelessWidget {
                           key: ValueKey<String>(player.playerId),
                           duration: const Duration(milliseconds: 420),
                           curve: Curves.easeInOutCubic,
-                          left: (player.x * constraints.maxWidth - 16)
-                              .clamp(0.0, constraints.maxWidth - 32)
+                          width: compact ? 116 : 100,
+                          height: 54,
+                          left: (player.x * constraints.maxWidth -
+                                  (compact ? 58 : 50))
+                              .clamp(
+                                0.0,
+                                constraints.maxWidth - (compact ? 116 : 100),
+                              )
                               .toDouble(),
                           top: (player.y * constraints.maxHeight - 16)
-                              .clamp(0.0, constraints.maxHeight - 48)
+                              .clamp(0.0, constraints.maxHeight - 54)
                               .toDouble(),
                           child: _PitchPlayerMarker(
                             player: player,
