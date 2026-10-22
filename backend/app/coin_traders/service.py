@@ -74,10 +74,15 @@ class CoinTraderService:
         coin_unit: LedgerUnit | None = None,
         approved_only: bool = True,
     ) -> list[CoinTraderProfileView]:
-        statement = select(CoinTraderProfile).order_by(
-            CoinTraderProfile.tier.desc(),
-            CoinTraderProfile.completion_rate.desc(),
-            CoinTraderProfile.updated_at.desc(),
+        statement = (
+            select(CoinTraderProfile)
+            .join(User, User.id == CoinTraderProfile.user_id)
+            .where(User.account_type == PublicAccountType.COIN_TRADER)
+            .order_by(
+                CoinTraderProfile.tier.desc(),
+                CoinTraderProfile.completion_rate.desc(),
+                CoinTraderProfile.updated_at.desc(),
+            )
         )
         if approved_only:
             statement = statement.where(CoinTraderProfile.status == CoinTraderProfileStatus.APPROVED.value)
@@ -95,6 +100,9 @@ class CoinTraderService:
     def get_profile(self, profile_id: str) -> CoinTraderProfileView:
         profile = self._require_profile(profile_id)
         if profile.status != CoinTraderProfileStatus.APPROVED.value:
+            raise CoinTraderNotFoundError("Approved coin trader profile was not found.")
+        trader = self._require_user(profile.user_id)
+        if trader.account_type != PublicAccountType.COIN_TRADER:
             raise CoinTraderNotFoundError("Approved coin trader profile was not found.")
         return self.to_profile_view(profile)
 
