@@ -539,10 +539,12 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
 
   bool get _isCoinTraderSession =>
       _accountType == 'coin_trader' ||
-      <String>{'coin_trader', 'coin-trader', 'trader'}.contains(_sessionRole);
+      (_accountType != 'creator' &&
+          <String>{'coin_trader', 'coin-trader', 'trader'}.contains(_sessionRole));
 
   bool get _isCreatorSession =>
-      _accountType == 'creator' || _sessionRole == 'creator';
+      _accountType == 'creator' ||
+      (_accountType != 'coin_trader' && _sessionRole == 'creator');
 
   bool get _isStaffSession {
     return <String>{
