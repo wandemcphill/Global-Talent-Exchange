@@ -443,32 +443,104 @@ class _AssetImageFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isJet = imageFile.endsWith('sovereign_900x_jet.png');
+    final bool isNarrow = MediaQuery.sizeOf(context).width < 760;
+
     return Container(
-      height: 220,
+      height: isJet ? (isNarrow ? 208 : 246) : 220,
       decoration: BoxDecoration(
         color: kNavyRaised,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: kNavyLineStrong),
-        gradient: RadialGradient(
-          center: Alignment.center,
-          radius: 0.8,
+        border: Border.all(
+          color: isJet
+              ? kGoldPrimary.withValues(alpha: 0.68)
+              : kNavyLineStrong,
+        ),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
           colors: <Color>[
-            kGoldPrimary.withValues(alpha: 0.08),
-            kNavyRaised,
+            Color(0xFF15243A),
+            Color(0xFF080F1B),
+            Color(0xFF101B2D),
           ],
         ),
+        boxShadow: isJet
+            ? <BoxShadow>[
+                BoxShadow(
+                  color: kGoldPrimary.withValues(alpha: 0.10),
+                  blurRadius: 24,
+                  spreadRadius: 1,
+                ),
+              ]
+            : const <BoxShadow>[],
       ),
       clipBehavior: Clip.antiAlias,
-      child: Center(
-        child: Image.asset(
-          imageFile,
-          fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => const Icon(
-            Icons.flight_takeoff_rounded,
-            size: 64,
-            color: kGoldPrimary,
+      child: Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          if (isJet)
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: Alignment(0.05, -0.15),
+                  radius: 0.82,
+                  colors: <Color>[
+                    Color(0x2BDFB63E),
+                    Color(0x0D4EA1C8),
+                    Colors.transparent,
+                  ],
+                  stops: <double>[0, 0.46, 1],
+                ),
+              ),
+            ),
+          Image.asset(
+            imageFile,
+            fit: BoxFit.contain,
+            alignment: Alignment.center,
+            errorBuilder: (_, __, ___) => Icon(
+              isJet ? Icons.flight_takeoff_rounded : Icons.image_not_supported_outlined,
+              size: 64,
+              color: isJet ? kGoldPrimary : kNavyTextMuted,
+            ),
           ),
-        ),
+          if (isJet)
+            Positioned(
+              left: 12,
+              bottom: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xD9081120),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: kGoldPrimary.withValues(alpha: 0.55),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    const Icon(
+                      Icons.flight_takeoff_rounded,
+                      size: 13,
+                      color: kGoldLight,
+                    ),
+                    const SizedBox(width: 7),
+                    const Text(
+                      'GTEX AVIATION  /  OWNER ASSET',
+                      style: TextStyle(
+                        color: kGoldLight,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1,
+                        fontFamily: kFontCondensed,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
