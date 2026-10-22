@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../core/app_feedback.dart';
@@ -2405,9 +2407,9 @@ class _GiftDrawerSheetState extends State<_GiftDrawerSheet> {
   final TextEditingController _recipientController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
   GiftCatalogItem? _selectedGift;
+  String _filter = 'all';
   bool _confirmPremiumGift = false;
   bool _isSending = false;
-  GiftEvent? _lastEvent;
 
   bool get _hasContextTarget =>
       (widget.chatThreadId?.trim().isNotEmpty ?? false) ||
@@ -2429,38 +2431,59 @@ class _GiftDrawerSheetState extends State<_GiftDrawerSheet> {
   }
 
   GiftCatalogItem? _bestInitialGift(List<GiftCatalogItem> catalog) {
-    if (catalog.isEmpty) {
-      return null;
+    if (catalog.isEmpty) return null;
+    for (final GiftCatalogItem item in catalog) {
+      if (item.isAwardPack && !_requiresReview(item)) return item;
     }
-    final Iterable<GiftCatalogItem> awards = catalog.where(
-      (GiftCatalogItem item) => item.isAwardPack,
-    );
-    return awards.isEmpty ? catalog.first : awards.first;
+    for (final GiftCatalogItem item in catalog) {
+      if (!_requiresReview(item)) return item;
+    }
+    return catalog.first;
   }
+
+  List<GiftCatalogItem> get _visibleGifts {
+    final List<GiftCatalogItem> gifts = widget.catalog;
+    if (_filter == 'all') return gifts;
+    if (_filter == 'award') {
+      return gifts.where((GiftCatalogItem gift) => gift.isAwardPack).toList();
+    }
+    return gifts.where(
+      (GiftCatalogItem gift) => gift.rarity.toLowerCase() == _filter,
+    ).toList();
+  }
+
+  bool _requiresReview(GiftCatalogItem gift) =>
+      gift.legalStatus.trim().toLowerCase() == 'requires_review' ||
+      gift.legalStatus.trim().toLowerCase() == 'pending_review';
+
+  String _priceLabel(GiftCatalogItem gift) =>
+      '${gift.costAmount.toStringAsFixed(gift.costAmount.truncateToDouble() == gift.costAmount ? 0 : 2)} ${gift.currencyLabel}';
 
   Future<void> _sendGift() async {
     final GiftCatalogItem? gift = _selectedGift;
-    if (gift == null || _isSending) {
+    if (gift == null || _isSending) return;
+    if (_requiresReview(gift)) {
+      AppFeedback.showError(context, 'This gift is unavailable while it is under review.');
       return;
     }
+
     final String recipientUserId = _recipientController.text.trim();
     if (!_hasContextTarget && recipientUserId.isEmpty) {
       AppFeedback.showError(
         context,
-        'Enter a recipient user ID or open gifting from a room/thread.',
+        'Enter the recipient’s GTEX user ID or open gifting from a room/thread.',
       );
       return;
     }
     if (gift.costAmount >= 500 && !_confirmPremiumGift) {
       AppFeedback.showError(
         context,
-        'Confirm premium gift spend before sending this fanfare.',
+        'Confirm this premium gift spend before sending.',
       );
       return;
     }
-    setState(() {
-      _isSending = true;
-    });
+
+    setState(() => _isSending = true);
     try {
       final GiftEvent event = await widget.api.sendGift(
         giftKey: gift.code,
@@ -2471,199 +2494,320 @@ class _GiftDrawerSheetState extends State<_GiftDrawerSheet> {
         discussionReplyId: widget.discussionReplyId,
         note: _noteController.text.trim(),
       );
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _lastEvent = event;
-      });
-      AppFeedback.showSuccess(
-        context,
-        '${event.giftDisplayName} gift sent with ${event.currencyLabel}.',
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        barrierColor: Colors.black.withValues(alpha: 0.76),
+        builder: (BuildContext context) => _GiftFanfarePreview(
+          event: event,
+          note: _noteController.text.trim(),
+          deliveryContext: _hasContextTarget ? 'Community conversation' : 'GTEX recipient',
+        ),
       );
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       AppFeedback.showError(context, AppFeedback.messageFor(error));
     } finally {
-      if (mounted) {
-        setState(() {
-          _isSending = false;
-        });
-      }
+      if (mounted) setState(() => _isSending = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final List<GiftCatalogItem> catalog =
-        widget.catalog.isEmpty ? const <GiftCatalogItem>[] : widget.catalog;
-    final List<GiftCatalogItem> awards =
-        catalog.where((GiftCatalogItem item) => item.isAwardPack).toList();
+    final List<GiftCatalogItem> catalog = widget.catalog;
+    final List<GiftCatalogItem> visible = _visibleGifts;
+    final GiftCatalogItem? selected = _selectedGift;
+    final double sheetHeight = math.min(MediaQuery.sizeOf(context).height * 0.88, 800.0);
     return SafeArea(
       top: false,
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: spacingMD,
-          right: spacingMD,
-          top: spacingMD,
-          bottom: MediaQuery.of(context).viewInsets.bottom + spacingMD,
+      child: Container(
+        height: sheetHeight,
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        decoration: BoxDecoration(
+          color: const Color(0xFF080F1B),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+          border: Border.all(color: GtexColors.gold.withValues(alpha: 0.34)),
+          boxShadow: <BoxShadow>[
+            BoxShadow(color: GtexColors.gold.withValues(alpha: 0.12), blurRadius: 32),
+          ],
         ),
-        child: SizedBox(
-          height: 650,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                'Football award gifts',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Fan Coin celebration only. Gift hype never adds competitive club ranking points.',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: spacingMD),
-              if (!_hasContextTarget)
-                TextField(
-                  controller: _recipientController,
-                  decoration: const InputDecoration(
-                    labelText: 'Recipient user ID',
-                    prefixIcon: Icon(Icons.person_search_outlined),
-                  ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Center(
+              child: Container(
+                width: 44,
+                height: 4,
+                margin: const EdgeInsets.only(top: 10, bottom: 13),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(99),
                 ),
-              if (!_hasContextTarget) const SizedBox(height: spacingSM),
-              if (catalog.isEmpty)
-                const Expanded(
-                  child: GteStatePanel(
-                    title: 'Gift catalogue unavailable',
-                    message:
-                        'The gift API has not returned a catalogue yet. Try again after the community sync finishes.',
-                    icon: Icons.card_giftcard_outlined,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 14, 13),
+              child: Row(
+                children: <Widget>[
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(17),
+                      gradient: GtexColors.panelGlow(accent: GtexColors.gold),
+                      border: Border.all(color: GtexColors.gold.withValues(alpha: 0.6)),
+                    ),
+                    child: const Icon(Icons.card_giftcard_rounded, color: GtexColors.gold, size: 28),
                   ),
-                )
-              else
-                Expanded(
-                  child: ListView(
-                    children: <Widget>[
-                      if (awards.isNotEmpty) ...<Widget>[
-                        Text(
-                          'Award packs',
-                          style: Theme.of(context).textTheme.titleMedium,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        const Text(
+                          'THE GTEX GIFT LOUNGE',
+                          style: TextStyle(color: Color(0xFFE8C979), fontSize: 9, letterSpacing: 2.0, fontWeight: FontWeight.w900),
                         ),
-                        const SizedBox(height: spacingSM),
-                        ...awards.map(_giftOptionTile),
-                        const SizedBox(height: spacingMD),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Give them a moment to remember',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w900, height: 1.1),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _hasContextTarget ? 'Gift attached to this conversation' : 'Send a gift to another GTEX user',
+                          style: const TextStyle(color: Color(0xFF9EACC0), fontSize: 11),
+                        ),
                       ],
-                      Text(
-                        'Full catalogue',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: spacingSM),
-                      ...catalog
-                          .where((GiftCatalogItem item) => !item.isAwardPack)
-                          .map(_giftOptionTile),
-                    ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Close gift lounge',
+                    onPressed: _isSending ? null : () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
+            if (!_hasContextTarget)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+                child: TextField(
+                  key: const Key('social-gift-recipient-id'),
+                  controller: _recipientController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Recipient GTEX user ID',
+                    labelStyle: const TextStyle(color: Color(0xFF9EAEC1)),
+                    prefixIcon: const Icon(Icons.person_search_rounded, color: GtexColors.gold),
+                    filled: true,
+                    fillColor: const Color(0xFF111D2D),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08))),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08))),
                   ),
                 ),
-              TextField(
+              ),
+            SizedBox(
+              height: 38,
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                scrollDirection: Axis.horizontal,
+                children: <Widget>[
+                  for (final String category in <String>['all', 'common', 'rare', 'epic', 'legendary', 'mythic', 'award'])
+                    Padding(
+                      padding: const EdgeInsets.only(right: 7),
+                      child: ChoiceChip(
+                        key: Key('social-gift-filter-$category'),
+                        label: Text(category == 'all' ? 'All gifts' : category == 'award' ? 'Award packs' : _capitalise(category)),
+                        selected: _filter == category,
+                        onSelected: (_) => setState(() => _filter = category),
+                        showCheckmark: false,
+                        selectedColor: GtexColors.gold.withValues(alpha: 0.22),
+                        backgroundColor: const Color(0xFF111D2D),
+                        side: BorderSide(color: _filter == category ? GtexColors.gold : Colors.white.withValues(alpha: 0.08)),
+                        labelStyle: TextStyle(color: _filter == category ? GtexColors.gold : const Color(0xFFB3C0D2), fontSize: 10, fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (catalog.isEmpty)
+              const Expanded(
+                child: GteStatePanel(
+                  title: 'Gift catalogue unavailable',
+                  message: 'The gift catalogue has not loaded yet. Try again after the community sync finishes.',
+                  icon: Icons.card_giftcard_outlined,
+                ),
+              )
+            else if (visible.isEmpty)
+              const Expanded(
+                child: Center(
+                  child: Text('No gifts in this category yet.', style: TextStyle(color: Color(0xFF9EACC0))),
+                ),
+              )
+            else
+              Expanded(
+                child: GridView.builder(
+                  key: const Key('social-gift-catalog-grid'),
+                  padding: const EdgeInsets.fromLTRB(16, 2, 16, 12),
+                  itemCount: visible.length,
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 235,
+                    mainAxisExtent: 151,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                  ),
+                  itemBuilder: (BuildContext context, int index) {
+                    final GiftCatalogItem gift = visible[index];
+                    return _CommunityGiftCard(
+                      gift: gift,
+                      selected: selected?.code == gift.code,
+                      onTap: () => setState(() => _selectedGift = gift),
+                    );
+                  },
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 3, 18, 0),
+              child: TextField(
+                key: const Key('social-gift-note'),
                 controller: _noteController,
                 minLines: 1,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Gift note (optional)',
-                  prefixIcon: Icon(Icons.short_text_outlined),
+                maxLines: 1,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: 'Add a personal note (optional)',
+                  labelStyle: const TextStyle(color: Color(0xFF9EACC0), fontSize: 12),
+                  prefixIcon: const Icon(Icons.edit_note_rounded, color: Color(0xFF9EACC0)),
+                  filled: true,
+                  fillColor: const Color(0xFF111D2D),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.07))),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.07))),
                 ),
               ),
-              const SizedBox(height: spacingSM),
+            ),
+            if (selected != null && selected.costAmount >= 500)
               CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
+                key: const Key('social-gift-premium-confirm'),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                dense: true,
+                controlAffinity: ListTileControlAffinity.leading,
+                activeColor: GtexColors.gold,
+                checkColor: const Color(0xFF121212),
                 value: _confirmPremiumGift,
-                onChanged:
-                    (bool? value) => setState(() {
-                      _confirmPremiumGift = value ?? false;
-                    }),
-                title: const Text('Confirm premium Fan Coin gift spend'),
-                subtitle: const Text('Required for high-value award packs.'),
+                onChanged: (bool? value) => setState(() => _confirmPremiumGift = value ?? false),
+                title: const Text('I confirm this premium gift spend', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                subtitle: const Text('High-value gift packs require extra confirmation.', style: TextStyle(color: Color(0xFF8999AD), fontSize: 10)),
               ),
-              if (_lastEvent != null) ...<Widget>[
-                const SizedBox(height: spacingSM),
-                _GiftFanfarePreview(event: _lastEvent!),
-              ],
-              const SizedBox(height: spacingSM),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed:
-                      _isSending || _selectedGift == null ? null : _sendGift,
-                  icon: const Icon(Icons.auto_awesome_outlined),
-                  label: Text(_isSending ? 'Sending...' : 'Send gift'),
-                ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 9, 18, 17),
+              child: Row(
+                children: <Widget>[
+                  if (selected != null) ...<Widget>[
+                    _CommunityGiftIcon(gift: selected, size: 46),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(selected.displayName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)),
+                          const SizedBox(height: 3),
+                          Text(_priceLabel(selected), style: TextStyle(color: _communityGiftColor(selected.rarity), fontWeight: FontWeight.w900, fontSize: 11)),
+                        ],
+                      ),
+                    ),
+                  ] else
+                    const Expanded(child: Text('Choose a gift to continue', style: TextStyle(color: Color(0xFF9EACC0)))),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    key: const Key('social-gift-send'),
+                    onPressed: _isSending || selected == null || _requiresReview(selected) || (selected.costAmount >= 500 && !_confirmPremiumGift) ? null : _sendGift,
+                    style: FilledButton.styleFrom(backgroundColor: GtexColors.gold, foregroundColor: const Color(0xFF11131A), padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14)),
+                    icon: _isSending
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF11131A)))
+                        : const Icon(Icons.send_rounded, size: 16),
+                    label: Text(_isSending ? 'Sending…' : selected != null && _requiresReview(selected) ? 'Under review' : 'Send gift', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
+}
 
-  Widget _giftOptionTile(GiftCatalogItem item) {
-    final bool isSelected = _selectedGift?.code == item.code;
-    final bool isHighest = item.code == 'ballon_dor';
-    return Padding(
-      padding: const EdgeInsets.only(bottom: spacingSM),
+class _CommunityGiftCard extends StatelessWidget {
+  const _CommunityGiftCard({
+    required this.gift,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final GiftCatalogItem gift;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color accent = _communityGiftColor(gift.rarity);
+    final bool underReview = gift.legalStatus.trim().toLowerCase() == 'requires_review' ||
+        gift.legalStatus.trim().toLowerCase() == 'pending_review';
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '${gift.displayName}, ${gift.costAmount} ${gift.currencyLabel}, ${gift.rarity}',
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap:
-            () => setState(() {
-              _selectedGift = item;
-            }),
-        child: Container(
-          padding: const EdgeInsets.all(14),
+        key: Key('social-gift-card-${gift.code}'),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(17),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 210),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color:
-                  isSelected
-                      ? GtexColors.gold
-                      : GteShellTheme.accentCommunity.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(17),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[
+                accent.withValues(alpha: selected ? 0.23 : 0.11),
+                const Color(0xFF111B2B),
+                const Color(0xFF0B1320),
+              ],
             ),
-            color:
-                isSelected
-                    ? GtexColors.gold.withValues(alpha: 0.12)
-                    : Colors.transparent,
+            border: Border.all(color: selected ? accent : accent.withValues(alpha: 0.33), width: selected ? 1.7 : 1),
+            boxShadow: selected ? <BoxShadow>[BoxShadow(color: accent.withValues(alpha: 0.14), blurRadius: 16)] : const <BoxShadow>[],
           ),
-          child: Row(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Icon(
-                isHighest
-                    ? Icons.workspace_premium_outlined
-                    : Icons.card_giftcard_outlined,
-                color: item.isAwardPack ? GtexColors.gold : GtexColors.mint,
+              Row(
+                children: <Widget>[
+                  _CommunityGiftIcon(gift: gift, size: 43),
+                  const Spacer(),
+                  if (selected) Icon(Icons.check_circle_rounded, color: accent, size: 18),
+                ],
               ),
-              const SizedBox(width: spacingSM),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      '${item.displayName}${isHighest ? ' - highest gift pack' : ''}',
-                      style: Theme.of(context).textTheme.titleSmall,
+              const Spacer(),
+              Text(gift.displayName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)),
+              const SizedBox(height: 3),
+              Text(gift.rarity.toUpperCase(), style: TextStyle(color: accent, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.1)),
+              const SizedBox(height: 4),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      '${gift.costAmount.toStringAsFixed(gift.costAmount.truncateToDouble() == gift.costAmount ? 0 : 2)} ${gift.currencyLabel}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Color(0xFFE7DCBF), fontWeight: FontWeight.w800, fontSize: 10),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${item.rarity.toUpperCase()} - ${item.costAmount.toStringAsFixed(item.costAmount.truncateToDouble() == item.costAmount ? 0 : 2)} ${item.currencyLabel}',
-                    ),
-                    if (item.fallbackDisplayName != null)
-                      Text('Fallback name: ${item.fallbackDisplayName}'),
-                    Text(
-                      'Animation: ${item.animationKey ?? 'gift_fanfare'} - legal ${item.legalStatus}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
+                  ),
+                  if (underReview) const Icon(Icons.lock_clock_rounded, color: Color(0xFFFFC66D), size: 15),
+                ],
               ),
             ],
           ),
@@ -2673,42 +2817,197 @@ class _GiftDrawerSheetState extends State<_GiftDrawerSheet> {
   }
 }
 
-class _GiftFanfarePreview extends StatelessWidget {
-  const _GiftFanfarePreview({required this.event});
+class _CommunityGiftIcon extends StatelessWidget {
+  const _CommunityGiftIcon({required this.gift, this.size = 48});
 
-  final GiftEvent event;
+  final GiftCatalogItem gift;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
-    final bool isMythic = event.rarity == 'mythic';
+    final Color accent = _communityGiftColor(gift.rarity);
+    final String key = gift.code.toLowerCase();
+    final IconData icon = key.contains('whistle')
+        ? Icons.sports
+        : key.contains('chant')
+        ? Icons.campaign_rounded
+        : key.contains('goal') || key.contains('boot')
+        ? Icons.sports_soccer_rounded
+        : key.contains('legend') || key.contains('award') || key.contains('dor')
+        ? Icons.workspace_premium_rounded
+        : key.contains('tactic') || key.contains('midfield')
+        ? Icons.auto_awesome_motion_rounded
+        : key.contains('hands')
+        ? Icons.back_hand_rounded
+        : Icons.card_giftcard_rounded;
     return Container(
-      padding: const EdgeInsets.all(14),
+      width: size,
+      height: size,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: isMythic ? GtexColors.gold : GtexColors.mint),
-        gradient: LinearGradient(
-          colors: <Color>[
-            (isMythic ? GtexColors.gold : GtexColors.mint).withValues(
-              alpha: 0.20,
-            ),
-            Colors.transparent,
-          ],
-        ),
+        borderRadius: BorderRadius.circular(size * 0.31),
+        gradient: RadialGradient(colors: <Color>[accent.withValues(alpha: 0.25), const Color(0xFF17243A)]),
+        border: Border.all(color: accent.withValues(alpha: 0.72)),
       ),
-      child: Row(
-        children: <Widget>[
-          Icon(
-            isMythic ? Icons.emoji_events_outlined : Icons.celebration_outlined,
-            color: isMythic ? GtexColors.gold : GtexColors.mint,
-          ),
-          const SizedBox(width: spacingSM),
-          Expanded(
-            child: Text(
-              '${event.giftDisplayName} ceremony queued - ${event.animationKey ?? 'gift_fanfare'}',
-              style: Theme.of(context).textTheme.bodyMedium,
+      child: Icon(icon, color: accent, size: size * 0.52),
+    );
+  }
+}
+
+Color _communityGiftColor(String rarity) {
+  switch (rarity.trim().toLowerCase()) {
+    case 'rare':
+      return const Color(0xFF69C7FF);
+    case 'epic':
+      return const Color(0xFFC29BFF);
+    case 'legendary':
+      return const Color(0xFFFFC96B);
+    case 'mythic':
+      return const Color(0xFFFF8EAB);
+    default:
+      return GtexColors.gold;
+  }
+}
+
+String _capitalise(String value) =>
+    value.isEmpty ? value : '${value[0].toUpperCase()}${value.substring(1)}';
+
+class _GiftFanfarePreview extends StatelessWidget {
+  const _GiftFanfarePreview({
+    required this.event,
+    required this.note,
+    required this.deliveryContext,
+  });
+
+  final GiftEvent event;
+  final String note;
+  final String deliveryContext;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color accent = _communityGiftColor(event.rarity);
+    final String animationKey = event.animationKey ??
+        (event.animationPayload['animation_key']?.toString() ?? 'gift_fanfare');
+    final String receiver = event.recipientUserId.isEmpty
+        ? deliveryContext
+        : 'GTEX user ${event.recipientUserId}';
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 0.82, end: 1),
+        duration: const Duration(milliseconds: 430),
+        curve: Curves.easeOutBack,
+        builder: (BuildContext context, double value, Widget? child) =>
+            Transform.scale(scale: value, child: child),
+        child: Container(
+          padding: const EdgeInsets.all(22),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[Color(0xFF1B2C44), Color(0xFF0C1524), Color(0xFF080F1B)],
             ),
+            borderRadius: BorderRadius.circular(27),
+            border: Border.all(color: accent.withValues(alpha: 0.78), width: 1.4),
+            boxShadow: <BoxShadow>[
+              BoxShadow(color: accent.withValues(alpha: 0.20), blurRadius: 36),
+            ],
           ),
-        ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const Text('GTEX COMMUNITY GIFTS', style: TextStyle(color: Color(0xFFE8C979), fontSize: 10, letterSpacing: 2.5, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 18),
+              Stack(
+                alignment: Alignment.center,
+                children: <Widget>[
+                  TweenAnimationBuilder<double>(
+                    tween: Tween<double>(begin: 0.65, end: 1),
+                    duration: const Duration(milliseconds: 850),
+                    builder: (BuildContext context, double value, Widget? child) =>
+                        Transform.scale(scale: value, child: child),
+                    child: Container(
+                      width: 148,
+                      height: 148,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(colors: <Color>[accent.withValues(alpha: 0.27), accent.withValues(alpha: 0.04), Colors.transparent]),
+                        border: Border.all(color: accent.withValues(alpha: 0.33)),
+                      ),
+                    ),
+                  ),
+                  _CommunityGiftIcon(gift: GiftCatalogItem(
+                    id: event.id,
+                    code: event.giftKey,
+                    displayName: event.giftDisplayName,
+                    costAmount: event.grossAmount,
+                    currencyLabel: event.currencyLabel,
+                    rarity: event.rarity,
+                    tier: 'delivery',
+                    isAwardPack: event.rarity == 'legendary' || event.rarity == 'mythic',
+                    legalStatus: 'safe',
+                    animationKey: event.animationKey,
+                  ), size: 105),
+                  Positioned(
+                    right: 5,
+                    bottom: 5,
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: const Color(0xFF0D1A2A),
+                        border: Border.all(color: const Color(0xFF7DE0AD), width: 1.5),
+                      ),
+                      child: const Icon(Icons.check_rounded, color: Color(0xFF7DE0AD)),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 19),
+              const Text('GIFT SENT SUCCESSFULLY', style: TextStyle(color: Color(0xFF7DE0AD), letterSpacing: 1.8, fontSize: 10, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 7),
+              Text(
+                event.giftDisplayName,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 7),
+              Text('Delivery context: $deliveryContext', textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFFAFBED1), fontSize: 12)),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(14), border: Border.all(color: accent.withValues(alpha: 0.26))),
+                child: Row(
+                  children: <Widget>[
+                    Icon(Icons.account_balance_wallet_outlined, color: accent, size: 19),
+                    const SizedBox(width: 9),
+                    const Expanded(child: Text('Confirmed gift total', style: TextStyle(color: Color(0xFFB4C2D5), fontSize: 11))),
+                    Text('${event.grossAmount.toStringAsFixed(event.grossAmount.truncateToDouble() == event.grossAmount ? 0 : 2)} ${event.currencyLabel}', style: TextStyle(color: accent, fontWeight: FontWeight.w900, fontSize: 12)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 11),
+              if (note.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Text('“$note”', textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFFE1D7BC), fontSize: 12, fontStyle: FontStyle.italic)),
+                ),
+              Text('Animation: $animationKey · Receipt: ${event.id.isEmpty ? 'recorded by GTEX' : event.id}', textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF8191A7), fontSize: 10)),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  key: const Key('social-gift-delivery-close'),
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: FilledButton.styleFrom(backgroundColor: accent, foregroundColor: const Color(0xFF10131B), padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                  child: const Text('Return to community', style: TextStyle(fontWeight: FontWeight.w900)),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
