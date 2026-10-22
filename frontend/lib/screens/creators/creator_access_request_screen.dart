@@ -74,6 +74,9 @@ class _CreatorAccessRequestScreenState
     super.dispose();
   }
 
+  String get _currentAccountType =>
+      widget.exchangeController.session?.user.accountType.trim().toLowerCase() ?? 'user';
+
   void _handleExchangeControllerChanged() {
     _syncApplicationController();
     if (mounted) {
@@ -173,9 +176,9 @@ class _CreatorAccessRequestScreenState
                 children: <Widget>[
                   const GteStatePanel(
                     eyebrow: 'CREATOR ACCESS',
-                    title: 'Request creator access from inside GTEX.',
+                    title: 'Creator promotion is for eligible User accounts.',
                     message:
-                        'Creator applications are reviewed before creator tools are provisioned. Confirm the account contacts GTEX should use, then submit your creator details from this screen.',
+                        'Direct Creator signup is available from the account selector. Existing normal User accounts may request one-way Creator promotion only after they no longer own any clubs. Sell or transfer clubs first; Coin Trader accounts cannot be promoted.',
                     icon: Icons.how_to_reg_outlined,
                     accentColor: GteShellTheme.accentCommunity,
                   ),
@@ -187,6 +190,24 @@ class _CreatorAccessRequestScreenState
                         Navigator.of(context).pop();
                       },
                     )
+                  else if (_currentAccountType == 'creator')
+                    const GteStatePanel(
+                      eyebrow: 'DEDICATED CREATOR ACCOUNT',
+                      title: 'Creator account already active',
+                      message:
+                          'This is a dedicated Creator account. Creator accounts cannot switch back to User or Club Owner, and there is no need to apply for Creator promotion again.',
+                      icon: Icons.campaign_outlined,
+                      accentColor: GteShellTheme.accentCommunity,
+                    )
+                  else if (_currentAccountType == 'coin_trader')
+                    const GteStatePanel(
+                      eyebrow: 'DEDICATED COIN TRADER ACCOUNT',
+                      title: 'Coin Trader accounts cannot be promoted',
+                      message:
+                          'Coin Trader is a separate account lane. It cannot switch to Creator, User, or Club Owner. Sign out and register a separate Creator account if that is the account type you need.',
+                      icon: Icons.candlestick_chart_outlined,
+                      accentColor: GteShellTheme.accentWarm,
+                    )
                   else if (applicationController == null ||
                       (applicationController.isLoading &&
                           !applicationController.hasLoadedOnce &&
@@ -195,7 +216,7 @@ class _CreatorAccessRequestScreenState
                       eyebrow: 'CREATOR ACCESS',
                       title: 'Loading creator access status',
                       message:
-                          'Checking your creator application status and contact readiness.',
+                          'Checking your Creator application and account readiness.',
                       icon: Icons.auto_awesome_motion_outlined,
                       isLoading: true,
                       accentColor: GteShellTheme.accentCommunity,
