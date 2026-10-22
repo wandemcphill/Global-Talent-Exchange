@@ -14,7 +14,7 @@ class _GtexLivingWorldSectionState extends State<GtexLivingWorldSection> {
   void _inspectArticle(NewsroomArticleItem article) {
     showDialog<void>(
       context: context,
-      builder: (BuildContext dialogContext) => _GroundedFactsDialog(article: article),
+      builder: (BuildContext dialogContext) => _StoryConceptDialog(article: article),
     );
   }
 
@@ -36,7 +36,7 @@ class _GtexLivingWorldSectionState extends State<GtexLivingWorldSection> {
           const GtexSectionHeader(
             eyebrow: 'A Living Football World',
             title: 'Event-Driven Football & Global Broadcasts',
-            subtitle: 'The GTEX universe never sleeps. Authenticated platform events, executive purchases, and matchday drama generate grounded football newsrooms and public broadcasts in real-time.',
+            subtitle: 'Club milestones, broadcast revenue and breakthrough talent can all become football stories. These cards preview the editorial format; live headlines and transaction details must come from confirmed GTEX data.',
             accentColor: kSkyBlue,
           ),
 
@@ -60,7 +60,7 @@ class _GtexLivingWorldSectionState extends State<GtexLivingWorldSection> {
                 children: const <Widget>[
                   Icon(Icons.newspaper_rounded, color: kGoldPrimary, size: 20),
                   Text(
-                    'AI-GROUNDED EDITORIAL NEWSROOM',
+                    'GTEX NEWSROOM PREVIEW',
                     style: TextStyle(
                       color: kGoldPrimary,
                       fontSize: 14,
@@ -72,7 +72,7 @@ class _GtexLivingWorldSectionState extends State<GtexLivingWorldSection> {
                 ],
               ),
               const Text(
-                'FACTS SEPARATED FROM NARRATION',
+                'ILLUSTRATIVE STORIES • NOT A LIVE FEED',
                 style: TextStyle(
                   color: kTextTertiary,
                   fontSize: 11,
@@ -95,7 +95,7 @@ class _GtexLivingWorldSectionState extends State<GtexLivingWorldSection> {
               return Wrap(
                 spacing: 16,
                 runSpacing: 16,
-                children: kVerifiedArticles.map((NewsroomArticleItem article) {
+                children: kEditorialExamples.map((NewsroomArticleItem article) {
                   return SizedBox(
                     width: cardWidth,
                     child: _NewsroomCard(
@@ -143,12 +143,12 @@ class _GlobalBroadcastTicker extends StatelessWidget {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: const <Widget>[
               GtexTagPill(
-                label: 'VERIFIED BROADCAST TICKER',
-                color: kPitchGreenBright,
-                icon: Icons.sensors_rounded,
+                label: 'EXAMPLE ANNOUNCEMENTS',
+                color: kGoldPrimary,
+                icon: Icons.newspaper_rounded,
               ),
               Text(
-                'Major platform events trigger public announcements with verified price tags',
+                'Story format previews — not live GTEX transactions',
                 style: TextStyle(
                   color: kTextTertiary,
                   fontSize: 11,
@@ -158,33 +158,34 @@ class _GlobalBroadcastTicker extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          // Verified platform broadcast events
+          // Example story formats; do not present these as current transactions.
           Wrap(
             spacing: 12,
             runSpacing: 10,
             children: const <Widget>[
               _TickerItem(
                 icon: Icons.flight_takeoff_rounded,
-                headline: 'Sovereign 900X Private Jet Commissioned',
-                price: '4,800.00 GTX',
-                owner: 'Executive Suite',
-                time: '24m ago',
+                headline: 'Club owner acquires a flagship private jet',
+                statusLabel: 'STORY CONCEPT',
+                owner: 'Illustrative',
+                time: 'Preview only',
               ),
               _TickerItem(
                 icon: Icons.stadium_rounded,
-                headline: 'Arena Imperiale Expansion Complete (65k Seats)',
-                price: '12,500.00 GTX',
-                owner: 'Continental Board',
-                time: '1h ago',
+                headline: 'A stadium upgrade changes a club’s ambitions',
+                statusLabel: 'STORY CONCEPT',
+                owner: 'Illustrative',
+                time: 'Preview only',
               ),
               _TickerItem(
-                icon: Icons.watch_rounded,
-                headline: 'Chronos Tourbillon Gifted to Mateo Alvarez',
-                price: '20,000.00 GTX',
-                owner: 'Club Owner',
-                time: '3h ago',
+                icon: Icons.auto_awesome_rounded,
+                headline: 'Academy prospect earns a first-team breakthrough',
+                statusLabel: 'STORY CONCEPT',
+                owner: 'Illustrative',
+                time: 'Preview only',
               ),
             ],
+          ),
           ),
         ],
       ),
@@ -196,14 +197,14 @@ class _TickerItem extends StatelessWidget {
   const _TickerItem({
     required this.icon,
     required this.headline,
-    required this.price,
+    required this.statusLabel,
     required this.owner,
     required this.time,
   });
 
   final IconData icon;
   final String headline;
-  final String price;
+  final String statusLabel;
   final String owner;
   final String time;
 
@@ -241,7 +242,7 @@ class _TickerItem extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
                     Text(
-                      price,
+                      statusLabel,
                       style: const TextStyle(
                         color: kGoldLight,
                         fontSize: 11,
@@ -292,6 +293,30 @@ class _NewsroomCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: SizedBox(
+              width: double.infinity,
+              height: 164,
+              child: Image.asset(
+                article.imageFile,
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+                errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) {
+                  return Container(
+                    color: kNavyOverlay,
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.image_not_supported_outlined,
+                      color: kTextTertiary,
+                      size: 30,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
           Wrap(
             alignment: WrapAlignment.spaceBetween,
             crossAxisAlignment: WrapCrossAlignment.center,
@@ -303,7 +328,7 @@ class _NewsroomCard extends StatelessWidget {
                 color: kGoldPrimary,
               ),
               Text(
-                article.timeAgo,
+                article.statusLabel,
                 style: const TextStyle(
                   color: kTextTertiary,
                   fontSize: 11,
@@ -346,10 +371,10 @@ class _NewsroomCard extends StatelessWidget {
               children: <Widget>[
                 Row(
                   children: const <Widget>[
-                    Icon(Icons.check_circle_outline_rounded, size: 14, color: kPitchGreenBright),
+                    Icon(Icons.info_outline_rounded, size: 14, color: kGoldPrimary),
                     SizedBox(width: 6),
                     Text(
-                      'ESTABLISHED FACTS',
+                      'STORY CONCEPT • NOT LIVE DATA',
                       style: TextStyle(
                         color: kPitchGreenBright,
                         fontSize: 10,
@@ -362,7 +387,7 @@ class _NewsroomCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  article.establishedFacts.first,
+                  article.editorialNotes.first,
                   style: const TextStyle(
                     color: kTextSecondary,
                     fontSize: 11,
@@ -381,7 +406,7 @@ class _NewsroomCard extends StatelessWidget {
               spacing: 6,
               children: const <Widget>[
                 Text(
-                  'Inspect Grounded Story & Facts',
+                  'Read story concept',
                   style: TextStyle(
                     color: kSkyBlue,
                     fontSize: 13,
@@ -398,8 +423,8 @@ class _NewsroomCard extends StatelessWidget {
   }
 }
 
-class _GroundedFactsDialog extends StatelessWidget {
-  const _GroundedFactsDialog({required this.article});
+class _StoryConceptDialog extends StatelessWidget {
+  const _StoryConceptDialog({required this.article});
 
   final NewsroomArticleItem article;
 
@@ -450,11 +475,20 @@ class _GroundedFactsDialog extends StatelessWidget {
                     height: 1.4,
                   ),
                 ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Illustrative story concept — not a live platform event.',
+                  style: TextStyle(
+                    color: kGoldLight,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 const SizedBox(height: 18),
                 const Divider(color: kNavyLine),
                 const SizedBox(height: 14),
 
-                // Established Facts Block
+                // Clearly labelled editorial example, not a verified live event.
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
@@ -467,10 +501,10 @@ class _GroundedFactsDialog extends StatelessWidget {
                     children: <Widget>[
                       Row(
                         children: const <Widget>[
-                          Icon(Icons.verified_rounded, size: 16, color: kPitchGreenBright),
+                          Icon(Icons.info_outline_rounded, size: 16, color: kGoldPrimary),
                           SizedBox(width: 8),
                           Text(
-                            'ESTABLISHED PLATFORM FACTS (READ-ONLY)',
+                            'ILLUSTRATIVE STORY PREMISE',
                             style: TextStyle(
                               color: kPitchGreenBright,
                               fontSize: 11,
@@ -482,7 +516,7 @@ class _GroundedFactsDialog extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 10),
-                      ...article.establishedFacts.map((String fact) => Padding(
+                      ...article.editorialNotes.map((String fact) => Padding(
                             padding: const EdgeInsets.symmetric(vertical: 3),
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -534,7 +568,7 @@ class _GroundedFactsDialog extends StatelessWidget {
                 Align(
                   alignment: Alignment.centerRight,
                   child: GtexGhostButton(
-                    label: 'Close Inspection',
+                    label: 'Close story preview',
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ),
