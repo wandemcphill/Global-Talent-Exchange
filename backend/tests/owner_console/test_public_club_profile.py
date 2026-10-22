@@ -23,7 +23,7 @@ def _seed_public_club(session):
     owner = User(
         email=f"public-profile-{unique}@example.test",
         username=f"public_profile_owner_{unique}",
-        password_hash="test-hash",
+        password_hash="test-hash",  # pragma: allowlist secret
         display_name="Amara Okafor",
         account_type=PublicAccountType.USER,
     )
@@ -283,7 +283,7 @@ def test_public_dossiers_return_404_for_private_clubs_and_nonexistent_owners(cli
         owner = User(
             email=f"private-profile-{uuid4().hex[:8]}@example.test",
             username=f"private_profile_{uuid4().hex[:8]}",
-            password_hash="test-hash",
+            password_hash="test-hash",  # pragma: allowlist secret
             display_name="Private Owner",
             account_type=PublicAccountType.USER,
         )
