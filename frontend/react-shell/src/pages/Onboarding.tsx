@@ -148,14 +148,14 @@ function CompetitionStep({ clubId, onDone }: any) {
   );
 }
 
-function CreateFirstClub({ onDone }: any) {
+function CreateFirstClub({ onDone, onCancel }: any) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const create = async () => {
     setBusy(true);
     try {
       const slug = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString(36).slice(-4)}`;
-      await api.post("/clubs", { club_name: name, slug, short_name: name.slice(0, 12), primary_color: "#0F766E", secondary_color: "#F8FAFC", accent_color: "#F59E0B", country_code: "NG", city_name: "Lagos", club_type: "community" });
+      await api.post("/clubs", { club_name: name, slug, short_name: name.slice(0, 12), primary_color: "#0F766E", secondary_color: "#F8FAFC", accent_color: "#F59E0B", country_code: "NG", city_name: "Lagos" });
       onDone();
     } catch (e) {
       toast.error(errMsg(e));
@@ -168,6 +168,7 @@ function CreateFirstClub({ onDone }: any) {
       <Panel eyebrow="First-club activation" title="Name your club" className="w-full max-w-lg">
         <input data-testid="first-club-name-input" className="gx-input" placeholder="Lagos Lions FC" value={name} onChange={(e) => setName(e.target.value)} />
         <Btn className="mt-4 w-full" disabled={name.length < 3 || busy} onClick={create} data-testid="first-club-create-button">Create club</Btn>
+        <Btn className="mt-2 w-full" variant="ghost" disabled={busy} onClick={onCancel} data-testid="skip-club-creation-button">Not now — explore GTEX first</Btn>
       </Panel>
     </div>
   );
@@ -181,7 +182,9 @@ export default function Onboarding() {
   if (loading || (user && isLoading)) return <Loading label="Preparing your club" />;
   if (!user) return <Navigate to="/login" replace />;
   const club = (data?.clubs || []).find((c: any) => !["active"].includes(c.stage)) || null;
-  if (!club && !(data?.clubs || []).length) return <CreateFirstClub onDone={() => refetch()} />;
+  if (!club && !(data?.clubs || []).length) {
+    return <CreateFirstClub onDone={() => refetch()} onCancel={() => navigate("/app")} />;
+  }
   if (!club) return <Navigate to="/app" replace />;
   const index = { not_started: 0, squad: 1, manager: 2, competition: 3 }[club.stage as string] ?? 3;
   const next = () => refetch();
