@@ -16,7 +16,7 @@ from app.models.coin_trader import (
     CoinTraderProfileStatus,
     CoinTraderRate,
 )
-from app.models.user import User, UserRole
+from app.models.user import PublicAccountType, User
 from app.models.wallet import (
     LedgerAccount,
     LedgerEntry,
@@ -99,6 +99,7 @@ class CoinTraderService:
         return self.to_profile_view(profile)
 
     def get_my_profile(self, actor: User) -> CoinTraderProfileView:
+        self._require_dedicated_trader_account(actor)
         profile = self.session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == actor.id))
         if profile is None:
             raise CoinTraderNotFoundError("Coin trader profile was not found for this user.")
@@ -107,6 +108,7 @@ class CoinTraderService:
     def create_or_update_profile(
         self, payload: CoinTraderProfileCreateRequest, *, actor: User
     ) -> CoinTraderProfileView:
+        self._require_dedicated_trader_account(actor)
         profile = self.session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == actor.id))
         if profile is None:
             profile = CoinTraderProfile(
@@ -322,7 +324,7 @@ class CoinTraderService:
 
     def submit_proof(self, order_id: str, payload: CoinTradeProofRequest, *, actor: User) -> CoinTradeOrderView:
         order = self._require_participating_order(order_id, actor)
-        profile = self._require_profile(order.trader_profile_id)
+        profile = self._require_approved_profile(order.trader_profile_id)
         proof_submitter_user_id = (
             order.user_id if order.direction == CoinTradeDirection.USER_BUYS.value else profile.user_id
         )
@@ -406,6 +408,7 @@ class CoinTraderService:
         if profile.user_id == admin.id:
             raise CoinTraderValidationError("Admins cannot approve their own trader profile.")
         user = self._require_user(profile.user_id)
+        self._require_dedicated_trader_account(user)
         now = utcnow()
         profile.status = CoinTraderProfileStatus.APPROVED.value
         profile.tier = str(payload.tier.value if hasattr(payload.tier, "value") else payload.tier)
@@ -414,7 +417,6 @@ class CoinTraderService:
         profile.rejected_at = None
         profile.frozen_at = None
         profile.metadata_json = {**dict(profile.metadata_json or {}), "approval_note": payload.note or ""}
-        user.role = UserRole.COIN_TRADER
         self.session.commit()
         self.session.refresh(profile)
         return self.to_profile_view(profile)
@@ -700,6 +702,10 @@ class CoinTraderService:
         profile = self._require_profile(order.trader_profile_id)
         if actor.id not in {order.user_id, profile.user_id}:
             raise CoinTraderPermissionError("Only order participants can perform this action.")
+        if actor.id == profile.user_id:
+            self._require_dedicated_trader_account(actor)
+            if profile.status != CoinTraderProfileStatus.APPROVED.value:
+                raise CoinTraderPermissionError("Approved coin trader access is required.")
         return order
 
     def _publish_order_matrix_notifications(
@@ -754,14 +760,22 @@ class CoinTraderService:
         return profile
 
     def _require_profile_for_user(self, actor: User) -> CoinTraderProfile:
+        self._require_dedicated_trader_account(actor)
         profile = self.session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == actor.id))
         if profile is None:
             raise CoinTraderNotFoundError("Coin trader profile was not found for this user.")
         return profile
 
+    @staticmethod
+    def _require_dedicated_trader_account(actor: User) -> None:
+        if actor.account_type != PublicAccountType.COIN_TRADER:
+            raise CoinTraderPermissionError(
+                "A dedicated Coin Trader account is required to operate a trader desk."
+            )
+
     def _require_approved_profile_for_user(self, actor: User) -> CoinTraderProfile:
         profile = self._require_profile_for_user(actor)
-        if profile.status != CoinTraderProfileStatus.APPROVED.value or actor.role != UserRole.COIN_TRADER:
+        if profile.status != CoinTraderProfileStatus.APPROVED.value:
             raise CoinTraderPermissionError("Approved coin trader access is required.")
         return profile
 
@@ -769,6 +783,7 @@ class CoinTraderService:
         profile = self._require_profile(profile_id)
         if profile.status != CoinTraderProfileStatus.APPROVED.value:
             raise CoinTraderPermissionError("Approved coin trader access is required.")
+        self._require_dedicated_trader_account(self._require_user(profile.user_id))
         return profile
 
     def _require_user(self, user_id: str) -> User:
