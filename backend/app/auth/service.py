@@ -491,6 +491,8 @@ class AuthService:
             full_name=user.full_name,
             phone_number=user.phone_number,
             age_confirmed_at=user.age_confirmed_at,
+            email_verified_at=user.email_verified_at,
+            phone_verified_at=user.phone_verified_at,
             display_name=profile_fields["display_name"],
             avatar_url=profile_fields["avatar_url"],
             favourite_club=profile_fields["favourite_club"],
