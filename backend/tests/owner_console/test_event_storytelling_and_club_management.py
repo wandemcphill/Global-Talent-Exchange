@@ -18,6 +18,7 @@ from app.owner_console.models import (
     OwnerBroadcastEvent,
     OwnerInboxItem,
     OwnerNewsroomArticle,
+    OwnerSquadPlayer,
 )
 from app.owner_console.service import OwnerError
 
@@ -104,6 +105,17 @@ def test_global_live_ticker_eligibility_and_luxury_isolation(client, bootstrap_a
 
     # 4. Luxury gifts are reserved for academy regens. A normal first-team
     # player must be rejected before any gift ledger or broadcast event is written.
+    with app.state.session_factory() as session:
+        session.add(
+            OwnerSquadPlayer(
+                club_id=club_id,
+                name="First-Team Player",
+                position="ST",
+                is_regen=False,
+            )
+        )
+        session.commit()
+
     club_detail = client.get(f"/api/owner/clubs/{club_id}", headers=bootstrap_admin_headers).json()
     first_team_player = next(player for player in club_detail["squad"] if not player.get("is_regen", False))
     rejected_gift = client.post(
