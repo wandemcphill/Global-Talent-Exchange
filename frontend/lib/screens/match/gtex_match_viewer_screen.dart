@@ -41,6 +41,7 @@ class GtexMatchViewerScreen extends StatefulWidget {
     this.fallbackSnapshot,
     this.preferFallback = false,
     this.presentationMode = MatchViewerPresentationMode.replay,
+    this.initialReplayMinute,
     this.renderMode = RenderMode.twoD,
     this.viewStateLoader,
     this.continuationLoader,
@@ -58,6 +59,7 @@ class GtexMatchViewerScreen extends StatefulWidget {
   final LiveMatchSnapshot? fallbackSnapshot;
   final bool preferFallback;
   final MatchViewerPresentationMode presentationMode;
+  final int? initialReplayMinute;
   final RenderMode renderMode;
   final MatchViewStateLoader? viewStateLoader;
   final MatchViewContinuationLoader? continuationLoader;
@@ -78,6 +80,7 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
   late Future<MatchViewState> _viewStateFuture;
   MatchPlaybackController? _controller;
   bool _showPreMatchBrief = false;
+  int? _replayStartedMinute;
 
   AmbientAudioState? _ambientAudio;
 
@@ -112,11 +115,15 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
       _showPreMatchBrief =
           widget.presentationMode == MatchViewerPresentationMode.broadcast;
     }
+    if (oldWidget.initialReplayMinute != widget.initialReplayMinute) {
+      _replayStartedMinute = null;
+    }
     if (oldWidget.matchKey != widget.matchKey ||
         oldWidget.viewStateLoader != widget.viewStateLoader ||
         oldWidget.fallbackSnapshot != widget.fallbackSnapshot ||
         oldWidget.preferFallback != widget.preferFallback ||
-        oldWidget.presentationMode != widget.presentationMode) {
+        oldWidget.presentationMode != widget.presentationMode ||
+        oldWidget.initialReplayMinute != widget.initialReplayMinute) {
       _reload();
     }
   }
@@ -290,6 +297,28 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
             final MatchPlaybackController controller = _ensureController(
               viewState,
             );
+            final int? replayMinute = widget.initialReplayMinute;
+            if (replayMinute != null && _replayStartedMinute != replayMinute) {
+              final List<MatchEvent> goals = viewState.events
+                  .where((MatchEvent event) => event.type == MatchViewerEventType.goal)
+                  .toList(growable: true);
+              final List<MatchEvent> targets = goals.isNotEmpty
+                  ? goals
+                  : viewState.events.toList(growable: true);
+              if (targets.isNotEmpty) {
+                targets.sort((MatchEvent a, MatchEvent b) =>
+                    (a.minute - replayMinute).abs().compareTo(
+                      (b.minute - replayMinute).abs(),
+                    ));
+                final MatchEvent targetEvent = targets.first;
+                _replayStartedMinute = replayMinute;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted && identical(_controller, controller)) {
+                    controller.replayEvent(targetEvent);
+                  }
+                });
+              }
+            }
             return ListenableBuilder(
               listenable: controller,
               builder: (BuildContext context, Widget? child) {
