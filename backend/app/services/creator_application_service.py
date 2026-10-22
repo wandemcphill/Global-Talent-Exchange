@@ -35,16 +35,19 @@ class CreatorApplicationService:
     session: Session
 
     def verify_email(self, *, actor: User) -> User:
-        actor.email_verified_at = actor.email_verified_at or utcnow()
-        self.session.flush()
-        return actor
+        """Do not treat an authenticated request as proof of email ownership.
+
+        GTEX already has a signup-confirmation token flow in AuthService. The
+        Creator endpoint has no verification code/token contract, so callers
+        must use that real confirmation flow instead of toggling the timestamp.
+        """
+        del actor
+        raise CreatorApplicationError("email_verification_must_use_auth_confirmation")
 
     def verify_phone(self, *, actor: User) -> User:
-        if not actor.phone_number or actor.phone_number == "0000000000":
-            raise CreatorApplicationError("phone_number_required_for_creator_verification")
-        actor.phone_verified_at = actor.phone_verified_at or utcnow()
-        self.session.flush()
-        return actor
+        """Fail closed until a real phone challenge/provider is implemented."""
+        del actor
+        raise CreatorApplicationError("secure_phone_verification_unavailable")
 
     def submit_application(self, *, actor: User, payload) -> CreatorApplication:
         if actor.email_verified_at is None:
