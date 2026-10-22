@@ -121,6 +121,8 @@ class GtexPublicClubHomeV3 extends StatelessWidget {
                     const _SectionTitle(kicker: 'THE FOOTBALL DEPARTMENT', title: 'The people and talent', subtitle: 'First-team leadership, standout players, and the next generation.'),
                     const SizedBox(height: 12),
                     _PlayerSpotlights(profile: profile, baseUrl: baseUrl),
+                    const SizedBox(height: 12),
+                    _PublicSquadDirectory(profile: profile),
                     const SizedBox(height: 14),
                     _ManagementPanel(profile: profile, accent: accent),
                     const SizedBox(height: 25),
@@ -326,6 +328,193 @@ class _ImageLabel extends StatelessWidget {
   final String text;
   @override
   Widget build(BuildContext context) => Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5), decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.72), borderRadius: BorderRadius.circular(4)), child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 9, letterSpacing: 1.2, fontWeight: FontWeight.w900)));
+}
+
+class _PublicSquadDirectory extends StatefulWidget {
+  const _PublicSquadDirectory({required this.profile});
+
+  final GtexPublicClubProfileData profile;
+
+  @override
+  State<_PublicSquadDirectory> createState() => _PublicSquadDirectoryState();
+}
+
+class _PublicSquadDirectoryState extends State<_PublicSquadDirectory> {
+  bool _showAll = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<GtexPublicClubPlayer> players = widget.profile.squadPlayers;
+    final List<GtexPublicClubPlayer> visiblePlayers =
+        _showAll ? players : players.take(6).toList(growable: false);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: GtexColors.panel,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: GtexColors.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              const Icon(Icons.groups_2_outlined, color: GtexColors.gold),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    const Text(
+                      'SQUAD DIRECTORY',
+                      style: TextStyle(
+                        color: GtexColors.text,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.1,
+                        fontSize: 11,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${widget.profile.squadPlayerCount} public squad records',
+                      style: const TextStyle(
+                        color: GtexColors.textMuted,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (players.isEmpty)
+            const Text(
+              'No squad records are available for public display yet.',
+              style: TextStyle(color: GtexColors.textMuted),
+            )
+          else ...<Widget>[
+            for (final GtexPublicClubPlayer player in visiblePlayers)
+              _PublicSquadPlayerRow(player: player),
+            if (players.length > 6)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => setState(() => _showAll = !_showAll),
+                  icon: Icon(
+                    _showAll ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                  ),
+                  label: Text(
+                    _showAll
+                        ? 'Show fewer players'
+                        : 'View all ${players.length} players',
+                  ),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PublicSquadPlayerRow extends StatelessWidget {
+  const _PublicSquadPlayerRow({required this.player});
+
+  final GtexPublicClubPlayer player;
+
+  @override
+  Widget build(BuildContext context) {
+    final VoidCallback? onTap = GtexPlayerNavigator.tapToOpen(
+      context,
+      player.id,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Material(
+        color: GtexColors.panelStrong,
+        borderRadius: BorderRadius.circular(7),
+        child: InkWell(
+          key: Key('gtex-public-squad-player-${player.id}'),
+          borderRadius: BorderRadius.circular(7),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: 36,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: player.isRegen
+                        ? GtexColors.gold.withValues(alpha: 0.12)
+                        : GtexColors.pitch.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Icon(
+                    player.isRegen
+                        ? Icons.auto_awesome_outlined
+                        : Icons.person_outline_rounded,
+                    size: 19,
+                    color: player.isRegen ? GtexColors.gold : GtexColors.pitch,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        player.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: GtexColors.text,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        <String?>[
+                          player.position,
+                          if (player.age != null) 'Age ${player.age}',
+                          if (player.isRegen) 'Regen',
+                        ].whereType<String>().join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: GtexColors.textMuted,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (player.rating != null) ...<Widget>[
+                  const SizedBox(width: 6),
+                  _Grade(
+                    label: 'RAT',
+                    value: player.rating.toString(),
+                    accent: GtexColors.text,
+                  ),
+                ],
+                if (player.potential != null) ...<Widget>[
+                  const SizedBox(width: 10),
+                  _Grade(
+                    label: 'POT',
+                    value: player.potential.toString(),
+                    accent: GtexColors.gold,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _PlayerSpotlights extends StatelessWidget {
