@@ -27,8 +27,9 @@ export default function CreatorAccess() {
     retry: false,
   });
   const { data: application, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["creator-application"],
+    queryKey: ["creator-application", user?.id],
     queryFn: async () => (await api.get("/creator/application")).data,
+    enabled: Boolean(user?.id) && accountType === "user",
     retry: false,
   });
   const [handle, setHandle] = useState("");
