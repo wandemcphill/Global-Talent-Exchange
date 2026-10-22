@@ -667,7 +667,10 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
                         ? null
                         : () => _handleBuyTap(exhibit),
                   ),
-                if (exhibit.owned && !exhibit.id.startsWith('facility:'))
+                if (exhibit.owned &&
+                    exhibit.ownerClass != 'player' &&
+                    exhibit.status != 'offered' &&
+                    !exhibit.id.startsWith('facility:'))
                   GtexActionButton(
                     key: Key('club-showroom-gift-${exhibit.id}'),
                     label: 'Gift ${exhibit.name}',
