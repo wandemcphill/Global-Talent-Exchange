@@ -1367,7 +1367,7 @@ Page<void> _landingPage({
   return NoTransitionPage<void>(
     key: state.pageKey,
     child: GtexPublicLandingRouteScreenV2(
-      onSignup: () => router.push(gtexUserSignupRoute),
+      onSignup: () => router.push(gtexAccountSelectRoute),
       onLogin: () => router.push(gtexLoginRoute),
       onCreatorSignup: () => router.push(gtexCreatorSignupRoute),
       onTraderSignup: () => router.push(gtexTraderSignupRoute),
