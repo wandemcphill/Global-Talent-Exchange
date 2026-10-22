@@ -48,7 +48,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signup = async (payload: any): Promise<AuthResult> => {
     const accountType = String(payload?.account_type || "user").toLowerCase();
-    const { account_type: _accountType, ...signupPayload } = payload || {};
+    const signupPayload = { ...(payload || {}) };
+    delete signupPayload.account_type;
     const endpoint =
       accountType === "creator"
         ? "/v2/auth/signup/creator"
