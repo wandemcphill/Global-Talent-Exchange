@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { useClubStory, useActiveClub, fmt } from "@/lib/owner";
+import { useClubStory, useActiveClub, useClub, fmt } from "@/lib/owner";
 import { api } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -28,6 +28,7 @@ export function ClubStory() {
   const qc = useQueryClient();
 
   const { data, isLoading } = useClubStory(clubId);
+  const { data: clubProfile } = useClub(clubId);
   const [activeTab, setActiveTab] = useState<
     "timeline" | "issues" | "relationships" | "watchlist" | "schedule" | "legacy"
   >("timeline");
@@ -116,6 +117,17 @@ export function ClubStory() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
+      {clubProfile?.public_profile_slug && (
+        <div className="flex justify-end">
+          <Link
+            to={`/club/${encodeURIComponent(clubProfile.public_profile_slug)}`}
+            className="gx-btn gx-btn-secondary"
+            data-testid="open-public-club-profile"
+          >
+            <ExternalLink className="h-3.5 w-3.5" /> View public club profile
+          </Link>
+        </div>
+      )}
       {/* Privacy Isolation Alert for Shared Save Participants */}
       {privacy_redacted && (
         <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex items-start space-x-3 text-amber-200">
