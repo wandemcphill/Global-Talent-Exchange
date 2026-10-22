@@ -700,6 +700,16 @@ def test_issue_274_signup_model_and_turnstile_security_regression(app_client, mo
 
     monkeypatch.setattr(turnstile.httpx, "post", fake_siteverify)
 
+    retired_creator_response = client.post(
+        "/auth/signup/creator",
+        json=creator_signup_payload(
+            email="turnstile-creator@example.com",
+            username="turnstile_creator",
+            password=TEST_PASSWORD,
+        ),
+    )
+    assert retired_creator_response.status_code == 410, retired_creator_response.text
+
     base_payload = {
         "email": "issue274-user@example.com",
         "username": "issue274_user",
@@ -975,14 +985,6 @@ def test_turnstile_enforced_on_all_signup_routes(app_client, monkeypatch) -> Non
             user_signup_payload(
                 email="turnstile-user@example.com",
                 username="turnstile_user",
-                password=TEST_PASSWORD,
-            ),
-        ),
-        (
-            "/auth/signup/creator",
-            creator_signup_payload(
-                email="turnstile-creator@example.com",
-                username="turnstile_creator",
                 password=TEST_PASSWORD,
             ),
         ),
