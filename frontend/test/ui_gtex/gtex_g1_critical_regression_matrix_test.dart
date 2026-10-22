@@ -29,17 +29,19 @@ void main() {
           capabilities: fullCapabilities,
         );
 
+        // User/club-owner accounts never acquire Creator or Trader
+        // workspaces from stale additive capability flags.
         expect(
           model.availableWorkspaces,
-          containsAll(<GtexWorkspaceKind>[
+          orderedEquals(<GtexWorkspaceKind>[
             GtexWorkspaceKind.club,
             GtexWorkspaceKind.fan,
             GtexWorkspaceKind.scouting,
-            GtexWorkspaceKind.trader,
-            GtexWorkspaceKind.creator,
             GtexWorkspaceKind.admin,
           ]),
         );
+        expect(model.availableWorkspaces, isNot(contains(GtexWorkspaceKind.trader)));
+        expect(model.availableWorkspaces, isNot(contains(GtexWorkspaceKind.creator)));
         expect(model.showWorkspaceSwitcher, isTrue);
 
         // 1. Club workspace
