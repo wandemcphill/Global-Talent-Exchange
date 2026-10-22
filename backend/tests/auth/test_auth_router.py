@@ -583,7 +583,12 @@ def test_user_creator_and_trader_signup_sessions_include_public_account_type(
         else:
             assert bootstrap["club"] is None
             assert bootstrap["onboarding"]["has_club"] is False
-            assert bootstrap["onboarding"]["requires_club"] is True
+            assert bootstrap["onboarding"]["requires_club"] is False
+            assert bootstrap["onboarding"]["suggested_route"] == "/app/home"
+            assert "continue_as_fan" in bootstrap["onboarding"]["available_actions"]
+            assert "national_team_rentals" in bootstrap["onboarding"]["available_actions"]
+            assert "create_club" in bootstrap["onboarding"]["available_actions"]
+            assert "club_owner" not in bootstrap["roles"]
 
     with app.state.session_factory() as session:
         creator = session.scalar(select(User).where(User.email == "account-type-creator@example.com"))
