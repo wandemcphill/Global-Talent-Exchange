@@ -87,7 +87,10 @@ void main() {
     ));
     await tester.tap(find.text('Gift'));
     await tester.pumpAndSettle();
-    for (final String key in <String>['ballon_dor', 'pending_review_crown']) {
+    for (final String key in <String>[
+      'ballon_dor',
+      'pending_review_crown',
+    ]) {
       final Finder giftCard = find.byKey(Key('gtex-gift-card-$key'));
       await tester.ensureVisible(giftCard);
       await tester.pumpAndSettle();
