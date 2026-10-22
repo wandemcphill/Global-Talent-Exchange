@@ -63,6 +63,25 @@ void main() {
         },
         'squad': <String, Object?>{
           'player_count': 22,
+          'players': <Object?>[
+            <String, Object?>{
+              'id': 'player-1',
+              'name': 'Samuel Okoro',
+              'position': 'ST',
+              'age': 24,
+              'rating': 91,
+              'potential': 93,
+            },
+            <String, Object?>{
+              'id': 'regen-1',
+              'name': 'Kaito Mensah',
+              'position': 'RW',
+              'age': 17,
+              'rating': 78,
+              'potential': 97,
+              'is_regen': true,
+            },
+          ],
           'best_player': <String, Object?>{
             'id': 'player-1',
             'name': 'Samuel Okoro',
@@ -119,6 +138,11 @@ void main() {
     expect(profile.stadium['capacity'], 42000);
     expect(profile.facilities['training_level'], 4);
     expect(profile.academy['prospect_count'], 1);
+    expect(profile.squadPlayerCount, 22);
+    expect(profile.squadPlayers.map((player) => player.name), <String>[
+      'Samuel Okoro',
+      'Kaito Mensah',
+    ]);
     expect(profile.bestPlayer?.name, 'Samuel Okoro');
     expect(profile.mostPromisingPlayer?.name, 'Kaito Mensah');
     expect(profile.mostPromisingPlayer?.isRegen, isTrue);
