@@ -286,6 +286,19 @@ def offer_gift(session: Session, *, asset_id: str, user_id: str, recipient_ref: 
         raise LegacyError("not_asset_owner", 403)
     elif asset.owner_class not in {"club", "owner"} and asset.club_id is not None:
         require_owner(session, asset.club_id, user_id)
+
+    # Club luxury incentives are reserved for academy regens. Leave ordinary
+    # user-to-user gifts unchanged when the recipient_ref is not a squad player.
+    from app.owner_console.models import OwnerSquadPlayer
+
+    player_recipient = session.get(OwnerSquadPlayer, recipient_ref)
+    if player_recipient is not None and not player_recipient.is_regen:
+        raise LegacyError(
+            "player_not_eligible_for_gift",
+            400,
+            "Luxury gifts can only be given to academy regens.",
+        )
+
     asset.status = "offered"
     gift = ClubLegacyGift(asset_id=asset.id, sender_user_id=user_id, recipient_ref=recipient_ref, status="offered")
     session.add(gift)

@@ -861,6 +861,12 @@ def gift_asset_to_squad_player(
     player = session.get(OwnerSquadPlayer, player_id)
     if not player or player.club_id != club_id:
         raise OwnerError("player_not_found", 404, "Player not in club squad.")
+    if not player.is_regen:
+        raise OwnerError(
+            "player_not_eligible_for_gift",
+            400,
+            "Luxury gifts can only be given to academy regens.",
+        )
 
     item_key = catalog_key or "chronos_tourbillon_watch"
     item = SHOWROOM_CATALOG.get(item_key)

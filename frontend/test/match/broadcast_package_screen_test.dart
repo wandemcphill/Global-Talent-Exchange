@@ -70,13 +70,23 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Send gift'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Captain Crown'));
+      // The redesigned picker requires an explicit gift selection followed by
+      // the send action; it must not send the default selection automatically.
+      await tester.tap(find.byKey(const Key('gtex-gift-card-goal_celebration')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('gtex-gift-send-button')));
       await tester.pumpAndSettle();
 
       expect(giftClient.lastTarget?.recipientUserId, 'creator-user-1');
-      expect(giftClient.lastGift?.key, 'crown');
+      expect(giftClient.lastGift?.key, 'goal_celebration');
+      expect(find.text('Delivered to Studio Kai'), findsOneWidget);
+      expect(find.text('10.0000 Fan Coin'), findsOneWidget);
+      expect(find.byKey(const Key('gtex-gift-delivery-close')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('gtex-gift-delivery-close')));
+      await tester.pumpAndSettle();
       expect(
-        find.text('Captain Crown sent to Studio Kai for 20.0000 Fan Coin.'),
+        find.text('Goal Celebration sent to Studio Kai for 10.0000 Fan Coin.'),
         findsOneWidget,
       );
     },

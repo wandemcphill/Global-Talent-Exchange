@@ -368,10 +368,12 @@ class _NewsroomCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Row(
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 6,
+                  runSpacing: 4,
                   children: const <Widget>[
                     Icon(Icons.info_outline_rounded, size: 14, color: kGoldPrimary),
-                    SizedBox(width: 6),
                     Text(
                       'STORY CONCEPT • NOT LIVE DATA',
                       style: TextStyle(
