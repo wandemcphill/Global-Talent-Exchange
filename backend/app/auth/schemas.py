@@ -417,6 +417,8 @@ class CurrentUserResponse(BaseModel):
     full_name: str | None
     phone_number: str | None
     age_confirmed_at: datetime | None
+    email_verified_at: datetime | None = None
+    phone_verified_at: datetime | None = None
     display_name: str | None
     avatar_url: str | None
     favourite_club: str | None
