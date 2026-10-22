@@ -385,6 +385,10 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
               builder: (BuildContext context, Widget? child) {
                 final MatchTimelineFrame frame = controller.displayFrame;
                 final MatchEvent? activeEvent = controller.activeEvent;
+                final MatchEvent? activeGoalEvent =
+                    activeEvent?.type == MatchViewerEventType.goal
+                        ? activeEvent
+                        : null;
                 return SafeArea(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
@@ -422,15 +426,15 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                             frame: frame,
                           ),
                         ),
-                        if (activeEvent?.type == MatchViewerEventType.goal) ...<Widget>[
+                        if (activeGoalEvent != null) ...<Widget>[
                           const SizedBox(height: 4),
                           Align(
                             alignment: Alignment.center,
                             child: FilledButton.tonalIcon(
                               key: const Key('match-2d-replay-active-goal'),
-                              onPressed: () => controller.replayEvent(activeEvent),
+                              onPressed: () => controller.replayEvent(activeGoalEvent),
                               icon: const Icon(Icons.replay_circle_filled_rounded),
-                              label: Text('REPLAY GOAL · ${activeEvent.minute}\''),
+                              label: Text('REPLAY GOAL · ${activeGoalEvent.minute}\''),
                             ),
                           ),
                         ],
