@@ -217,6 +217,7 @@ class GtexPublicClubProfileData {
     required this.facilities,
     required this.academy,
     required this.squadPlayerCount,
+    this.squadPlayers = const <GtexPublicClubPlayer>[],
     required this.staff,
     required this.coachBuses,
     required this.trophies,
@@ -254,6 +255,7 @@ class GtexPublicClubProfileData {
   final GtexPublicJson facilities;
   final GtexPublicJson academy;
   final int squadPlayerCount;
+  final List<GtexPublicClubPlayer> squadPlayers;
   final GtexPublicClubPlayer? bestPlayer;
   final GtexPublicClubPlayer? mostPromisingPlayer;
   final List<GtexPublicClubPerson> staff;
@@ -285,6 +287,9 @@ class GtexPublicClubProfileData {
       facilities: _publicMap(json['facilities']),
       academy: _publicMap(json['academy']),
       squadPlayerCount: _publicInt(squad['player_count']) ?? 0,
+      squadPlayers: _publicRows(squad['players'])
+          .map(GtexPublicClubPlayer.fromJson)
+          .toList(growable: false),
       bestPlayer: best is Map ? GtexPublicClubPlayer.fromJson(Map<String, Object?>.from(best)) : null,
       mostPromisingPlayer: promising is Map
           ? GtexPublicClubPlayer.fromJson(Map<String, Object?>.from(promising))
