@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
 import { fmt, label, useActiveClub, useClub, useClubShowroom, useControlCenter, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, Stat } from "@/components/gtex/ui";
-import { Plane, Building, Gift, Sparkles, BookOpen, ExternalLink, CheckCircle } from "lucide-react";
+import { Building, Gift, Sparkles, BookOpen, ExternalLink, CheckCircle, Coins, LockKeyhole, X, PackageCheck } from "lucide-react";
 
 function Facilities({ club }: any) {
   const refresh = useRefreshOwner();
@@ -65,25 +65,44 @@ function Facilities({ club }: any) {
 function ShowroomPanel({ club }: any) {
   const refresh = useRefreshOwner();
   const { data, isLoading } = useClubShowroom(club.club_id);
+  const { data: clubDetail } = useClub(club.club_id);
   const [busyItem, setBusyItem] = useState<string | null>(null);
+  const [acquiringItem, setAcquiringItem] = useState<any | null>(null);
   const [giftingItem, setGiftingItem] = useState<any | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
   const [giftNote, setGiftNote] = useState<string>("");
+  const [giftReceipt, setGiftReceipt] = useState<any | null>(null);
+  const [purchaseReceipt, setPurchaseReceipt] = useState<any | null>(null);
 
-  const items: any[] = data?.showroom || [];
-  const squad: any[] = data?.squad || club.squad || [];
+  // Current API returns {catalog, owned_assets}; accept the older transformed
+  // shape too so this panel remains compatible with existing deployed builds.
+  const rawCatalog = data?.catalog ?? data?.showroom?.catalog ?? data?.showroom;
+  const rawOwnedAssets = data?.owned_assets ?? data?.showroom?.owned_assets;
+  const rawSquad = data?.squad ?? clubDetail?.squad ?? club.squad;
+  const items: any[] = Array.isArray(rawCatalog) ? rawCatalog : [];
+  const ownedAssets: any[] = Array.isArray(rawOwnedAssets) ? rawOwnedAssets : [];
+  const squad: any[] = Array.isArray(rawSquad) ? rawSquad : [];
+  const selectedPlayer = squad.find((p: any) => p.id === selectedPlayerId);
+  const keyOf = (item: any) => String(item?.catalog_key || item?.key || item?.id || "");
+  const formatPrice = (item: any) => fmt(item?.price_gtex, 2);
+  const assetImage = (item: any) => item?.image_url || "";
 
-  const handlePurchase = async (catalogKey: string) => {
+  const handlePurchase = async (item: any) => {
+    const catalogKey = keyOf(item);
+    if (!catalogKey || busyItem) return;
     setBusyItem(catalogKey);
     try {
       const res = await api.post(`/owner/clubs/${club.club_id}/showroom/purchase`, {
         catalog_key: catalogKey,
+        idempotency_key: `showroom-purchase:${club.club_id}:${catalogKey}:${Date.now()}`,
       });
-      const d = res.data;
-      if (d.broadcast_globally) {
-        toast.success(`Acquired ${d.asset.custom_name}! Broadcast live to GTEX global ticker.`);
+      const result = res.data;
+      setAcquiringItem(null);
+      setPurchaseReceipt({ item, result });
+      if (result.broadcast_globally) {
+        toast.success(`Acquired ${result.asset.custom_name}. Verified notice published to the GTEX global wire.`);
       } else {
-        toast.success(`Acquired ${d.asset.custom_name} for club operations.`);
+        toast.success(`Acquired ${result.asset.custom_name} for club operations. This purchase stays private.`);
       }
       refresh();
     } catch (e) {
@@ -95,24 +114,44 @@ function ShowroomPanel({ club }: any) {
 
   const handleGift = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!giftingItem || !selectedPlayerId) return;
-    setBusyItem(giftingItem.key);
+    if (!giftingItem || !selectedPlayerId || busyItem) return;
+    const catalogKey = keyOf(giftingItem);
+    if (!catalogKey) {
+      toast.error("This showroom item is missing its catalogue reference.");
+      return;
+    }
+    setBusyItem(`gift:${catalogKey}`);
     try {
-      await api.post(`/owner/clubs/${club.club_id}/showroom/gift`, {
+      const { data: result } = await api.post(`/owner/clubs/${club.club_id}/showroom/gift`, {
         player_id: selectedPlayerId,
-        catalog_key: giftingItem.key,
-        note: giftNote,
+        catalog_key: catalogKey,
+        note: giftNote.trim(),
+        idempotency_key: `showroom-gift:${club.club_id}:${catalogKey}:${selectedPlayerId}:${Date.now()}`,
       });
-      toast.success(`Gifted ${giftingItem.name} to player! Broadcast live to GTEX wire.`);
+      const recipient = result.player || selectedPlayer;
+      setGiftReceipt({ item: giftingItem, player: recipient, note: giftNote.trim(), result });
       setGiftingItem(null);
       setSelectedPlayerId("");
       setGiftNote("");
+      if (result.broadcast_event) {
+        toast.success(`GTEX confirmed ${giftingItem.name} for ${recipient?.name || "your player"}; a verified gift event was recorded.`);
+      } else {
+        toast.success(`Gift recorded for ${recipient?.name || "your player"}.`);
+      }
       refresh();
     } catch (e) {
       toast.error(errMsg(e));
     } finally {
       setBusyItem(null);
     }
+  };
+
+  const rarityFor = (item: any) => {
+    const category = String(item.category || "").toLowerCase();
+    if (category === "jet" || item.price_gtex >= 4000) return "Prestige";
+    if (item.can_gift_to_player) return "Player eligible";
+    if (category === "facility") return "Infrastructure";
+    return "Private collection";
   };
 
   return (
@@ -122,144 +161,291 @@ function ShowroomPanel({ club }: any) {
       testid="showroom-panel"
       className="lg:col-span-12"
     >
-      <p className="text-xs text-slate-400 mb-4 max-w-2xl">
-        Jets and player gifts broadcast instantly on the global live wire upon confirmed blockchain/ledger settlement.
-        Personal luxury purchases remain confidential to your boardroom.
-      </p>
+      <div className="mb-5 flex flex-col gap-3 rounded-xl border border-amber-500/20 bg-gradient-to-r from-amber-500/[0.09] via-slate-900/60 to-transparent p-4 sm:flex-row sm:items-center">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-amber-300/30 bg-amber-400/10 text-amber-200">
+          <Sparkles className="h-6 w-6" />
+        </div>
+        <div className="min-w-0">
+          <div className="text-[10px] font-black uppercase tracking-[0.23em] text-amber-200">The owner's private collection</div>
+          <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-300">
+            Acquire prestige assets through the club treasury, or purchase a player-eligible gift and deliver it directly to a registered squad member. Only eligible, verified events are published to the global wire.
+          </p>
+        </div>
+        <div className="sm:ml-auto shrink-0 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2">
+          <div className="text-[9px] uppercase tracking-wider text-slate-500">Treasury</div>
+          <div className="font-mono text-sm font-bold text-amber-200">{fmt(club.cash)} GTX</div>
+        </div>
+      </div>
 
       {isLoading ? (
         <Loading />
+      ) : items.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/40 p-8 text-center">
+          <Gift className="mx-auto mb-3 h-8 w-8 text-amber-300" />
+          <div className="text-sm font-bold text-white">Showroom catalogue unavailable</div>
+          <p className="mx-auto mt-2 max-w-md text-xs text-slate-400">
+            GTEX did not return the luxury catalogue. Refresh the club data before trying to purchase or gift any item.
+          </p>
+        </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {items.map((it: any) => {
+            const key = keyOf(it);
             const isJet = it.category === "jet";
+            const isBusy = busyItem === key;
             return (
-              <div
-                key={it.key}
-                className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 flex flex-col justify-between space-y-3 hover:border-amber-500/30 transition-colors"
+              <article
+                key={key}
+                data-testid={`showroom-item-${key}`}
+                className="group flex min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900 to-slate-950 shadow-lg shadow-black/15 transition-all duration-300 hover:-translate-y-0.5 hover:border-amber-400/40 hover:shadow-amber-900/10"
               >
-                <div className="space-y-2">
-                  <div className="h-28 rounded-lg bg-slate-900 overflow-hidden relative border border-white/5 flex items-center justify-center">
+                <div className="relative h-44 overflow-hidden border-b border-white/5 bg-slate-950">
+                  {assetImage(it) ? (
                     <img
-                      src={it.image_url}
+                      src={assetImage(it)}
                       alt={it.name}
-                      className="w-full h-full object-cover"
+                      className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                       onError={(e) => {
-                        (e.target as HTMLElement).style.display = "none";
+                        (e.currentTarget as HTMLImageElement).style.opacity = "0";
                       }}
                     />
-                    <div className="absolute top-2 right-2">
-                      {isJet ? (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                          Global Wire
-                        </span>
-                      ) : (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-800 text-slate-400">
-                          Private
-                        </span>
+                  ) : (
+                    <div className="flex h-full items-center justify-center bg-gradient-to-br from-slate-900 via-slate-950 to-amber-900/10">
+                      <Building className="h-12 w-12 text-amber-300/70" />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/10 to-transparent" />
+                  <div className="absolute left-3 top-3">
+                    <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[9px] font-black uppercase tracking-wider ${isJet ? "border-amber-300/40 bg-amber-400/15 text-amber-200" : "border-slate-600 bg-slate-950/80 text-slate-300"}`}>
+                      {isJet ? <ExternalLink className="h-3 w-3" /> : <LockKeyhole className="h-3 w-3" />}
+                      {isJet ? "Eligible global wire" : "Private"}
+                    </span>
+                  </div>
+                  <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between gap-2">
+                    <span className="rounded-md border border-white/10 bg-slate-950/75 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-slate-200">{rarityFor(it)}</span>
+                    <span className="flex items-center gap-1 rounded-md bg-slate-950/80 px-2 py-1 font-mono text-[11px] font-black text-amber-200">
+                      <Coins className="h-3 w-3" /> {formatPrice(it)} GTX
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-1 flex-col p-4">
+                  <div className="min-h-[92px]">
+                    <h4 className="text-sm font-extrabold leading-snug text-white">{it.name}</h4>
+                    <p className="mt-1 line-clamp-3 text-[11px] leading-5 text-slate-400">{it.model || it.description || "A limited prestige asset for your club collection."}</p>
+                  </div>
+                  <div className="mt-auto space-y-2 border-t border-slate-800 pt-3">
+                    <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500">
+                      <span>Club treasury debit</span>
+                      <span className="font-mono font-bold text-slate-300">{formatPrice(it)} GTX</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Btn
+                        variant="secondary"
+                        className="flex-1 text-xs"
+                        disabled={!key || !!busyItem}
+                        onClick={() => setAcquiringItem(it)}
+                      >
+                        {isBusy ? "Processing…" : "Acquire asset"}
+                      </Btn>
+                      {it.can_gift_to_player && squad.length > 0 && (
+                        <Btn
+                          variant="ghost"
+                          className="border border-purple-400/25 px-3 text-xs text-purple-300 hover:border-purple-300/60 hover:text-purple-200"
+                          disabled={!!busyItem}
+                          title={`Gift ${it.name} to a squad player`}
+                          onClick={() => {
+                            setGiftingItem(it);
+                            setSelectedPlayerId(squad[0]?.id || "");
+                          }}
+                        >
+                          <Gift className="mr-1 h-3.5 w-3.5" /> Gift
+                        </Btn>
                       )}
                     </div>
                   </div>
-
-                  <div>
-                    <h4 className="text-sm font-bold text-white">{it.name}</h4>
-                    <p className="text-[11px] text-slate-400">{it.model || it.description}</p>
-                  </div>
                 </div>
-
-                <div className="pt-2 border-t border-slate-900 space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500">Price</span>
-                    <span className="font-mono font-bold text-amber-400">{fmt(it.price_gtex)} GTX</span>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Btn
-                      variant="secondary"
-                      className="flex-1 text-xs"
-                      disabled={busyItem === it.key}
-                      onClick={() => handlePurchase(it.key)}
-                    >
-                      {busyItem === it.key ? "…" : "Acquire"}
-                    </Btn>
-
-                    {it.can_gift_to_player && squad.length > 0 && (
-                      <Btn
-                        variant="ghost"
-                        className="text-xs px-2.5 text-purple-400 hover:text-purple-300"
-                        title="Gift to squad player"
-                        onClick={() => {
-                          setGiftingItem(it);
-                          setSelectedPlayerId(squad[0]?.id || "");
-                        }}
-                      >
-                        <Gift className="w-3.5 h-3.5" />
-                      </Btn>
-                    )}
-                  </div>
-                </div>
-              </div>
+              </article>
             );
           })}
         </div>
       )}
 
-      {/* Gift Modal */}
-      {giftingItem && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <h3 className="text-base font-bold text-white flex items-center space-x-2">
-              <Gift className="w-4 h-4 text-purple-400" />
-              <span>Gift {giftingItem.name} to Player</span>
-            </h3>
-            <p className="text-xs text-slate-400">
-              Gifting luxury assets boosts player morale (+15%) and announces your club's prestige on the GTEX Global Wire.
-            </p>
-
-            <form onSubmit={handleGift} className="space-y-3">
-              <div>
-                <label className="text-xs font-medium text-slate-300">Select Squad Player</label>
-                <select
-                  value={selectedPlayerId}
-                  onChange={(e) => setSelectedPlayerId(e.target.value)}
-                  className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-400"
-                >
-                  {squad.map((p: any) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.position}) · Morale: {p.morale}%
-                    </option>
-                  ))}
-                </select>
+      {ownedAssets.length > 0 && (
+        <section className="mt-6 rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <BookOpen className="h-4 w-4 text-amber-300" />
+            <div>
+              <h3 className="text-xs font-extrabold text-white">Verified luxury & gifting moments</h3>
+              <p className="text-[10px] text-slate-500">Recent events returned by the GTEX owner newsroom service</p>
+            </div>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {ownedAssets.slice(0, 6).map((event: any) => (
+              <div key={event.id} className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/70 p-3">
+                {event.image_url ? (
+                  <img src={event.image_url} alt="" className="h-12 w-12 rounded-lg object-cover" />
+                ) : (
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-amber-400/10 text-amber-300"><Gift className="h-5 w-5" /></div>
+                )}
+                <div className="min-w-0">
+                  <div className="truncate text-xs font-bold text-slate-200">{event.item_name || event.custom_name || "Luxury event"}</div>
+                  <div className="mt-1 truncate text-[10px] text-slate-500">{(event.player_name || event.gifted_to_player_name) ? `Gifted to ${event.player_name || event.gifted_to_player_name}` : event.created_at ? new Date(event.created_at).toLocaleDateString() : "Recorded on GTEX wire"}</div>
+                  {event.purchase_price_gtex != null && <div className="mt-1 font-mono text-[10px] text-amber-300">{fmt(event.purchase_price_gtex, 2)} GTX</div>}
+                </div>
               </div>
+            ))}
+          </div>
+        </section>
+      )}
 
+      {/* Purchase is explicit and confirmed before GTEX debits the club treasury. */}
+      {acquiringItem && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" data-testid="showroom-purchase-confirm">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-amber-300/35 bg-gradient-to-br from-slate-900 via-slate-950 to-amber-950/20 shadow-2xl shadow-amber-950/20">
+            <div className="relative h-40 bg-slate-950">
+              {assetImage(acquiringItem) && <img src={assetImage(acquiringItem)} alt={acquiringItem.name} className="h-full w-full object-cover" />}
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 to-transparent" />
+              <button type="button" onClick={() => setAcquiringItem(null)} className="absolute right-3 top-3 rounded-full border border-white/15 bg-black/60 p-2 text-white" aria-label="Close purchase confirmation"><X className="h-4 w-4" /></button>
+              <div className="absolute bottom-3 left-4 right-4">
+                <div className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-200">Treasury authorisation</div>
+                <h3 className="mt-1 text-lg font-black text-white">{acquiringItem.name}</h3>
+              </div>
+            </div>
+            <div className="space-y-4 p-5">
+              <p className="text-xs leading-5 text-slate-300">Confirm this acquisition. GTEX will validate the catalogue item and debit the verified price from your club treasury.</p>
+              <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-black/25 px-3 py-3">
+                <span className="text-xs text-slate-400">Total price</span>
+                <span className="font-mono text-base font-black text-amber-200">{formatPrice(acquiringItem)} GTX</span>
+              </div>
+              {acquiringItem.category === "jet" ? (
+                <div className="flex gap-2 rounded-lg border border-amber-400/20 bg-amber-400/[0.06] p-3 text-[11px] leading-5 text-amber-100"><ExternalLink className="mt-0.5 h-4 w-4 shrink-0" /><span>Private jet acquisitions publish a verified global wire notice. Ordinary luxury purchases stay private.</span></div>
+              ) : (
+                <div className="flex gap-2 rounded-lg border border-slate-700 bg-slate-950/50 p-3 text-[11px] leading-5 text-slate-400"><LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" /><span>This acquisition is private; the screen will only show a global notice if the server confirms one.</span></div>
+              )}
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setAcquiringItem(null)} className="flex-1 rounded-lg border border-slate-700 px-4 py-3 text-xs font-bold text-slate-300 hover:bg-white/5" disabled={!!busyItem}>Cancel</button>
+                <button type="button" onClick={() => handlePurchase(acquiringItem)} className="flex-1 rounded-lg bg-amber-300 px-4 py-3 text-xs font-black text-slate-950 transition hover:bg-amber-200 disabled:opacity-50" disabled={!!busyItem}>
+                  {busyItem ? "Processing…" : `Confirm · ${formatPrice(acquiringItem)} GTX`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Player selection includes real squad metadata before spending is confirmed. */}
+      {giftingItem && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" data-testid="showroom-gift-confirm">
+          <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-purple-400/30 bg-gradient-to-br from-slate-900 via-slate-950 to-purple-950/25 shadow-2xl shadow-purple-950/25">
+            <div className="relative h-44 bg-slate-950">
+              {assetImage(giftingItem) && <img src={assetImage(giftingItem)} alt={giftingItem.name} className="h-full w-full object-cover opacity-90" />}
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/10 to-transparent" />
+              <button type="button" onClick={() => setGiftingItem(null)} className="absolute right-3 top-3 rounded-full border border-white/15 bg-black/60 p-2 text-white" aria-label="Close gift dialog"><X className="h-4 w-4" /></button>
+              <div className="absolute bottom-3 left-4 right-4">
+                <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.2em] text-purple-200"><Gift className="h-3 w-3" /> A personal club reward</div>
+                <h3 className="mt-1 text-lg font-black text-white">{giftingItem.name}</h3>
+                <div className="mt-1 font-mono text-xs font-bold text-amber-200">{formatPrice(giftingItem)} GTX · charged to club treasury</div>
+              </div>
+            </div>
+            <form onSubmit={handleGift} className="space-y-4 p-5">
+              <div className="rounded-lg border border-purple-400/20 bg-purple-400/[0.06] p-3 text-xs leading-5 text-slate-300">
+                This gift is purchased and delivered directly to the selected squad player. GTEX records the verified gift event and the actual morale change returned by the server.
+              </div>
               <div>
-                <label className="text-xs font-medium text-slate-300">Award Memo / Note</label>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Choose squad player</label>
+                <div className="mt-2 grid max-h-52 gap-2 overflow-y-auto sm:grid-cols-2">
+                  {squad.map((p: any) => (
+                    <button
+                      type="button"
+                      key={p.id}
+                      onClick={() => setSelectedPlayerId(p.id)}
+                      className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${selectedPlayerId === p.id ? "border-purple-300/70 bg-purple-400/10" : "border-slate-800 bg-slate-950/50 hover:border-slate-600"}`}
+                    >
+                      {p.portrait_url ? <img src={p.portrait_url} alt="" className="h-11 w-11 shrink-0 rounded-full border border-white/10 object-cover" /> : <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-800 text-xs font-black text-amber-200">{String(p.name || "?").slice(0, 1)}</div>}
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-xs font-extrabold text-white">{p.name}</div>
+                        <div className="mt-0.5 text-[10px] text-slate-500">{p.position || "Squad player"} · OVR {p.rating ?? "—"}</div>
+                        <div className="text-[10px] text-slate-400">Morale {p.morale ?? "—"}%</div>
+                      </div>
+                      {selectedPlayerId === p.id && <CheckCircle className="h-4 w-4 shrink-0 text-purple-200" />}
+                    </button>
+                  ))}
+                </div>
+                {squad.length === 0 && <p className="mt-2 text-xs text-amber-200">No squad player data is available. Refresh your club roster before gifting.</p>}
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Personal note</label>
                 <input
                   type="text"
+                  maxLength={180}
                   value={giftNote}
                   onChange={(e) => setGiftNote(e.target.value)}
-                  placeholder="e.g. Hat-trick performance reward"
-                  className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-400"
+                  placeholder="A reward for the performance. A message from the owner."
+                  className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-3 text-xs text-white outline-none transition focus:border-purple-300/60"
                 />
               </div>
-
-              <div className="flex justify-end space-x-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setGiftingItem(null)}
-                  className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-white"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={busyItem === giftingItem.key}
-                  className="px-4 py-2 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white transition-colors"
-                >
-                  {busyItem === giftingItem.key ? "Gifting…" : `Gift · ${fmt(giftingItem.price_gtex)} GTX`}
+              <div className="flex gap-2 pt-1">
+                <button type="button" onClick={() => setGiftingItem(null)} className="flex-1 rounded-lg border border-slate-700 px-4 py-3 text-xs font-bold text-slate-300 hover:bg-white/5" disabled={!!busyItem}>Cancel</button>
+                <button type="submit" disabled={!selectedPlayerId || !!busyItem} className="flex-1 rounded-lg bg-purple-500 px-4 py-3 text-xs font-black text-white transition hover:bg-purple-400 disabled:opacity-50">
+                  {busyItem === `gift:${keyOf(giftingItem)}` ? "Delivering gift…" : `Confirm gift · ${formatPrice(giftingItem)} GTX`}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {purchaseReceipt && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" data-testid="showroom-purchase-receipt">
+          <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-amber-300/50 bg-gradient-to-br from-slate-900 via-slate-950 to-amber-950/25 p-6 text-center shadow-2xl shadow-amber-900/20">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_25%,rgba(251,191,36,0.16),transparent_52%)]" />
+            <div className="relative">
+              <div className="mx-auto flex h-28 w-28 animate-pulse items-center justify-center rounded-full border border-amber-300/50 bg-amber-400/10 p-3">
+                {assetImage(purchaseReceipt.item) ? <img src={assetImage(purchaseReceipt.item)} alt="" className="h-full w-full rounded-full object-cover" /> : <PackageCheck className="h-12 w-12 text-amber-200" />}
+              </div>
+              <div className="mt-5 text-[10px] font-black uppercase tracking-[0.22em] text-emerald-300"><CheckCircle className="mr-1 inline h-3.5 w-3.5" /> Acquisition confirmed</div>
+              <h3 className="mt-2 text-xl font-black text-white">{purchaseReceipt.result?.asset?.custom_name || purchaseReceipt.item.name}</h3>
+              <p className="mt-2 text-xs leading-5 text-slate-300">The GTEX showroom has confirmed the purchase and recorded the charge against your club treasury.</p>
+              <div className="mt-4 rounded-lg border border-slate-800 bg-black/30 px-4 py-3">
+                <div className="text-[10px] uppercase tracking-wider text-slate-500">Verified transaction</div>
+                <div className="mt-1 font-mono text-lg font-black text-amber-200">{fmt(purchaseReceipt.result?.asset?.price_gtex ?? purchaseReceipt.item.price_gtex, 2)} GTX</div>
+                <div className="mt-1 text-[10px] text-slate-400">{purchaseReceipt.result?.broadcast_globally ? "A verified global wire announcement was published." : "This item is a private collection acquisition."}</div>
+              </div>
+              <button type="button" onClick={() => setPurchaseReceipt(null)} className="mt-5 w-full rounded-lg bg-amber-300 px-4 py-3 text-xs font-black text-slate-950 hover:bg-amber-200">Return to showroom</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {giftReceipt && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/85 p-4 backdrop-blur-md" role="dialog" aria-modal="true" data-testid="showroom-gift-receipt">
+          <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-purple-300/50 bg-gradient-to-br from-slate-900 via-slate-950 to-purple-950/30 p-6 text-center shadow-2xl shadow-purple-950/30">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_25%,rgba(192,132,252,0.20),transparent_52%)]" />
+            <div className="relative">
+              <div className="mx-auto flex h-32 w-32 animate-bounce items-center justify-center rounded-full border border-purple-200/50 bg-purple-400/10 p-3">
+                {assetImage(giftReceipt.item) ? <img src={assetImage(giftReceipt.item)} alt="" className="h-full w-full rounded-full object-cover" /> : <Gift className="h-12 w-12 text-purple-200" />}
+              </div>
+              <div className="mt-5 text-[10px] font-black uppercase tracking-[0.22em] text-emerald-300"><CheckCircle className="mr-1 inline h-3.5 w-3.5" /> Gift delivery confirmed</div>
+              <h3 className="mt-2 text-xl font-black text-white">{giftReceipt.item.name}</h3>
+              <p className="mt-2 text-xs text-slate-300">A personal gift from the club owner to</p>
+              <div className="mx-auto mt-4 flex max-w-xs items-center gap-3 rounded-xl border border-purple-300/20 bg-black/30 p-3 text-left">
+                {giftReceipt.player?.portrait_url ? <img src={giftReceipt.player.portrait_url} alt="" className="h-14 w-14 rounded-full border border-purple-300/30 object-cover" /> : <div className="flex h-14 w-14 items-center justify-center rounded-full bg-purple-400/10 text-lg font-black text-purple-200">{String(giftReceipt.player?.name || "P").slice(0,1)}</div>}
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-extrabold text-white">{giftReceipt.player?.name || "Squad player"}</div>
+                  <div className="text-[10px] text-slate-400">{giftReceipt.player?.position || "First-team squad"}</div>
+                  {Number(giftReceipt.result?.morale_delta || 0) > 0 && <div className="mt-1 text-[10px] font-bold text-emerald-300">Morale +{giftReceipt.result.morale_delta} · confirmed</div>}
+                </div>
+                <CheckCircle className="h-5 w-5 shrink-0 text-emerald-300" />
+              </div>
+              {giftReceipt.note && <blockquote className="mt-4 text-xs italic text-purple-100">“{giftReceipt.note}”</blockquote>}
+              <div className="mt-4 rounded-lg border border-slate-800 bg-black/30 px-4 py-3">
+                <div className="text-[10px] uppercase tracking-wider text-slate-500">Gift transaction</div>
+                <div className="mt-1 font-mono text-base font-black text-purple-200">{fmt(giftReceipt.result?.asset?.price_gtex ?? giftReceipt.item.price_gtex, 2)} GTX</div>
+                <div className="mt-1 text-[10px] leading-4 text-slate-400">GTEX has recorded the gift event and the resulting player morale adjustment.</div>
+              </div>
+              <button type="button" onClick={() => setGiftReceipt(null)} className="mt-5 w-full rounded-lg bg-purple-400 px-4 py-3 text-xs font-black text-slate-950 hover:bg-purple-300">Return to the club</button>
+            </div>
           </div>
         </div>
       )}
