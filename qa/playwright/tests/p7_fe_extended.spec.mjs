@@ -49,7 +49,7 @@ test("Flutter Club HQ exposes the squad workspace or a clear create-club state w
     });
     let browseSheetOpened = false;
     if (!(await squadSectionDescription.isVisible().catch(() => false))) {
-      await page.getByTestId("gtex-master-detail-browse-action").click();
+      await page.getByRole("button", { name: "Club sections" }).click();
       browseSheetOpened = true;
     }
     await expect(squadSectionDescription).toBeVisible();
