@@ -21,12 +21,15 @@ test.afterEach(async ({ page: _page }, testInfo) => {
   await attachDiagnostics(testInfo);
 });
 
-test("Flutter Club HQ exposes the squad workspace or a clear create-club state without overflow", async ({
-  page,
-}, testInfo) => {
+test(
+  "Flutter Club HQ exposes the squad workspace or a clear create-club state without overflow",
+  async ({ page }, testInfo) => {
   // This workflow launches Flutter Web, not the separately hosted React shell
   // at /console. Use the Flutter Club HQ route and its semantic UI.
-  await visitAuthedRoute(page, process.env.GTEX_E2E_SQUAD_ROUTE ?? "/app/club");
+  await visitAuthedRoute(
+    page,
+    process.env.GTEX_E2E_SQUAD_ROUTE ?? "/app/club",
+  );
 
   const noClubEntry = page.getByText("Build your club command center", {
     exact: true,
@@ -63,12 +66,16 @@ test("Flutter Club HQ exposes the squad workspace or a clear create-club state w
     await expect(
       page.getByText("Lineup & squad registration", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByText("Open Lineup & Tactics", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("Open Lineup & Tactics", { exact: true }),
+    ).toBeVisible();
   }
 
   await verifyNoHorizontalOverflow(page);
   await captureScreenshot(page, testInfo, "lineup");
-});
+  },
+);
+
 test("A targeted notification opens its supplied target", async ({ page }, testInfo) => {
   test.skip(
     !process.env.GTEX_E2E_NOTIFICATION_TEXT || !process.env.GTEX_E2E_NOTIFICATION_TARGET,
