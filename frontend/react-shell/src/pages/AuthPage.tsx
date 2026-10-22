@@ -41,7 +41,7 @@ const accountChoices: Array<{ id: SignupAccountType; title: string; detail: stri
   {
     id: "user",
     title: "User Account",
-    detail: "Create a club at any time after signing in. Creator promotion requires no active club under your ownership.",
+    detail: "Create a club any time after signing in. Creator promotion requires that you no longer own any clubs; sell or transfer them first.",
   },
   {
     id: "creator",
