@@ -777,9 +777,7 @@ class CoinTraderService:
     @staticmethod
     def _require_dedicated_trader_account(actor: User) -> None:
         if actor.account_type != PublicAccountType.COIN_TRADER:
-            raise CoinTraderPermissionError(
-                "A dedicated Coin Trader account is required to operate a trader desk."
-            )
+            raise CoinTraderPermissionError("A dedicated Coin Trader account is required to operate a trader desk.")
 
     def _require_approved_profile_for_user(self, actor: User) -> CoinTraderProfile:
         profile = self._require_profile_for_user(actor)
