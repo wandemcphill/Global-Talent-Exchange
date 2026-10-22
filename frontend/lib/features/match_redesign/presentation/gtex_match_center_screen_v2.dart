@@ -370,7 +370,7 @@ class _PreMatchTacticalWorkspace extends StatelessWidget {
             height: 430,
             child: _BroadcastPanel(
               title: 'OFFICIAL TEAM SHEETS',
-              trailing: '\${match.home.formation} / \${match.away.formation}',
+              trailing: '${match.home.formation} / ${match.away.formation}',
               child: GtexMatchLineups(home: match.home, away: match.away),
             ),
           ),
