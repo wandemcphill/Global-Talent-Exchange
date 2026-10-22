@@ -58,11 +58,11 @@ class GtexPublicClubHomeV3 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color primary = _clubColor(profile.primaryColor, GtexColors.navy);
+    final Color primary = _clubColor(profile.primaryColor, GtexColors.surfaceBase);
     final Color secondary = _clubColor(profile.secondaryColor, GtexColors.gold);
     final Color accent = _clubColor(profile.accentColor, GtexColors.pitch);
     return ColoredBox(
-      color: GtexColors.navy,
+      color: GtexColors.surfaceBase,
       child: ListView(
         key: const Key('gtex-public-club-home-v3'),
         padding: EdgeInsets.zero,
@@ -151,8 +151,8 @@ class _ClubHero extends StatelessWidget {
         fit: StackFit.expand,
         children: <Widget>[
           Image.asset(_stadiumAsset, key: const Key('gtex-club-stadium-hero-image'), fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(colors: <Color>[primary, GtexColors.navy, secondary.withValues(alpha: 0.5)])))),
-          DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: <Color>[GtexColors.navy.withValues(alpha: 0.18), primary.withValues(alpha: 0.40), GtexColors.navy.withValues(alpha: 0.99)]))),
+            errorBuilder: (_, __, ___) => DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(colors: <Color>[primary, GtexColors.surfaceBase, secondary.withValues(alpha: 0.5)])))),
+          DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: <Color>[GtexColors.surfaceBase.withValues(alpha: 0.18), primary.withValues(alpha: 0.40), GtexColors.surfaceBase.withValues(alpha: 0.99)]))),
           Positioned(
             left: 18,
             right: 18,
@@ -209,7 +209,7 @@ class _Metric extends StatelessWidget {
     width: 190,
     child: Container(
       padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(color: GtexColors.panel, borderRadius: BorderRadius.circular(9), border: Border.all(color: GtexColors.border.withValues(alpha: 0.75))),
+      decoration: BoxDecoration(color: GtexColors.panel, borderRadius: BorderRadius.circular(9), border: Border.all(color: GtexColors.line.withValues(alpha: 0.75))),
       child: Row(children: <Widget>[
         Icon(icon, size: 24, color: accent),
         const SizedBox(width: 11),
@@ -243,7 +243,7 @@ class _Tag extends StatelessWidget {
   const _Tag({required this.label});
   final String label;
   @override
-  Widget build(BuildContext context) => Container(padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6), decoration: BoxDecoration(color: GtexColors.panelStrong, borderRadius: BorderRadius.circular(5), border: Border.all(color: GtexColors.border)), child: Text(label, style: const TextStyle(color: GtexColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700)));
+  Widget build(BuildContext context) => Container(padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6), decoration: BoxDecoration(color: GtexColors.panelStrong, borderRadius: BorderRadius.circular(5), border: Border.all(color: GtexColors.line)), child: Text(label, style: const TextStyle(color: GtexColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700)));
 }
 
 class _StadiumFeature extends StatelessWidget {
@@ -258,7 +258,7 @@ class _StadiumFeature extends StatelessWidget {
     final String name = (profile.stadium['name'] ?? profile.homeVenueName ?? 'Venue details unavailable').toString();
     return Container(
       clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(color: GtexColors.panel, borderRadius: BorderRadius.circular(12), border: Border.all(color: GtexColors.border)),
+      decoration: BoxDecoration(color: GtexColors.panel, borderRadius: BorderRadius.circular(12), border: Border.all(color: GtexColors.line)),
       child: LayoutBuilder(builder: (BuildContext context, BoxConstraints constraints) {
         final bool stacked = constraints.maxWidth < 600;
         final Widget image = SizedBox(
@@ -326,7 +326,7 @@ class _PlayerFeature extends StatelessWidget {
     return Container(
       height: 156,
       clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(color: GtexColors.panel, borderRadius: BorderRadius.circular(10), border: Border.all(color: GtexColors.border)),
+      decoration: BoxDecoration(color: GtexColors.panel, borderRadius: BorderRadius.circular(10), border: Border.all(color: GtexColors.line)),
       child: person == null
           ? Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: <Widget>[
               Icon(Icons.person_search_outlined, color: accent, size: 25),
@@ -379,7 +379,7 @@ class _ManagementPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(color: GtexColors.panel, borderRadius: BorderRadius.circular(11), border: Border.all(color: GtexColors.border)),
+    decoration: BoxDecoration(color: GtexColors.panel, borderRadius: BorderRadius.circular(11), border: Border.all(color: GtexColors.line)),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
       const Row(children: <Widget>[Icon(Icons.badge_outlined, color: GtexColors.gold), SizedBox(width: 8), Text('CLUB LEADERSHIP', style: TextStyle(color: GtexColors.text, fontWeight: FontWeight.w900, letterSpacing: 1.2, fontSize: 11))]),
       const SizedBox(height: 9),
@@ -425,7 +425,7 @@ class _AcademyAndFacilities extends StatelessWidget {
     return Column(children: <Widget>[
       Container(
         clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(color: GtexColors.panel, borderRadius: BorderRadius.circular(10), border: Border.all(color: GtexColors.border)),
+        decoration: BoxDecoration(color: GtexColors.panel, borderRadius: BorderRadius.circular(10), border: Border.all(color: GtexColors.line)),
         child: Row(children: <Widget>[
           SizedBox(width: 110, height: 130, child: Image.asset(_campusAsset, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: GtexColors.panelStrong, child: const Icon(Icons.school_outlined, color: GtexColors.gold, size: 38)))),
           Expanded(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
@@ -445,7 +445,7 @@ class _AcademyAndFacilities extends StatelessWidget {
           for (final (String, Object?, IconData) item in facilities)
             SizedBox(width: width, child: Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: GtexColors.panel, borderRadius: BorderRadius.circular(8), border: Border.all(color: GtexColors.border)),
+              decoration: BoxDecoration(color: GtexColors.panel, borderRadius: BorderRadius.circular(8), border: Border.all(color: GtexColors.line)),
               child: Row(children: <Widget>[
                 Icon(item.$3, color: accent, size: 20),
                 const SizedBox(width: 8),
@@ -491,7 +491,7 @@ class _CoachFleet extends StatelessWidget {
   Widget build(BuildContext context) {
     if (profile.coachBuses.isEmpty) return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: GtexColors.panel, borderRadius: BorderRadius.circular(9), border: Border.all(color: GtexColors.border)),
+      decoration: BoxDecoration(color: GtexColors.panel, borderRadius: BorderRadius.circular(9), border: Border.all(color: GtexColors.line)),
       child: const Row(children: <Widget>[Icon(Icons.directions_bus_outlined, color: GtexColors.textMuted, size: 28), SizedBox(width: 11), Expanded(child: Text('No club-owned coach buses are recorded yet.', style: TextStyle(color: GtexColors.textMuted)))]),
     );
     return LayoutBuilder(builder: (BuildContext context, BoxConstraints constraints) {
@@ -521,7 +521,7 @@ class _OwnerSpotlight extends StatelessWidget {
       onTap: onOpen,
       child: Container(
         padding: const EdgeInsets.all(17),
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(11), border: Border.all(color: GtexColors.border)),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(11), border: Border.all(color: GtexColors.line)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
           Row(children: <Widget>[
             Container(width: 54, height: 54, decoration: BoxDecoration(color: primary, borderRadius: BorderRadius.circular(9), border: Border.all(color: accent.withValues(alpha: 0.7))), child: const Icon(Icons.person_outline_rounded, color: GtexColors.gold, size: 30)),
@@ -570,7 +570,7 @@ class _TrophyShelf extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(15),
-    decoration: BoxDecoration(color: GtexColors.panel, borderRadius: BorderRadius.circular(10), border: Border.all(color: GtexColors.border)),
+    decoration: BoxDecoration(color: GtexColors.panel, borderRadius: BorderRadius.circular(10), border: Border.all(color: GtexColors.line)),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
       Row(children: <Widget>[Icon(Icons.emoji_events_outlined, color: accent, size: 23), const SizedBox(width: 8), const Text('HONOURS CABINET', style: TextStyle(color: GtexColors.text, fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w900))]),
       const SizedBox(height: 10),
@@ -600,7 +600,7 @@ class _AssetFeature extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     clipBehavior: Clip.antiAlias,
-    decoration: BoxDecoration(color: GtexColors.panel, borderRadius: BorderRadius.circular(9), border: Border.all(color: GtexColors.border)),
+    decoration: BoxDecoration(color: GtexColors.panel, borderRadius: BorderRadius.circular(9), border: Border.all(color: GtexColors.line)),
     child: Row(children: <Widget>[
       SizedBox(width: 112, height: 104, child: asset.previewFile == null
           ? Container(color: GtexColors.panelStrong, child: Icon(icon, color: accent, size: 35))
@@ -650,8 +650,8 @@ class _GtexPublicOwnerProfileScreenState extends State<GtexPublicOwnerProfileScr
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: GtexColors.navy,
-    appBar: AppBar(backgroundColor: GtexColors.navy, foregroundColor: GtexColors.text, title: const Text('Owner profile')),
+    backgroundColor: GtexColors.surfaceBase,
+    appBar: AppBar(backgroundColor: GtexColors.surfaceBase, foregroundColor: GtexColors.text, title: const Text('Owner profile')),
     body: FutureBuilder<GtexPublicOwnerProfileData>(
       future: _future,
       builder: (BuildContext context, AsyncSnapshot<GtexPublicOwnerProfileData> snapshot) {
@@ -678,7 +678,7 @@ class _GtexPublicOwnerProfileScreenState extends State<GtexPublicOwnerProfileScr
                   padding: const EdgeInsets.all(22),
                   decoration: BoxDecoration(gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: <Color>[Color(0xFF172740), Color(0xFF0A1323)]), borderRadius: BorderRadius.circular(14), border: Border.all(color: GtexColors.gold.withValues(alpha: 0.55))),
                   child: Row(children: <Widget>[
-                    Container(width: 66, height: 66, decoration: BoxDecoration(color: GtexColors.navy, borderRadius: BorderRadius.circular(12), border: Border.all(color: GtexColors.gold)), child: const Icon(Icons.workspace_premium_outlined, color: GtexColors.gold, size: 37)),
+                    Container(width: 66, height: 66, decoration: BoxDecoration(color: GtexColors.surfaceBase, borderRadius: BorderRadius.circular(12), border: Border.all(color: GtexColors.gold)), child: const Icon(Icons.workspace_premium_outlined, color: GtexColors.gold, size: 37)),
                     const SizedBox(width: 15),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
                       const Text('GTEX PUBLIC WEALTH DOSSIER', style: TextStyle(color: GtexColors.gold, fontSize: 9, letterSpacing: 1.3, fontWeight: FontWeight.w900)),
@@ -732,7 +732,7 @@ class _GtexPublicOwnerProfileScreenState extends State<GtexPublicOwnerProfileScr
                 const SizedBox(height: 24),
                 const _SectionTitle(kicker: 'PERSONAL COLLECTION', title: 'Rare assets and status pieces', subtitle: 'Only assets currently owned by this person appear here. Club-owned buses stay on each club page.'),
                 const SizedBox(height: 12),
-                if (owner.assets.isEmpty) Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: GtexColors.panel, borderRadius: BorderRadius.circular(9), border: Border.all(color: GtexColors.border)), child: const Text('No personal luxury assets are recorded yet.', style: TextStyle(color: GtexColors.textMuted))),
+                if (owner.assets.isEmpty) Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: GtexColors.panel, borderRadius: BorderRadius.circular(9), border: Border.all(color: GtexColors.line)), child: const Text('No personal luxury assets are recorded yet.', style: TextStyle(color: GtexColors.textMuted))),
                 LayoutBuilder(builder: (BuildContext context, BoxConstraints constraints) {
                   final double width = constraints.maxWidth < 520 ? constraints.maxWidth : (constraints.maxWidth - 20) / 3;
                   return Wrap(spacing: 10, runSpacing: 10, children: <Widget>[
@@ -763,7 +763,7 @@ class _OwnerAssetTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     clipBehavior: Clip.antiAlias,
-    decoration: BoxDecoration(color: GtexColors.panel, borderRadius: BorderRadius.circular(10), border: Border.all(color: GtexColors.border)),
+    decoration: BoxDecoration(color: GtexColors.panel, borderRadius: BorderRadius.circular(10), border: Border.all(color: GtexColors.line)),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
       AspectRatio(aspectRatio: 1.28, child: Stack(fit: StackFit.expand, children: <Widget>[
         if (asset.previewFile != null)
