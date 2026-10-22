@@ -601,7 +601,7 @@ class _ProspectsBoard extends StatelessWidget {
         // chips: the cell is a fixed box, so new content has to be paid for
         // here rather than clipped there. Raised again by 40 for the Floodlit
         // card's roomier padding and larger display type.
-        final double cellHeight = cardWidth < 320 ? 544 : 472;
+        final double cellHeight = cardWidth < 420 ? 544 : 480;
         // Section nav already labels this lane "Prospects"; skip a duplicate
         // board heading so the surface shows that label once.
         return Column(

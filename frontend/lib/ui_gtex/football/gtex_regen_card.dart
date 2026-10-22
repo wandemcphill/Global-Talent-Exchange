@@ -195,7 +195,12 @@ class GtexRegenCard extends StatelessWidget {
                       const SizedBox(width: GtexSpacing.sm),
                       portrait,
                       const SizedBox(width: GtexSpacing.sm),
-                      Expanded(child: details),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          physics: const ClampingScrollPhysics(),
+                          child: details,
+                        ),
+                      ),
                     ],
                   );
                 },
