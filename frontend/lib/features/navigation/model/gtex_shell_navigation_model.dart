@@ -115,10 +115,10 @@ class GtexShellCapabilities {
   final int unreadNotificationCount;
 
   bool get isDedicatedTraderAccount =>
-      accountType.trim().toLowerCase() == 'coin_trader' || isCoinTrader;
+      accountType.trim().toLowerCase() == 'coin_trader';
 
   bool get isDedicatedCreatorAccount =>
-      accountType.trim().toLowerCase() == 'creator' || isCreator;
+      accountType.trim().toLowerCase() == 'creator';
 
   bool get isClubOwner =>
       isAuthenticated &&
