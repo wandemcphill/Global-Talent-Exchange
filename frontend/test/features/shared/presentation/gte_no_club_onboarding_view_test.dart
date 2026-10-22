@@ -8,6 +8,8 @@ void main() {
     (WidgetTester tester) async {
       bool createClubCalled = false;
       bool nationalTeamCalled = false;
+      bool creatorApplicationCalled = false;
+      bool traderApplicationCalled = false;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -17,6 +19,8 @@ void main() {
               scrollable: true,
               onCreateClub: () => createClubCalled = true,
               onOpenNationalTeam: () => nationalTeamCalled = true,
+              onOpenCreatorAccessRequest: () => creatorApplicationCalled = true,
+              onOpenTraderAccessRequest: () => traderApplicationCalled = true,
             ),
           ),
         ),
@@ -31,6 +35,18 @@ void main() {
       await tester.pump();
 
       expect(nationalTeamCalled, isTrue);
+      expect(createClubCalled, isFalse);
+
+      await tester.ensureVisible(find.text('Apply for creator access'));
+      await tester.tap(find.text('Apply for creator access'));
+      await tester.pump();
+      expect(creatorApplicationCalled, isTrue);
+      expect(createClubCalled, isFalse);
+
+      await tester.ensureVisible(find.text('Open trader application'));
+      await tester.tap(find.text('Open trader application'));
+      await tester.pump();
+      expect(traderApplicationCalled, isTrue);
       expect(createClubCalled, isFalse);
     },
   );
