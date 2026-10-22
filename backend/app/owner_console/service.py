@@ -406,10 +406,13 @@ def sign_market_player(session: Session, user_id: str, club_id: str, player_id: 
 def unsign_market_player(session: Session, user_id: str, club_id: str, player_id: str) -> dict[str, Any]:
     state = require_state(session, club_id, user_id)
     current = squad(session, club_id)
-    target = next((p for p in current if p.player_ref == player_id or p.id == player_id or str(p.id) == str(player_id)), None)
+    target = next(
+        (p for p in current if p.player_ref == player_id or p.id == player_id or str(p.id) == str(player_id)), None
+    )
     if target is None:
         raise OwnerError("player_not_in_squad", 404)
-    
+
+
     refund_amount = int(target.value_coin or 0)
     if refund_amount > 0:
         ledger.record(
@@ -425,7 +428,8 @@ def unsign_market_player(session: Session, user_id: str, club_id: str, player_id
             related_id=target.player_ref or target.id,
             memo=f"Released {target.name} (refund)",
         )
-    
+
+
     session.delete(target)
     session.flush()
 
@@ -493,7 +497,10 @@ def autopick_squad(session: Session, user_id: str, club_id: str) -> dict[str, An
     remaining_budget = club_cash
 
     if not has_keeper:
-        gk_candidate = next((c for c in eligible if engine.normalize_position(c.normalized_position or c.position).startswith("goal")), None)
+        gk_candidate = next(
+            (c for c in eligible if engine.normalize_position(c.normalized_position or c.position).startswith("goal")),
+            None,
+        )
         if gk_candidate:
             cost = quotes_map[gk_candidate.id][0]
             if cost <= remaining_budget:
@@ -522,6 +529,7 @@ def autopick_squad(session: Session, user_id: str, club_id: str) -> dict[str, An
         "stage": state.stage,
         "cash": str(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)),
     }
+
 
 def _advance_stage_after_squad(session: Session, state: OwnerClubState) -> None:
     players = squad(session, state.club_id)
