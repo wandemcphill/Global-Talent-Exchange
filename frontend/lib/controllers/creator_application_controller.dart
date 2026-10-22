@@ -167,9 +167,13 @@ class CreatorApplicationController extends ChangeNotifier {
     final String message = AppFeedback.messageFor(error);
     switch (message.toLowerCase()) {
       case 'email_verification_required':
-        return 'Confirm the account email before you submit a creator request.';
+        return 'Confirm the account email using the GTEX signup-confirmation flow before submitting a creator request.';
+      case 'email_verification_must_use_auth_confirmation':
+        return 'This shortcut cannot verify email ownership. Use the confirmation link/code sent by GTEX.';
       case 'phone_verification_required':
         return 'Confirm the account phone number before you submit a creator request.';
+      case 'secure_phone_verification_unavailable':
+        return 'Secure phone verification is not available yet. Creator applications remain blocked until a real verification challenge is configured.';
       case 'phone_number_required_for_creator_verification':
         return 'Add a phone number to this GTEX account before you request creator access.';
       case 'creator_already_approved':

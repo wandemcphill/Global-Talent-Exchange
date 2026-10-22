@@ -6,9 +6,12 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import select
 
 from backend.tests.support.secrets import DASHBOARD_TEST_ADMIN_PASSWORD
+from backend.tests.support.signup_payloads import user_signup_payload
 from app.ingestion.models import Country, Player
+from app.models.club_profile import ClubProfile
 from app.models.player_agency_state import PlayerAgencyState
 from app.models.player_contract import PlayerContract
 from app.models.player_injury_case import PlayerInjuryCase
@@ -302,6 +305,64 @@ def test_rental_pool_empty_country_is_valid_response(client, national_admin_head
     assert payload["items"] == []
     assert payload["total"] == 0
     assert payload["partial"] is False
+
+
+def test_new_user_without_club_can_enter_and_rent_for_national_team(
+    client, app_session_factory, national_admin_headers
+) -> None:
+    nonce = uuid4().hex[:10]
+    signup_response = client.post(
+        "/auth/signup/user",
+        json=user_signup_payload(
+            email=f"no-club-national-{nonce}@test.gtex.local",
+            username=f"no_club_{nonce}",
+            full_name="No Club National Manager",
+        ),
+    )
+    assert signup_response.status_code == 201, signup_response.text
+    issued = signup_response.json()
+    user_id = issued["user"]["id"]
+    user_headers = {"Authorization": f"Bearer {issued['access_token']}"}
+
+    # Signup must persist a user account only; national-team participation
+    # must not require creating a ClubProfile or club-owner state.
+    with app_session_factory() as session:
+        assert session.scalar(select(ClubProfile).where(ClubProfile.owner_user_id == user_id)) is None
+
+    competition = _create_competition(
+        client, national_admin_headers, key_prefix=f"no-club-national-{nonce}"
+    )
+    player_ids = _seed_national_pool(
+        app_session_factory,
+        prefix=f"no-club-national-{nonce}",
+        funded_user_id=user_id,
+        home_code="NP2",
+        home_name="Nation Prime Two",
+        away_code="AX2",
+        away_name="Away X Two",
+    )
+    entry_response = client.post(
+        f"/api/national-team-engine/competitions/{competition['id']}/rental-entry",
+        headers=user_headers,
+        json={"country_code": "NP2", "country_name": "Nation Prime Two"},
+    )
+    assert entry_response.status_code == 200, entry_response.text
+    entry = entry_response.json()
+    assert entry["entry_owner_user_id"] == user_id
+
+    rent_response = client.post(
+        f"/api/national-team-engine/entries/{entry['id']}/rentals",
+        headers=user_headers,
+        json={"player_id": player_ids["home-st"]},
+    )
+    assert rent_response.status_code == 200, rent_response.text
+    rented = rent_response.json()
+    assert any(
+        member["player_id"] == player_ids["home-st"]
+        for member in rented["rental_squad_members"]
+    )
+    with app_session_factory() as session:
+        assert session.scalar(select(ClubProfile).where(ClubProfile.owner_user_id == user_id)) is None
 
 
 def test_multiple_users_can_rent_same_national_team(client, demo_seed, national_admin_headers) -> None:

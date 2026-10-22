@@ -22,6 +22,7 @@ from app.auth.service import AuthService
 from app.main import create_app
 from app.models import Base, ClubProfile, CreatorProfile
 from app.models.club_profile import ClubType
+from app.models.coin_trader import CoinTraderProfile
 from app.models.user import User, UserRole
 from app.trader.service import _totp
 from app.users.router import read_current_user
@@ -583,13 +584,82 @@ def test_user_creator_and_trader_signup_sessions_include_public_account_type(
         else:
             assert bootstrap["club"] is None
             assert bootstrap["onboarding"]["has_club"] is False
-            assert bootstrap["onboarding"]["requires_club"] is True
+            assert bootstrap["onboarding"]["requires_club"] is False
+            assert bootstrap["onboarding"]["suggested_route"] == "/app/home"
+            assert "continue_as_fan" in bootstrap["onboarding"]["available_actions"]
+            assert "national_team_rentals" in bootstrap["onboarding"]["available_actions"]
+            assert "create_club" in bootstrap["onboarding"]["available_actions"]
+            assert "club_owner" not in bootstrap["roles"]
 
     with app.state.session_factory() as session:
         creator = session.scalar(select(User).where(User.email == "account-type-creator@example.com"))
         assert creator is not None
         assert session.scalar(select(CreatorProfile).where(CreatorProfile.user_id == creator.id)) is not None
         assert session.scalar(select(ClubProfile).where(ClubProfile.owner_user_id == creator.id)) is None
+
+
+def test_approved_coin_trader_capability_bootstraps_for_normal_user_account(app_client) -> None:
+    app, client = app_client
+    signup_response = client.post(
+        "/auth/signup/user",
+        json=user_signup_payload(
+            email="member-trader-capability@example.com",
+            username="member_trader_capability",
+            full_name="Member Trader Capability",
+            password=TEST_PASSWORD,
+        ),
+    )
+    assert signup_response.status_code == 201, signup_response.text
+    user_id = signup_response.json()["user"]["id"]
+
+    # Simulate an approved profile produced by the normal application/review
+    # workflow. Approval grants the trader role without changing account_type.
+    with app.state.session_factory() as session:
+        user = session.get(User, user_id)
+        assert user is not None
+        user.role = UserRole.COIN_TRADER
+        session.add(
+            CoinTraderProfile(
+                user_id=user_id,
+                display_name="Member Trader Desk",
+                status="approved",
+                tier="gold",
+                terms_json={"same_name_only": True},
+                payment_methods_json=[],
+                bank_accounts_json=[],
+                metadata_json={},
+            )
+        )
+        session.commit()
+
+    login_response = client.post(
+        "/auth/login",
+        json={"email": "member-trader-capability@example.com", "password": TEST_PASSWORD},
+    )
+    assert login_response.status_code == 200, login_response.text
+    issued = login_response.json()
+    assert issued["user"]["account_type"] == "user"
+    assert issued["landing_route"] == "/app/trader-dashboard"
+
+    bootstrap_response = client.get(
+        "/api/v2/session/bootstrap",
+        headers={
+            "X-API-Version": "2",
+            "Authorization": f"Bearer {issued['access_token']}",
+            "X-User-Id": issued["user"]["id"],
+            "X-Session-Id": issued["session_id"],
+            "X-Device-Id": "approved-trader-capability-test",
+        },
+    )
+    assert bootstrap_response.status_code == 200, bootstrap_response.text
+    bootstrap = bootstrap_response.json()["data"]
+    assert bootstrap["account_type"] == "user"
+    assert bootstrap["coin_trader"]["is_approved"] is True
+    assert bootstrap["coin_trader"]["can_trade"] is True
+    assert "coin_trader" in bootstrap["roles"]
+    assert bootstrap["onboarding"]["requires_club"] is False
+    assert bootstrap["onboarding"]["suggested_route"] == "/app/trader-dashboard"
+    assert "create_club" in bootstrap["onboarding"]["available_actions"]
 
 
 def test_public_signup_rejects_external_admin_account_type(app_client) -> None:
@@ -705,7 +775,10 @@ def test_issue_274_signup_model_and_turnstile_security_regression(app_client, mo
     bootstrap = bootstrap_res.json()["data"]
     assert bootstrap["club"] is None
     assert bootstrap["onboarding"]["has_club"] is False
-    assert bootstrap["onboarding"]["requires_club"] is True
+    assert bootstrap["onboarding"]["requires_club"] is False
+    assert bootstrap["onboarding"]["suggested_route"] == "/app/home"
+    assert "continue_as_fan" in bootstrap["onboarding"]["available_actions"]
+    assert "national_team_rentals" in bootstrap["onboarding"]["available_actions"]
     assert bootstrap["creator"] is None
     assert bootstrap["coin_trader"] is None
     assert bootstrap["account_type"] == "user"

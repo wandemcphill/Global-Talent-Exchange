@@ -282,8 +282,8 @@ def _build_wallet_bootstrap(service: AuthService, session: Session, user: User) 
 
 
 def _build_creator_bootstrap(session: Session, user: User) -> SessionBootstrapCreatorState | None:
-    if user.account_type != PublicAccountType.CREATOR:
-        return None
+    # Creator access is an approved capability on a normal GTEX user account;
+    # do not key it solely off the legacy PublicAccountType.CREATOR signup.
     profile = session.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
     if profile is None:
         return None
@@ -299,8 +299,8 @@ def _build_creator_bootstrap(session: Session, user: User) -> SessionBootstrapCr
 
 
 def _build_coin_trader_bootstrap(session: Session, user: User) -> SessionBootstrapCoinTraderState | None:
-    if user.account_type != PublicAccountType.COIN_TRADER:
-        return None
+    # Trader status belongs to a profile that can be applied for from any normal
+    # user account. Fetch it independently of the legacy account_type field.
     profile = session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id))
     if profile is None:
         return None
@@ -324,21 +324,58 @@ def _build_onboarding_bootstrap(
     creator: SessionBootstrapCreatorState | None,
     coin_trader: SessionBootstrapCoinTraderState | None,
 ) -> SessionBootstrapOnboardingState:
+    # Capabilities take precedence over the legacy account-type branches. A
+    # user can retain normal GTEX access while holding approved creator/trader
+    # capabilities and can still choose to own a club later.
+    if coin_trader is not None and coin_trader.is_approved and user.is_active:
+        actions = [
+            "coin_trader_dashboard",
+            "wallet",
+            "coin_trader_marketplace",
+            "continue_as_fan",
+            "national_team_rentals",
+            "market",
+            "community",
+        ]
+        if creator is not None and creator.is_active:
+            actions.append("creator_dashboard")
+        actions.extend(["club_workspace", "competitions"] if club_present else ["create_club", "join_club"])
+        return SessionBootstrapOnboardingState(
+            has_club=club_present,
+            requires_club=False,
+            suggested_route="/app/trader-dashboard",
+            available_actions=actions,
+        )
+    if creator is not None and creator.is_active:
+        actions = [
+            "creator_dashboard",
+            "community",
+            "continue_as_fan",
+            "national_team_rentals",
+            "market",
+            "wallet",
+        ]
+        actions.extend(["club_workspace", "competitions"] if club_present else ["create_club", "join_club"])
+        if coin_trader is not None:
+            actions.extend(["coin_trader_marketplace", "apply_coin_trader"])
+        return SessionBootstrapOnboardingState(
+            has_club=club_present,
+            requires_club=False,
+            suggested_route="/app/hub",
+            available_actions=actions,
+        )
     if user.account_type == PublicAccountType.CREATOR:
         return SessionBootstrapOnboardingState(
-            has_club=False,
+            has_club=club_present,
             requires_club=False,
             suggested_route="/app/hub",
             available_actions=["creator_dashboard", "community"],
         )
     if user.account_type == PublicAccountType.COIN_TRADER:
-        trader_route = (
-            "/app/trader-dashboard" if coin_trader is not None and coin_trader.is_approved else "/app/coin-traders"
-        )
         return SessionBootstrapOnboardingState(
-            has_club=False,
+            has_club=club_present,
             requires_club=False,
-            suggested_route=trader_route,
+            suggested_route="/app/coin-traders",
             available_actions=["coin_trader_dashboard", "wallet", "coin_trader_marketplace"],
         )
     if club_present:
@@ -348,13 +385,23 @@ def _build_onboarding_bootstrap(
             suggested_route="/app/club",
             available_actions=["club_workspace", "market", "competitions", "community"],
         )
+    actions = [
+        "continue_as_fan",
+        "national_team_rentals",
+        "market",
+        "community",
+        "create_club",
+        "join_club",
+        "creator_access",
+        "coin_trader_marketplace",
+        "apply_coin_trader",
+    ]
     return SessionBootstrapOnboardingState(
         has_club=False,
-        requires_club=True,
-        suggested_route="/app/club",
-        available_actions=["create_club", "join_club", "continue_as_fan"],
+        requires_club=False,
+        suggested_route="/app/home",
+        available_actions=actions,
     )
-
 
 def _as_aware_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
@@ -384,9 +431,9 @@ def _build_session_roles(
     }
     if club_present:
         role_values.add("club_owner")
-    if creator is not None:
+    if creator is not None and creator.is_active:
         role_values.add("creator")
-    if coin_trader is not None:
+    if coin_trader is not None and coin_trader.is_approved:
         role_values.add("coin_trader")
     return sorted(value for value in role_values if value)
 

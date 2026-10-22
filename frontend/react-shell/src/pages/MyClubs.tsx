@@ -665,7 +665,6 @@ function NewClub({ count, max }: any) {
         accent_color: "#F59E0B",
         country_code: "NG",
         city_name: "Lagos",
-        club_type: "community",
       });
       navigate("/onboarding");
     } catch (e) {

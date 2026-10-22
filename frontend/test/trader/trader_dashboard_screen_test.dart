@@ -43,9 +43,10 @@ void main() {
     );
 
     expect(
-      find.text('Coin trading is a separate account lane'),
+      find.text('Use Coin Traders with your GTEX ID'),
       findsOneWidget,
     );
+    expect(find.text('Open Coin Traders'), findsOneWidget);
     expect(find.text('Trader command center'), findsNothing);
   });
 

@@ -61,6 +61,9 @@ npm ci --legacy-peer-deps --include=dev
 # publish the shell at / or point it at another backend.
 export PUBLIC_URL="/console"
 export REACT_APP_BACKEND_URL="${GTE_API_BASE_URL}"
+# The site key is public and is embedded only into the React browser bundle.
+# Keep the private secret exclusively in the backend service environment.
+export REACT_APP_GTE_TURNSTILE_SITE_KEY="${GTE_TURNSTILE_SITE_KEY:-${REACT_APP_GTE_TURNSTILE_SITE_KEY:-}}"
 # CRA fails the production build on warnings when CI=true, and Render exports
 # CI=true. This package's GitHub workflow builds with CI=false.
 export CI=false

@@ -15,25 +15,11 @@ class Gtex22AuthGateway extends StatelessWidget {
     final narrow = MediaQuery.sizeOf(context).width < 820;
     final roles = <_Role>[
       const _Role(
-        'PLAYER / CLUB',
-        'Build your football identity, discover talent, manage squads and compete.',
-        Icons.sports_soccer_rounded,
+        'GTEX MEMBER ID',
+        'Create one GTEX account. Explore national teams without a club, then apply for Creator tools or Coin Trader status when you are ready.',
+        Icons.person_outline_rounded,
         GtexFloodlit.pitch,
         '/auth/signup/user',
-      ),
-      const _Role(
-        'CREATOR',
-        'Publish football stories, grow a following and build your community.',
-        Icons.campaign_rounded,
-        GtexFloodlit.scoreboard,
-        '/auth/signup/creator',
-      ),
-      const _Role(
-        'TRADER',
-        'Access the GTEX economy with dedicated trading and wallet security.',
-        Icons.candlestick_chart_rounded,
-        GtexFloodlit.gold,
-        '/auth/signup/trader',
       ),
     ];
     return Scaffold(
@@ -261,7 +247,21 @@ class _Gtex22LoginScreenState extends State<Gtex22LoginScreen> {
         email: _email.text.trim(),
         password: _password.text,
       );
-      if (mounted && widget.controller.isAuthenticated) context.go('/app/home');
+      final String? backendRoute = widget.controller.session?.landingRoute;
+      const Map<String, String> routeMap = <String, String>{
+        '/app/home': '/app/home',
+        '/app/club': '/app/club',
+        '/app/hub': '/app/hub',
+        '/app/coin-traders': '/app/coin-traders',
+        '/app/trader-dashboard': '/app/trader-dashboard',
+        '/profile/admin': '/profile/admin',
+        '/profile/admin/god-mode': '/profile/admin/god-mode',
+        // Backward compatibility with older backend responses.
+        '/trader': '/app/coin-traders',
+      };
+      if (mounted && widget.controller.isAuthenticated) {
+        context.go(routeMap[backendRoute] ?? '/app/home');
+      }
     } catch (e) {
       if (mounted) {
         final bool invalidCredentials =

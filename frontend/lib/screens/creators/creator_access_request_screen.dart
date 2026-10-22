@@ -243,25 +243,7 @@ class _CreatorAccessRequestScreenState
               widget.exchangeController.session?.user.phoneNumber ??
               'No phone number on account',
           verificationStatus: controller.verificationStatus,
-          canVerifyPhone:
-              (widget.exchangeController.session?.user.phoneNumber ?? '')
-                  .trim()
-                  .isNotEmpty,
-          isVerifyingEmail: controller.isVerifyingEmail,
-          isVerifyingPhone: controller.isVerifyingPhone,
           verificationError: controller.verificationError,
-          onVerifyEmail:
-              controller.verificationStatus.isEmailVerified
-                  ? null
-                  : controller.verifyEmail,
-          onVerifyPhone:
-              controller.verificationStatus.isPhoneVerified ||
-                      (widget.exchangeController.session?.user.phoneNumber ??
-                              '')
-                          .trim()
-                          .isEmpty
-                  ? null
-                  : controller.verifyPhone,
         ),
         if (application != null) ...<Widget>[
           const SizedBox(height: 16),
@@ -594,23 +576,13 @@ class _ContactReadinessCard extends StatelessWidget {
     required this.email,
     required this.phoneNumber,
     required this.verificationStatus,
-    required this.canVerifyPhone,
-    required this.isVerifyingEmail,
-    required this.isVerifyingPhone,
     required this.verificationError,
-    required this.onVerifyEmail,
-    required this.onVerifyPhone,
   });
 
   final String email;
   final String phoneNumber;
   final CreatorContactVerificationStatus verificationStatus;
-  final bool canVerifyPhone;
-  final bool isVerifyingEmail;
-  final bool isVerifyingPhone;
   final String? verificationError;
-  final VoidCallback? onVerifyEmail;
-  final VoidCallback? onVerifyPhone;
 
   @override
   Widget build(BuildContext context) {
@@ -625,7 +597,7 @@ class _ContactReadinessCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Creator review uses the GTEX account email and phone on file. Confirm both contacts before you submit.',
+            'Creator applications require real email and phone verification. Email must be confirmed through the GTEX signup-confirmation flow. Secure phone verification is not currently configured, so this screen will not mark either contact verified by button press.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
@@ -641,45 +613,23 @@ class _ContactReadinessCard extends StatelessWidget {
             isReady: verificationStatus.isPhoneVerified,
           ),
           const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: <Widget>[
-              FilledButton.tonalIcon(
-                onPressed: onVerifyEmail,
-                icon: Icon(
-                  isVerifyingEmail ? Icons.autorenew : Icons.mail_outline,
-                ),
-                label: Text(
-                  verificationStatus.isEmailVerified
-                      ? 'Email ready'
-                      : isVerifyingEmail
-                      ? 'Confirming email...'
-                      : 'Use account email',
-                ),
-              ),
-              FilledButton.tonalIcon(
-                onPressed: onVerifyPhone,
-                icon: Icon(
-                  isVerifyingPhone ? Icons.autorenew : Icons.phone_outlined,
-                ),
-                label: Text(
-                  verificationStatus.isPhoneVerified
-                      ? 'Phone ready'
-                      : isVerifyingPhone
-                      ? 'Confirming phone...'
-                      : 'Use account phone',
-                ),
-              ),
-            ],
+          GteStatePanel(
+            title: verificationStatus.isPhoneVerified
+                ? 'Phone marked verified'
+                : 'Secure phone verification unavailable',
+            message: verificationStatus.isPhoneVerified
+                ? 'Phone status was recorded by an existing trusted verification process.'
+                : 'There is no active SMS/OTP provider behind this screen yet. Creator application submission stays blocked until a real verification challenge is implemented.',
+            icon: Icons.verified_user_outlined,
+            accentColor: GteShellTheme.accentWarm,
           ),
-          if (!canVerifyPhone) ...<Widget>[
-            const SizedBox(height: 12),
-            Text(
-              'Add a phone number to this account before you request creator access.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
+          const SizedBox(height: 12),
+          Text(
+            verificationStatus.isEmailVerified
+                ? 'Account email is confirmed.'
+                : 'Confirm the email with the link/code sent by GTEX at signup. This screen cannot self-certify email ownership.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
           if (verificationError != null) ...<Widget>[
             const SizedBox(height: 12),
             Text(
