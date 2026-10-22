@@ -1306,6 +1306,7 @@ class _LuxuryArrivalDialog extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
                   ),
+                  key: const Key('club-showroom-arrival-close'),
                   child: Text(actionLabel, style: const TextStyle(fontWeight: FontWeight.w900)),
                 ),
               ),
