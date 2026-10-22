@@ -1246,6 +1246,7 @@ def club_card(session: Session, state: OwnerClubState) -> dict[str, Any]:
         "primary_color": profile.primary_color if profile else "#10B981",
         "secondary_color": profile.secondary_color if profile else "#0F172A",
         "city": profile.city_name if profile else None,
+        "public_profile_slug": profile.slug if profile and profile.visibility == "public" else None,
         "country_code": profile.country_code if profile else None,
         "continent_code": profile.continent_code if profile else None,
         "stage": state.stage,
