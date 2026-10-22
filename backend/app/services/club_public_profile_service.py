@@ -13,12 +13,12 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.ingestion.models import Player
 from app.club_legacy.models import (
     ClubLegacyAsset,
     ClubLegacyCatalogueItem,
     ClubLegacyExecutive,
 )
+from app.ingestion.models import Player
 from app.models.club_growth import (
     AcademyProfile,
     AcademyProspect,
@@ -80,7 +80,11 @@ def _canonical_player_potential(player: Player) -> int | None:
     dna = player.dna_profile if isinstance(player.dna_profile, dict) else {}
     for key in ("potential", "potential_rating", "sofifa_potential"):
         value = dna.get(key)
-        if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+        if (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and value > 0
+        ):
             return int(round(value))
     return None
 
