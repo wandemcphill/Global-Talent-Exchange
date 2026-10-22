@@ -185,6 +185,7 @@ class GtexHomeNav extends StatelessWidget implements PreferredSizeWidget {
                     showModalBottomSheet<void>(
                       context: context,
                       useSafeArea: true,
+                      isScrollControlled: true,
                       backgroundColor: kNavyBase,
                       shape: const RoundedRectangleBorder(
                         borderRadius: BorderRadius.vertical(
@@ -254,9 +255,10 @@ class _MobileNavigationSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-      child: Column(
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -324,6 +326,7 @@ class _MobileNavigationSheet extends StatelessWidget {
             onTap: () => _go(context, 'trust'),
           ),
         ],
+      ),
       ),
     );
   }
