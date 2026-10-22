@@ -290,7 +290,7 @@ function ShowroomPanel({ club }: any) {
                 )}
                 <div className="min-w-0">
                   <div className="truncate text-xs font-bold text-slate-200">{event.item_name || event.custom_name || "Luxury event"}</div>
-                  <div className="mt-1 truncate text-[10px] text-slate-500">{event.player_name ? `Gifted to ${event.player_name}` : event.created_at ? new Date(event.created_at).toLocaleDateString() : "Recorded on GTEX wire"}</div>
+                  <div className="mt-1 truncate text-[10px] text-slate-500">{(event.player_name || event.gifted_to_player_name) ? `Gifted to ${event.player_name || event.gifted_to_player_name}` : event.created_at ? new Date(event.created_at).toLocaleDateString() : "Recorded on GTEX wire"}</div>
                   {event.purchase_price_gtex != null && <div className="mt-1 font-mono text-[10px] text-amber-300">{fmt(event.purchase_price_gtex, 2)} GTX</div>}
                 </div>
               </div>
