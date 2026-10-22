@@ -60,6 +60,32 @@ void _expectHeavyModel(WidgetTester tester, String fileName) {
 }
 
 void main() {
+  test('owner gift recipient parses regen eligibility from the API', () {
+    final OwnerGiftRecipient regen = OwnerGiftRecipient.fromJson(
+      <String, dynamic>{
+        'id': 'regen-1',
+        'name': 'Academy Prospect',
+        'position': 'AM',
+        'rating': 72,
+        'morale': 81,
+        'is_regen': true,
+      },
+    );
+    final OwnerGiftRecipient firstTeamPlayer = OwnerGiftRecipient.fromJson(
+      <String, dynamic>{
+        'id': 'senior-1',
+        'name': 'First-Team Player',
+        'position': 'CB',
+        'rating': 86,
+        'morale': 74,
+        'is_regen': false,
+      },
+    );
+
+    expect(regen.isRegen, isTrue);
+    expect(firstTeamPlayer.isRegen, isFalse);
+  });
+
   testWidgets('showroom labels the owner and turns the preview', (
     WidgetTester tester,
   ) async {
