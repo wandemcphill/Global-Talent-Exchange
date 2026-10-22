@@ -401,8 +401,6 @@ def sign_market_player(session: Session, user_id: str, club_id: str, player_id: 
     return signed
 
 
-
-
 def unsign_market_player(session: Session, user_id: str, club_id: str, player_id: str) -> dict[str, Any]:
     state = require_state(session, club_id, user_id)
     current = squad(session, club_id)
@@ -411,7 +409,6 @@ def unsign_market_player(session: Session, user_id: str, club_id: str, player_id
     )
     if target is None:
         raise OwnerError("player_not_in_squad", 404)
-
 
     refund_amount = int(target.value_coin or 0)
     if refund_amount > 0:
@@ -428,7 +425,6 @@ def unsign_market_player(session: Session, user_id: str, club_id: str, player_id
             related_id=target.player_ref or target.id,
             memo=f"Released {target.name} (refund)",
         )
-
 
     session.delete(target)
     session.flush()
