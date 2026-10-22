@@ -205,7 +205,7 @@ class _Gtex22HomeScreenState extends State<Gtex22HomeScreen> {
             SliverPersistentHeader(
               pinned: true,
               delegate: _PinnedGtexHomeNavDelegate(
-                height: MediaQuery.paddingOf(context).top + 64,
+                height: MediaQuery.paddingOf(context).top + 72,
                 child: GtexHomeNav(
                   onLogin: widget.onLogin,
                   onSignup: widget.onSignup,
