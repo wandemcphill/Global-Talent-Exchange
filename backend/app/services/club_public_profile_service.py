@@ -7,11 +7,13 @@ internal notes, or private club records.
 """
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.ingestion.models import Player
 from app.club_legacy.models import (
     ClubLegacyAsset,
     ClubLegacyCatalogueItem,
@@ -63,7 +65,11 @@ def _canonical_player_rating(player: Player) -> int | None:
     dna = player.dna_profile if isinstance(player.dna_profile, dict) else {}
     for key in ("current_rating", "overall", "sofifa_overall", "club_rating"):
         value = dna.get(key)
-        if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+        if (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and value > 0
+        ):
             return int(round(value))
     return None
 
