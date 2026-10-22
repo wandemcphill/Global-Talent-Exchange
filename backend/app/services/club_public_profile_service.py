@@ -301,18 +301,24 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
         ),
         reverse=True,
     )[:60]
+    rated_players = [
+        player for player in squad_players if player["rating"] is not None
+    ]
+    potential_players = [
+        player for player in squad_players if player["potential"] is not None
+    ]
     best_player = max(
-        squad_players,
+        rated_players,
         key=lambda player: (
-            player["rating"] or 0,
+            player["rating"],
             player["potential"] or 0,
         ),
         default=None,
     )
     promising_player = max(
-        squad_players,
+        potential_players,
         key=lambda player: (
-            player["potential"] or 0,
+            player["potential"],
             -(player["age"] or 100),
             (player["potential"] or 0) - (player["rating"] or 0),
         ),
