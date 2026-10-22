@@ -7698,6 +7698,12 @@
         "response_model": null
       },
       {
+        "method": "POST",
+        "path": "/api/owner/clubs/claim",
+        "handler": "claim_club",
+        "response_model": null
+      },
+      {
         "method": "GET",
         "path": "/api/owner/clubs/{club_id}",
         "handler": "club",
@@ -7806,12 +7812,6 @@
         "response_model": null
       },
       {
-        "method": "POST",
-        "path": "/api/owner/clubs/claim",
-        "handler": "claim_club",
-        "response_model": null
-      },
-      {
         "method": "GET",
         "path": "/api/owner/competitions",
         "handler": "competitions_list",
@@ -7821,6 +7821,12 @@
         "method": "POST",
         "path": "/api/owner/competitions",
         "handler": "host",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/competitions/join-by-code",
+        "handler": "join_code",
         "response_model": null
       },
       {
@@ -7839,12 +7845,6 @@
         "method": "POST",
         "path": "/api/owner/competitions/{competition_id}/play-next",
         "handler": "play",
-        "response_model": null
-      },
-      {
-        "method": "POST",
-        "path": "/api/owner/competitions/join-by-code",
-        "handler": "join_code",
         "response_model": null
       },
       {
@@ -7950,8 +7950,8 @@
         "response_model": null
       },
       {
-        "path": "/api/owner/public/profile/{owner_user_id}",
         "method": "GET",
+        "path": "/api/owner/public/profile/{owner_user_id}",
         "handler": "get_public_owner_profile",
         "response_model": null
       },
@@ -10363,18 +10363,6 @@
     "segment": [
       {
         "method": "GET",
-        "path": "/api/admin/clubs/{club_id}",
-        "handler": "get_admin_detail",
-        "response_model": "AdminClubDetailView"
-      },
-      {
-        "method": "POST",
-        "path": "/api/admin/clubs/{club_id}/moderate-branding",
-        "handler": "moderate_branding",
-        "response_model": "BrandingModerationResultView"
-      },
-      {
-        "method": "GET",
         "path": "/api/admin/clubs/academy-analytics",
         "handler": "get_academy_analytics",
         "response_model": "ClubAcademyAnalyticsView"
@@ -10414,6 +10402,18 @@
         "path": "/api/admin/clubs/summary",
         "handler": "get_summary",
         "response_model": "ClubSummaryView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/admin/clubs/{club_id}",
+        "handler": "get_admin_detail",
+        "response_model": "AdminClubDetailView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/clubs/{club_id}/moderate-branding",
+        "handler": "moderate_branding",
+        "response_model": "BrandingModerationResultView"
       },
       {
         "method": "POST",
@@ -10476,16 +10476,16 @@
         "response_model": "CreatorLeaderboardResponse"
       },
       {
-        "method": "POST",
-        "path": "/api/admin/referrals/rewards/{reward_id}/review",
-        "handler": "review_referral_reward",
-        "response_model": "RewardReviewDecisionView"
-      },
-      {
         "method": "GET",
         "path": "/api/admin/referrals/rewards/pending",
         "handler": "list_pending_referral_rewards",
         "response_model": "list[PendingRewardView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/referrals/rewards/{reward_id}/review",
+        "handler": "review_referral_reward",
+        "response_model": "RewardReviewDecisionView"
       },
       {
         "method": "GET",
@@ -10509,6 +10509,30 @@
         "method": "POST",
         "path": "/api/clubs",
         "handler": "create_club",
+        "response_model": "ClubProfileView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/catalog",
+        "handler": "get_catalog",
+        "response_model": "ClubCatalogView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clubs/catalog/purchase",
+        "handler": "purchase_catalog_item",
+        "response_model": "ClubCosmeticPurchaseCore"
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/owned",
+        "handler": "list_owned_clubs",
+        "response_model": "list[ClubProfileView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clubs/owned/{club_id}/activate",
+        "handler": "activate_owned_club",
         "response_model": "ClubProfileView"
       },
       {
@@ -10626,8 +10650,8 @@
         "response_model": "ClubJerseysView"
       },
       {
-        "path": "/api/clubs/{club_id}/public-profile",
         "method": "GET",
+        "path": "/api/clubs/{club_id}/public-profile",
         "handler": "get_public_club_profile",
         "response_model": null
       },
@@ -10807,30 +10831,6 @@
       },
       {
         "method": "GET",
-        "path": "/api/clubs/catalog",
-        "handler": "get_catalog",
-        "response_model": "ClubCatalogView"
-      },
-      {
-        "method": "POST",
-        "path": "/api/clubs/catalog/purchase",
-        "handler": "purchase_catalog_item",
-        "response_model": "ClubCosmeticPurchaseCore"
-      },
-      {
-        "method": "GET",
-        "path": "/api/clubs/owned",
-        "handler": "list_owned_clubs",
-        "response_model": "list[ClubProfileView]"
-      },
-      {
-        "method": "POST",
-        "path": "/api/clubs/owned/{club_id}/activate",
-        "handler": "activate_owned_club",
-        "response_model": "ClubProfileView"
-      },
-      {
-        "method": "GET",
         "path": "/api/competitions",
         "handler": "list_competitions",
         "response_model": "CompetitionListResponse"
@@ -10840,6 +10840,42 @@
         "path": "/api/competitions",
         "handler": "create_competition",
         "response_model": "CompetitionSummaryView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/competitions/create",
+        "handler": "create_competition_alias",
+        "response_model": "CompetitionSummaryView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/competitions/join",
+        "handler": "join_competition_alias",
+        "response_model": "CompetitionSummaryView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/competitions/leaderboard/clubs",
+        "handler": "get_club_competition_leaderboard",
+        "response_model": "ClubCompetitionLeaderboardResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/competitions/players/{subject_id}/progression",
+        "handler": "get_competition_progression",
+        "response_model": "CompetitionProgressionView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/competitions/random/join",
+        "handler": "join_random_competition",
+        "response_model": "CompetitionSummaryView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/competitions/random/quote",
+        "handler": "quote_random_competition",
+        "response_model": "RandomCompetitionQuoteView"
       },
       {
         "method": "GET",
@@ -11016,54 +11052,6 @@
         "response_model": "CompetitionSummaryView"
       },
       {
-        "method": "POST",
-        "path": "/api/competitions/create",
-        "handler": "create_competition_alias",
-        "response_model": "CompetitionSummaryView"
-      },
-      {
-        "method": "POST",
-        "path": "/api/competitions/join",
-        "handler": "join_competition_alias",
-        "response_model": "CompetitionSummaryView"
-      },
-      {
-        "method": "GET",
-        "path": "/api/competitions/leaderboard/clubs",
-        "handler": "get_club_competition_leaderboard",
-        "response_model": "ClubCompetitionLeaderboardResponse"
-      },
-      {
-        "method": "GET",
-        "path": "/api/competitions/players/{subject_id}/progression",
-        "handler": "get_competition_progression",
-        "response_model": "CompetitionProgressionView"
-      },
-      {
-        "method": "POST",
-        "path": "/api/competitions/random/join",
-        "handler": "join_random_competition",
-        "response_model": "CompetitionSummaryView"
-      },
-      {
-        "method": "POST",
-        "path": "/api/competitions/random/quote",
-        "handler": "quote_random_competition",
-        "response_model": "RandomCompetitionQuoteView"
-      },
-      {
-        "method": "GET",
-        "path": "/api/creators/{handle}",
-        "handler": "get_creator_profile",
-        "response_model": "CreatorProfileView"
-      },
-      {
-        "method": "GET",
-        "path": "/api/creators/{handle}",
-        "handler": "get_creator_profile",
-        "response_model": "CreatorProfileView"
-      },
-      {
         "method": "GET",
         "path": "/api/creators/me/competitions",
         "handler": "get_my_creator_competitions",
@@ -11157,6 +11145,18 @@
         "method": "GET",
         "path": "/api/creators/profile/me",
         "handler": "get_my_creator_profile",
+        "response_model": "CreatorProfileView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creators/{handle}",
+        "handler": "get_creator_profile",
+        "response_model": "CreatorProfileView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creators/{handle}",
+        "handler": "get_creator_profile",
         "response_model": "CreatorProfileView"
       },
       {
@@ -11190,16 +11190,16 @@
         "response_model": "ContractView"
       },
       {
-        "method": "POST",
-        "path": "/api/players/{player_id}/contracts/{contract_id}/renew",
-        "handler": "renew_player_contract",
-        "response_model": "ContractView"
-      },
-      {
         "method": "GET",
         "path": "/api/players/{player_id}/contracts/summary",
         "handler": "get_player_contract_summary",
         "response_model": "ContractSummaryView | None"
+      },
+      {
+        "method": "POST",
+        "path": "/api/players/{player_id}/contracts/{contract_id}/renew",
+        "handler": "renew_player_contract",
+        "response_model": "ContractView"
       },
       {
         "method": "GET",
@@ -11310,6 +11310,12 @@
         "response_model": "ShareCodeView"
       },
       {
+        "method": "GET",
+        "path": "/api/referrals/share-codes/me",
+        "handler": "list_my_share_codes",
+        "response_model": "list[ShareCodeView]"
+      },
+      {
         "method": "POST",
         "path": "/api/referrals/share-codes/{code}/redeem",
         "handler": "redeem_share_code",
@@ -11320,12 +11326,6 @@
         "path": "/api/referrals/share-codes/{share_code_id}",
         "handler": "update_share_code",
         "response_model": "ShareCodeView"
-      },
-      {
-        "method": "GET",
-        "path": "/api/referrals/share-codes/me",
-        "handler": "list_my_share_codes",
-        "response_model": "list[ShareCodeView]"
       },
       {
         "method": "GET",
