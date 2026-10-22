@@ -3,12 +3,36 @@ from __future__ import annotations
 from backend.tests.support.secrets import TEST_PASSWORD
 
 
+def test_normal_user_cannot_apply_to_operate_a_coin_trader_desk(
+    client,
+    auth_user_factory,
+) -> None:
+    user = auth_user_factory(suffix="normal-user-no-trader-promotion")
+    response = client.post(
+        "/api/coin-traders/apply",
+        headers=user["headers"],
+        json={
+            "display_name": "Unpermitted Desk",
+            "country_code": "NG",
+            "terms": {"same_name_account_only": True},
+            "payment_methods": [],
+            "bank_accounts": [],
+            "metadata_json": {},
+        },
+    )
+    assert response.status_code == 403, response.text
+    assert "dedicated Coin Trader account" in response.json()["detail"]
+
+    own_profile = client.get("/api/coin-traders/me", headers=user["headers"])
+    assert own_profile.status_code == 403, own_profile.text
+
+
 def test_coin_trader_router_order_lifecycle(
     client,
     auth_user_factory,
     bootstrap_admin_headers,
 ) -> None:
-    trader = auth_user_factory(suffix="coin-trader-router", funded_coin="100000")
+    trader = auth_user_factory(suffix="coin-trader-router", funded_coin="100000", account_type="coin_trader")
     buyer = auth_user_factory(suffix="coin-buyer-router")
 
     application = client.post(
@@ -109,7 +133,7 @@ def test_coin_trader_router_enforces_escrow_roles_and_admin_resolution(
     auth_user_factory,
     bootstrap_admin_headers,
 ) -> None:
-    trader = auth_user_factory(suffix="coin-trader-router-guards", funded_coin="100000")
+    trader = auth_user_factory(suffix="coin-trader-router-guards", funded_coin="100000", account_type="coin_trader")
     customer = auth_user_factory(suffix="coin-customer-router-guards", funded_coin="10000")
     profile_id = _approved_profile_with_rate(
         client,
@@ -276,7 +300,7 @@ def test_coin_trader_router_admin_liquidity_issue_and_redeem(
     auth_user_factory,
     bootstrap_admin_headers,
 ) -> None:
-    trader = auth_user_factory(suffix="coin-trader-router-liquidity")
+    trader = auth_user_factory(suffix="coin-trader-router-liquidity", account_type="coin_trader")
     profile_id = _approved_profile_with_rate(
         client,
         trader_headers=trader["headers"],
@@ -330,7 +354,7 @@ def test_scoped_admin_without_liquidity_permission_cannot_settle_coin_trader_fun
     auth_user_factory,
     bootstrap_admin_headers,
 ) -> None:
-    trader = auth_user_factory(suffix="coin-trader-router-scoped-liquidity")
+    trader = auth_user_factory(suffix="coin-trader-router-scoped-liquidity", account_type="coin_trader")
     profile_id = _approved_profile_with_rate(
         client,
         trader_headers=trader["headers"],
