@@ -140,17 +140,8 @@ class GtexPublicClubHomeV3 extends StatelessWidget {
                       owner: profile.owner,
                       primary: primary,
                       accent: accent,
-                      onOpen: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => GtexPublicOwnerProfileScreen(
-                            ownerUserId: profile.owner.id,
-                            baseUrl: baseUrl,
-                            backendMode: backendMode,
-                            accessToken: accessToken,
-                            isAuthenticated: isAuthenticated,
-                            onOpenLogin: onOpenLogin,
-                          ),
-                        ),
+                      onOpen: () => context.push(
+                        '/owners/${Uri.encodeComponent(profile.owner.id)}/profile',
                       ),
                     ),
                     const SizedBox(height: 25),
