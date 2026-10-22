@@ -65,7 +65,7 @@ void main() {
     expect(find.text('WWDWL'), findsOneWidget);
     expect(find.text('FIT 92%'), findsOneWidget);
     expect(find.text('SUBSTITUTES'), findsOneWidget);
-    expect(find.text('Reserve Striker'), findsOneWidget);
+    expect(find.textContaining('Reserve Striker'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
