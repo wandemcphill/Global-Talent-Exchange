@@ -31,12 +31,16 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
       if (mode === "login") {
         const result = await login(f.email, f.password);
         const accountType = String(result.user?.account_type || result.user?.accountType || "user").toLowerCase();
-        // Legacy creator/trader profiles retain their specialist entry points.
-        // New users always start with the normal GTEX member workspace.
+        const landingRoute = String(result.landingRoute || "");
+        // Map backend capability destinations to routes actually registered in
+        // the React shell. Creator Hub itself remains in the main Flutter app;
+        // this console shows Creator application/access state.
         navigate(
-          accountType === "creator"
+          accountType === "creator" || landingRoute === "/app/hub"
             ? "/app/creator-access"
-            : accountType === "coin_trader"
+            : accountType === "coin_trader" ||
+                landingRoute === "/trader" ||
+                landingRoute === "/app/trader-dashboard"
               ? "/app/coin-traders"
               : "/app",
         );
