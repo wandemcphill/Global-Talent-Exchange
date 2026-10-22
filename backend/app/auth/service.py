@@ -30,8 +30,6 @@ from app.models.auth_email_token import AuthEmailToken, AuthEmailTokenPurpose
 from app.models.auth_session import AuthSession
 from app.models.base import generate_uuid, utcnow
 from app.models.club_profile import ClubLifecycleStatus, ClubProfile, ClubType
-from app.models.coin_trader import CoinTraderProfile
-from app.models.creator_profile import CreatorProfile
 from app.models.user import PublicAccountType, User, UserRole
 from app.policies.service import PolicyService
 from app.services.club_dynasty_service import ClubDynastyService
