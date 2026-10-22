@@ -28,6 +28,9 @@ export default function CreatorAccess() {
   const status = String(application?.status || "").toLowerCase();
   const accountType = String(user?.account_type || user?.accountType || "user").toLowerCase();
   const isLegacyCreatorAccount = accountType === "creator";
+  const emailVerified = Boolean(user?.email_verified_at || user?.emailVerifiedAt);
+  const phoneVerified = Boolean(user?.phone_verified_at || user?.phoneVerifiedAt);
+  const contactsReady = emailVerified && phoneVerified;
   const canSubmit = !isLegacyCreatorAccount && (!application || status === "rejected");
 
   const submit = async (event: React.FormEvent) => {
@@ -128,8 +131,10 @@ export default function CreatorAccess() {
 
       {canSubmit && (
         <Panel eyebrow={application ? "Resubmission" : "Next step"} title={application ? "Update your creator application" : "Apply for creator access"}>
-          <div className="mb-5 rounded-lg border border-amber-400/25 bg-amber-500/[0.05] p-3 text-sm leading-5 text-amber-100" data-testid="creator-verification-blocker">
-            Creator applications require verified account email and phone. Email must be confirmed through GTEX's signup-confirmation flow. Secure phone verification is not currently available, so the backend will reject this application until a trusted phone-verification process is configured. This page will not mark either contact verified on your behalf.
+          <div className={`mb-5 rounded-lg border p-3 text-sm leading-5 ${contactsReady ? "border-emerald-400/25 bg-emerald-500/[0.05] text-emerald-100" : "border-amber-400/25 bg-amber-500/[0.05] text-amber-100"}`} data-testid="creator-verification-blocker">
+            {contactsReady
+              ? "Your account email and phone are marked verified."
+              : `Email: ${emailVerified ? "confirmed" : "not confirmed"}. Phone: ${phoneVerified ? "confirmed" : "not confirmed"}. Use the GTEX signup-confirmation flow for email. Secure phone verification is not currently configured, so application submission stays disabled until both verification timestamps come from trusted flows.`}
           </div>
           <form onSubmit={submit} className="grid gap-4 md:grid-cols-2">
             <label className="block">
@@ -156,7 +161,7 @@ export default function CreatorAccess() {
             </label>
             {formError && <p role="alert" className="md:col-span-2 rounded border border-red-500/30 bg-red-950/30 p-3 text-sm text-red-200">{formError}</p>}
             <div className="md:col-span-2">
-              <Btn type="submit" disabled={busy}>{busy ? "Submitting..." : application ? "Resubmit for review" : "Submit creator application"}</Btn>
+              <Btn type="submit" disabled={busy || !contactsReady}>{busy ? "Submitting..." : !contactsReady ? "Verify contacts first" : application ? "Resubmit for review" : "Submit creator application"}</Btn>
             </div>
           </form>
           <p className="mt-4 text-xs leading-5 text-slate-500">
