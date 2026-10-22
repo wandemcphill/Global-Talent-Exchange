@@ -21,6 +21,7 @@ import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/regen_universe_models.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/screens/clubs/create_club_screen.dart';
+import 'package:gte_frontend/screens/gtex_national_team_rental_screen_v2.dart';
 import 'package:gte_frontend/screens/clubs/gtex_club_owner_dashboard_screen_v2.dart';
 import 'package:gte_frontend/screens/clubs/club_trophy_cabinet_screen.dart';
 import 'package:gte_frontend/screens/competitions/competition_discovery_screen.dart';
@@ -649,6 +650,27 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     );
   }
 
+  Future<void> _openNationalTeamFromNoClub() async {
+    if (widget.navigationDependencies != null) {
+      await _openFeatureRoute(const NationalTeamCompetitionsRouteData());
+      return;
+    }
+
+    // The no-club home can render without the club-navigation dependency
+    // bundle. Keep the national-team CTA functional in that user-only state.
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => GtexNationalTeamRentalScreenV2(
+          controller: widget.exchangeController,
+          apiBaseUrl: widget.apiBaseUrl,
+          backendMode: widget.backendMode,
+          isAuthenticated: widget.exchangeController.isAuthenticated,
+          onOpenLogin: widget.onOpenLogin,
+        ),
+      ),
+    );
+  }
+
   Future<void> _openCurrentClubFeatureRoute(
     GteAppRouteData Function(String clubId, String? clubName) buildRoute, {
     required String title,
@@ -987,7 +1009,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     return GteNoClubOnboardingView(
       isAuthenticated: isAuthenticated,
       onCreateClub: _createClubOnboardingAction(),
-      onOpenNationalTeam: () => _openFeatureRoute(const NationalTeamCompetitionsRouteData()),
+      onOpenNationalTeam: _openNationalTeamFromNoClub,
       onBrowseClubMarket: _browseClubMarketOnboardingAction(),
       onExploreArena: _arenaOnboardingAction(),
       onOpenMatchday: _matchdayOnboardingAction(),
