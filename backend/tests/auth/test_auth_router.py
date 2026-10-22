@@ -592,6 +592,7 @@ def test_user_creator_and_trader_signup_sessions_include_dedicated_account_type(
             assert "create_club" in bootstrap["onboarding"]["available_actions"]
             assert "club_owner" not in bootstrap["roles"]
 
+
 def test_direct_creator_signup_creates_a_dedicated_creator_account(app_client) -> None:
     app, client = app_client
     response = client.post(
@@ -701,6 +702,7 @@ def test_stale_trader_profile_and_role_do_not_promote_a_normal_account(app_clien
     assert "create_club" in bootstrap["onboarding"]["available_actions"]
     assert "coin_trader_dashboard" not in bootstrap["onboarding"]["available_actions"]
     assert "creator_dashboard" not in bootstrap["onboarding"]["available_actions"]
+
 
 def test_public_signup_rejects_external_admin_account_type(app_client) -> None:
     _app, client = app_client
