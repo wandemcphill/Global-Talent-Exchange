@@ -113,8 +113,12 @@ export default function AppShell() {
   const role = String(user.role || "").toLowerCase();
   const accountType = String(user.account_type || user.accountType || "user").toLowerCase();
   const isAdmin = ["admin", "super_admin"].includes(role);
-  const isTraderAccount = accountType === "coin_trader" || role === "coin_trader";
-  const isCreatorAccount = accountType === "creator" || role === "creator";
+  const isTraderAccount =
+    accountType === "coin_trader" ||
+    (accountType !== "creator" && role === "coin_trader");
+  const isCreatorAccount =
+    accountType === "creator" ||
+    (accountType !== "coin_trader" && role === "creator");
   const isDedicatedAccount = isTraderAccount || isCreatorAccount;
   const clubs: any[] = data?.clubs || [];
   const hasClubProfile = !isDedicatedAccount && clubs.length > 0;
@@ -239,7 +243,11 @@ export default function AppShell() {
               </span>
             ) : (
               <span data-testid="topbar-user-account" className="gx-mono text-slate-400">
-                GTEX member account · no club required
+                {isTraderAccount
+                  ? "Coin Trader account · dedicated lane"
+                  : isCreatorAccount
+                    ? "Creator account · dedicated lane"
+                    : "GTEX member account · no club required"}
               </span>
             )}
             <span data-testid="topbar-fan-balance" className="gx-mono hidden text-slate-300 sm:inline">
