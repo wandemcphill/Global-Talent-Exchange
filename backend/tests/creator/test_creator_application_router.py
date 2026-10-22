@@ -198,15 +198,15 @@ def test_admin_approval_provisions_creator_assets(app_client) -> None:
     assert body["status"] == "approved"
     assert body["provisioning"] is not None
 
-    # Approval grants Creator as a capability while the user's original
-    # account type remains USER; session bootstrap must expose that capability.
+    # Approval promotes the normal member/club-owner account into the dedicated
+    # Creator account type. It is no longer a switchable capability.
     login_response = client.post(
         "/auth/login",
         json={"email": "creator3@example.com", "password": "SuperSecret1"},
     )
     assert login_response.status_code == 200, login_response.text
     issued = login_response.json()
-    assert issued["user"]["account_type"] == "user"
+    assert issued["user"]["account_type"] == "creator"
     assert issued["landing_route"] == "/app/hub"
     bootstrap_response = client.get(
         "/api/v2/session/bootstrap",
@@ -220,7 +220,7 @@ def test_admin_approval_provisions_creator_assets(app_client) -> None:
     )
     assert bootstrap_response.status_code == 200, bootstrap_response.text
     bootstrap = bootstrap_response.json()["data"]
-    assert bootstrap["account_type"] == "user"
+    assert bootstrap["account_type"] == "creator"
     assert bootstrap["creator"]["status"] == "active"
     assert "creator" in bootstrap["roles"]
     assert bootstrap["onboarding"]["requires_club"] is False
@@ -246,3 +246,17 @@ def test_admin_approval_provisions_creator_assets(app_client) -> None:
         assert len(squad.first_team_json) == 25
         assert len(squad.academy_json) == 30
         assert creator_regen.club_id == provisioning.club_id
+
+    reapply_response = client.post(
+        "/api/creator/apply",
+        headers=headers,
+        json={
+            "requested_handle": "creator.three.again",
+            "display_name": "Creator Three",
+            "platform": "tiktok",
+            "follower_count": 1250000,
+            "social_links": ["https://tiktok.com/@creatorthree"],
+        },
+    )
+    assert reapply_response.status_code == 409, reapply_response.text
+    assert reapply_response.json()["detail"] == "creator_promotion_requires_normal_account"
