@@ -149,7 +149,18 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
           claiming: _claiming,
         );
       case OwnerConsoleSection.showroom:
-        return ShowroomSection(load: widget.reader.fetchShowroom, onAction: widget.reader.performDesk);
+        final OwnerLegacyGiftGateway? giftGateway =
+            widget.reader is OwnerLegacyGiftGateway
+                ? widget.reader as OwnerLegacyGiftGateway
+                : null;
+        return ShowroomSection(
+          load: widget.reader.fetchShowroom,
+          onAction: widget.reader.performDesk,
+          loadGiftRecipients: giftGateway?.fetchGiftRecipients,
+          giftOwnedAsset: giftGateway == null
+              ? null
+              : giftGateway.giftOwnedAssetToPlayer,
+        );
       case OwnerConsoleSection.desk:
         return _DeskLoader(load: widget.reader.fetchDesk, act: widget.reader.performDesk);
       case OwnerConsoleSection.market:
