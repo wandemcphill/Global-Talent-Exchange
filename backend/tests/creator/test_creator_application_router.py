@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine, select
@@ -13,6 +15,7 @@ from app.models.club_infra import ClubStadium
 from app.models.creator_application import CreatorApplication
 from app.models.creator_profile import CreatorProfile
 from app.models.creator_provisioning import CreatorClubProvisioning, CreatorRegen, CreatorSquad
+from app.models.user import User
 from backend.tests.support.signup_payloads import creator_signup_payload
 
 
@@ -53,6 +56,18 @@ def _creator_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def _mark_contacts_verified_for_test(app, *, email: str) -> None:
+    """Fixture trusted contact state after the real verifier has run."""
+    with app.state.session_factory() as session:
+        user = session.scalar(select(User).where(User.email == email))
+        assert user is not None
+        now = datetime.now(timezone.utc)
+        user.phone_number = "+15555550123"
+        user.email_verified_at = now
+        user.phone_verified_at = now
+        session.commit()
+
+
 def test_creator_application_submission_requires_verification_and_persists_application(app_client) -> None:
     app, client = app_client
     token = _register_creator_user(client, email="creator1@example.com", username="creatorone")
@@ -72,10 +87,22 @@ def test_creator_application_submission_requires_verification_and_persists_appli
     assert apply_response.status_code == 400
     assert apply_response.json()["detail"] == "email_verification_required"
 
+    # These legacy endpoints must not self-certify a user's own contacts.
     email_response = client.post("/api/creator/verify-email", headers=headers)
     phone_response = client.post("/api/creator/verify-phone", headers=headers)
-    assert email_response.status_code == 200, email_response.text
-    assert phone_response.status_code == 200, phone_response.text
+    assert email_response.status_code == 400, email_response.text
+    assert email_response.json()["detail"] == "email_verification_must_use_auth_confirmation"
+    assert phone_response.status_code == 400, phone_response.text
+    assert phone_response.json()["detail"] == "secure_phone_verification_unavailable"
+    with app.state.session_factory() as session:
+        user = session.scalar(select(User).where(User.email == "creator1@example.com"))
+        assert user is not None
+        assert user.email_verified_at is None
+        assert user.phone_verified_at is None
+
+    # This direct state setup simulates contacts already verified by a trusted
+    # provider; these tests cover application/review lifecycle, not fake OTPs.
+    _mark_contacts_verified_for_test(app, email="creator1@example.com")
 
     apply_response = client.post(
         "/api/creator/apply",
@@ -106,8 +133,7 @@ def test_admin_request_verification_and_reject_flow(app_client) -> None:
     headers = _creator_headers(token)
     admin_headers = _admin_headers(client)
 
-    assert client.post("/api/creator/verify-email", headers=headers).status_code == 200
-    assert client.post("/api/creator/verify-phone", headers=headers).status_code == 200
+    _mark_contacts_verified_for_test(_app, email="creator2@example.com")
     apply_response = client.post(
         "/api/creator/apply",
         headers=headers,
@@ -144,8 +170,7 @@ def test_admin_approval_provisions_creator_assets(app_client) -> None:
     headers = _creator_headers(token)
     admin_headers = _admin_headers(client)
 
-    assert client.post("/api/creator/verify-email", headers=headers).status_code == 200
-    assert client.post("/api/creator/verify-phone", headers=headers).status_code == 200
+    _mark_contacts_verified_for_test(app, email="creator3@example.com")
     apply_response = client.post(
         "/api/creator/apply",
         headers=headers,
