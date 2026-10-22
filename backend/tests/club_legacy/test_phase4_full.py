@@ -440,7 +440,13 @@ def test_gift_resolution_authorization_checks(client, bootstrap_admin_headers, a
 
         # Gift sent to a player in recipient_user's club can be accepted by recipient_user
         recipient_club = _club(session, recipient_user.id, "Recipient FC", "recipient-fc")
-        player = OwnerSquadPlayer(id="squad-player-1", club_id=recipient_club.id, name="Star Player", position="ST")
+        player = OwnerSquadPlayer(
+            id="squad-player-1",
+            club_id=recipient_club.id,
+            name="Star Player",
+            position="ST",
+            is_regen=True,
+        )
         session.add(player)
         session.flush()
 
