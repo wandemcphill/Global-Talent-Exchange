@@ -21,9 +21,9 @@ test.afterEach(async ({ page: _page }, testInfo) => {
   await attachDiagnostics(testInfo);
 });
 
-test(
-  "Flutter Club HQ exposes the squad workspace or a clear create-club state without overflow",
-  async ({ page }, testInfo) => {
+test("Club squad route loads the roster or explicit no-club state", async ({
+  page,
+}, testInfo) => {
   // This workflow launches Flutter Web, not the separately hosted React shell
   // at /console. Use the Flutter Club HQ route and its semantic UI.
   await visitAuthedRoute(
@@ -73,8 +73,7 @@ test(
 
   await verifyNoHorizontalOverflow(page);
   await captureScreenshot(page, testInfo, "lineup");
-  },
-);
+});
 
 test("A targeted notification opens its supplied target", async ({ page }, testInfo) => {
   test.skip(
