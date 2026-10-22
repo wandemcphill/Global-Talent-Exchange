@@ -337,7 +337,9 @@ class _PinnedGtexHomeNavDelegate extends SliverPersistentHeaderDelegate {
     return Material(
       color: kNavyBase,
       elevation: overlapsContent ? 6 : 0,
-      child: child,
+      // Keep the painted child at the exact pinned sliver extent when mobile
+      // safe-area insets make the intrinsic navigation content shorter.
+      child: SizedBox(height: height, child: child),
     );
   }
 
