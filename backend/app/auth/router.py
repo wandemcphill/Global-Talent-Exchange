@@ -337,6 +337,8 @@ def _build_onboarding_bootstrap(
             "market",
             "community",
         ]
+        if creator is not None and creator.is_active:
+            actions.append("creator_dashboard")
         actions.extend(["club_workspace", "competitions"] if club_present else ["create_club", "join_club"])
         return SessionBootstrapOnboardingState(
             has_club=club_present,
@@ -355,7 +357,7 @@ def _build_onboarding_bootstrap(
         ]
         actions.extend(["club_workspace", "competitions"] if club_present else ["create_club", "join_club"])
         if coin_trader is not None:
-            actions.append("coin_trader_marketplace")
+            actions.extend(["coin_trader_marketplace", "apply_coin_trader"])
         return SessionBootstrapOnboardingState(
             has_club=club_present,
             requires_club=False,
