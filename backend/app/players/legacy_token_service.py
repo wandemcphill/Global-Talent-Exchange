@@ -22,7 +22,7 @@ from app.models.player_token_market import (
     PlayerShareMarket,
     PlayerSharePriceSnapshot,
 )
-from app.models.user import User, UserRole
+from app.models.user import PublicAccountType, User, UserRole
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
 from app.players.token_market_defaults import MIN_SHARE_PRICE_COIN, resolve_player_share_market_config
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
@@ -377,6 +377,18 @@ class PlayerTokenMarketService:
             raise PlayerTokenMarketError("Player share market is not active.", reason="market_inactive")
         if share_count <= 0:
             raise PlayerTokenMarketError("Share count must be greater than zero.", reason="share_count_invalid")
+
+        # Creator accounts can hold one share of each player/regen asset at a
+        # time. Normal user and club-owner accounts retain the standard market
+        # quantity rules. Apply the cap before any ledger postings.
+        if actor.account_type == PublicAccountType.CREATOR:
+            existing_holding = self.get_holding(user_id=actor.id, player_id=player_id)
+            existing_count = 0 if existing_holding is None else int(existing_holding.share_count or 0)
+            if existing_count + int(share_count) > 1:
+                raise PlayerTokenMarketError(
+                    "Creator accounts may hold only one share of each player or regen.",
+                    reason="creator_single_share_limit",
+                )
 
         available = int(market.total_shares or 0) - int(market.circulating_shares or 0)
         if share_count > available:
