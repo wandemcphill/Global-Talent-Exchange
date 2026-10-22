@@ -105,7 +105,12 @@ export function CoinTraderDesk() {
   const isDedicatedTraderAccount = accountType === "coin_trader";
   const { data: traders } = useQuery({ queryKey: ["coin-traders"], queryFn: async () => (await api.get("/coin-traders")).data });
   const { data: orders } = useQuery({ queryKey: ["coin-orders", "me"], queryFn: async () => (await api.get("/coin-traders/orders")).data });
-  const meQuery = useQuery({ queryKey: ["coin-trader-me"], queryFn: async () => (await api.get("/coin-traders/me")).data, retry: false });
+  const meQuery = useQuery({
+    queryKey: ["coin-trader-me"],
+    queryFn: async () => (await api.get("/coin-traders/me")).data,
+    retry: false,
+    enabled: isDedicatedTraderAccount,
+  });
   const me = meQuery.data;
   const status = String(me?.status || "").toLowerCase();
   const isTrader = isDedicatedTraderAccount && me && status === "approved";
@@ -162,10 +167,10 @@ export function CoinTraderDesk() {
 
       {showApplication && (
         <div className="mb-6 rounded-xl border border-amber-400/25 bg-amber-500/[0.05] p-4" data-testid="coin-trader-application">
-          <p className="gx-label text-amber-300">{status === "rejected" ? "Resubmit application" : "Become a coin trader"}</p>
-          <h3 className="gx-display mt-1 text-xl font-bold uppercase text-white">Apply for trader status</h3>
+          <p className="gx-label text-amber-300">{status === "rejected" ? "Resubmit desk application" : "Set up trader desk"}</p>
+          <h3 className="gx-display mt-1 text-xl font-bold uppercase text-white">Set up your trader desk</h3>
           <p className="mt-2 max-w-3xl text-sm leading-5 text-slate-400">
-            Applications are reviewed before trader-desk tools are enabled. This account is already a dedicated Coin Trader account; approval will not turn a User account into a Trader account.
+            Your dedicated Coin Trader account needs an approved desk profile before it can quote rates or accept client orders. Desk approval does not change account type.
           </p>
           <form onSubmit={submitTraderApplication} className="mt-4 grid gap-3 md:grid-cols-3">
             <label className="block">
