@@ -2518,7 +2518,7 @@ class _GiftDrawerSheetState extends State<_GiftDrawerSheet> {
     final List<GiftCatalogItem> catalog = widget.catalog;
     final List<GiftCatalogItem> visible = _visibleGifts;
     final GiftCatalogItem? selected = _selectedGift;
-    final double sheetHeight = math.min(MediaQuery.sizeOf(context).height * 0.88, 800.0);
+    final double sheetHeight = math.min(MediaQuery.sizeOf(context).height * 0.88, 800.0).toDouble();
     return SafeArea(
       top: false,
       child: Container(
