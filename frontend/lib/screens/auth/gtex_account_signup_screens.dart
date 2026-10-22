@@ -39,7 +39,7 @@ class GtexAccountSelectorScreen extends StatelessWidget {
     final roles = <_AccountRole>[
       const _AccountRole(
         'USER ACCOUNT',
-        'Create a normal GTEX member account. You can create a club any time after signing in. Creator promotion is available only when you have no active club under your ownership.',
+        'Create a normal GTEX member account. You can create a club any time after signing in. Creator promotion is available only when you no longer own any clubs; sell or transfer every club you still own first.',
         Icons.person_outline_rounded,
         Color(0xFFB9FF3D),
         '/auth/signup/user',
@@ -104,7 +104,7 @@ class GtexAccountSelectorScreen extends StatelessWidget {
                   const SizedBox(
                     width: 690,
                     child: Text(
-                      'Choose one dedicated account type: User, Creator, or Coin Trader. User accounts may create clubs after signing in. Creator promotion from an existing User account is only allowed when no active club remains under that account.',
+                      'Choose one dedicated account type: User, Creator, or Coin Trader. User accounts may create clubs after signing in. Creator promotion from an existing User account is only allowed when no club remains under that account's ownership.',
                       style: TextStyle(
                         color: Color(0xFF93A0AA),
                         fontSize: 16,
