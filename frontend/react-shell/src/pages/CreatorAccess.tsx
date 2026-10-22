@@ -64,7 +64,15 @@ export default function CreatorAccess() {
       const backendDetail = error?.response?.data?.detail;
       const message = typeof backendDetail === "string" ? backendDetail : errMsg(error);
       setFormError(message);
-      if (/email_verification_required|phone_verification_required/i.test(message)) {
+      if (/active_club_prevents_creator_promotion/i.test(message)) {
+        setFormError(
+          "Creator promotion is available only when your account has no active club under its ownership. Sell all active clubs first, then apply again."
+        );
+      } else if (/coin_trader_account_cannot_be_promoted_to_creator|creator_promotion_requires_normal_account/i.test(message)) {
+        setFormError(
+          "This account cannot be promoted to Creator. Coin Trader is a separate account lane; use a normal User account or register directly as a Creator."
+        );
+      } else if (/email_verification_required|phone_verification_required/i.test(message)) {
         setFormError(
           "GTEX requires verified email and phone contact before creator review. Your application was not submitted. The current phone-verification endpoint does not perform a real verification challenge, so this flow must remain blocked until GTEX provides secure phone verification."
         );
@@ -91,7 +99,7 @@ export default function CreatorAccess() {
             <p className="gx-eyebrow mb-2 text-pink-300">Creator account promotion</p>
             <h1 className="gx-display text-3xl font-black uppercase text-white sm:text-4xl">Turn your football voice into a platform.</h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
-              Normal GTEX member accounts, including club owners, can apply for promotion to a dedicated Creator account. Approval moves the account into the Creator lane; it cannot be switched back to a normal or club-owner account. Coin Trader accounts cannot apply.
+              Direct Creator signup is available here on GTEX's signup page. Existing normal User accounts can request one-way promotion only when they no longer own any active club; active club owners must sell their active club(s) first. Coin Trader accounts cannot apply.
             </p>
           </div>
         </div>
@@ -102,7 +110,9 @@ export default function CreatorAccess() {
           <p className="text-sm leading-6 text-slate-300">
             This GTEX ID is now a dedicated Creator account. Creator is a separate account lane, not a switchable workspace, and it cannot be changed back to a normal or club-owner account.
           </p>
-          <a href="/app/hub" data-testid="open-creator-studio" className="mt-4 inline-block text-xs font-bold uppercase tracking-wider text-pink-300 hover:text-pink-200">Open Creator Studio →</a>
+          <p className="mt-4 text-xs leading-5 text-slate-400">
+            Your Creator account is active. The full Creator Studio is available in the main GTEX application; this React console keeps your account and promotion status visible.
+          </p>
         </Panel>
       )}
 
