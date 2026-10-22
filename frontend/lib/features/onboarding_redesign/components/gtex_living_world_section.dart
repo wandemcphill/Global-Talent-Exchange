@@ -357,7 +357,7 @@ class _NewsroomCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          // Verified Facts Snippet Preview
+          // Editorial story concept preview
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -375,10 +375,10 @@ class _NewsroomCard extends StatelessWidget {
                     Text(
                       'STORY CONCEPT • NOT LIVE DATA',
                       style: TextStyle(
-                        color: kPitchGreenBright,
+                        color: kGoldPrimary,
                         fontSize: 10,
                         fontWeight: FontWeight.w800,
-                        letterSpacing: 1,
+                        letterSpacing: 0.6,
                         fontFamily: kFontCondensed,
                       ),
                     ),
@@ -541,7 +541,7 @@ class _StoryConceptDialog extends StatelessWidget {
 
                 const SizedBox(height: 18),
 
-                // AI Grounded Editorial Narration
+                // Editorial narration for the illustrative story
                 const Text(
                   'EDITORIAL NARRATION',
                   style: TextStyle(
