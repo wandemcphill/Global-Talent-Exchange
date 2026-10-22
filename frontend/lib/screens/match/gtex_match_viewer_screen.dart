@@ -310,6 +310,7 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                               previousFrame: controller.leftFrame,
                               activeEvent: activeEvent,
                               positionSeconds: controller.positionSeconds,
+                              controller: controller,
                             ),
                           ),
                         ),
@@ -320,6 +321,18 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                             frame: frame,
                           ),
                         ),
+                        if (activeEvent?.type == MatchViewerEventType.goal) ...<Widget>[
+                          const SizedBox(height: 4),
+                          Align(
+                            alignment: Alignment.center,
+                            child: FilledButton.tonalIcon(
+                              key: const Key('match-2d-replay-active-goal'),
+                              onPressed: () => controller.replayEvent(activeEvent!),
+                              icon: const Icon(Icons.replay_circle_filled_rounded),
+                              label: Text('REPLAY GOAL · ${activeEvent!.minute}\''),
+                            ),
+                          ),
+                        ],
                         if (widget.giftClient != null &&
                             giftTarget != null) ...<Widget>[
                           const SizedBox(height: 8),
@@ -386,6 +399,7 @@ class _MatchLiveLayout extends StatelessWidget {
     required this.previousFrame,
     required this.activeEvent,
     required this.positionSeconds,
+    required this.controller,
   });
 
   final MatchViewState viewState;
@@ -393,6 +407,7 @@ class _MatchLiveLayout extends StatelessWidget {
   final MatchTimelineFrame previousFrame;
   final MatchEvent? activeEvent;
   final double positionSeconds;
+  final MatchPlaybackController controller;
 
   @override
   Widget build(BuildContext context) {
@@ -411,6 +426,7 @@ class _MatchLiveLayout extends StatelessWidget {
           activeEvent: activeEvent,
           positionSeconds: positionSeconds,
           compact: !wide,
+          controller: controller,
         );
 
         if (wide) {
@@ -518,6 +534,7 @@ class _MatchInsightPanel extends StatelessWidget {
                     ),
                     activeEvent: activeEvent,
                     compact: true,
+                    controller: controller,
                   ),
                 ],
               ),
@@ -543,6 +560,7 @@ class _MatchInsightPanel extends StatelessWidget {
                       ),
                       activeEvent: activeEvent,
                       compact: false,
+                      controller: controller,
                     ),
                   ),
                 ],
@@ -770,18 +788,23 @@ class _EventFeed extends StatelessWidget {
     required this.events,
     required this.activeEvent,
     required this.compact,
+    required this.controller,
   });
 
   final List<MatchEvent> events;
   final MatchEvent? activeEvent;
   final bool compact;
+  final MatchPlaybackController controller;
 
   @override
   Widget build(BuildContext context) {
     final List<Widget> tiles = events
         .map(
-          (MatchEvent event) =>
-              _EventFeedTile(event: event, active: activeEvent?.id == event.id),
+          (MatchEvent event) => _EventFeedTile(
+            event: event,
+            active: activeEvent?.id == event.id,
+            onReplayGoal: () => controller.replayEvent(event),
+          ),
         )
         .toList(growable: false);
 
@@ -798,10 +821,15 @@ class _EventFeed extends StatelessWidget {
 }
 
 class _EventFeedTile extends StatelessWidget {
-  const _EventFeedTile({required this.event, required this.active});
+  const _EventFeedTile({
+    required this.event,
+    required this.active,
+    required this.onReplayGoal,
+  });
 
   final MatchEvent event;
   final bool active;
+  final VoidCallback onReplayGoal;
 
   @override
   Widget build(BuildContext context) {
@@ -847,6 +875,22 @@ class _EventFeedTile extends StatelessWidget {
                     letterSpacing: 0,
                   ),
                 ),
+                if (event.type == MatchViewerEventType.goal)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      key: Key('match-2d-replay-goal-${event.id}'),
+                      onPressed: onReplayGoal,
+                      icon: const Icon(Icons.replay_rounded, size: 15),
+                      label: Text('Replay goal · ${event.minute}\''),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFFFDE68A),
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        minimumSize: const Size(0, 30),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
