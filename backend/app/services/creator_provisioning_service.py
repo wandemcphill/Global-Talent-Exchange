@@ -34,9 +34,7 @@ class CreatorProvisioningService:
             raise CreatorProvisioningError("creator_promotion_requires_normal_account")
         if account.account_type == PublicAccountType.USER:
             owned_club_id = self.session.scalar(
-                select(ClubProfile.id)
-                .where(ClubProfile.owner_user_id == account.id)
-                .limit(1)
+                select(ClubProfile.id).where(ClubProfile.owner_user_id == account.id).limit(1)
             )
             if owned_club_id is not None:
                 raise CreatorProvisioningError("club_ownership_prevents_creator_promotion")
