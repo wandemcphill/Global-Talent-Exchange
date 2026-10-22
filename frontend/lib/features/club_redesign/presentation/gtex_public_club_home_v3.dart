@@ -1005,7 +1005,17 @@ class _OwnerAssetTile extends StatelessWidget {
         Text(asset.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: GtexColors.text, fontWeight: FontWeight.w900)),
         const SizedBox(height: 5),
         Text('Edition ' + (asset.editionNumber?.toString() ?? '—'), style: const TextStyle(color: GtexColors.textMuted, fontSize: 11)),
-        if (asset.value != null) ...<Widget>[const SizedBox(height: 5), Text(_valueLabel(asset.value), style: const TextStyle(color: GtexColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w800))],
+        if (asset.catalogPrice != null) ...<Widget>[
+          const SizedBox(height: 5),
+          Text(
+            'Catalogue price · ' + _valueLabel(asset.catalogPrice),
+            style: const TextStyle(
+              color: GtexColors.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
       ])),
     ]),
   );
