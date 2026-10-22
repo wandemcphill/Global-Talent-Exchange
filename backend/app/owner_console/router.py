@@ -721,10 +721,10 @@ def public_showroom(code: str, session: Session = Depends(get_session)) -> dict[
     return _run(session, public_card, session, code)
 
 
-
 @router.get("/public/profile/{owner_user_id}")
 def get_public_owner_profile(
-    owner_user_id: str, session: Session = Depends(get_session)
+    owner_user_id: str,
+    session: Session = Depends(get_session),
 ) -> dict[str, Any]:
     """Public owner persona; no private inbox, wallet controls, or per-account balances."""
     from app.services.club_public_profile_service import (
@@ -735,7 +735,10 @@ def get_public_owner_profile(
     try:
         return public_owner_profile(session, owner_user_id)
     except ClubPublicProfileNotFound as exc:
-        raise HTTPException(status_code=404, detail="Public owner profile not found.") from exc
+        raise HTTPException(
+            status_code=404,
+            detail="Public owner profile not found.",
+        ) from exc
 
 
 @router.post("/inbox/{item_id}/decide")
