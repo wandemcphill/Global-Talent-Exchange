@@ -59,4 +59,3 @@ def test_dedicated_creator_and_coin_trader_accounts_cannot_enter_club_owner_lane
         control_center = client.get("/api/owner/control-center", headers=headers)
         assert control_center.status_code == 403, control_center.text
         assert control_center.json()["detail"]["code"] == "club_owner_account_type_required"
-
