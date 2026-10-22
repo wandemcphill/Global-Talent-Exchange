@@ -12,7 +12,7 @@ from app.main import (
     create_app,
 )
 from app.models.club_infra import ClubStadium
-from app.models.club_profile import ClubProfile, ClubType
+from app.models.club_profile import ClubLifecycleStatus, ClubProfile, ClubType
 from app.models.creator_application import CreatorApplication
 from app.models.creator_profile import CreatorProfile
 from app.models.creator_provisioning import CreatorClubProvisioning, CreatorRegen, CreatorSquad
