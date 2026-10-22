@@ -99,7 +99,7 @@ class _GtexGiftingSheetState extends State<GtexGiftingSheet> {
     final double height = MediaQuery.sizeOf(context).height;
     final Color gold = GtexColors.gold;
     return Container(
-      height: math.min(height * 0.90, 820),
+      height: math.min(height * 0.90, 820.0),
       decoration: BoxDecoration(
         color: const Color(0xFF080F1B),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
@@ -119,9 +119,13 @@ class _GtexGiftingSheetState extends State<GtexGiftingSheet> {
           builder: (BuildContext context, AsyncSnapshot<List<MatchGiftCatalogItem>> snapshot) {
             final List<MatchGiftCatalogItem> catalog =
                 snapshot.data ?? kMatchGiftCatalog;
-            final MatchGiftCatalogItem? selected = _selected ??
-                catalog.where((MatchGiftCatalogItem gift) => !gift.requiresReview)
-                    .firstOrNull;
+            final MatchGiftCatalogItem? firstSendable = catalog.isEmpty
+                ? null
+                : catalog.firstWhere(
+                    (MatchGiftCatalogItem gift) => !gift.requiresReview,
+                    orElse: () => catalog.first,
+                  );
+            final MatchGiftCatalogItem? selected = _selected ?? firstSendable;
             final List<MatchGiftCatalogItem> gifts = _filtered(catalog);
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
