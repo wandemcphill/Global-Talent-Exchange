@@ -1,5 +1,5 @@
 import React from "react";
-import { NavLink, Navigate, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Award,
   BookOpen,
@@ -103,28 +103,73 @@ function ClubSwitcher() {
 export default function AppShell() {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { data, isLoading } = useControlCenter();
 
   if (loading) return <Loading label="Opening the boardroom..." />;
   if (!user) return <Navigate to="/login" replace />;
   if (isLoading) return <Loading label="Loading your clubs..." />;
 
-  const isAdmin = ["admin", "super_admin"].includes(String(user.role).toLowerCase());
+  const role = String(user.role || "").toLowerCase();
+  const accountType = String(user.account_type || user.accountType || "user").toLowerCase();
+  const isAdmin = ["admin", "super_admin"].includes(role);
+  const isTraderAccount = accountType === "coin_trader" || role === "coin_trader";
+  const isCreatorAccount = accountType === "creator" || role === "creator";
+  const isDedicatedAccount = isTraderAccount || isCreatorAccount;
   const clubs: any[] = data?.clubs || [];
-  const hasClubProfile = clubs.length > 0;
-  const hasActiveClub = clubs.some((c: any) => ["competition", "active"].includes(c.stage));
+  const hasClubProfile = !isDedicatedAccount && clubs.length > 0;
+  const hasActiveClub =
+    !isDedicatedAccount &&
+    clubs.some((c: any) => ["competition", "active"].includes(c.stage));
 
-  // Only users who have already started creating a club must finish activation.
-  // A normal user account with no club stays in GTEX and can use user-level lanes.
-  if (!isAdmin && hasClubProfile && !hasActiveClub) {
+  // Account type is a lane boundary, not a workspace preference. Trader and
+  // Creator accounts cannot navigate into club-owner actions or switch personas.
+  const traderAllowed = ["/app/coin-traders", "/app/finance"];
+  const creatorAllowed = [
+    "/app/creator-access",
+    "/app/newsroom",
+    "/app/transfer-hub",
+    "/app/regen-world",
+    "/app/awards",
+    "/app/market",
+    "/app/competitions",
+    "/app/national",
+    "/app/finance",
+  ];
+  const routeIsAllowed = (allowed: string[]) =>
+    allowed.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+
+  if (isTraderAccount && pathname !== "/app" && !routeIsAllowed(traderAllowed)) {
+    return <Navigate to="/app/coin-traders" replace />;
+  }
+  if (isCreatorAccount && pathname !== "/app" && !routeIsAllowed(creatorAllowed)) {
+    return <Navigate to="/app/creator-access" replace />;
+  }
+  if (isTraderAccount && pathname === "/app") {
+    return <Navigate to="/app/coin-traders" replace />;
+  }
+  if (isCreatorAccount && pathname === "/app") {
+    return <Navigate to="/app/creator-access" replace />;
+  }
+
+  // Only normal member accounts enter club activation. Dedicated Creator and
+  // Coin Trader accounts never inherit club onboarding from old ownership data.
+  if (!isAdmin && !isDedicatedAccount && hasClubProfile && !hasActiveClub) {
     return <Navigate to="/onboarding" replace />;
   }
 
-  const visibleNav = hasActiveClub
+  const normalNav = hasActiveClub
     ? NAV
     : NAV.filter((item) =>
         ["home", "clubs", "regen-world", "awards", "market", "competitions", "national", "finance", "creator-access", "coin-traders"].includes(item.id),
       );
+  const visibleNav = isTraderAccount
+    ? NAV.filter((item) => ["coin-traders", "finance"].includes(item.id))
+    : isCreatorAccount
+      ? NAV.filter((item) =>
+          ["creator-access", "newsroom", "transfers", "regen-world", "awards", "market", "competitions", "national", "finance"].includes(item.id),
+        ).map((item) => item.id === "creator-access" ? { ...item, label: "Creator Studio" } : item)
+      : normalNav;
   const wallet = data?.economy?.wallet || {};
 
   return (
@@ -158,7 +203,15 @@ export default function AppShell() {
 
         <div className="border-t border-white/[0.08] bg-black/40 p-4">
           <p className="truncate text-xs font-bold text-white">{user.display_name || user.username}</p>
-          <p className="gx-mono text-[10px] text-slate-400">{hasActiveClub ? `Owner integrity ${data?.integrity?.score ?? 100}/100` : "User account · club ownership optional"}</p>
+          <p className="gx-mono text-[10px] text-slate-400">
+            {isTraderAccount
+              ? "Coin trader account · dedicated lane"
+              : isCreatorAccount
+                ? "Creator account · dedicated lane"
+                : hasActiveClub
+                  ? `Owner integrity ${data?.integrity?.score ?? 100}/100`
+                  : "User account · club ownership optional"}
+          </p>
           <button
             data-testid="logout-button"
             onClick={() => {
@@ -177,7 +230,7 @@ export default function AppShell() {
         {/* Sticky Top Bar */}
         <header className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-white/[0.08] bg-slate-950/85 px-4 py-3 backdrop-blur-xl sm:px-8">
           <p className="gx-display text-xl font-black text-white lg:hidden">GTEX</p>
-          <ClubSwitcher />
+          {!isDedicatedAccount && <ClubSwitcher />}
 
           <div className="ml-auto flex items-center gap-4 text-xs">
             {hasActiveClub ? (
