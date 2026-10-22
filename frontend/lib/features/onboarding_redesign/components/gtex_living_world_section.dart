@@ -186,7 +186,6 @@ class _GlobalBroadcastTicker extends StatelessWidget {
               ),
             ],
           ),
-          ),
         ],
       ),
     );
