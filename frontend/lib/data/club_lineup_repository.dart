@@ -7,11 +7,25 @@ class LineupSquadPlayer {
     required this.playerId,
     required this.name,
     this.position,
+    this.shirtNumber,
+    this.rating,
+    this.potential,
+    this.form,
+    this.fitnessPct,
+    this.morale,
+    this.portraitUrl,
   });
 
   final String playerId;
   final String name;
   final String? position;
+  final int? shirtNumber;
+  final double? rating;
+  final double? potential;
+  final String? form;
+  final double? fitnessPct;
+  final double? morale;
+  final String? portraitUrl;
 }
 
 /// A club's saved formation + starting XI.
@@ -99,10 +113,83 @@ class ClubLineupRepository {
             playerId: (item['player_id'] ?? item['playerId'] ?? '').toString(),
             name: (item['player_name'] ?? item['playerName'] ?? 'Player').toString(),
             position: (item['position'] ?? item['normalized_position'])?.toString(),
+            shirtNumber: _intField(item, const <String>[
+              'shirt_number', 'shirtNumber', 'jersey_number', 'jerseyNumber',
+            ]),
+            rating: _doubleField(item, const <String>[
+              'rating', 'overall', 'overall_rating', 'overallRating',
+              'current_rating', 'currentRating',
+            ]),
+            potential: _doubleField(item, const <String>[
+              'potential', 'potential_rating', 'potentialRating',
+            ]),
+            form: _formField(item),
+            fitnessPct: _doubleField(item, const <String>[
+              'fitness_pct', 'fitnessPct', 'fitness', 'stamina_pct', 'staminaPct',
+            ]),
+            morale: _doubleField(item, const <String>['morale', 'happiness']),
+            portraitUrl: _stringField(item, const <String>[
+              'portrait_url', 'portraitUrl', 'image_url', 'imageUrl',
+              'avatar_url', 'avatarUrl',
+            ]),
           );
         })
         .where((LineupSquadPlayer p) => p.playerId.isNotEmpty)
         .toList(growable: false);
+  }
+
+  static String? _stringField(
+    Map<String, dynamic> item,
+    List<String> keys,
+  ) {
+    for (final String key in keys) {
+      final Object? value = item[key];
+      if (value is String && value.trim().isNotEmpty) return value.trim();
+    }
+    return null;
+  }
+
+  static int? _intField(Map<String, dynamic> item, List<String> keys) {
+    for (final String key in keys) {
+      final Object? value = item[key];
+      if (value is int) return value;
+      if (value is num) return value.round();
+      if (value is String) {
+        final int? parsed = int.tryParse(value.trim());
+        if (parsed != null) return parsed;
+      }
+    }
+    return null;
+  }
+
+  static double? _doubleField(
+    Map<String, dynamic> item,
+    List<String> keys,
+  ) {
+    for (final String key in keys) {
+      final Object? value = item[key];
+      if (value is num) return value.toDouble();
+      if (value is String) {
+        final double? parsed = double.tryParse(value.trim());
+        if (parsed != null) return parsed;
+      }
+    }
+    return null;
+  }
+
+  static String? _formField(Map<String, dynamic> item) {
+    final Object? value = item['form'] ?? item['recent_form'] ?? item['recentForm'];
+    if (value is String && value.trim().isNotEmpty) return value.trim();
+    if (value is List) {
+      final String joined = value
+          .map((dynamic item) => item?.toString() ?? '')
+          .where((String item) => item.trim().isNotEmpty)
+          .take(5)
+          .join();
+      return joined.isEmpty ? null : joined;
+    }
+    if (value is num) return value.toString();
+    return null;
   }
 
   List<String> _stringList(Object? value) {
