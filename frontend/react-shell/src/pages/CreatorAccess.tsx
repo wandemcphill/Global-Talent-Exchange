@@ -85,7 +85,7 @@ export default function CreatorAccess() {
       const backendDetail = error?.response?.data?.detail;
       const message = typeof backendDetail === "string" ? backendDetail : errMsg(error);
       setFormError(message);
-      if (/active_club_prevents_creator_promotion/i.test(message)) {
+      if (/club_ownership_prevents_creator_promotion|active_club_prevents_creator_promotion/i.test(message)) {
         setFormError(
           "Creator promotion is available only when your account no longer owns any clubs. Sell or transfer all clubs you still own first, then apply again."
         );
