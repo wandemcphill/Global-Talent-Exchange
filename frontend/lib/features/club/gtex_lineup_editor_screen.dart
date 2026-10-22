@@ -744,14 +744,13 @@ class _GtexLineupEditorScreenState extends State<GtexLineupEditorScreen> {
       top: top,
       width: markerWidth,
       height: 55,
-      child: _pitchPlayerMarker(index: index, role: role, width: markerWidth),
+      child: _pitchPlayerMarker(index: index, role: role),
     );
   }
 
   Widget _pitchPlayerMarker({
     required int index,
     required String role,
-    required double width,
   }) {
     final String? id = _slots[index];
     final LineupSquadPlayer? player = _playerForId(id);
@@ -920,6 +919,92 @@ class _GtexLineupEditorScreenState extends State<GtexLineupEditorScreen> {
       ),
     );
   }
+}
+
+class _LineupPitchPainter extends CustomPainter {
+  const _LineupPitchPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Rect field = Offset.zero & size;
+    final Paint grass = Paint()..style = PaintingStyle.fill;
+    const int stripeCount = 10;
+    for (int i = 0; i < stripeCount; i++) {
+      grass.color = i.isEven
+          ? const Color(0xFF175339)
+          : const Color(0xFF12462F);
+      canvas.drawRect(
+        Rect.fromLTWH(
+          field.left + field.width * i / stripeCount,
+          field.top,
+          field.width / stripeCount + 0.5,
+          field.height,
+        ),
+        grass,
+      );
+    }
+
+    final double inset = size.shortestSide * 0.045;
+    final Rect playArea = field.deflate(inset);
+    final Paint line = Paint()
+      ..color = Colors.white.withValues(alpha: 0.65)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.1;
+    canvas.drawRect(playArea, line);
+    canvas.drawLine(
+      Offset(playArea.left, playArea.center.dy),
+      Offset(playArea.right, playArea.center.dy),
+      line,
+    );
+    canvas.drawCircle(playArea.center, playArea.width * 0.12, line);
+    canvas.drawCircle(
+      playArea.center,
+      2,
+      Paint()..color = Colors.white.withValues(alpha: 0.8),
+    );
+
+    final Rect topBox = Rect.fromLTWH(
+      playArea.left + playArea.width * 0.22,
+      playArea.top,
+      playArea.width * 0.56,
+      playArea.height * 0.14,
+    );
+    final Rect bottomBox = Rect.fromLTWH(
+      playArea.left + playArea.width * 0.22,
+      playArea.bottom - playArea.height * 0.14,
+      playArea.width * 0.56,
+      playArea.height * 0.14,
+    );
+    final Rect topSix = Rect.fromLTWH(
+      playArea.left + playArea.width * 0.37,
+      playArea.top,
+      playArea.width * 0.26,
+      playArea.height * 0.055,
+    );
+    final Rect bottomSix = Rect.fromLTWH(
+      playArea.left + playArea.width * 0.37,
+      playArea.bottom - playArea.height * 0.055,
+      playArea.width * 0.26,
+      playArea.height * 0.055,
+    );
+    canvas.drawRect(topBox, line);
+    canvas.drawRect(bottomBox, line);
+    canvas.drawRect(topSix, line);
+    canvas.drawRect(bottomSix, line);
+    canvas.drawCircle(
+      Offset(playArea.center.dx, playArea.top + playArea.height * 0.105),
+      2,
+      Paint()..color = Colors.white.withValues(alpha: 0.75),
+    );
+    canvas.drawCircle(
+      Offset(playArea.center.dx, playArea.bottom - playArea.height * 0.105),
+      2,
+      Paint()..color = Colors.white.withValues(alpha: 0.75),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _LineupPitchPainter oldDelegate) => false;
 }
 
 /// Responsive substitute pattern for the active lineup editor. On narrow
