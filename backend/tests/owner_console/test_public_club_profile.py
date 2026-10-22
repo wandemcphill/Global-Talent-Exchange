@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from uuid import uuid4
 
 from app.club_legacy.models import (
     ClubLegacyAsset,
@@ -17,9 +18,10 @@ from app.owner_console.models import OwnerClubState, OwnerSquadPlayer
 
 
 def _seed_public_club(session):
+    unique = uuid4().hex[:8]
     owner = User(
-        email="public-profile-owner@example.test",
-        username="public_profile_owner",
+        email=f"public-profile-{unique}@example.test",
+        username=f"public_profile_owner_{unique}",
         password_hash="test-hash",
         display_name="Amara Okafor",
         account_type=PublicAccountType.USER,
@@ -33,7 +35,7 @@ def _seed_public_club(session):
         short_name="LEFC",
         club_type=ClubType.COMMUNITY,
         lifecycle_status=ClubLifecycleStatus.ACTIVE,
-        slug="lagos-eclipse-public-profile",
+        slug=f"lagos-eclipse-public-profile-{unique}",
         primary_color="#101B32",
         secondary_color="#D5B46A",
         accent_color="#24D18F",
@@ -123,7 +125,7 @@ def _seed_public_club(session):
     )
 
     bus = ClubLegacyCatalogueItem(
-        sku="public-profile-coach-bus",
+        sku=f"public-profile-coach-bus-{unique}",
         name="Vanguard First-Team Coach",
         category="coach",
         price=Decimal("320"),
@@ -131,7 +133,7 @@ def _seed_public_club(session):
         fallback_label="Team coach",
     )
     jet = ClubLegacyCatalogueItem(
-        sku="public-profile-owner-jet",
+        sku=f"public-profile-owner-jet-{unique}",
         name="Sovereign 900X Jet",
         category="jet",
         price=Decimal("50000"),
@@ -220,8 +222,8 @@ def test_public_owner_profile_lists_public_clubs_and_personal_assets_without_wal
 def test_public_dossiers_return_404_for_private_clubs_and_nonexistent_owners(client, app):
     with app.state.session_factory() as session:
         owner = User(
-            email="private-profile@example.test",
-            username="private_profile",
+            email=f"private-profile-{uuid4().hex[:8]}@example.test",
+            username=f"private_profile_{uuid4().hex[:8]}",
             password_hash="test-hash",
             display_name="Private Owner",
             account_type=PublicAccountType.USER,
