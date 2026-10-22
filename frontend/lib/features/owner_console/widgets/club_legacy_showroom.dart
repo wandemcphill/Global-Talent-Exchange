@@ -274,7 +274,7 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Choose the recipient',
+                  'Choose an academy regen',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w900,
@@ -303,12 +303,14 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
                     ),
                   );
                 }
-                final List<OwnerGiftRecipient> players = snapshot.data ?? const <OwnerGiftRecipient>[];
+                final List<OwnerGiftRecipient> players = (snapshot.data ?? const <OwnerGiftRecipient>[])
+                    .where((OwnerGiftRecipient player) => player.isRegen)
+                    .toList(growable: false);
                 if (players.isEmpty) {
                   return const Padding(
                     padding: EdgeInsets.all(18),
                     child: Text(
-                      'No squad players are available to receive a luxury gift yet.',
+                      'No eligible regen players are available yet. Add an academy regen before gifting luxury items.',
                       style: TextStyle(color: Color(0xFFB9C5D7)),
                     ),
                   );
@@ -358,11 +360,30 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: <Widget>[
-                                    Text(
-                                      player.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+                                    Row(
+                                      children: <Widget>[
+                                        Expanded(
+                                          child: Text(
+                                            player.name,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: GtexColors.gold.withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(5),
+                                            border: Border.all(color: GtexColors.gold.withValues(alpha: 0.35)),
+                                          ),
+                                          child: const Text(
+                                            'REGEN',
+                                            style: TextStyle(color: GtexColors.gold, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 0.7),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                     const SizedBox(height: 3),
                                     Text(
