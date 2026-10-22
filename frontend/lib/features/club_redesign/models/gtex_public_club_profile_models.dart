@@ -33,7 +33,7 @@ class GtexPublicClubAsset {
   const GtexPublicClubAsset({
     required this.name,
     required this.category,
-    this.value,
+    this.catalogPrice,
     this.editionNumber,
     this.previewFile,
     this.fallbackLabel,
@@ -42,7 +42,7 @@ class GtexPublicClubAsset {
 
   final String name;
   final String category;
-  final String? value;
+  final String? catalogPrice;
   final int? editionNumber;
   final String? previewFile;
   final String? fallbackLabel;
@@ -51,7 +51,7 @@ class GtexPublicClubAsset {
   factory GtexPublicClubAsset.fromJson(GtexPublicJson json) => GtexPublicClubAsset(
     name: _publicString(json['name']) ?? 'Club asset',
     category: _publicString(json['category']) ?? 'asset',
-    value: _publicString(json['value']),
+    catalogPrice: _publicString(json['catalog_price']),
     editionNumber: _publicInt(json['edition_number']),
     previewFile: _publicString(json['preview_file']),
     fallbackLabel: _publicString(json['fallback_label']),
