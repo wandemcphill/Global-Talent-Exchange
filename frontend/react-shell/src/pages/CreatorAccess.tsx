@@ -66,7 +66,7 @@ export default function CreatorAccess() {
       setFormError(message);
       if (/active_club_prevents_creator_promotion/i.test(message)) {
         setFormError(
-          "Creator promotion is available only when your account has no active club under its ownership. Sell all active clubs first, then apply again."
+          "Creator promotion is available only when your account no longer owns any clubs. Sell or transfer all clubs you still own first, then apply again."
         );
       } else if (/coin_trader_account_cannot_be_promoted_to_creator|creator_promotion_requires_normal_account/i.test(message)) {
         setFormError(
@@ -99,7 +99,7 @@ export default function CreatorAccess() {
             <p className="gx-eyebrow mb-2 text-pink-300">Creator account promotion</p>
             <h1 className="gx-display text-3xl font-black uppercase text-white sm:text-4xl">Turn your football voice into a platform.</h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
-              Direct Creator signup is available here on GTEX's signup page. Existing normal User accounts can request one-way promotion only when they no longer own any active club; active club owners must sell their active club(s) first. Coin Trader accounts cannot apply.
+              Direct Creator signup is available on GTEX's signup page. Existing normal User accounts can request one-way promotion only when they no longer own any clubs; anyone who still owns a club must sell or transfer it first. Coin Trader accounts cannot apply.
             </p>
           </div>
         </div>
