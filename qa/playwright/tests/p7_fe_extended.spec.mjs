@@ -21,12 +21,27 @@ test.afterEach(async ({ page: _page }, testInfo) => {
   await attachDiagnostics(testInfo);
 });
 
-test("Squad roster remains reachable without horizontal page overflow", async ({
+test("Squad route shows the owner roster or a no-club gate without horizontal overflow", async ({
   page,
 }, testInfo) => {
   await visitAuthedRoute(page, process.env.GTEX_E2E_SQUAD_ROUTE ?? "/app/squad");
-  await expect(page.getByTestId("squad-page")).toBeVisible();
-  await expect(page.getByTestId("squad-table-panel")).toBeVisible();
+
+  const squadPage = page.getByTestId("squad-page");
+  const noClubGate = page.getByTestId("squad-no-club");
+  await expect
+    .poll(async () => (await squadPage.count()) + (await noClubGate.count()))
+    .toBeGreaterThan(0);
+
+  if (await noClubGate.isVisible().catch(() => false)) {
+    await expect(page.getByTestId("squad-choose-club-link")).toBeVisible();
+    await expect(
+      page.getByText(/explore GTEX and manage eligible national-team activities/i),
+    ).toBeVisible();
+  } else {
+    await expect(squadPage).toBeVisible();
+    await expect(page.getByTestId("squad-table-panel")).toBeVisible();
+  }
+
   await verifyNoHorizontalOverflow(page);
   await captureScreenshot(page, testInfo, "lineup");
 });
