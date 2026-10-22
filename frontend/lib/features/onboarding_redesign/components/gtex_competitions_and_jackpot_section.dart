@@ -439,10 +439,12 @@ class _TournamentCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Row(
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            spacing: 8,
+            runSpacing: 6,
             children: <Widget>[
               GtexTagPill(label: comp.type, color: comp.accentColor),
-              const Spacer(),
               GtexTagPill(
                 label: comp.status,
                 color: comp.accentColor,
