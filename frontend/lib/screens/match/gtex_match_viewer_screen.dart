@@ -24,6 +24,7 @@ import 'package:gte_frontend/services/ambient_audio_controller.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/match/broadcast/gtex_gifting_sheet.dart';
+import 'package:gte_frontend/widgets/match/broadcast/gtex_gift_delivery_dialog.dart';
 import 'package:gte_frontend/widgets/match/pitch_2d_widget.dart';
 
 typedef MatchViewStateLoader = Future<MatchViewState> Function();
@@ -214,9 +215,14 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
   }
 
   Future<void> _openGiftSheet(MatchGiftTarget target) {
+    final MatchGiftClient? client = widget.giftClient;
     return GtexGiftingSheet.show(
       context,
       unitLabel: _giftUnitLabelForScope(target.sourceScope),
+      recipientLabel: target.recipientLabel,
+      catalogLoader: client is MatchGiftCatalogProvider
+          ? () => (client as MatchGiftCatalogProvider).fetchCatalog()
+          : null,
       onSelected: (MatchGiftCatalogItem gift) => _sendGift(target, gift),
     );
   }
@@ -237,9 +243,11 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
+      await GtexGiftDeliveryDialog.show(
         context,
-      ).showSnackBar(SnackBar(content: Text(receipt.confirmationMessage)));
+        gift: gift,
+        receipt: receipt,
+      );
     } catch (_) {
       if (!mounted) {
         return;
@@ -377,6 +385,10 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
               builder: (BuildContext context, Widget? child) {
                 final MatchTimelineFrame frame = controller.displayFrame;
                 final MatchEvent? activeEvent = controller.activeEvent;
+                final MatchEvent? activeGoalEvent =
+                    activeEvent?.type == MatchViewerEventType.goal
+                        ? activeEvent
+                        : null;
                 return SafeArea(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
@@ -414,15 +426,15 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                             frame: frame,
                           ),
                         ),
-                        if (activeEvent != null && activeEvent.type == MatchViewerEventType.goal) ...<Widget>[
+                        if (activeGoalEvent != null) ...<Widget>[
                           const SizedBox(height: 4),
                           Align(
                             alignment: Alignment.center,
                             child: FilledButton.tonalIcon(
                               key: const Key('match-2d-replay-active-goal'),
-                              onPressed: () => controller.replayEvent(activeEvent!),
+                              onPressed: () => controller.replayEvent(activeGoalEvent),
                               icon: const Icon(Icons.replay_circle_filled_rounded),
-                              label: Text("REPLAY GOAL - ${activeEvent!.minute}'"),
+                              label: Text('REPLAY GOAL · ${activeGoalEvent.minute}\''),
                             ),
                           ),
                         ],
@@ -698,12 +710,13 @@ class _MatchTeamSheetExpansion extends StatelessWidget {
   Widget build(BuildContext context) {
     final MatchPresentationPackage package =
         BroadcastPackageRepository().resolve(viewState);
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.035),
+    return Material(
+      color: Colors.white.withValues(alpha: 0.035),
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
       ),
+      clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
         key: const Key('match-2d-official-team-sheets'),
         tilePadding: const EdgeInsets.symmetric(horizontal: 10),

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/core/app_feedback.dart';
 import 'package:gte_frontend/data/match_gift_api.dart';
+import 'package:gte_frontend/widgets/match/broadcast/gtex_gift_delivery_dialog.dart';
 
 import '../../../controllers/match_3d_timeline_controller.dart';
 import '../../../models/competition_models.dart';
@@ -154,8 +155,14 @@ class _BroadcastPackageScreenState extends State<BroadcastPackageScreen>
     if (_giftTargetFor(viewState) == null) {
       return;
     }
+    final MatchGiftTarget target = _giftTargetFor(viewState)!;
+    final MatchGiftClient? client = widget.giftClient;
     await GtexGiftingSheet.show(
       context,
+      recipientLabel: target.recipientLabel,
+      catalogLoader: client is MatchGiftCatalogProvider
+          ? () => (client as MatchGiftCatalogProvider).fetchCatalog()
+          : null,
       onSelected: (MatchGiftCatalogItem gift) => _sendGift(viewState, gift),
     );
   }
@@ -184,6 +191,11 @@ class _BroadcastPackageScreenState extends State<BroadcastPackageScreen>
       setState(() {
         _giftStatusMessage = receipt.confirmationMessage;
       });
+      await GtexGiftDeliveryDialog.show(
+        context,
+        gift: gift,
+        receipt: receipt,
+      );
     } catch (error) {
       if (!mounted) {
         return;
