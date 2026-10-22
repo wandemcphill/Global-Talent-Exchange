@@ -430,7 +430,7 @@ class _MatchPitch2DPainter extends CustomPainter {
     double radius, {
     required bool emphasize,
   }) {
-    final double maxTextWidth = math.min(108, playArea.width * 0.34);
+    final double maxTextWidth = math.min(108.0, playArea.width * 0.34).toDouble();
     final TextPainter textPainter = TextPainter(
       text: TextSpan(
         text: name,
@@ -446,7 +446,7 @@ class _MatchPitch2DPainter extends CustomPainter {
       ellipsis: '…',
     )..layout(maxWidth: maxTextWidth);
 
-    final double tagWidth = (textPainter.width + 14).clamp(54, maxTextWidth + 14);
+    final double tagWidth = (textPainter.width + 14).clamp(54.0, maxTextWidth + 14).toDouble();
     const double tagHeight = 19;
     final double preferredTop = center.dy < playArea.center.dy
         ? center.dy + radius + 4
