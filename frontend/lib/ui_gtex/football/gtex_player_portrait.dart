@@ -116,12 +116,29 @@ class _IdentityPlate extends StatelessWidget {
   final Color accent;
   final double size;
 
+  String _resolveSilhouetteAsset(String? pos) {
+    final String p = (pos ?? '').trim().toUpperCase();
+    if (p == 'GK') return 'assets/media/players/keeper.png';
+    if (p == 'CB' || p == 'LB' || p == 'RB' || p == 'LWB' || p == 'RWB' || p == 'DEF') {
+      return 'assets/media/players/defender.png';
+    }
+    if (p == 'CM' || p == 'CDM' || p == 'CAM' || p == 'LM' || p == 'RM' || p == 'MID') {
+      return 'assets/media/players/midfielder.png';
+    }
+    if (p == 'ST' || p == 'CF' || p == 'LW' || p == 'RW' || p == 'FWD') {
+      return 'assets/media/players/striker.png';
+    }
+    return 'assets/media/players/striker.png';
+  }
+
   @override
   Widget build(BuildContext context) {
     final String? support = <String?>[
       position?.trim(),
       nationalityCode?.trim(),
     ].where((String? part) => part != null && part.isNotEmpty).join(' / ');
+    final String silhouetteAsset = _resolveSilhouetteAsset(position);
+
     return Container(
       key: const Key('gtex-player-portrait-plate'),
       decoration: BoxDecoration(
@@ -129,51 +146,93 @@ class _IdentityPlate extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: <Color>[
-            GtexColors.surfaceRaised,
-            accent.withValues(alpha: 0.16),
+            const Color(0xFF0D1522),
+            accent.withValues(alpha: 0.22),
           ],
         ),
-        border: Border.all(color: accent.withValues(alpha: 0.42)),
+        border: Border.all(color: accent.withValues(alpha: 0.45)),
       ),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text(
-              initials,
-              maxLines: 1,
-              style: TextStyle(
-                color: GtexColors.textPrimary,
-                fontFamily: 'BarlowCondensed',
-                fontSize: size * 0.38,
-                fontWeight: FontWeight.w900,
-                height: 1,
-                letterSpacing: 1,
+      child: Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          // Position silhouette fallback art
+          Opacity(
+            opacity: 0.42,
+            child: Image.asset(
+              silhouetteAsset,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            ),
+          ),
+          // Subtle radial dark gradient for typography contrast
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: <Color>[
+                  Colors.transparent,
+                  const Color(0xFF090E17).withValues(alpha: 0.85),
+                ],
               ),
             ),
-            if (support != null && support.isNotEmpty) ...<Widget>[
-              const SizedBox(height: 2),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: GtexSpacing.xxs,
-                ),
-                child: Text(
-                  support,
+          ),
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  initials,
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: accent,
-                    fontFamily: 'Barlow',
-                    fontSize: (size * 0.11).clamp(9, 13),
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.6,
+                    color: GtexColors.textPrimary,
+                    fontFamily: 'BarlowCondensed',
+                    fontSize: size * 0.38,
+                    fontWeight: FontWeight.w900,
+                    height: 1,
+                    letterSpacing: 1,
+                    shadows: const <Shadow>[
+                      Shadow(
+                        color: Colors.black,
+                        blurRadius: 8,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
-          ],
-        ),
+                if (support != null && support.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 2),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: GtexSpacing.xxs,
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: accent.withValues(alpha: 0.4), width: 0.8),
+                      ),
+                      child: Text(
+                        support,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: accent,
+                          fontFamily: 'Barlow',
+                          fontSize: (size * 0.11).clamp(9, 13),
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

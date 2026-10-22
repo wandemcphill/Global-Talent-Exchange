@@ -414,15 +414,15 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                             frame: frame,
                           ),
                         ),
-                        if (activeEvent?.type == MatchViewerEventType.goal) ...<Widget>[
+                        if (activeEvent != null && activeEvent.type == MatchViewerEventType.goal) ...<Widget>[
                           const SizedBox(height: 4),
                           Align(
                             alignment: Alignment.center,
                             child: FilledButton.tonalIcon(
                               key: const Key('match-2d-replay-active-goal'),
-                              onPressed: () => controller.replayEvent(activeEvent),
+                              onPressed: () => controller.replayEvent(activeEvent!),
                               icon: const Icon(Icons.replay_circle_filled_rounded),
-                              label: Text('REPLAY GOAL · ${activeEvent.minute}\''),
+                              label: Text("REPLAY GOAL - ${activeEvent!.minute}'"),
                             ),
                           ),
                         ],
