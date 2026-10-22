@@ -374,10 +374,15 @@ def _build_session_roles(
     creator: SessionBootstrapCreatorState | None,
     coin_trader: SessionBootstrapCoinTraderState | None,
 ) -> list[str]:
-    role_values = {
-        str(getattr(user.role, "value", user.role)),
-        str(getattr(user.account_type, "value", user.account_type)),
-    }
+    account_type = getattr(user.account_type, "value", user.account_type)
+    # Public account type is authoritative. Do not leak a stale historic role
+    # into a dedicated lane or make a normal account look like a Trader/Creator.
+    if account_type == PublicAccountType.CREATOR:
+        role_values = {str(account_type), "creator"}
+    elif account_type == PublicAccountType.COIN_TRADER:
+        role_values = {str(account_type), "coin_trader"}
+    else:
+        role_values = {str(getattr(user.role, "value", user.role)), str(account_type)}
     if user.account_type == PublicAccountType.USER and club_present:
         role_values.add("club_owner")
     if user.account_type == PublicAccountType.CREATOR and creator is not None and creator.is_active:
