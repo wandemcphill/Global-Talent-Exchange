@@ -109,7 +109,7 @@ def _asset_summary(session: Session, asset: ClubLegacyAsset) -> dict[str, Any] |
     return {
         "name": item.name,
         "category": item.category,
-        "value": str(item.price),
+        "catalog_price": str(item.price),
         "edition_number": asset.edition_number,
         "preview_file": _preview(item.category),
         "fallback_label": item.fallback_label,
@@ -501,7 +501,7 @@ def public_owner_profile(session: Session, owner_user_id: str) -> dict[str, Any]
         {
             "name": row["name"],
             "category": row["category"],
-            "value": row["value"],
+            "catalog_price": row["catalog_price"],
             "edition_number": row["edition_number"],
             "preview_file": row["preview_file"],
             "supply_cap": row["supply_cap"],
