@@ -367,6 +367,21 @@ def _build_onboarding_bootstrap(
     )
 
 
+def _as_aware_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _is_auth_session_active(record: AuthSession, *, now: datetime) -> bool:
+    return record.revoked_at is None and _as_aware_utc(record.expires_at) > now
+
+
+def _current_auth_session(request: Request) -> AuthSession | None:
+    current_session = getattr(request.state, "auth_session", None)
+    return current_session if isinstance(current_session, AuthSession) else None
+
+
 def _build_session_roles(
     *,
     user: User,
