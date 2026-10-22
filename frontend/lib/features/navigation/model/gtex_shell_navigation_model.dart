@@ -89,6 +89,7 @@ enum GtexSecondaryDestinationId {
 class GtexShellCapabilities {
   const GtexShellCapabilities({
     this.isAuthenticated = false,
+    this.accountType = 'user',
     this.ownedClubIds = const <String>[],
     this.activeClubId,
     this.isOrgScoutOrAgent = false,
@@ -101,6 +102,8 @@ class GtexShellCapabilities {
   });
 
   final bool isAuthenticated;
+  /// Dedicated product lane: user, creator, or coin_trader.
+  final String accountType;
   final List<String> ownedClubIds;
   final String? activeClubId;
   final bool isOrgScoutOrAgent;
@@ -111,8 +114,16 @@ class GtexShellCapabilities {
   final int unreadInboxCount;
   final int unreadNotificationCount;
 
+  bool get isDedicatedTraderAccount =>
+      accountType.trim().toLowerCase() == 'coin_trader' || isCoinTrader;
+
+  bool get isDedicatedCreatorAccount =>
+      accountType.trim().toLowerCase() == 'creator' || isCreator;
+
   bool get isClubOwner =>
       isAuthenticated &&
+      !isDedicatedTraderAccount &&
+      !isDedicatedCreatorAccount &&
       (ownedClubIds.isNotEmpty ||
           (activeClubId != null && activeClubId!.trim().isNotEmpty));
 
@@ -152,6 +163,15 @@ class GtexShellCapabilities {
             .toString()
             .trim()
             .toLowerCase();
+    final String accountType =
+        (userMap['account_type'] ??
+                userMap['accountType'] ??
+                sessionJson['account_type'] ??
+                sessionJson['accountType'] ??
+                'user')
+            .toString()
+            .trim()
+            .toLowerCase();
     final List<String> permissions = <String>[
       if (userMap['permissions'] is Iterable)
         ...(userMap['permissions']! as Iterable).map(
@@ -181,12 +201,13 @@ class GtexShellCapabilities {
         role == 'super_admin' ||
         role.endsWith('_admin') ||
         permissions.any((String p) => p.startsWith('admin.'));
+    // Account type is the source of truth. A permission/profile must not
+    // expose another account lane through the workspace switcher.
     final bool isCoinTrader =
+        accountType == 'coin_trader' ||
         role == 'coin_trader' ||
-        role == 'trader' ||
-        permissions.contains('coin_trader');
-    final bool isCreator =
-        role == 'creator' || permissions.contains('creator.studio');
+        role == 'trader';
+    final bool isCreator = accountType == 'creator' || role == 'creator';
     final bool isOrgScoutOrAgent =
         role == 'scout' ||
         role == 'agent' ||
@@ -197,6 +218,7 @@ class GtexShellCapabilities {
 
     return GtexShellCapabilities(
       isAuthenticated: true,
+      accountType: accountType,
       ownedClubIds: List<String>.unmodifiable(mergedClubs),
       activeClubId:
           clubId != null && clubId.isNotEmpty
@@ -276,12 +298,20 @@ class ShellNavigationModel {
       return const <GtexWorkspaceKind>[GtexWorkspaceKind.explore];
     }
 
+    // Creator and coin-trader accounts are dedicated lanes, not switchable
+    // roles on a normal GTEX ID. Old club/profile/permission data must not
+    // expand these accounts into a Club, Creator, or Trader workspace menu.
+    if (capabilities.isDedicatedTraderAccount) {
+      return const <GtexWorkspaceKind>[GtexWorkspaceKind.trader];
+    }
+    if (capabilities.isDedicatedCreatorAccount) {
+      return const <GtexWorkspaceKind>[GtexWorkspaceKind.creator];
+    }
+
     final List<GtexWorkspaceKind> workspaces = <GtexWorkspaceKind>[
       if (capabilities.isClubOwner) GtexWorkspaceKind.club,
       GtexWorkspaceKind.fan,
       if (capabilities.isOrgScoutOrAgent) GtexWorkspaceKind.scouting,
-      if (capabilities.isCoinTrader) GtexWorkspaceKind.trader,
-      if (capabilities.isCreator) GtexWorkspaceKind.creator,
       if (capabilities.isAdmin) GtexWorkspaceKind.admin,
     ];
     return List<GtexWorkspaceKind>.unmodifiable(workspaces);
@@ -305,17 +335,17 @@ class ShellNavigationModel {
     if (!capabilities.isAuthenticated) {
       return GtexWorkspaceKind.explore;
     }
+    if (capabilities.isDedicatedTraderAccount) {
+      return GtexWorkspaceKind.trader;
+    }
+    if (capabilities.isDedicatedCreatorAccount) {
+      return GtexWorkspaceKind.creator;
+    }
     if (capabilities.isClubOwner) {
       return GtexWorkspaceKind.club;
     }
     if (capabilities.isAdmin) {
       return GtexWorkspaceKind.admin;
-    }
-    if (capabilities.isCoinTrader) {
-      return GtexWorkspaceKind.trader;
-    }
-    if (capabilities.isCreator) {
-      return GtexWorkspaceKind.creator;
     }
     if (capabilities.isOrgScoutOrAgent) {
       return GtexWorkspaceKind.scouting;
