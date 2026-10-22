@@ -205,9 +205,11 @@ class GtexShellCapabilities {
     // expose another account lane through the workspace switcher.
     final bool isCoinTrader =
         accountType == 'coin_trader' ||
-        role == 'coin_trader' ||
-        role == 'trader';
-    final bool isCreator = accountType == 'creator' || role == 'creator';
+        (accountType != 'creator' &&
+            (role == 'coin_trader' || role == 'trader'));
+    final bool isCreator =
+        accountType == 'creator' ||
+        (accountType != 'coin_trader' && role == 'creator');
     final bool isOrgScoutOrAgent =
         role == 'scout' ||
         role == 'agent' ||
