@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.club_profile import ClubProfile
+from app.models.user import PublicAccountType, User
 from app.owner_console import engine, ledger
 from app.owner_console.ai import inbox_body
 from app.owner_console.models import (
@@ -51,7 +52,17 @@ def aware(dt: datetime | None) -> datetime | None:
 # ---------- ownership + state ----------
 
 
+def _require_normal_user_account(session: Session, user_id: str) -> User:
+    user = session.get(User, user_id)
+    if user is None:
+        raise OwnerError("user_not_found", 404)
+    if user.account_type != PublicAccountType.USER:
+        raise OwnerError("club_owner_account_type_required", 403)
+    return user
+
+
 def owned_profiles(session: Session, user_id: str) -> list[ClubProfile]:
+    _require_normal_user_account(session, user_id)
     return list(
         session.scalars(
             select(ClubProfile).where(ClubProfile.owner_user_id == user_id).order_by(ClubProfile.created_at.asc())
@@ -60,6 +71,7 @@ def owned_profiles(session: Session, user_id: str) -> list[ClubProfile]:
 
 
 def require_profile(session: Session, club_id: str, user_id: str) -> ClubProfile:
+    _require_normal_user_account(session, user_id)
     profile = session.get(ClubProfile, club_id)
     if profile is None:
         raise OwnerError("club_not_found", 404)
@@ -81,6 +93,7 @@ def require_state(session: Session, club_id: str, user_id: str) -> OwnerClubStat
 
 
 def user_states(session: Session, user_id: str) -> list[OwnerClubState]:
+    _require_normal_user_account(session, user_id)
     return list(
         session.scalars(
             select(OwnerClubState)
@@ -152,6 +165,7 @@ def claim_starter_club(
     staff coach, and the free launch league are filled in and the world ticks
     once.
     """
+    _require_normal_user_account(session, user.id)
     existing = user_states(session, user.id)
     if existing:
         return existing[0]
