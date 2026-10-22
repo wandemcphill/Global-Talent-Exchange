@@ -3,6 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/controllers/match_playback_controller.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
+import 'package:gte_frontend/features/match/presentation/broadcast_package_models.dart';
+import 'package:gte_frontend/features/match/presentation/broadcast_package_repository.dart';
+import 'package:gte_frontend/features/match/widgets/gtex_matchday_ad_slot.dart';
 import 'package:gte_frontend/data/match_gift_api.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match_event.dart';
@@ -74,12 +77,15 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
     with SingleTickerProviderStateMixin {
   late Future<MatchViewState> _viewStateFuture;
   MatchPlaybackController? _controller;
+  bool _showPreMatchBrief = false;
 
   AmbientAudioState? _ambientAudio;
 
   @override
   void initState() {
     super.initState();
+    _showPreMatchBrief =
+        widget.presentationMode == MatchViewerPresentationMode.broadcast;
     _viewStateFuture = _load();
   }
 
@@ -102,10 +108,15 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
   @override
   void didUpdateWidget(covariant GtexMatchViewerScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.presentationMode != widget.presentationMode) {
+      _showPreMatchBrief =
+          widget.presentationMode == MatchViewerPresentationMode.broadcast;
+    }
     if (oldWidget.matchKey != widget.matchKey ||
         oldWidget.viewStateLoader != widget.viewStateLoader ||
         oldWidget.fallbackSnapshot != widget.fallbackSnapshot ||
-        oldWidget.preferFallback != widget.preferFallback) {
+        oldWidget.preferFallback != widget.preferFallback ||
+        oldWidget.presentationMode != widget.presentationMode) {
       _reload();
     }
   }
@@ -241,7 +252,7 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
     final MatchPlaybackController created = MatchPlaybackController(
       vsync: this,
       viewState: viewState,
-      autoplay: true,
+      autoplay: widget.presentationMode != MatchViewerPresentationMode.broadcast,
     );
     _controller = created;
     return created;
@@ -284,6 +295,19 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
               builder: (BuildContext context, Widget? child) {
                 final MatchTimelineFrame frame = controller.displayFrame;
                 final MatchEvent? activeEvent = controller.activeEvent;
+                if (_showPreMatchBrief) {
+                  final MatchPresentationPackage package =
+                      BroadcastPackageRepository().resolve(viewState);
+                  return _MatchPreGameBrief(
+                    package: package,
+                    competitionName: widget.competition.name,
+                    onStart: () {
+                      if (!mounted) return;
+                      setState(() => _showPreMatchBrief = false);
+                      controller.play();
+                    },
+                  );
+                }
                 return SafeArea(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
