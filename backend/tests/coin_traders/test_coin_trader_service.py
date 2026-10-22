@@ -22,7 +22,12 @@ from app.coin_traders.schemas import (
 )
 from app.coin_traders.service import CoinTraderPermissionError, CoinTraderService, CoinTraderValidationError
 from app.models.base import Base
-from app.models.coin_trader import CoinTradeOrderStatus, CoinTraderProfile, CoinTraderProfileStatus, CoinTraderRate
+from app.models.coin_trader import (
+    CoinTradeOrderStatus,
+    CoinTraderProfile,
+    CoinTraderProfileStatus,
+    CoinTraderRate,
+)
 from app.models.notification_record import NotificationRecord
 from app.models.risk_ops import SystemEvent
 from app.models.user import KycStatus, PublicAccountType, User, UserRole
