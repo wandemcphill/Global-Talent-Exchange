@@ -5,6 +5,7 @@ import { errMsg } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { publicUrl } from "@/lib/publicPath";
 import { Btn } from "@/components/gtex/ui";
+import { TURNSTILE_SITE_KEY, TurnstileChallenge } from "@/components/gtex/TurnstileChallenge";
 
 function Field({ label, children }: any) {
   return (
@@ -19,6 +20,7 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
   const { login, signup } = useAuth();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [f, setF] = useState<any>({ full_name: "", username: "", email: "", password: "", over18: false });
   const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value });
 
@@ -40,7 +42,20 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
         );
       } else {
         if (!f.over18) throw new Error("You must be 18 or older to sign up for a GTEX account.");
-        await signup({ full_name: f.full_name, username: f.username, email: f.email, password: f.password, is_over_18: true });
+        if (TURNSTILE_SITE_KEY && !turnstileToken) {
+          throw new Error("Complete the security check to continue.");
+        }
+        const signupPayload: Record<string, unknown> = {
+          full_name: f.full_name,
+          username: f.username,
+          email: f.email,
+          password: f.password,
+          is_over_18: true,
+        };
+        // Never send a development bypass token. Only include a real challenge
+        // token when the public site key configured for this build is present.
+        if (TURNSTILE_SITE_KEY && turnstileToken) signupPayload.turnstile_token = turnstileToken;
+        await signup(signupPayload);
         // Registration creates a GTEX user account. Club ownership is optional
         // and can be started later from the authenticated workspace.
         navigate("/app");
@@ -89,6 +104,9 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
             <label className="flex items-center gap-2 text-xs text-slate-400">
               <input type="checkbox" data-testid="signup-over18-checkbox" checked={f.over18} onChange={set("over18")} /> I am 18 or older and accept the terms.
             </label>
+          )}
+          {mode === "signup" && (
+            <TurnstileChallenge onTokenChange={setTurnstileToken} />
           )}
           <Btn type="submit" disabled={busy} className="w-full py-3" data-testid={`${mode}-submit-button`}>
             {busy ? "Please wait…" : mode === "login" ? "Enter the console" : "Create GTEX ID"}
