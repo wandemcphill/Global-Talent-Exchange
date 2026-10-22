@@ -12,7 +12,7 @@ from app.models.creator_application import CreatorApplication
 from app.models.creator_profile import CreatorProfile
 from app.models.creator_provisioning import CreatorClubProvisioning
 from app.models.user import PublicAccountType, User
-from app.services.creator_provisioning_service import CreatorProvisioningService
+from app.services.creator_provisioning_service import CreatorProvisioningError, CreatorProvisioningService
 
 CREATOR_APPLICATION_PENDING = "pending"
 CREATOR_APPLICATION_APPROVED = "approved"
@@ -193,7 +193,19 @@ class CreatorApplicationService:
         application.approved_at = application.reviewed_at
         application.rejected_at = None
         application.verification_requested_at = None
-        CreatorProvisioningService(self.session).provision_application(application=application, reviewer=reviewer)
+        try:
+            CreatorProvisioningService(self.session).provision_application(
+                application=application,
+                reviewer=reviewer,
+            )
+        except CreatorProvisioningError as exc:
+            if str(exc) in {
+                "active_club_prevents_creator_promotion",
+                "creator_promotion_requires_normal_account",
+                "creator_applicant_account_not_found",
+            }:
+                raise CreatorApplicationConflictError(str(exc)) from exc
+            raise
         self.session.flush()
         return application
 
