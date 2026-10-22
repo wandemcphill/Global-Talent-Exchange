@@ -8,6 +8,8 @@ class GteNoClubOnboardingView extends StatelessWidget {
     this.isAuthenticated = true,
     this.onCreateClub,
     this.onOpenNationalTeam,
+    this.onOpenCreatorAccessRequest,
+    this.onOpenTraderAccessRequest,
     this.onBrowseClubMarket,
     this.onExploreArena,
     this.onOpenMatchday,
@@ -22,6 +24,8 @@ class GteNoClubOnboardingView extends StatelessWidget {
   final bool isAuthenticated;
   final VoidCallback? onCreateClub;
   final VoidCallback? onOpenNationalTeam;
+  final VoidCallback? onOpenCreatorAccessRequest;
+  final VoidCallback? onOpenTraderAccessRequest;
   final VoidCallback? onBrowseClubMarket;
   final VoidCallback? onExploreArena;
   final VoidCallback? onOpenMatchday;
@@ -64,6 +68,30 @@ class GteNoClubOnboardingView extends StatelessWidget {
           actionLabel: 'Explore national teams',
           onTap: onOpenNationalTeam!,
           prominence: _NoClubActionProminence.primary,
+        ),
+      if (isAuthenticated && onOpenCreatorAccessRequest != null)
+        _NoClubActionSpec(
+          eyebrow: 'CREATOR TOOLS',
+          chipLabel: 'Apply after signup',
+          title: 'Become a GTEX creator',
+          detail: 'Use your existing GTEX account to apply for creator access, publish football stories, and grow a community. No separate creator login is needed.',
+          icon: Icons.campaign_outlined,
+          accent: GteShellTheme.accentCommunity,
+          actionLabel: 'Apply for creator access',
+          onTap: onOpenCreatorAccessRequest!,
+          prominence: _NoClubActionProminence.tonal,
+        ),
+      if (isAuthenticated && onOpenTraderAccessRequest != null)
+        _NoClubActionSpec(
+          eyebrow: 'COIN TRADER TOOLS',
+          chipLabel: 'Approval required',
+          title: 'Apply to become a coin trader',
+          detail: 'Keep your GTEX member account. Apply for trader status after signup; approved traders can configure rates, liquidity, and manage escrow-protected orders.',
+          icon: Icons.candlestick_chart_outlined,
+          accent: GteShellTheme.accentWarm,
+          actionLabel: 'Open trader application',
+          onTap: onOpenTraderAccessRequest!,
+          prominence: _NoClubActionProminence.tonal,
         ),
       if (onExploreArena != null)
         _NoClubActionSpec(
