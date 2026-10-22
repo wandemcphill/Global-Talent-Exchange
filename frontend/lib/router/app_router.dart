@@ -39,6 +39,8 @@ import 'package:gte_frontend/screens/manager_market_screen.dart';
 import 'package:gte_frontend/features/player_detail/gtex_fm_player_profile_screen.dart';
 import 'package:gte_frontend/features/club/gtex_lineup_editor_screen.dart';
 import 'package:gte_frontend/screens/match/gtex_match_center_screen_v2.dart';
+import 'package:gte_frontend/screens/clubs/gtex_public_club_profile_screen_v2.dart';
+import 'package:gte_frontend/features/club_redesign/presentation/gtex_public_club_home_v3.dart';
 import 'package:gte_frontend/screens/notifications/gte_notifications_screen_v2.dart';
 import 'package:gte_frontend/screens/profile/gtex_live_profile_screen.dart';
 import 'package:gte_frontend/screens/support/gte_support_dispute_screens.dart';
@@ -133,6 +135,42 @@ GoRouter buildGtexAppRouter({
           return NoTransitionPage<void>(
             key: state.pageKey,
             child: PublicShowroomScreen(code: code, load: () => api.fetchPublicShowroom(code)),
+          );
+        },
+      ),
+      GoRoute(
+        // Public-facing, privacy-filtered club dossier. The backend returns 404
+        // for private clubs, so a guessed ID cannot reveal private club data.
+        path: '/clubs/:clubId/profile',
+        pageBuilder: (BuildContext context, GoRouterState state) {
+          final String clubId = state.pathParameters['clubId']?.trim() ?? '';
+          return NoTransitionPage<void>(
+            key: state.pageKey,
+            child: GtexPublicClubProfileScreenV2(
+              clubId: clubId,
+              baseUrl: config.apiBaseUrl,
+              backendMode: config.activeShellBackendMode,
+              isAuthenticated: controller.isAuthenticated,
+              onOpenLogin: () => context.go(gtexLoginRoute),
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        // Public owner dossier; private wallet details are never returned.
+        path: '/owners/:ownerUserId/profile',
+        pageBuilder: (BuildContext context, GoRouterState state) {
+          final String ownerUserId =
+              state.pathParameters['ownerUserId']?.trim() ?? '';
+          return NoTransitionPage<void>(
+            key: state.pageKey,
+            child: GtexPublicOwnerProfileScreen(
+              ownerUserId: ownerUserId,
+              baseUrl: config.apiBaseUrl,
+              backendMode: config.activeShellBackendMode,
+              isAuthenticated: controller.isAuthenticated,
+              onOpenLogin: () => context.go(gtexLoginRoute),
+            ),
           );
         },
       ),
