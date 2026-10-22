@@ -163,13 +163,15 @@ class GtexShellCapabilities {
             .toString()
             .trim()
             .toLowerCase();
-    final String accountType = (
-      userMap['account_type'] ??
-      userMap['accountType'] ??
-      sessionJson['account_type'] ??
-      sessionJson['accountType'] ??
-      'user'
-    ).toString().trim().toLowerCase();
+    final String accountType =
+        (userMap['account_type'] ??
+                userMap['accountType'] ??
+                sessionJson['account_type'] ??
+                sessionJson['accountType'] ??
+                'user')
+            .toString()
+            .trim()
+            .toLowerCase();
     final List<String> permissions = <String>[
       if (userMap['permissions'] is Iterable)
         ...(userMap['permissions']! as Iterable).map(
