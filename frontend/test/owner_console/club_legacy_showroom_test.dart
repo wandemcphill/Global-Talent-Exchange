@@ -342,7 +342,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('club-showroom-gift-watch-1')));
     await tester.pumpAndSettle();
-    expect(find.text('Choose the recipient'), findsOneWidget);
+    expect(find.text('Choose an academy regen'), findsOneWidget);
     expect(find.text('Darius Vale'), findsOneWidget);
     expect(find.text('Senior First-Team Player'), findsNothing);
     expect(find.text('REGEN'), findsOneWidget);
