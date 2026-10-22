@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -73,6 +73,21 @@ function ShowroomPanel({ club }: any) {
   const [giftNote, setGiftNote] = useState<string>("");
   const [giftReceipt, setGiftReceipt] = useState<any | null>(null);
   const [purchaseReceipt, setPurchaseReceipt] = useState<any | null>(null);
+  // Keep one idempotency key per user intent across network retries. Keys are
+  // discarded only after a confirmed response so a lost response cannot turn
+  // a retry into a second charge.
+  const purchaseIntentKeys = useRef(new Map<string, string>());
+  const giftIntentKeys = useRef(new Map<string, string>());
+  const stableIntentKey = (store: React.MutableRefObject<Map<string, string>>, identity: string, prefix: string) => {
+    const existing = store.current.get(identity);
+    if (existing) return existing;
+    const nonce = typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const created = `${prefix}:${club.club_id}:${identity}:${nonce}`;
+    store.current.set(identity, created);
+    return created;
+  };
 
   // Current API returns {catalog, owned_assets}; accept the older transformed
   // shape too so this panel remains compatible with existing deployed builds.
@@ -94,15 +109,19 @@ function ShowroomPanel({ club }: any) {
     try {
       const res = await api.post(`/owner/clubs/${club.club_id}/showroom/purchase`, {
         catalog_key: catalogKey,
-        idempotency_key: `showroom-purchase:${club.club_id}:${catalogKey}:${Date.now()}`,
+        idempotency_key: stableIntentKey(purchaseIntentKeys, catalogKey, "showroom-purchase"),
       });
-      const result = res.data;
+      const result = res.data ?? {};
+      // A 2xx response is authoritative even if optional receipt fields are
+      // omitted by an older server response shape.
+      purchaseIntentKeys.current.delete(catalogKey);
       setAcquiringItem(null);
       setPurchaseReceipt({ item, result });
-      if (result.broadcast_globally) {
-        toast.success(`Acquired ${result.asset.custom_name}. Verified notice published to the GTEX global wire.`);
+      const acquiredName = result?.asset?.custom_name || item?.name || "prestige asset";
+      if (result?.broadcast_globally === true) {
+        toast.success(`Acquired ${acquiredName}. Verified notice published to the GTEX global wire.`);
       } else {
-        toast.success(`Acquired ${result.asset.custom_name} for club operations. This purchase stays private.`);
+        toast.success(`Acquired ${acquiredName} for club operations. This purchase stays private unless GTEX confirms a public notice.`);
       }
       refresh();
     } catch (e) {
@@ -120,23 +139,27 @@ function ShowroomPanel({ club }: any) {
       toast.error("This showroom item is missing its catalogue reference.");
       return;
     }
+    const giftIntent = `${catalogKey}:${selectedPlayerId}`;
     setBusyItem(`gift:${catalogKey}`);
     try {
-      const { data: result } = await api.post(`/owner/clubs/${club.club_id}/showroom/gift`, {
+      const { data: responseData } = await api.post(`/owner/clubs/${club.club_id}/showroom/gift`, {
         player_id: selectedPlayerId,
         catalog_key: catalogKey,
         note: giftNote.trim(),
-        idempotency_key: `showroom-gift:${club.club_id}:${catalogKey}:${selectedPlayerId}:${Date.now()}`,
+        idempotency_key: stableIntentKey(giftIntentKeys, giftIntent, "showroom-gift"),
       });
-      const recipient = result.player || selectedPlayer;
+      const result = responseData ?? {};
+      giftIntentKeys.current.delete(giftIntent);
+      const recipient = result?.player || selectedPlayer;
       setGiftReceipt({ item: giftingItem, player: recipient, note: giftNote.trim(), result });
       setGiftingItem(null);
       setSelectedPlayerId("");
       setGiftNote("");
-      if (result.broadcast_event) {
-        toast.success(`GTEX confirmed ${giftingItem.name} for ${recipient?.name || "your player"}; a verified gift event was recorded.`);
+      const giftName = giftingItem?.name || result?.asset?.custom_name || "luxury gift";
+      if (result?.broadcast_event === true) {
+        toast.success(`GTEX confirmed ${giftName} for ${recipient?.name || "your player"}; a verified gift event was recorded.`);
       } else {
-        toast.success(`Gift recorded for ${recipient?.name || "your player"}.`);
+        toast.success(`GTEX recorded ${giftName} for ${recipient?.name || "your player"}.`);
       }
       refresh();
     } catch (e) {
