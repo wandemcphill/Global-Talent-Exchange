@@ -155,41 +155,55 @@ class _LineupTeam extends StatelessWidget {
                         ),
                       ),
                       Expanded(
-                        child: Text(
-                          player.name,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: GtexMatchVisualTokens.textPrimary,
-                            fontWeight: FontWeight.w800,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Row(
+                              children: <Widget>[
+                                Expanded(
+                                  child: Text(
+                                    player.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: GtexMatchVisualTokens.textPrimary,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                                if (player.isRegen) ...<Widget>[
+                                  const SizedBox(width: 6),
+                                  const _MicroTag(
+                                    label: 'REGEN',
+                                    color: GtexMatchVisualTokens.regen,
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 5),
+                            Wrap(
+                              spacing: 5,
+                              runSpacing: 4,
+                              children: <Widget>[
+                                _MicroTag(
+                                  label: player.position,
+                                  color: GtexMatchVisualTokens.textSecondary,
+                                ),
+                                if (player.formLabel?.trim().isNotEmpty == true)
+                                  _MicroTag(
+                                    label: player.formLabel!.trim(),
+                                    color: GtexMatchVisualTokens.amber,
+                                  ),
+                                if (player.fitnessPct != null)
+                                  _MicroTag(
+                                    label: 'FIT ${player.fitnessPct!.round()}%',
+                                    color: GtexMatchVisualTokens.live,
+                                  ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                      if (player.isRegen) ...[
-                        const SizedBox(width: 8),
-                        const _MicroTag(
-                          label: 'REGEN',
-                          color: GtexMatchVisualTokens.regen,
-                        ),
-                      ],
-                      const SizedBox(width: 8),
-                      _MicroTag(
-                        label: player.position,
-                        color: GtexMatchVisualTokens.textSecondary,
-                      ),
-                      if (player.formLabel?.trim().isNotEmpty == true) ...<Widget>[
-                        const SizedBox(width: 6),
-                        _MicroTag(
-                          label: player.formLabel!.trim(),
-                          color: GtexMatchVisualTokens.amber,
-                        ),
-                      ],
-                      if (player.fitnessPct != null) ...<Widget>[
-                        const SizedBox(width: 6),
-                        _MicroTag(
-                          label: 'FIT ${player.fitnessPct!.round()}%',
-                          color: GtexMatchVisualTokens.live,
-                        ),
-                      ],
                       const SizedBox(width: 8),
                       Text(
                         player.rating > 0
