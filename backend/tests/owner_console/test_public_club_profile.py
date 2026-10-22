@@ -166,7 +166,9 @@ def _seed_public_club(session):
     return owner.id, club.id
 
 
-def test_public_club_dossier_has_rich_club_details_and_redacts_private_economics(client, app):
+def test_public_club_dossier_has_rich_club_details_and_redacts_private_economics(
+    client, app
+):
     with app.state.session_factory() as session:
         owner_id, club_id = _seed_public_club(session)
 
@@ -184,20 +186,36 @@ def test_public_club_dossier_has_rich_club_details_and_redacts_private_economics
     assert data["squad"]["best_player"]["name"] == "Samuel Okoro"
     assert data["squad"]["most_promising_player"]["name"] == "Kaito Mensah"
     assert data["staff"] is not None
-    assert {person["role"]: person["name"] for person in data["staff"]}["manager"] == "Ayo Balogun"
-    assert {person["role"]: person["name"] for person in data["staff"]}["general_manager"] == "Nneka Manager"
-    assert {person["role"]: person["name"] for person in data["staff"]}["head_of_youth_development"] == "Chidi Youth Director"
-    assert any(asset["name"] == "Vanguard First-Team Coach" for asset in data["coach_buses"])
+    staff_by_role = {
+        person["role"]: person["name"] for person in data["staff"]
+    }
+    assert staff_by_role["manager"] == "Ayo Balogun"
+    assert staff_by_role["general_manager"] == "Nneka Manager"
+    assert (
+        staff_by_role["head_of_youth_development"] == "Chidi Youth Director"
+    )
+    assert any(
+        asset["name"] == "Vanguard First-Team Coach"
+        for asset in data["coach_buses"]
+    )
     assert data["trophies"][0]["name"] == "GTEX Champions Cup"
 
     # Public pages carry the aggregate chosen by the product, not the private
     # wallet breakdown, wages, inbox, or internal economic/sponsor records.
     public_payload = response.text
-    for forbidden in ("personal_cash", "personal_assets", "wallet_credits", "salary_minor", "password_hash"):
+    for forbidden in (
+        "personal_cash",
+        "personal_assets",
+        "wallet_credits",
+        "salary_minor",
+        "password_hash",
+    ):
         assert forbidden not in public_payload
 
 
-def test_public_owner_profile_lists_public_clubs_and_personal_assets_without_wallet_breakdown(client, app):
+def test_public_owner_profile_lists_public_clubs_and_personal_assets_without_wallet_breakdown(
+    client, app
+):
     with app.state.session_factory() as session:
         owner_id, club_id = _seed_public_club(session)
 
@@ -219,7 +237,9 @@ def test_public_owner_profile_lists_public_clubs_and_personal_assets_without_wal
     assert "password_hash" not in response.text
 
 
-def test_public_dossiers_return_404_for_private_clubs_and_nonexistent_owners(client, app):
+def test_public_dossiers_return_404_for_private_clubs_and_nonexistent_owners(
+    client, app
+):
     with app.state.session_factory() as session:
         owner = User(
             email=f"private-profile-{uuid4().hex[:8]}@example.test",
