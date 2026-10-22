@@ -234,10 +234,14 @@ void main() {
       expect(portfolioBtn, findsOneWidget);
       expect(marketBtn, findsOneWidget);
 
+      await tester.ensureVisible(portfolioBtn);
+      await tester.pumpAndSettle();
       await tester.tap(portfolioBtn);
       await tester.pump();
       expect(portfolioOpened, isTrue);
 
+      await tester.ensureVisible(marketBtn);
+      await tester.pumpAndSettle();
       await tester.tap(marketBtn);
       await tester.pump();
       expect(marketOpened, isTrue);

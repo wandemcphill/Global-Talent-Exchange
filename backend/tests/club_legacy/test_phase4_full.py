@@ -336,6 +336,59 @@ def test_gift_waits_for_acceptance_and_does_not_max_loyalty(client, bootstrap_ad
         session.commit()
 
 
+def test_luxury_player_gifts_are_regen_only(client, bootstrap_admin_headers, app):
+    club_id = _claim(client, bootstrap_admin_headers)
+    _enable(app)
+    with app.state.session_factory() as session:
+        admin = _admin(session)
+        _cheap(session, "gtex-watch-icon", price="100", supply=5)
+        ordinary = OwnerSquadPlayer(
+            id="p4-ordinary-player",
+            club_id=club_id,
+            name="First-Team Player",
+            position="ST",
+            is_regen=False,
+        )
+        regen = OwnerSquadPlayer(
+            id="p4-eligible-regen",
+            club_id=club_id,
+            name="Academy Regen",
+            position="AM",
+            is_regen=True,
+        )
+        session.add_all([ordinary, regen])
+        session.flush()
+        owned = purchase_asset(
+            session,
+            club_id=club_id,
+            user_id=admin.id,
+            sku="gtex-watch-icon",
+            owner_class="owner",
+            idempotency_key="p4-regen-only-gift",
+        )
+
+        with pytest.raises(LegacyError) as rejected:
+            offer_gift(
+                session,
+                asset_id=owned.id,
+                user_id=admin.id,
+                recipient_ref=ordinary.id,
+            )
+        assert rejected.value.status == 400
+        assert rejected.value.code == "player_not_eligible_for_gift"
+        session.refresh(owned)
+        assert owned.status == "owned"
+
+        accepted_offer = offer_gift(
+            session,
+            asset_id=owned.id,
+            user_id=admin.id,
+            recipient_ref=regen.id,
+        )
+        assert accepted_offer.status == "offered"
+        session.commit()
+
+
 def test_gift_resolution_authorization_checks(client, bootstrap_admin_headers, app):
     club_id = _claim(client, bootstrap_admin_headers)
     _enable(app)
@@ -387,7 +440,13 @@ def test_gift_resolution_authorization_checks(client, bootstrap_admin_headers, a
 
         # Gift sent to a player in recipient_user's club can be accepted by recipient_user
         recipient_club = _club(session, recipient_user.id, "Recipient FC", "recipient-fc")
-        player = OwnerSquadPlayer(id="squad-player-1", club_id=recipient_club.id, name="Star Player", position="ST")
+        player = OwnerSquadPlayer(
+            id="squad-player-1",
+            club_id=recipient_club.id,
+            name="Star Player",
+            position="ST",
+            is_regen=True,
+        )
         session.add(player)
         session.flush()
 

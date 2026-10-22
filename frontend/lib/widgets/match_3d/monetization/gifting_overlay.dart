@@ -212,42 +212,120 @@ class _OverlayBurstChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Color accent = burst.accentColor;
     return TweenAnimationBuilder<double>(
       key: ValueKey<String>(burst.id),
-      duration: const Duration(milliseconds: 220),
+      duration: const Duration(milliseconds: 480),
+      curve: Curves.easeOutBack,
       tween: Tween<double>(begin: 0, end: 1),
       builder: (BuildContext context, double value, Widget? child) {
         return Opacity(
-          opacity: value,
+          opacity: value.clamp(0.0, 1.0).toDouble(),
           child: Transform.translate(
-            offset: Offset((1 - value) * 20, 0),
-            child: child,
+            offset: Offset((1 - value) * 46, (1 - value) * -9),
+            child: Transform.scale(
+              scale: 0.88 + (0.12 * value),
+              alignment: Alignment.centerRight,
+              child: child,
+            ),
           ),
         );
       },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(999),
-          color: const Color(0xDA111C28),
-          border: Border.all(color: burst.accentColor.withValues(alpha: 0.50)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text(
-              burst.emoji,
-              style: const TextStyle(fontSize: 16),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 290),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(10, 9, 14, 9),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[
+                accent.withValues(alpha: 0.22),
+                const Color(0xF2111C2B),
+                const Color(0xEC0B1422),
+              ],
             ),
-            const SizedBox(width: 8),
-            Text(
-              burst.label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
+            border: Border.all(color: accent.withValues(alpha: 0.78)),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: accent.withValues(alpha: 0.16),
+                blurRadius: 22,
+                spreadRadius: -4,
+                offset: const Offset(0, 5),
               ),
-            ),
-          ],
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(13),
+                  color: accent.withValues(alpha: 0.12),
+                  border: Border.all(color: accent.withValues(alpha: 0.55)),
+                ),
+                child: Center(
+                  child: Text(
+                    burst.emoji,
+                    style: const TextStyle(fontSize: 24),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    const Text(
+                      'GIFT ARRIVED',
+                      style: TextStyle(
+                        color: Color(0xFF8FA2BB),
+                        fontSize: 8,
+                        letterSpacing: 1.7,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      burst.label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                        height: 1.12,
+                      ),
+                    ),
+                    if (burst.coinAmount != null) ...<Widget>[
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Icon(Icons.circle, size: 8, color: accent),
+                          const SizedBox(width: 5),
+                          Text(
+                            '${burst.coinAmount!.toStringAsFixed(2)} coin',
+                            style: TextStyle(
+                              color: accent,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(Icons.auto_awesome_rounded, size: 16, color: accent),
+            ],
+          ),
         ),
       ),
     );

@@ -42,7 +42,7 @@ class GtexHomeNav extends StatelessWidget implements PreferredSizeWidget {
         bottom: false,
         child: Container(
           padding: EdgeInsets.symmetric(
-            horizontal: isTablet ? 24 : 14,
+            horizontal: isTablet ? 24 : 8,
             vertical: 10,
           ),
           child: Row(
@@ -150,25 +150,43 @@ class GtexHomeNav extends StatelessWidget implements PreferredSizeWidget {
                 const SizedBox(width: 8),
               ],
 
-              // Sign in button
-              TextButton(
-                onPressed: onLogin,
-                style: TextButton.styleFrom(
-                  foregroundColor: kTextSecondary,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: const Text(
-                  'Sign in',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
+              // Preserve a visible sign-in affordance without crowding the
+              // primary action and overflow menu on the narrowest phones.
+              if (width < 390)
+                IconButton(
+                  tooltip: 'Sign in',
+                  onPressed: onLogin,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 32,
+                    height: 36,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(
+                    Icons.login_rounded,
+                    color: kTextSecondary,
+                    size: 18,
+                  ),
+                )
+              else
+                TextButton(
+                  onPressed: onLogin,
+                  style: TextButton.styleFrom(
+                    foregroundColor: kTextSecondary,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Text(
+                    'Sign in',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-              ),
 
-              const SizedBox(width: 8),
+              SizedBox(width: width < 390 ? 2 : 8),
 
               // Enter GTEX / Found Club
               GtexGlowButton(
@@ -181,6 +199,9 @@ class GtexHomeNav extends StatelessWidget implements PreferredSizeWidget {
                 const SizedBox(width: 2),
                 IconButton(
                   tooltip: 'Open homepage navigation',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+                  visualDensity: VisualDensity.compact,
                   onPressed: () {
                     showModalBottomSheet<void>(
                       context: context,

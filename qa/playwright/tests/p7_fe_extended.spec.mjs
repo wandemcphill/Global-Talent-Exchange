@@ -21,14 +21,12 @@ test.afterEach(async ({ page: _page }, testInfo) => {
   await attachDiagnostics(testInfo);
 });
 
-test("Lineup keeps substitutes reachable without horizontal page overflow", async ({
+test("Squad roster remains reachable without horizontal page overflow", async ({
   page,
 }, testInfo) => {
-  await visitAuthedRoute(page, process.env.GTEX_E2E_LINEUP_ROUTE ?? "/lineup");
-  await expect(page.getByText("SUBSTITUTES")).toBeVisible();
-  await expect(
-    page.getByText("Select a substitute, then tap a starter position to assign them."),
-  ).toBeVisible();
+  await visitAuthedRoute(page, process.env.GTEX_E2E_SQUAD_ROUTE ?? "/app/squad");
+  await expect(page.getByTestId("squad-page")).toBeVisible();
+  await expect(page.getByTestId("squad-table-panel")).toBeVisible();
   await verifyNoHorizontalOverflow(page);
   await captureScreenshot(page, testInfo, "lineup");
 });
