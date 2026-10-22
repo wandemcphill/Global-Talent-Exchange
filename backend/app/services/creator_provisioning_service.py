@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.common.enums.creator_profile_status import CreatorProfileStatus
+from app.models.club_profile import ClubLifecycleStatus, ClubProfile
 from app.models.creator_application import CreatorApplication
 from app.models.creator_profile import CreatorProfile
 from app.models.creator_provisioning import CreatorClubProvisioning
@@ -31,6 +32,17 @@ class CreatorProvisioningService:
             raise CreatorProvisioningError("creator_applicant_account_not_found")
         if account.account_type not in {PublicAccountType.USER, PublicAccountType.CREATOR}:
             raise CreatorProvisioningError("creator_promotion_requires_normal_account")
+        if account.account_type == PublicAccountType.USER:
+            active_club_id = self.session.scalar(
+                select(ClubProfile.id)
+                .where(
+                    ClubProfile.owner_user_id == account.id,
+                    ClubProfile.lifecycle_status == ClubLifecycleStatus.ACTIVE,
+                )
+                .limit(1)
+            )
+            if active_club_id is not None:
+                raise CreatorProvisioningError("active_club_prevents_creator_promotion")
 
         existing = self.session.scalar(
             select(CreatorClubProvisioning).where(CreatorClubProvisioning.application_id == application.id)
