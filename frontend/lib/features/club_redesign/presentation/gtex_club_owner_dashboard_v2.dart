@@ -3,6 +3,8 @@ import 'package:gte_frontend/features/club_growth_redesign/club_growth_redesign.
 import 'package:gte_frontend/features/club_lifecycle_redesign/club_lifecycle_redesign.dart';
 import 'package:gte_frontend/features/transfer_center/presentation/gtex_transfers_hub_panel.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
+import 'package:gte_frontend/data/gte_api_repository.dart';
+import 'package:gte_frontend/screens/clubs/gtex_public_club_profile_screen_v2.dart';
 import 'package:gte_frontend/ui_gtex/components/gtex_football_command_pulse.dart';
 
 import '../models/gtex_club_ownership_models.dart';
@@ -118,6 +120,27 @@ class _GtexClubOwnerDashboardV2State extends State<GtexClubOwnerDashboardV2> {
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  void _openPublicClubProfile(BuildContext context) {
+    final String? apiBaseUrl = widget.baseUrl;
+    if (apiBaseUrl == null || apiBaseUrl.trim().isEmpty) {
+      return;
+    }
+    final GteBackendMode? mode =
+        widget.backendMode is GteBackendMode
+            ? widget.backendMode as GteBackendMode
+            : null;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => GtexPublicClubProfileScreenV2(
+          clubId: widget.clubId,
+          clubName: widget.clubName ?? _controller.snapshot.clubName,
+          baseUrl: apiBaseUrl,
+          backendMode: mode,
+        ),
+      ),
+    );
   }
 
   @override
@@ -258,6 +281,17 @@ class _GtexClubOwnerDashboardV2State extends State<GtexClubOwnerDashboardV2> {
           ),
           rightPanel: GtexClubRightRail(snapshot: snapshot, ownerFacing: true),
           actions: <Widget>[
+            _CommandAction(
+              label: 'Public profile',
+              icon: Icons.public_outlined,
+              message:
+                  'Preview the visitor-facing club dossier: stadium, academy, leadership, standout players, club fleet, and owner profile.',
+              accent: GtexColors.gold,
+              onPressed:
+                  (widget.baseUrl?.trim().isNotEmpty ?? false)
+                      ? () => _openPublicClubProfile(context)
+                      : null,
+            ),
             _CommandAction(
               label: 'Market',
               icon: Icons.shopping_basket_outlined,
