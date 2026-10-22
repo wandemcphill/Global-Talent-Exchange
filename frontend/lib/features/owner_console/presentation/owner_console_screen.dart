@@ -157,9 +157,7 @@ class _OwnerConsoleScreenState extends State<OwnerConsoleScreen> {
           load: widget.reader.fetchShowroom,
           onAction: widget.reader.performDesk,
           loadGiftRecipients: giftGateway?.fetchGiftRecipients,
-          giftOwnedAsset: giftGateway == null
-              ? null
-              : giftGateway.giftOwnedAssetToPlayer,
+          giftOwnedAsset: giftGateway?.giftOwnedAssetToPlayer,
         );
       case OwnerConsoleSection.desk:
         return _DeskLoader(load: widget.reader.fetchDesk, act: widget.reader.performDesk);
