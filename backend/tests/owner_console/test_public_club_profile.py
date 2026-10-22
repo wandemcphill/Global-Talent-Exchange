@@ -4,6 +4,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
+from app.ingestion.models import Player
 from app.club_legacy.models import (
     ClubLegacyAsset,
     ClubLegacyCatalogueItem,
@@ -97,6 +98,18 @@ def _seed_public_club(session):
                 potential=97,
                 is_regen=True,
             ),
+            Player(
+                source_provider="public-profile-test",
+                provider_external_id=f"canonical-player-{unique}",
+                current_club_profile_id=club.id,
+                full_name="Ifeanyi Obi",
+                position="CM",
+                normalized_position="CM",
+                date_of_birth=date(2000, 1, 1),
+                potential=96,
+                is_real_player=True,
+                dna_profile={"overall": 88, "potential": 96},
+            ),
             ClubTrophy(
                 club_id=club.id,
                 trophy_type="league",
@@ -110,18 +123,53 @@ def _seed_public_club(session):
     academy = AcademyProfile(club_id=club.id, level=5, capacity_limit=24)
     session.add(academy)
     session.flush()
-    session.add(
-        AcademyProspect(
-            club_id=club.id,
-            academy_profile_id=academy.id,
-            display_name="Tunde Bello",
-            nationality="NG",
-            position="CM",
-            age=16,
-            current_ability=49,
-            potential=91,
-            portrait_asset_ref=None,
-        )
+    session.add_all(
+        [
+            AcademyProspect(
+                club_id=club.id,
+                academy_profile_id=academy.id,
+                display_name="Tunde Bello",
+                nationality="NG",
+                position="CM",
+                age=16,
+                current_ability=49,
+                potential=91,
+                portrait_asset_ref=None,
+            ),
+            AcademyProspect(
+                club_id=club.id,
+                academy_profile_id=academy.id,
+                display_name="Amina Yusuf",
+                nationality="NG",
+                position="RW",
+                age=15,
+                current_ability=45,
+                potential=86,
+                portrait_asset_ref=None,
+            ),
+            AcademyProspect(
+                club_id=club.id,
+                academy_profile_id=academy.id,
+                display_name="Daniel Mensah",
+                nationality="GH",
+                position="CB",
+                age=17,
+                current_ability=52,
+                potential=83,
+                portrait_asset_ref=None,
+            ),
+            AcademyProspect(
+                club_id=club.id,
+                academy_profile_id=academy.id,
+                display_name="Emeka Nwosu",
+                nationality="NG",
+                position="GK",
+                age=16,
+                current_ability=40,
+                potential=79,
+                portrait_asset_ref=None,
+            ),
+        ]
     )
 
     bus = ClubLegacyCatalogueItem(
@@ -182,7 +230,13 @@ def test_public_club_dossier_has_rich_club_details_and_redacts_private_economics
     assert data["stadium"]["capacity"] == 42000
     assert data["facilities"]["training_level"] == 4
     assert data["academy"]["level"] == 5
+    assert data["academy"]["prospect_count"] == 4
+    assert len(data["academy"]["prospects"]) == 3
     assert data["academy"]["prospects"][0]["name"] == "Tunde Bello"
+    assert data["squad"]["player_count"] == 3
+    assert any(
+        player["name"] == "Ifeanyi Obi" for player in data["squad"]["players"]
+    )
     assert data["squad"]["best_player"]["name"] == "Samuel Okoro"
     assert data["squad"]["most_promising_player"]["name"] == "Kaito Mensah"
     assert data["staff"] is not None
