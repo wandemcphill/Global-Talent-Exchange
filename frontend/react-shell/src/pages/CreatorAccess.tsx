@@ -4,11 +4,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, BadgeCheck, Clock3, Video } from "lucide-react";
 import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { Btn, Chip, Loading, Panel } from "@/components/gtex/ui";
 
 const PLATFORMS = ["youtube", "twitch", "tiktok"];
 
 export default function CreatorAccess() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const { data: application, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["creator-application"],
@@ -24,7 +26,9 @@ export default function CreatorAccess() {
   const [formError, setFormError] = useState("");
 
   const status = String(application?.status || "").toLowerCase();
-  const canSubmit = !application || status === "rejected";
+  const accountType = String(user?.account_type || user?.accountType || "user").toLowerCase();
+  const isLegacyCreatorAccount = accountType === "creator";
+  const canSubmit = !isLegacyCreatorAccount && (!application || status === "rejected");
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -88,6 +92,15 @@ export default function CreatorAccess() {
           </div>
         </div>
       </section>
+
+      {isLegacyCreatorAccount && (
+        <Panel eyebrow="Existing account" title="Legacy Creator profile detected">
+          <p className="text-sm leading-6 text-slate-300">
+            This GTEX ID already uses the legacy Creator account type. New creator access is now requested from a normal GTEX member account after signup, rather than by creating a separate Creator login. This React console does not yet include the full Creator Hub; continue using the existing Creator Hub in the main GTEX app.
+          </p>
+          <Link to="/app" className="mt-4 inline-block text-xs font-bold uppercase tracking-wider text-pink-300 hover:text-pink-200">Return to GTEX member workspace →</Link>
+        </Panel>
+      )}
 
       {isError && (
         <Panel eyebrow="Account status" title="Creator status unavailable">
