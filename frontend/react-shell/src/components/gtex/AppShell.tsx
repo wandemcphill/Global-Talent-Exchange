@@ -113,12 +113,8 @@ export default function AppShell() {
   const role = String(user.role || "").toLowerCase();
   const accountType = String(user.account_type || user.accountType || "user").toLowerCase();
   const isAdmin = ["admin", "super_admin"].includes(role);
-  const isTraderAccount =
-    accountType === "coin_trader" ||
-    (accountType !== "creator" && role === "coin_trader");
-  const isCreatorAccount =
-    accountType === "creator" ||
-    (accountType !== "coin_trader" && role === "creator");
+  const isTraderAccount = accountType === "coin_trader";
+  const isCreatorAccount = accountType === "creator";
   const isDedicatedAccount = isTraderAccount || isCreatorAccount;
   const clubs: any[] = data?.clubs || [];
   const hasClubProfile = !isDedicatedAccount && clubs.length > 0;
