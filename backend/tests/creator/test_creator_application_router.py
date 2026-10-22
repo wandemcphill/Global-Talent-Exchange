@@ -12,7 +12,7 @@ from app.main import (
     create_app,
 )
 from app.models.club_infra import ClubStadium
-from app.models.club_profile import ClubLifecycleStatus, ClubProfile, ClubType
+from app.models.club_profile import ClubProfile, ClubType
 from app.models.creator_application import CreatorApplication
 from app.models.creator_profile import CreatorProfile
 from app.models.creator_provisioning import CreatorClubProvisioning, CreatorRegen, CreatorSquad
@@ -76,7 +76,6 @@ def _create_active_club(app, *, owner_user_id: str, slug: str) -> str:
             owner_user_id=owner_user_id,
             club_name=f"{slug} FC",
             club_type=ClubType.COMMUNITY,
-            lifecycle_status=ClubLifecycleStatus.ACTIVE,
             slug=slug,
             primary_color="#0F766E",
             secondary_color="#F8FAFC",
@@ -87,7 +86,7 @@ def _create_active_club(app, *, owner_user_id: str, slug: str) -> str:
         return club.id
 
 
-def test_active_owned_club_blocks_creator_promotion_submission(app_client) -> None:
+def test_owned_club_blocks_creator_promotion_submission(app_client) -> None:
     app, client = app_client
     token = _register_creator_applicant(client, email="active-owner@example.com", username="activeowner")
     _mark_contacts_verified_for_test(app, email="active-owner@example.com")
@@ -109,10 +108,10 @@ def test_active_owned_club_blocks_creator_promotion_submission(app_client) -> No
         },
     )
     assert response.status_code == 409, response.text
-    assert response.json()["detail"] == "active_club_prevents_creator_promotion"
+    assert response.json()["detail"] == "club_ownership_prevents_creator_promotion"
 
 
-def test_creator_promotion_rechecks_active_club_at_approval(app_client) -> None:
+def test_creator_promotion_rechecks_club_ownership_at_approval(app_client) -> None:
     app, client = app_client
     token = _register_creator_applicant(client, email="race-owner@example.com", username="raceowner")
     _mark_contacts_verified_for_test(app, email="race-owner@example.com")
@@ -142,7 +141,7 @@ def test_creator_promotion_rechecks_active_club_at_approval(app_client) -> None:
         json={"reason": "Test the final eligibility recheck."},
     )
     assert approve_response.status_code == 409, approve_response.text
-    assert approve_response.json()["detail"] == "active_club_prevents_creator_promotion"
+    assert approve_response.json()["detail"] == "club_ownership_prevents_creator_promotion"
     with app.state.session_factory() as session:
         owner = session.scalar(select(User).where(User.email == "race-owner@example.com"))
         assert owner is not None
