@@ -49,7 +49,10 @@ class MatchGiftCatalogItem {
   final bool isAwardPack;
   final String legalStatus;
 
-  bool get requiresReview => legalStatus.trim().toLowerCase() == 'requires_review';
+  bool get requiresReview {
+    final String status = legalStatus.trim().toLowerCase();
+    return status == 'requires_review' || status == 'pending_review';
+  }
 
   String get priceLabel {
     final String amount = fanCoinAmount == fanCoinAmount.roundToDouble()
