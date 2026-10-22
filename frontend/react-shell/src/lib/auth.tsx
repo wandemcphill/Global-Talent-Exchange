@@ -47,10 +47,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signup = async (payload: any): Promise<AuthResult> => {
-    const { data } = await api.post("/v2/auth/signup/user", payload);
+    const accountType = String(payload?.account_type || "user").toLowerCase();
+    const { account_type: _accountType, ...signupPayload } = payload || {};
+    const endpoint =
+      accountType === "creator"
+        ? "/v2/auth/signup/creator"
+        : accountType === "coin_trader"
+          ? "/v2/auth/signup/trader"
+          : "/v2/auth/signup/user";
+    const { data } = await api.post(endpoint, signupPayload);
     if (data.access_token) tokens.set(data.access_token, data.refresh_token);
     else {
-      const res = await api.post("/v2/auth/login", { email: payload.email, password: payload.password });
+      const res = await api.post("/v2/auth/login", { email: signupPayload.email, password: signupPayload.password });
       tokens.set(res.data.access_token, res.data.refresh_token);
     }
     const currentUser = await loadMe();
