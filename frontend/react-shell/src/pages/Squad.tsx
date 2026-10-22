@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
@@ -124,11 +125,75 @@ function SquadTable({ club }: any) {
 
 export default function Squad() {
   const { active } = useActiveClub();
-  const { data: club, isLoading } = useClub(active?.club_id);
-  if (isLoading || !club) return <Loading />;
+  const {
+    data: club,
+    isLoading,
+    isError,
+    refetch,
+  } = useClub(active?.club_id);
+
+  if (!active?.club_id) {
+    return (
+      <div data-testid="squad-no-club" className="space-y-6">
+        <PageHeader
+          eyebrow="Owner workspace"
+          title="Choose a club to manage a squad"
+          sub="Your GTEX member account is ready. Squad and manager tools become available when you create, join, or take over a club."
+        />
+        <Panel eyebrow="Club ownership is optional" title="Start with the club that is right for you">
+          <p className="text-sm leading-6 text-slate-300">
+            You can explore GTEX and manage eligible national-team activities without
+            owning a club. To open the squad roster, first choose a club for your
+            owner workspace.
+          </p>
+          <Link
+            to="/app/clubs"
+            data-testid="squad-choose-club-link"
+            className="gx-btn gx-btn-primary mt-4 inline-flex"
+          >
+            Create or choose a club
+          </Link>
+        </Panel>
+      </div>
+    );
+  }
+
+  if (isLoading) return <Loading label="Loading your squad..." />;
+
+  if (isError || !club) {
+    return (
+      <div data-testid="squad-unavailable" className="space-y-6">
+        <PageHeader
+          eyebrow="Owner workspace"
+          title="Squad temporarily unavailable"
+          sub="GTEX could not load this club's squad. Your club data has not been changed."
+        />
+        <Panel eyebrow="Connection status" title="Unable to load squad details">
+          <p className="text-sm leading-6 text-slate-300">
+            Retry the request. If the problem continues, return to My Clubs and
+            select the club again.
+          </p>
+          <Btn variant="secondary" className="mt-4" onClick={() => void refetch()}>
+            Retry squad
+          </Btn>
+          <Link
+            to="/app/clubs"
+            className="gx-btn gx-btn-ghost ml-2 mt-4 inline-flex"
+          >
+            Open My Clubs
+          </Link>
+        </Panel>
+      </div>
+    );
+  }
+
   return (
     <div data-testid="squad-page">
-      <PageHeader eyebrow="Tactics & roster" title={club.club_name} sub={`${club.squad.length} registered players · Wage bill ${fmt(club.wage_bill)} GTX / match`} />
+      <PageHeader
+        eyebrow="Tactics & roster"
+        title={club.club_name}
+        sub={`${club.squad.length} registered players · Wage bill ${fmt(club.wage_bill)} GTX / match`}
+      />
       <div className="grid gap-6 lg:grid-cols-12">
         <ManagerSheet club={club} />
         <SquadTable club={club} />
