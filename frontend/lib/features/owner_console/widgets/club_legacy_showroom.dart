@@ -225,7 +225,7 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${exhibit.name} gift offered to ${normalizedRef.substring(0, normalizedRef.length.clamp(0, 8))}.')),
+          SnackBar(content: Text('${exhibit.name} gift offered to ${normalizedRef.substring(0, normalizedRef.length > 8 ? 8 : normalizedRef.length)}.')),
         );
       }
     } catch (error) {
@@ -348,7 +348,7 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
                                     ? NetworkImage(player.portraitUrl!)
                                     : null,
                                 child: Text(
-                                  player.name.isEmpty ? '?' : player.name.characters.first.toUpperCase(),
+                                  player.name.isEmpty ? '?' : player.name.substring(0, 1).toUpperCase(),
                                   style: const TextStyle(color: GtexColors.gold, fontWeight: FontWeight.w900),
                                 ),
                               ),
@@ -1265,7 +1265,7 @@ class _LuxuryArrivalDialog extends StatelessWidget {
                           ? NetworkImage(recipient!.portraitUrl!)
                           : null,
                       child: Text(
-                        recipient!.name.isEmpty ? '?' : recipient!.name.characters.first.toUpperCase(),
+                        recipient!.name.isEmpty ? '?' : recipient!.name.substring(0, 1).toUpperCase(),
                         style: const TextStyle(color: GtexColors.gold, fontWeight: FontWeight.w900),
                       ),
                     ),
