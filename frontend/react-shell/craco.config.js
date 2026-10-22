@@ -7,4 +7,8 @@ module.exports = {
       "@": path.resolve(__dirname, "src"),
     },
   },
+  devServer: (devServerConfig) => {
+    devServerConfig.historyApiFallback = true;
+    return devServerConfig;
+  },
 };

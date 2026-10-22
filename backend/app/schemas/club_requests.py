@@ -28,6 +28,7 @@ class ClubCreateRequest(CommonSchema):
     )
     city_name: str | None = Field(default=None, max_length=120, validation_alias=AliasChoices("city_name", "city"))
     description: str | None = Field(default=None, max_length=1000)
+    club_type: str | None = Field(default=None, max_length=40)
     visibility: ClubIdentityVisibility = ClubIdentityVisibility.PUBLIC
     founded_at: date | None = None
 

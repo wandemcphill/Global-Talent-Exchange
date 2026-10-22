@@ -244,6 +244,23 @@ def sign(
     }
 
 
+class UnsignRequest(BaseModel):
+    player_id: str
+
+
+@router.post("/clubs/{club_id}/unsign")
+def unsign(
+    club_id: str, body: UnsignRequest, user=Depends(get_current_user), session: Session = Depends(get_session)
+) -> dict[str, Any]:
+    return _run(session, service.unsign_market_player, session, user.id, club_id, body.player_id)
+
+
+@router.post("/clubs/{club_id}/autopick")
+def autopick(
+    club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)
+) -> dict[str, Any]:
+    return _run(session, service.autopick_squad, session, user.id, club_id)
+
 @router.get("/market/quote")
 def quote(player_ids: str, session: Session = Depends(get_session), user=Depends(get_current_user)) -> dict[str, Any]:
     from app.ingestion.models import Player

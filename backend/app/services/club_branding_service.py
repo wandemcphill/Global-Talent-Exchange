@@ -32,7 +32,15 @@ class ClubBrandingService:
         existing = self.session.scalar(select(ClubProfile).where(ClubProfile.slug == payload.slug))
         if existing is not None:
             raise ValueError("club_slug_taken")
+        from app.models.club_profile import ClubType
+        club_type_val = ClubType.COMMUNITY
+        if getattr(payload, "club_type", None):
+            try:
+                club_type_val = ClubType(payload.club_type)
+            except Exception:
+                pass
         club = ClubProfile(
+            club_type=club_type_val,
             owner_user_id=owner_user_id,
             club_name=payload.club_name,
             short_name=payload.short_name,

@@ -387,6 +387,128 @@ def sign_market_player(session: Session, user_id: str, club_id: str, player_id: 
     return signed
 
 
+
+
+def unsign_market_player(session: Session, user_id: str, club_id: str, player_id: str) -> dict[str, Any]:
+    state = require_state(session, club_id, user_id)
+    current = squad(session, club_id)
+    target = next((p for p in current if p.player_ref == player_id or p.id == player_id or str(p.id) == str(player_id)), None)
+    if target is None:
+        raise OwnerError("player_not_in_squad", 404)
+    
+    refund_amount = int(target.value_coin or 0)
+    if refund_amount > 0:
+        ledger.record(
+            session,
+            event_type="transfer_refund",
+            source=ledger.WORLD_MARKET,
+            destination=ledger.club_account(club_id),
+            currency=ledger.GTEX,
+            gross=refund_amount,
+            club_id=club_id,
+            user_id=user_id,
+            related_type="player",
+            related_id=target.player_ref or target.id,
+            memo=f"Released {target.name} (refund)",
+        )
+    
+    session.delete(target)
+    session.flush()
+
+    remaining = squad(session, club_id)
+    has_keeper = any(p.position.startswith("goal") for p in remaining)
+    if len(remaining) < MIN_SQUAD or not has_keeper:
+        if state.stage == "manager":
+            state.stage = "squad"
+
+    return {
+        "released_player_id": player_id,
+        "refunded": refund_amount,
+        "refund_amount": refund_amount,
+        "squad_size": len(remaining),
+        "stage": state.stage,
+        "cash": str(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)),
+    }
+
+
+def autopick_squad(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
+    from app.ingestion.models import Player
+    from app.players.read_models import PlayerSummaryReadModel
+
+    state = require_state(session, club_id, user_id)
+    current = squad(session, club_id)
+    non_regens = [p for p in current if not p.is_regen]
+    slots_needed = MIN_SQUAD - len(non_regens)
+    if slots_needed <= 0:
+        return {
+            "signed": [],
+            "signed_count": 0,
+            "squad_size": len(current),
+            "stage": state.stage,
+            "cash": str(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)),
+        }
+
+    club_cash = int(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX))
+    has_keeper = any(p.position.startswith("goal") for p in current)
+    signed_refs = {p.player_ref for p in current if p.player_ref}
+
+    query = (
+        select(Player)
+        .join(PlayerSummaryReadModel, Player.id == PlayerSummaryReadModel.player_id)
+        .order_by(PlayerSummaryReadModel.current_value_credits.asc())
+    )
+    if signed_refs:
+        query = query.where(Player.id.not_in(signed_refs))
+
+    candidates = list(session.scalars(query.limit(300)).all())
+    quotes_map = player_quotes(session, candidates)
+
+    rival_refs = set(
+        session.scalars(
+            select(OwnerSquadPlayer.player_ref).where(
+                OwnerSquadPlayer.player_ref.in_([c.id for c in candidates]),
+                OwnerSquadPlayer.status.in_(("active", "listed")),
+                OwnerSquadPlayer.club_id != club_id,
+            )
+        ).all()
+    )
+
+    eligible = [c for c in candidates if c.id not in rival_refs and quotes_map.get(c.id, (999999, 0))[0] > 0]
+
+    selected_players = []
+    remaining_budget = club_cash
+
+    if not has_keeper:
+        gk_candidate = next((c for c in eligible if engine.normalize_position(c.normalized_position or c.position).startswith("goal")), None)
+        if gk_candidate:
+            cost = quotes_map[gk_candidate.id][0]
+            if cost <= remaining_budget:
+                selected_players.append(gk_candidate)
+                remaining_budget -= cost
+                eligible = [c for c in eligible if c.id != gk_candidate.id]
+
+    for c in eligible:
+        if len(selected_players) >= slots_needed:
+            break
+        cost = quotes_map[c.id][0]
+        if cost <= remaining_budget:
+            selected_players.append(c)
+            remaining_budget -= cost
+
+    signed_results = []
+    for player in selected_players:
+        signed = sign_market_player(session, user_id, club_id, player.id)
+        signed_results.append(player_dict(signed))
+
+    final_squad = squad(session, club_id)
+    return {
+        "signed": signed_results,
+        "signed_count": len(signed_results),
+        "squad_size": len(final_squad),
+        "stage": state.stage,
+        "cash": str(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)),
+    }
+
 def _advance_stage_after_squad(session: Session, state: OwnerClubState) -> None:
     players = squad(session, state.club_id)
     if state.stage == "squad" and len(players) >= MIN_SQUAD and any(p.position.startswith("goal") for p in players):
