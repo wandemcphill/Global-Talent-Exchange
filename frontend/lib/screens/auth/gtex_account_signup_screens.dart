@@ -38,25 +38,11 @@ class GtexAccountSelectorScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final roles = <_AccountRole>[
       const _AccountRole(
-        'PLAYER / CLUB',
-        'Build your football identity, discover talent, manage squads and compete.',
-        Icons.sports_soccer_rounded,
+        'GTEX MEMBER ID',
+        'Create one normal GTEX account. Explore national teams without a club, then apply for Creator tools or Coin Trader status when you are ready.',
+        Icons.person_outline_rounded,
         Color(0xFFB9FF3D),
         '/auth/signup/user',
-      ),
-      const _AccountRole(
-        'CREATOR',
-        'Publish football stories, grow a following and build your community.',
-        Icons.campaign_rounded,
-        Color(0xFFFF5FA2),
-        '/auth/signup/creator',
-      ),
-      const _AccountRole(
-        'TRADER',
-        'Access the GTEX economy with dedicated trading and wallet security.',
-        Icons.candlestick_chart_rounded,
-        Color(0xFFFFC857),
-        '/auth/signup/trader',
       ),
     ];
     return Scaffold(
@@ -104,7 +90,7 @@ class GtexAccountSelectorScreen extends StatelessWidget {
                   const SizedBox(
                     width: 690,
                     child: Text(
-                      'One identity opens a living football ecosystem of talent, clubs, markets, matches and community. Pick the way you want to play.',
+                      'Register once, then choose your path inside GTEX. Club ownership is optional; Creator access and Coin Trader status are capabilities you can apply for after signup.',
                       style: TextStyle(
                         color: Color(0xFF93A0AA),
                         fontSize: 16,
@@ -141,7 +127,7 @@ class GtexAccountSelectorScreen extends StatelessWidget {
                     OutlinedButton.icon(
                       onPressed: onOpenCreatorAccessRequest,
                       icon: const Icon(Icons.how_to_reg_outlined),
-                      label: const Text('Apply for creator access'),
+                      label: const Text('Have a GTEX ID? Apply for creator access'),
                     ),
                   ],
                   const SizedBox(height: 24),
