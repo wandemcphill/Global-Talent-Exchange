@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:gte_frontend/data/club_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
+import 'package:gte_frontend/widgets/creator_club_follow_panel.dart';
 import 'package:gte_frontend/features/club_redesign/models/gtex_public_club_profile_models.dart';
 import 'package:gte_frontend/features/player_detail/gtex_player_navigator.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
@@ -50,12 +52,16 @@ class GtexPublicClubHomeV3 extends StatelessWidget {
     required this.baseUrl,
     this.backendMode,
     this.accessToken,
+    this.isAuthenticated = false,
+    this.onOpenLogin,
   });
 
   final GtexPublicClubProfileData profile;
   final String baseUrl;
   final GteBackendMode? backendMode;
   final String? accessToken;
+  final bool isAuthenticated;
+  final VoidCallback? onOpenLogin;
 
   @override
   Widget build(BuildContext context) {
@@ -86,6 +92,26 @@ class GtexPublicClubHomeV3 extends StatelessWidget {
                         _Metric(label: 'HONOURS', value: profile.trophies.length.toString(), icon: Icons.emoji_events_outlined, accent: GtexColors.gold),
                         _Metric(label: 'STADIUM', value: profile.stadium['level'] == null ? 'Unrated' : 'Level ' + profile.stadium['level'].toString(), icon: Icons.stadium_outlined, accent: accent),
                       ],
+                    ),
+                    const SizedBox(height: 14),
+                    CreatorClubFollowPanel(
+                      baseUrl: baseUrl,
+                      backendMode: backendMode ?? GteBackendMode.live,
+                      clubId: profile.clubId,
+                      clubName: profile.name,
+                      accessToken: accessToken,
+                      isAuthenticated: isAuthenticated,
+                      onOpenLogin: onOpenLogin,
+                    ),
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: GtexActionButton(
+                        label: 'Explore club ownership',
+                        icon: Icons.account_balance_outlined,
+                        accent: GtexColors.gold,
+                        onPressed: () => context.push('/clubs/${profile.clubId}/sale-market'),
+                      ),
                     ),
                     const SizedBox(height: 25),
                     const _SectionTitle(kicker: 'THE HOME GROUND', title: 'A stadium with an identity', subtitle: 'The venue, its scale, and the facilities behind the team.'),
@@ -119,6 +145,8 @@ class GtexPublicClubHomeV3 extends StatelessWidget {
                             baseUrl: baseUrl,
                             backendMode: backendMode,
                             accessToken: accessToken,
+                            isAuthenticated: isAuthenticated,
+                            onOpenLogin: onOpenLogin,
                           ),
                         ),
                       ),
@@ -625,11 +653,13 @@ class _AssetFeature extends StatelessWidget {
 }
 
 class GtexPublicOwnerProfileScreen extends StatefulWidget {
-  const GtexPublicOwnerProfileScreen({super.key, required this.ownerUserId, required this.baseUrl, this.backendMode, this.accessToken});
+  const GtexPublicOwnerProfileScreen({super.key, required this.ownerUserId, required this.baseUrl, this.backendMode, this.accessToken, this.isAuthenticated = false, this.onOpenLogin});
   final String ownerUserId;
   final String baseUrl;
   final GteBackendMode? backendMode;
   final String? accessToken;
+  final bool isAuthenticated;
+  final VoidCallback? onOpenLogin;
   @override
   State<GtexPublicOwnerProfileScreen> createState() => _GtexPublicOwnerProfileScreenState();
 }
@@ -717,7 +747,7 @@ class _GtexPublicOwnerProfileScreenState extends State<GtexPublicOwnerProfileScr
                             try {
                               final GtexPublicClubProfileData detail = await _api.fetchPublicClubProfile(clubId: club.id);
                               if (!context.mounted) return;
-                              Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => GtexPublicClubHomeV3(profile: detail, baseUrl: widget.baseUrl, backendMode: widget.backendMode, accessToken: widget.accessToken)));
+                              Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => GtexPublicClubHomeV3(profile: detail, baseUrl: widget.baseUrl, backendMode: widget.backendMode, accessToken: widget.accessToken, isAuthenticated: widget.isAuthenticated, onOpenLogin: widget.onOpenLogin)));
                             } catch (_) {
                               if (!context.mounted) return;
                               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('This public club page is temporarily unavailable.')));
