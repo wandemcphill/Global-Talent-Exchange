@@ -6,10 +6,11 @@ import { useAuth } from "@/lib/auth";
 export function useControlCenter() {
   const { user, loading } = useAuth();
   const userId = user?.id ? String(user.id) : null;
+  const accountType = String(user?.account_type || user?.accountType || "user").toLowerCase();
   return useQuery({
     queryKey: ["cc", userId],
     queryFn: async () => (await api.get("/owner/control-center")).data,
-    enabled: !loading && Boolean(userId),
+    enabled: !loading && Boolean(userId) && accountType === "user",
     staleTime: 15_000,
   });
 }
