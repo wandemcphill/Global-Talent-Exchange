@@ -796,7 +796,10 @@ def list_purchases(
 
 
 @router.get("/{club_id}/public-profile")
-def get_public_club_profile(club_id: str, session: Session = Depends(get_session)) -> dict[str, Any]:
+def get_public_club_profile(
+    club_id: str,
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
     """Public club dossier; deliberately separate from the owner-only V2 snapshot."""
     from app.services.club_public_profile_service import (
         ClubPublicProfileNotFound,
@@ -806,4 +809,7 @@ def get_public_club_profile(club_id: str, session: Session = Depends(get_session
     try:
         return public_club_profile(session, club_id)
     except ClubPublicProfileNotFound as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Public club profile not found.") from exc
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Public club profile not found.",
+        ) from exc
