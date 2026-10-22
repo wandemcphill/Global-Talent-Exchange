@@ -145,6 +145,8 @@ class _Gtex22HomeScreenState extends State<Gtex22HomeScreen> {
       if (mounted) {
         setState(() {
           _jackpotLabel = null;
+          _jackpotBalance = null;
+          _failsafeAt = null;
         });
       }
     }
@@ -200,13 +202,17 @@ class _Gtex22HomeScreenState extends State<Gtex22HomeScreen> {
           controller: _scrollController,
           slivers: <Widget>[
             // 1. World-Class Sticky Nav
-            SliverToBoxAdapter(
-              child: GtexHomeNav(
-                onLogin: widget.onLogin,
-                onSignup: widget.onSignup,
-                pulse: _pulse,
-                jackpotLabel: _jackpotLabel,
-                onScrollToSection: _scrollToSection,
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _PinnedGtexHomeNavDelegate(
+                height: MediaQuery.paddingOf(context).top + 64,
+                child: GtexHomeNav(
+                  onLogin: widget.onLogin,
+                  onSignup: widget.onSignup,
+                  pulse: _pulse,
+                  jackpotLabel: _jackpotLabel,
+                  onScrollToSection: _scrollToSection,
+                ),
               ),
             ),
 
@@ -303,5 +309,40 @@ class _Gtex22HomeScreenState extends State<Gtex22HomeScreen> {
         ),
       ),
     );
+  }
+}
+
+/// Pins the canonical public navigation while preserving its responsive layout.
+class _PinnedGtexHomeNavDelegate extends SliverPersistentHeaderDelegate {
+  const _PinnedGtexHomeNavDelegate({
+    required this.height,
+    required this.child,
+  });
+
+  final double height;
+  final Widget child;
+
+  @override
+  double get minExtent => height;
+
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Material(
+      color: kNavyBase,
+      elevation: overlapsContent ? 6 : 0,
+      child: child,
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _PinnedGtexHomeNavDelegate oldDelegate) {
+    return height != oldDelegate.height || child != oldDelegate.child;
   }
 }
