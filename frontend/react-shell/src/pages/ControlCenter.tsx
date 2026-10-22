@@ -30,13 +30,61 @@ import { fmt, label, useActiveClub, useControlCenter, useRefreshOwner } from "@/
 import { Btn, Chip, Coin, Empty, Loading, Panel, Stat } from "@/components/gtex/ui";
 import { InboxItem } from "@/components/gtex/InboxItem";
 
+function NoClubDashboard({ onCreateClub }: { onCreateClub: () => void }) {
+  return (
+    <div className="space-y-8 p-4 sm:p-8" data-testid="no-club-home">
+      <section className="relative overflow-hidden rounded-3xl border border-emerald-500/25 bg-gradient-to-br from-[#061e16] via-[#09151f] to-[#040b10] p-6 sm:p-10">
+        <p className="gx-eyebrow mb-3">GTEX member workspace</p>
+        <h1 className="gx-display max-w-3xl text-3xl font-black uppercase leading-tight text-white sm:text-5xl">
+          Your account is ready. Your football journey starts here.
+        </h1>
+        <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">
+          You do not need to own a club to use GTEX. Explore the football world, follow talent, buy club shares, and manage a national team in eligible competitions with your user account.
+        </p>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-3" aria-label="Explore GTEX">
+        <Link to="/app/national" data-testid="no-club-national-team" className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.06] p-5 transition hover:border-emerald-400/60">
+          <Trophy className="mb-4 text-emerald-300" size={22} />
+          <h2 className="gx-display text-xl font-bold uppercase text-white">National team</h2>
+          <p className="mt-2 text-sm leading-5 text-slate-400">Enter an eligible national competition and rent players without owning a club.</p>
+          <span className="mt-5 inline-block text-xs font-bold uppercase tracking-wider text-emerald-300">Explore national duty →</span>
+        </Link>
+        <Link to="/app/regen-world" data-testid="no-club-regen-world" className="rounded-2xl border border-white/10 bg-slate-900/60 p-5 transition hover:border-white/25">
+          <Globe2 className="mb-4 text-cyan-300" size={22} />
+          <h2 className="gx-display text-xl font-bold uppercase text-white">Regen world</h2>
+          <p className="mt-2 text-sm leading-5 text-slate-400">Discover emerging talent and follow the next generation across GTEX.</p>
+          <span className="mt-5 inline-block text-xs font-bold uppercase tracking-wider text-cyan-300">Explore talent →</span>
+        </Link>
+        <Link to="/app/market" data-testid="no-club-player-shares" className="rounded-2xl border border-white/10 bg-slate-900/60 p-5 transition hover:border-white/25">
+          <Users className="mb-4 text-amber-300" size={22} />
+          <h2 className="gx-display text-xl font-bold uppercase text-white">Player shares</h2>
+          <p className="mt-2 text-sm leading-5 text-slate-400">Explore available player-share opportunities and club ownership markets.</p>
+          <span className="mt-5 inline-block text-xs font-bold uppercase tracking-wider text-amber-300">Explore the market →</span>
+        </Link>
+      </section>
+
+      <Panel eyebrow="Optional next step" title="Own a club when you are ready">
+        <p className="max-w-3xl text-sm leading-6 text-slate-300">
+          Club ownership unlocks the club treasury, facilities, squad management, and club operations. You can start that journey now or return to it later; your GTEX user account remains useful either way.
+        </p>
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          <Btn onClick={onCreateClub} data-testid="no-club-create-club">Explore club ownership</Btn>
+          <Link to="/app/clubs" className="text-xs font-bold uppercase tracking-wider text-slate-300 hover:text-white">My clubs</Link>
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
 export function ControlCenter() {
-  const { data, isLoading } = useControlCenter();
+  const { data, isLoading, isError } = useControlCenter();
   const { active: activeClub } = useActiveClub();
   const navigate = useNavigate();
 
-  if (isLoading) return <Loading label="Initializing club command centre..." />;
-  if (!data) return <Empty title="No club data found" body="Register or select a club to open your command centre." />;
+  if (isLoading) return <Loading label="Loading your GTEX workspace..." />;
+  if (isError || !data) return <Empty title="GTEX workspace unavailable" body="We could not load your account right now. Please refresh and try again." />;
+  if (!(data.clubs || []).length) return <NoClubDashboard onCreateClub={() => navigate("/onboarding")} />;
 
   const wallet = data.economy?.wallet || {};
   const activeClubProfile = data.clubs?.find((c: any) => c.club_id === activeClub?.club_id) || data.clubs?.[0] || {};
