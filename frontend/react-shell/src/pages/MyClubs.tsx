@@ -157,7 +157,7 @@ function ShowroomPanel({ club }: any) {
       setSelectedPlayerId("");
       setGiftNote("");
       const giftName = giftingItem?.name || result?.asset?.custom_name || "luxury gift";
-      if (result?.broadcast_event === true) {
+      if (result?.broadcast_event) {
         toast.success(`GTEX confirmed ${giftName} for ${recipient?.name || "your player"}; a verified gift event was recorded.`);
       } else {
         toast.success(`GTEX recorded ${giftName} for ${recipient?.name || "your player"}.`);
