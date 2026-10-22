@@ -502,7 +502,7 @@ def test_refresh_logout_and_session_bootstrap_flow(app_client) -> None:
     assert revoked_bootstrap.status_code == 401
 
 
-def test_user_and_trader_signup_sessions_include_dedicated_account_type(
+def test_user_creator_and_trader_signup_sessions_include_dedicated_account_type(
     app_client,
 ) -> None:
     app, client = app_client
