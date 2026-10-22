@@ -691,6 +691,8 @@ def test_stale_trader_profile_and_role_do_not_promote_a_normal_account(app_clien
     assert bootstrap_response.status_code == 200, bootstrap_response.text
     bootstrap = bootstrap_response.json()["data"]
     assert bootstrap["account_type"] == "user"
+    assert bootstrap["effective_role"] == "user"
+    assert bootstrap["user"]["role"] == "user"
     assert bootstrap["coin_trader"] is None
     assert "coin_trader" not in bootstrap["roles"]
     assert "creator" not in bootstrap["roles"]
