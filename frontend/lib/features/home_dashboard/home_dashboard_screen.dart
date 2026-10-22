@@ -987,6 +987,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     return GteNoClubOnboardingView(
       isAuthenticated: isAuthenticated,
       onCreateClub: _createClubOnboardingAction(),
+      onOpenNationalTeam: () => _openFeatureRoute(const NationalTeamCompetitionsRouteData()),
       onBrowseClubMarket: _browseClubMarketOnboardingAction(),
       onExploreArena: _arenaOnboardingAction(),
       onOpenMatchday: _matchdayOnboardingAction(),
