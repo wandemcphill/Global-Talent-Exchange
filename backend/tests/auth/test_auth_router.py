@@ -710,7 +710,10 @@ def test_issue_274_signup_model_and_turnstile_security_regression(app_client, mo
     bootstrap = bootstrap_res.json()["data"]
     assert bootstrap["club"] is None
     assert bootstrap["onboarding"]["has_club"] is False
-    assert bootstrap["onboarding"]["requires_club"] is True
+    assert bootstrap["onboarding"]["requires_club"] is False
+    assert bootstrap["onboarding"]["suggested_route"] == "/app/home"
+    assert "continue_as_fan" in bootstrap["onboarding"]["available_actions"]
+    assert "national_team_rentals" in bootstrap["onboarding"]["available_actions"]
     assert bootstrap["creator"] is None
     assert bootstrap["coin_trader"] is None
     assert bootstrap["account_type"] == "user"
