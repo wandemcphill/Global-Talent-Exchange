@@ -163,15 +163,13 @@ class GtexShellCapabilities {
             .toString()
             .trim()
             .toLowerCase();
-    final String accountType =
-        (userMap['account_type'] ??
-                userMap['accountType'] ??
-                sessionJson['account_type'] ??
-                sessionJson['accountType'] ??
-                'user')
-            .toString()
-            .trim()
-            .toLowerCase();
+    final String accountType = (
+      userMap['account_type'] ??
+      userMap['accountType'] ??
+      sessionJson['account_type'] ??
+      sessionJson['accountType'] ??
+      'user'
+    ).toString().trim().toLowerCase();
     final List<String> permissions = <String>[
       if (userMap['permissions'] is Iterable)
         ...(userMap['permissions']! as Iterable).map(
@@ -203,13 +201,8 @@ class GtexShellCapabilities {
         permissions.any((String p) => p.startsWith('admin.'));
     // Account type is the source of truth. A permission/profile must not
     // expose another account lane through the workspace switcher.
-    final bool isCoinTrader =
-        accountType == 'coin_trader' ||
-        (accountType != 'creator' &&
-            (role == 'coin_trader' || role == 'trader'));
-    final bool isCreator =
-        accountType == 'creator' ||
-        (accountType != 'coin_trader' && role == 'creator');
+    final bool isCoinTrader = accountType == 'coin_trader';
+    final bool isCreator = accountType == 'creator';
     final bool isOrgScoutOrAgent =
         role == 'scout' ||
         role == 'agent' ||
