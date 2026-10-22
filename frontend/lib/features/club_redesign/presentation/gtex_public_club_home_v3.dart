@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:gte_frontend/data/club_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/features/club_redesign/models/gtex_public_club_profile_models.dart';
+import 'package:gte_frontend/features/player_detail/gtex_player_navigator.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
 const String _stadiumAsset = 'assets/showroom/arena_imperiale_stadium.webp';
@@ -323,7 +324,13 @@ class _PlayerFeature extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final GtexPublicClubPlayer? person = player;
-    return Container(
+    final VoidCallback? onTap =
+        person == null ? null : GtexPlayerNavigator.tapToOpen(context, person.id);
+    return InkWell(
+      key: Key('gtex-public-club-player-${person?.id ?? title.toLowerCase().replaceAll(' ', '-')}'),
+      borderRadius: BorderRadius.circular(10),
+      onTap: onTap,
+      child: Container(
       height: 156,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(color: GtexColors.panel, borderRadius: BorderRadius.circular(10), border: Border.all(color: GtexColors.line)),
@@ -356,6 +363,7 @@ class _PlayerFeature extends StatelessWidget {
                 ]),
               ]))),
             ]),
+      ),
     );
   }
 }
