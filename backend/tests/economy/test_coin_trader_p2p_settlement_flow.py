@@ -39,11 +39,7 @@ def _user(session, user_id: str, role: UserRole) -> User:
         username=user_id,
         password_hash="test-hash",  # pragma: allowlist secret
         role=role,
-        account_type=(
-            PublicAccountType.COIN_TRADER
-            if role == UserRole.COIN_TRADER
-            else PublicAccountType.USER
-        ),
+        account_type=(PublicAccountType.COIN_TRADER if role == UserRole.COIN_TRADER else PublicAccountType.USER),
     )
     session.add(user)
     session.flush()
