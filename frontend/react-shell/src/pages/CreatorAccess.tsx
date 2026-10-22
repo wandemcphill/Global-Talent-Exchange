@@ -58,7 +58,7 @@ export default function CreatorAccess() {
       setFormError(message);
       if (/email_verification_required|phone_verification_required/i.test(message)) {
         setFormError(
-          "GTEX requires verified email and phone contact before creator review. Your application was not submitted. The current React flow cannot complete phone verification; use the existing Creator access screen in Flutter or wait for the contact-verification flow to be completed."
+          "GTEX requires verified email and phone contact before creator review. Your application was not submitted. The current phone-verification endpoint does not perform a real verification challenge, so this flow must remain blocked until GTEX provides secure phone verification."
         );
       }
     } finally {
