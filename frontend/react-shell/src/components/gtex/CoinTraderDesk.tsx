@@ -101,14 +101,16 @@ function OrderForm({ traders }: any) {
 export function CoinTraderDesk() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const accountType = String(user?.account_type || user?.accountType || "user").toLowerCase();
+  const isDedicatedTraderAccount = accountType === "coin_trader";
   const { data: traders } = useQuery({ queryKey: ["coin-traders"], queryFn: async () => (await api.get("/coin-traders")).data });
   const { data: orders } = useQuery({ queryKey: ["coin-orders", "me"], queryFn: async () => (await api.get("/coin-traders/orders")).data });
   const meQuery = useQuery({ queryKey: ["coin-trader-me"], queryFn: async () => (await api.get("/coin-traders/me")).data, retry: false });
   const me = meQuery.data;
-  const isTrader = me && String(me.status).toLowerCase() === "approved";
   const status = String(me?.status || "").toLowerCase();
+  const isTrader = isDedicatedTraderAccount && me && status === "approved";
   const missingProfile = !meQuery.isLoading && !me && [403, 404].includes(Number((meQuery.error as any)?.response?.status));
-  const showApplication = missingProfile || status === "rejected";
+  const showApplication = isDedicatedTraderAccount && (missingProfile || status === "rejected");
   const { data: deskOrders } = useQuery({ queryKey: ["coin-orders", "desk"], queryFn: async () => (await api.get("/coin-traders/orders", { params: { as_trader: true } })).data, enabled: !!isTrader });
   const list = (traders || []).filter((t: any) => t.user_id !== user?.id);
   const [applyName, setApplyName] = useState(String(user?.display_name || user?.username || ""));
@@ -148,17 +150,22 @@ export function CoinTraderDesk() {
   };
 
   return (
-    <Panel eyebrow="GTEX Coin · optional capability" title="Coin Traders" testid="coin-traders-panel" className="lg:col-span-12">
+    <Panel eyebrow="GTEX Coin · P2P marketplace" title="Coin Traders" testid="coin-traders-panel" className="lg:col-span-12">
       <p className="mb-4 text-sm text-slate-400">
-        Use your regular GTEX account to buy or sell GTEX Coin with approved Naira traders through escrow-protected orders. If you want to operate a trader desk yourself, apply here; a separate trader login is not required.
+        User and Creator accounts can buy or sell GTEX Coin with approved Naira traders through escrow-protected orders. Operating a trader desk requires a dedicated Coin Trader account created through the Coin Trader signup path; a User or Creator account cannot be promoted into that lane.
       </p>
+      {!isDedicatedTraderAccount && (
+        <div className="mb-5 rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm text-slate-400" data-testid="dedicated-trader-signup-notice">
+          This is a customer account lane, not a trader-desk application. Sign out and create a separate Coin Trader account to operate a trader desk.
+        </div>
+      )}
 
       {showApplication && (
         <div className="mb-6 rounded-xl border border-amber-400/25 bg-amber-500/[0.05] p-4" data-testid="coin-trader-application">
           <p className="gx-label text-amber-300">{status === "rejected" ? "Resubmit application" : "Become a coin trader"}</p>
           <h3 className="gx-display mt-1 text-xl font-bold uppercase text-white">Apply for trader status</h3>
           <p className="mt-2 max-w-3xl text-sm leading-5 text-slate-400">
-            Applications are reviewed before trading as a liquidity partner is enabled. Your normal GTEX ID and user wallet remain the same.
+            Applications are reviewed before trader-desk tools are enabled. This account is already a dedicated Coin Trader account; approval will not turn a User account into a Trader account.
           </p>
           <form onSubmit={submitTraderApplication} className="mt-4 grid gap-3 md:grid-cols-3">
             <label className="block">
@@ -189,7 +196,7 @@ export function CoinTraderDesk() {
           <p className="mt-1 text-sm font-bold text-white">{me.display_name} · {label(status)}</p>
           <p className="mt-2 text-sm text-slate-400">
             {status === "applied" || status === "pending"
-              ? "Your application is awaiting review. You can still use GTEX as a normal member while approval is pending."
+              ? "Your dedicated Coin Trader account is awaiting desk approval. It remains in the Coin Trader lane while approval is pending."
               : "Trader operations are not enabled for this application status."}
           </p>
         </div>
