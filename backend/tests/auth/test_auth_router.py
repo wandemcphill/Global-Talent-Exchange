@@ -639,7 +639,7 @@ def test_approved_coin_trader_capability_bootstraps_for_normal_user_account(app_
     assert login_response.status_code == 200, login_response.text
     issued = login_response.json()
     assert issued["user"]["account_type"] == "user"
-    assert issued["landing_route"] == "/trader"
+    assert issued["landing_route"] == "/app/trader-dashboard"
 
     bootstrap_response = client.get(
         "/api/v2/session/bootstrap",
