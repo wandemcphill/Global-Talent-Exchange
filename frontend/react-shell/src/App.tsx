@@ -23,6 +23,7 @@ import Admin from "@/pages/Admin";
 import PaymentCallback from "@/pages/PaymentCallback";
 import NationalTeam from "@/pages/NationalTeam";
 import { ClubStory } from "@/pages/ClubStory";
+import PublicClubProfile from "@/pages/PublicClubProfile";
 import { Newsroom } from "@/pages/Newsroom";
 import { ROUTER_BASENAME } from "@/lib/publicPath";
 
@@ -36,6 +37,7 @@ export default function App() {
           <Route path="/signup" element={<AuthPage mode="signup" />} />
           <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/payment/callback" element={<PaymentCallback />} />
+          <Route path="/club/:clubSlug" element={<PublicClubProfile />} />
           <Route path="/app" element={<AppShell />}>
             <Route index element={<ControlCenter />} />
             <Route path="clubs" element={<MyClubs />} />
