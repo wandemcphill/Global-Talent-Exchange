@@ -65,12 +65,18 @@ def test_gtex_full_user_journey(client, app_session_factory, auth_user_factory, 
     # Registration / user IDs / clubs.
     owner = auth_user_factory(suffix=f"{PREFIX}-owner", funded_credit="5000", funded_coin="10000")
     trader = auth_user_factory(suffix=f"{PREFIX}-trader", funded_credit="500", funded_coin="100000")
+    coin_trader = auth_user_factory(
+        suffix=f"{PREFIX}-coin-trader",
+        funded_credit="500",
+        funded_coin="100000",
+        account_type="coin_trader",
+    )
     peer = auth_user_factory(suffix=f"{PREFIX}-peer", funded_credit="5000", funded_coin="5000")
     recipient = auth_user_factory(suffix=f"{PREFIX}-recipient", funded_credit="2500", funded_coin="2500")
     buyer = auth_user_factory(suffix=f"{PREFIX}-buyer", funded_credit="5000", funded_coin="100000")
     club_buyer = auth_user_factory(suffix=f"{PREFIX}-club-buyer", funded_credit="5000", funded_coin="200000")
     actors = (owner, trader, peer, recipient, buyer, club_buyer)
-    assert len({item["user_id"] for item in actors}) == 6
+    assert len({item["user_id"] for item in (*actors, coin_trader)}) == 7
 
     with app_session_factory() as session:
         club_ids = {item["user_id"]: _club(session, item["user_id"]).id for item in actors}
@@ -81,7 +87,7 @@ def test_gtex_full_user_journey(client, app_session_factory, auth_user_factory, 
     application = _ok(
         client.post(
             "/api/coin-traders/apply",
-            headers=trader["headers"],
+            headers=coin_trader["headers"],
             json={
                 "display_name": "GTEX Full Journey OTC Desk",
                 "country_code": "NG",
@@ -103,7 +109,7 @@ def test_gtex_full_user_journey(client, app_session_factory, auth_user_factory, 
     _ok(
         client.put(
             "/api/coin-traders/me/rates",
-            headers=trader["headers"],
+            headers=coin_trader["headers"],
             json={
                 "coin_unit": "coin",
                 "fiat_currency": "NGN",
@@ -132,7 +138,7 @@ def test_gtex_full_user_journey(client, app_session_factory, auth_user_factory, 
         ),
         201,
     )
-    _ok(client.post(f"/api/coin-traders/orders/{order['id']}/accept", headers=trader["headers"]))
+    _ok(client.post(f"/api/coin-traders/orders/{order['id']}/accept", headers=coin_trader["headers"]))
     _ok(
         client.post(
             f"/api/coin-traders/orders/{order['id']}/proof",
@@ -140,7 +146,7 @@ def test_gtex_full_user_journey(client, app_session_factory, auth_user_factory, 
             json={"proof_reference": f"{PREFIX}-bank-proof"},
         )
     )
-    released = _ok(client.post(f"/api/coin-traders/orders/{order['id']}/confirm", headers=trader["headers"]))
+    released = _ok(client.post(f"/api/coin-traders/orders/{order['id']}/confirm", headers=coin_trader["headers"]))
     assert released["status"] == "released"
     assert released["ledger_refs"]["release_entry_ids"]
 
