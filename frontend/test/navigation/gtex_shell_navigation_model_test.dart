@@ -85,53 +85,96 @@ void main() {
       }
     });
 
-    test('multi-role user gets Workspace Switcher and honors lastUsedWorkspace / selectedWorkspace (O-05)', () {
+    test('dedicated coin-trader account cannot switch to club or creator even with stale capabilities', () {
       final GtexShellCapabilities capabilities =
           GtexShellCapabilities.fromSessionMap(
-            sessionJson: <String, Object?>{
-              'current_club_id': 'royal-lagos-fc',
-              'user': <String, Object?>{
-                'id': 'user-1',
-                'role': 'coin_trader',
-                'permissions': <String>['creator.studio', 'scouting.access'],
-              },
-            },
-            ownedClubIds: const <String>['royal-lagos-fc'],
-            unreadInboxCount: 4,
-            unreadNotificationCount: 3,
-          );
-
-      final ShellNavigationModel defaultModel = ShellNavigationModel(
-        capabilities: capabilities,
+        sessionJson: <String, Object?>{
+          'current_club_id': 'royal-lagos-fc',
+          'user': <String, Object?>{
+            'id': 'trader-1',
+            'role': 'user',
+            'account_type': 'coin_trader',
+            'permissions': <String>['creator.studio', 'scouting.access'],
+          },
+        },
+        ownedClubIds: const <String>['royal-lagos-fc'],
+        unreadInboxCount: 4,
+        unreadNotificationCount: 3,
       );
-      expect(defaultModel.showWorkspaceSwitcher, isTrue);
-      expect(
-        defaultModel.availableWorkspaces,
-        orderedEquals(<GtexWorkspaceKind>[
-          GtexWorkspaceKind.club,
-          GtexWorkspaceKind.fan,
-          GtexWorkspaceKind.scouting,
-          GtexWorkspaceKind.trader,
-          GtexWorkspaceKind.creator,
-        ]),
-      );
-      // Default workspace prefers Club if owner when lastUsedWorkspace is null.
-      expect(defaultModel.activeWorkspace, GtexWorkspaceKind.club);
-      // Owner top-bar attention count combines unreadInboxCount + unreadNotificationCount.
-      expect(defaultModel.topBarAttentionCount, 7);
 
-      final ShellNavigationModel lastUsedTrader = ShellNavigationModel(
+      final ShellNavigationModel model = ShellNavigationModel(
         capabilities: capabilities,
-        lastUsedWorkspace: GtexWorkspaceKind.trader,
-      );
-      expect(lastUsedTrader.activeWorkspace, GtexWorkspaceKind.trader);
-
-      final ShellNavigationModel switchedCreator = ShellNavigationModel(
-        capabilities: capabilities,
-        lastUsedWorkspace: GtexWorkspaceKind.trader,
+        lastUsedWorkspace: GtexWorkspaceKind.club,
         selectedWorkspace: GtexWorkspaceKind.creator,
       );
-      expect(switchedCreator.activeWorkspace, GtexWorkspaceKind.creator);
+      expect(model.availableWorkspaces, orderedEquals(<GtexWorkspaceKind>[
+        GtexWorkspaceKind.trader,
+      ]));
+      expect(model.showWorkspaceSwitcher, isFalse);
+      expect(model.activeWorkspace, GtexWorkspaceKind.trader);
+      expect(model.topBarAttentionCount, 3);
+      expect(capabilities.isClubOwner, isFalse);
+    });
+
+    test('normal club-owner account can request creator promotion but does not switch into creator', () {
+      final GtexShellCapabilities capabilities =
+          GtexShellCapabilities.fromSessionMap(
+        sessionJson: <String, Object?>{
+          'current_club_id': 'royal-lagos-fc',
+          'user': <String, Object?>{
+            'id': 'owner-1',
+            'role': 'user',
+            'account_type': 'user',
+            // Stale/additive flags must not elevate a user into creator/trader.
+            'permissions': <String>[
+              'creator.studio',
+              'coin_trader',
+              'scouting.access',
+            ],
+          },
+        },
+        ownedClubIds: const <String>['royal-lagos-fc'],
+      );
+
+      final ShellNavigationModel model = ShellNavigationModel(
+        capabilities: capabilities,
+        selectedWorkspace: GtexWorkspaceKind.creator,
+      );
+      expect(model.availableWorkspaces, orderedEquals(<GtexWorkspaceKind>[
+        GtexWorkspaceKind.club,
+        GtexWorkspaceKind.fan,
+        GtexWorkspaceKind.scouting,
+      ]));
+      expect(model.activeWorkspace, GtexWorkspaceKind.club);
+      expect(model.availableWorkspaces, isNot(contains(GtexWorkspaceKind.creator)));
+      expect(model.availableWorkspaces, isNot(contains(GtexWorkspaceKind.trader)));
+    });
+
+    test('creator account stays in its dedicated lane and cannot switch back to club or trader', () {
+      final GtexShellCapabilities capabilities =
+          GtexShellCapabilities.fromSessionMap(
+        sessionJson: <String, Object?>{
+          'current_club_id': 'legacy-club-id',
+          'user': <String, Object?>{
+            'id': 'creator-1',
+            'role': 'user',
+            'account_type': 'creator',
+            'permissions': <String>['coin_trader', 'scouting.access'],
+          },
+        },
+        ownedClubIds: const <String>['legacy-club-id'],
+      );
+
+      final ShellNavigationModel model = ShellNavigationModel(
+        capabilities: capabilities,
+        selectedWorkspace: GtexWorkspaceKind.club,
+      );
+      expect(model.availableWorkspaces, orderedEquals(<GtexWorkspaceKind>[
+        GtexWorkspaceKind.creator,
+      ]));
+      expect(model.showWorkspaceSwitcher, isFalse);
+      expect(model.activeWorkspace, GtexWorkspaceKind.creator);
+      expect(capabilities.isClubOwner, isFalse);
     });
 
     test('clubLegacyEnabled flag gates Boardroom in More sheet without hiding sporting Club routes', () {
