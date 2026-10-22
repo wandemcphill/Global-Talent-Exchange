@@ -4,6 +4,7 @@ import {
   Award,
   BookOpen,
   Building2,
+  CandlestickChart,
   Compass,
   Flag,
   Gauge,
@@ -18,6 +19,7 @@ import {
   Sprout,
   Trophy,
   Wallet,
+  Video,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { fmt, useActiveClub, useControlCenter } from "@/lib/owner";
@@ -38,6 +40,8 @@ const NAV = [
   { to: "/app/academy", label: "Academy", icon: Sprout, id: "academy" },
   { to: "/app/national", label: "National Team", icon: Flag, id: "national" },
   { to: "/app/finance", label: "Finance & Ledger", icon: Wallet, id: "finance" },
+  { to: "/app/creator-access", label: "Creator Access", icon: Video, id: "creator-access" },
+  { to: "/app/coin-traders", label: "Coin Traders", icon: CandlestickChart, id: "coin-traders" },
   { to: "/app/inbox", label: "Inbox", icon: Inbox, id: "inbox" },
 ];
 
@@ -119,7 +123,7 @@ export default function AppShell() {
   const visibleNav = hasActiveClub
     ? NAV
     : NAV.filter((item) =>
-        ["home", "clubs", "regen-world", "awards", "market", "competitions", "national", "finance"].includes(item.id),
+        ["home", "clubs", "regen-world", "awards", "market", "competitions", "national", "finance", "creator-access", "coin-traders"].includes(item.id),
       );
   const wallet = data?.economy?.wallet || {};
 
