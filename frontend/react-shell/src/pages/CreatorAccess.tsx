@@ -13,7 +13,19 @@ const PLATFORMS = ["youtube", "twitch", "tiktok"];
 export default function CreatorAccess() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const { data: ownerData, isLoading: isOwnerLoading } = useControlCenter();
+  const accountType = String(user?.account_type || user?.accountType || "user").toLowerCase();
+  const {
+    data: ownershipData,
+    isLoading: isOwnershipLoading,
+    isError: isOwnershipError,
+    error: ownershipError,
+    refetch: refetchOwnership,
+  } = useQuery({
+    queryKey: ["creator-promotion-owned-clubs", user?.id],
+    queryFn: async () => (await api.get("/owner/onboarding")).data,
+    enabled: Boolean(user?.id) && accountType === "user",
+    retry: false,
+  });
   const { data: application, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["creator-application"],
     queryFn: async () => (await api.get("/creator/application")).data,
@@ -28,17 +40,17 @@ export default function CreatorAccess() {
   const [formError, setFormError] = useState("");
 
   const status = String(application?.status || "").toLowerCase();
-  const accountType = String(user?.account_type || user?.accountType || "user").toLowerCase();
   const isCreatorAccount = accountType === "creator";
   const isCoinTraderAccount = accountType === "coin_trader";
   const emailVerified = Boolean(user?.email_verified_at || user?.emailVerifiedAt);
   const phoneVerified = Boolean(user?.phone_verified_at || user?.phoneVerifiedAt);
   const contactsReady = emailVerified && phoneVerified;
-  const ownedClubCount = Array.isArray(ownerData?.clubs) ? ownerData.clubs.length : 0;
+  const ownedClubCount = Array.isArray(ownershipData?.clubs) ? ownershipData.clubs.length : 0;
   const stillOwnsClubs = ownedClubCount > 0;
   const canSubmit =
     !isCreatorAccount &&
     !isCoinTraderAccount &&
+    !isOwnershipError &&
     !stillOwnsClubs &&
     (!application || status === "rejected");
 
@@ -90,7 +102,9 @@ export default function CreatorAccess() {
     }
   };
 
-  if (isLoading || isOwnerLoading) return <Loading label="Checking creator access and club eligibility..." />;
+  if (isLoading || (accountType === "user" && isOwnershipLoading)) {
+    return <Loading label="Checking creator access and club eligibility..." />;
+  }
 
   return (
     <div className="space-y-6 p-4 sm:p-8" data-testid="creator-access-screen">
@@ -132,7 +146,17 @@ export default function CreatorAccess() {
         </Panel>
       )}
 
-      {!isCreatorAccount && !isCoinTraderAccount && stillOwnsClubs && (
+      {!isCreatorAccount && !isCoinTraderAccount && isOwnershipError && (
+        <Panel eyebrow="Promotion eligibility" title="Could not verify club ownership">
+          <p className="text-sm leading-6 text-slate-300">
+            GTEX could not confirm whether this User account still owns clubs, so application submission is disabled. Retry the ownership check before applying.
+          </p>
+          <Btn className="mt-4" onClick={() => refetchOwnership()}>Retry ownership check</Btn>
+          {ownershipError && <p className="mt-3 text-xs text-slate-500">{errMsg(ownershipError)}</p>}
+        </Panel>
+      )}
+
+      {!isCreatorAccount && !isCoinTraderAccount && !isOwnershipError && stillOwnsClubs && (
         <Panel eyebrow="Promotion eligibility" title="Sell or transfer your clubs first">
           <p className="text-sm leading-6 text-slate-300">
             Creator promotion is available only to normal User accounts that no longer own any clubs. Your account currently has {ownedClubCount} club{ownedClubCount === 1 ? "" : "s"} under its ownership. Sell or transfer every club you still own before submitting a Creator application.
