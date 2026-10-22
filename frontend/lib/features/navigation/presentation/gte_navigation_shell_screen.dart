@@ -635,6 +635,16 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         GtePrimaryDestination.community,
       ];
     }
+    if (_isCoinTraderSession && _isCreatorSession) {
+      return const <GtePrimaryDestination>[
+        GtePrimaryDestination.home,
+        GtePrimaryDestination.wallet,
+        GtePrimaryDestination.hub,
+        GtePrimaryDestination.market,
+        GtePrimaryDestination.regens,
+        GtePrimaryDestination.community,
+      ];
+    }
     if (_isCoinTraderSession) {
       return const <GtePrimaryDestination>[
         GtePrimaryDestination.home,
