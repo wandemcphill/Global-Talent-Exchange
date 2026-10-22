@@ -180,7 +180,10 @@ class _FeatureGrid extends StatelessWidget {
                     if (column > 0) const SizedBox(width: _gap),
                     Expanded(
                       child: start + column < end
-                          ? _FeatureCard(item: items[start + column])
+                          ? _FeatureCard(
+                              item: items[start + column],
+                              featured: start + column == 1,
+                            )
                           : const SizedBox.shrink(),
                     ),
                   ],
