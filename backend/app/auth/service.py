@@ -458,7 +458,7 @@ class AuthService:
         # switchable creator/trader capability on a normal account.
         if user.account_type == PublicAccountType.CREATOR:
             return "/app/hub"
-        if user.account_type == PublicAccountType.COIN_TRADER or effective_role == UserRole.COIN_TRADER:
+        if user.account_type == PublicAccountType.COIN_TRADER:
             return "/app/coin-traders"
         return "/app/home"
 
