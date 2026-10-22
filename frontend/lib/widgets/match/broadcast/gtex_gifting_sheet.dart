@@ -56,15 +56,23 @@ class GtexGiftingSheet extends StatelessWidget {
                 fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
+            Row(children: <Widget>[
+              Container(width: 44, height: 44, decoration: BoxDecoration(color: GtexColors.coinFan.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(14), border: Border.all(color: GtexColors.coinFan.withValues(alpha: 0.4))), child: const Icon(Icons.redeem_rounded, color: GtexColors.coinFan, size: 25)),
+              const SizedBox(width: 12),
+              Expanded(child: Text('Make the moment memorable', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: GtexColors.text, fontWeight: FontWeight.w800))),
+            ]),
+            const SizedBox(height: 10),
             Text(
-              'Match support settles through the live gift engine. Pick a real catalog item and send it to the verified match host.',
+              'Choose a gift to send support to the verified match recipient. Your selection is processed by the live gift engine.',
               style: Theme.of(
                 context,
               ).textTheme.bodyMedium?.copyWith(color: GtexColors.textSecondary),
             ),
             const SizedBox(height: 18),
-            Wrap(
+            LayoutBuilder(builder: (BuildContext context, BoxConstraints constraints) {
+              final double tileWidth = constraints.maxWidth >= 520 ? (constraints.maxWidth - 24) / 3 : (constraints.maxWidth - 12) / 2;
+              return Wrap(
               spacing: 12,
               runSpacing: 12,
               children: kMatchGiftCatalog
@@ -76,10 +84,14 @@ class GtexGiftingSheet extends StatelessWidget {
                         Navigator.of(context).pop();
                         await onSelected(option);
                       },
+                      width: tileWidth,
                     ),
                   )
                   .toList(growable: false),
-            ),
+            );
+            }),
+            const SizedBox(height: 12),
+            Text('Gift delivery is confirmed by the server response.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: GtexColors.textMuted)),
           ],
         ),
       ),
