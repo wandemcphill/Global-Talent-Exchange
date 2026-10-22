@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.base import utcnow
-from app.models.club_profile import ClubLifecycleStatus, ClubProfile
+from app.models.club_profile import ClubProfile
 from app.models.coin_trader import CoinTraderProfile
 from app.models.creator_application import CreatorApplication
 from app.models.creator_profile import CreatorProfile
@@ -62,16 +62,13 @@ class CreatorApplicationService:
             raise CreatorApplicationConflictError("coin_trader_account_cannot_be_promoted_to_creator")
         if actor.account_type != PublicAccountType.USER:
             raise CreatorApplicationConflictError("creator_promotion_requires_normal_account")
-        active_club_id = self.session.scalar(
+        owned_club_id = self.session.scalar(
             select(ClubProfile.id)
-            .where(
-                ClubProfile.owner_user_id == actor.id,
-                ClubProfile.lifecycle_status == ClubLifecycleStatus.ACTIVE,
-            )
+            .where(ClubProfile.owner_user_id == actor.id)
             .limit(1)
         )
-        if active_club_id is not None:
-            raise CreatorApplicationConflictError("active_club_prevents_creator_promotion")
+        if owned_club_id is not None:
+            raise CreatorApplicationConflictError("club_ownership_prevents_creator_promotion")
         if actor.email_verified_at is None:
             raise CreatorApplicationError("email_verification_required")
         if actor.phone_verified_at is None:
@@ -200,7 +197,7 @@ class CreatorApplicationService:
             )
         except CreatorProvisioningError as exc:
             if str(exc) in {
-                "active_club_prevents_creator_promotion",
+                "club_ownership_prevents_creator_promotion",
                 "creator_promotion_requires_normal_account",
                 "creator_applicant_account_not_found",
             }:
