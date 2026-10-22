@@ -9,6 +9,9 @@ import Onboarding from "@/pages/Onboarding";
 import ControlCenter from "@/pages/ControlCenter";
 import MyClubs from "@/pages/MyClubs";
 import Market from "@/pages/Market";
+import TransferHub from "@/pages/TransferHub";
+import RegenWorld from "@/pages/RegenWorld";
+import RegenAwards from "@/pages/RegenAwards";
 import Competitions from "@/pages/Competitions";
 import CompetitionDetail from "@/pages/CompetitionDetail";
 import MatchCenter from "@/pages/MatchCenter";
@@ -40,6 +43,9 @@ export default function App() {
             <Route path="clubs/:clubId/story" element={<ClubStory />} />
             <Route path="newsroom" element={<Newsroom />} />
             <Route path="market" element={<Market />} />
+            <Route path="transfer-hub" element={<TransferHub />} />
+            <Route path="regen-world" element={<RegenWorld />} />
+            <Route path="awards" element={<RegenAwards />} />
             <Route path="competitions" element={<Competitions />} />
             <Route path="competitions/:id" element={<CompetitionDetail />} />
             <Route path="match/:id" element={<MatchCenter />} />
