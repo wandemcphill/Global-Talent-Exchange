@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../player_detail/gtex_player_navigator.dart';
+import '../../match/widgets/gtex_matchday_ad_slot.dart';
 import '../data/gtex_match_models.dart';
 import 'gtex_match_visual_tokens.dart';
 
@@ -27,6 +28,11 @@ class GtexMatchLineups extends StatelessWidget {
         _LineupTeam(team: home),
         const SizedBox(height: 14),
         _LineupTeam(team: away),
+        const SizedBox(height: 14),
+        const GtexMatchdayAdSlot(
+          placement: 'Official team-sheet bulletin',
+          compact: true,
+        ),
       ],
     );
   }
