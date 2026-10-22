@@ -213,7 +213,7 @@ def test_public_club_dossier_has_rich_club_details_and_redacts_private_economics
         assert forbidden not in public_payload
 
 
-def test_public_owner_profile_lists_public_clubs_and_personal_assets_without_wallet_breakdown(
+def test_public_owner_profile_lists_clubs_and_assets_without_wallet_details(
     client, app
 ):
     with app.state.session_factory() as session:
