@@ -201,9 +201,9 @@ class GtexHeroSection extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    const Text(
+                    Text(
                       'WORLD PULSE • ${pulse!.clubsLabel} CLUBS',
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: kTextPrimary,
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
