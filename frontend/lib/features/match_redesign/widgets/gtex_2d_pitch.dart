@@ -58,14 +58,34 @@ class Gtex2dPitch extends StatelessWidget {
                         child: _PitchFeedTag(matchId: match.matchId),
                       ),
                       for (final GtexPitchPlayer player in match.pitchPlayers)
-                        Positioned(
-                          left: player.x * constraints.maxWidth - 16,
-                          top: player.y * constraints.maxHeight - 16,
+                        AnimatedPositioned(
+                          key: ValueKey<String>(player.playerId),
+                          duration: const Duration(milliseconds: 420),
+                          curve: Curves.easeInOutCubic,
+                          left: (player.x * constraints.maxWidth - 16)
+                              .clamp(0.0, constraints.maxWidth - 32)
+                              .toDouble(),
+                          top: (player.y * constraints.maxHeight - 16)
+                              .clamp(0.0, constraints.maxHeight - 48)
+                              .toDouble(),
                           child: _PitchPlayerMarker(
                             player: player,
                             selected: match.selectedPlayerId == player.playerId,
                             compact: compact,
                             onTap: () => onPlayerSelected(player.playerId),
+                          ),
+                        ),
+                      for (final GtexPitchPlayer player
+                          in match.pitchPlayers.where((GtexPitchPlayer p) => p.hasBall))
+                        Positioned(
+                          left: (player.x * constraints.maxWidth + 9)
+                              .clamp(1.0, constraints.maxWidth - 12)
+                              .toDouble(),
+                          top: (player.y * constraints.maxHeight - 24)
+                              .clamp(1.0, constraints.maxHeight - 12)
+                              .toDouble(),
+                          child: const IgnorePointer(
+                            child: _BallToken(),
                           ),
                         ),
                     ],
@@ -76,6 +96,26 @@ class Gtex2dPitch extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _BallToken extends StatelessWidget {
+  const _BallToken();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 8,
+      height: 8,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8E7),
+        shape: BoxShape.circle,
+        border: Border.all(color: const Color(0xFF101820), width: 1.2),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(color: Color(0xAA000000), blurRadius: 4, offset: Offset(1, 2)),
+        ],
+      ),
     );
   }
 }
@@ -226,6 +266,10 @@ class _PitchPlayerMarker extends StatelessWidget {
         ),
       ),
     );
+    final bool nameplateVisible = !compact || player.hasBall || selected;
+    final String nameplate = player.hasBall || selected
+        ? player.name
+        : _surname(player.name);
     return Tooltip(
       message: '${player.name} #${player.shirtNumber}',
       child: GestureDetector(
@@ -234,34 +278,38 @@ class _PitchPlayerMarker extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             marker,
-            if (!compact) ...[
+            if (nameplateVisible) ...[
               const SizedBox(height: 3),
               Container(
-                constraints: const BoxConstraints(maxWidth: 74),
+                constraints: BoxConstraints(maxWidth: compact ? 106 : 92),
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                color: const Color(0xCC0A0C0F),
+                decoration: BoxDecoration(
+                  color: player.hasBall
+                      ? const Color(0xF507111D)
+                      : const Color(0xCC0A0C0F),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: player.hasBall
+                        ? GtexMatchVisualTokens.amber
+                        : Colors.white.withOpacity(.12),
+                  ),
+                ),
                 child: Text(
-                  _surname(player.name).toUpperCase(),
+                  nameplate.toUpperCase(),
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: GtexMatchVisualTokens.textPrimary,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: player.hasBall
+                        ? GtexMatchVisualTokens.amber
+                        : GtexMatchVisualTokens.textPrimary,
                     fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: .4,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: .2,
                   ),
                 ),
               ),
             ],
-            if (player.hasBall)
-              Container(
-                margin: const EdgeInsets.only(top: 3),
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: GtexMatchVisualTokens.textPrimary,
-                  shape: BoxShape.circle,
-                ),
-              ),
           ],
         ),
       ),
