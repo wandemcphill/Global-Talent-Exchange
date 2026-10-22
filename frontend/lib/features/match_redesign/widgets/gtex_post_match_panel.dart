@@ -582,7 +582,7 @@ class _MatchStatRow extends StatelessWidget {
           Row(
             children: <Widget>[
               Expanded(
-                flex: (homeShare * 1000).round().clamp(1, 1000),
+                flex: (homeShare * 1000).round().clamp(1, 1000).toInt(),
                 child: Container(
                   height: 4,
                   decoration: BoxDecoration(
@@ -595,7 +595,7 @@ class _MatchStatRow extends StatelessWidget {
               ),
               const SizedBox(width: 3),
               Expanded(
-                flex: (awayShare * 1000).round().clamp(1, 1000),
+                flex: (awayShare * 1000).round().clamp(1, 1000).toInt(),
                 child: Container(
                   height: 4,
                   decoration: BoxDecoration(
