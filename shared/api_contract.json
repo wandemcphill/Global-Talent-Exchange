@@ -27936,7 +27936,6 @@
     "/clubs/{club_id}/ownership": "/api/v2/clubs/{club_id}/ownership",
     "/clubs/{club_id}/prestige": "/api/v2/clubs/{club_id}/prestige",
     "/clubs/{club_id}/proposals": "/api/v2/clubs/{club_id}/proposals",
-    "/clubs/{club_id}/public-profile": "/api/v2/clubs/{club_id}/public-profile",
     "/clubs/{club_id}/readiness": "/api/v2/clubs/{club_id}/readiness",
     "/clubs/{club_id}/reputation": "/api/v2/clubs/{club_id}/reputation",
     "/clubs/{club_id}/reputation/history": "/api/v2/clubs/{club_id}/reputation/history",
