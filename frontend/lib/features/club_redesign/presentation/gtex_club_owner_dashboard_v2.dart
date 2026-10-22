@@ -138,6 +138,8 @@ class _GtexClubOwnerDashboardV2State extends State<GtexClubOwnerDashboardV2> {
           clubName: widget.clubName ?? _controller.snapshot.clubName,
           baseUrl: apiBaseUrl,
           backendMode: mode,
+          isAuthenticated: widget.isAuthenticated,
+          onOpenLogin: widget.onOpenLogin,
         ),
       ),
     );
