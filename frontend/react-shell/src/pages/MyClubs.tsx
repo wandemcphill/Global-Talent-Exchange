@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
 import { fmt, label, useActiveClub, useClub, useClubShowroom, useControlCenter, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, Stat } from "@/components/gtex/ui";
-import { Plane, Building, Gift, Sparkles, BookOpen, ExternalLink, CheckCircle, Coins, LockKeyhole, X, PackageCheck } from "lucide-react";
+import { Building, Gift, Sparkles, BookOpen, ExternalLink, CheckCircle, Coins, LockKeyhole, X, PackageCheck } from "lucide-react";
 
 function Facilities({ club }: any) {
   const refresh = useRefreshOwner();
