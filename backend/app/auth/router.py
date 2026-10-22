@@ -374,15 +374,18 @@ def _build_session_roles(
     creator: SessionBootstrapCreatorState | None,
     coin_trader: SessionBootstrapCoinTraderState | None,
 ) -> list[str]:
-    account_type = getattr(user.account_type, "value", user.account_type)
-    # Public account type is authoritative. Do not leak a stale historic role
-    # into a dedicated lane or make a normal account look like a Trader/Creator.
-    if account_type == PublicAccountType.CREATOR:
-        role_values = {str(account_type), "creator"}
-    elif account_type == PublicAccountType.COIN_TRADER:
-        role_values = {str(account_type), "coin_trader"}
+    account_type = str(getattr(user.account_type, "value", user.account_type))
+    role = str(getattr(user.role, "value", user.role))
+    # Public account type is authoritative. Filter historic Creator/Trader
+    # role values from normal accounts so a legacy row cannot change its lane.
+    if account_type == PublicAccountType.CREATOR.value:
+        role_values = {account_type, "creator"}
+    elif account_type == PublicAccountType.COIN_TRADER.value:
+        role_values = {account_type, "coin_trader"}
     else:
-        role_values = {str(getattr(user.role, "value", user.role)), str(account_type)}
+        role_values = {account_type}
+        if role not in {UserRole.CREATOR.value if hasattr(UserRole, "CREATOR") else "creator", UserRole.COIN_TRADER.value}:
+            role_values.add(role)
     if user.account_type == PublicAccountType.USER and club_present:
         role_values.add("club_owner")
     if user.account_type == PublicAccountType.CREATOR and creator is not None and creator.is_active:
