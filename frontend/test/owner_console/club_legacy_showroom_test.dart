@@ -315,6 +315,15 @@ void main() {
                 position: 'ST',
                 rating: 91,
                 morale: 76,
+                isRegen: true,
+              ),
+              OwnerGiftRecipient(
+                id: 'first-team-1',
+                name: 'Senior First-Team Player',
+                position: 'CB',
+                rating: 88,
+                morale: 82,
+                isRegen: false,
               ),
             ],
             giftOwnedAsset: ({
@@ -335,6 +344,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Choose the recipient'), findsOneWidget);
     expect(find.text('Darius Vale'), findsOneWidget);
+    expect(find.text('Senior First-Team Player'), findsNothing);
+    expect(find.text('REGEN'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('club-showroom-recipient-player-9')));
     await tester.pumpAndSettle();
