@@ -99,7 +99,7 @@ class _GtexGiftingSheetState extends State<GtexGiftingSheet> {
     final double height = MediaQuery.sizeOf(context).height;
     final Color gold = GtexColors.gold;
     return Container(
-      height: math.min(height * 0.90, 820.0),
+      height: math.min(height * 0.90, 820.0).toDouble(),
       decoration: BoxDecoration(
         color: const Color(0xFF080F1B),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
