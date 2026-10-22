@@ -21,7 +21,7 @@ class GtexHeroSection extends StatelessWidget {
     final bool isNarrow = width < 760;
 
     return Container(
-      constraints: BoxConstraints(minHeight: isNarrow ? 400 : 580),
+      constraints: BoxConstraints(minHeight: isNarrow ? 460 : 640),
       color: kNavyBase,
       child: Stack(
         alignment: Alignment.centerLeft,
@@ -96,31 +96,17 @@ class GtexHeroSection extends StatelessWidget {
                     ],
                   ),
 
-                  SizedBox(height: isNarrow ? 8 : 14),
-
-                  // Brand Masthead
-                  Text(
-                    'GTEX',
-                    style: TextStyle(
-                      color: kTextPrimary,
-                      fontSize: isNarrow ? 24 : 36,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 3,
-                      fontFamily: kFontCondensed,
-                    ),
-                  ),
-
-                  const SizedBox(height: 2),
+                  SizedBox(height: isNarrow ? 10 : 18),
 
                   // Primary Editorial Headline (Preserving exact tested string)
                   Text(
                     'FOOTBALL,\nREBUILT.',
                     style: TextStyle(
                       color: kTextPrimary,
-                      fontSize: isNarrow ? 36 : 74,
+                      fontSize: isNarrow ? 40 : 84,
                       height: 0.88,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: -1.5,
+                      letterSpacing: -1.8,
                       fontFamily: kFontCondensed,
                     ),
                   ),
@@ -141,7 +127,7 @@ class GtexHeroSection extends StatelessWidget {
                   const SizedBox(height: 6),
 
                   Text(
-                    'GTEX brings talent, clubs, markets, matches, money and community into one connected football ecosystem.',
+                    'Own up to three clubs, hire managers, develop regens, earn TV money, trade talent and compete for prizes in one living football world.',
                     style: TextStyle(
                       color: kTextSecondary,
                       fontSize: isNarrow ? 12 : 15,
@@ -165,10 +151,10 @@ class GtexHeroSection extends StatelessWidget {
                         icon: Icons.stadium_rounded,
                       ),
                       GtexGhostButton(
-                        label: 'Explore the exchange',
+                        label: 'Explore the universe',
                         onPressed: onExplore,
                         large: !isNarrow,
-                        icon: Icons.candlestick_chart_rounded,
+                        icon: Icons.public_rounded,
                       ),
                     ],
                   ),
@@ -180,12 +166,10 @@ class GtexHeroSection extends StatelessWidget {
                     spacing: 8,
                     runSpacing: 8,
                     children: const <Widget>[
-                      _HeroBadge(icon: Icons.person_search_rounded, text: 'Scout'),
-                      _HeroBadge(icon: Icons.stadium_rounded, text: 'Build'),
-                      _HeroBadge(icon: Icons.candlestick_chart_rounded, text: 'Trade'),
-                      _HeroBadge(icon: Icons.sports_soccer_rounded, text: 'Compete'),
-                      _HeroBadge(icon: Icons.tv_rounded, text: 'Broadcast'),
-                      _HeroBadge(icon: Icons.public_rounded, text: 'Connect'),
+                      _HeroBadge(icon: Icons.shield_rounded, text: 'Own'),
+                      _HeroBadge(icon: Icons.auto_awesome_rounded, text: 'Develop'),
+                      _HeroBadge(icon: Icons.swap_horiz_rounded, text: 'Trade'),
+                      _HeroBadge(icon: Icons.emoji_events_rounded, text: 'Compete'),
                     ],
                   ),
                 ],
@@ -194,7 +178,7 @@ class GtexHeroSection extends StatelessWidget {
           ),
 
           // Live Signal Indicator (bottom right on wider screens)
-          if (!isNarrow)
+          if (!isNarrow && pulse != null)
             Positioned(
               right: 32,
               bottom: 32,
@@ -217,9 +201,9 @@ class GtexHeroSection extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    const Text(
-                      'WORLD PULSE • LIVE 2027',
-                      style: TextStyle(
+                    Text(
+                      'WORLD PULSE • ${pulse!.clubsLabel} CLUBS',
+                      style: const TextStyle(
                         color: kTextPrimary,
                         fontSize: 11,
                         fontWeight: FontWeight.w800,

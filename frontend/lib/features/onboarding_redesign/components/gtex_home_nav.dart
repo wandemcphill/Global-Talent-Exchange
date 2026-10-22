@@ -177,6 +177,36 @@ class GtexHomeNav extends StatelessWidget implements PreferredSizeWidget {
                 glowColor: kGoldPrimary,
                 large: false,
               ),
+              if (!isDesktop) ...<Widget>[
+                const SizedBox(width: 2),
+                IconButton(
+                  tooltip: 'Open homepage navigation',
+                  onPressed: () {
+                    showModalBottomSheet<void>(
+                      context: context,
+                      useSafeArea: true,
+                      isScrollControlled: true,
+                      backgroundColor: kNavyBase,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(22),
+                        ),
+                        side: BorderSide(color: kNavyLineStrong),
+                      ),
+                      builder: (BuildContext _) => _MobileNavigationSheet(
+                        onNavigate: (String section) {
+                          onScrollToSection?.call(section);
+                        },
+                      ),
+                    );
+                  },
+                  icon: const Icon(
+                    Icons.menu_rounded,
+                    color: kTextPrimary,
+                    size: 22,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -213,6 +243,141 @@ class _NavTextButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+
+class _MobileNavigationSheet extends StatelessWidget {
+  const _MobileNavigationSheet({required this.onNavigate});
+
+  final ValueChanged<String> onNavigate;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+        child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Text(
+            'EXPLORE GTEX',
+            style: TextStyle(
+              color: kGoldPrimary,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.8,
+              fontFamily: kFontCondensed,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Your football world, one destination at a time.',
+            style: TextStyle(
+              color: kTextSecondary,
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 14),
+          const Divider(color: kNavyLine),
+          _MobileNavItem(
+            icon: Icons.public_rounded,
+            title: 'The living world',
+            subtitle: 'News, milestones and broadcasts',
+            onTap: () => _go(context, 'world'),
+          ),
+          _MobileNavItem(
+            icon: Icons.shield_rounded,
+            title: 'Club ownership',
+            subtitle: 'Build your club and prestige',
+            onTap: () => _go(context, 'ownership'),
+          ),
+          _MobileNavItem(
+            icon: Icons.tv_rounded,
+            title: 'TV money & club finance',
+            subtitle: 'Broadcast revenue and club economics',
+            onTap: () => _go(context, 'finance'),
+          ),
+          _MobileNavItem(
+            icon: Icons.person_search_rounded,
+            title: 'Regens & player development',
+            subtitle: 'Discover and develop future stars',
+            onTap: () => _go(context, 'regens'),
+          ),
+          _MobileNavItem(
+            icon: Icons.emoji_events_rounded,
+            title: 'Competitions & jackpots',
+            subtitle: 'Tournaments, rules and prize events',
+            onTap: () => _go(context, 'competitions'),
+          ),
+          _MobileNavItem(
+            icon: Icons.groups_rounded,
+            title: 'The wider football universe',
+            subtitle: 'Managers and national-team rentals',
+            onTap: () => _go(context, 'universe'),
+          ),
+          _MobileNavItem(
+            icon: Icons.verified_user_rounded,
+            title: 'Trust & rules',
+            subtitle: 'Currencies, eligibility and disclosures',
+            onTap: () => _go(context, 'trust'),
+          ),
+        ],
+      ),
+      ),
+    );
+  }
+
+  void _go(BuildContext context, String section) {
+    Navigator.of(context).pop();
+    onNavigate(section);
+  }
+}
+
+class _MobileNavItem extends StatelessWidget {
+  const _MobileNavItem({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      leading: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: kNavyOverlay,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: kNavyLine),
+        ),
+        child: Icon(icon, color: kGoldPrimary, size: 19),
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: kTextPrimary,
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(color: kTextTertiary, fontSize: 11),
+      ),
+      trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: kTextTertiary),
+      onTap: onTap,
     );
   }
 }

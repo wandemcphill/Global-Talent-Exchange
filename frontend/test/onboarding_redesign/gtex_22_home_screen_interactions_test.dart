@@ -5,6 +5,7 @@ import 'package:gte_frontend/features/onboarding_redesign/components/gtex_compet
 import 'package:gte_frontend/features/onboarding_redesign/components/gtex_living_world_section.dart';
 import 'package:gte_frontend/features/onboarding_redesign/components/gtex_regen_economy_section.dart';
 import 'package:gte_frontend/features/onboarding_redesign/components/gtex_tv_and_finance_section.dart';
+import 'package:gte_frontend/features/onboarding_redesign/components/gtex_home_nav.dart';
 import 'package:gte_frontend/features/onboarding_redesign/gtex_22_home_screen.dart';
 
 void main() {
@@ -98,7 +99,7 @@ void main() {
     expect(find.text('91'), findsWidgets);
   });
 
-  testWidgets('GTEX 22 component: Grounded AI News modal opens and dismisses', (WidgetTester tester) async {
+  testWidgets('GTEX 22 component: illustrative newsroom concept opens and dismisses', (WidgetTester tester) async {
     tester.view.physicalSize = const Size(1200, 1600);
     tester.view.devicePixelRatio = 1;
     addTearDown(() {
@@ -117,7 +118,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final Finder inspectBtn = find.text('Inspect Grounded Story & Facts').first;
+    final Finder inspectBtn = find.text('Read story concept').first;
     expect(inspectBtn, findsOneWidget);
 
     // Tap inspect
@@ -125,14 +126,14 @@ void main() {
     await tester.pumpAndSettle();
 
     // Verify dialog contents
-    expect(find.text('ESTABLISHED PLATFORM FACTS (READ-ONLY)'), findsOneWidget);
+    expect(find.text('ILLUSTRATIVE STORY PREMISE'), findsOneWidget);
     expect(find.text('EDITORIAL NARRATION'), findsOneWidget);
 
     // Dismiss dialog via close button
     await tester.tap(find.byIcon(Icons.close_rounded));
     await tester.pumpAndSettle();
 
-    expect(find.text('ESTABLISHED PLATFORM FACTS (READ-ONLY)'), findsNothing);
+    expect(find.text('ILLUSTRATIVE STORY PREMISE'), findsNothing);
   });
 
   testWidgets('GTEX 22 component: competitions and jackpot section renders 4 scheduled drops', (WidgetTester tester) async {
@@ -156,7 +157,40 @@ void main() {
 
     expect(find.text('Continental Glory & 4 Scheduled Daily Jackpots'), findsOneWidget);
     expect(find.text('4 SCHEDULED DAILY DROPS • 6-HR CYCLE'), findsOneWidget);
-    expect(find.text('TIME TO NEXT SCHEDULED DROP (FAILSAFE 6-HR CAP)'), findsOneWidget);
+    expect(find.text('TIME TO NEXT SCHEDULED DROP'), findsOneWidget);
+  });
+
+  testWidgets('GTEX 22 homepage: mobile menu exposes section navigation', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    String? selectedSection;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: GtexHomeNav(
+            onScrollToSection: (String section) => selectedSection = section,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final Finder menuButton = find.byTooltip('Open homepage navigation');
+    expect(menuButton, findsOneWidget);
+    await tester.tap(menuButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('EXPLORE GTEX'), findsOneWidget);
+    await tester.tap(find.text('TV money & club finance'));
+    await tester.pumpAndSettle();
+
+    expect(selectedSection, 'finance');
+    expect(find.text('EXPLORE GTEX'), findsNothing);
   });
 
   testWidgets('GTEX 22 interactions: auth and routing callbacks invoke successfully', (WidgetTester tester) async {

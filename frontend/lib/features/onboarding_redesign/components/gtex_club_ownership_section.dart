@@ -272,7 +272,7 @@ class _GtexClubOwnershipSectionState extends State<GtexClubOwnershipSection> {
                 ],
               ),
               const Text(
-                'AUTHENTIC 3D & BROADCAST ASSETS',
+                'LUXURY FLEET • STADIUMS • FACILITIES',
                 style: TextStyle(
                   color: kTextTertiary,
                   fontSize: 11,
@@ -443,8 +443,9 @@ class _AssetImageFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isNarrow = MediaQuery.sizeOf(context).width < 760;
     return Container(
-      height: 220,
+      height: isNarrow ? 240 : 360,
       decoration: BoxDecoration(
         color: kNavyRaised,
         borderRadius: BorderRadius.circular(14),

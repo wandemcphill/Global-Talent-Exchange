@@ -210,68 +210,62 @@ class NewsroomArticleItem {
     required this.headline,
     required this.subheadline,
     required this.category,
-    required this.timeAgo,
-    required this.establishedFacts,
+    required this.statusLabel,
+    required this.imageFile,
+    required this.editorialNotes,
     required this.editorialNarration,
-    this.verifiedPriceGtex,
-    this.badgeText,
   });
 
   final String headline;
   final String subheadline;
   final String category;
-  final String timeAgo;
-  final List<String> establishedFacts;
+  final String statusLabel;
+  final String imageFile;
+  final List<String> editorialNotes;
   final String editorialNarration;
-  final double? verifiedPriceGtex;
-  final String? badgeText;
 }
 
-const List<NewsroomArticleItem> kVerifiedArticles = <NewsroomArticleItem>[
+/// Visual story concepts only. Live headlines and transaction details must come
+/// from the authoritative story feed before they can be presented as events.
+const List<NewsroomArticleItem> kEditorialExamples = <NewsroomArticleItem>[
   NewsroomArticleItem(
-    headline: 'GTEX Club Commissions Executive Long-Range Aviation',
-    subheadline: 'Boardroom finalizes acquisition of flagship VIP aircraft for intercontinental away legs.',
-    category: 'Fleet & Aviation',
-    timeAgo: '2h ago',
-    establishedFacts: <String>[
-      'Asset: Sovereign 900X Long-Range VIP Jet',
-      'Transaction amount: 4,800.00 GTX verified on ledger',
-      'Prestige addition: +8 Club Institutional Standing',
-      'Continental travel time reduced by 64%',
+    headline: 'A Club’s Next-Level Move: Private Aviation',
+    subheadline: 'A sample editorial package about an eligible luxury-asset milestone.',
+    category: 'Club Ownership',
+    statusLabel: 'STORY CONCEPT',
+    imageFile: 'assets/showroom/sovereign_900x_jet.png',
+    editorialNotes: <String>[
+      'Story premise: a club owner acquires an eligible private jet.',
+      'Public announcement should follow a confirmed platform event.',
+      'Any cost or gameplay effect must come from the asset catalogue.',
     ],
-    editorialNarration: 'The executive suite has signaled unequivocal ambition. By securing dedicated long-range VIP transit, the club eliminates fixture fatigue for continental travels while projecting immense prestige across the football universe.',
-    verifiedPriceGtex: 4800.0,
-    badgeText: 'VERIFIED LEDGER EVENT',
+    editorialNarration: 'A major aviation acquisition can signal a club’s ambition and make ownership feel tangible. In the live newsroom, the story would be published only after the transaction, eligible public details and any broadcast rules had been confirmed.',
   ),
   NewsroomArticleItem(
-    headline: 'Continental Prestige League Announces Stage 1 Broadcast Distribution',
-    subheadline: 'Record television pool allocations unlocked across foundation and established clubs.',
-    category: 'Television & Rights',
-    timeAgo: '5h ago',
-    establishedFacts: <String>[
-      'Platform television rule: 40% host club allocation, 60% participant split',
-      'Elite stage clubs retain 60% of total broadcast pool generation',
-      'Aggregate tournament prize pool: 18,000 USD / GTC Credits',
-      'Over 24,000 authenticated live spectator view sessions logged',
+    headline: 'TV Money and the Club’s Next Investment',
+    subheadline: 'A sample story about broadcast income, competitive progress and reinvestment.',
+    category: 'TV & Club Finance',
+    statusLabel: 'STORY CONCEPT',
+    imageFile: 'assets/showroom/arena_imperiale_stadium.png',
+    editorialNotes: <String>[
+      'TV distribution depends on the current GTEX stage and competition rules.',
+      'Actual amounts must come from authoritative platform records.',
+      'Scenario projections are illustrative, not guaranteed earnings.',
     ],
-    editorialNarration: 'Broadcast rights remain the golden lifeblood of modern football management. Under GTEX platform mechanics, clubs that upgrade their development score capture progressively higher television distribution percentages, fundamentally transforming their balance sheets.',
-    verifiedPriceGtex: 18000.0,
-    badgeText: 'BROADCAST RULE AUDIT',
+    editorialNarration: 'Broadcast revenue can become part of a club’s wider financial story, alongside sponsorships, advertising and player trading. A published GTEX story should use the club’s actual ledger and clearly separate earned amounts from illustrative projections.',
   ),
   NewsroomArticleItem(
-    headline: 'Academy Intake Yields Generational Playmaker in West Africa Circuit',
-    subheadline: 'Scouting network confirms breakthrough talent with 96 potential rating and Tier-1 GSI.',
-    category: 'Regen Discovery',
-    timeAgo: '9h ago',
-    establishedFacts: <String>[
-      'Candidate: Kwame Asante (Age 16, Attacking Midfielder)',
-      'Scouting Grade: 96 Potential Ceiling (World-Class Projection)',
-      'Traits unlocked: Visionary Passer, Decisive Big-Match Temperament',
-      'First-team transition target: Next competitive season window',
+    headline: 'From Academy Prospect to First-Team Regular',
+    subheadline: 'A sample player-development story following a young regen’s journey.',
+    category: 'Regen Development',
+    statusLabel: 'STORY CONCEPT',
+    imageFile: 'assets/showroom/apex_performance_campus.png',
+    editorialNotes: <String>[
+      'Player attributes and potential should come from the real regen record.',
+      'Development depends on the active academy, training and competition systems.',
+      'Player valuations can change and do not guarantee a future sale price.',
     ],
-    editorialNarration: 'Regens are not static cards; they are living talent waiting for the right mentor. When youth development facilities, Apex Campus multipliers, and high-stakes match minutes align, an academy prospect can appreciate 500% in market value before their 20th birthday.',
-    verifiedPriceGtex: null,
-    badgeText: 'TALENT INTELLIGENCE',
+    editorialNarration: 'The regen economy is about potential becoming a story. Scouting, training, mentoring and competitive minutes can shape a player’s journey; in the live product, the newsroom should use the existing regen engine and verified player history rather than invented statistics.',
   ),
 ];
 
@@ -406,40 +400,40 @@ class ActiveCompetitionItem {
   final bool broadcastAvailable;
 }
 
-const List<ActiveCompetitionItem> kActiveCompetitions = <ActiveCompetitionItem>[
+const List<ActiveCompetitionItem> kCompetitionFormatPreviews = <ActiveCompetitionItem>[
   ActiveCompetitionItem(
     name: 'Continental Prestige League',
     type: 'League Season',
-    format: '38 Matchday Double Round Robin',
-    prizePool: '18,000 USD / GTC',
-    currency: 'USD',
-    status: 'ACTIVE NOW',
-    slotsTotal: 20,
-    slotsFilled: 20,
+    format: 'Double round-robin league format',
+    prizePool: 'See published event rules',
+    currency: '',
+    status: 'FORMAT PREVIEW',
+    slotsTotal: 0,
+    slotsFilled: 0,
     accentColor: Color(0xFFD4AF37),
-    broadcastAvailable: true,
+    broadcastAvailable: false,
   ),
   ActiveCompetitionItem(
     name: 'West Africa Elite Circuit',
     type: 'Invitational Cup',
-    format: 'Group Stage + Knockout',
-    prizePool: '18,000 USD / GTC',
-    currency: 'USD',
-    status: 'REGISTRATION OPEN',
-    slotsTotal: 16,
-    slotsFilled: 14,
+    format: 'Group stage followed by knockout rounds',
+    prizePool: 'See published event rules',
+    currency: '',
+    status: 'FORMAT PREVIEW',
+    slotsTotal: 0,
+    slotsFilled: 0,
     accentColor: Color(0xFF10B981),
-    broadcastAvailable: true,
+    broadcastAvailable: false,
   ),
   ActiveCompetitionItem(
     name: 'Atlantic Prospect Series',
     type: 'U21 Showcase',
-    format: 'Knockout Tournament',
-    prizePool: '18,000 USD / GTC',
-    currency: 'USD',
-    status: 'SEEDED',
-    slotsTotal: 32,
-    slotsFilled: 30,
+    format: 'Knockout tournament for emerging talent',
+    prizePool: 'See published event rules',
+    currency: '',
+    status: 'FORMAT PREVIEW',
+    slotsTotal: 0,
+    slotsFilled: 0,
     accentColor: Color(0xFF3B82F6),
     broadcastAvailable: false,
   ),

@@ -45,13 +45,13 @@ class GtexPlatformMapSection extends StatelessWidget {
         Icons.account_balance_wallet_rounded,
         'Wallet & Economy',
         'Wallet funding, P2P activity, withdrawals and football commerce.',
-        Color(0xFFA855F7),
+        kGoldLight,
       ),
       const _PillarItem(
         Icons.forum_rounded,
         'Social Football',
         'Creators, fans, news, Fan Wars, gifting and a living community.',
-        Color(0xFFFF5FA2),
+        kPitchGreen,
       ),
     ];
 
@@ -75,12 +75,13 @@ class GtexPlatformMapSection extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
-          const Text(
+          Text(
             'Everything football.\nOne living system.',
             style: TextStyle(
               color: kTextPrimary,
-              fontSize: 48,
+              fontSize: isNarrow ? 36 : 56,
               height: 0.95,
+              letterSpacing: -1.2,
               fontWeight: FontWeight.w900,
               fontFamily: kFontCondensed,
             ),
@@ -98,7 +99,7 @@ class GtexPlatformMapSection extends StatelessWidget {
           _FeatureGrid(items: items),
           const SizedBox(height: 28),
           GtexGhostButton(
-            label: 'See the football world',
+            label: 'Start your GTEX story',
             onPressed: onSignup,
           ),
         ],
@@ -126,12 +127,44 @@ class _FeatureGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final int columns = constraints.maxWidth > 1050
-            ? 3
-            : constraints.maxWidth > 650
-                ? 2
-                : 1;
+        // Give the defining ownership experience more space than the supporting
+        // platform pillars instead of presenting six interchangeable cards.
+        if (constraints.maxWidth > 1050) {
+          return Column(
+            children: <Widget>[
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Expanded(
+                      flex: 2,
+                      child: _FeatureCard(item: items[1], featured: true),
+                    ),
+                    const SizedBox(width: _gap),
+                    Expanded(child: _FeatureCard(item: items[0])),
+                    const SizedBox(width: _gap),
+                    Expanded(child: _FeatureCard(item: items[2])),
+                  ],
+                ),
+              ),
+              const SizedBox(height: _gap),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Expanded(child: _FeatureCard(item: items[3])),
+                    const SizedBox(width: _gap),
+                    Expanded(child: _FeatureCard(item: items[4])),
+                    const SizedBox(width: _gap),
+                    Expanded(child: _FeatureCard(item: items[5])),
+                  ],
+                ),
+              ),
+            ],
+          );
+        }
 
+        final int columns = constraints.maxWidth > 650 ? 2 : 1;
         final List<Widget> rows = <Widget>[];
         for (int start = 0; start < items.length; start += columns) {
           if (rows.isNotEmpty) {
@@ -147,7 +180,10 @@ class _FeatureGrid extends StatelessWidget {
                     if (column > 0) const SizedBox(width: _gap),
                     Expanded(
                       child: start + column < end
-                          ? _FeatureCard(item: items[start + column])
+                          ? _FeatureCard(
+                              item: items[start + column],
+                              featured: start + column == 1,
+                            )
                           : const SizedBox.shrink(),
                     ),
                   ],
@@ -163,50 +199,64 @@ class _FeatureGrid extends StatelessWidget {
 }
 
 class _FeatureCard extends StatelessWidget {
-  const _FeatureCard({required this.item});
+  const _FeatureCard({
+    required this.item,
+    this.featured = false,
+  });
 
   final _PillarItem item;
+  final bool featured;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(22),
+      padding: EdgeInsets.all(featured ? 28 : 22),
       decoration: BoxDecoration(
-        color: kNavyRaised,
+        color: featured ? kNavyOverlay : kNavyRaised,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: kNavyLine),
+        border: Border.all(
+          color: featured ? item.accent.withValues(alpha: 0.55) : kNavyLine,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
+          if (featured) ...<Widget>[
+            GtexTagPill(
+              label: 'THE CORE EXPERIENCE',
+              color: item.accent,
+            ),
+            const SizedBox(height: 16),
+          ],
           Container(
-            width: 44,
-            height: 44,
+            width: featured ? 56 : 44,
+            height: featured ? 56 : 44,
             decoration: BoxDecoration(
               color: item.accent.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: item.accent.withValues(alpha: 0.3)),
             ),
-            child: Icon(item.icon, color: item.accent, size: 22),
+            child: Icon(item.icon, color: item.accent, size: featured ? 28 : 22),
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: featured ? 18 : 14),
           Text(
             item.title,
-            style: const TextStyle(
+            style: TextStyle(
               color: kTextPrimary,
-              fontSize: 20,
+              fontSize: featured ? 28 : 20,
+              height: 1.05,
               fontWeight: FontWeight.w800,
               fontFamily: kFontCondensed,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
             item.body,
-            style: const TextStyle(
+            style: TextStyle(
               color: kTextSecondary,
-              fontSize: 13,
-              height: 1.45,
+              fontSize: featured ? 15 : 13,
+              height: 1.5,
             ),
           ),
         ],
