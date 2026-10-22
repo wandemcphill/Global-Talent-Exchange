@@ -102,7 +102,7 @@ String exhibitPreviewPath({
     modelFile: modelFile,
   );
   if (model.endsWith('.glb')) {
-    return model.replaceFirst(RegExp(r'\.glb$'), '.png');
+    return model.replaceFirst(RegExp(r'\.glb$'), '.webp');
   }
   return model;
 }
