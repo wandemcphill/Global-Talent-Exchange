@@ -16,7 +16,7 @@ from app.models.creator_application import CreatorApplication
 from app.models.creator_profile import CreatorProfile
 from app.models.creator_provisioning import CreatorClubProvisioning, CreatorRegen, CreatorSquad
 from app.models.user import User
-from backend.tests.support.signup_payloads import creator_signup_payload
+from backend.tests.support.signup_payloads import user_signup_payload
 
 
 @pytest.fixture()
@@ -28,13 +28,14 @@ def app_client(tmp_path):
         yield app, client
 
 
-def _register_creator_user(client: TestClient, *, email: str, username: str) -> str:
+def _register_creator_applicant(client: TestClient, *, email: str, username: str) -> str:
+    # Creator access is applied for after normal GTEX user registration.
     response = client.post(
-        "/auth/signup/creator",
-        json=creator_signup_payload(
+        "/auth/signup/user",
+        json=user_signup_payload(
             email=email,
             username=username,
-            creator_name="Creator User",
+            full_name="Creator Applicant",
             password="SuperSecret1",
             country="US",
         ),
@@ -70,7 +71,7 @@ def _mark_contacts_verified_for_test(app, *, email: str) -> None:
 
 def test_creator_application_submission_requires_verification_and_persists_application(app_client) -> None:
     app, client = app_client
-    token = _register_creator_user(client, email="creator1@example.com", username="creatorone")
+    token = _register_creator_applicant(client, email="creator1@example.com", username="creatorone")
     headers = _creator_headers(token)
 
     apply_response = client.post(
@@ -129,7 +130,7 @@ def test_creator_application_submission_requires_verification_and_persists_appli
 
 def test_admin_request_verification_and_reject_flow(app_client) -> None:
     _app, client = app_client
-    token = _register_creator_user(client, email="creator2@example.com", username="creatortwo")
+    token = _register_creator_applicant(client, email="creator2@example.com", username="creatortwo")
     headers = _creator_headers(token)
     admin_headers = _admin_headers(client)
 
@@ -166,7 +167,7 @@ def test_admin_request_verification_and_reject_flow(app_client) -> None:
 
 def test_admin_approval_provisions_creator_assets(app_client) -> None:
     app, client = app_client
-    token = _register_creator_user(client, email="creator3@example.com", username="creatorthree")
+    token = _register_creator_applicant(client, email="creator3@example.com", username="creatorthree")
     headers = _creator_headers(token)
     admin_headers = _admin_headers(client)
 
