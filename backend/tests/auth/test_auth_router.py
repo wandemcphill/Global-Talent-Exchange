@@ -502,7 +502,7 @@ def test_refresh_logout_and_session_bootstrap_flow(app_client) -> None:
     assert revoked_bootstrap.status_code == 401
 
 
-def test_user_creator_and_trader_signup_sessions_include_public_account_type(
+def test_user_and_trader_signup_sessions_include_dedicated_account_type(
     app_client,
 ) -> None:
     app, client = app_client
@@ -517,16 +517,6 @@ def test_user_creator_and_trader_signup_sessions_include_public_account_type(
                 password=TEST_PASSWORD,
             ),
             "user",
-        ),
-        (
-            "/auth/signup/creator",
-            lambda: creator_signup_payload(
-                email="account-type-creator@example.com",
-                username="account_type_creator",
-                creator_name="Account Type Creator",
-                password=TEST_PASSWORD,
-            ),
-            "creator",
         ),
         (
             "/auth/signup/trader",
@@ -569,13 +559,7 @@ def test_user_creator_and_trader_signup_sessions_include_public_account_type(
             "agent",
         }
         assert bootstrap["onboarding"]["suggested_route"].startswith("/app/")
-        if expected_account_type == "creator":
-            assert bootstrap["creator"]["status"] == "active"
-            assert bootstrap["coin_trader"] is None
-            assert bootstrap["club"] is None
-            assert "club_owner" not in bootstrap["roles"]
-            assert bootstrap["onboarding"]["requires_club"] is False
-        elif expected_account_type == "coin_trader":
+        if expected_account_type == "coin_trader":
             assert bootstrap["creator"] is None
             assert bootstrap["club"] is None
             assert "club_owner" not in bootstrap["roles"]
@@ -591,14 +575,7 @@ def test_user_creator_and_trader_signup_sessions_include_public_account_type(
             assert "create_club" in bootstrap["onboarding"]["available_actions"]
             assert "club_owner" not in bootstrap["roles"]
 
-    with app.state.session_factory() as session:
-        creator = session.scalar(select(User).where(User.email == "account-type-creator@example.com"))
-        assert creator is not None
-        assert session.scalar(select(CreatorProfile).where(CreatorProfile.user_id == creator.id)) is not None
-        assert session.scalar(select(ClubProfile).where(ClubProfile.owner_user_id == creator.id)) is None
-
-
-def test_approved_coin_trader_capability_bootstraps_for_normal_user_account(app_client) -> None:
+def test_stale_trader_profile_and_role_do_not_promote_a_normal_account(app_client) -> None:
     app, client = app_client
     signup_response = client.post(
         "/auth/signup/user",
@@ -612,8 +589,8 @@ def test_approved_coin_trader_capability_bootstraps_for_normal_user_account(app_
     assert signup_response.status_code == 201, signup_response.text
     user_id = signup_response.json()["user"]["id"]
 
-    # Simulate an approved profile produced by the normal application/review
-    # workflow. Approval grants the trader role without changing account_type.
+    # Legacy profile/role rows cannot turn the normal member account into a
+    # dedicated Coin Trader account. A real trader uses account_type=coin_trader.
     with app.state.session_factory() as session:
         user = session.get(User, user_id)
         assert user is not None
@@ -621,7 +598,7 @@ def test_approved_coin_trader_capability_bootstraps_for_normal_user_account(app_
         session.add(
             CoinTraderProfile(
                 user_id=user_id,
-                display_name="Member Trader Desk",
+                display_name="Legacy Trader Desk",
                 status="approved",
                 tier="gold",
                 terms_json={"same_name_only": True},
@@ -639,7 +616,7 @@ def test_approved_coin_trader_capability_bootstraps_for_normal_user_account(app_
     assert login_response.status_code == 200, login_response.text
     issued = login_response.json()
     assert issued["user"]["account_type"] == "user"
-    assert issued["landing_route"] == "/app/trader-dashboard"
+    assert issued["landing_route"] == "/app/home"
 
     bootstrap_response = client.get(
         "/api/v2/session/bootstrap",
@@ -648,19 +625,20 @@ def test_approved_coin_trader_capability_bootstraps_for_normal_user_account(app_
             "Authorization": f"Bearer {issued['access_token']}",
             "X-User-Id": issued["user"]["id"],
             "X-Session-Id": issued["session_id"],
-            "X-Device-Id": "approved-trader-capability-test",
+            "X-Device-Id": "legacy-trader-profile-test",
         },
     )
     assert bootstrap_response.status_code == 200, bootstrap_response.text
     bootstrap = bootstrap_response.json()["data"]
     assert bootstrap["account_type"] == "user"
-    assert bootstrap["coin_trader"]["is_approved"] is True
-    assert bootstrap["coin_trader"]["can_trade"] is True
-    assert "coin_trader" in bootstrap["roles"]
-    assert bootstrap["onboarding"]["requires_club"] is False
-    assert bootstrap["onboarding"]["suggested_route"] == "/app/trader-dashboard"
+    assert bootstrap["coin_trader"] is None
+    assert "coin_trader" not in bootstrap["roles"]
+    assert "creator" not in bootstrap["roles"]
+    assert "club_owner" not in bootstrap["roles"]
+    assert bootstrap["onboarding"]["suggested_route"] == "/app/home"
     assert "create_club" in bootstrap["onboarding"]["available_actions"]
-
+    assert "coin_trader_dashboard" not in bootstrap["onboarding"]["available_actions"]
+    assert "creator_dashboard" not in bootstrap["onboarding"]["available_actions"]
 
 def test_public_signup_rejects_external_admin_account_type(app_client) -> None:
     _app, client = app_client
