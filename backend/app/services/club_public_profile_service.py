@@ -162,7 +162,7 @@ def _owner_summary(session: Session, owner_id: str) -> dict[str, Any]:
             if owner is not None
             else "GTEX Club Owner"
         ),
-        "club_count": len(clubs),
+        "club_count": sum(1 for club in clubs if club.visibility == "public"),
         "public_clubs": [
             {
                 "id": club.id,
