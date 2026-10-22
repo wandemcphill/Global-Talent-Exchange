@@ -176,9 +176,15 @@ export default function AppShell() {
           <ClubSwitcher />
 
           <div className="ml-auto flex items-center gap-4 text-xs">
-            <span data-testid="topbar-gtex-balance" className="gx-mono text-slate-300">
-              {hasActiveClub ? "Treasury" : "Personal wallet"} <b className="text-white font-mono">{fmt(wallet.gtex_total)}</b> <span className="text-blue-400 font-bold">GTX</span>
-            </span>
+            {hasActiveClub ? (
+              <span data-testid="topbar-gtex-balance" className="gx-mono text-slate-300">
+                Treasury <b className="text-white font-mono">{fmt(wallet.gtex_total)}</b> <span className="text-blue-400 font-bold">GTX</span>
+              </span>
+            ) : (
+              <span data-testid="topbar-user-account" className="gx-mono text-slate-400">
+                GTEX member account · no club required
+              </span>
+            )}
             <span data-testid="topbar-fan-balance" className="gx-mono hidden text-slate-300 sm:inline">
               <b className="text-white font-mono">{fmt(wallet.fan_total)}</b> <span className="text-amber-400 font-bold">FAN</span>
             </span>
