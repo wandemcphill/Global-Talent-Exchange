@@ -256,10 +256,27 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
       return existing;
     }
     existing?.dispose();
+    final bool hasStarted =
+        viewState.frames.any(
+          (MatchTimelineFrame frame) =>
+              frame.clockMinute > 0 ||
+              frame.homeScore > 0 ||
+              frame.awayScore > 0 ||
+              frame.phase == MatchViewerPhase.halftime ||
+              frame.phase == MatchViewerPhase.fulltime,
+        ) ||
+        viewState.events.any(
+          (MatchEvent event) =>
+              event.type == MatchViewerEventType.kickoff ||
+              event.type == MatchViewerEventType.goal ||
+              event.minute > 0,
+        );
     final MatchPlaybackController created = MatchPlaybackController(
       vsync: this,
       viewState: viewState,
-      autoplay: widget.presentationMode != MatchViewerPresentationMode.broadcast,
+      autoplay: widget.presentationMode != MatchViewerPresentationMode.broadcast ||
+          widget.initialReplayMinute != null ||
+          hasStarted,
     );
     _controller = created;
     return created;
@@ -287,6 +304,42 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
             final MatchGiftTarget? giftTarget = MatchGiftTarget.fromMetadata(
               viewState.monetization.metadata,
             );
+            final bool matchHasStarted =
+                viewState.frames.any(
+                  (MatchTimelineFrame frame) =>
+                      frame.clockMinute > 0 ||
+                      frame.homeScore > 0 ||
+                      frame.awayScore > 0 ||
+                      frame.phase == MatchViewerPhase.halftime ||
+                      frame.phase == MatchViewerPhase.fulltime,
+                ) ||
+                viewState.events.any(
+                  (MatchEvent event) =>
+                      event.type == MatchViewerEventType.kickoff ||
+                      event.type == MatchViewerEventType.goal ||
+                      event.minute > 0,
+                );
+            if (_showPreMatchBrief && !matchHasStarted) {
+              final MatchPlaybackController? preMatchController =
+                  viewState.frames.isEmpty ? null : _ensureController(viewState);
+              final MatchPresentationPackage package =
+                  BroadcastPackageRepository().resolve(viewState);
+              return _MatchPreGameBrief(
+                package: package,
+                competitionName: widget.competition.name,
+                canStart: preMatchController != null,
+                onStart: () {
+                  if (!mounted) return;
+                  if (preMatchController == null) {
+                    _reload();
+                    return;
+                  }
+                  setState(() => _showPreMatchBrief = false);
+                  preMatchController.play();
+                },
+                onRefresh: _reload,
+              );
+            }
             if (viewState.frames.isEmpty) {
               return _MatchViewerError(
                 onReload: _reload,
@@ -324,19 +377,6 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
               builder: (BuildContext context, Widget? child) {
                 final MatchTimelineFrame frame = controller.displayFrame;
                 final MatchEvent? activeEvent = controller.activeEvent;
-                if (_showPreMatchBrief) {
-                  final MatchPresentationPackage package =
-                      BroadcastPackageRepository().resolve(viewState);
-                  return _MatchPreGameBrief(
-                    package: package,
-                    competitionName: widget.competition.name,
-                    onStart: () {
-                      if (!mounted) return;
-                      setState(() => _showPreMatchBrief = false);
-                      controller.play();
-                    },
-                  );
-                }
                 return SafeArea(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
@@ -1516,12 +1556,16 @@ class _MatchPreGameBrief extends StatelessWidget {
   const _MatchPreGameBrief({
     required this.package,
     required this.competitionName,
+    required this.canStart,
     required this.onStart,
+    required this.onRefresh,
   });
 
   final MatchPresentationPackage package;
   final String competitionName;
+  final bool canStart;
   final VoidCallback onStart;
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -1615,9 +1659,12 @@ class _MatchPreGameBrief extends StatelessWidget {
                     height: 52,
                     child: FilledButton.icon(
                       key: const Key('gtex-matchday-start-broadcast'),
-                      onPressed: onStart,
-                      icon: const Icon(Icons.play_arrow_rounded, size: 24),
-                      label: const Text('WATCH 2D MATCH', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1)),
+                      onPressed: canStart ? onStart : onRefresh,
+                      icon: Icon(canStart ? Icons.play_arrow_rounded : Icons.refresh_rounded, size: 24),
+                      label: Text(
+                        canStart ? 'WATCH 2D MATCH' : 'CHECK FOR MATCH TIMELINE',
+                        style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1),
+                      ),
                       style: FilledButton.styleFrom(backgroundColor: const Color(0xFFF0C66B), foregroundColor: const Color(0xFF101722)),
                     ),
                   ),
