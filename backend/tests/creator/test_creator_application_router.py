@@ -196,6 +196,34 @@ def test_admin_approval_provisions_creator_assets(app_client) -> None:
     assert body["status"] == "approved"
     assert body["provisioning"] is not None
 
+    # Approval grants Creator as a capability while the user's original
+    # account type remains USER; session bootstrap must expose that capability.
+    login_response = client.post(
+        "/auth/login",
+        json={"email": "creator3@example.com", "password": "SuperSecret1"},
+    )
+    assert login_response.status_code == 200, login_response.text
+    issued = login_response.json()
+    assert issued["user"]["account_type"] == "user"
+    assert issued["landing_route"] == "/app/hub"
+    bootstrap_response = client.get(
+        "/api/v2/session/bootstrap",
+        headers={
+            "X-API-Version": "2",
+            "Authorization": f"Bearer {issued['access_token']}",
+            "X-User-Id": issued["user"]["id"],
+            "X-Session-Id": issued["session_id"],
+            "X-Device-Id": "creator-approved-test",
+        },
+    )
+    assert bootstrap_response.status_code == 200, bootstrap_response.text
+    bootstrap = bootstrap_response.json()["data"]
+    assert bootstrap["account_type"] == "user"
+    assert bootstrap["creator"]["status"] == "active"
+    assert "creator" in bootstrap["roles"]
+    assert bootstrap["onboarding"]["requires_club"] is False
+    assert bootstrap["onboarding"]["suggested_route"] == "/app/hub"
+
     with app.state.session_factory() as session:
         creator_profile = session.scalar(select(CreatorProfile).where(CreatorProfile.handle == "creator.three"))
         assert creator_profile is not None
