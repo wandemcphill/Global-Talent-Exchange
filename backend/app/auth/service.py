@@ -456,10 +456,10 @@ class AuthService:
         # Dedicated account types determine their lane. Approved creator
         # promotion updates account_type; profiles alone never create a
         # switchable creator/trader capability on a normal account.
-        if user.account_type == PublicAccountType.COIN_TRADER or effective_role == UserRole.COIN_TRADER:
-            return "/app/coin-traders"
         if user.account_type == PublicAccountType.CREATOR:
             return "/app/hub"
+        if user.account_type == PublicAccountType.COIN_TRADER or effective_role == UserRole.COIN_TRADER:
+            return "/app/coin-traders"
         return "/app/home"
 
     def build_user_public(self, session: Session, user: User) -> UserPublic:
