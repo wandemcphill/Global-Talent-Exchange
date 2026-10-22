@@ -21,9 +21,7 @@ test.afterEach(async ({ page: _page }, testInfo) => {
   await attachDiagnostics(testInfo);
 });
 
-test("Club squad route loads the roster or explicit no-club state", async ({
-  page,
-}, testInfo) => {
+test("Club squad route loads the roster or explicit no-club state", async ({ page }, testInfo) => {
   // This workflow launches Flutter Web, not the separately hosted React shell
   // at /console. Use the Flutter Club HQ route and its semantic UI.
   await visitAuthedRoute(
@@ -75,9 +73,7 @@ test("Club squad route loads the roster or explicit no-club state", async ({
   await captureScreenshot(page, testInfo, "lineup");
 });
 
-test("A targeted notification opens its supplied target", async ({
-  page,
-}, testInfo) => {
+test("A targeted notification opens its supplied target", async ({ page }, testInfo) => {
   test.skip(
     !process.env.GTEX_E2E_NOTIFICATION_TEXT ||
       !process.env.GTEX_E2E_NOTIFICATION_TARGET,
@@ -95,9 +91,7 @@ test("A targeted notification opens its supplied target", async ({
   await captureScreenshot(page, testInfo, "notifications-targeted");
 });
 
-test("An untargeted notification leaves navigation unavailable", async ({
-  page,
-}) => {
+test("An untargeted notification leaves navigation unavailable", async ({ page }) => {
   test.skip(
     !process.env.GTEX_E2E_UNTARGETED_NOTIFICATION_TEXT,
     "Provide a real notification without routing metadata.",
