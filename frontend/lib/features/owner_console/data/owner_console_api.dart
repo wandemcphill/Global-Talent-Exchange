@@ -63,6 +63,7 @@ class OwnerGiftRecipient {
     required this.rating,
     required this.morale,
     this.portraitUrl,
+    this.isRegen = false,
   });
 
   factory OwnerGiftRecipient.fromJson(Map<String, dynamic> json) =>
@@ -73,6 +74,7 @@ class OwnerGiftRecipient {
         rating: _int(json['rating'] ?? json['overall_rating']),
         morale: _int(json['morale']),
         portraitUrl: _text(json['portrait_url']),
+        isRegen: json['is_regen'] == true,
       );
 
   final String id;
@@ -81,6 +83,7 @@ class OwnerGiftRecipient {
   final int rating;
   final int morale;
   final String? portraitUrl;
+  final bool isRegen;
 }
 
 /// Optional, player-aware showroom actions. Keeping this separate leaves the
@@ -908,7 +911,10 @@ class OwnerConsoleApi implements OwnerConsoleReader, GtexOwnerInboxDataSource, O
     final Map<String, dynamic> detail = await client.getMap('/owner/clubs/$clubId');
     return _maps(detail['squad'])
         .map(OwnerGiftRecipient.fromJson)
-        .where((OwnerGiftRecipient player) => player.id.isNotEmpty)
+        .where(
+          (OwnerGiftRecipient player) =>
+              player.id.isNotEmpty && player.isRegen,
+        )
         .toList(growable: false);
   }
 
