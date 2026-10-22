@@ -24,6 +24,7 @@ import 'package:gte_frontend/services/ambient_audio_controller.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/match/broadcast/gtex_gifting_sheet.dart';
+import 'package:gte_frontend/widgets/match/broadcast/gtex_gift_delivery_dialog.dart';
 import 'package:gte_frontend/widgets/match/pitch_2d_widget.dart';
 
 typedef MatchViewStateLoader = Future<MatchViewState> Function();
@@ -214,9 +215,14 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
   }
 
   Future<void> _openGiftSheet(MatchGiftTarget target) {
+    final MatchGiftClient? client = widget.giftClient;
     return GtexGiftingSheet.show(
       context,
       unitLabel: _giftUnitLabelForScope(target.sourceScope),
+      recipientLabel: target.recipientLabel,
+      catalogLoader: client is MatchGiftCatalogProvider
+          ? () => (client as MatchGiftCatalogProvider).fetchCatalog()
+          : null,
       onSelected: (MatchGiftCatalogItem gift) => _sendGift(target, gift),
     );
   }
@@ -237,9 +243,11 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
+      await GtexGiftDeliveryDialog.show(
         context,
-      ).showSnackBar(SnackBar(content: Text(receipt.confirmationMessage)));
+        gift: gift,
+        receipt: receipt,
+      );
     } catch (_) {
       if (!mounted) {
         return;
