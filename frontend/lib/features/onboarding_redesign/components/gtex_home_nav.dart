@@ -42,7 +42,7 @@ class GtexHomeNav extends StatelessWidget implements PreferredSizeWidget {
         bottom: false,
         child: Container(
           padding: EdgeInsets.symmetric(
-            horizontal: isTablet ? 24 : 14,
+            horizontal: isTablet ? 24 : 8,
             vertical: 10,
           ),
           child: Row(
@@ -181,6 +181,9 @@ class GtexHomeNav extends StatelessWidget implements PreferredSizeWidget {
                 const SizedBox(width: 2),
                 IconButton(
                   tooltip: 'Open homepage navigation',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+                  visualDensity: VisualDensity.compact,
                   onPressed: () {
                     showModalBottomSheet<void>(
                       context: context,
