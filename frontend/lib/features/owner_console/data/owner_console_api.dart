@@ -17,6 +17,8 @@ class ShowroomExhibit {
     this.mintedCount,
     this.modelFile,
     this.previewFile,
+    this.ownerClass,
+    this.status,
     this.owned = false,
   });
 
@@ -32,6 +34,8 @@ class ShowroomExhibit {
     mintedCount: json['minted_count'] == null ? null : _int(json['minted_count']),
     modelFile: _text(json['model_file']),
     previewFile: _text(json['preview_file']),
+    ownerClass: _text(json['owner_class']),
+    status: _text(json['status']),
     owned: json['owned'] == true,
   );
 
@@ -46,6 +50,8 @@ class ShowroomExhibit {
   final int? mintedCount;
   final String? modelFile;
   final String? previewFile;
+  final String? ownerClass;
+  final String? status;
   final bool owned;
 }
 
