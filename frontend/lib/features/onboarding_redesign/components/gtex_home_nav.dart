@@ -192,10 +192,8 @@ class GtexHomeNav extends StatelessWidget implements PreferredSizeWidget {
                         ),
                         side: BorderSide(color: kNavyLineStrong),
                       ),
-                      builder: (BuildContext sheetContext) =>
-                          _MobileNavigationSheet(
+                      builder: (BuildContext _) => _MobileNavigationSheet(
                         onNavigate: (String section) {
-                          Navigator.of(sheetContext).pop();
                           onScrollToSection?.call(section);
                         },
                       ),
