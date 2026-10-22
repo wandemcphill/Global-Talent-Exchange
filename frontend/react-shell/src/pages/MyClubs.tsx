@@ -82,6 +82,7 @@ function ShowroomPanel({ club }: any) {
   const items: any[] = Array.isArray(rawCatalog) ? rawCatalog : [];
   const ownedAssets: any[] = Array.isArray(rawOwnedAssets) ? rawOwnedAssets : [];
   const squad: any[] = Array.isArray(rawSquad) ? rawSquad : [];
+  const selectedPlayer = squad.find((p: any) => p.id === selectedPlayerId);
   const keyOf = (item: any) => String(item?.catalog_key || item?.key || item?.id || "");
   const formatPrice = (item: any) => fmt(item?.price_gtex, 2);
   const assetImage = (item: any) => item?.image_url || "";
