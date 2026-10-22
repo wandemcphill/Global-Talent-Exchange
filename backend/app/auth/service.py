@@ -519,7 +519,7 @@ class AuthService:
             nationality=profile_fields["nationality"],
             region_code=region_code,
             preferred_position=profile_fields["preferred_position"],
-            role=access_context.effective_role,
+            role=public_role,
             account_type=user.account_type,
             kyc_status=user.kyc_status,
             is_active=user.is_active,
