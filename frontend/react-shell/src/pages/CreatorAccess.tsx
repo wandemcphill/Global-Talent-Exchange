@@ -6,12 +6,14 @@ import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Btn, Chip, Loading, Panel } from "@/components/gtex/ui";
+import { useControlCenter } from "@/lib/owner";
 
 const PLATFORMS = ["youtube", "twitch", "tiktok"];
 
 export default function CreatorAccess() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { data: ownerData, isLoading: isOwnerLoading } = useControlCenter();
   const { data: application, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["creator-application"],
     queryFn: async () => (await api.get("/creator/application")).data,
@@ -32,7 +34,13 @@ export default function CreatorAccess() {
   const emailVerified = Boolean(user?.email_verified_at || user?.emailVerifiedAt);
   const phoneVerified = Boolean(user?.phone_verified_at || user?.phoneVerifiedAt);
   const contactsReady = emailVerified && phoneVerified;
-  const canSubmit = !isCreatorAccount && !isCoinTraderAccount && (!application || status === "rejected");
+  const ownedClubCount = Array.isArray(ownerData?.clubs) ? ownerData.clubs.length : 0;
+  const stillOwnsClubs = ownedClubCount > 0;
+  const canSubmit =
+    !isCreatorAccount &&
+    !isCoinTraderAccount &&
+    !stillOwnsClubs &&
+    (!application || status === "rejected");
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -82,7 +90,7 @@ export default function CreatorAccess() {
     }
   };
 
-  if (isLoading) return <Loading label="Loading creator access..." />;
+  if (isLoading || isOwnerLoading) return <Loading label="Checking creator access and club eligibility..." />;
 
   return (
     <div className="space-y-6 p-4 sm:p-8" data-testid="creator-access-screen">
@@ -120,6 +128,14 @@ export default function CreatorAccess() {
         <Panel eyebrow="Dedicated account" title="Coin Trader accounts cannot promote to Creator">
           <p className="text-sm leading-6 text-slate-300">
             Coin Trader accounts stay in the coin-trading lane. Creator promotion is available only to a normal GTEX member or club-owner account.
+          </p>
+        </Panel>
+      )}
+
+      {!isCreatorAccount && !isCoinTraderAccount && stillOwnsClubs && (
+        <Panel eyebrow="Promotion eligibility" title="Sell or transfer your clubs first">
+          <p className="text-sm leading-6 text-slate-300">
+            Creator promotion is available only to normal User accounts that no longer own any clubs. Your account currently has {ownedClubCount} club{ownedClubCount === 1 ? "" : "s"} under its ownership. Sell or transfer every club you still own before submitting a Creator application.
           </p>
         </Panel>
       )}
