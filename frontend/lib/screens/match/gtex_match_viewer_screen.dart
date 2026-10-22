@@ -420,9 +420,9 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                             alignment: Alignment.center,
                             child: FilledButton.tonalIcon(
                               key: const Key('match-2d-replay-active-goal'),
-                              onPressed: () => controller.replayEvent(activeEvent!),
+                              onPressed: () => controller.replayEvent(activeEvent),
                               icon: const Icon(Icons.replay_circle_filled_rounded),
-                              label: Text('REPLAY GOAL · ${activeEvent!.minute}\''),
+                              label: Text('REPLAY GOAL · ${activeEvent.minute}\''),
                             ),
                           ),
                         ],
