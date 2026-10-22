@@ -27,6 +27,14 @@ void main() {
       rarity: 'mythic',
       legalStatus: 'requires_review',
     ),
+    MatchGiftCatalogItem(
+      key: 'pending_review_crown',
+      label: 'Crown Ceremony',
+      description: 'A pending-review premium celebration.',
+      fanCoinAmount: 2500,
+      rarity: 'epic',
+      legalStatus: 'pending_review',
+    ),
   ];
 
   testWidgets('selects a catalogue gift and submits it to the intended recipient',
@@ -79,12 +87,20 @@ void main() {
     ));
     await tester.tap(find.text('Gift'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('gtex-gift-card-ballon_dor')));
-    await tester.pumpAndSettle();
-    expect(find.text('Under review'), findsOneWidget);
-    expect(tester.widget<FilledButton>(
-      find.byKey(const Key('gtex-gift-send-button')),
-    ).onPressed, isNull);
+    for (final String key in <String>['ballon_dor', 'pending_review_crown']) {
+      final Finder giftCard = find.byKey(Key('gtex-gift-card-$key'));
+      await tester.ensureVisible(giftCard);
+      await tester.pumpAndSettle();
+      await tester.tap(giftCard);
+      await tester.pumpAndSettle();
+      expect(find.text('Under review'), findsOneWidget);
+      expect(
+        tester.widget<FilledButton>(
+          find.byKey(const Key('gtex-gift-send-button')),
+        ).onPressed,
+        isNull,
+      );
+    }
     expect(sentKey, isNull);
   });
 }
