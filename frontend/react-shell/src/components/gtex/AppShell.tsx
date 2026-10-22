@@ -106,10 +106,21 @@ export default function AppShell() {
   if (isLoading) return <Loading label="Loading your clubs..." />;
 
   const isAdmin = ["admin", "super_admin"].includes(String(user.role).toLowerCase());
-  if (!isAdmin && data && !data.clubs?.some((c: any) => ["competition", "active"].includes(c.stage))) {
+  const clubs: any[] = data?.clubs || [];
+  const hasClubProfile = clubs.length > 0;
+  const hasActiveClub = clubs.some((c: any) => ["competition", "active"].includes(c.stage));
+
+  // Only users who have already started creating a club must finish activation.
+  // A normal user account with no club stays in GTEX and can use user-level lanes.
+  if (!isAdmin && hasClubProfile && !hasActiveClub) {
     return <Navigate to="/onboarding" replace />;
   }
 
+  const visibleNav = hasActiveClub
+    ? NAV
+    : NAV.filter((item) =>
+        ["home", "clubs", "regen-world", "awards", "market", "competitions", "national", "finance"].includes(item.id),
+      );
   const wallet = data?.economy?.wallet || {};
 
   return (
@@ -131,7 +142,7 @@ export default function AppShell() {
         </div>
 
         <nav className="gx-scroll flex-1 space-y-0.5 overflow-y-auto px-3 py-4" data-testid="primary-nav">
-          {NAV.map((n) => (
+          {visibleNav.map((n) => (
             <NavItem key={n.to} item={n} badge={n.id === "inbox" ? data?.inbox_open_count : 0} />
           ))}
           {isAdmin && (
@@ -143,7 +154,7 @@ export default function AppShell() {
 
         <div className="border-t border-white/[0.08] bg-black/40 p-4">
           <p className="truncate text-xs font-bold text-white">{user.display_name || user.username}</p>
-          <p className="gx-mono text-[10px] text-slate-400">Owner Integrity {data?.integrity?.score ?? 100}/100</p>
+          <p className="gx-mono text-[10px] text-slate-400">{hasActiveClub ? `Owner integrity ${data?.integrity?.score ?? 100}/100` : "User account · club ownership optional"}</p>
           <button
             data-testid="logout-button"
             onClick={() => {
@@ -166,7 +177,7 @@ export default function AppShell() {
 
           <div className="ml-auto flex items-center gap-4 text-xs">
             <span data-testid="topbar-gtex-balance" className="gx-mono text-slate-300">
-              Treasury <b className="text-white font-mono">{fmt(wallet.gtex_total)}</b> <span className="text-blue-400 font-bold">GTX</span>
+              {hasActiveClub ? "Treasury" : "Personal wallet"} <b className="text-white font-mono">{fmt(wallet.gtex_total)}</b> <span className="text-blue-400 font-bold">GTX</span>
             </span>
             <span data-testid="topbar-fan-balance" className="gx-mono hidden text-slate-300 sm:inline">
               <b className="text-white font-mono">{fmt(wallet.fan_total)}</b> <span className="text-amber-400 font-bold">FAN</span>
@@ -175,7 +186,7 @@ export default function AppShell() {
 
           {/* Responsive Mobile Navigation Rail */}
           <nav className="gx-scroll -mx-1 flex w-full gap-1 overflow-x-auto lg:hidden pt-2 border-t border-white/[0.06]">
-            {NAV.map((n) => (
+            {visibleNav.map((n) => (
               <NavLink
                 key={n.to}
                 to={n.to}
