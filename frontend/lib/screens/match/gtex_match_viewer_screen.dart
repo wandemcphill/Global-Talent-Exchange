@@ -710,17 +710,14 @@ class _MatchTeamSheetExpansion extends StatelessWidget {
   Widget build(BuildContext context) {
     final MatchPresentationPackage package =
         BroadcastPackageRepository().resolve(viewState);
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.035),
+    return Material(
+      color: Colors.white.withValues(alpha: 0.035),
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
       ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-        clipBehavior: Clip.antiAlias,
-        child: ExpansionTile(
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
         key: const Key('match-2d-official-team-sheets'),
         tilePadding: const EdgeInsets.symmetric(horizontal: 10),
         childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
@@ -755,7 +752,6 @@ class _MatchTeamSheetExpansion extends StatelessWidget {
             ),
           ),
         ],
-        ),
       ),
     );
   }
