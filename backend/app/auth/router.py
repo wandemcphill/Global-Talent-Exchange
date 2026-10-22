@@ -403,6 +403,7 @@ def _build_onboarding_bootstrap(
         available_actions=actions,
     )
 
+
 def _as_aware_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=UTC)
