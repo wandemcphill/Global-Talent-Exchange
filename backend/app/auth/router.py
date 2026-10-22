@@ -684,83 +684,19 @@ def signup_user(
     )
 
 
-@legacy_router.post("/signup/creator", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-@api_router.post("/signup/creator", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-@api_v2_router.post("/signup/creator", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-def signup_creator(
-    payload: CreatorSignupRequest,
-    session: Session = Depends(get_session),
-    request: Request = None,
-) -> TokenResponse:
-    from app.auth.turnstile import verify_turnstile_token
-
-    service = _build_auth_service(request)
-    telemetry = _AuthRouteTelemetry("signup_creator")
-    user: User | None = None
-    issued_session: IssuedAuthSession | None = None
-    confirmation_code: str | None = None
-    try:
-        remote_ip = request.client.host if request is not None and request.client is not None else None
-        verify_turnstile_token(payload.turnstile_token, remote_ip=remote_ip)
-        user = service.register_user(
-            session,
-            email=payload.email,
-            full_name=payload.creator_name,
-            phone_number=None,
-            is_over_18=True,
-            region_code=payload.country[:8],
-            username=payload.username,
-            password=payload.password,
-            display_name=payload.creator_name,
-            account_type=PublicAccountType.CREATOR,
-            timing_recorder=telemetry.capture,
-        )
-        session.add(
-            CreatorProfile(
-                user_id=user.id,
-                handle=payload.username,
-                display_name=payload.creator_name,
-                tier="community",
-                status=CreatorProfileStatus.ACTIVE,
-                payout_config_json={
-                    "category": payload.category,
-                    "country": payload.country,
-                    "main_club_supported": payload.main_club_supported,
-                    "primary_language": payload.primary_language,
-                    "avatar_asset_ref": payload.avatar_asset_ref,
-                    "banner_asset_ref": payload.banner_asset_ref,
-                    "monetization": payload.monetization,
-                },
-            )
-        )
-        issued_session, confirmation_code = _issue_signup_session(
-            service=service,
-            session=session,
-            request=request,
-            user=user,
-            telemetry=telemetry,
-        )
-        session.commit()
-        session.refresh(user)
-    except DuplicateUserError as exc:
-        _rollback_with_telemetry(session, telemetry)
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except AuthError as exc:
-        _rollback_with_telemetry(session, telemetry)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    else:
-        if confirmation_code is not None:
-            try:
-                service.send_signup_confirmation_email(user=user, confirmation_code=confirmation_code)
-            except Exception as exc:
-                _log_email_dispatch_exception(flow="signup_confirmation", recipient=user.email, exc=exc)
-    return _build_token_response(
-        service=service,
-        session=session,
-        request=request,
-        telemetry=telemetry,
-        user=user,
-        issued_session=issued_session,
+@legacy_router.post("/signup/creator", status_code=status.HTTP_410_GONE)
+@api_router.post("/signup/creator", status_code=status.HTTP_410_GONE)
+@api_v2_router.post("/signup/creator", status_code=status.HTTP_410_GONE)
+def signup_creator(payload: CreatorSignupRequest) -> None:
+    """Retire direct Creator registration; Creator status is granted by review."""
+    del payload
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail=(
+            "Direct Creator signup is retired. Create a normal GTEX member account "
+            "and apply for Creator promotion from that account. Approved promotion "
+            "moves the account permanently into the Creator lane."
+        ),
     )
 
 
