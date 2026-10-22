@@ -6,16 +6,17 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import select
 
 from backend.tests.support.secrets import DASHBOARD_TEST_ADMIN_PASSWORD
+from backend.tests.support.signup_payloads import user_signup_payload
 from app.ingestion.models import Country, Player
+from app.models.club_profile import ClubProfile
 from app.models.player_agency_state import PlayerAgencyState
 from app.models.player_contract import PlayerContract
 from app.models.player_injury_case import PlayerInjuryCase
 from app.models.regen_ecosystem import NationalRegenSeed
-from app.models.club_profile import ClubProfile
 from app.models.user import User
-from sqlalchemy import select
 from app.models.wallet import LedgerEntryReason, LedgerUnit
 from app.wallets.service import LedgerPosting, WalletService
 
@@ -309,8 +310,6 @@ def test_rental_pool_empty_country_is_valid_response(client, national_admin_head
 def test_new_user_without_club_can_enter_and_rent_for_national_team(
     client, app_session_factory, national_admin_headers
 ) -> None:
-    from backend.tests.support.signup_payloads import user_signup_payload
-
     nonce = uuid4().hex[:10]
     signup_response = client.post(
         "/auth/signup/user",
