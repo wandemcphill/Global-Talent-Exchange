@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/gte_api_repository.dart';
 import '../../data/match_gift_api.dart';
 import '../../models/match_view_state.dart';
+import '../../models/match_viewer_presentation.dart';
 import '../../screens/match/gtex_match_viewer_screen.dart';
 import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
@@ -233,6 +234,7 @@ class _QualifiedMatchViewerRouteViewState
       competition: widget.bootstrap.competition,
       matchKey: widget.matchKey,
       titleOverride: '2D Match Viewer',
+      presentationMode: MatchViewerPresentationMode.broadcast,
       viewStateLoader: _loadInitialViewState,
       continuationLoader: _loadContinuation,
       giftClient: widget.giftClient,
