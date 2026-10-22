@@ -122,9 +122,7 @@ def test_creator_application_submission_requires_verification_and_persists_appli
 
     with app.state.session_factory() as session:
         application = session.scalar(
-            select(CreatorApplication).where(
-                CreatorApplication.requested_handle == "creator.one"
-            )
+            select(CreatorApplication).where(CreatorApplication.requested_handle == "creator.one")
         )
         assert application is not None
         assert application.platform == "youtube"
