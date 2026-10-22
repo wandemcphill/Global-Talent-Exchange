@@ -52,20 +52,13 @@ class CreatorApplicationService:
         raise CreatorApplicationError("secure_phone_verification_unavailable")
 
     def submit_application(self, *, actor: User, payload) -> CreatorApplication:
-        trader_profile = self.session.scalar(
-            select(CoinTraderProfile).where(CoinTraderProfile.user_id == actor.id)
-        )
-        if (
-            actor.account_type == PublicAccountType.COIN_TRADER
-            or trader_profile is not None
-        ):
+        trader_profile = self.session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == actor.id))
+        if actor.account_type == PublicAccountType.COIN_TRADER or trader_profile is not None:
             raise CreatorApplicationConflictError("coin_trader_account_cannot_be_promoted_to_creator")
         if actor.account_type != PublicAccountType.USER:
             raise CreatorApplicationConflictError("creator_promotion_requires_normal_account")
         owned_club_id = self.session.scalar(
-            select(ClubProfile.id)
-            .where(ClubProfile.owner_user_id == actor.id)
-            .limit(1)
+            select(ClubProfile.id).where(ClubProfile.owner_user_id == actor.id).limit(1)
         )
         if owned_club_id is not None:
             raise CreatorApplicationConflictError("club_ownership_prevents_creator_promotion")
@@ -127,9 +120,7 @@ class CreatorApplicationService:
         application = self.get_my_application(actor=actor)
         if application is not None:
             return self.serialize_application(application)
-        profile = self.session.scalar(
-            select(CreatorProfile).where(CreatorProfile.user_id == actor.id)
-        )
+        profile = self.session.scalar(select(CreatorProfile).where(CreatorProfile.user_id == actor.id))
         if profile is None:
             return None
         verified_at = actor.email_verified_at or profile.created_at or utcnow()
