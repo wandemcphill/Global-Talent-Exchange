@@ -53,11 +53,12 @@ export default function CreatorAccess() {
       await refetch();
       toast.success("Creator application submitted for review.");
     } catch (error: any) {
-      const message = errMsg(error);
+      const backendDetail = error?.response?.data?.detail;
+      const message = typeof backendDetail === "string" ? backendDetail : errMsg(error);
       setFormError(message);
       if (/email_verification_required|phone_verification_required/i.test(message)) {
         setFormError(
-          "GTEX requires verified email and phone contact before creator review. Your application was not submitted. Complete the contact-verification step before trying again."
+          "GTEX requires verified email and phone contact before creator review. Your application was not submitted. The current React flow cannot complete phone verification; use the existing Creator access screen in Flutter or wait for the contact-verification flow to be completed."
         );
       }
     } finally {
@@ -98,7 +99,7 @@ export default function CreatorAccess() {
       {application && (
         <Panel eyebrow="Application status" title={application.display_name || "Creator application"}>
           <div className="flex flex-wrap items-center gap-3">
-            <Chip tone={status === "approved" ? "good" : status === "rejected" ? "warn" : "default"}>
+            <Chip tone={status === "approved" ? "emerald" : status === "rejected" ? "red" : "blue"}>
               {status.replace(/_/g, " ") || "submitted"}
             </Chip>
             <span className="text-sm text-slate-400">@{application.requested_handle} · {application.platform}</span>
