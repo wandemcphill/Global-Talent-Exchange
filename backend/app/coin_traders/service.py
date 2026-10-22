@@ -780,6 +780,7 @@ class CoinTraderService:
             raise CoinTraderPermissionError("A dedicated Coin Trader account is required to operate a trader desk.")
 
     def _require_approved_profile_for_user(self, actor: User) -> CoinTraderProfile:
+        self._require_dedicated_trader_account(actor)
         profile = self._require_profile_for_user(actor)
         if profile.status != CoinTraderProfileStatus.APPROVED.value:
             raise CoinTraderPermissionError("Approved coin trader access is required.")
