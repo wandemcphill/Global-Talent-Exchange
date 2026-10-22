@@ -41,7 +41,8 @@ class GtexPostMatchPanel extends StatelessWidget {
                 ? GtexMatchVisualTokens.live.withValues(alpha: 0.40)
                 : GtexMatchVisualTokens.borderStrong,
       ),
-      child: Column(
+      child: SingleChildScrollView(
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -272,6 +273,7 @@ class GtexPostMatchPanel extends StatelessWidget {
             ),
           ],
         ],
+        ),
       ),
     );
   }
