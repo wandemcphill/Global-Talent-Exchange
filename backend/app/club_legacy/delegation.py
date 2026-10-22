@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.club_legacy.models import ClubLegacyAuditEvent, ClubLegacyPolicy, ClubLegacyRecommendation
 from app.models.base import utcnow
 from app.models.club_profile import ClubProfile
+from app.models.user import PublicAccountType, User
 from app.owner_console.ai import inbox_body
 from app.owner_console.models import OwnerInboxItem
 
@@ -56,6 +57,11 @@ def _audit(session: Session, *, club_id: str | None, actor_user_id: str | None, 
 
 
 def require_owner(session: Session, club_id: str, user_id: str) -> ClubProfile:
+    user = session.get(User, user_id)
+    if user is None:
+        raise LegacyError("user_not_found", 404)
+    if user.account_type != PublicAccountType.USER:
+        raise LegacyError("club_owner_account_type_required", 403)
     profile = session.get(ClubProfile, club_id)
     if profile is None:
         raise LegacyError("club_not_found", 404)
