@@ -97,7 +97,8 @@ function ShowroomPanel({ club }: any) {
   const items: any[] = Array.isArray(rawCatalog) ? rawCatalog : [];
   const ownedAssets: any[] = Array.isArray(rawOwnedAssets) ? rawOwnedAssets : [];
   const squad: any[] = Array.isArray(rawSquad) ? rawSquad : [];
-  const selectedPlayer = squad.find((p: any) => p.id === selectedPlayerId);
+  const eligibleRegens: any[] = squad.filter((player: any) => player?.is_regen === true);
+  const selectedPlayer = eligibleRegens.find((p: any) => p.id === selectedPlayerId);
   const keyOf = (item: any) => String(item?.catalog_key || item?.key || item?.id || "");
   const formatPrice = (item: any) => fmt(item?.price_gtex, 2);
   const assetImage = (item: any) => item?.image_url || "";
@@ -271,19 +272,28 @@ function ShowroomPanel({ club }: any) {
                       >
                         {isBusy ? "Processing…" : "Acquire asset"}
                       </Btn>
-                      {it.can_gift_to_player && squad.length > 0 && (
-                        <Btn
-                          variant="ghost"
-                          className="border border-purple-400/25 px-3 text-xs text-purple-300 hover:border-purple-300/60 hover:text-purple-200"
-                          disabled={!!busyItem}
-                          title={`Gift ${it.name} to a squad player`}
-                          onClick={() => {
-                            setGiftingItem(it);
-                            setSelectedPlayerId(squad[0]?.id || "");
-                          }}
-                        >
-                          <Gift className="mr-1 h-3.5 w-3.5" /> Gift
-                        </Btn>
+                      {it.can_gift_to_player && (
+                        <div className="min-w-0 flex-1">
+                          <Btn
+                            variant="ghost"
+                            className="w-full border border-purple-400/25 px-3 text-xs text-purple-300 hover:border-purple-300/60 hover:text-purple-200"
+                            disabled={!!busyItem || eligibleRegens.length === 0}
+                            title={eligibleRegens.length > 0
+                              ? `Gift ${it.name} to an academy regen`
+                              : "Luxury gifts are reserved for academy regens"}
+                            onClick={() => {
+                              setGiftingItem(it);
+                              setSelectedPlayerId(eligibleRegens[0]?.id || "");
+                            }}
+                          >
+                            <Gift className="mr-1 h-3.5 w-3.5" /> Gift a regen
+                          </Btn>
+                          {eligibleRegens.length === 0 && (
+                            <p className="mt-1 text-[9px] leading-4 text-slate-500">
+                              Regen only · add an academy regen first
+                            </p>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -373,12 +383,12 @@ function ShowroomPanel({ club }: any) {
             </div>
             <form onSubmit={handleGift} className="space-y-4 p-5">
               <div className="rounded-lg border border-purple-400/20 bg-purple-400/[0.06] p-3 text-xs leading-5 text-slate-300">
-                This gift is purchased and delivered directly to the selected squad player. GTEX records the verified gift event and the actual morale change returned by the server.
+                This luxury incentive is reserved for an academy regen. GTEX charges the club treasury, records the verified gift event, and shows only the actual morale change returned by the server.
               </div>
               <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Choose squad player</label>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Choose academy regen</label>
                 <div className="mt-2 grid max-h-52 gap-2 overflow-y-auto sm:grid-cols-2">
-                  {squad.map((p: any) => (
+                  {eligibleRegens.map((p: any) => (
                     <button
                       type="button"
                       key={p.id}
@@ -388,14 +398,15 @@ function ShowroomPanel({ club }: any) {
                       {p.portrait_url ? <img src={p.portrait_url} alt="" className="h-11 w-11 shrink-0 rounded-full border border-white/10 object-cover" /> : <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-800 text-xs font-black text-amber-200">{String(p.name || "?").slice(0, 1)}</div>}
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-xs font-extrabold text-white">{p.name}</div>
-                        <div className="mt-0.5 text-[10px] text-slate-500">{p.position || "Squad player"} · OVR {p.rating ?? "—"}</div>
+                        <div className="mt-0.5 text-[10px] text-slate-500">{p.position || "Regen player"} · OVR {p.rating ?? "—"}</div>
+                        <div className="mt-0.5 text-[8px] font-black tracking-[0.16em] text-amber-300">ACADEMY REGEN</div>
                         <div className="text-[10px] text-slate-400">Morale {p.morale ?? "—"}%</div>
                       </div>
                       {selectedPlayerId === p.id && <CheckCircle className="h-4 w-4 shrink-0 text-purple-200" />}
                     </button>
                   ))}
                 </div>
-                {squad.length === 0 && <p className="mt-2 text-xs text-amber-200">No squad player data is available. Refresh your club roster before gifting.</p>}
+                {eligibleRegens.length === 0 && <p className="mt-2 text-xs text-amber-200">No eligible academy regens are available. Develop an academy regen before sending a luxury gift.</p>}
               </div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Personal note</label>
