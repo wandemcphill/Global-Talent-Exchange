@@ -12,7 +12,11 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.club_legacy.models import ClubLegacyAsset, ClubLegacyCatalogueItem, ClubLegacyExecutive
+from app.club_legacy.models import (
+    ClubLegacyAsset,
+    ClubLegacyCatalogueItem,
+    ClubLegacyExecutive,
+)
 from app.models.club_growth import (
     AcademyProfile,
     AcademyProspect,
@@ -149,8 +153,12 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
         raise ClubPublicProfileNotFound("public_club_profile_not_found")
 
     stadium = session.scalar(select(ClubStadium).where(ClubStadium.club_id == club.id))
-    facilities = session.scalar(select(ClubFacility).where(ClubFacility.club_id == club.id))
-    academy = session.scalar(select(AcademyProfile).where(AcademyProfile.club_id == club.id))
+    facilities = session.scalar(
+        select(ClubFacility).where(ClubFacility.club_id == club.id)
+    )
+    academy = session.scalar(
+        select(AcademyProfile).where(AcademyProfile.club_id == club.id)
+    )
     prospects = session.scalars(
         select(AcademyProspect)
         .where(AcademyProspect.club_id == club.id)
@@ -166,18 +174,32 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
         .order_by(OwnerSquadPlayer.rating.desc(), OwnerSquadPlayer.potential.desc())
         .limit(60)
     ).all()
-    best_player = max(squad, key=lambda player: (player.rating, player.potential), default=None)
+    best_player = max(
+        squad,
+        key=lambda player: (player.rating, player.potential),
+        default=None,
+    )
     promising_player = max(
         squad,
-        key=lambda player: (player.potential, -player.age, player.potential - player.rating),
+        key=lambda player: (
+            player.potential,
+            -player.age,
+            player.potential - player.rating,
+        ),
         default=None,
     )
 
     people: dict[str, dict[str, Any]] = {}
     assignments = session.execute(
         select(ClubStaffAssignment, ClubStaffContract, ClubStaffProfile)
-        .join(ClubStaffContract, ClubStaffContract.id == ClubStaffAssignment.staff_contract_id)
-        .join(ClubStaffProfile, ClubStaffProfile.id == ClubStaffContract.staff_profile_id)
+        .join(
+            ClubStaffContract,
+            ClubStaffContract.id == ClubStaffAssignment.staff_contract_id,
+        )
+        .join(
+            ClubStaffProfile,
+            ClubStaffProfile.id == ClubStaffContract.staff_profile_id,
+        )
         .where(
             ClubStaffAssignment.club_id == club.id,
             ClubStaffAssignment.active.is_(True),
@@ -187,7 +209,11 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
     for assignment, _contract, staff_profile in assignments:
         role_key = assignment.role_key.lower()
         kind = staff_profile.staff_type.lower()
-        if "manager" in role_key or role_key in {"head_coach", "first_team_manager"} or kind == "manager":
+        if (
+            "manager" in role_key
+            or role_key in {"head_coach", "first_team_manager"}
+            or kind == "manager"
+        ):
             role = "manager"
         elif "youth" in role_key or "hoyd" in role_key:
             role = "head_of_youth_development"
@@ -200,7 +226,11 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
         people[role] = {
             "role": role,
             "name": staff_profile.display_name,
-            "rating": int(staff_profile.rating) if staff_profile.rating is not None else None,
+            "rating": (
+                int(staff_profile.rating)
+                if staff_profile.rating is not None
+                else None
+            ),
         }
 
     # The legacy executive roster is the canonical source for the GM and HOYD
@@ -223,7 +253,9 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
             continue
         people.setdefault(role, {"role": role, "name": executive.name, "rating": None})
 
-    state = session.scalar(select(OwnerClubState).where(OwnerClubState.club_id == club.id))
+    state = session.scalar(
+        select(OwnerClubState).where(OwnerClubState.club_id == club.id)
+    )
     if "manager" not in people and state is not None:
         name = _person_name(state.manager_json)
         if name:
@@ -291,20 +323,37 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
         },
         "owner": owner,
         "stadium": {
-            "name": stadium.name if stadium is not None else (club.home_venue_name or "Stadium details unavailable"),
+            "name": (
+                stadium.name
+                if stadium is not None
+                else (club.home_venue_name or "Stadium details unavailable")
+            ),
             "level": int(stadium.level) if stadium is not None else None,
             "capacity": int(stadium.capacity) if stadium is not None else None,
             "theme_key": stadium.theme_key if stadium is not None else None,
             "image_asset": "assets/showroom/arena_imperiale_stadium.webp",
         },
         "facilities": {
-            "training_level": int(facilities.training_level) if facilities is not None else None,
-            "academy_level": int(facilities.academy_level) if facilities is not None else (
+            "training_level": (
+                int(facilities.training_level) if facilities is not None else None
+            ),
+            "academy_level": (
+                int(facilities.academy_level)
+                if facilities is not None
+                else (
                 int(academy.level) if academy is not None else None
             ),
-            "medical_level": int(facilities.medical_level) if facilities is not None else None,
-            "branding_level": int(facilities.branding_level) if facilities is not None else None,
-            "youth_recruitment_level": int(facilities.youth_recruitment_level) if facilities is not None else None,
+            "medical_level": (
+                int(facilities.medical_level) if facilities is not None else None
+            ),
+            "branding_level": (
+                int(facilities.branding_level) if facilities is not None else None
+            ),
+            "youth_recruitment_level": (
+                int(facilities.youth_recruitment_level)
+                if facilities is not None
+                else None
+            ),
             "academy_image_asset": "assets/showroom/apex_performance_campus.webp",
         },
         "academy": {
