@@ -22,7 +22,7 @@ from app.coin_traders.schemas import (
 )
 from app.coin_traders.service import CoinTraderPermissionError, CoinTraderService, CoinTraderValidationError
 from app.models.base import Base
-from app.models.coin_trader import CoinTradeOrderStatus, CoinTraderProfileStatus, CoinTraderRate
+from app.models.coin_trader import CoinTradeOrderStatus, CoinTraderProfile, CoinTraderProfileStatus, CoinTraderRate
 from app.models.notification_record import NotificationRecord
 from app.models.risk_ops import SystemEvent
 from app.models.user import KycStatus, PublicAccountType, User, UserRole
@@ -750,13 +750,58 @@ def test_frozen_or_rejected_coin_trader_cannot_trade(coin_trader_session: Sessio
         )
 
 
-def test_admin_cannot_approve_own_coin_trader_profile(coin_trader_session: Session) -> None:
+def test_normal_account_cannot_operate_a_legacy_approved_coin_trader_profile(
+    coin_trader_session: Session,
+) -> None:
     users = _seed_users(coin_trader_session)
-    service = CoinTraderService(coin_trader_session)
-    profile = service.create_or_update_profile(
-        CoinTraderProfileCreateRequest(display_name="Admin Desk", country_code="NG"),
-        actor=users["admin"],
+    legacy_profile = CoinTraderProfile(
+        user_id=users["buyer"].id,
+        display_name="Legacy Buyer Desk",
+        status=CoinTraderProfileStatus.APPROVED.value,
+        tier="gold",
+        terms_json={},
+        payment_methods_json=[],
+        bank_accounts_json=[],
+        metadata_json={},
     )
+    coin_trader_session.add(legacy_profile)
+    coin_trader_session.commit()
 
-    with pytest.raises(CoinTraderValidationError):
-        service.approve_trader(profile.id, CoinTraderAdminDecisionRequest(tier="gold"), admin=users["admin"])
+    service = CoinTraderService(coin_trader_session)
+    with pytest.raises(CoinTraderPermissionError, match="dedicated Coin Trader account"):
+        service.upsert_rate(
+            CoinTraderRateUpsertRequest(
+                coin_unit=LedgerUnit.COIN,
+                fiat_currency="NGN",
+                buy_rate_fiat=Decimal("860"),
+                sell_rate_fiat=Decimal("920"),
+                min_coin_amount=Decimal("100"),
+                max_coin_amount=Decimal("10000"),
+                available_liquidity=Decimal("1000"),
+            ),
+            actor=users["buyer"],
+        )
+
+
+def test_admin_cannot_approve_own_legacy_coin_trader_profile(coin_trader_session: Session) -> None:
+    users = _seed_users(coin_trader_session)
+    profile = CoinTraderProfile(
+        user_id=users["admin"].id,
+        display_name="Admin Legacy Desk",
+        status=CoinTraderProfileStatus.APPLIED.value,
+        tier="bronze",
+        terms_json={},
+        payment_methods_json=[],
+        bank_accounts_json=[],
+        metadata_json={},
+    )
+    coin_trader_session.add(profile)
+    coin_trader_session.commit()
+
+    service = CoinTraderService(coin_trader_session)
+    with pytest.raises(CoinTraderValidationError, match="cannot approve their own"):
+        service.approve_trader(
+            profile.id,
+            CoinTraderAdminDecisionRequest(tier="gold"),
+            admin=users["admin"],
+        )
