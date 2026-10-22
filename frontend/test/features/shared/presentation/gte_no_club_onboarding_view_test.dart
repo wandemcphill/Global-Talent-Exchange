@@ -30,21 +30,21 @@ void main() {
       expect(find.text('Manage a national team'), findsOneWidget);
       expect(find.textContaining('No club required'), findsOneWidget);
 
-      await tester.ensureVisible(find.text('Explore national teams'));
-      await tester.tap(find.text('Explore national teams'));
+      await tester.ensureVisible(find.widgetWithText(OutlinedButton, 'Explore national teams'));
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Explore national teams'));
       await tester.pump();
 
       expect(nationalTeamCalled, isTrue);
       expect(createClubCalled, isFalse);
 
-      await tester.ensureVisible(find.text('Apply for creator access'));
-      await tester.tap(find.text('Apply for creator access'));
+      await tester.ensureVisible(find.widgetWithText(OutlinedButton, 'Apply for creator access'));
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Apply for creator access'));
       await tester.pump();
       expect(creatorApplicationCalled, isTrue);
       expect(createClubCalled, isFalse);
 
-      await tester.ensureVisible(find.text('Open trader application'));
-      await tester.tap(find.text('Open trader application'));
+      await tester.ensureVisible(find.widgetWithText(OutlinedButton, 'Open trader application'));
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Open trader application'));
       await tester.pump();
       expect(traderApplicationCalled, isTrue);
       expect(createClubCalled, isFalse);
