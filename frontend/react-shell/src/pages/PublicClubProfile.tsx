@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -10,7 +10,7 @@ import {
   ShieldCheck,
   Trophy,
 } from "lucide-react";
-import { api } from "@/lib/api";
+import { API, api } from "@/lib/api";
 
 type TrophyRecord = {
   competition: string;
@@ -34,9 +34,11 @@ type PublicClubProfileData = {
 function crestSource(reference?: string | null) {
   if (!reference) return null;
   if (/^(https?:|data:)/i.test(reference)) return reference;
+  const apiOrigin = API.replace(/\/api\/?$/, "");
+  if (reference.startsWith("/api/")) return `${apiOrigin}${reference}`;
+  if (reference.startsWith("api/")) return `${apiOrigin}/${reference}`;
   if (reference.startsWith("/")) return reference;
-  if (reference.startsWith("api/media/")) return `/${reference}`;
-  return `/api/media/${reference.replace(/^\/+/, "")}`;
+  return `${API}/media/${reference.replace(/^\/+/, "")}`;
 }
 
 function placementLabel(position: number) {
@@ -48,6 +50,7 @@ function placementLabel(position: number) {
 
 export default function PublicClubProfile() {
   const { clubSlug } = useParams<{ clubSlug: string }>();
+  const [crestFailed, setCrestFailed] = useState(false);
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery<PublicClubProfileData>({
     queryKey: ["public-club-profile", clubSlug],
     queryFn: async () => (await api.get(`/owner/public/showroom/${encodeURIComponent(clubSlug || "")}`)).data,
@@ -55,6 +58,7 @@ export default function PublicClubProfile() {
     retry: false,
     staleTime: 30_000,
   });
+  React.useEffect(() => setCrestFailed(false), [data?.crest_url]);
 
   if (isLoading) {
     return (
@@ -124,14 +128,12 @@ export default function PublicClubProfile() {
               className="flex size-28 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 bg-slate-950/80 p-3 shadow-2xl backdrop-blur-md sm:size-36"
               style={{ borderColor: `${primary}cc` }}
             >
-              {crest ? (
+              {crest && !crestFailed ? (
                 <img
                   src={crest}
                   alt={`${data.club_name} crest`}
                   className="h-full w-full object-contain"
-                  onError={(event) => {
-                    (event.currentTarget as HTMLImageElement).style.display = "none";
-                  }}
+                  onError={() => setCrestFailed(true)}
                 />
               ) : (
                 <span className="gx-display text-3xl font-black" style={{ color: secondary }}>
