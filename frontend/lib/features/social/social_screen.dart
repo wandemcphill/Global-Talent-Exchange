@@ -2505,6 +2505,9 @@ class _GiftDrawerSheetState extends State<_GiftDrawerSheet> {
           deliveryContext: _hasContextTarget ? 'Community conversation' : 'GTEX recipient',
         ),
       );
+      // The receipt is the end of this journey; dismiss the picker as well so
+      // the sender lands back in the conversation instead of an open gift grid.
+      if (mounted) Navigator.of(context).pop();
     } catch (error) {
       if (!mounted) return;
       AppFeedback.showError(context, AppFeedback.messageFor(error));
