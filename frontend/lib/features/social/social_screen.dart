@@ -2973,7 +2973,7 @@ class _GiftFanfarePreview extends StatelessWidget {
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 7),
-              Text('Delivery context: $deliveryContext', textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFFAFBED1), fontSize: 12)),
+              Text('Delivered to $receiver', textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFFAFBED1), fontSize: 12)),
               const SizedBox(height: 16),
               Container(
                 width: double.infinity,
