@@ -7,6 +7,7 @@ import {
   ArrowUpRight,
   BookOpen,
   Building,
+  CandlestickChart,
   CheckCircle2,
   Clock,
   Compass,
@@ -23,6 +24,7 @@ import {
   Sparkles,
   Trophy,
   Users,
+  Video,
   Wallet,
 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
@@ -61,6 +63,23 @@ function NoClubDashboard({ onCreateClub }: { onCreateClub: () => void }) {
           <h2 className="gx-display text-xl font-bold uppercase text-white">Player shares</h2>
           <p className="mt-2 text-sm leading-5 text-slate-400">Explore available player-share opportunities and club ownership markets.</p>
           <span className="mt-5 inline-block text-xs font-bold uppercase tracking-wider text-amber-300">Explore the market →</span>
+        </Link>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-2" aria-label="Optional GTEX capabilities">
+        <Link to="/app/creator-access" data-testid="no-club-creator-access" className="rounded-2xl border border-pink-400/20 bg-pink-400/[0.04] p-5 transition hover:border-pink-300/50">
+          <Video className="mb-4 text-pink-300" size={22} />
+          <p className="gx-eyebrow text-pink-300">Creator tools</p>
+          <h2 className="gx-display mt-1 text-xl font-bold uppercase text-white">Build a football audience</h2>
+          <p className="mt-2 text-sm leading-5 text-slate-400">Use your existing GTEX ID to apply for creator access, publish football stories, and build a community. Creator tools do not require club ownership.</p>
+          <span className="mt-5 inline-block text-xs font-bold uppercase tracking-wider text-pink-300">Apply for creator access →</span>
+        </Link>
+        <Link to="/app/coin-traders" data-testid="no-club-coin-traders" className="rounded-2xl border border-amber-400/20 bg-amber-400/[0.04] p-5 transition hover:border-amber-300/50">
+          <CandlestickChart className="mb-4 text-amber-300" size={22} />
+          <p className="gx-eyebrow text-amber-300">Coin trader tools</p>
+          <h2 className="gx-display mt-1 text-xl font-bold uppercase text-white">Enter the GTEX economy</h2>
+          <p className="mt-2 text-sm leading-5 text-slate-400">Buy and sell GTEX Coin with approved traders, or apply to operate a trader desk. Approval is required for liquidity-partner operations.</p>
+          <span className="mt-5 inline-block text-xs font-bold uppercase tracking-wider text-amber-300">Explore Coin Traders →</span>
         </Link>
       </section>
 
