@@ -38,11 +38,25 @@ class GtexAccountSelectorScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final roles = <_AccountRole>[
       const _AccountRole(
-        'GTEX MEMBER ID',
-        'Create one normal GTEX member account. Club ownership is optional. You can apply for one-way promotion to Creator; Coin Trader is a separate, dedicated account and cannot be switched into from this account.',
+        'USER ACCOUNT',
+        'Create a normal GTEX member account. You can create a club any time after signing in. Creator promotion is available only when you have no active club under your ownership.',
         Icons.person_outline_rounded,
         Color(0xFFB9FF3D),
         '/auth/signup/user',
+      ),
+      const _AccountRole(
+        'CREATOR ACCOUNT',
+        'Register directly into a dedicated Creator account for publishing and creator tools. Creator accounts cannot switch back to User or Club Owner.',
+        Icons.campaign_outlined,
+        Color(0xFFFF7BC5),
+        '/auth/signup/creator',
+      ),
+      const _AccountRole(
+        'COIN TRADER ACCOUNT',
+        'A dedicated lane for Coin Trader desk activity using this account. It cannot switch to User, Club Owner, or Creator.',
+        Icons.candlestick_chart_rounded,
+        Color(0xFFFFD166),
+        '/auth/signup/trader',
       ),
     ];
     return Scaffold(
@@ -90,7 +104,7 @@ class GtexAccountSelectorScreen extends StatelessWidget {
                   const SizedBox(
                     width: 690,
                     child: Text(
-                      'Register one normal GTEX member account. Club ownership is optional. Creator promotion is reviewed and permanent; Coin Trader is a separate, dedicated account lane.',
+                      'Choose one dedicated account type: User, Creator, or Coin Trader. User accounts may create clubs after signing in. Creator promotion from an existing User account is only allowed when no active club remains under that account.',
                       style: TextStyle(
                         color: Color(0xFF93A0AA),
                         fontSize: 16,
