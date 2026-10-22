@@ -3,6 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/controllers/match_playback_controller.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
+import 'package:gte_frontend/features/match/presentation/broadcast_package_models.dart';
+import 'package:gte_frontend/features/match/presentation/broadcast_package_repository.dart';
+import 'package:gte_frontend/features/match/widgets/gtex_matchday_ad_slot.dart';
 import 'package:gte_frontend/data/match_gift_api.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match_event.dart';
@@ -38,6 +41,7 @@ class GtexMatchViewerScreen extends StatefulWidget {
     this.fallbackSnapshot,
     this.preferFallback = false,
     this.presentationMode = MatchViewerPresentationMode.replay,
+    this.initialReplayMinute,
     this.renderMode = RenderMode.twoD,
     this.viewStateLoader,
     this.continuationLoader,
@@ -55,6 +59,7 @@ class GtexMatchViewerScreen extends StatefulWidget {
   final LiveMatchSnapshot? fallbackSnapshot;
   final bool preferFallback;
   final MatchViewerPresentationMode presentationMode;
+  final int? initialReplayMinute;
   final RenderMode renderMode;
   final MatchViewStateLoader? viewStateLoader;
   final MatchViewContinuationLoader? continuationLoader;
@@ -74,12 +79,16 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
     with SingleTickerProviderStateMixin {
   late Future<MatchViewState> _viewStateFuture;
   MatchPlaybackController? _controller;
+  bool _showPreMatchBrief = false;
+  int? _replayStartedMinute;
 
   AmbientAudioState? _ambientAudio;
 
   @override
   void initState() {
     super.initState();
+    _showPreMatchBrief =
+        widget.presentationMode == MatchViewerPresentationMode.broadcast;
     _viewStateFuture = _load();
   }
 
@@ -102,10 +111,19 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
   @override
   void didUpdateWidget(covariant GtexMatchViewerScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.presentationMode != widget.presentationMode) {
+      _showPreMatchBrief =
+          widget.presentationMode == MatchViewerPresentationMode.broadcast;
+    }
+    if (oldWidget.initialReplayMinute != widget.initialReplayMinute) {
+      _replayStartedMinute = null;
+    }
     if (oldWidget.matchKey != widget.matchKey ||
         oldWidget.viewStateLoader != widget.viewStateLoader ||
         oldWidget.fallbackSnapshot != widget.fallbackSnapshot ||
-        oldWidget.preferFallback != widget.preferFallback) {
+        oldWidget.preferFallback != widget.preferFallback ||
+        oldWidget.presentationMode != widget.presentationMode ||
+        oldWidget.initialReplayMinute != widget.initialReplayMinute) {
       _reload();
     }
   }
@@ -238,10 +256,27 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
       return existing;
     }
     existing?.dispose();
+    final bool hasStarted =
+        viewState.frames.any(
+          (MatchTimelineFrame frame) =>
+              frame.clockMinute > 0 ||
+              frame.homeScore > 0 ||
+              frame.awayScore > 0 ||
+              frame.phase == MatchViewerPhase.halftime ||
+              frame.phase == MatchViewerPhase.fulltime,
+        ) ||
+        viewState.events.any(
+          (MatchEvent event) =>
+              event.type == MatchViewerEventType.kickoff ||
+              event.type == MatchViewerEventType.goal ||
+              event.minute > 0,
+        );
     final MatchPlaybackController created = MatchPlaybackController(
       vsync: this,
       viewState: viewState,
-      autoplay: true,
+      autoplay: widget.presentationMode != MatchViewerPresentationMode.broadcast ||
+          widget.initialReplayMinute != null ||
+          hasStarted,
     );
     _controller = created;
     return created;
@@ -269,6 +304,42 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
             final MatchGiftTarget? giftTarget = MatchGiftTarget.fromMetadata(
               viewState.monetization.metadata,
             );
+            final bool matchHasStarted =
+                viewState.frames.any(
+                  (MatchTimelineFrame frame) =>
+                      frame.clockMinute > 0 ||
+                      frame.homeScore > 0 ||
+                      frame.awayScore > 0 ||
+                      frame.phase == MatchViewerPhase.halftime ||
+                      frame.phase == MatchViewerPhase.fulltime,
+                ) ||
+                viewState.events.any(
+                  (MatchEvent event) =>
+                      event.type == MatchViewerEventType.kickoff ||
+                      event.type == MatchViewerEventType.goal ||
+                      event.minute > 0,
+                );
+            if (_showPreMatchBrief && !matchHasStarted) {
+              final MatchPlaybackController? preMatchController =
+                  viewState.frames.isEmpty ? null : _ensureController(viewState);
+              final MatchPresentationPackage package =
+                  BroadcastPackageRepository().resolve(viewState);
+              return _MatchPreGameBrief(
+                package: package,
+                competitionName: widget.competition.name,
+                canStart: preMatchController != null,
+                onStart: () {
+                  if (!mounted) return;
+                  if (preMatchController == null) {
+                    _reload();
+                    return;
+                  }
+                  setState(() => _showPreMatchBrief = false);
+                  preMatchController.play();
+                },
+                onRefresh: _reload,
+              );
+            }
             if (viewState.frames.isEmpty) {
               return _MatchViewerError(
                 onReload: _reload,
@@ -279,6 +350,28 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
             final MatchPlaybackController controller = _ensureController(
               viewState,
             );
+            final int? replayMinute = widget.initialReplayMinute;
+            if (replayMinute != null && _replayStartedMinute != replayMinute) {
+              final List<MatchEvent> goals = viewState.events
+                  .where((MatchEvent event) => event.type == MatchViewerEventType.goal)
+                  .toList(growable: true);
+              final List<MatchEvent> targets = goals.isNotEmpty
+                  ? goals
+                  : viewState.events.toList(growable: true);
+              if (targets.isNotEmpty) {
+                targets.sort((MatchEvent a, MatchEvent b) =>
+                    (a.minute - replayMinute).abs().compareTo(
+                      (b.minute - replayMinute).abs(),
+                    ));
+                final MatchEvent targetEvent = targets.first;
+                _replayStartedMinute = replayMinute;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted && identical(_controller, controller)) {
+                    controller.replayEvent(targetEvent);
+                  }
+                });
+              }
+            }
             return ListenableBuilder(
               listenable: controller,
               builder: (BuildContext context, Widget? child) {
@@ -310,6 +403,7 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                               previousFrame: controller.leftFrame,
                               activeEvent: activeEvent,
                               positionSeconds: controller.positionSeconds,
+                              controller: controller,
                             ),
                           ),
                         ),
@@ -320,6 +414,18 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                             frame: frame,
                           ),
                         ),
+                        if (activeEvent?.type == MatchViewerEventType.goal) ...<Widget>[
+                          const SizedBox(height: 4),
+                          Align(
+                            alignment: Alignment.center,
+                            child: FilledButton.tonalIcon(
+                              key: const Key('match-2d-replay-active-goal'),
+                              onPressed: () => controller.replayEvent(activeEvent),
+                              icon: const Icon(Icons.replay_circle_filled_rounded),
+                              label: Text('REPLAY GOAL · ${activeEvent.minute}\''),
+                            ),
+                          ),
+                        ],
                         if (widget.giftClient != null &&
                             giftTarget != null) ...<Widget>[
                           const SizedBox(height: 8),
@@ -386,6 +492,7 @@ class _MatchLiveLayout extends StatelessWidget {
     required this.previousFrame,
     required this.activeEvent,
     required this.positionSeconds,
+    required this.controller,
   });
 
   final MatchViewState viewState;
@@ -393,6 +500,7 @@ class _MatchLiveLayout extends StatelessWidget {
   final MatchTimelineFrame previousFrame;
   final MatchEvent? activeEvent;
   final double positionSeconds;
+  final MatchPlaybackController controller;
 
   @override
   Widget build(BuildContext context) {
@@ -411,6 +519,7 @@ class _MatchLiveLayout extends StatelessWidget {
           activeEvent: activeEvent,
           positionSeconds: positionSeconds,
           compact: !wide,
+          controller: controller,
         );
 
         if (wide) {
@@ -485,6 +594,7 @@ class _MatchInsightPanel extends StatelessWidget {
     required this.activeEvent,
     required this.positionSeconds,
     required this.compact,
+    required this.controller,
   });
 
   final MatchViewState viewState;
@@ -492,6 +602,7 @@ class _MatchInsightPanel extends StatelessWidget {
   final MatchEvent? activeEvent;
   final double positionSeconds;
   final bool compact;
+  final MatchPlaybackController controller;
 
   @override
   Widget build(BuildContext context) {
@@ -503,6 +614,11 @@ class _MatchInsightPanel extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   _TacticalSummary(viewState: viewState, frame: frame),
+                  const SizedBox(height: 8),
+                  _MatchTeamSheetExpansion(
+                    viewState: viewState,
+                    compact: true,
+                  ),
                   const SizedBox(height: 8),
                   _PlayerPanels(
                     viewState: viewState,
@@ -518,6 +634,7 @@ class _MatchInsightPanel extends StatelessWidget {
                     ),
                     activeEvent: activeEvent,
                     compact: true,
+                    controller: controller,
                   ),
                 ],
               ),
@@ -535,6 +652,11 @@ class _MatchInsightPanel extends StatelessWidget {
                     compact: false,
                   ),
                   const SizedBox(height: 8),
+                  _MatchTeamSheetExpansion(
+                    viewState: viewState,
+                    compact: false,
+                  ),
+                  const SizedBox(height: 8),
                   Expanded(
                     child: _EventFeed(
                       events: _feedEventsForPosition(
@@ -543,6 +665,7 @@ class _MatchInsightPanel extends StatelessWidget {
                       ),
                       activeEvent: activeEvent,
                       compact: false,
+                      controller: controller,
                     ),
                   ),
                 ],
@@ -558,6 +681,65 @@ class _MatchInsightPanel extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: body,
+    );
+  }
+}
+
+class _MatchTeamSheetExpansion extends StatelessWidget {
+  const _MatchTeamSheetExpansion({
+    required this.viewState,
+    required this.compact,
+  });
+
+  final MatchViewState viewState;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final MatchPresentationPackage package =
+        BroadcastPackageRepository().resolve(viewState);
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.035),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: ExpansionTile(
+        key: const Key('match-2d-official-team-sheets'),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 10),
+        childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
+        iconColor: const Color(0xFFF0C66B),
+        collapsedIconColor: Colors.white70,
+        title: const Text(
+          'Official lineups & bench',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        subtitle: Text(
+          '${package.home.formation} · ${package.home.coachName ?? 'Home manager'}  /  '
+          '${package.away.formation} · ${package.away.coachName ?? 'Away manager'}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: Color(0xFFB7C3D0), fontSize: 10),
+        ),
+        children: <Widget>[
+          SizedBox(
+            height: compact ? 245 : 225,
+            child: SingleChildScrollView(
+              child: Column(
+                children: <Widget>[
+                  _PreMatchTeamSheet(team: package.home),
+                  const SizedBox(height: 8),
+                  _PreMatchTeamSheet(team: package.away),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -770,18 +952,23 @@ class _EventFeed extends StatelessWidget {
     required this.events,
     required this.activeEvent,
     required this.compact,
+    required this.controller,
   });
 
   final List<MatchEvent> events;
   final MatchEvent? activeEvent;
   final bool compact;
+  final MatchPlaybackController controller;
 
   @override
   Widget build(BuildContext context) {
     final List<Widget> tiles = events
         .map(
-          (MatchEvent event) =>
-              _EventFeedTile(event: event, active: activeEvent?.id == event.id),
+          (MatchEvent event) => _EventFeedTile(
+            event: event,
+            active: activeEvent?.id == event.id,
+            onReplayGoal: () => controller.replayEvent(event),
+          ),
         )
         .toList(growable: false);
 
@@ -798,10 +985,15 @@ class _EventFeed extends StatelessWidget {
 }
 
 class _EventFeedTile extends StatelessWidget {
-  const _EventFeedTile({required this.event, required this.active});
+  const _EventFeedTile({
+    required this.event,
+    required this.active,
+    required this.onReplayGoal,
+  });
 
   final MatchEvent event;
   final bool active;
+  final VoidCallback onReplayGoal;
 
   @override
   Widget build(BuildContext context) {
@@ -847,6 +1039,22 @@ class _EventFeedTile extends StatelessWidget {
                     letterSpacing: 0,
                   ),
                 ),
+                if (event.type == MatchViewerEventType.goal)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      key: Key('match-2d-replay-goal-${event.id}'),
+                      onPressed: onReplayGoal,
+                      icon: const Icon(Icons.replay_rounded, size: 15),
+                      label: Text('Replay goal · ${event.minute}\''),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFFFDE68A),
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        minimumSize: const Size(0, 30),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -1410,4 +1618,342 @@ String _giftUnitLabelForScope(String sourceScope) {
     return 'GTEX Coin';
   }
   return 'Fan Coin';
+}
+
+
+
+
+class _MatchPreGameBrief extends StatelessWidget {
+  const _MatchPreGameBrief({
+    required this.package,
+    required this.competitionName,
+    required this.canStart,
+    required this.onStart,
+    required this.onRefresh,
+  });
+
+  final MatchPresentationPackage package;
+  final String competitionName;
+  final bool canStart;
+  final VoidCallback onStart;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: gteBackdropDecoration(),
+      child: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1400),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  const Row(
+                    children: <Widget>[
+                      Icon(Icons.sports_soccer_rounded, color: Color(0xFFF0C66B), size: 25),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text('GTEX MATCHDAY STUDIO', style: TextStyle(
+                              color: Color(0xFFF0C66B), fontWeight: FontWeight.w900,
+                              letterSpacing: 1.6, fontSize: 11,
+                            )),
+                            SizedBox(height: 3),
+                            Text('Match preview & official team sheets', style: TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18,
+                            )),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(competitionName, style: TextStyle(color: Colors.white60, fontSize: 12)),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft, end: Alignment.bottomRight,
+                        colors: <Color>[Color(0xFF172638), Color(0xFF09121D)],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0x55F0C66B)),
+                    ),
+                    child: Column(
+                      children: <Widget>[
+                        Text(package.matchLabel.toUpperCase(), textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: <Widget>[
+                            Expanded(child: _PreMatchFormationBadge(team: package.home)),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 12),
+                              child: Text('VS', style: TextStyle(color: Color(0xFFF0C66B), fontWeight: FontWeight.w900, fontSize: 13)),
+                            ),
+                            Expanded(child: _PreMatchFormationBadge(team: package.away)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  LayoutBuilder(
+                    builder: (BuildContext context, BoxConstraints constraints) {
+                      if (constraints.maxWidth >= 860) {
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Expanded(child: _PreMatchTeamSheet(team: package.home)),
+                            const SizedBox(width: 12),
+                            Expanded(child: _PreMatchTeamSheet(team: package.away)),
+                          ],
+                        );
+                      }
+                      return Column(children: <Widget>[
+                        _PreMatchTeamSheet(team: package.home),
+                        const SizedBox(height: 12),
+                        _PreMatchTeamSheet(team: package.away),
+                      ]);
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  const GtexMatchdayAdSlot(placement: 'Pre-match broadcast & team-sheet programme'),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    height: 52,
+                    child: FilledButton.icon(
+                      key: const Key('gtex-matchday-start-broadcast'),
+                      onPressed: canStart ? onStart : onRefresh,
+                      icon: Icon(canStart ? Icons.play_arrow_rounded : Icons.refresh_rounded, size: 24),
+                      label: Text(
+                        canStart ? 'WATCH 2D MATCH' : 'CHECK FOR MATCH TIMELINE',
+                        style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1),
+                      ),
+                      style: FilledButton.styleFrom(backgroundColor: const Color(0xFFF0C66B), foregroundColor: const Color(0xFF101722)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PreMatchFormationBadge extends StatelessWidget {
+  const _PreMatchFormationBadge({required this.team});
+  final MatchPresentationTeam team;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color accent = _parseHexColor(team.primaryColorHex ?? '#1DBF73');
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.20),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: accent.withValues(alpha: 0.55)),
+      ),
+      child: Column(
+        children: <Widget>[
+          Text(team.shortName.isEmpty ? team.teamName : team.shortName, maxLines: 1,
+            overflow: TextOverflow.ellipsis, textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13)),
+          const SizedBox(height: 3),
+          Text(team.formation, style: TextStyle(color: accent, fontWeight: FontWeight.w900, fontSize: 22)),
+          if (team.coachName?.trim().isNotEmpty == true) ...<Widget>[
+            const SizedBox(height: 3),
+            Text(team.coachName!, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center,
+              style: const TextStyle(color: Color(0xFFC1CEDB), fontSize: 11)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PreMatchTeamSheet extends StatelessWidget {
+  const _PreMatchTeamSheet({required this.team});
+  final MatchPresentationTeam team;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color accent = _parseHexColor(team.primaryColorHex ?? '#1DBF73');
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xD90B1420), borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(width: 4, height: 32, decoration: BoxDecoration(color: accent, borderRadius: BorderRadius.circular(4))),
+              const SizedBox(width: 9),
+              Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(team.teamName, maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
+                  Text('FORMATION ${team.formation}', style: TextStyle(color: accent, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 0.8)),
+                ],
+              )),
+              if (team.recentForm != null) _PreMatchTag(label: 'FORM ${team.recentForm}%'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 7, runSpacing: 7,
+            children: <Widget>[
+              _PreMatchTag(label: "Manager: ${team.coachName?.trim().isNotEmpty == true ? team.coachName!.trim() : 'Not supplied'}"),
+              if (team.mentality?.trim().isNotEmpty == true)
+                _PreMatchTag(label: 'Mentality: ${team.mentality!.replaceAll('_', ' ')}'),
+              for (final String instruction in team.instructionSummary.take(2))
+                _PreMatchTag(label: instruction),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const Text('STARTING XI', style: TextStyle(color: Color(0xFFC1CEDB), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+          const SizedBox(height: 6),
+          if (team.starters.isEmpty)
+            const Text('Starting-player details were not supplied for this team.', style: TextStyle(color: Color(0xFF8797A8), fontSize: 11))
+          else
+            for (final MatchPresentationPlayer player in team.starters)
+              _PreMatchPlayerRow(player: player, accent: accent),
+          const SizedBox(height: 10),
+          const Divider(color: Color(0x243F5063)),
+          const SizedBox(height: 7),
+          Row(
+            children: <Widget>[
+              const Icon(Icons.sync_alt_rounded, color: Color(0xFFF0C66B), size: 16),
+              const SizedBox(width: 7),
+              const Expanded(child: Text('SUBSTITUTES', style: TextStyle(color: Color(0xFFC1CEDB), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1))),
+              Text('${team.bench.length} listed', style: const TextStyle(color: Color(0xFF8797A8), fontSize: 10)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (team.bench.isEmpty)
+            const Text('Substitute list not supplied by the official match package.', style: TextStyle(color: Color(0xFF8797A8), fontSize: 11))
+          else
+            Wrap(
+              spacing: 6, runSpacing: 6,
+              children: team.bench.map((MatchPresentationPlayer player) {
+                final String shirt = player.shirtNumber == null ? '' : '#${player.shirtNumber} ';
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        '${shirt}${player.playerName}',
+                        style: const TextStyle(
+                          color: Color(0xFFD2DBE4),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      if (player.role?.trim().isNotEmpty == true ||
+                          player.rating != null) ...<Widget>[
+                        const SizedBox(height: 3),
+                        Text(
+                          <String>[
+                            if (player.role?.trim().isNotEmpty == true)
+                              player.role!.replaceAll('_', ' ').toUpperCase(),
+                            if (player.rating != null)
+                              'OVR ${player.rating!.toStringAsFixed(1)}',
+                          ].join(' · '),
+                          style: const TextStyle(
+                            color: Color(0xFFF0C66B),
+                            fontSize: 8,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              }).toList(growable: false),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PreMatchPlayerRow extends StatelessWidget {
+  const _PreMatchPlayerRow({required this.player, required this.accent});
+  final MatchPresentationPlayer player;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget portrait = Container(
+      width: 30, height: 30, clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(color: accent.withValues(alpha: 0.12), shape: BoxShape.circle, border: Border.all(color: accent.withValues(alpha: 0.45))),
+      child: player.hasPortrait
+          ? Image.network(player.portraitUrl!, fit: BoxFit.cover,
+              errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) => const Icon(Icons.person, color: Colors.white70, size: 16))
+          : const Icon(Icons.person, color: Colors.white70, size: 16),
+    );
+    return Container(
+      margin: const EdgeInsets.only(bottom: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.035), borderRadius: BorderRadius.circular(7)),
+      child: Row(
+        children: <Widget>[
+          portrait,
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 28,
+            child: Text(player.shirtNumber == null ? '—' : '${player.shirtNumber}',
+              style: TextStyle(color: accent, fontWeight: FontWeight.w900, fontSize: 11)),
+          ),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(player.playerName, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 11)),
+              Text(player.role?.trim().isNotEmpty == true ? player.role!.replaceAll('_', ' ').toUpperCase() : 'PLAYER',
+                style: const TextStyle(color: Color(0xFF8797A8), fontSize: 9)),
+            ],
+          )),
+          if (player.rating != null)
+            Text(player.rating!.toStringAsFixed(1), style: const TextStyle(color: Color(0xFFF0C66B), fontWeight: FontWeight.w900, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+}
+
+class _PreMatchTag extends StatelessWidget {
+  const _PreMatchTag({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.045), borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+      ),
+      child: Text(label, style: const TextStyle(color: Color(0xFFC1CEDB), fontSize: 10, fontWeight: FontWeight.w700)),
+    );
+  }
 }

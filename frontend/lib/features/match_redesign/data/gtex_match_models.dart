@@ -113,6 +113,11 @@ class GtexMatchTeam {
     required this.players,
     this.badgeUrl,
     this.primaryColorHex,
+    this.managerName,
+    this.recentFormPercent,
+    this.mentality,
+    this.instructionSummary = const <String>[],
+    this.bench = const <GtexLineupPlayer>[],
   });
 
   final String id;
@@ -123,6 +128,11 @@ class GtexMatchTeam {
   final List<GtexLineupPlayer> players;
   final String? badgeUrl;
   final String? primaryColorHex;
+  final String? managerName;
+  final int? recentFormPercent;
+  final String? mentality;
+  final List<String> instructionSummary;
+  final List<GtexLineupPlayer> bench;
 }
 
 @immutable
@@ -135,6 +145,8 @@ class GtexLineupPlayer {
     required this.rating,
     this.imageUrl,
     this.isRegen = false,
+    this.formLabel,
+    this.fitnessPct,
   });
 
   final String id;
@@ -144,6 +156,8 @@ class GtexLineupPlayer {
   final double rating;
   final String? imageUrl;
   final bool isRegen;
+  final String? formLabel;
+  final double? fitnessPct;
 }
 
 @immutable

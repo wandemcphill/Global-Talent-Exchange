@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../data/club_lineup_repository.dart';
 import '../../data/gte_api_repository.dart';
+import '../match/widgets/gtex_matchday_ad_slot.dart';
 import '../player_detail/gtex_player_navigator.dart';
 
 const Color _bg = Color(0xFF0E1217);
@@ -314,98 +316,540 @@ class _GtexLineupEditorScreenState extends State<GtexLineupEditorScreen> {
     );
   }
 
+
   Widget _buildEditor() {
     final List<String> roles = _slotRoles;
+    final int selectedCount = _slots.whereType<String>().toSet().length;
     final Widget formationSelector = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         const Text(
-          'FORMATION',
+          'CHOOSE YOUR SHAPE',
           style: TextStyle(color: _textMuted, fontSize: 11, letterSpacing: 1),
         ),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: _formations
-              .map((String f) {
-                final bool selected = f == _formation;
-                return GestureDetector(
-                  onTap: () => setState(() => _formation = f),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: selected ? _green.withValues(alpha: 0.16) : _panel,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: selected ? _green : _border,
-                        width: selected ? 1.5 : 0.5,
-                      ),
-                    ),
-                    child: Text(
-                      f,
-                      style: TextStyle(
-                        fontFamily: _condensed,
-                        color: selected ? _green : _textSecondary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                      ),
+          children: _formations.map((String formation) {
+            final bool selected = formation == _formation;
+            return Semantics(
+              button: true,
+              selected: selected,
+              label: '$formation formation',
+              child: InkWell(
+                borderRadius: BorderRadius.circular(9),
+                onTap: () => setState(() => _formation = formation),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? _green.withValues(alpha: 0.16)
+                        : _panel,
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(
+                      color: selected ? _green : _border,
+                      width: selected ? 1.5 : 0.7,
                     ),
                   ),
-                );
-              })
-              .toList(growable: false),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      if (selected) ...<Widget>[
+                        const Icon(Icons.check_circle, size: 14, color: _green),
+                        const SizedBox(width: 6),
+                      ],
+                      Text(
+                        formation,
+                        style: TextStyle(
+                          fontFamily: _condensed,
+                          color: selected ? _green : _textSecondary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }).toList(growable: false),
         ),
       ],
     );
-    final Widget starters = Container(
-      decoration: BoxDecoration(
-        color: _pitch.withValues(alpha: 0.35),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _border),
+
+    final Widget tacticalPitch = _buildTacticalPitch();
+    final Widget startingXiList = ExpansionTile(
+      key: const Key('gtex-lineup-list-fallback'),
+      tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+      childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
+      collapsedBackgroundColor: _panel,
+      backgroundColor: _panel,
+      iconColor: _green,
+      collapsedIconColor: _textSecondary,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: const BorderSide(color: _border),
       ),
-      padding: const EdgeInsets.all(8),
-      child: Column(
-        children: List<Widget>.generate(11, (int i) => _slotTile(i, roles[i])),
+      collapsedShape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: const BorderSide(color: _border),
+      ),
+      title: const Text(
+        'Starting XI · list view',
+        style: TextStyle(color: _text, fontWeight: FontWeight.w800),
+      ),
+      subtitle: const Text(
+        'Accessible alternative for assigning each position',
+        style: TextStyle(color: _textMuted, fontSize: 11),
+      ),
+      children: List<Widget>.generate(
+        11,
+        (int index) => _slotTile(index, roles[index]),
       ),
     );
+
     final Widget substitutes = GtexLineupSubstitutes(
       players: _substitutes,
       selectedPlayerId: _selectedSubstituteId,
       onSelect: _selectSubstitute,
     );
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
-      children: <Widget>[
-        formationSelector,
-        const SizedBox(height: 18),
-        LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            if (constraints.maxWidth >= 900) {
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Expanded(flex: 3, child: starters),
-                  const SizedBox(width: 16),
-                  Expanded(flex: 2, child: substitutes),
-                ],
-              );
-            }
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+
+    final Widget managerCard = Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _panel,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _border),
+      ),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0C66B).withValues(alpha: 0.11),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.sports_outlined,
+              color: Color(0xFFF0C66B),
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                starters,
-                const SizedBox(height: 16),
-                substitutes,
+                Text(
+                  'MANAGER & COACHING STAFF',
+                  style: TextStyle(
+                    color: _text,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                    letterSpacing: 0.65,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Choose a coach whose tactical style fits this formation.',
+                  style: TextStyle(color: _textSecondary, fontSize: 11),
+                ),
               ],
-            );
-          },
+            ),
+          ),
+          const SizedBox(width: 10),
+          OutlinedButton.icon(
+            key: const Key('gtex-lineup-open-coaches'),
+            onPressed: () => context.push('/coaches'),
+            icon: const Icon(Icons.manage_accounts_outlined, size: 17),
+            label: const Text('Select'),
+          ),
+        ],
+      ),
+    );
+
+    return ListView(
+      key: const Key('gtex-tactical-setup-list'),
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 20),
+      children: <Widget>[
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[Color(0xFF182638), Color(0xFF0D151F)],
+            ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFF3A4D61)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const Text(
+                'TACTICAL SETUP',
+                style: TextStyle(
+                  color: Color(0xFFF0C66B),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.4,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                _formation,
+                style: const TextStyle(
+                  color: _text,
+                  fontFamily: _condensed,
+                  fontSize: 29,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                '$selectedCount of 11 starting positions assigned · ${_substitutes.length} players available for the bench',
+                style: const TextStyle(color: _textSecondary, fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: <Widget>[
+                  _setupTag(Icons.grid_3x3, 'Formation'),
+                  _setupTag(Icons.groups_2_outlined, 'Starting XI'),
+                  _setupTag(Icons.compare_arrows, 'Substitutions'),
+                  _setupTag(Icons.sports, 'Manager'),
+                ],
+              ),
+            ],
+          ),
         ),
+        const SizedBox(height: 14),
+        managerCard,
+        const SizedBox(height: 18),
+        formationSelector,
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: _panel,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  const Icon(Icons.sports_soccer, color: _green, size: 18),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'FORMATION BOARD',
+                      style: TextStyle(
+                        color: _text,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.8,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    _selectedSubstituteId == null
+                        ? 'Tap a position to edit'
+                        : 'Tap a position to assign',
+                    style: const TextStyle(color: _green, fontSize: 10),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              tacticalPitch,
+              const SizedBox(height: 10),
+              startingXiList,
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        GtexMatchdayAdSlot(placement: 'Pre-match lineup & formation board'),
+        const SizedBox(height: 16),
+        substitutes,
       ],
     );
+  }
+
+  Widget _setupTag(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, color: _textSecondary, size: 13),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: const TextStyle(
+              color: _textSecondary,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<({int index, int count, int ordinal, double y})> get _pitchPositions {
+    final List<int> parts = _formation
+        .split('-')
+        .map((String part) => int.tryParse(part) ?? 0)
+        .toList(growable: false);
+    if (parts.length < 3 || parts.any((int count) => count <= 0)) {
+      return <({int index, int count, int ordinal, double y})>[
+        (index: 0, count: 1, ordinal: 0, y: 0.89),
+        for (int i = 1; i < 11; i++)
+          (index: i, count: 10, ordinal: i - 1, y: 0.52),
+      ];
+    }
+
+    final List<({int index, int count, int ordinal, double y})> placements =
+        <({int index, int count, int ordinal, double y})>[];
+    placements.add((index: 0, count: 1, ordinal: 0, y: 0.89));
+
+    final int defenders = parts.first;
+    for (int slot = 0; slot < defenders; slot++) {
+      placements.add((
+        index: 1 + slot,
+        count: defenders,
+        ordinal: slot,
+        y: 0.72,
+      ));
+    }
+
+    int nextIndex = 1 + defenders;
+    final List<int> midfieldRows = parts.sublist(1, parts.length - 1);
+    for (int line = 0; line < midfieldRows.length; line++) {
+      final int count = midfieldRows[line];
+      final double y = midfieldRows.length == 1
+          ? 0.49
+          : 0.57 - line * (0.22 / (midfieldRows.length - 1));
+      for (int slot = 0; slot < count; slot++) {
+        placements.add((
+          index: nextIndex + slot,
+          count: count,
+          ordinal: slot,
+          y: y,
+        ));
+      }
+      nextIndex += count;
+    }
+
+    final int forwards = parts.last;
+    for (int slot = 0; slot < forwards; slot++) {
+      placements.add((
+        index: nextIndex + slot,
+        count: forwards,
+        ordinal: slot,
+        y: 0.19,
+      ));
+    }
+    return placements;
+  }
+
+  Widget _buildTacticalPitch() {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints outer) {
+        final double width = outer.maxWidth;
+        final double height = width / 0.82;
+        return SizedBox(
+          width: width,
+          height: height,
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints bounds) {
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    const Positioned.fill(child: CustomPaint(painter: _LineupPitchPainter())),
+                    const Positioned(
+                      top: 7,
+                      left: 10,
+                      child: Text(
+                        'ATTACK ↑',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ),
+                    const Positioned(
+                      bottom: 7,
+                      right: 10,
+                      child: Text(
+                        'DEFEND ↓',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ),
+                    for (final placement in _pitchPositions)
+                      _buildPitchMarker(
+                        constraints: bounds,
+                        index: placement.index,
+                        count: placement.count,
+                        ordinal: placement.ordinal,
+                        y: placement.y,
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPitchMarker({
+    required BoxConstraints constraints,
+    required int index,
+    required int count,
+    required int ordinal,
+    required double y,
+  }) {
+    final double markerWidth =
+        (constraints.maxWidth / (count + 0.75)).clamp(50.0, 88.0).toDouble();
+    final double x = count == 1 ? 0.5 : 0.08 + ordinal * (0.84 / (count - 1));
+    final double left = (x * constraints.maxWidth - markerWidth / 2)
+        .clamp(1.0, constraints.maxWidth - markerWidth - 1.0)
+        .toDouble();
+    final double top = (y * constraints.maxHeight - 27)
+        .clamp(0.0, constraints.maxHeight - 55.0)
+        .toDouble();
+    final String role = _slotRoles[index];
+
+    return Positioned(
+      left: left,
+      top: top,
+      width: markerWidth,
+      height: 55,
+      child: _pitchPlayerMarker(index: index, role: role),
+    );
+  }
+
+  Widget _pitchPlayerMarker({
+    required int index,
+    required String role,
+  }) {
+    final String? id = _slots[index];
+    final LineupSquadPlayer? player = _playerForId(id);
+    final bool filled = player != null;
+    final bool selectedTarget = id != null && id == _selectedSubstituteId;
+    final String tokenLabel = player?.shirtNumber?.toString() ?? role;
+    final List<String> meta = <String>[
+      if (player?.rating != null) player!.rating!.toStringAsFixed(0),
+      if (player?.form != null && player!.form!.trim().isNotEmpty) player.form!,
+    ];
+    return Semantics(
+      button: true,
+      label: '$role · ${player?.name ?? 'Add player'}',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: Key('gtex-pitch-slot-$index'),
+          borderRadius: BorderRadius.circular(7),
+          onTap: () => _assignSelectedSubstitute(index),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(3, 3, 3, 2),
+            decoration: BoxDecoration(
+              color: selectedTarget
+                  ? const Color(0xFF493817)
+                  : filled
+                      ? const Color(0xE9131D28)
+                      : const Color(0xCC07111B),
+              borderRadius: BorderRadius.circular(7),
+              border: Border.all(
+                color: selectedTarget
+                    ? const Color(0xFFF0C66B)
+                    : filled
+                        ? Colors.white.withValues(alpha: 0.36)
+                        : _green.withValues(alpha: 0.86),
+                width: selectedTarget ? 1.6 : 0.9,
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Container(
+                  constraints: const BoxConstraints(minWidth: 20, minHeight: 16),
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: filled ? _green : _green.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    filled ? tokenLabel : '+',
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: filled ? const Color(0xFF07120D) : _green,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  player?.name ?? 'Add ${role.toLowerCase()}',
+                  maxLines: 2,
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _text,
+                    fontSize: 8.5,
+                    height: 1.0,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                if (meta.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 1),
+                  Text(
+                    meta.join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFFF0C66B),
+                      fontSize: 7.5,
+                      height: 1.0,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  LineupSquadPlayer? _playerForId(String? id) {
+    if (id == null) return null;
+    for (final LineupSquadPlayer player in _squad) {
+      if (player.playerId == id) return player;
+    }
+    return null;
   }
 
   Widget _slotTile(int index, String role) {
@@ -475,6 +919,92 @@ class _GtexLineupEditorScreenState extends State<GtexLineupEditorScreen> {
       ),
     );
   }
+}
+
+class _LineupPitchPainter extends CustomPainter {
+  const _LineupPitchPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Rect field = Offset.zero & size;
+    final Paint grass = Paint()..style = PaintingStyle.fill;
+    const int stripeCount = 10;
+    for (int i = 0; i < stripeCount; i++) {
+      grass.color = i.isEven
+          ? const Color(0xFF175339)
+          : const Color(0xFF12462F);
+      canvas.drawRect(
+        Rect.fromLTWH(
+          field.left + field.width * i / stripeCount,
+          field.top,
+          field.width / stripeCount + 0.5,
+          field.height,
+        ),
+        grass,
+      );
+    }
+
+    final double inset = size.shortestSide * 0.045;
+    final Rect playArea = field.deflate(inset);
+    final Paint line = Paint()
+      ..color = Colors.white.withValues(alpha: 0.65)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.1;
+    canvas.drawRect(playArea, line);
+    canvas.drawLine(
+      Offset(playArea.left, playArea.center.dy),
+      Offset(playArea.right, playArea.center.dy),
+      line,
+    );
+    canvas.drawCircle(playArea.center, playArea.width * 0.12, line);
+    canvas.drawCircle(
+      playArea.center,
+      2,
+      Paint()..color = Colors.white.withValues(alpha: 0.8),
+    );
+
+    final Rect topBox = Rect.fromLTWH(
+      playArea.left + playArea.width * 0.22,
+      playArea.top,
+      playArea.width * 0.56,
+      playArea.height * 0.14,
+    );
+    final Rect bottomBox = Rect.fromLTWH(
+      playArea.left + playArea.width * 0.22,
+      playArea.bottom - playArea.height * 0.14,
+      playArea.width * 0.56,
+      playArea.height * 0.14,
+    );
+    final Rect topSix = Rect.fromLTWH(
+      playArea.left + playArea.width * 0.37,
+      playArea.top,
+      playArea.width * 0.26,
+      playArea.height * 0.055,
+    );
+    final Rect bottomSix = Rect.fromLTWH(
+      playArea.left + playArea.width * 0.37,
+      playArea.bottom - playArea.height * 0.055,
+      playArea.width * 0.26,
+      playArea.height * 0.055,
+    );
+    canvas.drawRect(topBox, line);
+    canvas.drawRect(bottomBox, line);
+    canvas.drawRect(topSix, line);
+    canvas.drawRect(bottomSix, line);
+    canvas.drawCircle(
+      Offset(playArea.center.dx, playArea.top + playArea.height * 0.105),
+      2,
+      Paint()..color = Colors.white.withValues(alpha: 0.75),
+    );
+    canvas.drawCircle(
+      Offset(playArea.center.dx, playArea.bottom - playArea.height * 0.105),
+      2,
+      Paint()..color = Colors.white.withValues(alpha: 0.75),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _LineupPitchPainter oldDelegate) => false;
 }
 
 /// Responsive substitute pattern for the active lineup editor. On narrow
@@ -567,27 +1097,82 @@ class GtexLineupSubstitutes extends StatelessWidget {
                             ),
                             child: Row(
                               children: <Widget>[
+                                Container(
+                                  width: 30,
+                                  height: 38,
+                                  clipBehavior: Clip.antiAlias,
+                                  decoration: BoxDecoration(
+                                    color: _green.withValues(alpha: 0.10),
+                                    borderRadius: BorderRadius.circular(7),
+                                    border: Border.all(color: _border),
+                                  ),
+                                  child: player.portraitUrl?.trim().isNotEmpty == true
+                                      ? Image.network(
+                                          player.portraitUrl!,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) =>
+                                              const Icon(Icons.person_outline_rounded, color: _textMuted, size: 18),
+                                        )
+                                      : const Icon(Icons.person_outline_rounded, color: _textMuted, size: 18),
+                                ),
+                                const SizedBox(width: 7),
                                 Expanded(
-                                  child: Text(
-                                    player.name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: _text,
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      Text(
+                                        player.name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: _text,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 10,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        <String>[
+                                          if (player.position?.trim().isNotEmpty == true) player.position!,
+                                          if (player.rating != null) 'OVR ${player.rating!.round()}',
+                                        ].join(' · ').isEmpty
+                                            ? 'Squad player'
+                                            : <String>[
+                                                if (player.position?.trim().isNotEmpty == true) player.position!,
+                                                if (player.rating != null) 'OVR ${player.rating!.round()}',
+                                              ].join(' · '),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(color: _textSecondary, fontSize: 9),
+                                      ),
+                                      if (player.form?.trim().isNotEmpty == true ||
+                                          player.fitnessPct != null ||
+                                          player.morale != null) ...<Widget>[
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          <String>[
+                                            if (player.form?.trim().isNotEmpty == true) 'FORM ${player.form!.trim()}',
+                                            if (player.fitnessPct != null) 'FIT ${player.fitnessPct!.round()}%',
+                                            if (player.morale != null) 'MOR ${player.morale!.round()}',
+                                          ].join(' · '),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: Color(0xFFF0C66B),
+                                            fontSize: 8,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                 ),
-                                if (player.position != null) ...<Widget>[
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    player.position!,
-                                    style: const TextStyle(
-                                      color: _textMuted,
-                                      fontSize: 11,
-                                    ),
+                                if (selected)
+                                  const Padding(
+                                    padding: EdgeInsets.only(left: 4),
+                                    child: Icon(Icons.check_circle, color: _green, size: 15),
                                   ),
-                                ],
                               ],
                             ),
                           ),

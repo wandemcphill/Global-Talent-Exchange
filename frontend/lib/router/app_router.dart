@@ -931,9 +931,15 @@ List<RouteBase> _buildLegacyAliasRoutes({
       path: '/matches/viewer/:matchKey',
       pageBuilder: (BuildContext context, GoRouterState state) {
         final String matchKey = state.pathParameters['matchKey']?.trim() ?? '';
+        final int? replayMinute = int.tryParse(
+          state.uri.queryParameters['minute']?.trim() ?? '',
+        );
         return NoTransitionPage<void>(
           key: state.pageKey,
-          child: MatchViewerRouteScreen(matchKey: matchKey),
+          child: MatchViewerRouteScreen(
+            matchKey: matchKey,
+            initialReplayMinute: replayMinute,
+          ),
         );
       },
     ),
