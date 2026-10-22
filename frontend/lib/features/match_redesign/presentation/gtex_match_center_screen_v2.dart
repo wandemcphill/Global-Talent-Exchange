@@ -245,6 +245,9 @@ class _MainPitchWorkspace extends StatelessWidget {
               onOpenPortfolio: onOpenPortfolio,
               onOpenMarket: onOpenMarket,
               onOpenNewsroomReport: onOpenNewsroomReport,
+              onReplayGoal: (int minute) => context.push(
+                '/matches/viewer/${Uri.encodeComponent(match.matchId)}?minute=$minute',
+              ),
             ),
           ],
         ),
