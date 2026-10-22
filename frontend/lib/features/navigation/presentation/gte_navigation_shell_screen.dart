@@ -510,8 +510,9 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   }
 
   bool get _hasApprovedCreatorAccess {
-    final application = _creatorApplicationController.application;
-    return application?.isApproved == true;
+    // Creator tools belong to the dedicated Creator account lane. A stale
+    // legacy CreatorProfile on a User account is not promotion approval.
+    return _isCreatorSession;
   }
 
   bool get _canHostCompetitions {
@@ -758,8 +759,11 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       hasApprovedCreatorAccess: _hasApprovedCreatorAccess,
       canHostCompetitions: _canHostCompetitions,
       onOpenLogin: (BuildContext _) => _openLogin(targetRoute: _route),
-      onOpenCreatorAccessRequest:
-          (BuildContext context) => _pushCreatorAccessRequest(context),
+      onOpenCreatorAccessRequest: (BuildContext context) async {
+        if (_accountType == 'user') {
+          await _pushCreatorAccessRequest(context);
+        }
+      },
       currentUserIdProvider: _resolveCompetitionUserId,
       currentUserNameProvider: _resolveCompetitionUserName,
       currentUserRoleProvider: () => widget.controller.session?.user.role,
@@ -1450,7 +1454,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       _buildThemePickerAction(context),
       _buildAmbientAction(),
     ];
-    if (widget.controller.isAuthenticated) {
+    if (widget.controller.isAuthenticated && _accountType == 'user') {
       actions.add(
         IconButton(
           tooltip: 'Creator access request',
@@ -1458,7 +1462,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
           icon: const Icon(Icons.how_to_reg_outlined, color: GtexColors.text),
         ),
       );
-      if (_hasApprovedCreatorAccess) {
+    }
+    if (widget.controller.isAuthenticated && _isCreatorSession) {
         actions.add(
           IconButton(
             tooltip: 'Creator community',
