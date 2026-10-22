@@ -206,7 +206,10 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
     # The legacy executive roster is the canonical source for the GM and HOYD
     # roles in clubs that use that feature. Never expose contracts or wages.
     executives = session.scalars(
-        select(ClubLegacyExecutive).where(ClubLegacyExecutive.club_id == club.id)
+        select(ClubLegacyExecutive).where(
+            ClubLegacyExecutive.club_id == club.id,
+            ClubLegacyExecutive.status == "hired",
+        )
     ).all()
     for executive in executives:
         role_key = str(executive.role).lower()
