@@ -459,12 +459,12 @@ class AuthService:
         # Route according to the approved capability profile, not only the
         # legacy account_type selected by older signup screens.
         if effective_role == UserRole.COIN_TRADER:
-            return "/trader"
+            return "/app/trader-dashboard"
         if session is not None:
             trader_profile = session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id))
             trader_status = "" if trader_profile is None else str(trader_profile.status)
             if trader_status == "approved" and user.is_active:
-                return "/trader"
+                return "/app/trader-dashboard"
             creator_profile = session.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
             creator_status = "" if creator_profile is None else str(
                 getattr(creator_profile.status, "value", creator_profile.status)
