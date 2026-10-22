@@ -118,7 +118,8 @@ class UserClubSignupRequest(BaseModel):
     """Easy signup: display name + @handle + password; email/club optional.
 
     Older clients that still POST club + country continue to work. When club
-    fields are omitted, signup defers club create (requires_club bootstrap).
+    fields are omitted, signup creates a normal user account and leaves club
+    ownership as an optional next step in session bootstrap.
     """
 
     model_config = ConfigDict(extra="forbid")
