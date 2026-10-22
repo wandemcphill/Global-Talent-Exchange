@@ -6,10 +6,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.base import utcnow
+from app.models.coin_trader import CoinTraderProfile
 from app.models.creator_application import CreatorApplication
 from app.models.creator_profile import CreatorProfile
 from app.models.creator_provisioning import CreatorClubProvisioning
-from app.models.user import User
+from app.models.user import PublicAccountType, User
 from app.services.creator_provisioning_service import CreatorProvisioningService
 
 CREATOR_APPLICATION_PENDING = "pending"
@@ -50,6 +51,13 @@ class CreatorApplicationService:
         raise CreatorApplicationError("secure_phone_verification_unavailable")
 
     def submit_application(self, *, actor: User, payload) -> CreatorApplication:
+        if actor.account_type != PublicAccountType.USER:
+            raise CreatorApplicationConflictError("creator_promotion_requires_normal_account")
+        trader_profile = self.session.scalar(
+            select(CoinTraderProfile).where(CoinTraderProfile.user_id == actor.id)
+        )
+        if trader_profile is not None:
+            raise CreatorApplicationConflictError("coin_trader_account_cannot_be_promoted_to_creator")
         if actor.email_verified_at is None:
             raise CreatorApplicationError("email_verification_required")
         if actor.phone_verified_at is None:
