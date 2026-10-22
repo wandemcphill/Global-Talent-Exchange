@@ -12,6 +12,7 @@ from app.main import (
     create_app,
 )
 from app.models.club_infra import ClubStadium
+from app.models.club_profile import ClubLifecycleStatus, ClubProfile, ClubType
 from app.models.creator_application import CreatorApplication
 from app.models.creator_profile import CreatorProfile
 from app.models.creator_provisioning import CreatorClubProvisioning, CreatorRegen, CreatorSquad
@@ -67,6 +68,133 @@ def _mark_contacts_verified_for_test(app, *, email: str) -> None:
         user.email_verified_at = now
         user.phone_verified_at = now
         session.commit()
+
+
+def _create_active_club(app, *, owner_user_id: str, slug: str) -> str:
+    with app.state.session_factory() as session:
+        club = ClubProfile(
+            owner_user_id=owner_user_id,
+            club_name=f"{slug} FC",
+            club_type=ClubType.COMMUNITY,
+            lifecycle_status=ClubLifecycleStatus.ACTIVE,
+            slug=slug,
+            primary_color="#0F766E",
+            secondary_color="#F8FAFC",
+            accent_color="#F59E0B",
+        )
+        session.add(club)
+        session.commit()
+        return club.id
+
+
+def test_active_owned_club_blocks_creator_promotion_submission(app_client) -> None:
+    app, client = app_client
+    token = _register_creator_applicant(client, email="active-owner@example.com", username="activeowner")
+    _mark_contacts_verified_for_test(app, email="active-owner@example.com")
+    with app.state.session_factory() as session:
+        owner = session.scalar(select(User).where(User.email == "active-owner@example.com"))
+        assert owner is not None
+        owner_id = owner.id
+    _create_active_club(app, owner_user_id=owner_id, slug="active-owner-club")
+
+    response = client.post(
+        "/api/creator/apply",
+        headers=_creator_headers(token),
+        json={
+            "requested_handle": "active.owner.creator",
+            "display_name": "Active Owner",
+            "platform": "youtube",
+            "follower_count": 1000,
+            "social_links": ["https://youtube.com/@activeowner"],
+        },
+    )
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"] == "active_club_prevents_creator_promotion"
+
+
+def test_creator_promotion_rechecks_active_club_at_approval(app_client) -> None:
+    app, client = app_client
+    token = _register_creator_applicant(client, email="race-owner@example.com", username="raceowner")
+    _mark_contacts_verified_for_test(app, email="race-owner@example.com")
+    headers = _creator_headers(token)
+    apply_response = client.post(
+        "/api/creator/apply",
+        headers=headers,
+        json={
+            "requested_handle": "race.owner.creator",
+            "display_name": "Race Owner",
+            "platform": "youtube",
+            "follower_count": 1000,
+            "social_links": ["https://youtube.com/@raceowner"],
+        },
+    )
+    assert apply_response.status_code == 201, apply_response.text
+    application_id = apply_response.json()["application_id"]
+    with app.state.session_factory() as session:
+        owner = session.scalar(select(User).where(User.email == "race-owner@example.com"))
+        assert owner is not None
+        owner_id = owner.id
+    _create_active_club(app, owner_user_id=owner_id, slug="race-owner-club")
+
+    approve_response = client.post(
+        f"/api/admin/creator/applications/{application_id}/approve",
+        headers=_admin_headers(client),
+        json={"reason": "Test the final eligibility recheck."},
+    )
+    assert approve_response.status_code == 409, approve_response.text
+    assert approve_response.json()["detail"] == "active_club_prevents_creator_promotion"
+    with app.state.session_factory() as session:
+        owner = session.scalar(select(User).where(User.email == "race-owner@example.com"))
+        assert owner is not None
+        assert owner.account_type.value == "user"
+        assert session.scalar(select(CreatorProfile).where(CreatorProfile.user_id == owner.id)) is None
+
+
+def test_sold_club_no_longer_blocks_creator_promotion(app_client) -> None:
+    app, client = app_client
+    token = _register_creator_applicant(client, email="sold-owner@example.com", username="soldowner")
+    _mark_contacts_verified_for_test(app, email="sold-owner@example.com")
+    with app.state.session_factory() as session:
+        owner = session.scalar(select(User).where(User.email == "sold-owner@example.com"))
+        buyer = User(
+            email="club-buyer@example.com",
+            username="clubbuyer",
+            password_hash="test-hash",
+            full_name="Club Buyer",
+        )
+        session.add(buyer)
+        session.flush()
+        assert owner is not None
+        club = ClubProfile(
+            owner_user_id=owner.id,
+            club_name="Sold Club FC",
+            club_type=ClubType.COMMUNITY,
+            lifecycle_status=ClubLifecycleStatus.ACTIVE,
+            slug="sold-club-fc",
+            primary_color="#0F766E",
+            secondary_color="#F8FAFC",
+            accent_color="#F59E0B",
+        )
+        session.add(club)
+        session.flush()
+        # ClubSaleMarketService settles a sale by changing owner_user_id to
+        # the buyer. A former owner with no active club is eligible to apply.
+        club.owner_user_id = buyer.id
+        session.commit()
+
+    response = client.post(
+        "/api/creator/apply",
+        headers=_creator_headers(token),
+        json={
+            "requested_handle": "sold.owner.creator",
+            "display_name": "Sold Owner",
+            "platform": "youtube",
+            "follower_count": 1000,
+            "social_links": ["https://youtube.com/@soldowner"],
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["status"] == "pending"
 
 
 def test_creator_application_submission_requires_verification_and_persists_application(app_client) -> None:
