@@ -7951,6 +7951,12 @@
       },
       {
         "method": "GET",
+        "path": "/api/owner/public/profile/{owner_user_id}",
+        "handler": "get_public_owner_profile",
+        "response_model": null
+      },
+      {
+        "method": "GET",
         "path": "/api/owner/public/showroom/{code}",
         "handler": "public_showroom",
         "response_model": null
@@ -10642,6 +10648,12 @@
         "path": "/api/clubs/{club_id}/jerseys/{jersey_id}",
         "handler": "update_jersey",
         "response_model": "ClubJerseysView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/public-profile",
+        "handler": "get_public_club_profile",
+        "response_model": null
       },
       {
         "method": "GET",

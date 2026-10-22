@@ -21,6 +21,7 @@ import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet_repository.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_leaderboard_entry_dto.dart';
 import 'package:gte_frontend/features/club_redesign/models/gtex_club_redesign_models.dart';
+import 'package:gte_frontend/features/club_redesign/models/gtex_public_club_profile_models.dart';
 import 'package:gte_frontend/models/club_branding_models.dart';
 import 'package:gte_frontend/models/club_catalog_models.dart';
 import 'package:gte_frontend/models/club_models.dart';
@@ -230,6 +231,53 @@ class ClubApi {
         dynastyProfile,
         trophyCabinet,
       ),
+    );
+  }
+
+  Future<GtexPublicClubProfileData> fetchPublicClubProfile({
+    required String clubId,
+  }) async {
+    final Map<String, Object?> payload = await _fetchPublicDossier(
+      path: '/api/clubs/$clubId/public-profile',
+      label: 'public club profile',
+      fallback: 'This club does not have a public profile.',
+    );
+    return GtexPublicClubProfileData.fromJson(payload);
+  }
+
+  Future<GtexPublicOwnerProfileData> fetchPublicOwnerProfile({
+    required String ownerUserId,
+  }) async {
+    final Map<String, Object?> payload = await _fetchPublicDossier(
+      path: '/owner/public/profile/$ownerUserId',
+      label: 'public owner profile',
+      fallback: 'This owner does not have a public profile.',
+    );
+    return GtexPublicOwnerProfileData.fromJson(payload);
+  }
+
+  Future<Map<String, Object?>> _fetchPublicDossier({
+    required String path,
+    required String label,
+    required String fallback,
+  }) async {
+    final GteTransportResponse response = await transport.send(
+      GteTransportRequest(
+        method: 'GET',
+        uri: config.uriFor(path),
+        headers: const <String, String>{'Accept': 'application/json'},
+      ),
+    );
+    if (response.statusCode >= 400) {
+      throw GteApiException(
+        type: _snapshotErrorType(response.statusCode),
+        statusCode: response.statusCode,
+        message: gteApiErrorMessage(response.body, fallback: fallback),
+      );
+    }
+    return GteJson.map(
+      gteApiSuccessPayload(response.body),
+      label: label,
     );
   }
 

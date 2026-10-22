@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -597,7 +599,9 @@ def create_scouting_intelligence_mission(
     return mission
 
 
-@router.post("/{club_id}/scouting-intelligence/missions/{mission_id}/complete", response_model=CompletedScoutMissionView)
+@router.post(
+    "/{club_id}/scouting-intelligence/missions/{mission_id}/complete", response_model=CompletedScoutMissionView
+)
 def complete_scouting_intelligence_mission(
     club_id: str,
     mission_id: str,
@@ -615,7 +619,9 @@ def complete_scouting_intelligence_mission(
     return completed
 
 
-@router.get("/{club_id}/scouting-intelligence/academy-supply-signals", response_model=tuple[AcademySupplySignalView, ...])
+@router.get(
+    "/{club_id}/scouting-intelligence/academy-supply-signals", response_model=tuple[AcademySupplySignalView, ...]
+)
 def list_scouting_intelligence_academy_supply_signals(
     club_id: str,
     refresh: bool = Query(default=False),
@@ -791,3 +797,23 @@ def list_purchases(
     except Exception as error:  # noqa: BLE001
         raise _to_http_error(error) from error
     return ClubPurchasesView(purchases=purchases)
+
+
+@router.get("/{club_id}/public-profile")
+def get_public_club_profile(
+    club_id: str,
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Public club dossier; deliberately separate from the owner-only V2 snapshot."""
+    from app.services.club_public_profile_service import (
+        ClubPublicProfileNotFound,
+        public_club_profile,
+    )
+
+    try:
+        return public_club_profile(session, club_id)
+    except ClubPublicProfileNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Public club profile not found.",
+        ) from exc
