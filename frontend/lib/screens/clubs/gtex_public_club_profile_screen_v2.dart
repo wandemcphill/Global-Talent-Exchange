@@ -181,6 +181,8 @@ class _GtexPublicClubProfileScreenV2State
       baseUrl: widget.baseUrl!,
       backendMode: widget.backendMode,
       accessToken: widget.accessToken,
+      isAuthenticated: widget.isAuthenticated,
+      onOpenLogin: widget.onOpenLogin,
     );
   }
 }
