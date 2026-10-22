@@ -350,9 +350,16 @@ def _build_onboarding_bootstrap(
         )
     return SessionBootstrapOnboardingState(
         has_club=False,
-        requires_club=True,
-        suggested_route="/app/club",
-        available_actions=["create_club", "join_club", "continue_as_fan"],
+        requires_club=False,
+        suggested_route="/app/home",
+        available_actions=[
+            "continue_as_fan",
+            "national_team_rentals",
+            "market",
+            "community",
+            "create_club",
+            "join_club",
+        ],
     )
 
 
