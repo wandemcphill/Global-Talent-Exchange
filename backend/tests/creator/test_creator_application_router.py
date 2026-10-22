@@ -15,8 +15,9 @@ from app.models.club_infra import ClubStadium
 from app.models.club_profile import ClubLifecycleStatus, ClubProfile, ClubType
 from app.models.creator_application import CreatorApplication
 from app.models.creator_profile import CreatorProfile
+from app.models.coin_trader import CoinTraderProfile
 from app.models.creator_provisioning import CreatorClubProvisioning, CreatorRegen, CreatorSquad
-from app.models.user import User
+from app.models.user import PublicAccountType, User, UserRole
 from backend.tests.support.signup_payloads import user_signup_payload
 
 
@@ -387,3 +388,46 @@ def test_admin_approval_provisions_creator_assets(app_client) -> None:
     )
     assert reapply_response.status_code == 409, reapply_response.text
     assert reapply_response.json()["detail"] == "creator_promotion_requires_normal_account"
+
+def test_stale_coin_trader_profile_does_not_override_normal_account_type_for_creator_promotion(
+    app_client,
+) -> None:
+    app, client = app_client
+    token = _register_creator_applicant(
+        client,
+        email="stale-trader-profile@example.com",
+        username="stale_trader_profile",
+    )
+    _mark_contacts_verified_for_test(app, email="stale-trader-profile@example.com")
+    with app.state.session_factory() as session:
+        actor = session.scalar(select(User).where(User.email == "stale-trader-profile@example.com"))
+        assert actor is not None
+        actor.role = UserRole.COIN_TRADER
+        session.add(
+            CoinTraderProfile(
+                user_id=actor.id,
+                display_name="Stale Legacy Trader Desk",
+                status="approved",
+                tier="gold",
+            )
+        )
+        session.commit()
+
+    response = client.post(
+        "/api/creator/apply",
+        headers=_creator_headers(token),
+        json={
+            "requested_handle": "stale.trader.profile",
+            "display_name": "Stale Profile Applicant",
+            "platform": "youtube",
+            "follower_count": 1200,
+            "social_links": ["https://youtube.com/@staleprofile"],
+        },
+    )
+    assert response.status_code == 201, response.text
+    with app.state.session_factory() as session:
+        actor = session.scalar(select(User).where(User.email == "stale-trader-profile@example.com"))
+        assert actor is not None
+        assert actor.account_type == PublicAccountType.USER
+        assert actor.role == UserRole.COIN_TRADER
+\n
