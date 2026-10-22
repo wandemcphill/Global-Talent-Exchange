@@ -109,15 +109,10 @@ test(
   async ({ page }, testInfo) => {
     await visitAuthedRoute(
       page,
-      process.env.GTEX_E2E_MATCH_VIEWER_ROUTE ??
-        "/matches/viewer/not-available",
+      process.env.GTEX_E2E_MATCH_VIEWER_ROUTE ?? "/matches/viewer/not-available",
     );
     await expect(
-      page
-        .getByText(
-          /No match available|Match viewer unavailable|2D Match Viewer/,
-        )
-        .first(),
+      page.getByText(/No match available|Match viewer unavailable|2D Match Viewer/).first(),
     ).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText("Verifying shipped capability")).toHaveCount(0);
     await verifyNoHorizontalOverflow(page);
