@@ -1785,7 +1785,37 @@ class _PreMatchTeamSheet extends StatelessWidget {
                     color: Colors.white.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(6),
                     border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                   ),
-                  child: Text('${shirt}${player.playerName}', style: const TextStyle(color: Color(0xFFD2DBE4), fontSize: 10)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        '${shirt}${player.playerName}',
+                        style: const TextStyle(
+                          color: Color(0xFFD2DBE4),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      if (player.role?.trim().isNotEmpty == true ||
+                          player.rating != null) ...<Widget>[
+                        const SizedBox(height: 3),
+                        Text(
+                          <String>[
+                            if (player.role?.trim().isNotEmpty == true)
+                              player.role!.replaceAll('_', ' ').toUpperCase(),
+                            if (player.rating != null)
+                              'OVR ${player.rating!.toStringAsFixed(1)}',
+                          ].join(' · '),
+                          style: const TextStyle(
+                            color: Color(0xFFF0C66B),
+                            fontSize: 8,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 );
               }).toList(growable: false),
             ),
