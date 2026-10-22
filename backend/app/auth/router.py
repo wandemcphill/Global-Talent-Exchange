@@ -485,11 +485,7 @@ def _build_session_bootstrap_response(
             creator=creator,
             coin_trader=coin_trader,
         ),
-        club=(
-            ClubProfileCore.model_validate(bootstrap.club)
-            if club_present and bootstrap.club is not None
-            else None
-        ),
+        club=(ClubProfileCore.model_validate(bootstrap.club) if club_present and bootstrap.club is not None else None),
         wallet=wallet,
         compliance=compliance,
         permissions=bootstrap.permissions,
