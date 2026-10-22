@@ -13,7 +13,7 @@ from app.economy.governor_service import EconomyGovernorService
 from app.ingestion.models import Player
 from app.models.base import Base
 from app.models.regen_ecosystem import NationalRegenSeed
-from app.models.user import User, UserRole
+from app.models.user import PublicAccountType, User, UserRole
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
 from app.players.token_service import PlayerTokenMarketError, PlayerTokenMarketService
 from app.wallets.service import LedgerPosting, WalletService
@@ -33,13 +33,20 @@ def session():
         yield db_session
 
 
-def _create_user(session, *, user_id: str, role: UserRole = UserRole.USER) -> User:
+def _create_user(
+    session,
+    *,
+    user_id: str,
+    role: UserRole = UserRole.USER,
+    account_type: PublicAccountType = PublicAccountType.USER,
+) -> User:
     user = User(
         id=user_id,
         email=f"{user_id}@example.com",
         username=user_id,
         password_hash="hashed",
         role=role,
+        account_type=account_type,
     )
     session.add(user)
     session.flush()
@@ -270,3 +277,47 @@ def test_preseeded_national_regens_cannot_issue_player_share_markets(session) ->
         )
 
     assert exc_info.value.reason == "preseeded_national_regen_share_market_ineligible"
+
+
+def test_creator_account_can_hold_only_one_share_per_player_before_any_debit(session) -> None:
+    wallet = WalletService()
+    admin = _create_user(session, user_id="creator-cap-admin", role=UserRole.ADMIN)
+    creator = _create_user(
+        session,
+        user_id="creator-cap-user",
+        account_type=PublicAccountType.CREATOR,
+    )
+    player = _create_player(session, player_id="creator-cap-player", is_tradable=True)
+    _seed_coin_balance(session, wallet, user=creator, amount=Decimal("50.0000"))
+
+    service = PlayerTokenMarketService(session=session, wallet_service=wallet)
+    service.issue_market(
+        actor=admin,
+        player_id=player.id,
+        total_shares=1000,
+        share_price_coin=Decimal("0.5000"),
+        liquidity_coin=Decimal("20.0000"),
+    )
+
+    with pytest.raises(PlayerTokenMarketError) as too_many:
+        service.buy_shares(actor=creator, player_id=player.id, share_count=2)
+    assert too_many.value.reason == "creator_single_share_limit"
+    holding = service.get_holding(user_id=creator.id, player_id=player.id)
+    assert holding is None
+
+    first_purchase = service.buy_shares(actor=creator, player_id=player.id, share_count=1)
+    assert first_purchase["holding"].share_count == 1
+    balance_after_first = wallet.get_balance(
+        session,
+        wallet.get_user_account(session, creator, LedgerUnit.COIN),
+    )
+
+    with pytest.raises(PlayerTokenMarketError) as second_share:
+        service.buy_shares(actor=creator, player_id=player.id, share_count=1)
+    assert second_share.value.reason == "creator_single_share_limit"
+    balance_after_rejection = wallet.get_balance(
+        session,
+        wallet.get_user_account(session, creator, LedgerUnit.COIN),
+    )
+    assert balance_after_rejection == balance_after_first
+    assert service.get_holding(user_id=creator.id, player_id=player.id).share_count == 1
