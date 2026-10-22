@@ -384,7 +384,7 @@ def _build_session_roles(
         role_values = {account_type, "coin_trader"}
     else:
         role_values = {account_type}
-        if role not in {UserRole.CREATOR.value if hasattr(UserRole, "CREATOR") else "creator", UserRole.COIN_TRADER.value}:
+        if role.lower() not in {"creator", "coin_trader"}:
             role_values.add(role)
     if user.account_type == PublicAccountType.USER and club_present:
         role_values.add("club_owner")
