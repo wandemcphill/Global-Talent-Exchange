@@ -235,6 +235,9 @@ def test_public_dossiers_return_404_for_private_clubs_and_nonexistent_owners(cli
             club_type=ClubType.COMMUNITY,
             lifecycle_status=ClubLifecycleStatus.ACTIVE,
             slug="private-club-profile",
+            primary_color="#101B32",
+            secondary_color="#D5B46A",
+            accent_color="#24D18F",
             visibility="private",
         )
         session.add(private_club)
