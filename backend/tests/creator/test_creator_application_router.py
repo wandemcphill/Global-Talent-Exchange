@@ -389,6 +389,7 @@ def test_admin_approval_provisions_creator_assets(app_client) -> None:
     assert reapply_response.status_code == 409, reapply_response.text
     assert reapply_response.json()["detail"] == "creator_promotion_requires_normal_account"
 
+
 def test_stale_coin_trader_profile_does_not_override_normal_account_type_for_creator_promotion(
     app_client,
 ) -> None:
@@ -430,4 +431,3 @@ def test_stale_coin_trader_profile_does_not_override_normal_account_type_for_cre
         assert actor is not None
         assert actor.account_type == PublicAccountType.USER
         assert actor.role == UserRole.COIN_TRADER
-\n
