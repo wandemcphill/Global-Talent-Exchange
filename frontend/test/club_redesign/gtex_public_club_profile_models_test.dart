@@ -163,7 +163,11 @@ void main() {
         'net_worth': '720000.00',
         'net_worth_currency': 'GTX',
         'assets': <Object?>[
-          <String, Object?>{'name': 'Sovereign 900X Jet', 'category': 'jet'},
+          <String, Object?>{
+            'name': 'Sovereign 900X Jet',
+            'category': 'jet',
+            'catalog_price': '50000.00',
+          },
           <String, Object?>{'name': 'Veloce GT9', 'category': 'car'},
           <String, Object?>{'name': 'Chronos Tourbillon', 'category': 'watch'},
         ],
@@ -177,6 +181,7 @@ void main() {
     expect(owner.clubCount, 2);
     expect(owner.luxuryAssetCount, 3);
     expect(owner.assets.map((asset) => asset.category), <String>['jet', 'car', 'watch']);
+    expect(owner.assets.first.catalogPrice, '50000.00');
     expect(owner.publicClubs, hasLength(2));
   });
 
