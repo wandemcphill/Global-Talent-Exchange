@@ -27,8 +27,17 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
     setBusy(true);
     try {
       if (mode === "login") {
-        await login(f.email, f.password);
-        navigate("/app");
+        const result = await login(f.email, f.password);
+        const accountType = String(result.user?.account_type || result.user?.accountType || "user").toLowerCase();
+        // Legacy creator/trader profiles retain their specialist entry points.
+        // New users always start with the normal GTEX member workspace.
+        navigate(
+          accountType === "creator"
+            ? "/app/creator-access"
+            : accountType === "coin_trader"
+              ? "/app/coin-traders"
+              : "/app",
+        );
       } else {
         if (!f.over18) throw new Error("You must be 18 or older to sign up for a GTEX account.");
         await signup({ full_name: f.full_name, username: f.username, email: f.email, password: f.password, is_over_18: true });
