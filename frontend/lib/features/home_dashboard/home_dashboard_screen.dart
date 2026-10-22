@@ -22,6 +22,7 @@ import 'package:gte_frontend/models/regen_universe_models.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/screens/clubs/create_club_screen.dart';
 import 'package:gte_frontend/screens/gtex_national_team_rental_screen_v2.dart';
+import 'package:gte_frontend/screens/wallet/gtex_wallet_overview_screen_v2.dart';
 import 'package:gte_frontend/screens/clubs/gtex_club_owner_dashboard_screen_v2.dart';
 import 'package:gte_frontend/screens/clubs/club_trophy_cabinet_screen.dart';
 import 'package:gte_frontend/screens/competitions/competition_discovery_screen.dart';
@@ -671,6 +672,20 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     );
   }
 
+  Future<void> _openTraderApplicationFromNoClub() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => GtexWalletOverviewScreenV2(
+          controller: widget.exchangeController,
+          baseUrl: widget.apiBaseUrl,
+          backendMode: widget.backendMode,
+          initialModule: GtexWalletDeskModule.traderDashboard,
+          onOpenLogin: widget.onOpenLogin,
+        ),
+      ),
+    );
+  }
+
   Future<void> _openCurrentClubFeatureRoute(
     GteAppRouteData Function(String clubId, String? clubName) buildRoute, {
     required String title,
@@ -1010,6 +1025,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       isAuthenticated: isAuthenticated,
       onCreateClub: _createClubOnboardingAction(),
       onOpenNationalTeam: _openNationalTeamFromNoClub,
+      onOpenCreatorAccessRequest: widget.onOpenCreatorAccessRequest == null
+          ? null
+          : () { widget.onOpenCreatorAccessRequest!.call(); },
+      onOpenTraderAccessRequest: _openTraderApplicationFromNoClub,
       onBrowseClubMarket: _browseClubMarketOnboardingAction(),
       onExploreArena: _arenaOnboardingAction(),
       onOpenMatchday: _matchdayOnboardingAction(),
