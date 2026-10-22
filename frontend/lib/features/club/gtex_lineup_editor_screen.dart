@@ -471,6 +471,7 @@ class _GtexLineupEditorScreenState extends State<GtexLineupEditorScreen> {
 
     return ListView(
       key: const Key('gtex-tactical-setup-list'),
+      cacheExtent: 3000,
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 20),
       children: <Widget>[
         Container(
@@ -1026,7 +1027,7 @@ class GtexLineupSubstitutes extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       container: true,
-      label: 'Substitutes',
+      label: 'SUBSTITUTES',
       child: Container(
         decoration: BoxDecoration(
           color: _panel,
