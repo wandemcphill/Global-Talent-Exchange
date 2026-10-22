@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { errMsg } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { publicUrl } from "@/lib/publicPath";
-import { Btn } from "@/components/gtex/ui";
+import { Btn, Loading } from "@/components/gtex/ui";
 import { TURNSTILE_SITE_KEY, TurnstileChallenge } from "@/components/gtex/TurnstileChallenge";
 
 type SignupAccountType = "user" | "creator" | "coin_trader";
@@ -56,7 +56,7 @@ const accountChoices: Array<{ id: SignupAccountType; title: string; detail: stri
 ];
 
 export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
-  const { login, signup } = useAuth();
+  const { user, loading: authLoading, login, signup } = useAuth();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
@@ -195,6 +195,29 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
   const totpUri = totpSecret
     ? `otpauth://totp/GTEX:${encodeURIComponent(f.email || f.username || "coin-trader")}?secret=${totpSecret}&issuer=GTEX`
     : "";
+
+  // Direct registration creates a separate account, never converts the
+  // currently signed-in ID. Require sign-out first to avoid accidental lane
+  // changes when the signup response replaces browser session tokens.
+  if (mode === "signup" && authLoading) {
+    return <Loading label="Checking your GTEX session..." />;
+  }
+  if (mode === "signup" && user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#070B11] px-6 py-12">
+        <section className="w-full max-w-lg space-y-4 rounded-xl border border-white/10 bg-white/[0.02] p-6">
+          <p className="gx-eyebrow">Dedicated account types</p>
+          <h1 className="gx-h2 text-white">You are already signed in.</h1>
+          <p className="text-sm leading-6 text-slate-300">
+            GTEX does not switch this account between User, Creator, and Coin Trader. Sign out first to register a separate account, or continue to your current account. Normal User accounts may request Creator promotion only after they no longer own any clubs.
+          </p>
+          <Link to="/app" className="inline-flex rounded-md bg-emerald-400 px-4 py-2 text-sm font-bold text-slate-950">
+            Return to current account
+          </Link>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="grid min-h-screen bg-[#070B11] lg:grid-cols-2">
