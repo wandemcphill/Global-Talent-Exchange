@@ -158,51 +158,70 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
 
   Future<void> _giftAsset(ShowroomExhibit exhibit) async {
     final Future<void> Function(String, Map<String, Object?>)? onAction = widget.onAction;
-    if (onAction == null) {
-      return;
-    }
-    String recipientInput = '';
+    if (onAction == null) return;
+    final TextEditingController recipientController = TextEditingController();
     final String? recipientRef = await showDialog<String>(
       context: context,
-      builder: (BuildContext dialogContext) => AlertDialog(
-        title: Text('Gift ${exhibit.name}'),
-        content: TextField(
-          key: const Key('club-showroom-gift-recipient'),
-          autofocus: true,
-          onChanged: (String value) => recipientInput = value,
-          decoration: const InputDecoration(
-            labelText: 'Recipient GTEX user ID',
-            hintText: 'Enter the intended recipient ID',
-          ),
+      builder: (BuildContext dialogContext) => Dialog(
+        backgroundColor: GtexColors.panelStrong,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24), side: BorderSide(color: GtexColors.gold.withValues(alpha: 0.45))),
+        child: Padding(
+          padding: const EdgeInsets.all(22),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+            Row(children: <Widget>[
+              Container(width: 52, height: 52, decoration: BoxDecoration(color: GtexColors.gold.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(16)), child: Icon(_icon(exhibit.category), color: GtexColors.gold, size: 28)),
+              const SizedBox(width: 14),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+                Text('A gift worthy of a champion', style: GtexTypography.bodyS(color: GtexColors.gold300)),
+                const SizedBox(height: 4),
+                Text(exhibit.name, style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(color: GtexColors.text, fontWeight: FontWeight.w900)),
+              ])),
+            ]),
+            const SizedBox(height: 16),
+            Text('Choose the player who should receive this item. The asset will be transferred through the club gifting flow.', style: Theme.of(dialogContext).textTheme.bodyMedium?.copyWith(color: GtexColors.textSecondary)),
+            const SizedBox(height: 16),
+            TextField(
+              key: const Key('club-showroom-gift-recipient'),
+              controller: recipientController,
+              autofocus: true,
+              style: const TextStyle(color: GtexColors.text),
+              decoration: InputDecoration(
+                labelText: 'Player / recipient GTEX ID',
+                hintText: 'Enter the recipient ID',
+                prefixIcon: const Icon(Icons.person_search_rounded),
+                filled: true,
+                fillColor: GtexColors.panel,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text('Only send to the intended recipient. Check the ID before confirming.', style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(color: GtexColors.textMuted)),
+            const SizedBox(height: 18),
+            Row(children: <Widget>[
+              Expanded(child: OutlinedButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Cancel'))),
+              const SizedBox(width: 10),
+              Expanded(child: FilledButton.icon(
+                key: const Key('club-showroom-gift-confirm'),
+                onPressed: () {
+                  final String value = recipientController.text.trim();
+                  if (value.isNotEmpty) Navigator.of(dialogContext).pop(value);
+                },
+                icon: const Icon(Icons.card_giftcard_rounded),
+                label: const Text('Confirm gift'),
+              )),
+            ]),
+          ]),
         ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const Key('club-showroom-gift-confirm'),
-            onPressed: () => Navigator.of(dialogContext).pop(recipientInput.trim()),
-            child: const Text('Send gift'),
-          ),
-        ],
       ),
     );
+    recipientController.dispose();
     final String normalizedRef = (recipientRef ?? '').trim();
-    if (!mounted || normalizedRef.isEmpty) {
-      return;
-    }
+    if (!mounted || normalizedRef.isEmpty) return;
     try {
-      await onAction('gift', <String, Object?>{
-        'asset_id': exhibit.id,
-        'recipient_ref': normalizedRef,
-      });
+      await onAction('gift', <String, Object?>{'asset_id': exhibit.id, 'recipient_ref': normalizedRef});
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${exhibit.name} gift submitted for ${normalizedRef}.'), behavior: SnackBarBehavior.floating));
     } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Gift failed. Please check the recipient and try again.')),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gift failed. Please check the recipient and try again.')));
     }
   }
 
