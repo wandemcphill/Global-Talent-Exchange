@@ -261,6 +261,41 @@ class _MainPitchWorkspace extends StatelessWidget {
           child: _BroadcastPanel(
             title: 'MATCH CAM',
             trailing: '${match.home.formation} / ${match.away.formation}',
+            trailingWidget: onOpenReplay != null
+                ? Tooltip(
+                    message: 'Open 2D Broadcast Pitch',
+                    child: InkWell(
+                      key: const Key('gtex-open-broadcast-viewer-btn'),
+                      onTap: () => onOpenReplay!(match.matchId),
+                      borderRadius: BorderRadius.circular(4),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.tv,
+                              size: 13,
+                              color: _GtexMatchColors.primary,
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              '2D BROADCAST',
+                              style: TextStyle(
+                                color: _GtexMatchColors.primary,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                : null,
             child: Center(
               child: _PitchViewStack(
                 match: match,
@@ -502,7 +537,23 @@ class _RightLivePanel extends StatelessWidget {
       case 3:
         return GtexTacticsPanel(
           isSending: controller.isSendingInstruction,
-          onSubmit: controller.sendInstruction,
+          onSubmit: (GtexTacticalInstruction instruction) async {
+            await controller.sendInstruction(instruction);
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Tactical instruction accepted by match authority '
+                    '(Press: ${instruction.pressIntensity}%, Line: ${instruction.defensiveLine}%, '
+                    'Tempo: ${instruction.tempo}%, Risk: ${instruction.riskLevel}%)',
+                  ),
+                  duration: const Duration(seconds: 3),
+                  backgroundColor: const Color(0xFF0F172A),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          },
         );
       case 4:
         return GtexHighlightsPanel(
@@ -572,6 +623,32 @@ class _MobileMatchView extends StatelessWidget {
                 fontFamily: 'JetBrains Mono',
               ),
             ),
+            if (onOpenReplay != null) ...[
+              const SizedBox(width: 8),
+              InkWell(
+                key: const Key('gtex-mobile-open-broadcast-btn'),
+                onTap: () => onOpenReplay!(match.matchId),
+                borderRadius: BorderRadius.circular(4),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.tv, size: 14, color: _GtexMatchColors.primary),
+                      SizedBox(width: 4),
+                      Text(
+                        '2D PITCH',
+                        style: TextStyle(
+                          color: _GtexMatchColors.primary,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
         const SizedBox(height: 10),
@@ -848,10 +925,12 @@ class _BroadcastPanel extends StatelessWidget {
     required this.title,
     required this.child,
     this.trailing,
+    this.trailingWidget,
   });
 
   final String title;
   final String? trailing;
+  final Widget? trailingWidget;
   final Widget child;
 
   @override
@@ -883,6 +962,10 @@ class _BroadcastPanel extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
+                if (trailingWidget != null) ...[
+                  trailingWidget!,
+                  if (trailing != null) const SizedBox(width: 8),
+                ],
                 if (trailing != null)
                   Text(
                     trailing!,

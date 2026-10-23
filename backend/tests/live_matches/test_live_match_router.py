@@ -37,17 +37,7 @@ def _build_app() -> tuple[FastAPI, sessionmaker[Session]]:
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    Base.metadata.create_all(
-        engine,
-        tables=[
-            CompetitionMatch.__table__,
-            User.__table__,
-            SpectatorSession.__table__,
-            BroadcastRight.__table__,
-            BroadcastAccessGrant.__table__,
-            ViewSession.__table__,
-        ],
-    )
+    Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     app.state.session_factory = session_factory
     return app, session_factory
@@ -353,3 +343,82 @@ def test_unity_live_refresh_route_revalidates_restricted_match_access() -> None:
     assert body["detail"]["message"] == "Broadcast rights access is restricted for this match."
     assert body["detail"]["access"]["has_access"] is False
     assert body["detail"]["access"]["requires_payment"] is True
+
+
+def test_update_and_read_match_tactics() -> None:
+    app, session_factory = _build_app()
+    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=42))
+    _insert_match(session_factory, replay_payload)
+    match_id = replay_payload.match_id
+
+    with TestClient(app) as client:
+        # Initial read returns formations and baseline tactics
+        get_res = client.get(f"/api/matches/{match_id}/tactics")
+        assert get_res.status_code == 200
+        get_body = get_res.json()
+        assert get_body["match_id"] == match_id
+        assert "home" in get_body and "away" in get_body
+        assert get_body["home"]["press_intensity"] == 50
+
+        # Submit tactical adjustments for home team
+        post_res = client.post(
+            f"/api/matches/{match_id}/tactics",
+            json={
+                "press_intensity": 78,
+                "defensive_line": 64,
+                "tempo": 82,
+                "risk_level": 70,
+                "formation": "4-2-3-1",
+                "side": "home",
+            },
+        )
+        assert post_res.status_code == 200
+        post_body = post_res.json()
+        assert post_body["status"] == "accepted"
+        assert post_body["side"] == "home"
+        assert post_body["tactics"]["press_intensity"] == 78
+        assert post_body["tactics"]["defensive_line"] == 64
+        assert post_body["tactics"]["tempo"] == 82
+        assert post_body["tactics"]["formation"] == "4-2-3-1"
+        assert post_body["tactics"]["mentality"] == "attacking"
+
+        # Verify persisted tactics are reflected in GET
+        refreshed = client.get(f"/api/matches/{match_id}/tactics")
+        assert refreshed.status_code == 200
+        refreshed_body = refreshed.json()
+        assert refreshed_body["home"]["press_intensity"] == 78
+        assert refreshed_body["home"]["defensive_line"] == 64
+        assert refreshed_body["home"]["tempo"] == 82
+        assert refreshed_body["home"]["formation"] == "4-2-3-1"
+        assert refreshed_body["home"]["mentality"] == "attacking"
+
+        # Update away tactics via legacy router path
+        legacy_res = client.post(
+            f"/matches/{match_id}/tactics",
+            json={
+                "press_intensity": 40,
+                "defensive_line": 35,
+                "tempo": 45,
+                "risk_level": 25,
+                "side": "away",
+            },
+        )
+        assert legacy_res.status_code == 200
+        legacy_body = legacy_res.json()
+        assert legacy_body["status"] == "accepted"
+        assert legacy_body["side"] == "away"
+        assert legacy_body["tactics"]["mentality"] == "defensive"
+
+        # Invalid side rejects
+        bad_side = client.post(
+            f"/api/matches/{match_id}/tactics",
+            json={"side": "middle"},
+        )
+        assert bad_side.status_code == 400
+
+        # Non-existent match returns 404
+        missing = client.post(
+            "/api/matches/non-existent-match-xyz/tactics",
+            json={"side": "home"},
+        )
+        assert missing.status_code == 404

@@ -6,7 +6,7 @@ import logging
 import math
 from threading import RLock, Thread
 import time
-from typing import Callable, Sequence
+from typing import Any, Callable, Sequence
 
 from fastapi import FastAPI
 from sqlalchemy import select
@@ -114,6 +114,7 @@ class LiveMatchHub:
     attendance_overlay_provider: AttendanceOverlayProvider | None = None
     _matches: dict[str, _LiveMatchRuntime] = field(default_factory=dict)
     _halted_matches: dict[str, dict[str, object]] = field(default_factory=dict)
+    _tactics: dict[str, dict[str, dict[str, Any]]] = field(default_factory=dict)
     _lock: RLock = field(default_factory=RLock)
     _hot_cache: HotPathCache = field(init=False)
 
@@ -450,6 +451,131 @@ class LiveMatchHub:
             if state is None:
                 return None
             return {"match_id": match_id, "enabled": True, **state}
+
+    def set_tactics(
+        self,
+        match_id: str,
+        *,
+        side: str,
+        press_intensity: int | float | None = None,
+        defensive_line: int | float | None = None,
+        tempo: int | float | None = None,
+        risk_level: int | float | None = None,
+        mentality: str | None = None,
+        formation: str | None = None,
+        substitutions: list[dict[str, Any]] | None = None,
+        instructions: list[str] | None = None,
+    ) -> dict[str, Any]:
+        with self._lock:
+            match_tactics = self._tactics.setdefault(match_id, {})
+            current = match_tactics.setdefault(
+                side,
+                {
+                    "press_intensity": 50,
+                    "defensive_line": 50,
+                    "tempo": 50,
+                    "risk_level": 50,
+                    "mentality": "balanced",
+                    "formation": "4-3-3",
+                },
+            )
+            if press_intensity is not None:
+                current["press_intensity"] = max(0, min(100, int(round(float(press_intensity)))))
+            if defensive_line is not None:
+                current["defensive_line"] = max(0, min(100, int(round(float(defensive_line)))))
+            if tempo is not None:
+                current["tempo"] = max(0, min(100, int(round(float(tempo)))))
+            if risk_level is not None:
+                current["risk_level"] = max(0, min(100, int(round(float(risk_level)))))
+                if mentality is None:
+                    if current["risk_level"] >= 65:
+                        mentality = "attacking"
+                    elif current["risk_level"] <= 35:
+                        mentality = "defensive"
+                    else:
+                        mentality = "balanced"
+            if mentality is not None:
+                current["mentality"] = str(mentality).strip().lower()
+            if formation is not None:
+                current["formation"] = str(formation).strip()
+            if substitutions is not None:
+                current["substitutions"] = substitutions
+            if instructions is not None:
+                current["instructions"] = instructions
+            current["updated_at"] = utcnow().isoformat()
+
+            runtime = self._matches.get(match_id)
+            live_event = None
+            channel = None
+            if runtime is not None:
+                team_name = runtime.home_team_name if side == "home" else runtime.away_team_name
+                team_id = runtime.home_team_id if side == "home" else runtime.away_team_id
+                minute = 0
+                if runtime.last_snapshot is not None:
+                    minute = runtime.last_snapshot.minute
+                if formation and runtime.viewer_state is not None:
+                    target_team = runtime.viewer_state.home_team if side == "home" else runtime.viewer_state.away_team
+                    if hasattr(target_team, "formation"):
+                        target_team.formation = formation
+
+                event_id = f"{match_id}-tactic-{int(time.time()*1000)}"
+                comm = (
+                    f"Tactical adjustment ({team_name}): tempo {current['tempo']}%, "
+                    f"pressing {current['press_intensity']}%, mentality '{current['mentality']}'."
+                )
+                live_event = LiveMatchStreamEventView(
+                    match_id=match_id,
+                    event_id=event_id,
+                    minute=minute,
+                    event_type="tactical_switch",
+                    team_id=team_id,
+                    team=team_name,
+                    team_side=side,
+                    commentary=comm,
+                    clock_label=f"{minute}'",
+                    importance_score=0.4,
+                )
+                runtime.published_events.append(live_event)
+                channel = runtime.channel
+
+            result = dict(current)
+
+        if runtime is not None and live_event is not None and channel is not None:
+            self._publish_channel(channel, {"kind": "events", "payload": [live_event.model_dump(mode="json")]})
+            self._publish_domain_events(match_id, [live_event])
+
+        return result
+
+    def get_tactics(self, match_id: str) -> dict[str, dict[str, Any]]:
+        with self._lock:
+            match_tactics = self._tactics.get(match_id, {})
+            home_t = dict(
+                match_tactics.get(
+                    "home",
+                    {
+                        "press_intensity": 50,
+                        "defensive_line": 50,
+                        "tempo": 50,
+                        "risk_level": 50,
+                        "mentality": "balanced",
+                        "formation": "4-3-3",
+                    },
+                )
+            )
+            away_t = dict(
+                match_tactics.get(
+                    "away",
+                    {
+                        "press_intensity": 50,
+                        "defensive_line": 50,
+                        "tempo": 50,
+                        "risk_level": 50,
+                        "mentality": "balanced",
+                        "formation": "4-3-3",
+                    },
+                )
+            )
+            return {"home": home_t, "away": away_t}
 
     def _run_stream(self, match_id: str) -> None:
         while True:

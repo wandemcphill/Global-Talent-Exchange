@@ -6,8 +6,9 @@ import logging
 import os
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.encoders import jsonable_encoder
+from pydantic import BaseModel
 
 from app.auth.security import TokenError
 from app.auth.dependencies import get_current_match_user, get_current_social_user
@@ -1230,26 +1231,88 @@ def read_match_v2_lineups(match_id: str, request: Request) -> dict[str, object]:
     }
 
 
+class UpdateMatchTacticsRequest(BaseModel):
+    press_intensity: int | float | None = None
+    defensive_line: int | float | None = None
+    tempo: int | float | None = None
+    risk_level: int | float | None = None
+    pressing: int | float | None = None
+    mentality: str | None = None
+    formation: str | None = None
+    side: str | None = "home"
+    substitutions: list[dict[str, Any]] | None = None
+    instructions: list[str] | None = None
+
+
 @api_router.get("/{match_id}/tactics")
+@legacy_router.get("/{match_id}/tactics")
 def read_match_v2_tactics(match_id: str, request: Request) -> dict[str, object]:
     payload = _v2_match_state_payload(match_id, request.app)
     home = dict(payload["home"])
     away = dict(payload["away"])
+    hub = ensure_live_match_hub(request.app)
+    tactics = hub.get_tactics(match_id)
+    home_tactics = tactics.get("home", {})
+    away_tactics = tactics.get("away", {})
     return {
         "match_id": payload["match_id"],
         **_strict_live_runtime_flags(),
-        "home": {"team_id": home.get("team_id"), "formation": home.get("formation")},
-        "away": {"team_id": away.get("team_id"), "formation": away.get("formation")},
+        "home": {
+            "team_id": home.get("team_id"),
+            "formation": home_tactics.get("formation") or home.get("formation") or "4-3-3",
+            "press_intensity": home_tactics.get("press_intensity", 50),
+            "defensive_line": home_tactics.get("defensive_line", 50),
+            "tempo": home_tactics.get("tempo", 50),
+            "risk_level": home_tactics.get("risk_level", 50),
+            "mentality": home_tactics.get("mentality", "balanced"),
+        },
+        "away": {
+            "team_id": away.get("team_id"),
+            "formation": away_tactics.get("formation") or away.get("formation") or "4-3-3",
+            "press_intensity": away_tactics.get("press_intensity", 50),
+            "defensive_line": away_tactics.get("defensive_line", 50),
+            "tempo": away_tactics.get("tempo", 50),
+            "risk_level": away_tactics.get("risk_level", 50),
+            "mentality": away_tactics.get("mentality", "balanced"),
+        },
     }
 
 
 @api_router.post("/{match_id}/tactics")
-def update_match_v2_tactics(match_id: str, request: Request) -> dict[str, object]:
+@legacy_router.post("/{match_id}/tactics")
+def update_match_v2_tactics(
+    match_id: str,
+    request: Request,
+    payload: UpdateMatchTacticsRequest = Body(default_factory=UpdateMatchTacticsRequest),
+) -> dict[str, object]:
     _load_strict_live_view_state(match_id, request.app)
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Live tactical instruction persistence is not mounted.",
+    hub = ensure_live_match_hub(request.app)
+    side = (payload.side or "home").strip().lower()
+    if side not in {"home", "away"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tactical instruction side must be 'home' or 'away'.",
+        )
+    applied = hub.set_tactics(
+        match_id,
+        side=side,
+        press_intensity=payload.press_intensity if payload.press_intensity is not None else payload.pressing,
+        defensive_line=payload.defensive_line,
+        tempo=payload.tempo,
+        risk_level=payload.risk_level,
+        mentality=payload.mentality,
+        formation=payload.formation,
+        substitutions=payload.substitutions,
+        instructions=payload.instructions,
     )
+    return {
+        "status": "accepted",
+        "match_id": match_id,
+        **_strict_live_runtime_flags(),
+        "side": side,
+        "tactics": applied,
+        "message": f"Tactical instructions applied to {side} team.",
+    }
 
 
 @api_router.get("/{match_id}/stats")

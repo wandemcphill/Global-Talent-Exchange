@@ -53,6 +53,7 @@ class GtexMatchViewerScreen extends StatefulWidget {
     this.titleOverride,
     this.engineBridge,
     this.androidLiveBootstrapProvisioner,
+    this.onOpenMatchCenter,
   });
 
   final CompetitionSummary competition;
@@ -71,6 +72,7 @@ class GtexMatchViewerScreen extends StatefulWidget {
   final String? titleOverride;
   final Match3DBridge? engineBridge;
   final Match3dAndroidLiveBootstrapProvisioner? androidLiveBootstrapProvisioner;
+  final VoidCallback? onOpenMatchCenter;
 
   @override
   State<GtexMatchViewerScreen> createState() => _GtexMatchViewerScreenState();
@@ -403,6 +405,7 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                           homeScore: frame.homeScore,
                           awayScore: frame.awayScore,
                           onReload: _reload,
+                          onOpenMatchCenter: widget.onOpenMatchCenter,
                         ),
                         const SizedBox(height: 10),
                         Expanded(
@@ -1177,6 +1180,7 @@ class _ScoreStrip extends StatelessWidget {
     required this.homeScore,
     required this.awayScore,
     required this.onReload,
+    this.onOpenMatchCenter,
   });
 
   final String timeLabel;
@@ -1185,6 +1189,7 @@ class _ScoreStrip extends StatelessWidget {
   final int homeScore;
   final int awayScore;
   final VoidCallback onReload;
+  final VoidCallback? onOpenMatchCenter;
 
   @override
   Widget build(BuildContext context) {
@@ -1244,6 +1249,24 @@ class _ScoreStrip extends StatelessWidget {
               ),
             ),
           ),
+          if (onOpenMatchCenter != null) ...<Widget>[
+            const SizedBox(width: 6),
+            Tooltip(
+              message: 'Open Tactical Match Center',
+              child: IconButton(
+                key: const Key('match-viewer-open-tactics-btn'),
+                onPressed: onOpenMatchCenter,
+                icon: const Icon(Icons.tune, size: 18),
+                color: const Color(0xFF38BDF8),
+                style: IconButton.styleFrom(
+                  backgroundColor: const Color(0xFF38BDF8).withValues(alpha: 0.15),
+                  fixedSize: const Size.square(32),
+                  minimumSize: const Size.square(32),
+                  padding: EdgeInsets.zero,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
