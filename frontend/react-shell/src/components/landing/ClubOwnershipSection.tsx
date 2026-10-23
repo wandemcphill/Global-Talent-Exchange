@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { Shield, Building2, Tv, Plane, Diamond, Gift, Radio, ArrowRight } from "lucide-react";
+import { Shield, Building2, Tv, Plane, Bus, CarFront, Watch, Diamond, Gift, Radio, ArrowRight } from "lucide-react";
 import { publicUrl } from "@/lib/publicPath";
 import { kClubStages, kShowroomAssets, ClubStageData, ShowroomAssetItem } from "./landingModels";
 
@@ -28,9 +28,9 @@ export const ClubOwnershipSection: React.FC = () => {
               From Grassroots Founder to Global Football Institution
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-[#9AA7BD] sm:text-base">
-              Every owner can found or acquire up to three clubs. Define club identity, construct
-              world-class facilities, appoint tacticians, and unlock luxury aviation as your
-              institutional prestige rises.
+              Every owner can found or acquire up to three clubs. Build elite facilities, acquire private jets
+              and team coach buses, collect luxury cars and wristwatches, and gift eligible items to
+              players as your football institution grows.
             </p>
           </div>
 
@@ -169,30 +169,97 @@ export const ClubOwnershipSection: React.FC = () => {
               </h3>
             </div>
             <span className="font-['Barlow_Condensed'] text-xs font-bold uppercase tracking-wider text-[#6B7A93]">
-              LUXURY FLEET • STADIUMS • FACILITIES
+              PRIVATE JETS • TEAM COACH BUSES • LUXURY CARS • WRISTWATCHES
             </span>
           </div>
 
           {/* Showroom Container */}
           <div className="mt-6 rounded-2xl border border-[#2F4C75] bg-[#081120] p-6 sm:p-8">
-            {/* Asset Selector Tabs */}
-            <div className="flex flex-wrap gap-2">
-              {kShowroomAssets.map((asset, idx) => {
-                const isSelected = idx === selectedAssetIndex;
-                return (
-                  <button
-                    key={asset.catalogKey}
-                    onClick={() => setSelectedAssetIndex(idx)}
-                    className={`rounded-lg border px-3.5 py-2 font-['Barlow_Condensed'] text-xs font-bold uppercase tracking-wider transition-colors ${
-                      isSelected
-                        ? "border-[#D4AF37] bg-[#D4AF37]/20 text-[#E8C766]"
-                        : "border-[#22385A] bg-[#13233A] text-[#9AA7BD] hover:border-[#2F4C75]"
-                    }`}
-                  >
-                    {asset.name}
-                  </button>
-                );
-              })}
+            {/* Clear luxury categories: each real item type has its own image-backed card */}
+            <div className="mt-2">
+              <div className="font-['Barlow_Condensed'] text-xs font-extrabold uppercase tracking-[0.18em] text-[#D4AF37]">
+                Four luxury categories
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-[#9AA7BD]">
+                Select a private jet, team coach bus, luxury car, or wristwatch to inspect its details.
+              </p>
+              <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                {kShowroomAssets.slice(0, 4).map((asset, idx) => {
+                  const isSelected = idx === selectedAssetIndex;
+                  const categoryIcon =
+                    asset.catalogKey === "sovereign_900x_jet" ? <Plane size={18} /> :
+                    asset.catalogKey === "vanguard_xii_coach" ? <Bus size={18} /> :
+                    asset.catalogKey === "veloce_gt9_hypercar" ? <CarFront size={18} /> :
+                    <Watch size={18} />;
+                  return (
+                    <button
+                      key={asset.catalogKey}
+                      type="button"
+                      aria-label={`${asset.category}: ${asset.name}`}
+                      aria-pressed={isSelected}
+                      onClick={() => setSelectedAssetIndex(idx)}
+                      className={`overflow-hidden rounded-xl border text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] ${
+                        isSelected
+                          ? "border-[#D4AF37] bg-[#D4AF37]/10 shadow-[0_0_18px_rgba(212,175,55,0.12)]"
+                          : "border-[#22385A] bg-[#13233A] hover:border-[#D4AF37]/60"
+                      }`}
+                    >
+                      <div className="relative flex h-28 items-center justify-center overflow-hidden bg-[#081120] p-2">
+                        <img
+                          src={publicUrl(asset.imageFile)}
+                          alt=""
+                          loading="lazy"
+                          className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
+                        />
+                        <span className="absolute left-2 top-2 rounded border border-[#D4AF37]/40 bg-[#081120]/90 px-2 py-1 font-['Barlow_Condensed'] text-[10px] font-extrabold uppercase tracking-wider text-[#E8C766]">
+                          {asset.category}
+                        </span>
+                      </div>
+                      <div className="p-3">
+                        <div className="flex items-center gap-2 text-[#D4AF37]">
+                          {categoryIcon}
+                          <span className="font-['Barlow_Condensed'] text-xs font-extrabold uppercase tracking-wider">
+                            {asset.category}
+                          </span>
+                        </div>
+                        <div className="mt-1 font-['Barlow_Condensed'] text-sm font-bold leading-tight text-[#F2F4F8]">
+                          {asset.name}
+                        </div>
+                        <div className="mt-2 text-[10px] font-bold uppercase tracking-wider text-[#6B7A93]">
+                          {isSelected ? "Selected asset" : "View asset"}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-5 border-t border-[#22385A] pt-4">
+                <div className="font-['Barlow_Condensed'] text-xs font-extrabold uppercase tracking-[0.16em] text-[#9AA7BD]">
+                  Club infrastructure
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {kShowroomAssets.slice(4).map((asset, offset) => {
+                    const idx = offset + 4;
+                    const isSelected = idx === selectedAssetIndex;
+                    return (
+                      <button
+                        key={asset.catalogKey}
+                        type="button"
+                        aria-pressed={isSelected}
+                        onClick={() => setSelectedAssetIndex(idx)}
+                        className={`rounded-lg border px-3 py-2 text-left text-xs font-bold transition-colors ${
+                          isSelected
+                            ? "border-[#D4AF37] bg-[#D4AF37]/15 text-[#E8C766]"
+                            : "border-[#22385A] bg-[#13233A] text-[#9AA7BD] hover:border-[#2F4C75]"
+                        }`}
+                      >
+                        {asset.category}: {asset.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
             {/* Featured Asset Showcase */}
