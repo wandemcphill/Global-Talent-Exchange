@@ -375,6 +375,7 @@ class _GtexClubOwnershipSectionState extends State<GtexClubOwnershipSection> {
                                           ),
                                           Positioned(
                                             left: 8,
+                                            right: 8,
                                             top: 8,
                                             child: Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
@@ -385,6 +386,8 @@ class _GtexClubOwnershipSectionState extends State<GtexClubOwnershipSection> {
                                               ),
                                               child: Text(
                                                 asset.category,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
                                                 style: const TextStyle(
                                                   color: kGoldLight,
                                                   fontSize: 9,
