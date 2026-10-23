@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import logging
@@ -50,6 +51,10 @@ def utcnow() -> datetime:
 
 class LiveMatchError(ValueError):
     pass
+
+
+class LiveMatchPersistenceError(RuntimeError):
+    """Raised when an accepted-looking tactical change cannot be persisted."""
 
 
 BatchCallback = Callable[[str, list[LiveMatchStreamEventView], LiveMatchSnapshotView], None]
@@ -598,6 +603,14 @@ class LiveMatchHub:
             _validate_formation_string(str(formation).strip())
 
         with self._lock:
+            prior_tactics = copy.deepcopy(self._tactics.get(match_id))
+            prior_runtime = self._matches.get(match_id)
+            prior_viewer_state = (
+                copy.deepcopy(prior_runtime.viewer_state)
+                if prior_runtime is not None and prior_runtime.viewer_state is not None
+                else None
+            )
+            prior_event_count = len(prior_runtime.published_events) if prior_runtime is not None else 0
             match_tactics = self._tactics.setdefault(match_id, {})
             current = match_tactics.setdefault(
                 side_norm,
@@ -641,16 +654,26 @@ class LiveMatchHub:
                         f"Cannot complete {len(substitutions)} substitutions: team has used {current_sub_count}/5 allowable substitutions."
                     )
 
-                active_pitch_ids: set[str] = set()
-                if runtime is not None and runtime.viewer_state is not None and runtime.viewer_state.frames:
-                    latest_frame = runtime.viewer_state.frames[-1]
-                    active_pitch_ids = {
-                        p.player_id
-                        for p in latest_frame.players
-                        if str(getattr(getattr(p, "side", None), "value", getattr(p, "side", "")) or "").strip().lower()
-                        == side_norm
-                    }
-
+                if runtime is None or runtime.viewer_state is None or not runtime.viewer_state.frames:
+                    raise LiveMatchError("Substitutions cannot be validated without an authoritative active lineup.")
+                latest_frame = runtime.viewer_state.frames[-1]
+                active_pitch_ids = {
+                    str(p.player_id)
+                    for p in latest_frame.players
+                    if str(getattr(getattr(p, "side", None), "value", getattr(p, "side", "")) or "").strip().lower()
+                    == side_norm
+                }
+                presentation = getattr(runtime.viewer_state, "presentation_package", None)
+                presentation_team = getattr(presentation, side_norm, None) if presentation is not None else None
+                bench_players = list(getattr(presentation_team, "bench", None) or [])
+                bench_by_id = {
+                    str(getattr(player, "player_id", "") or "").strip(): player
+                    for player in bench_players
+                    if str(getattr(player, "player_id", "") or "").strip()
+                }
+                if not bench_by_id:
+                    raise LiveMatchError(f"Substitution rejected: authoritative {side_norm} bench data is unavailable.")
+                available_bench_ids = set(bench_by_id)
                 for sub in substitutions:
                     out_id = str(sub.get("out_player_id") or sub.get("outPlayerId") or "").strip()
                     in_id = str(sub.get("in_player_id") or sub.get("inPlayerId") or "").strip()
@@ -658,17 +681,29 @@ class LiveMatchHub:
                         raise LiveMatchError("Each substitution requires both 'out_player_id' and 'in_player_id'.")
                     if out_id == in_id:
                         raise LiveMatchError(f"Invalid substitution: player {out_id} cannot replace themselves.")
-                    if active_pitch_ids:
-                        if out_id not in active_pitch_ids:
-                            raise LiveMatchError(
-                                f"Substitution rejected: player '{out_id}' is not currently on the pitch for {side_norm} team."
-                            )
-                        if in_id in active_pitch_ids:
-                            raise LiveMatchError(
-                                f"Substitution rejected: substitute '{in_id}' is already active on the pitch."
-                            )
-                        active_pitch_ids.discard(out_id)
-                        active_pitch_ids.add(in_id)
+                    if out_id not in active_pitch_ids:
+                        raise LiveMatchError(
+                            f"Substitution rejected: player '{out_id}' is not currently on the pitch for {side_norm} team."
+                        )
+                    if in_id in active_pitch_ids:
+                        raise LiveMatchError(
+                            f"Substitution rejected: substitute '{in_id}' is already active on the pitch."
+                        )
+                    if in_id not in available_bench_ids:
+                        raise LiveMatchError(
+                            f"Substitution rejected: incoming player '{in_id}' is not on the authoritative {side_norm} bench."
+                        )
+                    bench_player = bench_by_id[in_id]
+                    trusted_name = getattr(bench_player, "player_name", None) or getattr(bench_player, "name", None)
+                    if trusted_name:
+                        sub["in_player_name"] = str(trusted_name)
+                        sub["inPlayerName"] = str(trusted_name)
+                    trusted_number = getattr(bench_player, "shirt_number", None)
+                    if trusted_number is not None:
+                        sub["shirt_number"] = int(trusted_number)
+                    active_pitch_ids.discard(out_id)
+                    active_pitch_ids.add(in_id)
+                    available_bench_ids.discard(in_id)
 
                 current["substitution_count"] = current_sub_count + len(substitutions)
                 current["substitutions"] = substitutions
@@ -716,15 +751,15 @@ class LiveMatchHub:
                                         if hasattr(tp, "shirt_number"):
                                             tp.shirt_number = in_shirt
 
-                            # Update viewer_state frames
+                            # Change the current frame only. Historical match frames must
+                            # preserve the player identity for the period they depict.
                             if runtime.viewer_state.frames:
-                                for f in runtime.viewer_state.frames:
-                                    for p in f.players:
-                                        if getattr(p, "player_id", None) == out_id:
-                                            p.player_id = in_id
-                                            p.label = in_name
-                                            p.shirt_number = in_shirt
-                                            p.stamina_pct = 100.0
+                                for p in runtime.viewer_state.frames[-1].players:
+                                    if getattr(p, "player_id", None) == out_id:
+                                        p.player_id = in_id
+                                        p.label = in_name
+                                        p.shirt_number = in_shirt
+                                        p.stamina_pct = 100.0
 
                     # Shift spatial player coordinates on pitch according to tactics
                     if runtime.viewer_state.frames:
@@ -803,12 +838,33 @@ class LiveMatchHub:
                     with self.session_factory() as session:
                         comp_match = session.get(CompetitionMatch, match_id)
                         if comp_match is not None:
+                            if comp_match is None:
+                                raise ValueError(f"Match '{match_id}' disappeared before tactics persistence.")
                             meta = dict(comp_match.metadata_json or {})
                             meta["tactics"] = full_tactics
                             comp_match.metadata_json = meta
                             session.commit()
-                except Exception:
+                except Exception as exc:
                     logger.exception("Failed to persist tactics in CompetitionMatch metadata for %s", match_id)
+                    if prior_tactics is None:
+                        self._tactics.pop(match_id, None)
+                    else:
+                        self._tactics[match_id] = prior_tactics
+                    if prior_runtime is not None and prior_viewer_state is not None:
+                        prior_runtime.viewer_state = prior_viewer_state
+                        del prior_runtime.published_events[prior_event_count:]
+                    try:
+                        previous = prior_tactics or {}
+                        self._hot_cache.set(
+                            f"match:{match_id}:tactics",
+                            {"home": previous.get("home", {}), "away": previous.get("away", {})},
+                            ttl_seconds=86400,
+                        )
+                    except Exception:
+                        logger.debug("Failed to restore previous tactics cache for %s", match_id, exc_info=True)
+                    raise LiveMatchPersistenceError(
+                        f"Unable to persist tactics for match '{match_id}'."
+                    ) from exc
 
         if runtime is not None and events_to_broadcast and channel is not None:
             self._publish_channel(
