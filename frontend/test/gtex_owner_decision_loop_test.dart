@@ -224,7 +224,7 @@ void main() {
 
       expect(find.text('MATCHDAY → OWNER DECISION LOOP'), findsOneWidget);
       expect(
-        find.textContaining('Performance in this fixture has updated published player valuations'),
+        find.textContaining('Financial and valuation effects are shown only when confirmed'),
         findsOneWidget,
       );
 
