@@ -216,7 +216,6 @@ class _MainPitchWorkspace extends StatelessWidget {
       return GtexPreMatchPackagePanel(
         match: match,
         onEnterTactics: () => controller.selectTab(3),
-        onSubmitPrediction: controller.submitPrediction,
       );
     }
     final bool isFullTime = match.phase == GtexMatchPhase.fullTime;
@@ -623,7 +622,6 @@ class _MobileMatchView extends StatelessWidget {
       return GtexPreMatchPackagePanel(
         match: match,
         onEnterTactics: () => controller.selectTab(3),
-        onSubmitPrediction: controller.submitPrediction,
       );
     }
     return Column(
