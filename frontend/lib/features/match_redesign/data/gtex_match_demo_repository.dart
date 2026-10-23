@@ -26,6 +26,13 @@ class GtexMatchDemoRepository implements GtexMatchRepository {
   ) async {
     await Future<void>.delayed(const Duration(milliseconds: 250));
   }
+
+  @override
+  Future<void> submitPrediction(String matchId, String choice) {
+    return Future<void>.error(
+      StateError('Fan prediction voting requires the authenticated live match API.'),
+    );
+  }
 }
 
 GtexLiveMatchState _demoState(String matchId, {required int minute}) {
