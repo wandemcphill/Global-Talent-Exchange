@@ -501,7 +501,7 @@ class _AssetImageFrame extends StatelessWidget {
             errorBuilder: (_, __, ___) => Icon(
               isJet ? Icons.flight_takeoff_rounded : Icons.image_not_supported_outlined,
               size: 64,
-              color: isJet ? kGoldPrimary : kNavyTextMuted,
+              color: isJet ? kGoldPrimary : kTextTertiary,
             ),
           ),
           if (isJet)
