@@ -198,7 +198,7 @@ export const ClubOwnershipSection: React.FC = () => {
                       aria-label={`${asset.category}: ${asset.name}`}
                       aria-pressed={isSelected}
                       onClick={() => setSelectedAssetIndex(idx)}
-                      className={`overflow-hidden rounded-xl border text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] ${
+                      className={`group overflow-hidden rounded-xl border text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] ${
                         isSelected
                           ? "border-[#D4AF37] bg-[#D4AF37]/10 shadow-[0_0_18px_rgba(212,175,55,0.12)]"
                           : "border-[#22385A] bg-[#13233A] hover:border-[#D4AF37]/60"
