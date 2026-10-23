@@ -42,48 +42,25 @@ class _GtexPostMatchPanelState extends State<GtexPostMatchPanel> {
     final post = widget.match.postMatch ??
         GtexPostMatchPackage(
           motm: GtexPlayerOfTheMatch(
-            playerName: widget.match.home.players.isNotEmpty
-                ? widget.match.home.players.first.name
-                : 'Top Performer',
-            teamName: widget.match.home.name,
-            shirtNumber: widget.match.home.players.isNotEmpty
-                ? widget.match.home.players.first.shirtNumber
-                : 10,
-            rating: widget.match.home.score > 0 ? 8.2 : 7.2,
-            goals: widget.match.home.score,
+            playerName: '',
+            teamName: '',
+            shirtNumber: 0,
+            rating: 0,
+            goals: 0,
             assists: 0,
             keyPasses: 0,
-            passAcc: 85,
-            summary:
-                'Official post-match performance evaluation pending final whistle verification.',
+            passAcc: 0,
+            summary: 'A verified player-of-the-match record is not available for this fixture.',
+            available: false,
+            ratingAvailable: false,
+            assistsAvailable: false,
+            keyPassesAvailable: false,
+            passAccAvailable: false,
           ),
           shotMap: const [],
           momentum: const [],
-          ratings: [
-            for (final p in widget.match.home.players.take(11))
-              GtexPlayerRatingItem(
-                playerId: p.id,
-                name: p.name,
-                shirtNumber: p.shirtNumber,
-                position: p.position,
-                rating: p.rating > 0 ? p.rating : 7.0,
-                isHome: true,
-                badges: const [],
-              ),
-            for (final p in widget.match.away.players.take(11))
-              GtexPlayerRatingItem(
-                playerId: p.id,
-                name: p.name,
-                shirtNumber: p.shirtNumber,
-                position: p.position,
-                rating: p.rating > 0 ? p.rating : 7.0,
-                isHome: false,
-                badges: const [],
-              ),
-          ],
-          shareSummary:
-              '🏁 FULL TIME: ${widget.match.home.name} ${widget.match.home.score} - ${widget.match.away.score} ${widget.match.away.name}\n'
-              'Verified on Global Talent Exchange ⚽',
+          ratings: const [],
+          shareSummary: 'Verified match analytics are not available for this fixture.',
         );
 
     return Container(
@@ -153,6 +130,20 @@ class _GtexPostMatchPanelState extends State<GtexPostMatchPanel> {
             ),
             const SizedBox(height: 12),
 
+            if (finalWhistle)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 6),
+                child: Text(
+                  'FULL-TIME PERFORMANCE REVIEW',
+                  style: TextStyle(
+                    color: GtexMatchVisualTokens.textSecondary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+              ),
+
             // Big Result Title
             Text(
               finalWhistle ? resultLabel : 'MATCH STILL IN PROGRESS',
@@ -178,36 +169,53 @@ class _GtexPostMatchPanelState extends State<GtexPostMatchPanel> {
             const SizedBox(height: 14),
 
             if (finalWhistle) ...[
-              // 1. Player of the Match (MOTM) Spotlight
-              _MotmCelebrationCard(motm: post.motm),
+              // Only render analytics when supported by source records.
+              if (post.motm.available)
+                _MotmCelebrationCard(motm: post.motm)
+              else
+                const GtexMatchEmptyFeed(
+                  icon: Icons.emoji_events_outlined,
+                  title: 'Player of the match unavailable',
+                  message: 'No verified player rating or goal-contribution record was returned.',
+                ),
               const SizedBox(height: 14),
 
-              // 2. Interactive xG Shot Map
-              _XgShotMapCard(
-                shots: post.shotMap,
-                homeTeam: widget.match.home,
-                awayTeam: widget.match.away,
-              ),
+              if (post.shotMap.isNotEmpty)
+                _XgShotMapCard(shots: post.shotMap, homeTeam: widget.match.home, awayTeam: widget.match.away)
+              else
+                const GtexMatchEmptyFeed(
+                  icon: Icons.gps_off_rounded,
+                  title: 'Verified shot map unavailable',
+                  message: 'Shot coordinates and xG are shown only when recorded by the match data source.',
+                ),
               const SizedBox(height: 14),
 
-              // 3. Match Momentum Flow Chart
-              _MatchMomentumCard(
-                momentum: post.momentum,
-                homeTeam: widget.match.home,
-                awayTeam: widget.match.away,
-              ),
+              if (post.momentum.isNotEmpty)
+                _MatchMomentumCard(momentum: post.momentum, homeTeam: widget.match.home, awayTeam: widget.match.away)
+              else
+                const GtexMatchEmptyFeed(
+                  icon: Icons.show_chart_rounded,
+                  title: 'Event-impact timeline unavailable',
+                  message: 'No recorded timeline events are available for an event-impact view.',
+                ),
               const SizedBox(height: 14),
 
-              // 4. Player Performance Ratings Strip
-              _PlayerRatingsSection(
-                ratings: post.ratings,
-                homeTeam: widget.match.home,
-                awayTeam: widget.match.away,
-                showHome: _showHomeRatings,
-                onToggleTeam: (home) => setState(() {
-                  _showHomeRatings = home;
-                }),
-              ),
+              if (post.ratings.isNotEmpty)
+                _PlayerRatingsSection(
+                  ratings: post.ratings,
+                  homeTeam: widget.match.home,
+                  awayTeam: widget.match.away,
+                  showHome: _showHomeRatings,
+                  onToggleTeam: (home) => setState(() {
+                    _showHomeRatings = home;
+                  }),
+                )
+              else
+                const GtexMatchEmptyFeed(
+                  icon: Icons.bar_chart_rounded,
+                  title: 'Player ratings unavailable',
+                  message: 'No verified player ratings were supplied by the match data source.',
+                ),
               const SizedBox(height: 14),
 
               // 5. Post-Match Manager Press Conference
@@ -314,7 +322,7 @@ class _MotmCelebrationCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  '${motm.rating.toStringAsFixed(1)} RATING',
+                  motm.ratingAvailable ? '${motm.rating.toStringAsFixed(1)} RATING' : 'RATING N/A',
                   style: const TextStyle(
                     color: Color(0xFF0F172A),
                     fontSize: 11,
@@ -391,9 +399,9 @@ class _MotmCelebrationCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _MotmMetricItem(label: 'GOALS', value: '${motm.goals}'),
-                _MotmMetricItem(label: 'ASSISTS', value: '${motm.assists}'),
-                _MotmMetricItem(label: 'KEY PASSES', value: '${motm.keyPasses}'),
-                _MotmMetricItem(label: 'PASS ACC', value: '${motm.passAcc}%'),
+                _MotmMetricItem(label: 'ASSISTS', value: motm.assistsAvailable ? '${motm.assists}' : 'N/A'),
+                _MotmMetricItem(label: 'KEY PASSES', value: motm.keyPassesAvailable ? '${motm.keyPasses}' : 'N/A'),
+                _MotmMetricItem(label: 'PASS ACC', value: motm.passAccAvailable ? '${motm.passAcc}%' : 'N/A'),
               ],
             ),
           ),
@@ -1106,7 +1114,7 @@ class _OwnerDecisionLoop extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         const Text(
-          'Performance in this fixture has updated published player valuations and club token progression. Review your portfolio position or explore new talent on the market.',
+          'Review your portfolio position, explore new talent, or open the match report. Financial and valuation effects are shown only when confirmed by their owning services.',
           style: TextStyle(
             color: GtexMatchVisualTokens.textSecondary,
             fontSize: 11.5,
@@ -1120,18 +1128,21 @@ class _OwnerDecisionLoop extends StatelessWidget {
           children: [
             if (onOpenPortfolio != null)
               FilledButton.icon(
+                key: const Key('gtex-post-match-portfolio-btn'),
                 onPressed: onOpenPortfolio,
                 icon: const Icon(Icons.account_balance_wallet_outlined, size: 15),
                 label: const Text('Review Portfolio', style: TextStyle(fontSize: 11)),
               ),
             if (onOpenMarket != null)
               OutlinedButton.icon(
+                key: const Key('gtex-post-match-market-btn'),
                 onPressed: onOpenMarket,
                 icon: const Icon(Icons.storefront_outlined, size: 15),
                 label: const Text('Explore Transfer Hub', style: TextStyle(fontSize: 11)),
               ),
             if (onOpenNewsroomReport != null)
               OutlinedButton.icon(
+                key: const Key('gtex-post-match-newsroom-btn'),
                 onPressed: onOpenNewsroomReport,
                 icon: const Icon(Icons.article_outlined, size: 15),
                 label: const Text('Newsroom Report', style: TextStyle(fontSize: 11)),
@@ -1180,17 +1191,17 @@ class _MatchPerformanceSummary extends StatelessWidget {
           const SizedBox(height: 12),
           _MatchStatRow(
             label: 'Possession',
-            home: '${stats.homePossession}%',
-            away: '${stats.awayPossession}%',
-            homeValue: stats.homePossession.toDouble(),
-            awayValue: stats.awayPossession.toDouble(),
+            home: stats.possessionAvailable ? '${stats.homePossession}%' : 'N/A',
+            away: stats.possessionAvailable ? '${stats.awayPossession}%' : 'N/A',
+            homeValue: stats.possessionAvailable ? stats.homePossession.toDouble() : 0,
+            awayValue: stats.possessionAvailable ? stats.awayPossession.toDouble() : 0,
           ),
           _MatchStatRow(
             label: 'Shots',
-            home: '${stats.homeShots}',
-            away: '${stats.awayShots}',
-            homeValue: stats.homeShots.toDouble(),
-            awayValue: stats.awayShots.toDouble(),
+            home: stats.shotsAvailable ? '${stats.homeShots}' : 'N/A',
+            away: stats.shotsAvailable ? '${stats.awayShots}' : 'N/A',
+            homeValue: stats.shotsAvailable ? stats.homeShots.toDouble() : 0,
+            awayValue: stats.shotsAvailable ? stats.awayShots.toDouble() : 0,
           ),
           _MatchStatRow(
             label: 'Shots on target',
@@ -1201,17 +1212,17 @@ class _MatchPerformanceSummary extends StatelessWidget {
           ),
           _MatchStatRow(
             label: 'Pass accuracy',
-            home: '${stats.homePassAccuracy}%',
-            away: '${stats.awayPassAccuracy}%',
-            homeValue: stats.homePassAccuracy.toDouble(),
-            awayValue: stats.awayPassAccuracy.toDouble(),
+            home: stats.passingAvailable ? '${stats.homePassAccuracy}%' : 'N/A',
+            away: stats.passingAvailable ? '${stats.awayPassAccuracy}%' : 'N/A',
+            homeValue: stats.passingAvailable ? stats.homePassAccuracy.toDouble() : 0,
+            awayValue: stats.passingAvailable ? stats.awayPassAccuracy.toDouble() : 0,
           ),
           _MatchStatRow(
             label: 'Expected goals',
-            home: stats.homeExpectedGoals.toStringAsFixed(2),
-            away: stats.awayExpectedGoals.toStringAsFixed(2),
-            homeValue: stats.homeExpectedGoals,
-            awayValue: stats.awayExpectedGoals,
+            home: stats.expectedGoalsAvailable ? stats.homeExpectedGoals.toStringAsFixed(2) : 'N/A',
+            away: stats.expectedGoalsAvailable ? stats.awayExpectedGoals.toStringAsFixed(2) : 'N/A',
+            homeValue: stats.expectedGoalsAvailable ? stats.homeExpectedGoals : 0,
+            awayValue: stats.expectedGoalsAvailable ? stats.awayExpectedGoals : 0,
           ),
         ],
       ),
