@@ -283,6 +283,8 @@ function Pitch2DView({
   showTactics,
   showLanes,
   ballOwner,
+  pitchPlayers,
+  ball,
 }: {
   homeFormation: string;
   selectedPlayer: number | null;
@@ -291,9 +293,46 @@ function Pitch2DView({
   showTactics: boolean;
   showLanes: boolean;
   ballOwner: { team: "home" | "away"; num: number } | null;
+  pitchPlayers?: Array<{
+    player_id?: string;
+    name?: string;
+    shirt_number?: number;
+    x: number;
+    y: number;
+    is_home?: boolean;
+    has_ball?: boolean;
+    role?: string;
+  }>;
+  ball?: { x: number; y: number } | null;
 }) {
-  const homeCoords = HOME_FORMATION_COORDS[homeFormation] || HOME_FORMATION_COORDS["4-3-3"];
+  const defaultHomeCoords = HOME_FORMATION_COORDS[homeFormation] || HOME_FORMATION_COORDS["4-3-3"];
+  const liveHome = pitchPlayers
+    ?.filter((p) => p.is_home)
+    .map((p) => ({
+      x: p.x,
+      y: p.y,
+      num: p.shirt_number || 0,
+      role: p.role || "MF",
+      hasBall: Boolean(p.has_ball),
+      name: p.name,
+    }));
+  const homeCoords = liveHome && liveHome.length > 0 ? liveHome : defaultHomeCoords;
+
+  const liveAway = pitchPlayers
+    ?.filter((p) => !p.is_home)
+    .map((p) => ({
+      x: p.x,
+      y: p.y,
+      num: p.shirt_number || 0,
+      role: p.role || "MF",
+      hasBall: Boolean(p.has_ball),
+      name: p.name,
+    }));
+  const awayCoords = liveAway && liveAway.length > 0 ? liveAway : AWAY_PLAYERS_DEFAULT;
+
   const selectedObj = homeCoords.find((p) => p.num === selectedPlayer);
+  const ballX = (ball ? ball.x : 0.52) * 1000;
+  const ballY = (ball ? ball.y : 0.46) * 625;
 
   return (
     <div className="relative aspect-[16/10] w-full overflow-hidden rounded-lg border border-emerald-500/30 bg-[#0A1F13] shadow-2xl">
@@ -347,13 +386,13 @@ function Pitch2DView({
         {/* Heatmap Overlay */}
         {showHeatmap && (
           <g className="transition-opacity duration-300">
-            {homeCoords.map((p) => (
-              <circle key={`heat-h-${p.num}`} cx={p.x * 1000} cy={p.y * 625} r="100" fill="url(#heat-home)" />
+            {homeCoords.map((p, idx) => (
+              <circle key={`heat-h-${p.num || idx}`} cx={p.x * 1000} cy={p.y * 625} r="100" fill="url(#heat-home)" />
             ))}
-            {AWAY_PLAYERS_DEFAULT.map((p) => (
-              <circle key={`heat-a-${p.num}`} cx={p.x * 1000} cy={p.y * 625} r="100" fill="url(#heat-away)" />
+            {awayCoords.map((p, idx) => (
+              <circle key={`heat-a-${p.num || idx}`} cx={p.x * 1000} cy={p.y * 625} r="100" fill="url(#heat-away)" />
             ))}
-            <circle cx="520" cy="290" r="130" fill="url(#heat-ball)" />
+            <circle cx={ballX} cy={ballY} r="130" fill="url(#heat-ball)" />
           </g>
         )}
 
@@ -371,9 +410,9 @@ function Pitch2DView({
           <g>
             {homeCoords
               .filter((p) => p.num !== selectedObj.num)
-              .map((p) => (
+              .map((p, idx) => (
                 <line
-                  key={`lane-${p.num}`}
+                  key={`lane-${p.num || idx}`}
                   x1={selectedObj.x * 1000}
                   y1={selectedObj.y * 625}
                   x2={p.x * 1000}
@@ -388,12 +427,12 @@ function Pitch2DView({
         )}
 
         {/* Home Players */}
-        {homeCoords.map((p) => {
+        {homeCoords.map((p, idx) => {
           const isSelected = selectedPlayer === p.num;
-          const hasBall = ballOwner?.team === "home" && ballOwner?.num === p.num;
+          const hasBall = (p as any).hasBall || (ballOwner?.team === "home" && ballOwner?.num === p.num);
           return (
             <g
-              key={`home-${p.num}`}
+              key={`home-${p.num || idx}`}
               transform={`translate(${p.x * 1000}, ${p.y * 625})`}
               className="cursor-pointer transition-transform duration-300 hover:scale-110"
               onClick={() => onSelectPlayer(isSelected ? null : p.num)}
@@ -402,7 +441,7 @@ function Pitch2DView({
               <circle r="14" fill="#0F172A" stroke={hasBall ? "#00E87A" : "#FFFFFF"} strokeWidth={hasBall ? 2.5 : 1.5} />
               <circle r="11" fill="#00E87A" />
               <text y="4" textAnchor="middle" fill="#0F172A" fontSize="10" fontWeight="900" fontFamily="JetBrains Mono">
-                {p.num}
+                {p.num || idx + 1}
               </text>
               <rect x="-18" y="16" width="36" height="13" rx="2" fill="#0A0C0F" opacity="0.8" />
               <text y="26" textAnchor="middle" fill="#A7F3D0" fontSize="8" fontWeight="800">
@@ -413,14 +452,14 @@ function Pitch2DView({
         })}
 
         {/* Away Players */}
-        {AWAY_PLAYERS_DEFAULT.map((p) => {
-          const hasBall = ballOwner?.team === "away" && ballOwner?.num === p.num;
+        {awayCoords.map((p, idx) => {
+          const hasBall = (p as any).hasBall || (ballOwner?.team === "away" && ballOwner?.num === p.num);
           return (
-            <g key={`away-${p.num}`} transform={`translate(${p.x * 1000}, ${p.y * 625})`} className="cursor-pointer">
+            <g key={`away-${p.num || idx}`} transform={`translate(${p.x * 1000}, ${p.y * 625})`} className="cursor-pointer">
               <circle r="14" fill="#0F172A" stroke={hasBall ? "#FFB800" : "#FFFFFF"} strokeWidth={hasBall ? 2.5 : 1.5} />
               <circle r="11" fill="#FFB800" />
               <text y="4" textAnchor="middle" fill="#0F172A" fontSize="10" fontWeight="900" fontFamily="JetBrains Mono">
-                {p.num}
+                {p.num || idx + 1}
               </text>
               <rect x="-18" y="16" width="36" height="13" rx="2" fill="#0A0C0F" opacity="0.8" />
               <text y="26" textAnchor="middle" fill="#FDE68A" fontSize="8" fontWeight="800">
@@ -431,7 +470,7 @@ function Pitch2DView({
         })}
 
         {/* Live Ball */}
-        <g transform="translate(520, 290)">
+        <g transform={`translate(${ballX}, ${ballY})`}>
           <ellipse cx="0" cy="5" rx="8" ry="4" fill="#000000" opacity="0.4" />
           <circle r="6" fill="#FFFFFF" stroke="#0F172A" strokeWidth="1" />
           <circle r="2" fill="#00E87A" />
@@ -518,7 +557,7 @@ function TacticalHUD({
   const dispatchInstruction = async () => {
     setSubmitting(true);
     try {
-      await api.post(`/owner/matches/${matchId}/instruction`, {
+      await api.post(`/api/matches/${matchId}/tactics`, {
         press_intensity: press,
         defensive_line: line,
         tempo: tempo,
@@ -526,10 +565,10 @@ function TacticalHUD({
         formation: formation,
         side: "home",
       });
-      toast.success(`Tactical order dispatched: ${formation} · Press ${press}%`);
-    } catch {
-      // Mock fallback feedback if route stubbed
-      toast.success(`Tactical order applied: ${formation} · Press ${press}% · Line ${line}%`);
+      toast.success(`Tactical order dispatched: ${formation} · Press ${press}% · Line ${line}%`);
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || err?.message || "Tactical adjustment rejected";
+      toast.error(typeof msg === "string" ? msg : JSON.stringify(msg));
     } finally {
       setSubmitting(false);
     }
@@ -685,8 +724,39 @@ function TacticalHUD({
 }
 
 // Pre-Match Briefing Component
-function PreMatchBriefing({ match }: any) {
+function PreMatchBriefing({ match, preMatch, matchId }: { match: any; preMatch?: any; matchId: string }) {
   const [pollVote, setPollVote] = useState<string | null>(null);
+  const [predictionData, setPredictionData] = useState<any>(preMatch?.fan_predictions);
+
+  const { data: initialPreds } = useQuery({
+    queryKey: ["predictions", matchId],
+    queryFn: async () => (await api.get(`/api/matches/${matchId}/predictions`)).data,
+    initialData: preMatch?.fan_predictions,
+    enabled: !!matchId,
+  });
+
+  const preds = predictionData || initialPreds || preMatch?.fan_predictions;
+  const totalVotes = preds?.total_votes ?? 0;
+
+  const handleVote = async (choiceKey: "home" | "draw" | "away", optLabel: string) => {
+    try {
+      const res = await api.post(`/api/matches/${matchId}/predictions`, { choice: choiceKey });
+      setPollVote(optLabel);
+      setPredictionData(res.data);
+      toast.success(`Vote logged: ${optLabel}`);
+    } catch (err: any) {
+      if (err?.response?.status === 409) {
+        setPollVote(optLabel);
+        toast.info("Your vote has already been submitted for this match.");
+      } else {
+        toast.error(errMsg(err));
+      }
+    }
+  };
+
+  const keyDuel = preMatch?.key_duel;
+  const homeForm: string[] = preMatch?.home_form || [];
+  const awayForm: string[] = preMatch?.away_form || [];
 
   return (
     <div className="space-y-6">
@@ -695,101 +765,206 @@ function PreMatchBriefing({ match }: any) {
         <div className="mb-4 grid grid-cols-3 gap-2 text-center text-xs">
           <div className="rounded-sm border border-emerald-500/20 bg-emerald-500/5 p-3">
             <span className="text-slate-400">{match.home_name}</span>
-            <p className="gx-display text-2xl font-black text-emerald-400">54%</p>
+            <p className="gx-display text-2xl font-black text-emerald-400">
+              {totalVotes > 0 ? `${preds.home_win_pct}%` : "—"}
+            </p>
           </div>
           <div className="rounded-sm border border-slate-500/20 bg-slate-500/5 p-3">
             <span className="text-slate-400">Draw</span>
-            <p className="gx-display text-2xl font-black text-slate-300">22%</p>
+            <p className="gx-display text-2xl font-black text-slate-300">
+              {totalVotes > 0 ? `${preds.draw_pct}%` : "—"}
+            </p>
           </div>
           <div className="rounded-sm border border-amber-500/20 bg-amber-500/5 p-3">
             <span className="text-slate-400">{match.away_name}</span>
-            <p className="gx-display text-2xl font-black text-amber-400">24%</p>
+            <p className="gx-display text-2xl font-black text-amber-400">
+              {totalVotes > 0 ? `${preds.away_win_pct}%` : "—"}
+            </p>
           </div>
         </div>
 
-        <p className="gx-label">Fan Matchday Vote</p>
+        <div className="mb-2 flex items-center justify-between">
+          <p className="gx-label mb-0">Fan Matchday Vote</p>
+          <span className="gx-mono text-[10px] text-slate-500">
+            {totalVotes > 0 ? `${totalVotes} verified fan votes` : "Awaiting first verified votes"}
+          </span>
+        </div>
         <div className="grid grid-cols-3 gap-2">
-          {["HOME WIN", "DRAW", "AWAY WIN"].map((opt) => (
+          {[
+            { key: "home" as const, label: "HOME WIN" },
+            { key: "draw" as const, label: "DRAW" },
+            { key: "away" as const, label: "AWAY WIN" },
+          ].map(({ key, label }) => (
             <button
-              key={opt}
-              onClick={() => {
-                setPollVote(opt);
-                toast.success(`Vote logged: ${opt}`);
-              }}
+              key={key}
+              onClick={() => handleVote(key, label)}
               className={`rounded-sm py-2 text-xs font-bold transition-colors ${
-                pollVote === opt
+                pollVote === label
                   ? "border border-emerald-500 bg-emerald-500/20 text-emerald-300"
                   : "border border-white/10 bg-white/[0.02] text-slate-300 hover:border-white/30"
               }`}
             >
-              {opt}
+              {label}
             </button>
           ))}
+        </div>
+
+        {/* Real Competition Form */}
+        <div className="mt-4 border-t border-white/5 pt-3">
+          <p className="gx-label mb-2">Recent Competition Form</p>
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="rounded-sm border border-white/5 bg-slate-900/40 p-2">
+              <span className="text-[10px] text-slate-400">{match.home_name}</span>
+              <div className="mt-1 flex gap-1">
+                {homeForm.length > 0 ? (
+                  homeForm.map((f, i) => (
+                    <span
+                      key={i}
+                      className={`flex h-5 w-5 items-center justify-center rounded-xs text-[10px] font-bold ${
+                        f === "W"
+                          ? "bg-emerald-500/20 text-emerald-300"
+                          : f === "D"
+                          ? "bg-slate-500/20 text-slate-300"
+                          : "bg-red-500/20 text-red-300"
+                      }`}
+                    >
+                      {f}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-[10px] italic text-slate-500">No prior fixtures recorded</span>
+                )}
+              </div>
+            </div>
+            <div className="rounded-sm border border-white/5 bg-slate-900/40 p-2">
+              <span className="text-[10px] text-slate-400">{match.away_name}</span>
+              <div className="mt-1 flex gap-1">
+                {awayForm.length > 0 ? (
+                  awayForm.map((f, i) => (
+                    <span
+                      key={i}
+                      className={`flex h-5 w-5 items-center justify-center rounded-xs text-[10px] font-bold ${
+                        f === "W"
+                          ? "bg-emerald-500/20 text-emerald-300"
+                          : f === "D"
+                          ? "bg-slate-500/20 text-slate-300"
+                          : "bg-red-500/20 text-red-300"
+                      }`}
+                    >
+                      {f}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-[10px] italic text-slate-500">No prior fixtures recorded</span>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </Panel>
 
       {/* Key Player Duel */}
       <Panel eyebrow="Scouting Report" title="Key Player Head-to-Head Duel" testid="player-duel">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 p-4 text-center">
-            <span className="inline-block rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
-              HOME TALISMAN
-            </span>
-            <p className="mt-2 text-base font-bold text-white">Gabriel Silva</p>
-            <p className="text-xs text-slate-400">Striker · #9</p>
-            <div className="mt-3 flex justify-around text-xs">
-              <div>
-                <span className="block text-[10px] text-slate-500">GOALS</span>
-                <span className="gx-mono font-bold text-emerald-300">14</span>
-              </div>
-              <div>
-                <span className="block text-[10px] text-slate-500">RATING</span>
-                <span className="gx-mono font-bold text-emerald-300">8.4</span>
-              </div>
-              <div>
-                <span className="block text-[10px] text-slate-500">PACE</span>
-                <span className="gx-mono font-bold text-emerald-300">92</span>
+        {keyDuel?.home_player && keyDuel?.away_player ? (
+          <div className="grid grid-cols-2 gap-4">
+            <div className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 p-4 text-center">
+              <span className="inline-block rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+                HOME TALISMAN
+              </span>
+              <p className="mt-2 text-base font-bold text-white">{keyDuel.home_player.name}</p>
+              <p className="text-xs text-slate-400">
+                {keyDuel.home_player.role} · #{keyDuel.home_player.shirt_number}
+              </p>
+              <div className="mt-3 flex justify-around text-xs">
+                <div>
+                  <span className="block text-[10px] text-slate-500">RATING</span>
+                  <span className="gx-mono font-bold text-emerald-300">{keyDuel.home_player.rating ?? 7.5}</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="rounded-sm border border-amber-500/30 bg-amber-500/5 p-4 text-center">
-            <span className="inline-block rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-300">
-              AWAY DANGERMAN
-            </span>
-            <p className="mt-2 text-base font-bold text-white">Mateo Ruiz</p>
-            <p className="text-xs text-slate-400">Playmaker · #10</p>
-            <div className="mt-3 flex justify-around text-xs">
-              <div>
-                <span className="block text-[10px] text-slate-500">ASSISTS</span>
-                <span className="gx-mono font-bold text-amber-300">11</span>
-              </div>
-              <div>
-                <span className="block text-[10px] text-slate-500">RATING</span>
-                <span className="gx-mono font-bold text-amber-300">8.1</span>
-              </div>
-              <div>
-                <span className="block text-[10px] text-slate-500">VISION</span>
-                <span className="gx-mono font-bold text-amber-300">90</span>
+            <div className="rounded-sm border border-amber-500/30 bg-amber-500/5 p-4 text-center">
+              <span className="inline-block rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+                AWAY DANGERMAN
+              </span>
+              <p className="mt-2 text-base font-bold text-white">{keyDuel.away_player.name}</p>
+              <p className="text-xs text-slate-400">
+                {keyDuel.away_player.role} · #{keyDuel.away_player.shirt_number}
+              </p>
+              <div className="mt-3 flex justify-around text-xs">
+                <div>
+                  <span className="block text-[10px] text-slate-500">RATING</span>
+                  <span className="gx-mono font-bold text-amber-300">{keyDuel.away_player.rating ?? 7.5}</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <p className="p-3 text-center text-xs italic text-slate-500">
+            Player duels and tactical matchups will be evaluated once official lineups are finalized.
+          </p>
+        )}
       </Panel>
     </div>
   );
 }
 
 // Post-Match Analytics & Press Room Component
-function PostMatchAnalytics({ match, homeScore, awayScore }: any) {
+function PostMatchAnalytics({
+  match,
+  postMatch,
+  stats,
+  matchId,
+  homeScore,
+  awayScore,
+}: {
+  match: any;
+  postMatch?: any;
+  stats?: any;
+  matchId: string;
+  homeScore: number;
+  awayScore: number;
+}) {
   const [pressAnswers, setPressAnswers] = useState<Record<number, number>>({});
   const [rewardsClaimed, setRewardsClaimed] = useState(false);
+  const [claimingRewards, setClaimingRewards] = useState(false);
+
+  const motm = postMatch?.motm;
+  const shotMap: Array<{
+    minute: number;
+    is_home: boolean;
+    x: number;
+    y: number;
+    xg: number;
+    outcome: string;
+    player_name?: string;
+  }> = postMatch?.shot_map || [];
+
+  const homeXg = Number(stats?.home_expected_goals ?? (postMatch?.xg?.home ?? 0.0));
+  const awayXg = Number(stats?.away_expected_goals ?? (postMatch?.xg?.away ?? 0.0));
+
+  const claimRewards = async () => {
+    setClaimingRewards(true);
+    try {
+      const res = await api.post(`/api/matches/${matchId}/rewards/claim`);
+      setRewardsClaimed(true);
+      if (res.data?.status === "already_claimed") {
+        toast.info("Matchday settlement rewards were already claimed for this fixture.");
+      } else {
+        toast.success(`Claimed +${res.data?.xp ?? 550} XP & +${res.data?.tokens ?? 25} $TALENT Tokens!`);
+      }
+    } catch (err: any) {
+      toast.error(errMsg(err));
+    } finally {
+      setClaimingRewards(false);
+    }
+  };
 
   const questions = [
     {
       outlet: "THE ATHLETIC · TACTICAL DESK",
       journalist: "Samir Croft",
-      q: "Manager, your side dominated wide spaces in the final 30 minutes. What was your key tactical directive?",
+      q: "Manager, your side adapted rapidly during high-intensity sequences. What was your key tactical directive?",
       opts: [
         { text: '"We instructed our fullbacks to invert and create central superiority."', effect: "+15 TACTICS · +10 BOARD" },
         { text: '"The squad adapted to the tempo flawlessly. Pure collective discipline."', effect: "+20 MORALE · +10 CHEMISTRY" },
@@ -812,21 +987,30 @@ function PostMatchAnalytics({ match, homeScore, awayScore }: any) {
     <div className="space-y-6">
       {/* MOTM Celebration */}
       <Panel eyebrow="Full-time Honors" title="Player of the Match" testid="motm-card">
-        <div className="flex items-center justify-between rounded-md border border-amber-500/30 bg-gradient-to-r from-amber-500/10 to-slate-900 p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-amber-400 bg-amber-500 text-lg font-black text-slate-950">
-              #9
+        {motm ? (
+          <div className="flex items-center justify-between rounded-md border border-amber-500/30 bg-gradient-to-r from-amber-500/10 to-slate-900 p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-amber-400 bg-amber-500 text-lg font-black text-slate-950">
+                #{motm.shirt_number || 10}
+              </div>
+              <div>
+                <p className="text-sm font-black text-amber-300">{motm.player_name}</p>
+                <p className="text-xs text-slate-400">
+                  {motm.team_name} · {motm.goals} Goal{motm.goals === 1 ? "" : "s"} · {motm.assists ?? 0} Assist{motm.assists === 1 ? "" : "s"}
+                </p>
+                {motm.summary && <p className="mt-1 text-[11px] text-slate-300">{motm.summary}</p>}
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-black text-amber-300">Gabriel Silva</p>
-              <p className="text-xs text-slate-400">{match.home_name} · 2 Goals · 4 Key Passes</p>
+            <div className="text-right">
+              <span className="rounded-sm bg-amber-500 px-2 py-0.5 text-xs font-black text-slate-950">
+                {motm.rating?.toFixed(1) ?? "8.0"} RATING
+              </span>
+              <p className="mt-1 text-[10px] text-amber-200">{motm.pass_acc ?? 88}% Pass Acc</p>
             </div>
           </div>
-          <div className="text-right">
-            <span className="rounded-sm bg-amber-500 px-2 py-0.5 text-xs font-black text-slate-950">8.9 RATING</span>
-            <p className="mt-1 text-[10px] text-amber-200">92% Pass Acc</p>
-          </div>
-        </div>
+        ) : (
+          <p className="p-4 text-center text-xs text-slate-500">Player of the match evaluation pending.</p>
+        )}
       </Panel>
 
       {/* Interactive xG Shot Map */}
@@ -839,33 +1023,49 @@ function PostMatchAnalytics({ match, homeScore, awayScore }: any) {
             <circle cx="500" cy="280" r="70" fill="none" stroke="#FFFFFF" strokeWidth="2" opacity="0.3" />
 
             {/* Shots */}
-            <circle cx="820" cy="270" r="16" fill="#00E87A" stroke="#FFFFFF" strokeWidth="2" className="cursor-pointer" />
-            <text x="820" y="274" textAnchor="middle" fill="#000" fontSize="11" fontWeight="bold">
-              ⚽
-            </text>
-
-            <circle cx="780" cy="220" r="12" fill="#00E87A" stroke="#FFFFFF" strokeWidth="2" className="cursor-pointer" />
-            <text x="780" y="224" textAnchor="middle" fill="#000" fontSize="10" fontWeight="bold">
-              ⚽
-            </text>
-
-            <circle cx="720" cy="330" r="9" fill="#60A5FA" stroke="#FFFFFF" strokeWidth="1.5" className="cursor-pointer" />
-            <circle cx="680" cy="180" r="8" fill="#F87171" stroke="#FFFFFF" strokeWidth="1.5" className="cursor-pointer" />
-            <circle cx="260" cy="290" r="11" fill="#FFB800" stroke="#FFFFFF" strokeWidth="1.5" className="cursor-pointer" />
+            {shotMap.length > 0 ? (
+              shotMap.map((s, idx) => {
+                const cx = s.x * 1000;
+                const cy = s.y * 560;
+                const isGoal = s.outcome === "goal";
+                const isSaved = s.outcome === "saved";
+                const color = isGoal ? "#00E87A" : isSaved ? "#60A5FA" : "#F87171";
+                const r = isGoal ? 14 : Math.max(7, Math.min(13, (s.xg || 0.15) * 20));
+                return (
+                  <g key={`shot-${idx}`} className="cursor-pointer">
+                    <circle cx={cx} cy={cy} r={r} fill={color} stroke="#FFFFFF" strokeWidth={isGoal ? 2 : 1.5} />
+                    {isGoal && (
+                      <text x={cx} y={cy + 4} textAnchor="middle" fill="#000" fontSize="11" fontWeight="bold">
+                        ⚽
+                      </text>
+                    )}
+                  </g>
+                );
+              })
+            ) : (
+              <text x="500" y="280" textAnchor="middle" fill="#94A3B8" fontSize="13" fontStyle="italic">
+                No shot events recorded in this match (0.00 xG)
+              </text>
+            )}
           </svg>
           <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
             <div className="flex gap-3">
-              <span className="flex items-center gap-1 text-emerald-400">● Goal (xG &gt; 0.6)</span>
+              <span className="flex items-center gap-1 text-emerald-400">● Goal</span>
               <span className="flex items-center gap-1 text-blue-400">● Saved</span>
               <span className="flex items-center gap-1 text-red-400">● Missed</span>
             </div>
-            <span className="gx-mono font-bold text-white">xG: {homeScore > 0 ? (homeScore * 0.95).toFixed(2) : "1.84"} vs {(awayScore * 0.85).toFixed(2)}</span>
+            <span className="gx-mono font-bold text-white">
+              xG: {homeXg.toFixed(2)} vs {awayXg.toFixed(2)}
+            </span>
           </div>
         </div>
       </Panel>
 
-      {/* Interactive Manager Press Conference */}
-      <Panel eyebrow="Media Room" title="Post-Match Manager Press Conference" testid="press-conference">
+      {/* Simulated Media Reaction */}
+      <Panel eyebrow="AI Simulation · Press Room" title="Simulated Media Reaction (Press Room Briefing)" testid="press-conference">
+        <p className="mb-3 text-[11px] text-slate-400">
+          Post-match reactions are dynamically simulated from pitch actions and match statistics.
+        </p>
         <div className="space-y-4">
           {questions.map((q, qIdx) => (
             <div key={qIdx} className="rounded-sm border border-white/10 bg-slate-900/60 p-3">
@@ -909,20 +1109,21 @@ function PostMatchAnalytics({ match, homeScore, awayScore }: any) {
             <div className={`h-full transition-all duration-500 ${rewardsClaimed ? "w-[95%] bg-emerald-400" : "w-[85%] bg-amber-400"}`} />
           </div>
           <button
-            onClick={() => {
-              setRewardsClaimed(true);
-              toast.success("Rewards claimed: +550 XP & +25 $TALENT Tokens deposited to club wallet!");
-            }}
-            disabled={rewardsClaimed}
+            onClick={claimRewards}
+            disabled={rewardsClaimed || claimingRewards}
             className={`mt-4 flex w-full items-center justify-center gap-1.5 rounded-sm py-2 text-xs font-black uppercase tracking-wider transition-colors ${
               rewardsClaimed
                 ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                : "bg-amber-500 text-slate-950 hover:bg-amber-400"
+                : "bg-amber-500 text-slate-950 hover:bg-amber-400 disabled:opacity-50"
             }`}
           >
             {rewardsClaimed ? (
               <>
                 <CheckCircle2 size={13} /> REWARDS DEPOSITED TO WALLET
+              </>
+            ) : claimingRewards ? (
+              <>
+                <Coins size={13} className="animate-spin" /> CLAIMING SETTLEMENT...
               </>
             ) : (
               <>
@@ -940,10 +1141,25 @@ export default function MatchCenter() {
   const { id } = useParams();
   const [params] = useSearchParams();
   const clubId = params.get("club") || "";
-  const { data: m, isLoading } = useQuery({ queryKey: ["match", id], queryFn: async () => (await api.get(`/owner/matches/${id}`)).data });
+  const { data: m, isLoading } = useQuery({
+    queryKey: ["match", id],
+    queryFn: async () => (await api.get(`/owner/matches/${id}`)).data,
+    enabled: !!id,
+  });
+
+  const { data: liveState } = useQuery({
+    queryKey: ["match-live-state", id],
+    queryFn: async () => (await api.get(`/api/matches/${id}/state`)).data,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data) return 2500;
+      return data.phase === "full_time" || data.status === "FT" ? false : 2500;
+    },
+    enabled: !!id,
+  });
 
   // Clock & Playback Controls
-  const [minute, setMinute] = useState(params.get("live") ? 0 : 120);
+  const [localMinute, setLocalMinute] = useState(params.get("live") ? 0 : 120);
   const [isPaused, setIsPaused] = useState(false);
   const [speed, setSpeed] = useState(1.0);
   const [audioAtmosphere, setAudioAtmosphere] = useState(false);
@@ -965,22 +1181,37 @@ export default function MatchCenter() {
   const [risk, setRisk] = useState(45);
 
   useEffect(() => {
-    if (minute >= 120 || isPaused) return undefined;
+    if (liveState || localMinute >= 120 || isPaused) return undefined;
     const intervalMs = Math.max(80, Math.floor(380 / speed));
-    const t = setTimeout(() => setMinute((x) => x + 2), intervalMs);
+    const t = setTimeout(() => setLocalMinute((x) => x + 2), intervalMs);
     return () => clearTimeout(t);
-  }, [minute, isPaused, speed]);
+  }, [localMinute, isPaused, speed, liveState]);
 
-  const shown = useMemo(() => (m?.events || []).filter((e: any) => e.minute <= minute), [m, minute]);
+  const minute = liveState ? liveState.minute : localMinute;
+  const shown = useMemo(() => {
+    if (liveState?.timeline?.length) {
+      return liveState.timeline;
+    }
+    return (m?.events || []).filter((e: any) => e.minute <= minute);
+  }, [m, minute, liveState]);
 
   if (isLoading || !m) return <Loading label="Loading match" />;
 
-  const score = shown.filter((e: any) => e.type === "goal").reduce((acc: any, e: any) => ({ ...acc, [e.team]: acc[e.team] + 1 }), {
-    home: 0,
-    away: 0,
-  });
-  const done = minute >= 90;
-  const isScheduled = minute === 0 && params.get("live");
+  const fallbackScore = shown
+    .filter((e: any) => e.type === "goal")
+    .reduce((acc: any, e: any) => ({ ...acc, [e.team]: (acc[e.team] || 0) + 1 }), {
+      home: 0,
+      away: 0,
+    });
+
+  const score = {
+    home: liveState?.home?.score ?? fallbackScore.home,
+    away: liveState?.away?.score ?? fallbackScore.away,
+  };
+  const done = liveState
+    ? liveState.phase === "full_time" || liveState.status === "FT" || minute >= 90
+    : localMinute >= 90;
+  const isScheduled = liveState ? liveState.phase === "pre_match" && minute === 0 : localMinute === 0 && params.get("live");
   const side = m.home_club_id === clubId ? "home" : m.away_club_id === clubId ? "away" : m.narrative?.home_owner_view ? "home" : "away";
 
   const applyPreset = (preset: any) => {
@@ -1011,7 +1242,7 @@ export default function MatchCenter() {
               </Chip>
 
               {/* Pause/Resume Toggle */}
-              {!done && (
+              {!done && !liveState && (
                 <button
                   onClick={() => setIsPaused(!isPaused)}
                   className="flex items-center gap-1 rounded-sm border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-300 hover:border-white/30"
@@ -1022,7 +1253,7 @@ export default function MatchCenter() {
               )}
 
               {/* Speed Cycle Pill */}
-              {!done && (
+              {!done && !liveState && (
                 <button
                   onClick={() => setSpeed((s) => (s === 0.5 ? 1.0 : s === 1.0 ? 2.0 : 0.5))}
                   className="gx-mono rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-xs font-bold text-emerald-400"
@@ -1035,7 +1266,7 @@ export default function MatchCenter() {
               <button
                 onClick={() => {
                   setAudioAtmosphere(!audioAtmosphere);
-                  toast.info(audioAtmosphere ? "Stadium crowd audio muted" : "Stadium crowd audio active");
+                  toast.info(audioAtmosphere ? "Stadium crowd audio muted" : "Synthesized stadium atmosphere active");
                 }}
                 className={`flex items-center gap-1 rounded-sm border px-2 py-1 text-xs transition-colors ${
                   audioAtmosphere
@@ -1048,8 +1279,8 @@ export default function MatchCenter() {
               </button>
             </div>
 
-            {!done && (
-              <Btn variant="ghost" onClick={() => setMinute(120)} data-testid="skip-to-full-time">
+            {!done && !liveState && (
+              <Btn variant="ghost" onClick={() => setLocalMinute(120)} data-testid="skip-to-full-time">
                 Skip to full time
               </Btn>
             )}
@@ -1148,7 +1379,9 @@ export default function MatchCenter() {
               showHeatmap={showHeatmap}
               showTactics={showTactics}
               showLanes={showLanes}
-              ballOwner={{ team: "home", num: 10 }}
+              ballOwner={null}
+              pitchPlayers={liveState?.pitch_players}
+              ball={liveState?.ball}
             />
           </div>
         )}
@@ -1175,11 +1408,20 @@ export default function MatchCenter() {
         )}
 
         {/* Tab 3: Pre-Match Package */}
-        {activeTab === "pre_match" && <PreMatchBriefing match={m} />}
+        {activeTab === "pre_match" && (
+          <PreMatchBriefing match={m} preMatch={liveState?.pre_match} matchId={id || ""} />
+        )}
 
         {/* Tab 4: Post-Match Analytics & Press Room */}
         {activeTab === "post_match" && (
-          <PostMatchAnalytics match={m} homeScore={score.home} awayScore={score.away} />
+          <PostMatchAnalytics
+            match={m}
+            postMatch={liveState?.post_match}
+            stats={liveState?.stats}
+            matchId={id || ""}
+            homeScore={score.home}
+            awayScore={score.away}
+          />
         )}
 
         {/* Tab 5: Live Commentary & Events */}
@@ -1195,7 +1437,7 @@ export default function MatchCenter() {
                 >
                   <span className="gx-mono w-10 shrink-0 text-slate-500">{e.minute}'</span>
                   {e.type === "goal" && <Flame size={14} className="mt-0.5 text-emerald-400" />}
-                  <span>{e.text}</span>
+                  <span>{e.text || e.title || e.description}</span>
                 </li>
               ))}
             </ol>

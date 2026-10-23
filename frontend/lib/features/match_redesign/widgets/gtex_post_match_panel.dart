@@ -49,28 +49,16 @@ class _GtexPostMatchPanelState extends State<GtexPostMatchPanel> {
             shirtNumber: widget.match.home.players.isNotEmpty
                 ? widget.match.home.players.first.shirtNumber
                 : 10,
-            rating: 8.8,
+            rating: widget.match.home.score > 0 ? 8.2 : 7.2,
             goals: widget.match.home.score,
-            assists: 1,
-            keyPasses: 4,
-            passAcc: 91,
+            assists: 0,
+            keyPasses: 0,
+            passAcc: 85,
             summary:
-                'Decisive match-winning performance, controlling midfield tempo and driving attacking transitions.',
+                'Official post-match performance evaluation pending final whistle verification.',
           ),
-          shotMap: const [
-            GtexShotMapEntry(minute: 14, isHome: true, x: 0.82, y: 0.48, xg: 0.72, outcome: 'goal', playerName: 'Home Scorer'),
-            GtexShotMapEntry(minute: 42, isHome: true, x: 0.86, y: 0.52, xg: 0.65, outcome: 'goal', playerName: 'Home Scorer'),
-            GtexShotMapEntry(minute: 58, isHome: true, x: 0.78, y: 0.38, xg: 0.28, outcome: 'saved', playerName: 'Home Winger'),
-            GtexShotMapEntry(minute: 71, isHome: false, x: 0.22, y: 0.55, xg: 0.22, outcome: 'missed', playerName: 'Away Striker'),
-          ],
-          momentum: const [
-            GtexMomentumPoint(minute: 15, value: 70),
-            GtexMomentumPoint(minute: 30, value: -40),
-            GtexMomentumPoint(minute: 45, value: 65),
-            GtexMomentumPoint(minute: 60, value: 30),
-            GtexMomentumPoint(minute: 75, value: -20),
-            GtexMomentumPoint(minute: 90, value: 45),
-          ],
+          shotMap: const [],
+          momentum: const [],
           ratings: [
             for (final p in widget.match.home.players.take(11))
               GtexPlayerRatingItem(
@@ -78,9 +66,9 @@ class _GtexPostMatchPanelState extends State<GtexPostMatchPanel> {
                 name: p.name,
                 shirtNumber: p.shirtNumber,
                 position: p.position,
-                rating: p.rating > 0 ? p.rating : 7.4,
+                rating: p.rating > 0 ? p.rating : 7.0,
                 isHome: true,
-                badges: const ['Solid Shape 🛡️', '88% Pass 📊'],
+                badges: const [],
               ),
             for (final p in widget.match.away.players.take(11))
               GtexPlayerRatingItem(
@@ -88,9 +76,9 @@ class _GtexPostMatchPanelState extends State<GtexPostMatchPanel> {
                 name: p.name,
                 shirtNumber: p.shirtNumber,
                 position: p.position,
-                rating: p.rating > 0 ? p.rating : 7.1,
+                rating: p.rating > 0 ? p.rating : 7.0,
                 isHome: false,
-                badges: const ['High Workrate ⚡'],
+                badges: const [],
               ),
           ],
           shareSummary:
@@ -529,6 +517,19 @@ class _XgShotMapCard extends StatelessWidget {
                   children: [
                     // Pitch lines
                     Positioned.fill(child: CustomPaint(painter: _MiniPitchPainter())),
+
+                    // Empty state when no shots recorded
+                    if (shots.isEmpty)
+                      const Center(
+                        child: Text(
+                          'No shot events recorded in this match (0.00 xG)',
+                          style: TextStyle(
+                            color: GtexMatchVisualTokens.textTertiary,
+                            fontSize: 11,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
 
                     // Shot markers
                     for (final shot in shots)
@@ -1515,7 +1516,7 @@ class _ManagerPressConferenceCardState extends State<_ManagerPressConferenceCard
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'POST-MATCH PRESS CONFERENCE',
+                      'SIMULATED MEDIA REACTION (PRESS ROOM BRIEFING)',
                       style: TextStyle(
                         color: Color(0xFF60A5FA),
                         fontSize: 10,

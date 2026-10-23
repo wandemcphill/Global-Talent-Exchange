@@ -26,19 +26,19 @@ class _GtexPreMatchPackagePanelState extends State<GtexPreMatchPackagePanel> {
   Widget build(BuildContext context) {
     final pre = widget.match.preMatch ??
         const GtexPreMatchPackage(
-          homeForm: ['W', 'W', 'D', 'W', 'L'],
-          awayForm: ['D', 'W', 'L', 'W', 'D'],
-          homeWinRate: 65,
-          awayWinRate: 52,
-          h2hTotal: 6,
-          h2hHomeWins: 3,
-          h2hDraws: 2,
-          h2hAwayWins: 1,
-          h2hLastMeeting: '2 - 1',
-          homeWinPct: 52,
-          drawPct: 26,
-          awayWinPct: 22,
-          totalVotes: 1450,
+          homeForm: [],
+          awayForm: [],
+          homeWinRate: 0,
+          awayWinRate: 0,
+          h2hTotal: 0,
+          h2hHomeWins: 0,
+          h2hDraws: 0,
+          h2hAwayWins: 0,
+          h2hLastMeeting: 'N/A',
+          homeWinPct: 0,
+          drawPct: 0,
+          awayWinPct: 0,
+          totalVotes: 0,
         );
 
     return SingleChildScrollView(
@@ -190,9 +190,16 @@ class _PredictionPollCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final int displayHomePct = selectedPrediction == 'home' ? pre.homeWinPct + 1 : pre.homeWinPct;
-    final int displayAwayPct = selectedPrediction == 'away' ? pre.awayWinPct + 1 : pre.awayWinPct;
-    final int displayDrawPct = 100 - displayHomePct - displayAwayPct;
+    final bool hasVotes = pre.totalVotes > 0;
+    final int displayHomePct = hasVotes
+        ? (selectedPrediction == 'home' ? pre.homeWinPct + 1 : pre.homeWinPct)
+        : 33;
+    final int displayAwayPct = hasVotes
+        ? (selectedPrediction == 'away' ? pre.awayWinPct + 1 : pre.awayWinPct)
+        : 33;
+    final int displayDrawPct = hasVotes
+        ? (100 - displayHomePct - displayAwayPct).clamp(1, 100)
+        : 34;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -219,7 +226,7 @@ class _PredictionPollCard extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                '${pre.totalVotes} VOTES',
+                hasVotes ? '${pre.totalVotes} VOTES' : 'AWAITING VOTES',
                 style: const TextStyle(
                   color: GtexMatchVisualTokens.textSecondary,
                   fontSize: 10,
@@ -263,7 +270,7 @@ class _PredictionPollCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '${homeTeam.shortName} $displayHomePct%',
+                hasVotes ? '${homeTeam.shortName} $displayHomePct%' : '${homeTeam.shortName} —',
                 style: const TextStyle(
                   color: GtexMatchVisualTokens.live,
                   fontSize: 11,
@@ -272,7 +279,7 @@ class _PredictionPollCard extends StatelessWidget {
                 ),
               ),
               Text(
-                'DRAW $displayDrawPct%',
+                hasVotes ? 'DRAW $displayDrawPct%' : 'DRAW —',
                 style: const TextStyle(
                   color: Color(0xFF94A3B8),
                   fontSize: 11,
@@ -281,7 +288,7 @@ class _PredictionPollCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '${awayTeam.shortName} $displayAwayPct%',
+                hasVotes ? '${awayTeam.shortName} $displayAwayPct%' : '${awayTeam.shortName} —',
                 style: const TextStyle(
                   color: GtexMatchVisualTokens.amber,
                   fontSize: 11,
@@ -433,14 +440,24 @@ class _HeadToHeadAndFormCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Row(
-                      children: pre.homeForm
-                          .map((res) => _FormChip(result: res))
-                          .toList(),
-                    ),
+                    if (pre.homeForm.isNotEmpty)
+                      Row(
+                        children: pre.homeForm
+                            .map((res) => _FormChip(result: res))
+                            .toList(),
+                      )
+                    else
+                      const Text(
+                        'No prior fixtures',
+                        style: TextStyle(
+                          color: GtexMatchVisualTokens.textTertiary,
+                          fontSize: 10,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
                     const SizedBox(height: 4),
                     Text(
-                      '${pre.homeWinRate}% Season Win Rate',
+                      pre.homeForm.isNotEmpty ? '${pre.homeWinRate}% Season Win Rate' : 'New season form',
                       style: const TextStyle(
                         color: GtexMatchVisualTokens.textTertiary,
                         fontSize: 9.5,
@@ -468,15 +485,25 @@ class _HeadToHeadAndFormCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: pre.awayForm
-                          .map((res) => _FormChip(result: res))
-                          .toList(),
-                    ),
+                    if (pre.awayForm.isNotEmpty)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: pre.awayForm
+                            .map((res) => _FormChip(result: res))
+                            .toList(),
+                      )
+                    else
+                      const Text(
+                        'No prior fixtures',
+                        style: TextStyle(
+                          color: GtexMatchVisualTokens.textTertiary,
+                          fontSize: 10,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
                     const SizedBox(height: 4),
                     Text(
-                      '${pre.awayWinRate}% Season Win Rate',
+                      pre.awayForm.isNotEmpty ? '${pre.awayWinRate}% Season Win Rate' : 'New season form',
                       style: const TextStyle(
                         color: GtexMatchVisualTokens.textTertiary,
                         fontSize: 9.5,
@@ -491,26 +518,39 @@ class _HeadToHeadAndFormCard extends StatelessWidget {
           const Divider(height: 24, color: Color(0xFF1E2D3D)),
 
           // Historical H2H Statistics Row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _H2hStatBox(label: '${homeTeam.shortName} WINS', value: '${pre.h2hHomeWins}', color: GtexMatchVisualTokens.live),
-              _H2hStatBox(label: 'DRAWS', value: '${pre.h2hDraws}', color: const Color(0xFF94A3B8)),
-              _H2hStatBox(label: '${awayTeam.shortName} WINS', value: '${pre.h2hAwayWins}', color: GtexMatchVisualTokens.amber),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Center(
-            child: Text(
-              'Last meeting: ${pre.h2hLastMeeting}',
-              style: const TextStyle(
-                color: GtexMatchVisualTokens.textTertiary,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                fontFamily: 'JetBrains Mono',
+          if (pre.h2hTotal > 0) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _H2hStatBox(label: '${homeTeam.shortName} WINS', value: '${pre.h2hHomeWins}', color: GtexMatchVisualTokens.live),
+                _H2hStatBox(label: 'DRAWS', value: '${pre.h2hDraws}', color: const Color(0xFF94A3B8)),
+                _H2hStatBox(label: '${awayTeam.shortName} WINS', value: '${pre.h2hAwayWins}', color: GtexMatchVisualTokens.amber),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Center(
+              child: Text(
+                'Last meeting: ${pre.h2hLastMeeting}',
+                style: const TextStyle(
+                  color: GtexMatchVisualTokens.textTertiary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  fontFamily: 'JetBrains Mono',
+                ),
               ),
             ),
-          ),
+          ] else
+            const Center(
+              child: Text(
+                'No prior head-to-head records in competition database',
+                style: TextStyle(
+                  color: GtexMatchVisualTokens.textTertiary,
+                  fontSize: 10,
+                  fontStyle: FontStyle.italic,
+                  fontFamily: 'JetBrains Mono',
+                ),
+              ),
+            ),
         ],
       ),
     );

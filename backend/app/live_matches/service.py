@@ -57,6 +57,107 @@ CompleteCallback = Callable[[str], None]
 AttendanceOverlayProvider = Callable[[str, MatchCrowdStateView | None], MatchCrowdStateView | None]
 
 
+def _validate_formation_string(formation: str) -> list[int]:
+    parts = [p.strip() for p in formation.split("-") if p.strip()]
+    if len(parts) < 3:
+        raise LiveMatchError(f"Invalid formation format: '{formation}'. Must have at least 3 lines, e.g. '4-3-3'.")
+    try:
+        int_parts = [int(p) for p in parts]
+    except ValueError:
+        raise LiveMatchError(f"Invalid formation format: '{formation}'. All line counts must be integers.")
+    if sum(int_parts) != 10 or any(p <= 0 for p in int_parts):
+        raise LiveMatchError(
+            f"Invalid formation format: '{formation}'. Outfield line sizes must sum to 10 (e.g. 4-4-2, 4-3-3, 3-5-2)."
+        )
+    return int_parts
+
+
+def _reposition_frame_players(
+    frame: Any,
+    side: str,
+    formation: str,
+    defensive_line: float,
+) -> None:
+    if frame is None or not hasattr(frame, "players") or not frame.players:
+        return
+    try:
+        line_sizes = [int(p) for p in formation.split("-")]
+    except Exception:
+        line_sizes = [4, 3, 3]
+
+    side_norm = side.strip().lower()
+    team_players = [
+        p
+        for p in frame.players
+        if str(getattr(getattr(p, "side", None), "value", getattr(p, "side", "")) or "").strip().lower() == side_norm
+    ]
+    if not team_players:
+        return
+
+    home_attacks_right = getattr(frame, "home_attacks_right", True)
+    attacks_right = home_attacks_right if side_norm == "home" else not home_attacks_right
+
+    gk = next(
+        (
+            p
+            for p in team_players
+            if "goal" in str(getattr(getattr(p, "role", None), "value", getattr(p, "role", "")) or "").lower()
+        ),
+        team_players[0],
+    )
+    outfield = [p for p in team_players if p is not gk]
+
+    gk_x = 8.0 if attacks_right else 92.0
+    if hasattr(gk, "position") and gk.position is not None:
+        gk.position.x = gk_x
+        gk.position.y = 50.0
+    if hasattr(gk, "anchor_position") and gk.anchor_position is not None:
+        gk.anchor_position.x = gk_x
+        gk.anchor_position.y = 50.0
+
+    if len(line_sizes) == 3:
+        assigned_names = ["defense", "midfield", "attack"]
+    elif len(line_sizes) == 4:
+        assigned_names = ["defense", "defensive_midfield", "midfield", "attack"]
+    else:
+        assigned_names = ["defense", "midfield", "attack"] * 2
+
+    line_shift = (float(defensive_line) - 50.0) * 0.12
+    gap = 56.0 / max(1, len(line_sizes) - 1)
+
+    player_idx = 0
+    for line_idx, size in enumerate(line_sizes):
+        if line_idx == 0:
+            shift = line_shift
+        elif line_idx == len(line_sizes) - 1:
+            shift = line_shift * 0.35
+        else:
+            shift = line_shift * 0.65
+
+        base_x = max(14.0, min(86.0, 22.0 + (gap * line_idx) + shift))
+        eff_x = base_x if attacks_right else (100.0 - base_x)
+        current_line_name = assigned_names[line_idx] if line_idx < len(assigned_names) else "midfield"
+
+        for slot_idx in range(size):
+            if player_idx < len(outfield):
+                p = outfield[player_idx]
+                if size == 1:
+                    eff_y = 50.0
+                else:
+                    eff_y = 15.0 + (slot_idx * (70.0 / (size - 1)))
+                eff_y = max(10.0, min(90.0, eff_y))
+
+                if hasattr(p, "position") and p.position is not None:
+                    p.position.x = round(eff_x, 2)
+                    p.position.y = round(eff_y, 2)
+                if hasattr(p, "anchor_position") and p.anchor_position is not None:
+                    p.anchor_position.x = round(eff_x, 2)
+                    p.anchor_position.y = round(eff_y, 2)
+                if hasattr(p, "line"):
+                    p.line = current_line_name
+                player_idx += 1
+
+
 @dataclass(slots=True)
 class _LiveBatch:
     events: list[LiveMatchStreamEventView]
@@ -466,10 +567,40 @@ class LiveMatchHub:
         substitutions: list[dict[str, Any]] | None = None,
         instructions: list[str] | None = None,
     ) -> dict[str, Any]:
+        side_norm = (side or "").strip().lower()
+        if side_norm not in {"home", "away"}:
+            raise LiveMatchError("Tactical instruction side must be 'home' or 'away'.")
+
+        # Bounds validation
+        if press_intensity is not None and not (0 <= float(press_intensity) <= 100):
+            raise LiveMatchError("Press intensity must be between 0 and 100.")
+        if defensive_line is not None and not (0 <= float(defensive_line) <= 100):
+            raise LiveMatchError("Defensive line must be between 0 and 100.")
+        if tempo is not None and not (0 <= float(tempo) <= 100):
+            raise LiveMatchError("Tempo must be between 0 and 100.")
+        if risk_level is not None and not (0 <= float(risk_level) <= 100):
+            raise LiveMatchError("Risk level must be between 0 and 100.")
+
+        valid_mentalities = {
+            "attacking",
+            "defensive",
+            "balanced",
+            "ultra_attacking",
+            "ultra_defensive",
+            "cautious",
+        }
+        if mentality is not None:
+            mentality_norm = str(mentality).strip().lower()
+            if mentality_norm not in valid_mentalities:
+                raise LiveMatchError(f"Invalid mentality '{mentality}'. Must be one of {sorted(valid_mentalities)}.")
+
+        if formation is not None:
+            _validate_formation_string(str(formation).strip())
+
         with self._lock:
             match_tactics = self._tactics.setdefault(match_id, {})
             current = match_tactics.setdefault(
-                side,
+                side_norm,
                 {
                     "press_intensity": 50,
                     "defensive_line": 50,
@@ -477,6 +608,7 @@ class LiveMatchHub:
                     "risk_level": 50,
                     "mentality": "balanced",
                     "formation": "4-3-3",
+                    "substitution_count": 0,
                 },
             )
             if press_intensity is not None:
@@ -498,30 +630,115 @@ class LiveMatchHub:
                 current["mentality"] = str(mentality).strip().lower()
             if formation is not None:
                 current["formation"] = str(formation).strip()
-            if substitutions is not None:
+
+            # Substitution enforcement
+            runtime = self._matches.get(match_id)
+            current_sub_count = int(current.get("substitution_count", 0))
+
+            if substitutions:
+                if current_sub_count + len(substitutions) > 5:
+                    raise LiveMatchError(
+                        f"Cannot complete {len(substitutions)} substitutions: team has used {current_sub_count}/5 allowable substitutions."
+                    )
+
+                active_pitch_ids: set[str] = set()
+                if runtime is not None and runtime.viewer_state is not None and runtime.viewer_state.frames:
+                    latest_frame = runtime.viewer_state.frames[-1]
+                    active_pitch_ids = {
+                        p.player_id
+                        for p in latest_frame.players
+                        if str(getattr(getattr(p, "side", None), "value", getattr(p, "side", "")) or "").strip().lower()
+                        == side_norm
+                    }
+
+                for sub in substitutions:
+                    out_id = str(sub.get("out_player_id") or sub.get("outPlayerId") or "").strip()
+                    in_id = str(sub.get("in_player_id") or sub.get("inPlayerId") or "").strip()
+                    if not out_id or not in_id:
+                        raise LiveMatchError("Each substitution requires both 'out_player_id' and 'in_player_id'.")
+                    if out_id == in_id:
+                        raise LiveMatchError(f"Invalid substitution: player {out_id} cannot replace themselves.")
+                    if active_pitch_ids:
+                        if out_id not in active_pitch_ids:
+                            raise LiveMatchError(
+                                f"Substitution rejected: player '{out_id}' is not currently on the pitch for {side_norm} team."
+                            )
+                        if in_id in active_pitch_ids:
+                            raise LiveMatchError(
+                                f"Substitution rejected: substitute '{in_id}' is already active on the pitch."
+                            )
+                        active_pitch_ids.discard(out_id)
+                        active_pitch_ids.add(in_id)
+
+                current["substitution_count"] = current_sub_count + len(substitutions)
                 current["substitutions"] = substitutions
+
             if instructions is not None:
                 current["instructions"] = instructions
             current["updated_at"] = utcnow().isoformat()
 
-            runtime = self._matches.get(match_id)
             events_to_broadcast = []
             channel = None
             if runtime is not None:
-                team_name = runtime.home_team_name if side == "home" else runtime.away_team_name
-                team_id = runtime.home_team_id if side == "home" else runtime.away_team_id
+                team_name = runtime.home_team_name if side_norm == "home" else runtime.away_team_name
+                team_id = runtime.home_team_id if side_norm == "home" else runtime.away_team_id
                 minute = 0
                 if runtime.last_snapshot is not None:
-                    minute = runtime.last_snapshot.minute
-                if formation and runtime.viewer_state is not None:
-                    target_team = runtime.viewer_state.home_team if side == "home" else runtime.viewer_state.away_team
-                    if hasattr(target_team, "formation"):
+                    minute = getattr(
+                        runtime.last_snapshot, "current_minute", getattr(runtime.last_snapshot, "minute", 0)
+                    )
+
+                if runtime.viewer_state is not None:
+                    target_team = (
+                        runtime.viewer_state.home_team if side_norm == "home" else runtime.viewer_state.away_team
+                    )
+                    if formation and hasattr(target_team, "formation"):
                         target_team.formation = formation
+
+                    # Apply substitutions to active lineup and frame positions
+                    if substitutions:
+                        for sub in substitutions:
+                            out_id = str(sub.get("out_player_id") or sub.get("outPlayerId") or "").strip()
+                            in_id = str(sub.get("in_player_id") or sub.get("inPlayerId") or "").strip()
+                            out_name = str(sub.get("out_player_name") or sub.get("outPlayerName") or "Player")
+                            in_name = str(sub.get("in_player_name") or sub.get("inPlayerName") or "Substitute")
+                            in_shirt = int(sub.get("shirt_number") or 14)
+
+                            # Update team players
+                            if hasattr(target_team, "players") and target_team.players:
+                                for tp in target_team.players:
+                                    if getattr(tp, "player_id", None) == out_id:
+                                        tp.player_id = in_id
+                                        if hasattr(tp, "label"):
+                                            tp.label = in_name
+                                        if hasattr(tp, "name"):
+                                            tp.name = in_name
+                                        if hasattr(tp, "shirt_number"):
+                                            tp.shirt_number = in_shirt
+
+                            # Update viewer_state frames
+                            if runtime.viewer_state.frames:
+                                for f in runtime.viewer_state.frames:
+                                    for p in f.players:
+                                        if getattr(p, "player_id", None) == out_id:
+                                            p.player_id = in_id
+                                            p.label = in_name
+                                            p.shirt_number = in_shirt
+                                            p.stamina_pct = 100.0
+
+                    # Shift spatial player coordinates on pitch according to tactics
+                    if runtime.viewer_state.frames:
+                        _reposition_frame_players(
+                            frame=runtime.viewer_state.frames[-1],
+                            side=side_norm,
+                            formation=current["formation"],
+                            defensive_line=float(current["defensive_line"]),
+                        )
 
                 event_id = f"{match_id}-tactic-{int(time.time()*1000)}"
                 comm = (
-                    f"Tactical adjustment ({team_name}): tempo {current['tempo']}%, "
-                    f"pressing {current['press_intensity']}%, mentality '{current['mentality']}'."
+                    f"Tactical adjustment ({team_name}): formation {current['formation']}, "
+                    f"tempo {current['tempo']}%, pressing {current['press_intensity']}%, mentality '{current['mentality']}'."
                 )
                 live_event = LiveMatchStreamEventView(
                     match_id=match_id,
@@ -530,7 +747,7 @@ class LiveMatchHub:
                     event_type="tactical_switch",
                     team_id=team_id,
                     team=team_name,
-                    team_side=side,
+                    team_side=side_norm,
                     commentary=comm,
                     clock_label=f"{minute}'",
                     importance_score=0.4,
@@ -553,7 +770,7 @@ class LiveMatchHub:
                             event_type="substitution",
                             team_id=team_id,
                             team=team_name,
-                            team_side=side,
+                            team_side=side_norm,
                             player_id=in_id,
                             player=in_name,
                             secondary_player_id=out_id,
@@ -569,6 +786,30 @@ class LiveMatchHub:
 
             result = dict(current)
 
+            # Persist tactics across restarts: Hot cache and database
+            full_tactics = {
+                "home": match_tactics.get("home", {}),
+                "away": match_tactics.get("away", {}),
+            }
+            try:
+                self._hot_cache.set(f"match:{match_id}:tactics", full_tactics, ttl_seconds=86400)
+            except Exception:
+                logger.debug("Failed to set tactics in hot cache", exc_info=True)
+
+            if self.session_factory is not None:
+                try:
+                    from app.models.competition_match import CompetitionMatch
+
+                    with self.session_factory() as session:
+                        comp_match = session.get(CompetitionMatch, match_id)
+                        if comp_match is not None:
+                            meta = dict(comp_match.metadata_json or {})
+                            meta["tactics"] = full_tactics
+                            comp_match.metadata_json = meta
+                            session.commit()
+                except Exception:
+                    logger.exception("Failed to persist tactics in CompetitionMatch metadata for %s", match_id)
+
         if runtime is not None and events_to_broadcast and channel is not None:
             self._publish_channel(
                 channel,
@@ -580,7 +821,39 @@ class LiveMatchHub:
 
     def get_tactics(self, match_id: str) -> dict[str, dict[str, Any]]:
         with self._lock:
-            match_tactics = self._tactics.get(match_id, {})
+            match_tactics = self._tactics.get(match_id)
+            if not match_tactics:
+                try:
+                    cached = self._hot_cache.get(f"match:{match_id}:tactics")
+                    if isinstance(cached, dict) and ("home" in cached or "away" in cached):
+                        self._tactics[match_id] = {
+                            "home": dict(cached.get("home", {})),
+                            "away": dict(cached.get("away", {})),
+                        }
+                        match_tactics = self._tactics[match_id]
+                except Exception:
+                    pass
+
+            if not match_tactics and self.session_factory is not None:
+                try:
+                    from app.models.competition_match import CompetitionMatch
+
+                    with self.session_factory() as session:
+                        comp_match = session.get(CompetitionMatch, match_id)
+                        if comp_match is not None and comp_match.metadata_json:
+                            saved = comp_match.metadata_json.get("tactics")
+                            if isinstance(saved, dict) and ("home" in saved or "away" in saved):
+                                self._tactics[match_id] = {
+                                    "home": dict(saved.get("home", {})),
+                                    "away": dict(saved.get("away", {})),
+                                }
+                                match_tactics = self._tactics[match_id]
+                except Exception:
+                    pass
+
+            if not match_tactics:
+                match_tactics = {}
+
             home_t = dict(
                 match_tactics.get(
                     "home",
@@ -591,6 +864,7 @@ class LiveMatchHub:
                         "risk_level": 50,
                         "mentality": "balanced",
                         "formation": "4-3-3",
+                        "substitution_count": 0,
                     },
                 )
             )
@@ -604,6 +878,7 @@ class LiveMatchHub:
                         "risk_level": 50,
                         "mentality": "balanced",
                         "formation": "4-3-3",
+                        "substitution_count": 0,
                     },
                 )
             )

@@ -18,6 +18,20 @@ class Gtex2dPitch extends StatefulWidget {
   State<Gtex2dPitch> createState() => _Gtex2dPitchState();
 }
 
+class _HeatmapSample {
+  const _HeatmapSample({
+    required this.x,
+    required this.y,
+    required this.isHome,
+    required this.weight,
+  });
+
+  final double x;
+  final double y;
+  final bool isHome;
+  final double weight;
+}
+
 class _Gtex2dPitchState extends State<Gtex2dPitch> {
   bool _showTacticsOverlay = true;
   bool _showPassingLanes = true;
@@ -25,6 +39,36 @@ class _Gtex2dPitchState extends State<Gtex2dPitch> {
   double _playbackSpeed = 1.0;
   bool _isPaused = false;
   bool _isAudioAtmosphereOn = false;
+  final List<_HeatmapSample> _historicalHeatmapSamples = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _recordHeatmapSamples();
+  }
+
+  @override
+  void didUpdateWidget(Gtex2dPitch oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _recordHeatmapSamples();
+  }
+
+  void _recordHeatmapSamples() {
+    if (widget.match.pitchPlayers.isEmpty) return;
+    for (final p in widget.match.pitchPlayers) {
+      _historicalHeatmapSamples.add(
+        _HeatmapSample(
+          x: p.x,
+          y: p.y,
+          isHome: p.isHome,
+          weight: p.hasBall ? 1.5 : 1.0,
+        ),
+      );
+    }
+    if (_historicalHeatmapSamples.length > 400) {
+      _historicalHeatmapSamples.removeRange(0, _historicalHeatmapSamples.length - 400);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -103,6 +147,7 @@ class _Gtex2dPitchState extends State<Gtex2dPitch> {
                               players: widget.match.pitchPlayers,
                               ballX: ballX,
                               ballY: ballY,
+                              historicalSamples: _historicalHeatmapSamples,
                             ),
                           ),
                         ),
@@ -1128,31 +1173,36 @@ class _TacticalToolbar extends StatelessWidget {
         const SizedBox(width: 4),
 
         // Stadium Audio Atmosphere Toggle
-        InkWell(
-          onTap: onToggleAudio,
-          borderRadius: BorderRadius.circular(4),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-            decoration: BoxDecoration(
-              color: isAudioAtmosphereOn ? const Color(0xE61E3A8A) : const Color(0xCC0A0C0F),
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(
-                color: isAudioAtmosphereOn ? const Color(0xFF60A5FA) : Colors.white24,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  isAudioAtmosphereOn ? Icons.volume_up_rounded : Icons.volume_off_rounded,
-                  size: 11,
-                  color: isAudioAtmosphereOn ? const Color(0xFF60A5FA) : Colors.white60,
+        Tooltip(
+          message: isAudioAtmosphereOn
+              ? 'SYNTHESIZED STADIUM ATMOSPHERE (ACTIVE)'
+              : 'SYNTHESIZED STADIUM ATMOSPHERE (MUTED)',
+          child: InkWell(
+            onTap: onToggleAudio,
+            borderRadius: BorderRadius.circular(4),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              decoration: BoxDecoration(
+                color: isAudioAtmosphereOn ? const Color(0xE61E3A8A) : const Color(0xCC0A0C0F),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(
+                  color: isAudioAtmosphereOn ? const Color(0xFF60A5FA) : Colors.white24,
                 ),
-                if (isAudioAtmosphereOn) ...[
-                  const SizedBox(width: 4),
-                  const _AtmosphereEqualizerIndicator(),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isAudioAtmosphereOn ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+                    size: 11,
+                    color: isAudioAtmosphereOn ? const Color(0xFF60A5FA) : Colors.white60,
+                  ),
+                  if (isAudioAtmosphereOn) ...[
+                    const SizedBox(width: 4),
+                    const _AtmosphereEqualizerIndicator(),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -1166,17 +1216,40 @@ class _PitchHeatmapPainter extends CustomPainter {
     required this.players,
     required this.ballX,
     required this.ballY,
+    required this.historicalSamples,
   });
 
   final List<GtexPitchPlayer> players;
   final double ballX;
   final double ballY;
+  final List<_HeatmapSample> historicalSamples;
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (players.isEmpty) return;
+    if (players.isEmpty && historicalSamples.isEmpty) return;
 
     final Paint radialPaint = Paint()..blendMode = BlendMode.screen;
+
+    // Draw historical accumulated spatial coverage
+    for (final sample in historicalSamples) {
+      final double sx = sample.x * size.width;
+      final double sy = sample.y * size.height;
+      final double radius = size.width * 0.08 * sample.weight;
+
+      final Color centerColor = sample.isHome
+          ? const Color(0x1500E87A)
+          : const Color(0x15FFB800);
+
+      radialPaint.shader = RadialGradient(
+        colors: [
+          centerColor,
+          Colors.transparent,
+        ],
+        stops: const [0.0, 1.0],
+      ).createShader(Rect.fromCircle(center: Offset(sx, sy), radius: radius));
+
+      canvas.drawCircle(Offset(sx, sy), radius, radialPaint);
+    }
 
     // Draw player presence heat zones
     for (final player in players) {
@@ -1221,7 +1294,8 @@ class _PitchHeatmapPainter extends CustomPainter {
   bool shouldRepaint(covariant _PitchHeatmapPainter oldDelegate) {
     return oldDelegate.ballX != ballX ||
         oldDelegate.ballY != ballY ||
-        oldDelegate.players != players;
+        oldDelegate.players != players ||
+        oldDelegate.historicalSamples.length != historicalSamples.length;
   }
 }
 
