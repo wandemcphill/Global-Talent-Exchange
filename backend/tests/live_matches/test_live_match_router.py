@@ -538,7 +538,7 @@ def test_tactical_validation_and_substitutions() -> None:
         assert "not currently on the pitch" in invalid_sub.json()["detail"]
 
         # Valid substitution uses a player from the fixture's real bench.
-        bench_players = replay.visual_identity.home_team.player_visuals[11:]
+        bench_players = replay_payload.visual_identity.home_team.player_visuals[11:]
         assert bench_players, "test fixture requires a home bench"
         incoming_player = bench_players[0]
         incoming_id = incoming_player.player_id
