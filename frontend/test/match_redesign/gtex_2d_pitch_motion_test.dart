@@ -88,7 +88,8 @@ void main() {
     await tester.pump();
 
     expect(find.text('ALEX STRIKER'), findsOneWidget);
-    expect(find.byType(AnimatedPositioned), findsNWidgets(2));
+    expect(find.byKey(const ValueKey<String>('player-9')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('player-4')), findsOneWidget);
     final double startX = tester.getTopLeft(
       find.descendant(
         of: find.byKey(const ValueKey<String>('player-9')),
