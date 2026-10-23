@@ -883,13 +883,16 @@ class LiveMatchHub:
 
                     with self.session_factory() as session:
                         comp_match = session.get(CompetitionMatch, match_id)
-                        if comp_match is not None:
-                            if comp_match is None:
-                                raise ValueError(f"Match '{match_id}' disappeared before tactics persistence.")
-                            meta = dict(comp_match.metadata_json or {})
-                            meta["tactics"] = full_tactics
-                            comp_match.metadata_json = meta
-                            session.commit()
+                        if comp_match is None:
+                            raise ValueError(f"Match '{match_id}' disappeared before tactics persistence.")
+                        meta = dict(comp_match.metadata_json or {})
+                        meta["tactics"] = full_tactics
+                        if runtime is not None and runtime.viewer_state is not None:
+                            # Persist the updated canonical viewer state as well as tactic
+                            # settings so a worker restart does not revert the active XI.
+                            meta["match_viewer"] = runtime.viewer_state.model_dump(mode="json")
+                        comp_match.metadata_json = meta
+                        session.commit()
                 except Exception as exc:
                     logger.exception("Failed to persist tactics in CompetitionMatch metadata for %s", match_id)
                     if prior_tactics is None:
