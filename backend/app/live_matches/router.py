@@ -1099,6 +1099,7 @@ def _v2_pre_match_payload(match_id: str, view_state: Any, app: Any = None) -> di
                         select(CompetitionMatch)
                         .where(
                             CompetitionMatch.status == "completed",
+                            CompetitionMatch.id != match_id,
                             (CompetitionMatch.home_club_id == h_id) | (CompetitionMatch.away_club_id == h_id),
                         )
                         .order_by(CompetitionMatch.completed_at.desc(), CompetitionMatch.created_at.desc())
@@ -1119,6 +1120,7 @@ def _v2_pre_match_payload(match_id: str, view_state: Any, app: Any = None) -> di
                         select(CompetitionMatch)
                         .where(
                             CompetitionMatch.status == "completed",
+                            CompetitionMatch.id != match_id,
                             (CompetitionMatch.home_club_id == a_id) | (CompetitionMatch.away_club_id == a_id),
                         )
                         .order_by(CompetitionMatch.completed_at.desc(), CompetitionMatch.created_at.desc())
@@ -1139,6 +1141,7 @@ def _v2_pre_match_payload(match_id: str, view_state: Any, app: Any = None) -> di
                         select(CompetitionMatch)
                         .where(
                             CompetitionMatch.status == "completed",
+                            CompetitionMatch.id != match_id,
                             ((CompetitionMatch.home_club_id == h_id) & (CompetitionMatch.away_club_id == a_id))
                             | ((CompetitionMatch.home_club_id == a_id) & (CompetitionMatch.away_club_id == h_id)),
                         )
@@ -1157,7 +1160,11 @@ def _v2_pre_match_payload(match_id: str, view_state: Any, app: Any = None) -> di
                             h2h_away += 1
                     if h2h_matches:
                         lm = h2h_matches[0]
-                        last_meeting = f"{home_name} {lm.home_score} - {lm.away_score} {away_name}"
+                        if lm.home_club_id == h_id:
+                            home_score, away_score = lm.home_score, lm.away_score
+                        else:
+                            home_score, away_score = lm.away_score, lm.home_score
+                        last_meeting = f"{home_name} {home_score} - {away_score} {away_name}"
         except Exception:
             logger.debug("Failed to query real pre-match stats from database", exc_info=True)
 
@@ -1183,17 +1190,23 @@ def _v2_pre_match_payload(match_id: str, view_state: Any, app: Any = None) -> di
         (
             p
             for p in home_players
-            if "forward" in str(getattr(p, "role", "")).lower() or "attack" in str(getattr(p, "role", "")).lower()
+            if any(
+                token in str(getattr(p, "role", "")).lower()
+                for token in ("forward", "attack", "striker", "winger", "st", "rw", "lw", "cf")
+            )
         ),
-        home_players[0] if home_players else None,
+        None,
     )
     away_defender = next(
         (
             p
             for p in away_players
-            if "defen" in str(getattr(p, "role", "")).lower() or "back" in str(getattr(p, "role", "")).lower()
+            if any(
+                token in str(getattr(p, "role", "")).lower()
+                for token in ("defen", "back", "cb", "lb", "rb", "lwb", "rwb", "sweeper")
+            )
         ),
-        away_players[0] if away_players else None,
+        None,
     )
 
     if home_forward is not None and away_defender is not None:
@@ -1698,7 +1711,7 @@ def update_match_v2_tactics(
                 if club is None:
                     raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Tactical changes are disabled because club ownership records are unavailable.")
                 if str(club.owner_user_id) != str(current_user.id):
-                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"You do not have management authority for the {side} team.")
+                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"You cannot submit tactical adjustments for opponent's team ({side}).")
     except HTTPException:
         raise
     except Exception as exc:
