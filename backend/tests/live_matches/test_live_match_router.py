@@ -599,6 +599,7 @@ def test_zero_zero_match_data_integrity() -> None:
     post = post_res.json()["post_match"]
     assert post["shot_map"] == []
     assert post["motm"]["goals"] == 0
+    assert "recorded xG: N/A - N/A" in post["share_summary"]
 
 
 def test_read_match_pre_match_package() -> None:
