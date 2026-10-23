@@ -688,7 +688,33 @@ function PreMatchBriefing({ match, preMatch, matchId }: { match: any; preMatch?:
     }
   };
 
-  const keyDuel = preMatch?.key_duel;
+  const rawKeyDuel = preMatch?.key_duel;
+  const keyDuel = rawKeyDuel && rawKeyDuel.available !== false
+    ? {
+        home_player: rawKeyDuel.home_player ?? (
+          rawKeyDuel.home_player_name
+            ? {
+                id: rawKeyDuel.home_player_id,
+                name: rawKeyDuel.home_player_name,
+                role: rawKeyDuel.home_player_role,
+                shirt_number: rawKeyDuel.home_player_shirt_number,
+                rating: rawKeyDuel.home_player_rating,
+              }
+            : null
+        ),
+        away_player: rawKeyDuel.away_player ?? (
+          rawKeyDuel.away_player_name
+            ? {
+                id: rawKeyDuel.away_player_id,
+                name: rawKeyDuel.away_player_name,
+                role: rawKeyDuel.away_player_role,
+                shirt_number: rawKeyDuel.away_player_shirt_number,
+                rating: rawKeyDuel.away_player_rating,
+              }
+            : null
+        ),
+      }
+    : null;
   const homeForm: string[] = preMatch?.home_form || [];
   const awayForm: string[] = preMatch?.away_form || [];
 
@@ -807,7 +833,7 @@ function PreMatchBriefing({ match, preMatch, matchId }: { match: any; preMatch?:
               </span>
               <p className="mt-2 text-base font-bold text-white">{keyDuel.home_player.name}</p>
               <p className="text-xs text-slate-400">
-                {keyDuel.home_player.role} · #{keyDuel.home_player.shirt_number}
+                {keyDuel.home_player.role || "Role unavailable"}{keyDuel.home_player.shirt_number ? ` · #${keyDuel.home_player.shirt_number}` : ""}
               </p>
               <div className="mt-3 flex justify-around text-xs">
                 <div>
@@ -823,7 +849,7 @@ function PreMatchBriefing({ match, preMatch, matchId }: { match: any; preMatch?:
               </span>
               <p className="mt-2 text-base font-bold text-white">{keyDuel.away_player.name}</p>
               <p className="text-xs text-slate-400">
-                {keyDuel.away_player.role} · #{keyDuel.away_player.shirt_number}
+                {keyDuel.away_player.role || "Role unavailable"}{keyDuel.away_player.shirt_number ? ` · #${keyDuel.away_player.shirt_number}` : ""}
               </p>
               <div className="mt-3 flex justify-around text-xs">
                 <div>
