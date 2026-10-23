@@ -431,3 +431,23 @@ def test_update_and_read_match_tactics() -> None:
             json={"side": "home"},
         )
         assert missing.status_code == 404
+
+
+def test_read_match_pre_match_package() -> None:
+    app, session_factory = _build_app()
+    replay = MatchSimulationService().build_replay_payload(build_request(seed=42, match_id="pre-match-check-001"))
+    _insert_match(session_factory, replay)
+    client = TestClient(app)
+
+    response = client.get(f"/api/matches/{replay.match_id}/pre-match")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["match_id"] == replay.match_id
+    assert "pre_match" in body
+    pre = body["pre_match"]
+    assert len(pre["home_form"]) == 5
+    assert len(pre["away_form"]) == 5
+    assert pre["h2h_total"] > 0
+    assert pre["home_win_pct"] + pre["draw_pct"] + pre["away_win_pct"] == 100
+    assert "key_duel" in pre
+    assert "storyline" in pre

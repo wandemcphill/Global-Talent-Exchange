@@ -15,6 +15,7 @@ import '../widgets/gtex_match_timeline.dart';
 import '../widgets/gtex_match_visual_tokens.dart';
 import '../../match/widgets/gtex_matchday_ad_slot.dart';
 import '../widgets/gtex_post_match_panel.dart';
+import '../widgets/gtex_pre_match_package_panel.dart';
 import '../widgets/gtex_tactics_panel.dart';
 import 'gtex_match_center_controller.dart';
 
@@ -211,7 +212,10 @@ class _MainPitchWorkspace extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (match.phase == GtexMatchPhase.scheduled) {
-      return _PreMatchTacticalWorkspace(match: match);
+      return GtexPreMatchPackagePanel(
+        match: match,
+        onEnterTactics: () => controller.selectTab(3),
+      );
     }
     final bool isFullTime = match.phase == GtexMatchPhase.fullTime;
     if (isFullTime) {
@@ -606,7 +610,10 @@ class _MobileMatchView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (match.phase == GtexMatchPhase.scheduled) {
-      return _PreMatchTacticalWorkspace(match: match);
+      return GtexPreMatchPackagePanel(
+        match: match,
+        onEnterTactics: () => controller.selectTab(3),
+      );
     }
     return Column(
       children: [

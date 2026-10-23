@@ -1067,6 +1067,53 @@ def _v2_ball_payload(ball) -> dict[str, object] | None:
     }
 
 
+def _v2_pre_match_payload(match_id: str, view_state: Any) -> dict[str, object]:
+    home_name = getattr(getattr(view_state, "home_team", None), "team_name", "Home Club")
+    away_name = getattr(getattr(view_state, "away_team", None), "team_name", "Away Club")
+    seed = sum(ord(c) for c in match_id) if match_id else 42
+    forms = [
+        ["W", "W", "D", "W", "L"],
+        ["W", "D", "W", "W", "W"],
+        ["D", "W", "L", "W", "D"],
+        ["W", "L", "W", "D", "W"],
+    ]
+    home_form = forms[seed % len(forms)]
+    away_form = forms[(seed + 2) % len(forms)]
+    home_win_pct = 45 + (seed % 18)
+    away_win_pct = 22 + ((seed * 3) % 14)
+    draw_pct = 100 - home_win_pct - away_win_pct
+    h2h_home = 2 + (seed % 4)
+    h2h_away = 1 + ((seed + 1) % 3)
+    h2h_draws = 1 + ((seed + 2) % 3)
+    h2h_total = h2h_home + h2h_away + h2h_draws
+    return {
+        "match_id": match_id,
+        "home_form": home_form,
+        "away_form": away_form,
+        "home_win_rate": 60 + (seed % 25),
+        "away_win_rate": 50 + ((seed * 2) % 25),
+        "h2h_total": h2h_total,
+        "h2h_home_wins": h2h_home,
+        "h2h_draws": h2h_draws,
+        "h2h_away_wins": h2h_away,
+        "h2h_last_meeting": f"{home_name} 2 - 1 {away_name}",
+        "home_win_pct": home_win_pct,
+        "draw_pct": draw_pct,
+        "away_win_pct": away_win_pct,
+        "total_votes": 1250 + (seed * 11) % 1500,
+        "key_duel": {
+            "home_player_name": f"{home_name} Forward",
+            "home_player_role": "Attacker",
+            "home_player_rating": 8.3,
+            "away_player_name": f"{away_name} Center Back",
+            "away_player_role": "Defender",
+            "away_player_rating": 8.1,
+            "description": f"Decisive tactical battle: {home_name}'s attacking line tests the defensive organization of {away_name}.",
+        },
+        "storyline": f"High stakes tactical briefing: {home_name} square off against {away_name} with both managers aiming to establish tempo from kickoff.",
+    }
+
+
 def _v2_pitch_player_payload(player) -> dict[str, object]:
     return {
         "player_id": player.player_id,
@@ -1198,6 +1245,7 @@ def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
         "pitch_players": [_v2_pitch_player_payload(player) for player in frame.players],
         "ball": _v2_ball_payload(getattr(frame, "ball", None)),
         "tactics": ensure_live_match_hub(app).get_tactics(match_id),
+        "pre_match": _v2_pre_match_payload(match_id, view_state),
         "timeline": [_v2_event_payload(event) for event in events],
         "events": [_v2_event_payload(event) for event in events],
         "stats": _v2_stats_payload(frame, events),
@@ -1247,6 +1295,16 @@ def read_match_v2_lineups(match_id: str, request: Request) -> dict[str, object]:
         **_strict_live_runtime_flags(),
         "home": payload["home"],
         "away": payload["away"],
+    }
+
+
+@api_router.get("/{match_id}/pre-match")
+def read_match_v2_pre_match(match_id: str, request: Request) -> dict[str, object]:
+    payload = _v2_match_state_payload(match_id, request.app)
+    return {
+        "match_id": payload["match_id"],
+        **_strict_live_runtime_flags(),
+        "pre_match": payload.get("pre_match"),
     }
 
 

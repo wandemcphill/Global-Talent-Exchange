@@ -141,6 +141,7 @@ GtexLiveMatchState _parseLiveMatchState(
       ], fallback: 'scheduled'),
     ),
     ball: _parsePitchBall(_asMap(payload['ball'])),
+    preMatch: _parsePreMatchPackage(_asMap(payload['pre_match'] ?? payload['preMatch'])),
     pitchPlayers: _list(payload['pitch_players'] ?? payload['pitchPlayers'])
         .map((Object? value) => _parsePitchPlayer(_asMap(value)))
         .toList(growable: false),
@@ -240,6 +241,42 @@ GtexLineupPlayer _parseLineupPlayer(Map<String, Object?> json) {
     isRegen: _bool(json, const <String>['is_regen', 'isRegen']),
     formLabel: _nullableString(json, const <String>['form', 'form_label', 'formLabel']),
     fitnessPct: _nullableDouble(json, const <String>['fitness_pct', 'fitnessPct', 'fitness']),
+  );
+}
+
+GtexPreMatchPackage? _parsePreMatchPackage(Map<String, Object?> json) {
+  if (json.isEmpty) {
+    return null;
+  }
+  final keyDuelMap = _asMap(json['key_duel'] ?? json['keyDuel']);
+  final keyDuel = keyDuelMap.isNotEmpty
+      ? GtexKeyDuel(
+          homePlayerName: _string(keyDuelMap, const <String>['home_player_name', 'homePlayerName'], fallback: 'Home Striker'),
+          homePlayerRole: _string(keyDuelMap, const <String>['home_player_role', 'homePlayerRole'], fallback: 'Attacker'),
+          homePlayerRating: _double(keyDuelMap, const <String>['home_player_rating', 'homePlayerRating'], fallback: 8.0),
+          awayPlayerName: _string(keyDuelMap, const <String>['away_player_name', 'awayPlayerName'], fallback: 'Away Defender'),
+          awayPlayerRole: _string(keyDuelMap, const <String>['away_player_role', 'awayPlayerRole'], fallback: 'Defender'),
+          awayPlayerRating: _double(keyDuelMap, const <String>['away_player_rating', 'awayPlayerRating'], fallback: 8.0),
+          description: _string(keyDuelMap, const <String>['description'], fallback: 'Decisive tactical battle between attack and defense.'),
+        )
+      : null;
+
+  return GtexPreMatchPackage(
+    homeForm: _list(json['home_form'] ?? json['homeForm']).map((e) => e.toString()).toList(),
+    awayForm: _list(json['away_form'] ?? json['awayForm']).map((e) => e.toString()).toList(),
+    homeWinRate: _int(json, const <String>['home_win_rate', 'homeWinRate'], fallback: 60),
+    awayWinRate: _int(json, const <String>['away_win_rate', 'awayWinRate'], fallback: 50),
+    h2hTotal: _int(json, const <String>['h2h_total', 'h2hTotal'], fallback: 5),
+    h2hHomeWins: _int(json, const <String>['h2h_home_wins', 'h2hHomeWins'], fallback: 2),
+    h2hDraws: _int(json, const <String>['h2h_draws', 'h2hDraws'], fallback: 1),
+    h2hAwayWins: _int(json, const <String>['h2h_away_wins', 'h2hAwayWins'], fallback: 2),
+    h2hLastMeeting: _string(json, const <String>['h2h_last_meeting', 'h2hLastMeeting'], fallback: '2 - 1'),
+    homeWinPct: _int(json, const <String>['home_win_pct', 'homeWinPct'], fallback: 50),
+    drawPct: _int(json, const <String>['draw_pct', 'drawPct'], fallback: 25),
+    awayWinPct: _int(json, const <String>['away_win_pct', 'awayWinPct'], fallback: 25),
+    totalVotes: _int(json, const <String>['total_votes', 'totalVotes'], fallback: 1200),
+    keyDuel: keyDuel,
+    storyline: _nullableString(json, const <String>['storyline']),
   );
 }
 

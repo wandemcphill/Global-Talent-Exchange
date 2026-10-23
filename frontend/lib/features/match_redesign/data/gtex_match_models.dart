@@ -44,6 +44,64 @@ class GtexPitchBall {
 }
 
 @immutable
+class GtexKeyDuel {
+  const GtexKeyDuel({
+    required this.homePlayerName,
+    required this.homePlayerRole,
+    required this.homePlayerRating,
+    required this.awayPlayerName,
+    required this.awayPlayerRole,
+    required this.awayPlayerRating,
+    required this.description,
+  });
+
+  final String homePlayerName;
+  final String homePlayerRole;
+  final double homePlayerRating;
+  final String awayPlayerName;
+  final String awayPlayerRole;
+  final double awayPlayerRating;
+  final String description;
+}
+
+@immutable
+class GtexPreMatchPackage {
+  const GtexPreMatchPackage({
+    required this.homeForm,
+    required this.awayForm,
+    required this.homeWinRate,
+    required this.awayWinRate,
+    required this.h2hTotal,
+    required this.h2hHomeWins,
+    required this.h2hDraws,
+    required this.h2hAwayWins,
+    required this.h2hLastMeeting,
+    required this.homeWinPct,
+    required this.drawPct,
+    required this.awayWinPct,
+    required this.totalVotes,
+    this.keyDuel,
+    this.storyline,
+  });
+
+  final List<String> homeForm;
+  final List<String> awayForm;
+  final int homeWinRate;
+  final int awayWinRate;
+  final int h2hTotal;
+  final int h2hHomeWins;
+  final int h2hDraws;
+  final int h2hAwayWins;
+  final String h2hLastMeeting;
+  final int homeWinPct;
+  final int drawPct;
+  final int awayWinPct;
+  final int totalVotes;
+  final GtexKeyDuel? keyDuel;
+  final String? storyline;
+}
+
+@immutable
 class GtexLiveMatchState {
   const GtexLiveMatchState({
     required this.matchId,
@@ -56,6 +114,7 @@ class GtexLiveMatchState {
     required this.stats,
     required this.highlights,
     this.ball,
+    this.preMatch,
     this.homeMomentumPercent,
     this.economyImpacts = const <GtexMatchEconomyImpact>[],
     this.selectedPlayerId,
@@ -72,6 +131,7 @@ class GtexLiveMatchState {
   final GtexMatchStats stats;
   final List<GtexMatchHighlight> highlights;
   final GtexPitchBall? ball;
+  final GtexPreMatchPackage? preMatch;
   final int? homeMomentumPercent;
   final List<GtexMatchEconomyImpact> economyImpacts;
   final String? selectedPlayerId;
@@ -86,6 +146,7 @@ class GtexLiveMatchState {
     GtexMatchPhase? phase,
     List<GtexMatchTimelineEvent>? timeline,
     GtexPitchBall? ball,
+    GtexPreMatchPackage? preMatch,
   }) {
     return GtexLiveMatchState(
       matchId: matchId,
@@ -98,6 +159,7 @@ class GtexLiveMatchState {
       stats: stats,
       highlights: highlights,
       ball: ball ?? this.ball,
+      preMatch: preMatch ?? this.preMatch,
       homeMomentumPercent: homeMomentumPercent,
       economyImpacts: economyImpacts,
       selectedPlayerId: selectedPlayerId ?? this.selectedPlayerId,

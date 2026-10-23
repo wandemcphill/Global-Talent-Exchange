@@ -126,6 +126,33 @@ GtexLiveMatchState _demoState(String matchId, {required int minute}) {
     ball: minute.isEven
         ? const GtexPitchBall(x: 0.58, y: 0.50, z: 0.0, ownerPlayerId: 'player-h7', state: 'controlled')
         : const GtexPitchBall(x: 0.52, y: 0.46, z: 0.18, state: 'in_flight'),
+    preMatch: const GtexPreMatchPackage(
+      homeForm: ['W', 'W', 'D', 'W', 'L'],
+      awayForm: ['D', 'W', 'L', 'W', 'D'],
+      homeWinRate: 68,
+      awayWinRate: 54,
+      h2hTotal: 6,
+      h2hHomeWins: 3,
+      h2hDraws: 2,
+      h2hAwayWins: 1,
+      h2hLastMeeting: 'Lagos City 2 - 1 Accra Voltage',
+      homeWinPct: 54,
+      drawPct: 26,
+      awayWinPct: 20,
+      totalVotes: 1840,
+      keyDuel: GtexKeyDuel(
+        homePlayerName: 'T. Adeyemi',
+        homePlayerRole: 'Attacker (ST)',
+        homePlayerRating: 8.5,
+        awayPlayerName: 'K. Mensah',
+        awayPlayerRole: 'Defender (CB)',
+        awayPlayerRating: 8.2,
+        description:
+            'Decisive battle: Adeyemi (14 league goals) faces Mensah, the league leader in aerial duels won.',
+      ),
+      storyline:
+          'Top-of-the-table clash: Accra Voltage look to end their 3-match winless streak against league leaders Lagos City.',
+    ),
     pitchPlayers: _pitchPlayers(homePlayers, awayPlayers, minute),
     stats: GtexMatchStats(
       homePossession: 58,
