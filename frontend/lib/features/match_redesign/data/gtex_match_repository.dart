@@ -38,4 +38,5 @@ class GtexUnavailableMatchRepository implements GtexMatchRepository {
   ) {
     return Future<void>.error(_unavailable(matchId));
   }
+
 }

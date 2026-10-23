@@ -31,6 +31,11 @@ class MatchViewerRouteScreen extends ConsumerWidget {
     }
     final GoRouter? router = GoRouter.maybeOf(context);
     if (router != null) {
+      final String trimmed = matchKey.trim();
+      if (trimmed.isNotEmpty) {
+        router.go('/live-match/$trimmed');
+        return;
+      }
       router.go('/app/play/overview');
     }
   }
@@ -83,6 +88,7 @@ class MatchViewerRouteScreen extends ConsumerWidget {
             repository: repository,
             giftClient: giftClient,
             initialReplayMinute: initialReplayMinute,
+            onOpenMatchCenter: () => _defaultOpenMatchCenter(context),
           ),
         );
       },
@@ -97,7 +103,10 @@ class MatchViewerRouteScreen extends ConsumerWidget {
           return MatchRouteCapabilityOverlay(
             capability: MatchViewerCapability.twoD,
             status: DataSourceStatus.demo,
-            child: _FallbackMatchViewerRouteView(matchKey: resolvedMatchKey),
+            child: _FallbackMatchViewerRouteView(
+              matchKey: resolvedMatchKey,
+              onOpenMatchCenter: () => _defaultOpenMatchCenter(context),
+            ),
           );
         }
         final _MatchViewerRouteFailure failure = _MatchViewerRouteFailure.from(
@@ -206,6 +215,7 @@ class _QualifiedMatchViewerRouteView extends StatefulWidget {
     required this.repository,
     required this.giftClient,
     this.initialReplayMinute,
+    this.onOpenMatchCenter,
   });
 
   final String matchKey;
@@ -214,6 +224,7 @@ class _QualifiedMatchViewerRouteView extends StatefulWidget {
   final LiveMatchViewerRepository repository;
   final MatchGiftClient? giftClient;
   final int? initialReplayMinute;
+  final VoidCallback? onOpenMatchCenter;
 
   @override
   State<_QualifiedMatchViewerRouteView> createState() =>
@@ -246,6 +257,7 @@ class _QualifiedMatchViewerRouteViewState
       viewStateLoader: _loadInitialViewState,
       continuationLoader: _loadContinuation,
       giftClient: widget.giftClient,
+      onOpenMatchCenter: widget.onOpenMatchCenter,
     );
   }
 
@@ -275,9 +287,13 @@ class _QualifiedMatchViewerRouteViewState
 }
 
 class _FallbackMatchViewerRouteView extends StatelessWidget {
-  const _FallbackMatchViewerRouteView({required this.matchKey});
+  const _FallbackMatchViewerRouteView({
+    required this.matchKey,
+    this.onOpenMatchCenter,
+  });
 
   final String matchKey;
+  final VoidCallback? onOpenMatchCenter;
 
   @override
   Widget build(BuildContext context) {
@@ -288,6 +304,7 @@ class _FallbackMatchViewerRouteView extends StatelessWidget {
       matchKey: matchKey,
       titleOverride: '2D Match Viewer',
       preferFallback: true,
+      onOpenMatchCenter: onOpenMatchCenter,
     );
   }
 }

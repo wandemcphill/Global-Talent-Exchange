@@ -89,13 +89,29 @@ def _anchors(runtime: Any, attacks_right: bool) -> dict[str, dict[str, float]]:
     if base_x is None:
         gap = 58.0 / max(1, len(sizes) - 1)
         base_x = tuple(21.0 + (gap * index) for index in range(len(sizes)))
+    defensive_line = float(getattr(runtime, "defensive_line", 50.0) or 50.0)
+    width = float(getattr(runtime, "width", 50.0) or 50.0)
+    line_shift = (defensive_line - 50.0) * 0.12
+    adjusted_x = []
+    for i, x in enumerate(base_x):
+        if i == 0:
+            shift = line_shift
+        elif i == len(base_x) - 1:
+            shift = line_shift * 0.35
+        else:
+            shift = line_shift * 0.65
+        adjusted_x.append(_clamp(x + shift, 14.0, 86.0))
+    base_x = tuple(adjusted_x)
     if not attacks_right:
         base_x = tuple(100.0 - value for value in base_x)
     result = {runtime.lineup[0]: {"x": 8.0 if attacks_right else 92.0, "y": 50.0}}
     cursor = 0
     outfield = runtime.lineup[1:]
+    width_factor = 1.0 + ((width - 50.0) * 0.003)
     for group_index, size in enumerate(sizes):
         ys = _LINE_Y.get(size, tuple(10.0 + ((i + 1) * (80.0 / (size + 1))) for i in range(size)))
+        if width_factor != 1.0:
+            ys = tuple(_clamp(50.0 + (y - 50.0) * width_factor, 8.0, 92.0) for y in ys)
         for local_index in range(size):
             result[outfield[cursor + local_index]] = {"x": float(base_x[group_index]), "y": float(ys[local_index])}
         cursor += size
@@ -243,6 +259,20 @@ def _player_position(
     else:
         position["x"] -= 2.0 * direction
         state = MatchViewerPlayerState.DEFENDING
+        press_intensity = float(getattr(runtime, "press_intensity", 50.0) or 50.0)
+        if active_event is not None:
+            target_pt = _event_point(active_event, "origin") or _event_point(active_event, "target")
+            if target_pt is not None:
+                dx = target_pt["x"] - position["x"]
+                dy = target_pt["y"] - position["y"]
+                dist = hypot(dx, dy)
+                press_radius = 18.0 + (press_intensity * 0.16)
+                if 0.5 < dist < press_radius:
+                    pull = ((press_radius - dist) / press_radius) * (press_intensity / 100.0) * 0.25
+                    position["x"] += dx * pull
+                    position["y"] += dy * pull
+                    if line != "goalkeeper" and dist < 14.0:
+                        state = MatchViewerPlayerState.PRESSING
     if active_event is not None:
         event_time = float(active_event.view.time_seconds)
         duration = max(0.5, float(active_event.view.duration_ms) / 1000.0)

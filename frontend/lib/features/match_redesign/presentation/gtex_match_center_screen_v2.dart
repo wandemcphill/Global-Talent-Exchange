@@ -15,6 +15,8 @@ import '../widgets/gtex_match_timeline.dart';
 import '../widgets/gtex_match_visual_tokens.dart';
 import '../../match/widgets/gtex_matchday_ad_slot.dart';
 import '../widgets/gtex_post_match_panel.dart';
+import '../widgets/gtex_pre_match_package_panel.dart';
+import '../widgets/gtex_tactical_advisor_widget.dart';
 import '../widgets/gtex_tactics_panel.dart';
 import 'gtex_match_center_controller.dart';
 
@@ -211,7 +213,10 @@ class _MainPitchWorkspace extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (match.phase == GtexMatchPhase.scheduled) {
-      return _PreMatchTacticalWorkspace(match: match);
+      return GtexPreMatchPackagePanel(
+        match: match,
+        onEnterTactics: () => controller.selectTab(3),
+      );
     }
     final bool isFullTime = match.phase == GtexMatchPhase.fullTime;
     if (isFullTime) {
@@ -256,11 +261,54 @@ class _MainPitchWorkspace extends StatelessWidget {
     return Column(
       children: [
         GtexMatchScoreboard(match: match),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
+        GtexTacticalAdvisorWidget(
+          match: match,
+          compact: true,
+          onApplyInstruction: (inst) async {
+            await controller.sendInstruction(inst);
+          },
+        ),
+        const SizedBox(height: 8),
         Expanded(
           child: _BroadcastPanel(
             title: 'MATCH CAM',
             trailing: '${match.home.formation} / ${match.away.formation}',
+            trailingWidget: onOpenReplay != null
+                ? Tooltip(
+                    message: 'Open 2D Broadcast Pitch',
+                    child: InkWell(
+                      key: const Key('gtex-open-broadcast-viewer-btn'),
+                      onTap: () => onOpenReplay!(match.matchId),
+                      borderRadius: BorderRadius.circular(4),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.tv,
+                              size: 13,
+                              color: _GtexMatchColors.primary,
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              '2D BROADCAST',
+                              style: TextStyle(
+                                color: _GtexMatchColors.primary,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                : null,
             child: Center(
               child: _PitchViewStack(
                 match: match,
@@ -502,7 +550,30 @@ class _RightLivePanel extends StatelessWidget {
       case 3:
         return GtexTacticsPanel(
           isSending: controller.isSendingInstruction,
-          onSubmit: controller.sendInstruction,
+          homeTeam: match.home,
+          awayTeam: match.away,
+          currentMinute: match.minute,
+          onSubmit: (GtexTacticalInstruction instruction) async {
+            await controller.sendInstruction(instruction);
+            if (context.mounted) {
+              final subsCount = instruction.substitutions?.length ?? 0;
+              final subsMsg = subsCount > 0 ? ' · $subsCount subs' : '';
+              final mentalityText = instruction.mentality?.toUpperCase() ?? 'BALANCED';
+              final formationText = instruction.formation ?? '4-3-3';
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Tactical instruction accepted: $formationText · '
+                    '$mentalityText$subsMsg '
+                    '(Press: ${instruction.pressIntensity}%, Line: ${instruction.defensiveLine}%)',
+                  ),
+                  duration: const Duration(seconds: 3),
+                  backgroundColor: const Color(0xFF0F172A),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          },
         );
       case 4:
         return GtexHighlightsPanel(
@@ -548,7 +619,10 @@ class _MobileMatchView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (match.phase == GtexMatchPhase.scheduled) {
-      return _PreMatchTacticalWorkspace(match: match);
+      return GtexPreMatchPackagePanel(
+        match: match,
+        onEnterTactics: () => controller.selectTab(3),
+      );
     }
     return Column(
       children: [
@@ -572,11 +646,45 @@ class _MobileMatchView extends StatelessWidget {
                 fontFamily: 'JetBrains Mono',
               ),
             ),
+            if (onOpenReplay != null) ...[
+              const SizedBox(width: 8),
+              InkWell(
+                key: const Key('gtex-mobile-open-broadcast-btn'),
+                onTap: () => onOpenReplay!(match.matchId),
+                borderRadius: BorderRadius.circular(4),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.tv, size: 14, color: _GtexMatchColors.primary),
+                      SizedBox(width: 4),
+                      Text(
+                        '2D PITCH',
+                        style: TextStyle(
+                          color: _GtexMatchColors.primary,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
         const SizedBox(height: 10),
         GtexMatchScoreboard(match: match),
-        const SizedBox(height: 10),
+        const SizedBox(height: 6),
+        GtexTacticalAdvisorWidget(
+          match: match,
+          compact: true,
+          onApplyInstruction: (inst) async {
+            await controller.sendInstruction(inst);
+          },
+        ),
+        const SizedBox(height: 6),
         Expanded(
           flex: 5,
           child: _BroadcastPanel(
@@ -848,10 +956,12 @@ class _BroadcastPanel extends StatelessWidget {
     required this.title,
     required this.child,
     this.trailing,
+    this.trailingWidget,
   });
 
   final String title;
   final String? trailing;
+  final Widget? trailingWidget;
   final Widget child;
 
   @override
@@ -883,6 +993,10 @@ class _BroadcastPanel extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
+                if (trailingWidget != null) ...[
+                  trailingWidget!,
+                  if (trailing != null) const SizedBox(width: 8),
+                ],
                 if (trailing != null)
                   Text(
                     trailing!,

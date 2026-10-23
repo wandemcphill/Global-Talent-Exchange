@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import logging
 import math
 from threading import RLock, Thread
 import time
-from typing import Callable, Sequence
+from typing import Any, Callable, Sequence
 
 from fastapi import FastAPI
 from sqlalchemy import select
@@ -52,9 +53,114 @@ class LiveMatchError(ValueError):
     pass
 
 
+class LiveMatchPersistenceError(RuntimeError):
+    """Raised when an accepted-looking tactical change cannot be persisted."""
+
+
 BatchCallback = Callable[[str, list[LiveMatchStreamEventView], LiveMatchSnapshotView], None]
 CompleteCallback = Callable[[str], None]
 AttendanceOverlayProvider = Callable[[str, MatchCrowdStateView | None], MatchCrowdStateView | None]
+
+
+def _validate_formation_string(formation: str) -> list[int]:
+    parts = [p.strip() for p in formation.split("-") if p.strip()]
+    if len(parts) < 3:
+        raise LiveMatchError(f"Invalid formation format: '{formation}'. Must have at least 3 lines, e.g. '4-3-3'.")
+    try:
+        int_parts = [int(p) for p in parts]
+    except ValueError:
+        raise LiveMatchError(f"Invalid formation format: '{formation}'. All line counts must be integers.")
+    if sum(int_parts) != 10 or any(p <= 0 for p in int_parts):
+        raise LiveMatchError(
+            f"Invalid formation format: '{formation}'. Outfield line sizes must sum to 10 (e.g. 4-4-2, 4-3-3, 3-5-2)."
+        )
+    return int_parts
+
+
+def _reposition_frame_players(
+    frame: Any,
+    side: str,
+    formation: str,
+    defensive_line: float,
+) -> None:
+    if frame is None or not hasattr(frame, "players") or not frame.players:
+        return
+    try:
+        line_sizes = [int(p) for p in formation.split("-")]
+    except Exception:
+        line_sizes = [4, 3, 3]
+
+    side_norm = side.strip().lower()
+    team_players = [
+        p
+        for p in frame.players
+        if str(getattr(getattr(p, "side", None), "value", getattr(p, "side", "")) or "").strip().lower() == side_norm
+    ]
+    if not team_players:
+        return
+
+    home_attacks_right = getattr(frame, "home_attacks_right", True)
+    attacks_right = home_attacks_right if side_norm == "home" else not home_attacks_right
+
+    gk = next(
+        (
+            p
+            for p in team_players
+            if "goal" in str(getattr(getattr(p, "role", None), "value", getattr(p, "role", "")) or "").lower()
+        ),
+        team_players[0],
+    )
+    outfield = [p for p in team_players if p is not gk]
+
+    gk_x = 8.0 if attacks_right else 92.0
+    if hasattr(gk, "position") and gk.position is not None:
+        gk.position.x = gk_x
+        gk.position.y = 50.0
+    if hasattr(gk, "anchor_position") and gk.anchor_position is not None:
+        gk.anchor_position.x = gk_x
+        gk.anchor_position.y = 50.0
+
+    if len(line_sizes) == 3:
+        assigned_names = ["defense", "midfield", "attack"]
+    elif len(line_sizes) == 4:
+        assigned_names = ["defense", "defensive_midfield", "midfield", "attack"]
+    else:
+        assigned_names = ["defense", "midfield", "attack"] * 2
+
+    line_shift = (float(defensive_line) - 50.0) * 0.12
+    gap = 56.0 / max(1, len(line_sizes) - 1)
+
+    player_idx = 0
+    for line_idx, size in enumerate(line_sizes):
+        if line_idx == 0:
+            shift = line_shift
+        elif line_idx == len(line_sizes) - 1:
+            shift = line_shift * 0.35
+        else:
+            shift = line_shift * 0.65
+
+        base_x = max(14.0, min(86.0, 22.0 + (gap * line_idx) + shift))
+        eff_x = base_x if attacks_right else (100.0 - base_x)
+        current_line_name = assigned_names[line_idx] if line_idx < len(assigned_names) else "midfield"
+
+        for slot_idx in range(size):
+            if player_idx < len(outfield):
+                p = outfield[player_idx]
+                if size == 1:
+                    eff_y = 50.0
+                else:
+                    eff_y = 15.0 + (slot_idx * (70.0 / (size - 1)))
+                eff_y = max(10.0, min(90.0, eff_y))
+
+                if hasattr(p, "position") and p.position is not None:
+                    p.position.x = round(eff_x, 2)
+                    p.position.y = round(eff_y, 2)
+                if hasattr(p, "anchor_position") and p.anchor_position is not None:
+                    p.anchor_position.x = round(eff_x, 2)
+                    p.anchor_position.y = round(eff_y, 2)
+                if hasattr(p, "line"):
+                    p.line = current_line_name
+                player_idx += 1
 
 
 @dataclass(slots=True)
@@ -114,6 +220,7 @@ class LiveMatchHub:
     attendance_overlay_provider: AttendanceOverlayProvider | None = None
     _matches: dict[str, _LiveMatchRuntime] = field(default_factory=dict)
     _halted_matches: dict[str, dict[str, object]] = field(default_factory=dict)
+    _tactics: dict[str, dict[str, dict[str, Any]]] = field(default_factory=dict)
     _lock: RLock = field(default_factory=RLock)
     _hot_cache: HotPathCache = field(init=False)
 
@@ -450,6 +557,437 @@ class LiveMatchHub:
             if state is None:
                 return None
             return {"match_id": match_id, "enabled": True, **state}
+
+    def set_tactics(
+        self,
+        match_id: str,
+        *,
+        side: str,
+        press_intensity: int | float | None = None,
+        defensive_line: int | float | None = None,
+        tempo: int | float | None = None,
+        risk_level: int | float | None = None,
+        mentality: str | None = None,
+        formation: str | None = None,
+        substitutions: list[dict[str, Any]] | None = None,
+        instructions: list[str] | None = None,
+    ) -> dict[str, Any]:
+        side_norm = (side or "").strip().lower()
+        if side_norm not in {"home", "away"}:
+            raise LiveMatchError("Tactical instruction side must be 'home' or 'away'.")
+
+        # Bounds validation
+        if press_intensity is not None and not (0 <= float(press_intensity) <= 100):
+            raise LiveMatchError("Press intensity must be between 0 and 100.")
+        if defensive_line is not None and not (0 <= float(defensive_line) <= 100):
+            raise LiveMatchError("Defensive line must be between 0 and 100.")
+        if tempo is not None and not (0 <= float(tempo) <= 100):
+            raise LiveMatchError("Tempo must be between 0 and 100.")
+        if risk_level is not None and not (0 <= float(risk_level) <= 100):
+            raise LiveMatchError("Risk level must be between 0 and 100.")
+
+        valid_mentalities = {
+            "attacking",
+            "defensive",
+            "balanced",
+            "ultra_attacking",
+            "ultra_defensive",
+            "cautious",
+        }
+        if mentality is not None:
+            mentality_norm = str(mentality).strip().lower()
+            if mentality_norm not in valid_mentalities:
+                raise LiveMatchError(f"Invalid mentality '{mentality}'. Must be one of {sorted(valid_mentalities)}.")
+
+        if formation is not None:
+            _validate_formation_string(str(formation).strip())
+
+        with self._lock:
+            prior_tactics = copy.deepcopy(self._tactics.get(match_id))
+            prior_runtime = self._matches.get(match_id)
+            prior_viewer_state = (
+                copy.deepcopy(prior_runtime.viewer_state)
+                if prior_runtime is not None and prior_runtime.viewer_state is not None
+                else None
+            )
+            prior_event_count = len(prior_runtime.published_events) if prior_runtime is not None else 0
+            match_tactics = self._tactics.setdefault(match_id, {})
+            current = match_tactics.setdefault(
+                side_norm,
+                {
+                    "press_intensity": 50,
+                    "defensive_line": 50,
+                    "tempo": 50,
+                    "risk_level": 50,
+                    "mentality": "balanced",
+                    "formation": "4-3-3",
+                    "substitution_count": 0,
+                },
+            )
+            if press_intensity is not None:
+                current["press_intensity"] = max(0, min(100, int(round(float(press_intensity)))))
+            if defensive_line is not None:
+                current["defensive_line"] = max(0, min(100, int(round(float(defensive_line)))))
+            if tempo is not None:
+                current["tempo"] = max(0, min(100, int(round(float(tempo)))))
+            if risk_level is not None:
+                current["risk_level"] = max(0, min(100, int(round(float(risk_level)))))
+                if mentality is None:
+                    if current["risk_level"] >= 65:
+                        mentality = "attacking"
+                    elif current["risk_level"] <= 35:
+                        mentality = "defensive"
+                    else:
+                        mentality = "balanced"
+            if mentality is not None:
+                current["mentality"] = str(mentality).strip().lower()
+            if formation is not None:
+                current["formation"] = str(formation).strip()
+
+            # Substitution enforcement
+            runtime = self._matches.get(match_id)
+            active_frame = None
+            active_minute = None
+            if runtime is not None and runtime.viewer_state is not None and runtime.viewer_state.frames:
+                current_minute = float(
+                    getattr(
+                        runtime.last_snapshot,
+                        "current_minute",
+                        getattr(runtime.last_snapshot, "minute", runtime.viewer_state.frames[0].clock_minute),
+                    )
+                    or 0.0
+                )
+                active_frame = min(
+                    runtime.viewer_state.frames,
+                    key=lambda frame: abs(float(frame.clock_minute) - current_minute),
+                )
+                active_minute = float(active_frame.clock_minute)
+            current_sub_count = int(current.get("substitution_count", 0))
+
+            if substitutions:
+                if current_sub_count + len(substitutions) > 5:
+                    raise LiveMatchError(
+                        f"Cannot complete {len(substitutions)} substitutions: team has used {current_sub_count}/5 allowable substitutions."
+                    )
+
+                if runtime is None or runtime.viewer_state is None or not runtime.viewer_state.frames:
+                    raise LiveMatchError("Substitutions cannot be validated without an authoritative active lineup.")
+                if active_frame is None:
+                    raise LiveMatchError("Substitutions cannot be validated without a current match frame.")
+                active_pitch_ids = {
+                    str(p.player_id)
+                    for p in active_frame.players
+                    if str(getattr(getattr(p, "side", None), "value", getattr(p, "side", "")) or "").strip().lower()
+                    == side_norm
+                }
+                presentation = getattr(runtime.viewer_state, "presentation_package", None)
+                presentation_team = getattr(presentation, side_norm, None) if presentation is not None else None
+                bench_players = list(getattr(presentation_team, "bench", None) or [])
+                bench_by_id = {
+                    str(getattr(player, "player_id", "") or "").strip(): player
+                    for player in bench_players
+                    if str(getattr(player, "player_id", "") or "").strip()
+                }
+                available_bench_ids = set(bench_by_id)
+                for sub in substitutions:
+                    out_id = str(sub.get("out_player_id") or sub.get("outPlayerId") or "").strip()
+                    in_id = str(sub.get("in_player_id") or sub.get("inPlayerId") or "").strip()
+                    if not out_id or not in_id:
+                        raise LiveMatchError("Each substitution requires both 'out_player_id' and 'in_player_id'.")
+                    if out_id == in_id:
+                        raise LiveMatchError(f"Invalid substitution: player {out_id} cannot replace themselves.")
+                    if out_id not in active_pitch_ids:
+                        raise LiveMatchError(
+                            f"Substitution rejected: player '{out_id}' is not currently on the pitch for {side_norm} team."
+                        )
+                    if in_id in active_pitch_ids:
+                        raise LiveMatchError(
+                            f"Substitution rejected: substitute '{in_id}' is already active on the pitch."
+                        )
+                    if not bench_by_id:
+                        raise LiveMatchError(
+                            f"Substitution rejected: authoritative {side_norm} bench data is unavailable."
+                        )
+                    if in_id not in available_bench_ids:
+                        raise LiveMatchError(
+                            f"Substitution rejected: incoming player '{in_id}' is not on the authoritative {side_norm} bench."
+                        )
+                    bench_player = bench_by_id[in_id]
+                    trusted_name = getattr(bench_player, "player_name", None) or getattr(bench_player, "name", None)
+                    if trusted_name:
+                        sub["in_player_name"] = str(trusted_name)
+                        sub["inPlayerName"] = str(trusted_name)
+                    trusted_number = getattr(bench_player, "shirt_number", None)
+                    if trusted_number is not None:
+                        sub["shirt_number"] = int(trusted_number)
+                    active_pitch_ids.discard(out_id)
+                    active_pitch_ids.add(in_id)
+                    available_bench_ids.discard(in_id)
+
+                current["substitution_count"] = current_sub_count + len(substitutions)
+                current["substitutions"] = substitutions
+
+            if instructions is not None:
+                current["instructions"] = instructions
+            current["updated_at"] = utcnow().isoformat()
+
+            events_to_broadcast = []
+            channel = None
+            if runtime is not None:
+                team_name = runtime.home_team_name if side_norm == "home" else runtime.away_team_name
+                team_id = runtime.home_team_id if side_norm == "home" else runtime.away_team_id
+                minute = 0
+                if runtime.last_snapshot is not None:
+                    minute = getattr(
+                        runtime.last_snapshot, "current_minute", getattr(runtime.last_snapshot, "minute", 0)
+                    )
+
+                if runtime.viewer_state is not None:
+                    target_team = (
+                        runtime.viewer_state.home_team if side_norm == "home" else runtime.viewer_state.away_team
+                    )
+                    if formation and hasattr(target_team, "formation"):
+                        target_team.formation = formation
+                    presentation_package = runtime.viewer_state.presentation_package
+                    presentation_team_for_tactics = (
+                        getattr(presentation_package, side_norm, None) if presentation_package is not None else None
+                    )
+                    if formation and presentation_team_for_tactics is not None:
+                        presentation_team_for_tactics.formation = formation
+
+                    # Apply substitutions to active lineup and frame positions
+                    if substitutions:
+                        for sub in substitutions:
+                            out_id = str(sub.get("out_player_id") or sub.get("outPlayerId") or "").strip()
+                            in_id = str(sub.get("in_player_id") or sub.get("inPlayerId") or "").strip()
+                            out_name = str(sub.get("out_player_name") or sub.get("outPlayerName") or "Player")
+                            in_name = str(sub.get("in_player_name") or sub.get("inPlayerName") or "Substitute")
+                            in_shirt = int(sub.get("shirt_number") or 14)
+
+                            # Update the presentation XI/bench so the incoming player
+                            # cannot be selected for another substitution. Historical frames
+                            # retain the identities that actually appeared in that period.
+                            presentation_package = runtime.viewer_state.presentation_package
+                            presentation_team = (
+                                getattr(presentation_package, side_norm, None)
+                                if presentation_package is not None
+                                else None
+                            )
+                            if presentation_team is not None:
+                                starters = list(getattr(presentation_team, "starters", []) or [])
+                                starter_index = next(
+                                    (
+                                        idx
+                                        for idx, player in enumerate(starters)
+                                        if str(getattr(player, "player_id", "") or "").strip() == out_id
+                                    ),
+                                    None,
+                                )
+                                incoming_player = bench_by_id.get(in_id)
+                                if starter_index is not None and incoming_player is not None:
+                                    starters[starter_index] = copy.deepcopy(incoming_player)
+                                    presentation_team.starters = starters
+                                presentation_team.bench = [
+                                    player
+                                    for player in list(getattr(presentation_team, "bench", []) or [])
+                                    if str(getattr(player, "player_id", "") or "").strip() != in_id
+                                ]
+
+                            # Update the active frame and every future frame, leaving earlier
+                            # frames intact for faithful replay history.
+                            for frame in runtime.viewer_state.frames:
+                                if float(frame.clock_minute) + 1e-6 < active_minute:
+                                    continue
+                                for p in frame.players:
+                                    if getattr(p, "player_id", None) == out_id:
+                                        p.player_id = in_id
+                                        p.label = in_name
+                                        p.shirt_number = in_shirt
+                                        p.stamina_pct = 100.0
+
+                    # Apply tactical geometry to the active and future frames only.
+                    # Earlier frames remain an accurate record of the old tactics.
+                    if runtime.viewer_state.frames:
+                        for frame in runtime.viewer_state.frames:
+                            if active_minute is not None and float(frame.clock_minute) + 1e-6 < active_minute:
+                                continue
+                            _reposition_frame_players(
+                                frame=frame,
+                                side=side_norm,
+                                formation=current["formation"],
+                                defensive_line=float(current["defensive_line"]),
+                            )
+
+                event_id = f"{match_id}-tactic-{int(time.time()*1000)}"
+                comm = (
+                    f"Tactical adjustment ({team_name}): formation {current['formation']}, "
+                    f"tempo {current['tempo']}%, pressing {current['press_intensity']}%, mentality '{current['mentality']}'."
+                )
+                live_event = LiveMatchStreamEventView(
+                    match_id=match_id,
+                    event_id=event_id,
+                    minute=minute,
+                    event_type="tactical_switch",
+                    team_id=team_id,
+                    team=team_name,
+                    team_side=side_norm,
+                    commentary=comm,
+                    clock_label=f"{minute}'",
+                    importance_score=0.4,
+                )
+                runtime.published_events.append(live_event)
+                events_to_broadcast.append(live_event)
+
+                if substitutions:
+                    for sub in substitutions:
+                        out_id = str(sub.get("out_player_id") or sub.get("outPlayerId") or "")
+                        in_id = str(sub.get("in_player_id") or sub.get("inPlayerId") or "")
+                        out_name = str(sub.get("out_player_name") or sub.get("outPlayerName") or "Player")
+                        in_name = str(sub.get("in_player_name") or sub.get("inPlayerName") or "Substitute")
+                        sub_event_id = f"{match_id}-sub-{int(time.time()*1000)}-{out_id}"
+                        sub_comm = f"Substitution for {team_name}: {out_name} is replaced by {in_name}."
+                        sub_event = LiveMatchStreamEventView(
+                            match_id=match_id,
+                            event_id=sub_event_id,
+                            minute=minute,
+                            event_type="substitution",
+                            team_id=team_id,
+                            team=team_name,
+                            team_side=side_norm,
+                            player_id=in_id,
+                            player=in_name,
+                            secondary_player_id=out_id,
+                            secondary_player=out_name,
+                            commentary=sub_comm,
+                            clock_label=f"{minute}'",
+                            importance_score=0.6,
+                        )
+                        runtime.published_events.append(sub_event)
+                        events_to_broadcast.append(sub_event)
+
+                channel = runtime.channel
+
+            result = dict(current)
+
+            # Persist tactics across restarts: Hot cache and database
+            full_tactics = {
+                "home": match_tactics.get("home", {}),
+                "away": match_tactics.get("away", {}),
+            }
+            try:
+                self._hot_cache.set(f"match:{match_id}:tactics", full_tactics, ttl_seconds=86400)
+            except Exception:
+                logger.debug("Failed to set tactics in hot cache", exc_info=True)
+
+            if self.session_factory is not None:
+                try:
+                    from app.models.competition_match import CompetitionMatch
+
+                    with self.session_factory() as session:
+                        comp_match = session.get(CompetitionMatch, match_id)
+                        if comp_match is None:
+                            raise ValueError(f"Match '{match_id}' disappeared before tactics persistence.")
+                        meta = dict(comp_match.metadata_json or {})
+                        meta["tactics"] = full_tactics
+                        if runtime is not None and runtime.viewer_state is not None:
+                            # Persist the updated canonical viewer state as well as tactic
+                            # settings so a worker restart does not revert the active XI.
+                            meta["match_viewer"] = runtime.viewer_state.model_dump(mode="json")
+                        comp_match.metadata_json = meta
+                        session.commit()
+                except Exception as exc:
+                    logger.exception("Failed to persist tactics in CompetitionMatch metadata for %s", match_id)
+                    if prior_tactics is None:
+                        self._tactics.pop(match_id, None)
+                    else:
+                        self._tactics[match_id] = prior_tactics
+                    if prior_runtime is not None and prior_viewer_state is not None:
+                        prior_runtime.viewer_state = prior_viewer_state
+                        del prior_runtime.published_events[prior_event_count:]
+                    try:
+                        previous = prior_tactics or {}
+                        self._hot_cache.set(
+                            f"match:{match_id}:tactics",
+                            {"home": previous.get("home", {}), "away": previous.get("away", {})},
+                            ttl_seconds=86400,
+                        )
+                    except Exception:
+                        logger.debug("Failed to restore previous tactics cache for %s", match_id, exc_info=True)
+                    raise LiveMatchPersistenceError(f"Unable to persist tactics for match '{match_id}'.") from exc
+
+        if runtime is not None and events_to_broadcast and channel is not None:
+            self._publish_channel(
+                channel,
+                {"kind": "events", "payload": [ev.model_dump(mode="json") for ev in events_to_broadcast]},
+            )
+            self._publish_domain_events(match_id, events_to_broadcast)
+
+        return result
+
+    def get_tactics(self, match_id: str) -> dict[str, dict[str, Any]]:
+        with self._lock:
+            match_tactics = self._tactics.get(match_id)
+            if not match_tactics:
+                try:
+                    cached = self._hot_cache.get(f"match:{match_id}:tactics")
+                    if isinstance(cached, dict) and ("home" in cached or "away" in cached):
+                        self._tactics[match_id] = {
+                            "home": dict(cached.get("home", {})),
+                            "away": dict(cached.get("away", {})),
+                        }
+                        match_tactics = self._tactics[match_id]
+                except Exception:
+                    pass
+
+            if not match_tactics and self.session_factory is not None:
+                try:
+                    from app.models.competition_match import CompetitionMatch
+
+                    with self.session_factory() as session:
+                        comp_match = session.get(CompetitionMatch, match_id)
+                        if comp_match is not None and comp_match.metadata_json:
+                            saved = comp_match.metadata_json.get("tactics")
+                            if isinstance(saved, dict) and ("home" in saved or "away" in saved):
+                                self._tactics[match_id] = {
+                                    "home": dict(saved.get("home", {})),
+                                    "away": dict(saved.get("away", {})),
+                                }
+                                match_tactics = self._tactics[match_id]
+                except Exception:
+                    pass
+
+            if not match_tactics:
+                match_tactics = {}
+
+            home_t = dict(
+                match_tactics.get(
+                    "home",
+                    {
+                        "press_intensity": 50,
+                        "defensive_line": 50,
+                        "tempo": 50,
+                        "risk_level": 50,
+                        "mentality": "balanced",
+                        "formation": "4-3-3",
+                        "substitution_count": 0,
+                    },
+                )
+            )
+            away_t = dict(
+                match_tactics.get(
+                    "away",
+                    {
+                        "press_intensity": 50,
+                        "defensive_line": 50,
+                        "tempo": 50,
+                        "risk_level": 50,
+                        "mentality": "balanced",
+                        "formation": "4-3-3",
+                        "substitution_count": 0,
+                    },
+                )
+            )
+            return {"home": home_t, "away": away_t}
 
     def _run_stream(self, match_id: str) -> None:
         while True:

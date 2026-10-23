@@ -1002,6 +1002,7 @@ List<RouteBase> _buildLegacyAliasRoutes({
           child: MatchViewerRouteScreen(
             matchKey: matchKey,
             initialReplayMinute: replayMinute,
+            onOpenMatchCenter: () => context.go('/live-match/$matchKey'),
           ),
         );
       },
@@ -1055,8 +1056,29 @@ List<RouteBase> _buildLegacyAliasRoutes({
         final String matchKey = state.pathParameters['matchKey']?.trim() ?? '';
         return NoTransitionPage<void>(
           key: state.pageKey,
-          child: MatchViewerRouteScreen(matchKey: matchKey),
+          child: MatchViewerRouteScreen(
+            matchKey: matchKey,
+            onOpenMatchCenter: () => context.go('/live-match/$matchKey'),
+          ),
         );
+      },
+    ),
+    GoRoute(
+      path: '/match/:matchId',
+      redirect: (BuildContext context, GoRouterState state) {
+        final String matchId = state.pathParameters['matchId']?.trim() ?? '';
+        return matchId.isEmpty
+            ? const BroadcastDeskRouteData().toUri().toString()
+            : '/live-match/$matchId';
+      },
+    ),
+    GoRoute(
+      path: '/match-center/:matchId',
+      redirect: (BuildContext context, GoRouterState state) {
+        final String matchId = state.pathParameters['matchId']?.trim() ?? '';
+        return matchId.isEmpty
+            ? const BroadcastDeskRouteData().toUri().toString()
+            : '/live-match/$matchId';
       },
     ),
     GoRoute(
