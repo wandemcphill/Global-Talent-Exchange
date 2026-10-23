@@ -887,7 +887,12 @@ function PostMatchAnalytics({
       if (res.data?.status === "already_claimed") {
         toast.info("Matchday settlement rewards were already claimed for this fixture.");
       } else {
-        toast.success(`Claimed +${res.data?.xp ?? 550} XP & +${res.data?.tokens ?? 25} $TALENT Tokens!`);
+        const amount = res.data?.talent_coin ?? res.data?.net_amount;
+        toast.success(
+          amount === undefined || amount === null
+            ? "Match reward was settled to your wallet."
+            : `Match reward settled: ${amount} $TALENT.`,
+        );
       }
     } catch (err: any) {
       toast.error(errMsg(err));
@@ -1016,7 +1021,7 @@ function PostMatchAnalytics({
                     key={optIdx}
                     onClick={() => {
                       setPressAnswers((prev) => ({ ...prev, [qIdx]: optIdx }));
-                      toast.success(`Reaction recorded: ${opt.effect}`);
+                      toast.info("Response selected for preview only; no manager effects were applied.");
                     }}
                     className={`flex w-full items-center justify-between rounded-sm px-3 py-2 text-left text-xs transition-colors ${
                       pressAnswers[qIdx] === optIdx
@@ -1025,7 +1030,7 @@ function PostMatchAnalytics({
                     }`}
                   >
                     <span>{opt.text}</span>
-                    <span className="gx-mono text-[9px] font-bold text-emerald-400">{opt.effect}</span>
+                    <span className="gx-mono text-[9px] font-bold text-slate-500">PREVIEW ONLY</span>
                   </button>
                 ))}
               </div>
@@ -1063,7 +1068,7 @@ function PostMatchAnalytics({
               </>
             ) : (
               <>
-                <Coins size={13} /> CLAIM +550 XP & 25 $TALENT
+                <Coins size={13} /> CLAIM MATCH REWARD
               </>
             )}
           </button>
