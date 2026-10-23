@@ -397,6 +397,7 @@ class GtexMatchTimelineEvent {
 }
 
 @immutable
+// Availability flags prevent missing match-feed metrics being presented as measurements.
 class GtexMatchStats {
   const GtexMatchStats({
     required this.homePossession,
