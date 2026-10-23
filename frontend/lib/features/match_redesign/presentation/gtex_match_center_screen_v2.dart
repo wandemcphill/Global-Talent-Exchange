@@ -16,6 +16,7 @@ import '../widgets/gtex_match_visual_tokens.dart';
 import '../../match/widgets/gtex_matchday_ad_slot.dart';
 import '../widgets/gtex_post_match_panel.dart';
 import '../widgets/gtex_pre_match_package_panel.dart';
+import '../widgets/gtex_tactical_advisor_widget.dart';
 import '../widgets/gtex_tactics_panel.dart';
 import 'gtex_match_center_controller.dart';
 
@@ -260,7 +261,15 @@ class _MainPitchWorkspace extends StatelessWidget {
     return Column(
       children: [
         GtexMatchScoreboard(match: match),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
+        GtexTacticalAdvisorWidget(
+          match: match,
+          compact: true,
+          onApplyInstruction: (inst) async {
+            await controller.sendInstruction(inst);
+          },
+        ),
+        const SizedBox(height: 8),
         Expanded(
           child: _BroadcastPanel(
             title: 'MATCH CAM',
@@ -667,7 +676,15 @@ class _MobileMatchView extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         GtexMatchScoreboard(match: match),
-        const SizedBox(height: 10),
+        const SizedBox(height: 6),
+        GtexTacticalAdvisorWidget(
+          match: match,
+          compact: true,
+          onApplyInstruction: (inst) async {
+            await controller.sendInstruction(inst);
+          },
+        ),
+        const SizedBox(height: 6),
         Expanded(
           flex: 5,
           child: _BroadcastPanel(

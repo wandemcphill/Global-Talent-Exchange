@@ -222,11 +222,15 @@ class _GtexPostMatchPanelState extends State<GtexPostMatchPanel> {
               ),
               const SizedBox(height: 14),
 
-              // 5. Match Statistics Breakdown
+              // 5. Post-Match Manager Press Conference
+              _ManagerPressConferenceCard(match: widget.match),
+              const SizedBox(height: 14),
+
+              // 6. Match Statistics Breakdown
               _MatchPerformanceSummary(match: widget.match),
               const SizedBox(height: 14),
 
-              // 6. Goal Replays
+              // 7. Goal Replays
               if (widget.onReplayGoal != null &&
                   widget.match.timeline.any((e) => e.type == GtexPitchEventType.goal)) ...[
                 _GoalReplaysList(
@@ -236,7 +240,11 @@ class _GtexPostMatchPanelState extends State<GtexPostMatchPanel> {
                 const SizedBox(height: 14),
               ],
 
-              // 7. Owner Decision Loop Actions
+              // 8. XP & Manager Token Settlement
+              _PostMatchSettlementCard(match: widget.match),
+              const SizedBox(height: 14),
+
+              // 9. Owner Decision Loop Actions
               const GtexMatchdayAdSlot(
                 placement: 'Full-time match report & replay',
                 compact: true,
@@ -1299,6 +1307,699 @@ class _MatchStatRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _PressQuestionData {
+  const _PressQuestionData({
+    required this.outlet,
+    required this.journalist,
+    required this.avatarColor,
+    required this.question,
+    required this.options,
+  });
+
+  final String outlet;
+  final String journalist;
+  final Color avatarColor;
+  final String question;
+  final List<_PressOptionData> options;
+}
+
+class _PressOptionData {
+  const _PressOptionData({
+    required this.text,
+    required this.impactLabel,
+    required this.impactColor,
+  });
+
+  final String text;
+  final String impactLabel;
+  final Color impactColor;
+}
+
+class _ManagerPressConferenceCard extends StatefulWidget {
+  const _ManagerPressConferenceCard({required this.match});
+
+  final GtexLiveMatchState match;
+
+  @override
+  State<_ManagerPressConferenceCard> createState() => _ManagerPressConferenceCardState();
+}
+
+class _ManagerPressConferenceCardState extends State<_ManagerPressConferenceCard> {
+  final Map<int, int> _selectedAnswers = {};
+
+  List<_PressQuestionData> _buildQuestions() {
+    final int homeScore = widget.match.home.score;
+    final int awayScore = widget.match.away.score;
+    final bool won = homeScore > awayScore;
+    final bool drew = homeScore == awayScore;
+
+    return [
+      _PressQuestionData(
+        outlet: 'THE ATHLETIC · TACTICAL DESK',
+        journalist: 'Samir Croft, Senior Analyst',
+        avatarColor: const Color(0xFF60A5FA),
+        question: won
+            ? 'Manager, your team adapted fluidly across tactical phases today. What was your key tactical directive?'
+            : drew
+                ? 'Manager, both sides cancelled each other out in the middle third. How did you assess the tactical battle?'
+                : 'Manager, your side struggled against their defensive transition. Where did the plan fall short?',
+        options: won
+            ? const [
+                _PressOptionData(
+                  text: '"We pressed high and dominated the central half-spaces to dictate tempo."',
+                  impactLabel: '+18 TACTICAL DISCIPLINE · +12 BOARD CONFIDENCE',
+                  impactColor: Color(0xFF00E87A),
+                ),
+                _PressOptionData(
+                  text: '"Our positional flexibility allowed the wingers to overload wide areas."',
+                  impactLabel: '+15 TEAM CHEMISTRY · +10 ADAPTABILITY',
+                  impactColor: Color(0xFF60A5FA),
+                ),
+                _PressOptionData(
+                  text: '"Credit to the squad. They executed instructions with elite maturity."',
+                  impactLabel: '+20 SQUAD MORALE · +10 REPUTATION',
+                  impactColor: Color(0xFFFFB800),
+                ),
+              ]
+            : const [
+                _PressOptionData(
+                  text: '"We held solid defensive compactness, but lacked the final killer pass."',
+                  impactLabel: '+12 PRAGMATISM · +8 STABILITY',
+                  impactColor: Color(0xFF60A5FA),
+                ),
+                _PressOptionData(
+                  text: '"The workrate was there. We will refine attacking rotations in training."',
+                  impactLabel: '+15 WORK ETHIC · +10 FOCUS',
+                  impactColor: Color(0xFF00E87A),
+                ),
+                _PressOptionData(
+                  text: '"We set high standards here. A point is not enough for our ambition."',
+                  impactLabel: '+18 AMBITION · -5 STRESS RISK',
+                  impactColor: Color(0xFFFF5722),
+                ),
+              ],
+      ),
+      _PressQuestionData(
+        outlet: 'SKY SPORTS FOOTBALL',
+        journalist: 'Laura Evans, Pitchside Anchor',
+        avatarColor: const Color(0xFFFF5722),
+        question: won
+            ? 'The fans were roaring all 90 minutes. How special was the connection between pitch and stadium?'
+            : 'How do you maintain momentum going into the next fixture after today’s intense 90 minutes?',
+        options: won
+            ? const [
+                _PressOptionData(
+                  text: '"This win belongs to the fans. Their energy gave us an unstoppable second wind."',
+                  impactLabel: '+25 FAN APPROVAL · +20 STADIUM PASSION',
+                  impactColor: Color(0xFF00E87A),
+                ),
+                _PressOptionData(
+                  text: '"Professional execution. We celebrate tonight and refocus tomorrow morning."',
+                  impactLabel: '+15 PROFESSIONALISM · +10 COMPOSURE',
+                  impactColor: Color(0xFF60A5FA),
+                ),
+                _PressOptionData(
+                  text: '"This is the benchmark. Every match must be contested with this intensity."',
+                  impactLabel: '+18 SQUAD DETERMINATION · +12 REPUTATION',
+                  impactColor: Color(0xFFFFB800),
+                ),
+              ]
+            : const [
+                _PressOptionData(
+                  text: '"We stay united. Difficult phases build champions; we rise together."',
+                  impactLabel: '+20 SQUAD RESOLVE · +15 FAN LOYALTY',
+                  impactColor: Color(0xFF00E87A),
+                ),
+                _PressOptionData(
+                  text: '"We review video analytics tomorrow, adjust key metrics, and bounce back."',
+                  impactLabel: '+15 ANALYTICAL FOCUS · +10 CONFIDENCE',
+                  impactColor: Color(0xFF60A5FA),
+                ),
+                _PressOptionData(
+                  text: '"Every player knows what is required. Accountability is paramount."',
+                  impactLabel: '+18 STANDARDS · +10 LEADERSHIP',
+                  impactColor: Color(0xFFFF5722),
+                ),
+              ],
+      ),
+      _PressQuestionData(
+        outlet: 'GTEX FAN VOICE',
+        journalist: 'Dave Wilson, Supporters Forum',
+        avatarColor: const Color(0xFFFFB800),
+        question:
+            'Looking ahead to the transfer window and player progression, how confident are you in this squad’s ceiling?',
+        options: const [
+          _PressOptionData(
+            text: '"We have extraordinary emerging talent. The long-term trajectory is world-class."',
+            impactLabel: '+25 BOARD VISION · +20 TALENT CONFIDENCE',
+            impactColor: Color(0xFF00E87A),
+          ),
+          _PressOptionData(
+            text: '"Our scouting network is actively identifying high-value tactical profiles."',
+            impactLabel: '+18 MARKET REPUTATION · +15 SCOUT ACCURACY',
+            impactColor: Color(0xFF60A5FA),
+          ),
+          _PressOptionData(
+            text: '"I believe in our current roster. We develop from within and reward hard work."',
+            impactLabel: '+22 ACADEMY PRIDE · +18 SQUAD LOYALTY',
+            impactColor: Color(0xFFFFB800),
+          ),
+        ],
+      ),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final questions = _buildQuestions();
+    final int answeredCount = _selectedAnswers.length;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF111827),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: answeredCount == questions.length
+              ? const Color(0xFF00E87A)
+              : const Color(0x663B82F6),
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0x333B82F6),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFF3B82F6)),
+                ),
+                child: const Icon(
+                  Icons.record_voice_over_rounded,
+                  size: 15,
+                  color: Color(0xFF60A5FA),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'POST-MATCH PRESS CONFERENCE',
+                      style: TextStyle(
+                        color: Color(0xFF60A5FA),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    Text(
+                      '3 ACCREDITED MEDIA QUESTIONS · $answeredCount/3 ANSWERED',
+                      style: const TextStyle(
+                        color: GtexMatchVisualTokens.textSecondary,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (answeredCount == questions.length)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0x3300E87A),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: const Color(0xFF00E87A)),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle_rounded, size: 12, color: Color(0xFF00E87A)),
+                      SizedBox(width: 4),
+                      Text(
+                        'PRESS CONCLUDED',
+                        style: TextStyle(
+                          color: Color(0xFF00E87A),
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Questions List
+          for (int qIdx = 0; qIdx < questions.length; qIdx++) ...[
+            _buildQuestionTile(questions[qIdx], qIdx),
+            if (qIdx < questions.length - 1) const SizedBox(height: 12),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuestionTile(_PressQuestionData q, int qIdx) {
+    final int? selectedOpt = _selectedAnswers[qIdx];
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: selectedOpt != null
+              ? const Color(0x6600E87A)
+              : Colors.white12,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Outlet & Journalist
+          Row(
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: q.avatarColor,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                q.outlet,
+                style: TextStyle(
+                  color: q.avatarColor,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.6,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                q.journalist,
+                style: const TextStyle(
+                  color: GtexMatchVisualTokens.textTertiary,
+                  fontSize: 9,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+
+          // Question Text
+          Text(
+            q.question,
+            style: const TextStyle(
+              color: GtexMatchVisualTokens.textPrimary,
+              fontSize: 11,
+              fontStyle: FontStyle.italic,
+              fontWeight: FontWeight.w600,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Response Options
+          for (int optIdx = 0; optIdx < q.options.length; optIdx++) ...[
+            _buildOptionButton(q.options[optIdx], qIdx, optIdx, selectedOpt == optIdx),
+            if (optIdx < q.options.length - 1) const SizedBox(height: 6),
+          ],
+
+          // Effect indicator if selected
+          if (selectedOpt != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: q.options[selectedOpt].impactColor.withAlpha(30),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(
+                  color: q.options[selectedOpt].impactColor,
+                  width: 0.8,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.trending_up_rounded,
+                    size: 11,
+                    color: q.options[selectedOpt].impactColor,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    q.options[selectedOpt].impactLabel,
+                    style: TextStyle(
+                      color: q.options[selectedOpt].impactColor,
+                      fontSize: 8.5,
+                      fontWeight: FontWeight.w900,
+                      fontFamily: 'JetBrains Mono',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOptionButton(
+    _PressOptionData opt,
+    int qIdx,
+    int optIdx,
+    bool isSelected,
+  ) {
+    return InkWell(
+      onTap: () => setState(() {
+        _selectedAnswers[qIdx] = optIdx;
+      }),
+      borderRadius: BorderRadius.circular(6),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0x3300E87A) : const Color(0x661E293B),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF00E87A) : Colors.white10,
+            width: isSelected ? 1.2 : 0.8,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              isSelected
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_off_rounded,
+              size: 13,
+              color: isSelected ? const Color(0xFF00E87A) : Colors.white38,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                opt.text,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : GtexMatchVisualTokens.textSecondary,
+                  fontSize: 10,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PostMatchSettlementCard extends StatefulWidget {
+  const _PostMatchSettlementCard({required this.match});
+
+  final GtexLiveMatchState match;
+
+  @override
+  State<_PostMatchSettlementCard> createState() => _PostMatchSettlementCardState();
+}
+
+class _PostMatchSettlementCardState extends State<_PostMatchSettlementCard> {
+  bool _claimed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final int homeScore = widget.match.home.score;
+    final int awayScore = widget.match.away.score;
+    final bool won = homeScore > awayScore;
+    final bool drew = homeScore == awayScore;
+
+    final int resultXp = won ? 200 : (drew ? 100 : 50);
+    const int participationXp = 250;
+    const int tacticalXp = 100;
+    final int totalXp = participationXp + resultXp + tacticalXp;
+
+    final int tokenReward = won ? 25 : (drew ? 15 : 10);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+        ),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: _claimed ? const Color(0xFF00E87A) : const Color(0xFFFFB800),
+          width: 1.2,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x22FFB800),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: const BoxDecoration(
+                  color: Color(0x33FFB800),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.military_tech_rounded,
+                  size: 16,
+                  color: Color(0xFFFFB800),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'MATCH REWARD SETTLEMENT',
+                      style: TextStyle(
+                        color: Color(0xFFFFB800),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    Text(
+                      'MANAGER LEVEL 14 · SEASON TACTICAL CYCLE',
+                      style: TextStyle(
+                        color: GtexMatchVisualTokens.textSecondary,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0x33FFB800),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: const Color(0xFFFFB800)),
+                ),
+                child: Text(
+                  '+$totalXp XP',
+                  style: const TextStyle(
+                    color: Color(0xFFFFB800),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    fontFamily: 'JetBrains Mono',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Settlement Breakdown Rows
+          _buildSettlementRow(
+            icon: Icons.sports_soccer_rounded,
+            label: 'Matchday Completion',
+            value: '+$participationXp XP',
+            color: Colors.white70,
+          ),
+          const SizedBox(height: 6),
+          _buildSettlementRow(
+            icon: Icons.emoji_events_rounded,
+            label: won ? 'Victory Bounty' : (drew ? 'Draw Result Share' : 'Match Resilience'),
+            value: '+$resultXp XP',
+            color: won ? const Color(0xFF00E87A) : (drew ? const Color(0xFFFFB800) : Colors.white60),
+          ),
+          const SizedBox(height: 6),
+          _buildSettlementRow(
+            icon: Icons.tune_rounded,
+            label: 'Tactical Alignment Masterclass',
+            value: '+$tacticalXp XP',
+            color: const Color(0xFF60A5FA),
+          ),
+          const SizedBox(height: 6),
+          _buildSettlementRow(
+            icon: Icons.monetization_on_rounded,
+            label: 'GTEX Manager Token Pool',
+            value: '+$tokenReward \$TALENT',
+            color: const Color(0xFFFFB800),
+            isBold: true,
+          ),
+          const SizedBox(height: 14),
+
+          // Level Progression Bar
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Text(
+                    'LEVEL 14 PROGRESSION',
+                    style: TextStyle(
+                      color: GtexMatchVisualTokens.textTertiary,
+                      fontSize: 8.5,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  Spacer(),
+                  Text(
+                    '8,450 / 10,000 XP (84.5%)',
+                    style: TextStyle(
+                      color: Color(0xFFFFB800),
+                      fontSize: 8.5,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'JetBrains Mono',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 5),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(3),
+                child: LinearProgressIndicator(
+                  value: _claimed ? 0.90 : 0.845,
+                  minHeight: 6,
+                  backgroundColor: const Color(0xFF334155),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    _claimed ? const Color(0xFF00E87A) : const Color(0xFFFFB800),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Claim Button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _claimed
+                  ? null
+                  : () {
+                      setState(() => _claimed = true);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Settled: +$totalXp XP and +$tokenReward \$TALENT credited to Manager Account',
+                          ),
+                          backgroundColor: const Color(0xFF0F172A),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _claimed
+                    ? const Color(0x3300E87A)
+                    : const Color(0xFFFFB800),
+                foregroundColor: _claimed
+                    ? const Color(0xFF00E87A)
+                    : const Color(0xFF0F172A),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  side: _claimed
+                      ? const BorderSide(color: Color(0xFF00E87A))
+                      : BorderSide.none,
+                ),
+              ),
+              icon: Icon(
+                _claimed ? Icons.check_circle_rounded : Icons.lock_open_rounded,
+                size: 16,
+              ),
+              label: Text(
+                _claimed
+                    ? 'REWARDS DEPOSITED TO WALLET'
+                    : 'CLAIM +$totalXp XP & +$tokenReward \$TALENT',
+                style: const TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.6,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettlementRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+    bool isBold = false,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 12, color: color),
+        const SizedBox(width: 7),
+        Text(
+          label,
+          style: TextStyle(
+            color: GtexMatchVisualTokens.textSecondary,
+            fontSize: 10,
+            fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+        const Spacer(),
+        Text(
+          value,
+          style: TextStyle(
+            color: color,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w900,
+            fontFamily: 'JetBrains Mono',
+          ),
+        ),
+      ],
     );
   }
 }
