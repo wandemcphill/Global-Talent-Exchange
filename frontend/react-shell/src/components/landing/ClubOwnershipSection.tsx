@@ -1,22 +1,8 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  Shield,
-  Building2,
-  Tv,
-  Plane,
-  Diamond,
-  Gift,
-  Radio,
-  ArrowRight,
-} from "lucide-react";
+import { Shield, Building2, Tv, Plane, Diamond, Gift, Radio, ArrowRight } from "lucide-react";
 import { publicUrl } from "@/lib/publicPath";
-import {
-  kClubStages,
-  kShowroomAssets,
-  ClubStageData,
-  ShowroomAssetItem,
-} from "./landingModels";
+import { kClubStages, kShowroomAssets, ClubStageData, ShowroomAssetItem } from "./landingModels";
 
 export const ClubOwnershipSection: React.FC = () => {
   // Start on Legacy stage (index 4) as in canonical Flutter design
@@ -42,7 +28,9 @@ export const ClubOwnershipSection: React.FC = () => {
               From Grassroots Founder to Global Football Institution
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-[#9AA7BD] sm:text-base">
-              Every owner can found or acquire up to three clubs. Define club identity, construct world-class facilities, appoint tacticians, and unlock luxury aviation as your institutional prestige rises.
+              Every owner can found or acquire up to three clubs. Define club identity, construct
+              world-class facilities, appoint tacticians, and unlock luxury aviation as your
+              institutional prestige rises.
             </p>
           </div>
 
@@ -54,9 +42,7 @@ export const ClubOwnershipSection: React.FC = () => {
             <span className="mt-1 font-['Barlow_Condensed'] text-xl font-black uppercase text-[#F2F4F8]">
               Up to 3 Active Clubs
             </span>
-            <span className="text-xs text-[#6B7A93]">
-              Independent sporting ledgers
-            </span>
+            <span className="text-xs text-[#6B7A93]">Independent sporting ledgers</span>
           </div>
         </div>
 
@@ -211,7 +197,18 @@ export const ClubOwnershipSection: React.FC = () => {
 
             {/* Featured Asset Showcase */}
             <div className="mt-8 grid grid-cols-1 items-center gap-8 lg:grid-cols-12">
-              <div className="overflow-hidden rounded-xl border border-[#22385A] bg-[#0B1626] lg:col-span-6">
+              <div
+                className={`relative overflow-hidden rounded-xl border bg-[#0B1626] lg:col-span-6 ${
+                  currentAsset.imageFile.includes("sovereign_900x_jet")
+                    ? "border-[#D4AF37]/70 shadow-[0_0_24px_rgba(212,175,55,0.12)]"
+                    : "border-[#22385A]"
+                }`}
+              >
+                {currentAsset.imageFile.includes("sovereign_900x_jet") && (
+                  <span className="absolute left-3 top-3 z-10 rounded border border-[#D4AF37]/60 bg-[#0B1626]/80 px-2.5 py-1 font-['Barlow_Condensed'] text-[11px] font-extrabold uppercase tracking-[0.15em] text-[#D4AF37] backdrop-blur-sm">
+                    GTEX AVIATION / OWNER ASSET
+                  </span>
+                )}
                 <img
                   src={publicUrl(currentAsset.imageFile)}
                   alt={currentAsset.name}

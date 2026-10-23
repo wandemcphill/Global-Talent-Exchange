@@ -1,13 +1,5 @@
 import React, { useState } from "react";
-import {
-  Sparkles,
-  UserCheck,
-  Dumbbell,
-  Trophy,
-  TrendingUp,
-  Activity,
-  Award,
-} from "lucide-react";
+import { Sparkles, UserCheck, Dumbbell, Trophy, TrendingUp, Activity, Award } from "lucide-react";
 import { kFeaturedRegens, RegenTalentProfile } from "./landingModels";
 
 interface RegenJourneyStep {
@@ -90,7 +82,9 @@ export const RegenEconomySection: React.FC = () => {
             Discover the Next Superstar. Build Living Football Value.
           </h2>
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#9AA7BD] sm:text-base">
-            Explore an illustrative journey from academy intake to first-team football. In live GTEX, player identity, ratings, development history and valuation should come from the existing regen engine and player records.
+            Explore an illustrative journey from academy intake to first-team football. In live
+            GTEX, player identity, ratings, development history and valuation should come from the
+            existing regen engine and player records.
           </p>
         </div>
 
@@ -175,7 +169,7 @@ export const RegenEconomySection: React.FC = () => {
               </h3>
             </div>
             <span className="font-['Barlow_Condensed'] text-xs font-bold uppercase tracking-wider text-[#6B7A93]">
-              GENERATIONAL TALENT EXAMPLES
+              SAMPLE PROFILES â€¢ ILLUSTRATIVE VALUES
             </span>
           </div>
 
@@ -240,9 +234,7 @@ export const RegenEconomySection: React.FC = () => {
                   </div>
                 </div>
 
-                <p className="mt-4 text-xs leading-relaxed text-[#9AA7BD]">
-                  {activeRegen.story}
-                </p>
+                <p className="mt-4 text-xs leading-relaxed text-[#9AA7BD]">{activeRegen.story}</p>
 
                 {/* Traits */}
                 <div className="mt-4 flex flex-wrap gap-1.5">
@@ -267,9 +259,17 @@ export const RegenEconomySection: React.FC = () => {
                   {[
                     { label: "Pace & Acceleration", val: activeRegen.pace, color: "#38BDF8" },
                     { label: "Vision & Playmaking", val: activeRegen.vision, color: "#36E38A" },
-                    { label: "Technique & Dribbling", val: activeRegen.technique, color: "#D4AF37" },
+                    {
+                      label: "Technique & Dribbling",
+                      val: activeRegen.technique,
+                      color: "#D4AF37",
+                    },
                     { label: "Stamina & Physicality", val: activeRegen.stamina, color: "#F59E0B" },
-                    { label: "Mentality & Composure", val: activeRegen.mentality, color: "#A855F7" },
+                    {
+                      label: "Mentality & Composure",
+                      val: activeRegen.mentality,
+                      color: "#A855F7",
+                    },
                   ].map((attr) => (
                     <div key={attr.label}>
                       <div className="flex justify-between text-xs">

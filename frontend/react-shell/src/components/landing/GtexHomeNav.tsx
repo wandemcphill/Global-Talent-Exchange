@@ -1,6 +1,17 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { Menu, X, ArrowRight, ShieldCheck } from "lucide-react";
+import {
+  Menu,
+  X,
+  ArrowRight,
+  Globe2,
+  Shield,
+  Tv,
+  UserSearch,
+  Trophy,
+  Users,
+  ShieldCheck,
+} from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { publicUrl } from "@/lib/publicPath";
 import { GtexLiveWorldPulse } from "./landingModels";
@@ -20,13 +31,58 @@ export const GtexHomeNav: React.FC<GtexHomeNavProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navLinks = [
-    { label: "World", id: "world" },
-    { label: "Clubs", id: "ownership" },
-    { label: "TV Money", id: "finance" },
-    { label: "Regens", id: "regens" },
-    { label: "Tournaments", id: "competitions" },
-    { label: "Universe", id: "universe" },
-    { label: "Trust", id: "trust" },
+    { label: "World", id: "world", wideOnly: false },
+    { label: "Clubs", id: "ownership", wideOnly: false },
+    { label: "TV Money", id: "finance", wideOnly: false },
+    { label: "Regens", id: "regens", wideOnly: false },
+    { label: "Tournaments", id: "competitions", wideOnly: false },
+    { label: "Universe", id: "universe", wideOnly: true },
+    { label: "Trust", id: "trust", wideOnly: true },
+  ];
+
+  const mobileNavItems = [
+    {
+      id: "world",
+      Icon: Globe2,
+      title: "The living world",
+      subtitle: "News, milestones and broadcasts",
+    },
+    {
+      id: "ownership",
+      Icon: Shield,
+      title: "Club ownership",
+      subtitle: "Build your club and prestige",
+    },
+    {
+      id: "finance",
+      Icon: Tv,
+      title: "TV money & club finance",
+      subtitle: "Broadcast revenue and club economics",
+    },
+    {
+      id: "regens",
+      Icon: UserSearch,
+      title: "Regens & player development",
+      subtitle: "Discover and develop future stars",
+    },
+    {
+      id: "competitions",
+      Icon: Trophy,
+      title: "Competitions & jackpots",
+      subtitle: "Tournaments, rules and prize events",
+    },
+    {
+      id: "universe",
+      Icon: Users,
+      title: "The wider football universe",
+      subtitle: "Managers and national-team rentals",
+    },
+    {
+      id: "trust",
+      Icon: ShieldCheck,
+      title: "Trust & rules",
+      subtitle: "Currencies, eligibility and disclosures",
+    },
   ];
 
   const handleNavClick = (id: string) => {
@@ -81,7 +137,7 @@ export const GtexHomeNav: React.FC<GtexHomeNavProps> = ({
             <button
               key={link.id}
               onClick={() => handleNavClick(link.id)}
-              className="text-xs font-semibold uppercase tracking-wider text-[#9AA7BD] transition-colors hover:text-[#F2F4F8]"
+              className={`${link.wideOnly ? "hidden xl:inline-block" : ""} text-xs font-semibold uppercase tracking-wider text-[#9AA7BD] transition-colors hover:text-[#F2F4F8]`}
             >
               {link.label}
             </button>
@@ -102,14 +158,14 @@ export const GtexHomeNav: React.FC<GtexHomeNavProps> = ({
             data-testid="landing-nav-signup"
             className="flex items-center gap-1.5 rounded-md border border-[#D4AF37] bg-[#D4AF37] px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-[#0B1626] shadow-[0_0_20px_rgba(212,175,55,0.25)] transition-[transform,background-color] hover:bg-[#E8C766] active:scale-[0.98]"
           >
-            Claim a club
+            Enter GTEX
           </Link>
 
           {/* Mobile hamburger toggle */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="lg:hidden p-2 text-[#9AA7BD] hover:text-white"
-            aria-label="Toggle Navigation Menu"
+            aria-label="Open homepage navigation"
           >
             {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
@@ -119,14 +175,27 @@ export const GtexHomeNav: React.FC<GtexHomeNavProps> = ({
       {/* Mobile Drawer Menu */}
       {mobileMenuOpen && (
         <div className="lg:hidden border-b border-[#22385A] bg-[#0B1626] px-6 py-6 shadow-2xl">
-          <div className="grid grid-cols-2 gap-3">
-            {navLinks.map((link) => (
+          <p className="font-['Barlow_Condensed'] text-xs font-extrabold uppercase tracking-[0.15em] text-[#D4AF37]">
+            Explore GTEX
+          </p>
+          <p className="mt-2 text-[13px] leading-snug text-[#9AA7BD]">
+            Your football world, one destination at a time.
+          </p>
+          <div className="mt-4 divide-y divide-[#22385A] border-t border-[#22385A]">
+            {mobileNavItems.map(({ id, Icon, title, subtitle }) => (
               <button
-                key={link.id}
-                onClick={() => handleNavClick(link.id)}
-                className="rounded-lg border border-[#22385A] bg-[#13233A] px-3.5 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-[#F2F4F8] hover:border-[#D4AF37]"
+                key={id}
+                onClick={() => handleNavClick(id)}
+                className="flex w-full items-center gap-3 py-2.5 text-left hover:bg-[#13233A]/60"
               >
-                {link.label}
+                <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px] border border-[#22385A] bg-[#1A2E4A] text-[#D4AF37]">
+                  <Icon size={19} />
+                </span>
+                <span className="flex-1">
+                  <span className="block text-sm font-bold text-[#F2F4F8]">{title}</span>
+                  <span className="block text-[11px] text-[#6B7A93]">{subtitle}</span>
+                </span>
+                <ArrowRight size={14} className="text-[#6B7A93]" />
               </button>
             ))}
           </div>
@@ -137,7 +206,7 @@ export const GtexHomeNav: React.FC<GtexHomeNavProps> = ({
               onClick={() => setMobileMenuOpen(false)}
               className="flex items-center justify-center gap-2 rounded-lg bg-[#D4AF37] py-2.5 text-xs font-extrabold uppercase tracking-wider text-[#0B1626]"
             >
-              Create Free Account <ArrowRight size={14} />
+              Enter GTEX <ArrowRight size={14} />
             </Link>
           </div>
         </div>

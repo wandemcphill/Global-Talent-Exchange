@@ -19,7 +19,7 @@ export const PlatformMapSection: React.FC = () => {
       icon: Building2,
       accent: "#36E38A",
       featured: true,
-      tag: "CORE PILLAR",
+      tag: "THE CORE EXPERIENCE",
     },
     {
       id: "talent",
@@ -85,7 +85,8 @@ export const PlatformMapSection: React.FC = () => {
 
         {/* Subhead */}
         <p className="mt-4 max-w-2xl text-base text-[#9AA7BD]">
-          GTEX brings talent, clubs, markets, matches, money and community into one connected football ecosystem.
+          GTEX brings talent, clubs, markets, matches, money and community into one connected
+          football ecosystem.
         </p>
 
         {/* Feature Grid */}
@@ -124,15 +125,16 @@ export const PlatformMapSection: React.FC = () => {
                   <h3 className="mt-5 font-['Barlow_Condensed'] text-2xl font-bold uppercase text-[#F2F4F8]">
                     {pillar.title}
                   </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-[#9AA7BD]">
-                    {pillar.body}
-                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-[#9AA7BD]">{pillar.body}</p>
                 </div>
 
                 <div className="mt-6 pt-4 border-t border-[#22385A]/50">
                   <div className="flex items-center text-xs font-bold uppercase tracking-wider text-[#9AA7BD] group-hover:text-white">
                     <span>Explore pillar</span>
-                    <ArrowRight size={14} className="ml-1.5 transition-transform group-hover:translate-x-1" />
+                    <ArrowRight
+                      size={14}
+                      className="ml-1.5 transition-transform group-hover:translate-x-1"
+                    />
                   </div>
                 </div>
               </div>

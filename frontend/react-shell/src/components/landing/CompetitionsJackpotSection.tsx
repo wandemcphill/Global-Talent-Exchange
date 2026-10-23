@@ -2,16 +2,14 @@ import React, { useState, useEffect } from "react";
 import {
   Trophy,
   Clock,
-  Coins,
-  ShieldCheck,
   Calendar,
-  Sparkles,
-  ArrowRight,
+  Timer,
+  TrendingUp,
+  Dices,
+  AlarmClockCheck,
+  Info,
 } from "lucide-react";
-import {
-  kCompetitionFormatPreviews,
-  ActiveCompetitionItem,
-} from "./landingModels";
+import { kCompetitionFormatPreviews, ActiveCompetitionItem } from "./landingModels";
 
 interface CompetitionsJackpotSectionProps {
   initialJackpotBalance?: string | null;
@@ -23,9 +21,7 @@ export const CompetitionsJackpotSection: React.FC<CompetitionsJackpotSectionProp
   initialFailsafeAt,
 }) => {
   const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
-  const [balanceStr, setBalanceStr] = useState<string>(
-    initialJackpotBalance || "125,000 GTC"
-  );
+  const balanceStr = initialJackpotBalance || "Pool unavailable";
 
   const getNextScheduledDrop = (): Date => {
     const now = new Date();
@@ -39,8 +35,8 @@ export const CompetitionsJackpotSection: React.FC<CompetitionsJackpotSectionProp
         nextDropHour >= 24 ? 0 : nextDropHour,
         0,
         0,
-        0
-      )
+        0,
+      ),
     );
     if (nextDropHour >= 24) {
       target.setUTCDate(target.getUTCDate() + 1);
@@ -92,7 +88,8 @@ export const CompetitionsJackpotSection: React.FC<CompetitionsJackpotSectionProp
             Continental Glory & 4 Scheduled Daily Jackpots
           </h2>
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#9AA7BD] sm:text-base">
-            Enter league circuits, knockout tournaments and user-hosted cups. Published event rules define eligibility and prize pools, alongside the four scheduled daily jackpot drops.
+            Enter league circuits, knockout tournaments and user-hosted cups. Published event rules
+            define eligibility and prize pools, alongside the four scheduled daily jackpot drops.
           </p>
         </div>
 
@@ -100,82 +97,69 @@ export const CompetitionsJackpotSection: React.FC<CompetitionsJackpotSectionProp
         <div className="mt-10 rounded-2xl border border-[#D4AF37]/50 bg-[#13233A] p-6 sm:p-10 shadow-[0_4px_32px_rgba(212,175,55,0.12)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="flex items-center gap-2 rounded-full border border-[#D4AF37]/40 bg-[#D4AF37]/15 px-3.5 py-1 font-['Barlow_Condensed'] text-xs font-extrabold uppercase tracking-wider text-[#D4AF37]">
-              <Clock size={14} />
-              4 SCHEDULED DAILY DROPS • 6-HR CYCLE
+              <Clock size={14} />4 SCHEDULED DAILY DROPS • 6-HR CYCLE
             </span>
             <span className="flex items-center gap-1.5 font-['JetBrains_Mono'] text-xs font-bold text-[#38BDF8]">
               <Calendar size={13} />
-              UTC SCHEDULE (00:00, 06:00, 12:00, 18:00)
+              UTC SCHEDULE
             </span>
           </div>
 
           <div className="mt-8 grid grid-cols-1 items-center gap-8 lg:grid-cols-12">
-            {/* Left: Countdown */}
+            {/* Left: Pool + Countdown */}
             <div className="lg:col-span-6">
-              <span className="font-['Barlow_Condensed'] text-xs font-bold uppercase tracking-widest text-[#6B7A93]">
-                NEXT SCHEDULED JACKPOT DROP IN
+              <span className="font-['Barlow_Condensed'] text-[11px] font-extrabold uppercase tracking-[0.15em] text-[#6B7A93]">
+                CURRENT JACKPOT ROUND POOL
               </span>
-              <p className="mt-2 font-['JetBrains_Mono'] text-5xl sm:text-6xl font-black tracking-tight text-[#F2F4F8]">
-                {formatCountdown(remainingSeconds)}
+              <p className="mt-1 font-['JetBrains_Mono'] text-3xl font-black tracking-tight text-[#E8C766]">
+                {balanceStr}
               </p>
 
-              <div className="mt-6 flex flex-wrap items-center gap-4">
-                <div className="rounded-xl border border-[#22385A] bg-[#0B1626] p-4">
-                  <span className="text-[10px] uppercase tracking-wider text-[#6B7A93]">
-                    ESTIMATED POOL
-                  </span>
-                  <p className="font-['JetBrains_Mono'] text-2xl font-bold text-[#E8C766]">
-                    {balanceStr}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-[#22385A] bg-[#0B1626] p-4">
-                  <span className="text-[10px] uppercase tracking-wider text-[#6B7A93]">
-                    DROP CYCLE
-                  </span>
-                  <p className="font-['JetBrains_Mono'] text-2xl font-bold text-[#36E38A]">
-                    Every 6 Hours
-                  </p>
-                </div>
+              <span className="mt-4 block font-['Barlow_Condensed'] text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#36E38A]">
+                TIME TO NEXT SCHEDULED DROP
+              </span>
+              <div className="mt-1.5 inline-flex items-center gap-2 rounded-[10px] border border-[#22385A] bg-[#081120] px-3.5 py-2">
+                <Timer size={18} className="text-[#36E38A]" />
+                <span className="font-['JetBrains_Mono'] text-[22px] font-black tracking-[0.1em] text-[#F2F4F8]">
+                  {formatCountdown(remainingSeconds)}
+                </span>
+                <span className="text-[10px] font-bold text-[#6B7A93]">UTC</span>
               </div>
             </div>
 
             {/* Right: Mechanics */}
-            <div className="space-y-4 rounded-xl border border-[#22385A] bg-[#0B1626]/70 p-6 lg:col-span-6">
-              <div className="flex items-start gap-3">
-                <ShieldCheck size={18} className="mt-0.5 text-[#36E38A]" />
-                <div>
-                  <h4 className="font-['Barlow_Condensed'] text-base font-bold uppercase text-[#F2F4F8]">
-                    Automated 6-Hour Failsafe Cycles
-                  </h4>
-                  <p className="mt-0.5 text-xs text-[#9AA7BD] leading-relaxed">
-                    Jackpot drops trigger unconditionally at 00:00, 06:00, 12:00, and 18:00 UTC. If no winner claims the pool within the 6-hour interval, the failsafe routine awards the balance to top matchday participants.
-                  </p>
+            <div className="space-y-2 lg:col-span-6">
+              <p className="font-['Barlow_Condensed'] text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#D4AF37]">
+                THREE VERIFIED TRIGGER MECHANISMS
+              </p>
+              {[
+                {
+                  Icon: TrendingUp,
+                  title: "1. Threshold Trigger (500.00 GTC)",
+                  description:
+                    "Automatically triggers payout the moment pool hits the verified threshold balance.",
+                },
+                {
+                  Icon: Dices,
+                  title: "2. Probability Roll (Scales to 50% Cap)",
+                  description:
+                    "Every match contribution rolls dynamic win chance capped at 50% maximum limit.",
+                },
+                {
+                  Icon: AlarmClockCheck,
+                  title: "3. 6-Hour Failsafe (Guaranteed 4x Daily)",
+                  description:
+                    "If neither threshold nor roll occurs, round triggers automatically every 6 hours.",
+                },
+              ].map(({ Icon, title, description }) => (
+                <div key={title} className="flex items-start gap-2">
+                  <Icon size={14} className="mt-0.5 shrink-0 text-[#D4AF37]" />
+                  <div>
+                    <h4 className="text-xs font-bold text-[#F2F4F8]">{title}</h4>
+                    <p className="text-[11px] leading-snug text-[#6B7A93]">{description}</p>
+                  </div>
                 </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Coins size={18} className="mt-0.5 text-[#D4AF37]" />
-                <div>
-                  <h4 className="font-['Barlow_Condensed'] text-base font-bold uppercase text-[#F2F4F8]">
-                    Transparent Rules & Equal Odds
-                  </h4>
-                  <p className="mt-0.5 text-xs text-[#9AA7BD] leading-relaxed">
-                    Every active tournament match generates tickets based on competitive goals scored and tactical performance. All probabilities are audited on-chain and deterministically executed.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Sparkles size={18} className="mt-0.5 text-[#38BDF8]" />
-                <div>
-                  <h4 className="font-['Barlow_Condensed'] text-base font-bold uppercase text-[#F2F4F8]">
-                    Instant Ledger Distribution
-                  </h4>
-                  <p className="mt-0.5 text-xs text-[#9AA7BD] leading-relaxed">
-                    Winnings credit immediately to the club owner’s verified sporting ledger, instantly available for stadium expansions or squad reinforcements.
-                  </p>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
         </div>
@@ -185,11 +169,11 @@ export const CompetitionsJackpotSection: React.FC<CompetitionsJackpotSectionProp
           <div className="flex items-center gap-2">
             <Trophy size={20} className="text-[#D4AF37]" />
             <h3 className="font-['Barlow_Condensed'] text-base font-extrabold uppercase tracking-widest text-[#D4AF37]">
-              COMPETITION FORMAT PREVIEWS
+              FEATURED COMPETITION FORMATS
             </h3>
           </div>
           <span className="font-['Barlow_Condensed'] text-xs font-bold uppercase tracking-wider text-[#6B7A93]">
-            GOVERNED BY PUBLISHED EVENT RULES
+            ILLUSTRATIVE • NOT LIVE FIXTURES
           </span>
         </div>
 
@@ -220,14 +204,14 @@ export const CompetitionsJackpotSection: React.FC<CompetitionsJackpotSectionProp
                 <h4 className="mt-4 font-['Barlow_Condensed'] text-2xl font-bold uppercase text-[#F2F4F8]">
                   {comp.name}
                 </h4>
-                <p className="mt-2 text-xs leading-relaxed text-[#9AA7BD]">
-                  {comp.format}
-                </p>
+                <p className="mt-2 text-xs leading-relaxed text-[#9AA7BD]">{comp.format}</p>
               </div>
 
-              <div className="mt-6 pt-4 border-t border-[#22385A]">
-                <p className="text-[11px] text-[#6B7A93] italic">
-                  {comp.prizePool}
+              <div className="mt-6 flex items-start gap-2 rounded-[10px] border border-[#22385A] bg-[#081120] p-3">
+                <Info size={16} className="mt-0.5 shrink-0 text-[#D4AF37]" />
+                <p className="text-[11px] leading-snug text-[#9AA7BD]">
+                  Format preview. Live entry status, prize pools and broadcast availability must
+                  come from the published event data.
                 </p>
               </div>
             </div>

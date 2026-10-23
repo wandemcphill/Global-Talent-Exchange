@@ -30,7 +30,9 @@ export const LivingWorldSection: React.FC = () => {
             Event-Driven Football & Global Broadcasts
           </h2>
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#9AA7BD] sm:text-base">
-            Club milestones, broadcast revenue and breakthrough talent can all become football stories. These cards preview the editorial format; live headlines and transaction details must come from confirmed GTEX data.
+            Club milestones, broadcast revenue and breakthrough talent can all become football
+            stories. These cards preview the editorial format; live headlines and transaction
+            details must come from confirmed GTEX data.
           </p>
         </div>
 
@@ -140,6 +142,9 @@ export const LivingWorldSection: React.FC = () => {
                   <p className="mt-2 text-xs leading-relaxed text-[#9AA7BD]">
                     {article.subheadline}
                   </p>
+                  <p className="mt-3 text-[11px] italic text-[#6B7A93]">
+                    Illustrative story concept â€” not a live platform event.
+                  </p>
                 </div>
               </div>
 
@@ -181,9 +186,7 @@ export const LivingWorldSection: React.FC = () => {
             <h3 className="mt-4 font-['Barlow_Condensed'] text-2xl sm:text-3xl font-black uppercase text-[#F2F4F8] leading-tight">
               {inspectedArticle.headline}
             </h3>
-            <p className="mt-1 text-sm text-[#9AA7BD]">
-              {inspectedArticle.subheadline}
-            </p>
+            <p className="mt-1 text-sm text-[#9AA7BD]">{inspectedArticle.subheadline}</p>
 
             <div className="mt-5 overflow-hidden rounded-xl border border-[#22385A] bg-[#081120]">
               <img
@@ -223,7 +226,7 @@ export const LivingWorldSection: React.FC = () => {
                 onClick={() => setInspectedArticle(null)}
                 className="rounded-lg bg-[#22385A] px-5 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-[#2F4C75]"
               >
-                Close Preview
+                Close story preview
               </button>
             </div>
           </div>
