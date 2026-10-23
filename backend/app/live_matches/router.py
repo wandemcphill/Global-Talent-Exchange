@@ -1846,7 +1846,6 @@ def claim_match_rewards(
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Reward settlement storage is not configured.")
 
     with session_factory() as session:
-        comp_match = session.get(CompetitionMatch, match_id)    with session_factory() as session:
         comp_match = session.get(CompetitionMatch, match_id)
         if comp_match is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Match '{match_id}' was not found.")
