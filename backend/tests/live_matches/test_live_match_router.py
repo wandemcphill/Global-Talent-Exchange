@@ -671,7 +671,8 @@ def test_rewards_claim_idempotency() -> None:
     claim_body = claim_res.json()
     assert claim_body["claimed"] is True
     assert claim_body["status"] in {"claimed", "already_claimed"}
-    assert claim_body["xp"] == 550
+    assert "xp" not in claim_body
+    assert claim_body["talent_coin"] == claim_body["net_amount"]
 
     # 2. Repeated claim is idempotent (returns already_claimed)
     claim_again = client.post(f"/api/matches/{replay.match_id}/rewards/claim")
@@ -679,3 +680,5 @@ def test_rewards_claim_idempotency() -> None:
     again_body = claim_again.json()
     assert again_body["claimed"] is True
     assert again_body["status"] == "already_claimed"
+    assert "xp" not in again_body
+    assert again_body["talent_coin"] == again_body["net_amount"]
