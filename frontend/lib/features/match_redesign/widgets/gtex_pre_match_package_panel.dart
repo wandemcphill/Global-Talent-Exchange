@@ -9,10 +9,12 @@ class GtexPreMatchPackagePanel extends StatefulWidget {
     super.key,
     required this.match,
     this.onEnterTactics,
+    this.onSubmitPrediction,
   });
 
   final GtexLiveMatchState match;
   final VoidCallback? onEnterTactics;
+  final Future<void> Function(String choice)? onSubmitPrediction;
 
   @override
   State<GtexPreMatchPackagePanel> createState() => _GtexPreMatchPackagePanelState();
@@ -21,6 +23,25 @@ class GtexPreMatchPackagePanel extends StatefulWidget {
 class _GtexPreMatchPackagePanelState extends State<GtexPreMatchPackagePanel> {
   String? _userPrediction; // 'home', 'draw', 'away'
   bool _showBench = false;
+
+  Future<void> _submitPrediction(String prediction) async {
+    final submit = widget.onSubmitPrediction;
+    if (submit == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Fan predictions are unavailable until the live voting service is connected.')),
+      );
+      return;
+    }
+    try {
+      await submit(prediction);
+      if (mounted) setState(() => _userPrediction = prediction);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Prediction was not saved: $error')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +60,13 @@ class _GtexPreMatchPackagePanelState extends State<GtexPreMatchPackagePanel> {
           drawPct: 0,
           awayWinPct: 0,
           totalVotes: 0,
+          homeFormAvailable: false,
+          awayFormAvailable: false,
+          h2hAvailable: false,
+          probabilityAvailable: false,
+          votesAvailable: false,
+          homeWinRateAvailable: false,
+          awayWinRateAvailable: false,
         );
 
     return SingleChildScrollView(
@@ -63,9 +91,7 @@ class _GtexPreMatchPackagePanelState extends State<GtexPreMatchPackagePanel> {
             homeTeam: widget.match.home,
             awayTeam: widget.match.away,
             selectedPrediction: _userPrediction,
-            onSelectPrediction: (pred) => setState(() {
-              _userPrediction = pred;
-            }),
+            onSelectPrediction: _submitPrediction,
           ),
           const SizedBox(height: 14),
 
@@ -78,7 +104,7 @@ class _GtexPreMatchPackagePanelState extends State<GtexPreMatchPackagePanel> {
           const SizedBox(height: 14),
 
           // Key Player Duel (Tactical Matchup)
-          if (pre.keyDuel != null) ...[
+          if (pre.keyDuel != null && pre.keyDuel!.available) ...[
             _KeyDuelCard(duel: pre.keyDuel!),
             const SizedBox(height: 14),
           ],
@@ -191,15 +217,10 @@ class _PredictionPollCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool hasVotes = pre.totalVotes > 0;
-    final int displayHomePct = hasVotes
-        ? (selectedPrediction == 'home' ? pre.homeWinPct + 1 : pre.homeWinPct)
-        : 33;
-    final int displayAwayPct = hasVotes
-        ? (selectedPrediction == 'away' ? pre.awayWinPct + 1 : pre.awayWinPct)
-        : 33;
-    final int displayDrawPct = hasVotes
-        ? (100 - displayHomePct - displayAwayPct).clamp(1, 100)
-        : 34;
+    // Percentages come from persisted aggregate votes, never from a local optimistic bump.
+    final int displayHomePct = hasVotes ? pre.homeWinPct : 0;
+    final int displayAwayPct = hasVotes ? pre.awayWinPct : 0;
+    final int displayDrawPct = hasVotes ? pre.drawPct : 0;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -238,29 +259,36 @@ class _PredictionPollCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // Probability Segmented Bar
+          // Only draw a probability distribution when the server has real votes.
           ClipRRect(
             borderRadius: BorderRadius.circular(6),
             child: SizedBox(
               height: 10,
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: displayHomePct,
-                    child: Container(color: GtexMatchVisualTokens.live),
-                  ),
-                  const SizedBox(width: 2),
-                  Expanded(
-                    flex: displayDrawPct,
-                    child: Container(color: const Color(0xFF475569)),
-                  ),
-                  const SizedBox(width: 2),
-                  Expanded(
-                    flex: displayAwayPct,
-                    child: Container(color: GtexMatchVisualTokens.amber),
-                  ),
-                ],
-              ),
+              child: hasVotes
+                  ? Row(
+                      children: [
+                        Expanded(
+                          flex: displayHomePct,
+                          child: Container(color: GtexMatchVisualTokens.live),
+                        ),
+                        const SizedBox(width: 2),
+                        Expanded(
+                          flex: displayDrawPct,
+                          child: Container(color: const Color(0xFF475569)),
+                        ),
+                        const SizedBox(width: 2),
+                        Expanded(
+                          flex: displayAwayPct,
+                          child: Container(color: GtexMatchVisualTokens.amber),
+                        ),
+                      ],
+                    )
+                  : const Center(
+                      child: Text(
+                        'NO RECORDED VOTES',
+                        style: TextStyle(fontSize: 8, color: GtexMatchVisualTokens.textTertiary),
+                      ),
+                    ),
             ),
           ),
           const SizedBox(height: 8),
@@ -457,7 +485,7 @@ class _HeadToHeadAndFormCard extends StatelessWidget {
                       ),
                     const SizedBox(height: 4),
                     Text(
-                      pre.homeForm.isNotEmpty ? '${pre.homeWinRate}% Season Win Rate' : 'New season form',
+                      pre.homeWinRateAvailable ? '${pre.homeWinRate}% Season Win Rate' : 'Season win rate unavailable',
                       style: const TextStyle(
                         color: GtexMatchVisualTokens.textTertiary,
                         fontSize: 9.5,
@@ -503,7 +531,7 @@ class _HeadToHeadAndFormCard extends StatelessWidget {
                       ),
                     const SizedBox(height: 4),
                     Text(
-                      pre.awayForm.isNotEmpty ? '${pre.awayWinRate}% Season Win Rate' : 'New season form',
+                      pre.awayWinRateAvailable ? '${pre.awayWinRate}% Season Win Rate' : 'Season win rate unavailable',
                       style: const TextStyle(
                         color: GtexMatchVisualTokens.textTertiary,
                         fontSize: 9.5,
@@ -518,7 +546,7 @@ class _HeadToHeadAndFormCard extends StatelessWidget {
           const Divider(height: 24, color: Color(0xFF1E2D3D)),
 
           // Historical H2H Statistics Row
-          if (pre.h2hTotal > 0) ...[
+          if (pre.h2hAvailable && pre.h2hTotal > 0) ...[
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
