@@ -129,8 +129,7 @@ class GtexAccountSelectorScreen extends StatelessWidget {
                           crossAxisCount: columns,
                           crossAxisSpacing: 14,
                           mainAxisSpacing: 14,
-                          childAspectRatio: 1.25,
-                          mainAxisExtent: columns == 1 ? 210 : null,
+                          mainAxisExtent: columns == 1 ? 280 : 290,
                         ),
                         itemBuilder: (_, i) => _AccountRoleCard(role: roles[i]),
                       );
