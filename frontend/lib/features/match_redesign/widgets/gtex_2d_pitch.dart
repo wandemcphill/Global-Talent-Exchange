@@ -21,6 +21,10 @@ class Gtex2dPitch extends StatefulWidget {
 class _Gtex2dPitchState extends State<Gtex2dPitch> {
   bool _showTacticsOverlay = true;
   bool _showPassingLanes = true;
+  bool _showHeatmap = false;
+  double _playbackSpeed = 1.0;
+  bool _isPaused = false;
+  bool _isAudioAtmosphereOn = false;
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +39,8 @@ class _Gtex2dPitchState extends State<Gtex2dPitch> {
         ),
       );
     }
+
+    final int markerDurationMs = _isPaused ? 9999999 : (380 / _playbackSpeed).toInt();
 
     return LayoutBuilder(
       builder: (context, outerConstraints) {
@@ -89,6 +95,18 @@ class _Gtex2dPitchState extends State<Gtex2dPitch> {
                       // Base pitch turf and lines
                       const Positioned.fill(child: _PitchPainterLayer()),
 
+                      // Positional Heatmap Layer
+                      if (_showHeatmap)
+                        Positioned.fill(
+                          child: CustomPaint(
+                            painter: _PitchHeatmapPainter(
+                              players: widget.match.pitchPlayers,
+                              ballX: ballX,
+                              ballY: ballY,
+                            ),
+                          ),
+                        ),
+
                       // Tactical overlay: defensive lines, team compactness, passing lanes
                       if (_showTacticsOverlay)
                         Positioned.fill(
@@ -106,7 +124,7 @@ class _Gtex2dPitchState extends State<Gtex2dPitch> {
                       for (final GtexPitchPlayer player in widget.match.pitchPlayers)
                         AnimatedPositioned(
                           key: ValueKey<String>(player.playerId),
-                          duration: const Duration(milliseconds: 380),
+                          duration: Duration(milliseconds: markerDurationMs),
                           curve: Curves.easeInOutCubic,
                           width: compact ? 116 : 104,
                           height: 58,
@@ -132,7 +150,44 @@ class _Gtex2dPitchState extends State<Gtex2dPitch> {
                         isInFlight: isInFlight,
                         pitchWidth: pitchWidth,
                         pitchHeight: pitchHeight,
+                        isPaused: _isPaused,
+                        playbackSpeed: _playbackSpeed,
                       ),
+
+                      // Freeze Frame Notification Banner
+                      if (_isPaused)
+                        Positioned(
+                          bottom: 12,
+                          left: 0,
+                          right: 0,
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xE60F172A),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFFFFB800), width: 1.0),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.pause_circle_filled_rounded, size: 14, color: Color(0xFFFFB800)),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'TACTICAL FREEZE FRAME · TAP PLAY TO RESUME',
+                                    style: TextStyle(
+                                      color: Color(0xFFFFB800),
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.6,
+                                      fontFamily: 'JetBrains Mono',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
 
                       // Header Toolbar: feed tag + tactical toggles
                       Positioned(
@@ -147,11 +202,33 @@ class _Gtex2dPitchState extends State<Gtex2dPitch> {
                               compact: compact,
                               showTactics: _showTacticsOverlay,
                               showLanes: _showPassingLanes,
+                              showHeatmap: _showHeatmap,
+                              playbackSpeed: _playbackSpeed,
+                              isPaused: _isPaused,
+                              isAudioAtmosphereOn: _isAudioAtmosphereOn,
                               onToggleTactics: () => setState(() {
                                 _showTacticsOverlay = !_showTacticsOverlay;
                               }),
                               onToggleLanes: () => setState(() {
                                 _showPassingLanes = !_showPassingLanes;
+                              }),
+                              onToggleHeatmap: () => setState(() {
+                                _showHeatmap = !_showHeatmap;
+                              }),
+                              onCycleSpeed: () => setState(() {
+                                if (_playbackSpeed == 0.5) {
+                                  _playbackSpeed = 1.0;
+                                } else if (_playbackSpeed == 1.0) {
+                                  _playbackSpeed = 2.0;
+                                } else {
+                                  _playbackSpeed = 0.5;
+                                }
+                              }),
+                              onTogglePause: () => setState(() {
+                                _isPaused = !_isPaused;
+                              }),
+                              onToggleAudio: () => setState(() {
+                                _isAudioAtmosphereOn = !_isAudioAtmosphereOn;
                               }),
                               ballOwner: ballOwner,
                               isInFlight: isInFlight,
@@ -179,6 +256,8 @@ class _DynamicBallLayer extends StatelessWidget {
     required this.isInFlight,
     required this.pitchWidth,
     required this.pitchHeight,
+    this.isPaused = false,
+    this.playbackSpeed = 1.0,
   });
 
   final double ballX;
@@ -187,9 +266,12 @@ class _DynamicBallLayer extends StatelessWidget {
   final bool isInFlight;
   final double pitchWidth;
   final double pitchHeight;
+  final bool isPaused;
+  final double playbackSpeed;
 
   @override
   Widget build(BuildContext context) {
+    final int ballDurationMs = isPaused ? 9999999 : (140 / playbackSpeed).toInt().clamp(40, 350);
     final double groundPixelX = (ballX * pitchWidth).clamp(8.0, pitchWidth - 8.0);
     final double groundPixelY = (ballY * pitchHeight).clamp(8.0, pitchHeight - 8.0);
     final double elevationOffset = (ballZ * 48.0).clamp(0.0, 36.0);
@@ -204,7 +286,7 @@ class _DynamicBallLayer extends StatelessWidget {
         children: [
           // Ground drop shadow
           AnimatedPositioned(
-            duration: const Duration(milliseconds: 140),
+            duration: Duration(milliseconds: ballDurationMs),
             curve: Curves.easeOutQuad,
             left: groundPixelX - (6.0 * shadowScale),
             top: groundPixelY + 2.0,
@@ -222,7 +304,7 @@ class _DynamicBallLayer extends StatelessWidget {
 
           // The physical ball token
           AnimatedPositioned(
-            duration: const Duration(milliseconds: 140),
+            duration: Duration(milliseconds: ballDurationMs),
             curve: Curves.easeOutQuad,
             left: groundPixelX - (ballSize / 2),
             top: ballPixelY - (ballSize / 2),
@@ -799,8 +881,16 @@ class _TacticalToolbar extends StatelessWidget {
     required this.compact,
     required this.showTactics,
     required this.showLanes,
+    required this.showHeatmap,
+    required this.playbackSpeed,
+    required this.isPaused,
+    required this.isAudioAtmosphereOn,
     required this.onToggleTactics,
     required this.onToggleLanes,
+    required this.onToggleHeatmap,
+    required this.onCycleSpeed,
+    required this.onTogglePause,
+    required this.onToggleAudio,
     required this.ballOwner,
     required this.isInFlight,
   });
@@ -808,8 +898,16 @@ class _TacticalToolbar extends StatelessWidget {
   final bool compact;
   final bool showTactics;
   final bool showLanes;
+  final bool showHeatmap;
+  final double playbackSpeed;
+  final bool isPaused;
+  final bool isAudioAtmosphereOn;
   final VoidCallback onToggleTactics;
   final VoidCallback onToggleLanes;
+  final VoidCallback onToggleHeatmap;
+  final VoidCallback onCycleSpeed;
+  final VoidCallback onTogglePause;
+  final VoidCallback onToggleAudio;
   final GtexPitchPlayer? ballOwner;
   final bool isInFlight;
 
@@ -864,7 +962,7 @@ class _TacticalToolbar extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(width: 6),
+        const SizedBox(width: 5),
 
         // Tactics Overlay Toggle
         InkWell(
@@ -942,7 +1040,246 @@ class _TacticalToolbar extends StatelessWidget {
             ),
           ),
         ),
+        const SizedBox(width: 4),
+
+        // Live Positional Heatmap Toggle
+        InkWell(
+          onTap: onToggleHeatmap,
+          borderRadius: BorderRadius.circular(4),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            decoration: BoxDecoration(
+              color: showHeatmap ? const Color(0xE67C2D12) : const Color(0xCC0A0C0F),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: showHeatmap ? const Color(0xFFFF5722) : Colors.white24,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.whatshot_rounded,
+                  size: 11,
+                  color: showHeatmap ? const Color(0xFFFF5722) : Colors.white60,
+                ),
+                if (!compact) ...[
+                  const SizedBox(width: 4),
+                  Text(
+                    'HEATMAP',
+                    style: TextStyle(
+                      color: showHeatmap ? const Color(0xFFFF5722) : Colors.white70,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 4),
+
+        // Pause / Resume Toggle
+        InkWell(
+          onTap: onTogglePause,
+          borderRadius: BorderRadius.circular(4),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            decoration: BoxDecoration(
+              color: isPaused ? const Color(0xE678350F) : const Color(0xCC0A0C0F),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: isPaused ? const Color(0xFFFFB800) : Colors.white24,
+              ),
+            ),
+            child: Icon(
+              isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+              size: 11,
+              color: isPaused ? const Color(0xFFFFB800) : Colors.white70,
+            ),
+          ),
+        ),
+        const SizedBox(width: 4),
+
+        // Speed Cycle Pill (0.5x, 1.0x, 2.0x)
+        InkWell(
+          onTap: onCycleSpeed,
+          borderRadius: BorderRadius.circular(4),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xCC0A0C0F),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: const Color(0x6600E87A)),
+            ),
+            child: Text(
+              '${playbackSpeed.toStringAsFixed(1)}x',
+              style: const TextStyle(
+                color: Color(0xFF00E87A),
+                fontSize: 9,
+                fontWeight: FontWeight.w900,
+                fontFamily: 'JetBrains Mono',
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 4),
+
+        // Stadium Audio Atmosphere Toggle
+        InkWell(
+          onTap: onToggleAudio,
+          borderRadius: BorderRadius.circular(4),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            decoration: BoxDecoration(
+              color: isAudioAtmosphereOn ? const Color(0xE61E3A8A) : const Color(0xCC0A0C0F),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: isAudioAtmosphereOn ? const Color(0xFF60A5FA) : Colors.white24,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isAudioAtmosphereOn ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+                  size: 11,
+                  color: isAudioAtmosphereOn ? const Color(0xFF60A5FA) : Colors.white60,
+                ),
+                if (isAudioAtmosphereOn) ...[
+                  const SizedBox(width: 4),
+                  const _AtmosphereEqualizerIndicator(),
+                ],
+              ],
+            ),
+          ),
+        ),
       ],
+    );
+  }
+}
+
+class _PitchHeatmapPainter extends CustomPainter {
+  const _PitchHeatmapPainter({
+    required this.players,
+    required this.ballX,
+    required this.ballY,
+  });
+
+  final List<GtexPitchPlayer> players;
+  final double ballX;
+  final double ballY;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (players.isEmpty) return;
+
+    final Paint radialPaint = Paint()..blendMode = BlendMode.screen;
+
+    // Draw player presence heat zones
+    for (final player in players) {
+      final double px = player.x * size.width;
+      final double py = player.y * size.height;
+      final double radius = size.width * 0.13;
+
+      final Color centerColor = player.isHome
+          ? const Color(0x4400E87A)
+          : const Color(0x44FFB800);
+
+      radialPaint.shader = RadialGradient(
+        colors: [
+          centerColor,
+          centerColor.withAlpha(25),
+          Colors.transparent,
+        ],
+        stops: const [0.0, 0.45, 1.0],
+      ).createShader(Rect.fromCircle(center: Offset(px, py), radius: radius));
+
+      canvas.drawCircle(Offset(px, py), radius, radialPaint);
+    }
+
+    // Ball heat epicenter (high intensity hot spot)
+    final double bx = ballX * size.width;
+    final double by = ballY * size.height;
+    final double ballRadius = size.width * 0.16;
+
+    radialPaint.shader = RadialGradient(
+      colors: const [
+        Color(0x66FF4500),
+        Color(0x33FFA500),
+        Colors.transparent,
+      ],
+      stops: const [0.0, 0.5, 1.0],
+    ).createShader(Rect.fromCircle(center: Offset(bx, by), radius: ballRadius));
+
+    canvas.drawCircle(Offset(bx, by), ballRadius, radialPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _PitchHeatmapPainter oldDelegate) {
+    return oldDelegate.ballX != ballX ||
+        oldDelegate.ballY != ballY ||
+        oldDelegate.players != players;
+  }
+}
+
+class _AtmosphereEqualizerIndicator extends StatefulWidget {
+  const _AtmosphereEqualizerIndicator();
+
+  @override
+  State<_AtmosphereEqualizerIndicator> createState() => _AtmosphereEqualizerIndicatorState();
+}
+
+class _AtmosphereEqualizerIndicatorState extends State<_AtmosphereEqualizerIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final double t = _controller.value;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            _buildBar(2.5 + (t * 5.0)),
+            const SizedBox(width: 1.5),
+            _buildBar(7.5 - (t * 4.5)),
+            const SizedBox(width: 1.5),
+            _buildBar(3.5 + (t * 5.5)),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildBar(double height) {
+    return Container(
+      width: 2,
+      height: height.clamp(2.0, 9.0),
+      decoration: BoxDecoration(
+        color: const Color(0xFF60A5FA),
+        borderRadius: BorderRadius.circular(1),
+      ),
     );
   }
 }
