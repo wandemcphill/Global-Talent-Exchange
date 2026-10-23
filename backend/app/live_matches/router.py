@@ -1194,30 +1194,20 @@ def _v2_pre_match_payload(match_id: str, view_state: Any, app: Any = None) -> di
         tokens = set(role_text.replace("/", " ").replace("_", " ").replace("-", " ").replace(".", " ").split())
         return role_text, tokens
 
-    home_forward = next(
-        (
-            player for player in home_players
-            if (
-                (lambda role_text, tokens: (
-                    any(token in role_text for token in ("forward", "attack", "striker", "winger"))
-                    or bool(tokens & {"st", "rw", "lw", "cf", "ss", "am", "rf", "lf"})
-                ))(*_role_tokens(player))
-            )
-        ),
-        None,
-    )
-    away_defender = next(
-        (
-            player for player in away_players
-            if (
-                (lambda role_text, tokens: (
-                    any(token in role_text for token in ("defen", "back", "sweeper"))
-                    or bool(tokens & {"cb", "lb", "rb", "lwb", "rwb", "rcb", "lcb"})
-                ))(*_role_tokens(player))
-            )
-        ),
-        None,
-    )
+    def _is_attacker(player: Any) -> bool:
+        role_text, tokens = _role_tokens(player)
+        return any(token in role_text for token in ("forward", "attack", "striker", "winger")) or bool(
+            tokens & {"st", "rw", "lw", "cf", "ss", "am", "rf", "lf"}
+        )
+
+    def _is_defender(player: Any) -> bool:
+        role_text, tokens = _role_tokens(player)
+        return any(token in role_text for token in ("defen", "back", "sweeper")) or bool(
+            tokens & {"cb", "lb", "rb", "lwb", "rwb", "rcb", "lcb"}
+        )
+
+    home_forward = next((player for player in home_players if _is_attacker(player)), None)
+    away_defender = next((player for player in away_players if _is_defender(player)), None)
 
     def _presentation_player_name(player: Any) -> str | None:
         for field in ("player_name", "label", "name"):
@@ -1353,11 +1343,17 @@ def _v2_stats_payload(frame: MatchTimelineFrameView, events: list[Any]) -> dict[
     away_shots = len(away_shots_events) if shots_available else None
     home_on_target = (
         sum(1 for e in events if _v2_event_type(e.event_type) in {"goal", "save"} and e.team_id == home_team_id)
-        if shots_available else None
+        if shots_available
+        else None
     )
     away_on_target = (
-        sum(1 for e in events if _v2_event_type(e.event_type) in {"goal", "save"} and e.team_id and e.team_id != home_team_id)
-        if shots_available else None
+        sum(
+            1
+            for e in events
+            if _v2_event_type(e.event_type) in {"goal", "save"} and e.team_id and e.team_id != home_team_id
+        )
+        if shots_available
+        else None
     )
     home_xg = recorded_xg(home_shots_events, frame.home_score) if have_team_identity else None
     away_xg = recorded_xg(away_shots_events, frame.away_score) if have_team_identity else None
@@ -1425,16 +1421,22 @@ def _v2_post_match_payload(
         if not isinstance(x, (int, float)) or not isinstance(y, (int, float)) or xg is None:
             unmapped_shots += 1
             continue
-        shots_map.append({
-            "minute": int(getattr(event, "minute", 0)),
-            "is_home": is_home,
-            "x": round(float(x) / 100.0, 3),
-            "y": round(float(y) / 100.0, 3),
-            "xg": xg,
-            "outcome": "goal" if _v2_event_type(event.event_type) == "goal" else "saved" if _v2_event_type(event.event_type) == "save" else "missed",
-            "player_name": getattr(event, "primary_player_name", None),
-            "coordinates_measured": True,
-        })
+        shots_map.append(
+            {
+                "minute": int(getattr(event, "minute", 0)),
+                "is_home": is_home,
+                "x": round(float(x) / 100.0, 3),
+                "y": round(float(y) / 100.0, 3),
+                "xg": xg,
+                "outcome": (
+                    "goal"
+                    if _v2_event_type(event.event_type) == "goal"
+                    else "saved" if _v2_event_type(event.event_type) == "save" else "missed"
+                ),
+                "player_name": getattr(event, "primary_player_name", None),
+                "coordinates_measured": True,
+            }
+        )
 
     momentum: list[dict[str, int]] = []
     for bucket in range(1, 19):
@@ -1459,15 +1461,29 @@ def _v2_post_match_payload(
         key = player_id or player_name
         if not key:
             continue
-        item = goal_contributions.setdefault(key, {
-            "player_id": player_id or None, "player_name": player_name or None,
-            "team_id": event.team_id, "goals": 0,
-        })
+        item = goal_contributions.setdefault(
+            key,
+            {
+                "player_id": player_id or None,
+                "player_name": player_name or None,
+                "team_id": event.team_id,
+                "goals": 0,
+            },
+        )
         item["goals"] += 1
 
     motm: dict[str, Any] = {
-        "available": False, "basis": None, "player_id": None, "player_name": None, "team_name": None,
-        "shirt_number": None, "rating": None, "goals": 0, "assists": None, "key_passes": None, "pass_acc": None,
+        "available": False,
+        "basis": None,
+        "player_id": None,
+        "player_name": None,
+        "team_name": None,
+        "shirt_number": None,
+        "rating": None,
+        "goals": 0,
+        "assists": None,
+        "key_passes": None,
+        "pass_acc": None,
         "summary": "Verified player-of-the-match data is unavailable for this fixture.",
     }
     selected: dict[str, Any] | None = None
@@ -1475,7 +1491,8 @@ def _v2_post_match_payload(
         selected = max(goal_contributions.values(), key=lambda item: int(item["goals"]))
     else:
         rated_players = [
-            p for p in frame_players
+            p
+            for p in frame_players
             if isinstance(getattr(p, "rating", None), (int, float))
             and not isinstance(getattr(p, "rating", None), bool)
             and 0 <= float(getattr(p, "rating")) <= 10
@@ -1485,7 +1502,9 @@ def _v2_post_match_payload(
             selected = {
                 "player_id": getattr(selected_player, "player_id", None),
                 "player_name": getattr(selected_player, "label", None) or getattr(selected_player, "name", None),
-                "team_id": getattr(selected_player, "team_id", None), "goals": 0, "rating_player": selected_player,
+                "team_id": getattr(selected_player, "team_id", None),
+                "goals": 0,
+                "rating_player": selected_player,
             }
 
     if selected is not None:
@@ -1493,15 +1512,30 @@ def _v2_post_match_payload(
         player_name = selected.get("player_name")
         player = selected.get("rating_player")
         if player is None:
-            player = next((
-                candidate for candidate in frame_players
-                if (player_id and getattr(candidate, "player_id", None) == player_id)
-                or (player_name and (getattr(candidate, "label", None) or getattr(candidate, "name", None)) == player_name)
-            ), None)
+            player = next(
+                (
+                    candidate
+                    for candidate in frame_players
+                    if (player_id and getattr(candidate, "player_id", None) == player_id)
+                    or (
+                        player_name
+                        and (getattr(candidate, "label", None) or getattr(candidate, "name", None)) == player_name
+                    )
+                ),
+                None,
+            )
         rating_value = getattr(player, "rating", None) if player is not None else None
-        rating = float(rating_value) if isinstance(rating_value, (int, float)) and not isinstance(rating_value, bool) and 0 <= float(rating_value) <= 10 else None
+        rating = (
+            float(rating_value)
+            if isinstance(rating_value, (int, float))
+            and not isinstance(rating_value, bool)
+            and 0 <= float(rating_value) <= 10
+            else None
+        )
         team_id = selected.get("team_id") or (getattr(player, "team_id", None) if player is not None else None)
-        display_name = ((getattr(player, "label", None) or getattr(player, "name", None) if player is not None else None) or player_name)
+        display_name = (
+            getattr(player, "label", None) or getattr(player, "name", None) if player is not None else None
+        ) or player_name
         motm = {
             "available": bool(display_name or player_id),
             "basis": "recorded_goal_contributions" if goal_contributions else "recorded_player_rating",
@@ -1509,34 +1543,52 @@ def _v2_post_match_payload(
             "player_name": display_name,
             "team_name": home_name if team_id == home_team_id else away_name if team_id == away_team_id else None,
             "shirt_number": getattr(player, "shirt_number", None) if player is not None else None,
-            "rating": rating, "goals": int(selected.get("goals", 0)),
+            "rating": rating,
+            "goals": int(selected.get("goals", 0)),
             "assists": getattr(player, "assists", None) if player is not None else None,
             "key_passes": getattr(player, "key_passes", None) if player is not None else None,
             "pass_acc": getattr(player, "pass_accuracy", None) if player is not None else None,
-            "summary": "Selected from recorded goal contributions; other metrics require their own source records."
-            if goal_contributions else "Selected from an explicitly recorded player rating.",
+            "summary": (
+                "Selected from recorded goal contributions; other metrics require their own source records."
+                if goal_contributions
+                else "Selected from an explicitly recorded player rating."
+            ),
         }
 
     ratings: list[dict[str, Any]] = []
     for player in frame_players:
         rating_value = getattr(player, "rating", None)
-        if not isinstance(rating_value, (int, float)) or isinstance(rating_value, bool) or not 0 <= float(rating_value) <= 10:
+        if (
+            not isinstance(rating_value, (int, float))
+            or isinstance(rating_value, bool)
+            or not 0 <= float(rating_value) <= 10
+        ):
             continue
         name = getattr(player, "label", None) or getattr(player, "name", None)
         if not name:
             continue
-        player_goals = sum(1 for event in goal_events if (
-            (getattr(event, "primary_player_id", None) and getattr(event, "primary_player_id", None) == getattr(player, "player_id", None))
-            or (getattr(event, "primary_player_name", None) and getattr(event, "primary_player_name", None) == name)
-        ))
-        ratings.append({
-            "player_id": getattr(player, "player_id", None), "name": name,
-            "shirt_number": getattr(player, "shirt_number", None),
-            "position": _enum_value(getattr(player, "role", None)) or "Player",
-            "rating": round(float(rating_value), 1),
-            "is_home": (_enum_value(getattr(player, "side", None)) or "").lower() == "home",
-            "badges": [f"{player_goals} Goal{'s' if player_goals != 1 else ''}"] if player_goals else [],
-        })
+        player_goals = sum(
+            1
+            for event in goal_events
+            if (
+                (
+                    getattr(event, "primary_player_id", None)
+                    and getattr(event, "primary_player_id", None) == getattr(player, "player_id", None)
+                )
+                or (getattr(event, "primary_player_name", None) and getattr(event, "primary_player_name", None) == name)
+            )
+        )
+        ratings.append(
+            {
+                "player_id": getattr(player, "player_id", None),
+                "name": name,
+                "shirt_number": getattr(player, "shirt_number", None),
+                "position": _enum_value(getattr(player, "role", None)) or "Player",
+                "rating": round(float(rating_value), 1),
+                "is_home": (_enum_value(getattr(player, "side", None)) or "").lower() == "home",
+                "badges": [f"{player_goals} Goal{'s' if player_goals != 1 else ''}"] if player_goals else [],
+            }
+        )
 
     shots_summary = f"{stats.get('home_shots') if stats.get('home_shots') is not None else 'N/A'} - {stats.get('away_shots') if stats.get('away_shots') is not None else 'N/A'}"
     home_xg, away_xg = stats.get("home_expected_goals"), stats.get("away_expected_goals")
@@ -1548,10 +1600,16 @@ def _v2_post_match_payload(
     )
     return {
         "analytics_available": bool(motm["available"] or shots_map or ratings or events),
-        "motm": motm, "shot_map": shots_map, "shot_map_available": bool(shots_map),
-        "shot_events_total": len(shot_events), "shot_map_unmapped_count": unmapped_shots,
-        "momentum": momentum if events else [], "momentum_source": "recorded_event_impact" if events else "unavailable",
-        "ratings": ratings, "ratings_available": bool(ratings), "share_summary": share_text,
+        "motm": motm,
+        "shot_map": shots_map,
+        "shot_map_available": bool(shots_map),
+        "shot_events_total": len(shot_events),
+        "shot_map_unmapped_count": unmapped_shots,
+        "momentum": momentum if events else [],
+        "momentum_source": "recorded_event_impact" if events else "unavailable",
+        "ratings": ratings,
+        "ratings_available": bool(ratings),
+        "share_summary": share_text,
     }
 
 def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
@@ -1718,7 +1776,10 @@ def update_match_v2_tactics(
 
     session_factory = getattr(request.app.state, "session_factory", None)
     if session_factory is None:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Tactical changes are disabled because durable ownership validation is unavailable.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Tactical changes are disabled because durable ownership validation is unavailable.",
+        )
     try:
         with session_factory() as session:
             comp_match = session.get(CompetitionMatch, match_id)
@@ -1730,14 +1791,23 @@ def update_match_v2_tactics(
                 target_club_id = comp_match.home_club_id if side == "home" else comp_match.away_club_id
                 club = session.get(ClubProfile, target_club_id) if target_club_id else None
                 if club is None:
-                    raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Tactical changes are disabled because club ownership records are unavailable.")
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail="Tactical changes are disabled because club ownership records are unavailable.",
+                    )
                 if str(club.owner_user_id) != str(current_user.id):
-                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"You cannot submit tactical adjustments for opponent's team ({side}).")
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=f"You cannot submit tactical adjustments for opponent's team ({side}).",
+                    )
     except HTTPException:
         raise
     except Exception as exc:
         logger.exception("Unable to verify club ownership for match tactics")
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Tactical changes are disabled because ownership could not be verified.") from exc
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Tactical changes are disabled because ownership could not be verified.",
+        ) from exc
 
     try:
         applied = hub.set_tactics(
@@ -1753,7 +1823,10 @@ def update_match_v2_tactics(
             instructions=payload.instructions,
         )
     except LiveMatchPersistenceError as exc:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Tactical changes could not be durably saved; no successful update is being reported.") from exc
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Tactical changes could not be durably saved; no successful update is being reported.",
+        ) from exc
     except LiveMatchError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except ValueError as exc:
@@ -1789,7 +1862,9 @@ def submit_match_fan_prediction(
 
     session_factory = getattr(request.app.state, "session_factory", None)
     if session_factory is None:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Fan prediction storage is not configured.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Fan prediction storage is not configured."
+        )
 
     with session_factory() as session:
         comp_match = session.get(CompetitionMatch, match_id)
@@ -1844,7 +1919,9 @@ def read_match_fan_predictions(
 ) -> dict[str, object]:
     session_factory = getattr(request.app.state, "session_factory", None)
     if session_factory is None:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Fan prediction storage is not configured.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Fan prediction storage is not configured."
+        )
 
     with session_factory() as session:
         comp_match = session.get(CompetitionMatch, match_id)
@@ -1877,7 +1954,9 @@ def claim_match_rewards(
 ) -> dict[str, object]:
     session_factory = getattr(request.app.state, "session_factory", None)
     if session_factory is None:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Reward settlement storage is not configured.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Reward settlement storage is not configured."
+        )
 
     with session_factory() as session:
         comp_match = session.get(CompetitionMatch, match_id)
@@ -1920,18 +1999,29 @@ def claim_match_rewards(
         try:
             engine = RewardEngineService(session=session)
             settlement = engine.settle_reward(
-                actor=current_user, user_id=current_user.id, competition_key=competition_key,
-                title=f"Matchday Reward ({match_id})", gross_amount=Decimal("25.0000"),
-                reward_source=reward_source, note=f"Reward settlement for completed match {match_id}",
+                actor=current_user,
+                user_id=current_user.id,
+                competition_key=competition_key,
+                title=f"Matchday Reward ({match_id})",
+                gross_amount=Decimal("25.0000"),
+                reward_source=reward_source,
+                note=f"Reward settlement for completed match {match_id}",
             )
             session.commit()
         except Exception as exc:
             session.rollback()
             logger.exception("Match reward settlement failed for match %s", match_id)
-            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Reward settlement failed. No successful claim has been recorded.") from exc
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Reward settlement failed. No successful claim has been recorded.",
+            ) from exc
         return {
-            "status": "claimed", "claimed": True, "match_id": match_id, "settlement_id": settlement.id,
-            "talent_coin": str(settlement.net_amount), "net_amount": str(settlement.net_amount),
+            "status": "claimed",
+            "claimed": True,
+            "match_id": match_id,
+            "settlement_id": settlement.id,
+            "talent_coin": str(settlement.net_amount),
+            "net_amount": str(settlement.net_amount),
             "message": "Matchday rewards deposited to your wallet.",
         }
 
