@@ -226,6 +226,12 @@ class GtexMatchCenterController extends ChangeNotifier {
     _notify();
   }
 
+  Future<void> submitPrediction(String choice) async {
+    await repository.submitPrediction(matchId, choice);
+    // Refresh the server-owned vote distribution after the write succeeds.
+    await load();
+  }
+
   Future<void> sendInstruction(GtexTacticalInstruction instruction) async {
     if (_isSendingInstruction) {
       return;
