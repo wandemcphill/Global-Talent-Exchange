@@ -688,8 +688,6 @@ class LiveMatchHub:
                     for player in bench_players
                     if str(getattr(player, "player_id", "") or "").strip()
                 }
-                if not bench_by_id:
-                    raise LiveMatchError(f"Substitution rejected: authoritative {side_norm} bench data is unavailable.")
                 available_bench_ids = set(bench_by_id)
                 for sub in substitutions:
                     out_id = str(sub.get("out_player_id") or sub.get("outPlayerId") or "").strip()
@@ -705,6 +703,10 @@ class LiveMatchHub:
                     if in_id in active_pitch_ids:
                         raise LiveMatchError(
                             f"Substitution rejected: substitute '{in_id}' is already active on the pitch."
+                        )
+                    if not bench_by_id:
+                        raise LiveMatchError(
+                            f"Substitution rejected: authoritative {side_norm} bench data is unavailable."
                         )
                     if in_id not in available_bench_ids:
                         raise LiveMatchError(
