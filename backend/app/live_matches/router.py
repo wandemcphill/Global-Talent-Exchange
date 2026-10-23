@@ -2028,6 +2028,7 @@ def claim_match_rewards(
             "message": "Matchday rewards deposited to your wallet.",
         }
 
+
 @api_router.get("/{match_id}/stats")
 def read_match_v2_stats(match_id: str, request: Request) -> dict[str, object]:
     payload = _v2_match_state_payload(match_id, request.app)
