@@ -43,7 +43,7 @@ class _GtexClubOwnershipSectionState extends State<GtexClubOwnershipSection> {
                 child: GtexSectionHeader(
                   eyebrow: 'Club Ownership & Simulation Life',
                   title: 'From Grassroots Founder to Global Football Institution',
-                  subtitle: 'Every owner can found or acquire up to three clubs. Define club identity, construct world-class facilities, appoint tacticians, and unlock luxury aviation as your institutional prestige rises.',
+                  subtitle: 'Every owner can found or acquire up to three clubs. Build elite facilities, acquire private jets and team coach buses, collect luxury cars and wristwatches, and gift eligible items to players as your football institution grows.',
                   accentColor: kGoldPrimary,
                 ),
               ),
@@ -272,7 +272,7 @@ class _GtexClubOwnershipSectionState extends State<GtexClubOwnershipSection> {
                 ],
               ),
               const Text(
-                'LUXURY FLEET • STADIUMS • FACILITIES',
+                'PRIVATE JETS • TEAM COACH BUSES • LUXURY CARS • WRISTWATCHES',
                 style: TextStyle(
                   color: kTextTertiary,
                   fontSize: 11,
@@ -297,33 +297,206 @@ class _GtexClubOwnershipSectionState extends State<GtexClubOwnershipSection> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                // Asset thumbnail tabs
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: List<Widget>.generate(kShowroomAssets.length, (int index) {
-                      final ShowroomAssetItem asset = kShowroomAssets[index];
-                      final bool isSelected = index == _selectedAssetIndex;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          label: Text(asset.name),
-                          selected: isSelected,
-                          onSelected: (_) => setState(() => _selectedAssetIndex = index),
-                          selectedColor: kGoldPrimary.withValues(alpha: 0.2),
-                          backgroundColor: kNavyRaised,
-                          labelStyle: TextStyle(
-                            color: isSelected ? kGoldLight : kTextSecondary,
-                            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                            fontSize: 12,
-                          ),
-                          side: BorderSide(
-                            color: isSelected ? kGoldPrimary : kNavyLine,
-                          ),
-                        ),
-                      );
-                    }),
+                // Make the four luxury item types immediately recognizable.
+                const Text(
+                  'FOUR LUXURY CATEGORIES',
+                  style: TextStyle(
+                    color: kGoldPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.4,
+                    fontFamily: kFontCondensed,
                   ),
+                ),
+                const SizedBox(height: 5),
+                const Text(
+                  'Private jet • Team coach bus • Luxury car • Wristwatch',
+                  style: TextStyle(color: kTextSecondary, fontSize: 12, height: 1.4),
+                ),
+                const SizedBox(height: 14),
+                LayoutBuilder(
+                  builder: (BuildContext context, BoxConstraints constraints) {
+                    const double gap = 12;
+                    final int columns = constraints.maxWidth >= 920 ? 4 : 2;
+                    final double cardWidth =
+                        (constraints.maxWidth - gap * (columns - 1)) / columns;
+                    return Wrap(
+                      spacing: gap,
+                      runSpacing: gap,
+                      children: List<Widget>.generate(4, (int index) {
+                        final ShowroomAssetItem asset = kShowroomAssets[index];
+                        final bool isSelected = index == _selectedAssetIndex;
+                        final IconData itemIcon = switch (asset.catalogKey) {
+                          'sovereign_900x_jet' => Icons.flight_takeoff_rounded,
+                          'vanguard_xii_coach' => Icons.directions_bus_rounded,
+                          'veloce_gt9_hypercar' => Icons.directions_car_filled_rounded,
+                          _ => Icons.watch_rounded,
+                        };
+                        return SizedBox(
+                          width: cardWidth,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () => setState(() => _selectedAssetIndex = index),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? kGoldPrimary.withValues(alpha: 0.08)
+                                      : kNavyRaised,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: isSelected ? kGoldPrimary : kNavyLine,
+                                    width: isSelected ? 2 : 1,
+                                  ),
+                                ),
+                                clipBehavior: Clip.antiAlias,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    SizedBox(
+                                      height: 116,
+                                      width: double.infinity,
+                                      child: Stack(
+                                        fit: StackFit.expand,
+                                        children: <Widget>[
+                                          Container(color: const Color(0xFF081120)),
+                                          Padding(
+                                            padding: const EdgeInsets.all(8),
+                                            child: Image.asset(
+                                              asset.imageFile,
+                                              fit: BoxFit.contain,
+                                              errorBuilder: (_, __, ___) => Icon(
+                                                itemIcon,
+                                                size: 46,
+                                                color: kGoldPrimary,
+                                              ),
+                                            ),
+                                          ),
+                                          Positioned(
+                                            left: 8,
+                                            right: 8,
+                                            top: 8,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xE6081120),
+                                                borderRadius: BorderRadius.circular(6),
+                                                border: Border.all(color: kGoldPrimary.withValues(alpha: 0.5)),
+                                              ),
+                                              child: Text(
+                                                asset.category,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  color: kGoldLight,
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.w800,
+                                                  letterSpacing: 0.6,
+                                                  fontFamily: kFontCondensed,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.all(10),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: <Widget>[
+                                          Row(
+                                            children: <Widget>[
+                                              Icon(itemIcon, size: 16, color: kGoldPrimary),
+                                              const SizedBox(width: 6),
+                                              Expanded(
+                                                child: Text(
+                                                  asset.category,
+                                                  style: const TextStyle(
+                                                    color: kGoldLight,
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w800,
+                                                    letterSpacing: 0.5,
+                                                    fontFamily: kFontCondensed,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 5),
+                                          Text(
+                                            asset.name,
+                                            style: const TextStyle(
+                                              color: kTextPrimary,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w800,
+                                              height: 1.15,
+                                            ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 7),
+                                          Text(
+                                            isSelected ? 'SELECTED ASSET' : 'VIEW ASSET',
+                                            style: const TextStyle(
+                                              color: kTextTertiary,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w800,
+                                              letterSpacing: 0.8,
+                                              fontFamily: kFontCondensed,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    );
+                  },
+                ),
+                const SizedBox(height: 16),
+                const Divider(color: kNavyLine),
+                const SizedBox(height: 8),
+                const Text(
+                  'CLUB INFRASTRUCTURE',
+                  style: TextStyle(
+                    color: kTextSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                    fontFamily: kFontCondensed,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: List<Widget>.generate(kShowroomAssets.length - 4, (int offset) {
+                    final int index = offset + 4;
+                    final ShowroomAssetItem asset = kShowroomAssets[index];
+                    final bool isSelected = index == _selectedAssetIndex;
+                    return ChoiceChip(
+                      label: Text('${asset.category}: ${asset.name}'),
+                      selected: isSelected,
+                      onSelected: (_) => setState(() => _selectedAssetIndex = index),
+                      selectedColor: kGoldPrimary.withValues(alpha: 0.2),
+                      backgroundColor: kNavyRaised,
+                      labelStyle: TextStyle(
+                        color: isSelected ? kGoldLight : kTextSecondary,
+                        fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                      side: BorderSide(color: isSelected ? kGoldPrimary : kNavyLine),
+                    );
+                  }),
                 ),
 
                 const SizedBox(height: 20),
@@ -443,7 +616,7 @@ class _AssetImageFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isJet = imageFile.endsWith('sovereign_900x_jet.png');
+    final bool isJet = imageFile.endsWith('sovereign_900x_jet.webp');
     final bool isNarrow = MediaQuery.sizeOf(context).width < 760;
 
     return Container(
