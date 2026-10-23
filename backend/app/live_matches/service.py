@@ -751,22 +751,39 @@ class LiveMatchHub:
                             in_name = str(sub.get("in_player_name") or sub.get("inPlayerName") or "Substitute")
                             in_shirt = int(sub.get("shirt_number") or 14)
 
-                            # Update team players
-                            if hasattr(target_team, "players") and target_team.players:
-                                for tp in target_team.players:
-                                    if getattr(tp, "player_id", None) == out_id:
-                                        tp.player_id = in_id
-                                        if hasattr(tp, "label"):
-                                            tp.label = in_name
-                                        if hasattr(tp, "name"):
-                                            tp.name = in_name
-                                        if hasattr(tp, "shirt_number"):
-                                            tp.shirt_number = in_shirt
+                            # Update the presentation XI/bench so the incoming player
+                            # cannot be selected for another substitution. Historical frames
+                            # retain the identities that actually appeared in that period.
+                            presentation_package = runtime.viewer_state.presentation_package
+                            presentation_team = (
+                                getattr(presentation_package, side_norm, None)
+                                if presentation_package is not None
+                                else None
+                            )
+                            if presentation_team is not None:
+                                starters = list(getattr(presentation_team, "starters", []) or [])
+                                starter_index = next(
+                                    (
+                                        idx for idx, player in enumerate(starters)
+                                        if str(getattr(player, "player_id", "") or "").strip() == out_id
+                                    ),
+                                    None,
+                                )
+                                incoming_player = bench_by_id.get(in_id)
+                                if starter_index is not None and incoming_player is not None:
+                                    starters[starter_index] = copy.deepcopy(incoming_player)
+                                    presentation_team.starters = starters
+                                presentation_team.bench = [
+                                    player for player in list(getattr(presentation_team, "bench", []) or [])
+                                    if str(getattr(player, "player_id", "") or "").strip() != in_id
+                                ]
 
-                            # Change the current frame only. Historical match frames must
-                            # preserve the player identity for the period they depict.
-                            if runtime.viewer_state.frames:
-                                for p in runtime.viewer_state.frames[-1].players:
+                            # Update the active frame and every future frame, leaving earlier
+                            # frames intact for faithful replay history.
+                            for frame in runtime.viewer_state.frames:
+                                if float(frame.clock_minute) + 1e-6 < active_minute:
+                                    continue
+                                for p in frame.players:
                                     if getattr(p, "player_id", None) == out_id:
                                         p.player_id = in_id
                                         p.label = in_name
