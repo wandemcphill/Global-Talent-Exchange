@@ -29,7 +29,7 @@ from app.live_matches.schemas import (
     UnityLiveAccessView,
     UnityLiveAccessRefreshRequest,
 )
-from app.live_matches.service import LiveMatchError, ensure_live_match_hub
+from app.live_matches.service import LiveMatchError, LiveMatchPersistenceError, ensure_live_match_hub
 from app.live_matches.unity_access import (
     issue_unity_live_token_bundle,
     validate_unity_live_access_token,
@@ -1171,18 +1171,10 @@ def _v2_pre_match_payload(match_id: str, view_state: Any, app: Any = None) -> di
         draw_pct = max(0, 100 - home_win_pct - away_win_pct)
         win_prob_available = True
     else:
-        home_players = getattr(getattr(view_state, "home_team", None), "players", [])
-        away_players = getattr(getattr(view_state, "away_team", None), "players", [])
-        if home_players and away_players:
-            home_win_pct = 45
-            draw_pct = 25
-            away_win_pct = 30
-            win_prob_available = True
-        else:
-            home_win_pct = None
-            draw_pct = None
-            away_win_pct = None
-            win_prob_available = False
+        home_win_pct = None
+        draw_pct = None
+        away_win_pct = None
+        win_prob_available = False
 
     home_players = getattr(getattr(view_state, "home_team", None), "players", []) or []
     away_players = getattr(getattr(view_state, "away_team", None), "players", []) or []
@@ -1306,99 +1298,59 @@ def _v2_stats_payload(frame: MatchTimelineFrameView, events: list[Any]) -> dict[
         (player.team_id for player in frame.players if (_enum_value(player.side) or "").lower() == "home"), None
     )
     shot_events = [e for e in events if _v2_event_type(e.event_type) in {"goal", "save", "miss", "shot"}]
-    if home_team_id is not None:
-        home_shots = sum(1 for e in shot_events if e.team_id == home_team_id)
-        away_shots = sum(1 for e in shot_events if e.team_id and e.team_id != home_team_id)
-        home_on_target = sum(
-            1 for e in events if _v2_event_type(e.event_type) in {"goal", "save"} and e.team_id == home_team_id
-        )
-        away_on_target = sum(
-            1
-            for e in events
-            if _v2_event_type(e.event_type) in {"goal", "save"} and e.team_id and e.team_id != home_team_id
-        )
-    else:
-        home_shots = len(shot_events)
-        away_shots = 0
-        home_on_target = home_shots
-        away_on_target = 0
+    home_shots_events = [e for e in shot_events if home_team_id is not None and e.team_id == home_team_id]
+    away_shots_events = [e for e in shot_events if home_team_id is not None and e.team_id and e.team_id != home_team_id]
 
-    diff = home_shots - away_shots
-    home_poss = 50 if (home_shots == 0 and away_shots == 0) else max(38, min(65, 50 + diff * 2))
-    away_poss = 100 - home_poss
+    def recorded_xg(team_shots: list[Any], team_score: int) -> float | None:
+        if not team_shots:
+            return 0.0 if team_score == 0 else None
+        values: list[float] = []
+        for event in team_shots:
+            metadata = getattr(event, "metadata", None)
+            raw_xg = metadata.get("xg") if isinstance(metadata, dict) else None
+            if not isinstance(raw_xg, (int, float)) or isinstance(raw_xg, bool) or not 0 <= float(raw_xg) <= 1:
+                return None
+            values.append(float(raw_xg))
+        return round(sum(values), 2)
 
-    if home_shots == 0:
-        home_xg = 0.0
-    else:
-        home_xg = round(
-            sum(
-                float(
-                    getattr(e, "metadata", {}).get("xg", 0.14)
-                    if hasattr(e, "metadata") and isinstance(e.metadata, dict)
-                    else 0.14
-                )
-                for e in shot_events
-                if e.team_id == home_team_id
-            ),
-            2,
-        )
-        if home_xg == 0.0 and frame.home_score > 0:
-            home_xg = round(frame.home_score * 0.72, 2)
-
-    if away_shots == 0:
-        away_xg = 0.0
-    else:
-        away_xg = round(
-            sum(
-                float(
-                    getattr(e, "metadata", {}).get("xg", 0.14)
-                    if hasattr(e, "metadata") and isinstance(e.metadata, dict)
-                    else 0.14
-                )
-                for e in shot_events
-                if e.team_id and e.team_id != home_team_id
-            ),
-            2,
-        )
-        if away_xg == 0.0 and frame.away_score > 0:
-            away_xg = round(frame.away_score * 0.72, 2)
-
-    home_acc = 82 if events else None
-    away_acc = 80 if events else None
-
+    have_team_identity = home_team_id is not None
+    shots_available = have_team_identity and bool(events)
+    home_shots = len(home_shots_events) if shots_available else None
+    away_shots = len(away_shots_events) if shots_available else None
+    home_on_target = (
+        sum(1 for e in events if _v2_event_type(e.event_type) in {"goal", "save"} and e.team_id == home_team_id)
+        if shots_available else None
+    )
+    away_on_target = (
+        sum(1 for e in events if _v2_event_type(e.event_type) in {"goal", "save"} and e.team_id and e.team_id != home_team_id)
+        if shots_available else None
+    )
+    home_xg = recorded_xg(home_shots_events, frame.home_score) if have_team_identity else None
+    away_xg = recorded_xg(away_shots_events, frame.away_score) if have_team_identity else None
+    xg_available = home_xg is not None and away_xg is not None
     return {
         "available": bool(events),
         "source": "event_timeline" if events else "unavailable",
         "projections": {
-            "shots": {
-                "available": bool(shot_events),
-                "source": "event_timeline" if shot_events else "unavailable",
-            },
-            "possession": {
-                "available": bool(events),
-                "source": "timeline_tracking" if events else "unavailable",
-            },
-            "passing": {
-                "available": bool(events),
-                "source": "event_timeline" if events else "unavailable",
-            },
+            "shots": {"available": shots_available, "source": "event_timeline" if shots_available else "unavailable"},
+            "possession": {"available": False, "source": "unavailable"},
+            "passing": {"available": False, "source": "unavailable"},
             "expected_goals": {
-                "available": bool(shot_events) or (frame.home_score > 0 or frame.away_score > 0),
-                "source": "xg_model" if shot_events else "unavailable",
+                "available": xg_available,
+                "source": "recorded_shot_xg" if xg_available else "unavailable",
             },
         },
-        "home_possession": home_poss,
-        "away_possession": away_poss,
+        "home_possession": None,
+        "away_possession": None,
         "home_shots": home_shots,
         "away_shots": away_shots,
         "home_shots_on_target": home_on_target,
         "away_shots_on_target": away_on_target,
-        "home_pass_accuracy": home_acc or 80,
-        "away_pass_accuracy": away_acc or 80,
+        "home_pass_accuracy": None,
+        "away_pass_accuracy": None,
         "home_expected_goals": home_xg,
         "away_expected_goals": away_xg,
     }
-
 
 def _v2_post_match_payload(
     match_id: str, view_state: Any, frame: MatchTimelineFrameView, events: list[Any], stats: dict[str, Any]
@@ -1406,149 +1358,167 @@ def _v2_post_match_payload(
     home_name = getattr(getattr(view_state, "home_team", None), "team_name", "Home Club")
     away_name = getattr(getattr(view_state, "away_team", None), "team_name", "Away Club")
     home_team_id = getattr(getattr(view_state, "home_team", None), "team_id", None)
-    home_score = frame.home_score
-    away_score = frame.away_score
-
-    home_players = [p for p in frame.players if (_enum_value(p.side) or "").lower() == "home"]
-    away_players = [p for p in frame.players if (_enum_value(p.side) or "").lower() == "away"]
-
-    shots_map = []
+    away_team_id = getattr(getattr(view_state, "away_team", None), "team_id", None)
+    frame_players = list(frame.players)
+    goal_events = [e for e in events if _v2_event_type(e.event_type) == "goal"]
     shot_events = [e for e in events if _v2_event_type(e.event_type) in {"goal", "save", "miss", "shot"}]
-    for idx, se in enumerate(shot_events):
-        etype = _v2_event_type(se.event_type)
-        is_goal = etype == "goal"
-        outcome = "goal" if is_goal else ("saved" if etype == "save" else "missed")
-        is_home = se.team_id == home_team_id
 
-        real_x = None
-        real_y = None
-        if hasattr(se, "ball") and se.ball is not None and hasattr(se.ball, "position") and se.ball.position:
-            real_x = round(float(se.ball.position.x) / 100.0, 3)
-            real_y = round(float(se.ball.position.y) / 100.0, 3)
-        elif hasattr(se, "positions") and se.positions:
-            real_x = round(float(se.positions[0].position.x) / 100.0, 3)
-            real_y = round(float(se.positions[0].position.y) / 100.0, 3)
+    def explicit_xg(event: Any) -> float | None:
+        metadata = getattr(event, "metadata", None)
+        raw = metadata.get("xg") if isinstance(metadata, dict) else None
+        if isinstance(raw, (int, float)) and not isinstance(raw, bool) and 0 <= float(raw) <= 1:
+            return round(float(raw), 2)
+        return None
 
-        x_coord = real_x if real_x is not None else (0.84 if is_home else 0.16)
-        y_coord = real_y if real_y is not None else 0.50
+    shots_map: list[dict[str, object]] = []
+    unmapped_shots = 0
+    for event in shot_events:
+        if home_team_id is None or event.team_id not in {home_team_id, away_team_id}:
+            unmapped_shots += 1
+            continue
+        is_home = event.team_id == home_team_id
+        position = None
+        ball = getattr(event, "ball", None)
+        if ball is not None:
+            position = getattr(ball, "position", None)
+        if position is None:
+            positions = getattr(event, "positions", None) or []
+            if positions:
+                position = getattr(positions[0], "position", None)
+        x = getattr(position, "x", None) if position is not None else None
+        y = getattr(position, "y", None) if position is not None else None
+        xg = explicit_xg(event)
+        if not isinstance(x, (int, float)) or not isinstance(y, (int, float)) or xg is None:
+            unmapped_shots += 1
+            continue
+        shots_map.append({
+            "minute": int(getattr(event, "minute", 0)),
+            "is_home": is_home,
+            "x": round(float(x) / 100.0, 3),
+            "y": round(float(y) / 100.0, 3),
+            "xg": xg,
+            "outcome": "goal" if _v2_event_type(event.event_type) == "goal" else "saved" if _v2_event_type(event.event_type) == "save" else "missed",
+            "player_name": getattr(event, "primary_player_name", None),
+            "coordinates_measured": True,
+        })
 
-        meta_dict = se.metadata if hasattr(se, "metadata") and isinstance(se.metadata, dict) else {}
-        shot_xg = float(meta_dict.get("xg") or (0.72 if is_goal else 0.16))
-
-        shots_map.append(
-            {
-                "minute": int(getattr(se, "minute", 0)),
-                "is_home": is_home,
-                "x": x_coord,
-                "y": y_coord,
-                "xg": round(shot_xg, 2),
-                "outcome": outcome,
-                "player_name": getattr(se, "primary_player_name", None)
-                or ("Home Player" if is_home else "Away Player"),
-                "coordinates_measured": real_x is not None,
-            }
-        )
-
-    momentum = []
+    momentum: list[dict[str, int]] = []
     for bucket in range(1, 19):
         bucket_end = bucket * 5
         bucket_start = bucket_end - 5
-        window_events = [e for e in events if bucket_start <= int(getattr(e, "minute", 0)) < bucket_end]
-        h_score = 0
-        a_score = 0
-        for we in window_events:
-            et = _v2_event_type(we.event_type)
-            w = 50 if et == "goal" else (25 if et in {"shot", "save"} else 10)
-            if we.team_id == home_team_id:
-                h_score += w
-            else:
-                a_score += w
-        diff_val = max(-100, min(100, h_score - a_score))
-        momentum.append({"minute": bucket_end, "value": diff_val})
+        window = [e for e in events if bucket_start <= int(getattr(e, "minute", 0)) < bucket_end]
+        home_impact = 0
+        away_impact = 0
+        for event in window:
+            kind = _v2_event_type(event.event_type)
+            weight = 50 if kind == "goal" else 25 if kind in {"shot", "save"} else 10
+            if event.team_id == home_team_id:
+                home_impact += weight
+            elif event.team_id == away_team_id:
+                away_impact += weight
+        momentum.append({"minute": bucket_end, "value": max(-100, min(100, home_impact - away_impact))})
 
-    goal_events = [e for e in events if _v2_event_type(e.event_type) == "goal"]
-    if goal_events:
-        top_scorer_name = goal_events[0].primary_player_name
-        is_h_motm = goal_events[0].team_id == home_team_id
-        motm_name = top_scorer_name
-        motm_team = home_name if is_h_motm else away_name
-        motm_rating = 8.8
-        motm_goals = sum(1 for g in goal_events if g.primary_player_name == top_scorer_name)
-    else:
-        motm_is_h = home_score >= away_score
-        motm_team = home_name if motm_is_h else away_name
-        p_pool = home_players if motm_is_h else away_players
-        motm_player = p_pool[0] if p_pool else None
-        motm_name = getattr(motm_player, "label", "Star Performer")
-        motm_rating = 7.6
-        motm_goals = 0
+    goal_contributions: dict[str, dict[str, Any]] = {}
+    for event in goal_events:
+        player_id = str(getattr(event, "primary_player_id", None) or "").strip()
+        player_name = str(getattr(event, "primary_player_name", None) or "").strip()
+        key = player_id or player_name
+        if not key:
+            continue
+        item = goal_contributions.setdefault(key, {
+            "player_id": player_id or None, "player_name": player_name or None,
+            "team_id": event.team_id, "goals": 0,
+        })
+        item["goals"] += 1
 
-    player_ratings = []
-    for p in frame.players:
-        is_h = (_enum_value(p.side) or "").lower() == "home"
-        p_name = p.label
-        p_goals = sum(
-            1
-            for e in events
-            if _v2_event_type(e.event_type) == "goal" and getattr(e, "primary_player_name", None) == p_name
-        )
-        p_cards = sum(
-            1
-            for e in events
-            if _v2_event_type(e.event_type) in {"yellow_card", "red_card"}
-            and getattr(e, "primary_player_name", None) == p_name
-        )
-        base_r = min(10.0, max(5.5, 6.6 + (p_goals * 1.5) - (p_cards * 0.7)))
-        if p_name == motm_name:
-            base_r = motm_rating
-
-        badges = []
-        if p_goals > 0:
-            badges.append(f"{p_goals} Goal{'s' if p_goals > 1 else ''} ⚽")
-        if base_r >= 8.0:
-            badges.append("Match Influencer 🎯")
-        elif base_r >= 7.2:
-            badges.append("Disciplined Shape 🛡️")
-
-        player_ratings.append(
-            {
-                "player_id": p.player_id,
-                "name": p.label,
-                "shirt_number": p.shirt_number or 0,
-                "position": _enum_value(getattr(p, "role", None)) or "Player",
-                "rating": round(base_r, 1),
-                "is_home": is_h,
-                "badges": badges,
-            }
-        )
-
-    share_text = (
-        f"🏁 FULL TIME: {home_name} {home_score} - {away_score} {away_name}\n"
-        f"⭐ MOTM: {motm_name} ({motm_rating})\n"
-        f"📊 Shots: {stats.get('home_shots', 0)} - {stats.get('away_shots', 0)} | "
-        f"xG: {stats.get('home_expected_goals', 0)} - {stats.get('away_expected_goals', 0)}\n"
-        f"Verified on Global Talent Exchange ⚽"
-    )
-
-    return {
-        "motm": {
-            "player_name": motm_name,
-            "team_name": motm_team,
-            "shirt_number": 10,
-            "rating": motm_rating,
-            "goals": motm_goals,
-            "assists": 1 if motm_goals > 0 else 0,
-            "key_passes": 3,
-            "pass_acc": 88,
-            "summary": f"Influential display by {motm_name} managing tempo and organizing transitions.",
-        },
-        "shot_map": shots_map,
-        "shot_map_available": bool(shots_map),
-        "momentum": momentum,
-        "ratings": player_ratings,
-        "share_summary": share_text,
+    motm: dict[str, Any] = {
+        "available": False, "basis": None, "player_id": None, "player_name": None, "team_name": None,
+        "shirt_number": None, "rating": None, "goals": 0, "assists": None, "key_passes": None, "pass_acc": None,
+        "summary": "Verified player-of-the-match data is unavailable for this fixture.",
     }
+    selected: dict[str, Any] | None = None
+    if goal_contributions:
+        selected = max(goal_contributions.values(), key=lambda item: int(item["goals"]))
+    else:
+        rated_players = [
+            p for p in frame_players
+            if isinstance(getattr(p, "rating", None), (int, float))
+            and not isinstance(getattr(p, "rating", None), bool)
+            and 0 <= float(getattr(p, "rating")) <= 10
+        ]
+        if rated_players:
+            selected_player = max(rated_players, key=lambda p: float(getattr(p, "rating")))
+            selected = {
+                "player_id": getattr(selected_player, "player_id", None),
+                "player_name": getattr(selected_player, "label", None) or getattr(selected_player, "name", None),
+                "team_id": getattr(selected_player, "team_id", None), "goals": 0, "rating_player": selected_player,
+            }
 
+    if selected is not None:
+        player_id = selected.get("player_id")
+        player_name = selected.get("player_name")
+        player = selected.get("rating_player")
+        if player is None:
+            player = next((
+                candidate for candidate in frame_players
+                if (player_id and getattr(candidate, "player_id", None) == player_id)
+                or (player_name and (getattr(candidate, "label", None) or getattr(candidate, "name", None)) == player_name)
+            ), None)
+        rating_value = getattr(player, "rating", None) if player is not None else None
+        rating = float(rating_value) if isinstance(rating_value, (int, float)) and not isinstance(rating_value, bool) and 0 <= float(rating_value) <= 10 else None
+        team_id = selected.get("team_id") or (getattr(player, "team_id", None) if player is not None else None)
+        display_name = ((getattr(player, "label", None) or getattr(player, "name", None) if player is not None else None) or player_name)
+        motm = {
+            "available": bool(display_name or player_id),
+            "basis": "recorded_goal_contributions" if goal_contributions else "recorded_player_rating",
+            "player_id": player_id or (getattr(player, "player_id", None) if player is not None else None),
+            "player_name": display_name,
+            "team_name": home_name if team_id == home_team_id else away_name if team_id == away_team_id else None,
+            "shirt_number": getattr(player, "shirt_number", None) if player is not None else None,
+            "rating": rating, "goals": int(selected.get("goals", 0)),
+            "assists": getattr(player, "assists", None) if player is not None else None,
+            "key_passes": getattr(player, "key_passes", None) if player is not None else None,
+            "pass_acc": getattr(player, "pass_accuracy", None) if player is not None else None,
+            "summary": "Selected from recorded goal contributions; other metrics require their own source records."
+            if goal_contributions else "Selected from an explicitly recorded player rating.",
+        }
+
+    ratings: list[dict[str, Any]] = []
+    for player in frame_players:
+        rating_value = getattr(player, "rating", None)
+        if not isinstance(rating_value, (int, float)) or isinstance(rating_value, bool) or not 0 <= float(rating_value) <= 10:
+            continue
+        name = getattr(player, "label", None) or getattr(player, "name", None)
+        if not name:
+            continue
+        player_goals = sum(1 for event in goal_events if (
+            (getattr(event, "primary_player_id", None) and getattr(event, "primary_player_id", None) == getattr(player, "player_id", None))
+            or (getattr(event, "primary_player_name", None) and getattr(event, "primary_player_name", None) == name)
+        ))
+        ratings.append({
+            "player_id": getattr(player, "player_id", None), "name": name,
+            "shirt_number": getattr(player, "shirt_number", None),
+            "position": _enum_value(getattr(player, "role", None)) or "Player",
+            "rating": round(float(rating_value), 1),
+            "is_home": (_enum_value(getattr(player, "side", None)) or "").lower() == "home",
+            "badges": [f"{player_goals} Goal{'s' if player_goals != 1 else ''}"] if player_goals else [],
+        })
+
+    shots_summary = f"{stats.get('home_shots') if stats.get('home_shots') is not None else 'N/A'} - {stats.get('away_shots') if stats.get('away_shots') is not None else 'N/A'}"
+    home_xg, away_xg = stats.get("home_expected_goals"), stats.get("away_expected_goals")
+    share_text = (
+        f"FULL TIME: {home_name} {frame.home_score} - {frame.away_score} {away_name}\n"
+        f"Player of the match: {motm.get('player_name') or 'Unavailable'}\n"
+        f"Recorded shots: {shots_summary} | recorded xG: {home_xg if home_xg is not None else 'N/A'} - {away_xg if away_xg is not None else 'N/A'}\n"
+        "GTEX match report. Metrics are included only where source records are available."
+    )
+    return {
+        "analytics_available": bool(motm["available"] or shots_map or ratings or events),
+        "motm": motm, "shot_map": shots_map, "shot_map_available": bool(shots_map),
+        "shot_events_total": len(shot_events), "shot_map_unmapped_count": unmapped_shots,
+        "momentum": momentum if events else [], "momentum_source": "recorded_event_impact" if events else "unavailable",
+        "ratings": ratings, "ratings_available": bool(ratings), "share_summary": share_text,
+    }
 
 def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
     view_state, frame, events, is_live = _load_strict_live_view_state(match_id, app)
@@ -1712,41 +1682,28 @@ def update_match_v2_tactics(
             detail="Tactical instruction side must be 'home' or 'away'.",
         )
 
-    # Enforce team ownership and authorization
     session_factory = getattr(request.app.state, "session_factory", None)
-    if session_factory is not None:
-        try:
-            with session_factory() as session:
-                comp_match = session.get(CompetitionMatch, match_id)
-                if comp_match is not None:
-                    is_admin = bool(
-                        getattr(current_user, "is_admin", False) or getattr(current_user, "is_superuser", False)
-                    )
-                    if not is_admin:
-                        from app.models.club_profile import ClubProfile
-
-                        target_club_id = comp_match.home_club_id if side == "home" else comp_match.away_club_id
-                        opp_club_id = comp_match.away_club_id if side == "home" else comp_match.home_club_id
-
-                        club = session.get(ClubProfile, target_club_id)
-                        opp_club = session.get(ClubProfile, opp_club_id)
-
-                        # Prevent sabotage: manager of opposing club attempting to issue commands
-                        if opp_club is not None and opp_club.owner_user_id == current_user.id:
-                            raise HTTPException(
-                                status_code=status.HTTP_403_FORBIDDEN,
-                                detail=f"You cannot submit tactical adjustments for opponent's team ({side}).",
-                            )
-
-                        if club is not None and club.owner_user_id != current_user.id:
-                            raise HTTPException(
-                                status_code=status.HTTP_403_FORBIDDEN,
-                                detail=f"You do not have management authority for {side} team ({club.club_name}).",
-                            )
-        except HTTPException:
-            raise
-        except Exception:
-            logger.debug("Non-fatal error checking club ownership in tactics endpoint", exc_info=True)
+    if session_factory is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Tactical changes are disabled because durable ownership validation is unavailable.")
+    try:
+        with session_factory() as session:
+            comp_match = session.get(CompetitionMatch, match_id)
+            if comp_match is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found.")
+            is_admin = bool(getattr(current_user, "is_admin", False) or getattr(current_user, "is_superuser", False))
+            if not is_admin:
+                from app.models.club_profile import ClubProfile
+                target_club_id = comp_match.home_club_id if side == "home" else comp_match.away_club_id
+                club = session.get(ClubProfile, target_club_id) if target_club_id else None
+                if club is None:
+                    raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Tactical changes are disabled because club ownership records are unavailable.")
+                if str(club.owner_user_id) != str(current_user.id):
+                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"You do not have management authority for the {side} team.")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Unable to verify club ownership for match tactics")
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Tactical changes are disabled because ownership could not be verified.") from exc
 
     try:
         applied = hub.set_tactics(
@@ -1761,11 +1718,10 @@ def update_match_v2_tactics(
             substitutions=payload.substitutions,
             instructions=payload.instructions,
         )
+    except LiveMatchPersistenceError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Tactical changes could not be durably saved; no successful update is being reported.") from exc
     except LiveMatchError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1799,7 +1755,7 @@ def submit_match_fan_prediction(
 
     session_factory = getattr(request.app.state, "session_factory", None)
     if session_factory is None:
-        return {"status": "recorded", "match_id": match_id, "choice": choice, "total_votes": 1}
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Fan prediction storage is not configured.")
 
     with session_factory() as session:
         comp_match = session.get(CompetitionMatch, match_id)
@@ -1854,7 +1810,7 @@ def read_match_fan_predictions(
 ) -> dict[str, object]:
     session_factory = getattr(request.app.state, "session_factory", None)
     if session_factory is None:
-        return {"match_id": match_id, "total_votes": 0, "home_votes": 0, "draw_votes": 0, "away_votes": 0}
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Fan prediction storage is not configured.")
 
     with session_factory() as session:
         comp_match = session.get(CompetitionMatch, match_id)
@@ -1887,16 +1843,10 @@ def claim_match_rewards(
 ) -> dict[str, object]:
     session_factory = getattr(request.app.state, "session_factory", None)
     if session_factory is None:
-        return {
-            "status": "claimed",
-            "claimed": True,
-            "match_id": match_id,
-            "xp": 550,
-            "talent_coin": 25,
-            "message": "Matchday rewards deposited to your account.",
-        }
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Reward settlement storage is not configured.")
 
     with session_factory() as session:
+        comp_match = session.get(CompetitionMatch, match_id)    with session_factory() as session:
         comp_match = session.get(CompetitionMatch, match_id)
         if comp_match is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Match '{match_id}' was not found.")
@@ -1938,51 +1888,20 @@ def claim_match_rewards(
         try:
             engine = RewardEngineService(session=session)
             settlement = engine.settle_reward(
-                actor=current_user,
-                user_id=current_user.id,
-                competition_key=competition_key,
-                title=f"Matchday Reward ({match_id})",
-                gross_amount=Decimal("25.0000"),
-                reward_source=reward_source,
-                note=f"Reward settlement for completed match {match_id}",
+                actor=current_user, user_id=current_user.id, competition_key=competition_key,
+                title=f"Matchday Reward ({match_id})", gross_amount=Decimal("25.0000"),
+                reward_source=reward_source, note=f"Reward settlement for completed match {match_id}",
             )
             session.commit()
-            return {
-                "status": "claimed",
-                "claimed": True,
-                "match_id": match_id,
-                "settlement_id": settlement.id,
-                "xp": 550,
-                "talent_coin": 25,
-                "net_amount": str(settlement.net_amount),
-                "message": "Matchday rewards deposited to your wallet.",
-            }
-        except Exception:
+        except Exception as exc:
             session.rollback()
-            meta = dict(comp_match.metadata_json or {})
-            claimed_users = set(meta.get("reward_claimed_users") or [])
-            if current_user.id in claimed_users:
-                return {
-                    "status": "already_claimed",
-                    "claimed": True,
-                    "match_id": match_id,
-                    "xp": 550,
-                    "talent_coin": 25,
-                    "message": "Match rewards have already been claimed.",
-                }
-            claimed_users.add(current_user.id)
-            meta["reward_claimed_users"] = list(claimed_users)
-            comp_match.metadata_json = meta
-            session.commit()
-            return {
-                "status": "claimed",
-                "claimed": True,
-                "match_id": match_id,
-                "xp": 550,
-                "talent_coin": 25,
-                "message": "Matchday rewards credited.",
-            }
-
+            logger.exception("Match reward settlement failed for match %s", match_id)
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Reward settlement failed. No successful claim has been recorded.") from exc
+        return {
+            "status": "claimed", "claimed": True, "match_id": match_id, "settlement_id": settlement.id,
+            "xp": 550, "talent_coin": 25, "net_amount": str(settlement.net_amount),
+            "message": "Matchday rewards deposited to your wallet.",
+        }
 
 @api_router.get("/{match_id}/stats")
 def read_match_v2_stats(match_id: str, request: Request) -> dict[str, object]:
