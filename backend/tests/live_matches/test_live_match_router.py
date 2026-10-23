@@ -23,6 +23,7 @@ from app.models.spectator_session import SpectatorSession
 from app.models.user import User
 from backend.tests.match_engine.helpers import build_request
 from backend.tests.support.secrets import MEDIA_SIGNING_TEST_SECRET, TEST_AUTH_SECRET
+from backend.tests.support.economic_policy import seed_economic_policy
 
 
 def _build_app() -> tuple[FastAPI, sessionmaker[Session]]:
@@ -676,6 +677,7 @@ def test_rewards_claim_idempotency() -> None:
     )
     with session_factory() as session:
         session.add(reward_claimer)
+        seed_economic_policy(session)
         session.commit()
     app.dependency_overrides[get_current_match_user] = lambda: reward_claimer
 
