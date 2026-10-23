@@ -117,18 +117,6 @@ class ApiBackedMatchRepository implements GtexMatchRepository {
       },
     );
   }
-
-  @override
-  Future<void> submitPrediction(String matchId, String choice) async {
-    final normalized = choice.trim().toLowerCase();
-    if (!const <String>{'home', 'draw', 'away'}.contains(normalized)) {
-      throw ArgumentError.value(choice, 'choice', 'Must be home, draw, or away.');
-    }
-    await _client.post(
-      '/api/matches/' + matchId + '/predictions',
-      body: <String, Object?>{'choice': normalized},
-    );
-  }
 }
 
 GtexLiveMatchState _parseLiveMatchState(
