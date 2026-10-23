@@ -646,16 +646,9 @@ class LiveMatchHub:
 
             # Substitution enforcement
             runtime = self._matches.get(match_id)
-            current_sub_count = int(current.get("substitution_count", 0))
-
-            if substitutions:
-                if current_sub_count + len(substitutions) > 5:
-                    raise LiveMatchError(
-                        f"Cannot complete {len(substitutions)} substitutions: team has used {current_sub_count}/5 allowable substitutions."
-                    )
-
-                if runtime is None or runtime.viewer_state is None or not runtime.viewer_state.frames:
-                    raise LiveMatchError("Substitutions cannot be validated without an authoritative active lineup.")
+            active_frame = None
+            active_minute = None
+            if runtime is not None and runtime.viewer_state is not None and runtime.viewer_state.frames:
                 current_minute = float(
                     getattr(
                         runtime.last_snapshot,
@@ -669,6 +662,18 @@ class LiveMatchHub:
                     key=lambda frame: abs(float(frame.clock_minute) - current_minute),
                 )
                 active_minute = float(active_frame.clock_minute)
+            current_sub_count = int(current.get("substitution_count", 0))
+
+            if substitutions:
+                if current_sub_count + len(substitutions) > 5:
+                    raise LiveMatchError(
+                        f"Cannot complete {len(substitutions)} substitutions: team has used {current_sub_count}/5 allowable substitutions."
+                    )
+
+                if runtime is None or runtime.viewer_state is None or not runtime.viewer_state.frames:
+                    raise LiveMatchError("Substitutions cannot be validated without an authoritative active lineup.")
+                if active_frame is None:
+                    raise LiveMatchError("Substitutions cannot be validated without a current match frame.")
                 active_pitch_ids = {
                     str(p.player_id)
                     for p in active_frame.players
@@ -741,6 +746,14 @@ class LiveMatchHub:
                     )
                     if formation and hasattr(target_team, "formation"):
                         target_team.formation = formation
+                    presentation_package = runtime.viewer_state.presentation_package
+                    presentation_team_for_tactics = (
+                        getattr(presentation_package, side_norm, None)
+                        if presentation_package is not None
+                        else None
+                    )
+                    if formation and presentation_team_for_tactics is not None:
+                        presentation_team_for_tactics.formation = formation
 
                     # Apply substitutions to active lineup and frame positions
                     if substitutions:
@@ -790,14 +803,18 @@ class LiveMatchHub:
                                         p.shirt_number = in_shirt
                                         p.stamina_pct = 100.0
 
-                    # Shift spatial player coordinates on pitch according to tactics
+                    # Apply tactical geometry to the active and future frames only.
+                    # Earlier frames remain an accurate record of the old tactics.
                     if runtime.viewer_state.frames:
-                        _reposition_frame_players(
-                            frame=runtime.viewer_state.frames[-1],
-                            side=side_norm,
-                            formation=current["formation"],
-                            defensive_line=float(current["defensive_line"]),
-                        )
+                        for frame in runtime.viewer_state.frames:
+                            if active_minute is not None and float(frame.clock_minute) + 1e-6 < active_minute:
+                                continue
+                            _reposition_frame_players(
+                                frame=frame,
+                                side=side_norm,
+                                formation=current["formation"],
+                                defensive_line=float(current["defensive_line"]),
+                            )
 
                 event_id = f"{match_id}-tactic-{int(time.time()*1000)}"
                 comm = (
