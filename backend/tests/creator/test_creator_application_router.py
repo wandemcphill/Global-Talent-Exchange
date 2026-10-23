@@ -159,7 +159,7 @@ def test_sold_club_no_longer_blocks_creator_promotion(app_client) -> None:
         buyer = User(
             email="club-buyer@example.com",
             username="clubbuyer",
-            password_hash="test-hash",
+            password_hash="test-hash",  # pragma: allowlist secret
             full_name="Club Buyer",
         )
         session.add(buyer)

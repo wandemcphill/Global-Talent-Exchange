@@ -1464,14 +1464,13 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       );
     }
     if (widget.controller.isAuthenticated && _isCreatorSession) {
-        actions.add(
-          IconButton(
-            tooltip: 'Creator community',
-            onPressed: () => _openPrimaryDestination(GtePrimaryDestination.hub),
-            icon: const Icon(Icons.campaign_outlined, color: GtexColors.text),
-          ),
-        );
-      }
+      actions.add(
+        IconButton(
+          tooltip: 'Creator community',
+          onPressed: () => _openPrimaryDestination(GtePrimaryDestination.hub),
+          icon: const Icon(Icons.campaign_outlined, color: GtexColors.text),
+        ),
+      );
     }
     return actions;
   }

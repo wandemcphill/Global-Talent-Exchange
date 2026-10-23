@@ -226,7 +226,7 @@ def auth_user_factory(client, app_session_factory):
         if account_type == "coin_trader":
             from app.trader.service import _totp
 
-            totp_secret = "JBSWY3DPEHPK3PXP"
+            totp_secret = "JBSWY3DPEHPK3PXP"  # pragma: allowlist secret
             trader_payload = trader_signup_payload(
                 email=email,
                 trading_alias=username,

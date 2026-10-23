@@ -9,7 +9,7 @@ import { TURNSTILE_SITE_KEY, TurnstileChallenge } from "@/components/gtex/Turnst
 
 type SignupAccountType = "user" | "creator" | "coin_trader";
 
-const TOTP_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+const TOTP_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"; // pragma: allowlist secret
 
 function generateTotpSecret(): string {
   if (typeof window === "undefined" || !window.crypto?.getRandomValues) {

@@ -40,7 +40,7 @@ def test_dedicated_creator_and_coin_trader_accounts_cannot_enter_club_owner_lane
             email="dedicated-creator-owner-guard@example.com",
             username="dedicated_creator_guard",
             creator_name="Dedicated Creator",
-            password="SuperSecret1",
+            password="SuperSecret1",  # pragma: allowlist secret
         ),
     )
     assert creator_response.status_code == 201, creator_response.text
