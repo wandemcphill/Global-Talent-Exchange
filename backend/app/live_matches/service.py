@@ -505,7 +505,7 @@ class LiveMatchHub:
             current["updated_at"] = utcnow().isoformat()
 
             runtime = self._matches.get(match_id)
-            live_event = None
+            events_to_broadcast = []
             channel = None
             if runtime is not None:
                 team_name = runtime.home_team_name if side == "home" else runtime.away_team_name
@@ -536,13 +536,45 @@ class LiveMatchHub:
                     importance_score=0.4,
                 )
                 runtime.published_events.append(live_event)
+                events_to_broadcast.append(live_event)
+
+                if substitutions:
+                    for sub in substitutions:
+                        out_id = str(sub.get("out_player_id") or sub.get("outPlayerId") or "")
+                        in_id = str(sub.get("in_player_id") or sub.get("inPlayerId") or "")
+                        out_name = str(sub.get("out_player_name") or sub.get("outPlayerName") or "Player")
+                        in_name = str(sub.get("in_player_name") or sub.get("inPlayerName") or "Substitute")
+                        sub_event_id = f"{match_id}-sub-{int(time.time()*1000)}-{out_id}"
+                        sub_comm = f"Substitution for {team_name}: {out_name} is replaced by {in_name}."
+                        sub_event = LiveMatchStreamEventView(
+                            match_id=match_id,
+                            event_id=sub_event_id,
+                            minute=minute,
+                            event_type="substitution",
+                            team_id=team_id,
+                            team=team_name,
+                            team_side=side,
+                            player_id=in_id,
+                            player=in_name,
+                            secondary_player_id=out_id,
+                            secondary_player=out_name,
+                            commentary=sub_comm,
+                            clock_label=f"{minute}'",
+                            importance_score=0.6,
+                        )
+                        runtime.published_events.append(sub_event)
+                        events_to_broadcast.append(sub_event)
+
                 channel = runtime.channel
 
             result = dict(current)
 
-        if runtime is not None and live_event is not None and channel is not None:
-            self._publish_channel(channel, {"kind": "events", "payload": [live_event.model_dump(mode="json")]})
-            self._publish_domain_events(match_id, [live_event])
+        if runtime is not None and events_to_broadcast and channel is not None:
+            self._publish_channel(
+                channel,
+                {"kind": "events", "payload": [ev.model_dump(mode="json") for ev in events_to_broadcast]},
+            )
+            self._publish_domain_events(match_id, events_to_broadcast)
 
         return result
 

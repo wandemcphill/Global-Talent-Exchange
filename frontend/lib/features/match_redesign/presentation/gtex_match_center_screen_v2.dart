@@ -537,15 +537,22 @@ class _RightLivePanel extends StatelessWidget {
       case 3:
         return GtexTacticsPanel(
           isSending: controller.isSendingInstruction,
+          homeTeam: match.home,
+          awayTeam: match.away,
+          currentMinute: match.minute,
           onSubmit: (GtexTacticalInstruction instruction) async {
             await controller.sendInstruction(instruction);
             if (context.mounted) {
+              final subsCount = instruction.substitutions?.length ?? 0;
+              final subsMsg = subsCount > 0 ? ' · $subsCount subs' : '';
+              final mentalityText = instruction.mentality?.toUpperCase() ?? 'BALANCED';
+              final formationText = instruction.formation ?? '4-3-3';
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
-                    'Tactical instruction accepted by match authority '
-                    '(Press: ${instruction.pressIntensity}%, Line: ${instruction.defensiveLine}%, '
-                    'Tempo: ${instruction.tempo}%, Risk: ${instruction.riskLevel}%)',
+                    'Tactical instruction accepted: $formationText · '
+                    '$mentalityText$subsMsg '
+                    '(Press: ${instruction.pressIntensity}%, Line: ${instruction.defensiveLine}%)',
                   ),
                   duration: const Duration(seconds: 3),
                   backgroundColor: const Color(0xFF0F172A),

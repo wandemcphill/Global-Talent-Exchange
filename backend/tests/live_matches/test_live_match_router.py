@@ -401,6 +401,14 @@ def test_update_and_read_match_tactics() -> None:
                 "tempo": 45,
                 "risk_level": 25,
                 "side": "away",
+                "substitutions": [
+                    {
+                        "out_player_id": "player-away-1",
+                        "in_player_id": "player-away-12",
+                        "out_player_name": "Striker One",
+                        "in_player_name": "Striker Two",
+                    }
+                ],
             },
         )
         assert legacy_res.status_code == 200
@@ -408,6 +416,7 @@ def test_update_and_read_match_tactics() -> None:
         assert legacy_body["status"] == "accepted"
         assert legacy_body["side"] == "away"
         assert legacy_body["tactics"]["mentality"] == "defensive"
+        assert len(legacy_body["tactics"]["substitutions"]) == 1
 
         # Invalid side rejects
         bad_side = client.post(

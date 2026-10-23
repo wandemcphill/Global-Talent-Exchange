@@ -109,6 +109,11 @@ class ApiBackedMatchRepository implements GtexMatchRepository {
         'defensive_line': instruction.defensiveLine,
         'tempo': instruction.tempo,
         'risk_level': instruction.riskLevel,
+        if (instruction.formation != null) 'formation': instruction.formation,
+        if (instruction.mentality != null) 'mentality': instruction.mentality,
+        if (instruction.side != null) 'side': instruction.side,
+        if (instruction.substitutions != null && instruction.substitutions!.isNotEmpty)
+          'substitutions': instruction.substitutions,
       },
     );
   }

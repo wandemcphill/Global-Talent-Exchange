@@ -251,10 +251,18 @@ class GtexTacticalInstruction {
     required this.defensiveLine,
     required this.tempo,
     required this.riskLevel,
+    this.formation,
+    this.mentality,
+    this.side,
+    this.substitutions,
   });
 
   final int pressIntensity;
   final int defensiveLine;
   final int tempo;
   final int riskLevel;
+  final String? formation;
+  final String? mentality;
+  final String? side;
+  final List<Map<String, dynamic>>? substitutions;
 }
