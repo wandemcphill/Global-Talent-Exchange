@@ -142,6 +142,7 @@ GtexLiveMatchState _parseLiveMatchState(
     ),
     ball: _parsePitchBall(_asMap(payload['ball'])),
     preMatch: _parsePreMatchPackage(_asMap(payload['pre_match'] ?? payload['preMatch'])),
+    postMatch: _parsePostMatchPackage(_asMap(payload['post_match'] ?? payload['postMatch'])),
     pitchPlayers: _list(payload['pitch_players'] ?? payload['pitchPlayers'])
         .map((Object? value) => _parsePitchPlayer(_asMap(value)))
         .toList(growable: false),
@@ -241,6 +242,68 @@ GtexLineupPlayer _parseLineupPlayer(Map<String, Object?> json) {
     isRegen: _bool(json, const <String>['is_regen', 'isRegen']),
     formLabel: _nullableString(json, const <String>['form', 'form_label', 'formLabel']),
     fitnessPct: _nullableDouble(json, const <String>['fitness_pct', 'fitnessPct', 'fitness']),
+  );
+}
+
+GtexPostMatchPackage? _parsePostMatchPackage(Map<String, Object?> json) {
+  if (json.isEmpty) {
+    return null;
+  }
+  final motmMap = _asMap(json['motm']);
+  final motm = GtexPlayerOfTheMatch(
+    playerName: _string(motmMap, const <String>['player_name', 'playerName'], fallback: 'Top Performer'),
+    teamName: _string(motmMap, const <String>['team_name', 'teamName'], fallback: 'Team'),
+    shirtNumber: _int(motmMap, const <String>['shirt_number', 'shirtNumber'], fallback: 10),
+    rating: _double(motmMap, const <String>['rating'], fallback: 8.5),
+    goals: _int(motmMap, const <String>['goals'], fallback: 1),
+    assists: _int(motmMap, const <String>['assists'], fallback: 1),
+    keyPasses: _int(motmMap, const <String>['key_passes', 'keyPasses'], fallback: 4),
+    passAcc: _int(motmMap, const <String>['pass_acc', 'passAcc'], fallback: 90),
+    summary: _string(motmMap, const <String>['summary'], fallback: 'Player of the match performance.'),
+  );
+
+  final shotMap = _list(json['shot_map'] ?? json['shotMap']).map((item) {
+    final m = _asMap(item);
+    return GtexShotMapEntry(
+      minute: _int(m, const <String>['minute'], fallback: 0),
+      isHome: _bool(m, const <String>['is_home', 'isHome']),
+      x: _double(m, const <String>['x'], fallback: 0.5),
+      y: _double(m, const <String>['y'], fallback: 0.5),
+      xg: _double(m, const <String>['xg'], fallback: 0.2),
+      outcome: _string(m, const <String>['outcome'], fallback: 'saved'),
+      playerName: _string(m, const <String>['player_name', 'playerName'], fallback: 'Shooter'),
+    );
+  }).toList();
+
+  final momentum = _list(json['momentum']).map((item) {
+    final m = _asMap(item);
+    return GtexMomentumPoint(
+      minute: _int(m, const <String>['minute'], fallback: 0),
+      value: _int(m, const <String>['value'], fallback: 0),
+    );
+  }).toList();
+
+  final ratings = _list(json['ratings']).map((item) {
+    final m = _asMap(item);
+    return GtexPlayerRatingItem(
+      playerId: _string(m, const <String>['player_id', 'playerId', 'id'], fallback: ''),
+      name: _string(m, const <String>['name', 'label'], fallback: 'Player'),
+      shirtNumber: _int(m, const <String>['shirt_number', 'shirtNumber'], fallback: 0),
+      position: _string(m, const <String>['position', 'role'], fallback: 'MID'),
+      rating: _double(m, const <String>['rating'], fallback: 7.0),
+      isHome: _bool(m, const <String>['is_home', 'isHome']),
+      badges: _list(m['badges']).map((e) => e.toString()).toList(),
+    );
+  }).toList();
+
+  final shareSummary = _string(json, const <String>['share_summary', 'shareSummary'], fallback: 'Full-time match recap.');
+
+  return GtexPostMatchPackage(
+    motm: motm,
+    shotMap: shotMap,
+    momentum: momentum,
+    ratings: ratings,
+    shareSummary: shareSummary,
   );
 }
 

@@ -102,6 +102,103 @@ class GtexPreMatchPackage {
 }
 
 @immutable
+class GtexShotMapEntry {
+  const GtexShotMapEntry({
+    required this.minute,
+    required this.isHome,
+    required this.x,
+    required this.y,
+    required this.xg,
+    required this.outcome,
+    required this.playerName,
+  });
+
+  final int minute;
+  final bool isHome;
+  final double x;
+  final double y;
+  final double xg;
+  final String outcome; // 'goal', 'saved', 'missed', 'blocked'
+  final String playerName;
+
+  bool get isGoal => outcome == 'goal';
+}
+
+@immutable
+class GtexPlayerOfTheMatch {
+  const GtexPlayerOfTheMatch({
+    required this.playerName,
+    required this.teamName,
+    required this.shirtNumber,
+    required this.rating,
+    required this.goals,
+    required this.assists,
+    required this.keyPasses,
+    required this.passAcc,
+    required this.summary,
+  });
+
+  final String playerName;
+  final String teamName;
+  final int shirtNumber;
+  final double rating;
+  final int goals;
+  final int assists;
+  final int keyPasses;
+  final int passAcc;
+  final String summary;
+}
+
+@immutable
+class GtexMomentumPoint {
+  const GtexMomentumPoint({
+    required this.minute,
+    required this.value,
+  });
+
+  final int minute;
+  final int value;
+}
+
+@immutable
+class GtexPlayerRatingItem {
+  const GtexPlayerRatingItem({
+    required this.playerId,
+    required this.name,
+    required this.shirtNumber,
+    required this.position,
+    required this.rating,
+    required this.isHome,
+    this.badges = const <String>[],
+  });
+
+  final String playerId;
+  final String name;
+  final int shirtNumber;
+  final String position;
+  final double rating;
+  final bool isHome;
+  final List<String> badges;
+}
+
+@immutable
+class GtexPostMatchPackage {
+  const GtexPostMatchPackage({
+    required this.motm,
+    required this.shotMap,
+    required this.momentum,
+    required this.ratings,
+    required this.shareSummary,
+  });
+
+  final GtexPlayerOfTheMatch motm;
+  final List<GtexShotMapEntry> shotMap;
+  final List<GtexMomentumPoint> momentum;
+  final List<GtexPlayerRatingItem> ratings;
+  final String shareSummary;
+}
+
+@immutable
 class GtexLiveMatchState {
   const GtexLiveMatchState({
     required this.matchId,
@@ -115,6 +212,7 @@ class GtexLiveMatchState {
     required this.highlights,
     this.ball,
     this.preMatch,
+    this.postMatch,
     this.homeMomentumPercent,
     this.economyImpacts = const <GtexMatchEconomyImpact>[],
     this.selectedPlayerId,
@@ -132,6 +230,7 @@ class GtexLiveMatchState {
   final List<GtexMatchHighlight> highlights;
   final GtexPitchBall? ball;
   final GtexPreMatchPackage? preMatch;
+  final GtexPostMatchPackage? postMatch;
   final int? homeMomentumPercent;
   final List<GtexMatchEconomyImpact> economyImpacts;
   final String? selectedPlayerId;
@@ -147,6 +246,7 @@ class GtexLiveMatchState {
     List<GtexMatchTimelineEvent>? timeline,
     GtexPitchBall? ball,
     GtexPreMatchPackage? preMatch,
+    GtexPostMatchPackage? postMatch,
   }) {
     return GtexLiveMatchState(
       matchId: matchId,
@@ -160,6 +260,7 @@ class GtexLiveMatchState {
       highlights: highlights,
       ball: ball ?? this.ball,
       preMatch: preMatch ?? this.preMatch,
+      postMatch: postMatch ?? this.postMatch,
       homeMomentumPercent: homeMomentumPercent,
       economyImpacts: economyImpacts,
       selectedPlayerId: selectedPlayerId ?? this.selectedPlayerId,

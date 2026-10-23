@@ -451,3 +451,26 @@ def test_read_match_pre_match_package() -> None:
     assert pre["home_win_pct"] + pre["draw_pct"] + pre["away_win_pct"] == 100
     assert "key_duel" in pre
     assert "storyline" in pre
+
+
+def test_read_match_post_match_package() -> None:
+    app, session_factory = _build_app()
+    replay = MatchSimulationService().build_replay_payload(build_request(seed=42, match_id="post-match-check-001"))
+    _insert_match(session_factory, replay)
+    client = TestClient(app)
+
+    response = client.get(f"/api/matches/{replay.match_id}/post-match")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["match_id"] == replay.match_id
+    assert "post_match" in body
+    post = body["post_match"]
+    assert "motm" in post
+    assert post["motm"]["rating"] >= 8.0
+    assert "shot_map" in post
+    assert len(post["shot_map"]) > 0
+    assert "momentum" in post
+    assert len(post["momentum"]) == 18
+    assert "ratings" in post
+    assert len(post["ratings"]) > 0
+    assert "share_summary" in post
