@@ -1891,8 +1891,7 @@ def claim_match_rewards(
                 "claimed": True,
                 "match_id": match_id,
                 "settlement_id": existing.id,
-                "xp": 550,
-                "talent_coin": 25,
+                "talent_coin": str(existing.net_amount),
                 "net_amount": str(existing.net_amount),
                 "message": "Match rewards have already been settled for your account.",
             }
@@ -1911,7 +1910,7 @@ def claim_match_rewards(
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Reward settlement failed. No successful claim has been recorded.") from exc
         return {
             "status": "claimed", "claimed": True, "match_id": match_id, "settlement_id": settlement.id,
-            "xp": 550, "talent_coin": 25, "net_amount": str(settlement.net_amount),
+            "talent_coin": str(settlement.net_amount), "net_amount": str(settlement.net_amount),
             "message": "Matchday rewards deposited to your wallet.",
         }
 
