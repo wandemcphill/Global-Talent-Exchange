@@ -53,6 +53,9 @@ class GtexKeyDuel {
     required this.awayPlayerRole,
     required this.awayPlayerRating,
     required this.description,
+    this.available = true,
+    this.homePlayerRatingAvailable = true,
+    this.awayPlayerRatingAvailable = true,
   });
 
   final String homePlayerName;
@@ -62,6 +65,9 @@ class GtexKeyDuel {
   final String awayPlayerRole;
   final double awayPlayerRating;
   final String description;
+  final bool available;
+  final bool homePlayerRatingAvailable;
+  final bool awayPlayerRatingAvailable;
 }
 
 @immutable
@@ -82,6 +88,13 @@ class GtexPreMatchPackage {
     required this.totalVotes,
     this.keyDuel,
     this.storyline,
+    this.homeFormAvailable = true,
+    this.awayFormAvailable = true,
+    this.h2hAvailable = true,
+    this.probabilityAvailable = true,
+    this.votesAvailable = true,
+    this.homeWinRateAvailable = true,
+    this.awayWinRateAvailable = true,
   });
 
   final List<String> homeForm;
@@ -99,6 +112,13 @@ class GtexPreMatchPackage {
   final int totalVotes;
   final GtexKeyDuel? keyDuel;
   final String? storyline;
+  final bool homeFormAvailable;
+  final bool awayFormAvailable;
+  final bool h2hAvailable;
+  final bool probabilityAvailable;
+  final bool votesAvailable;
+  final bool homeWinRateAvailable;
+  final bool awayWinRateAvailable;
 }
 
 @immutable
@@ -136,6 +156,11 @@ class GtexPlayerOfTheMatch {
     required this.keyPasses,
     required this.passAcc,
     required this.summary,
+    this.available = true,
+    this.ratingAvailable = true,
+    this.assistsAvailable = true,
+    this.keyPassesAvailable = true,
+    this.passAccAvailable = true,
   });
 
   final String playerName;
@@ -147,6 +172,11 @@ class GtexPlayerOfTheMatch {
   final int keyPasses;
   final int passAcc;
   final String summary;
+  final bool available;
+  final bool ratingAvailable;
+  final bool assistsAvailable;
+  final bool keyPassesAvailable;
+  final bool passAccAvailable;
 }
 
 @immutable
