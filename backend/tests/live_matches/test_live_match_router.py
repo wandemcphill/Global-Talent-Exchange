@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from datetime import UTC, date, datetime
+from decimal import Decimal
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -20,7 +21,7 @@ from app.models.broadcast_rights import BroadcastAccessGrant, BroadcastRight, Vi
 from app.models.club_profile import ClubProfile
 from app.models.competition_match import CompetitionMatch
 from app.models.spectator_session import SpectatorSession
-from app.models.user import User
+from app.models.user import User, UserRole
 from backend.tests.match_engine.helpers import build_request
 from backend.tests.support.secrets import MEDIA_SIGNING_TEST_SECRET, TEST_AUTH_SECRET
 from backend.tests.support.economic_policy import seed_economic_policy
@@ -675,9 +676,22 @@ def test_rewards_claim_idempotency() -> None:
         password_hash="hashed-password",  # pragma: allowlist secret
         is_active=True,
     )
+    reward_admin = User(
+        id="reward-admin-001",
+        email="reward-admin@example.com",
+        username="reward-admin",
+        password_hash="hashed-password",  # pragma: allowlist secret
+        role=UserRole.ADMIN,
+        is_active=True,
+    )
     with session_factory() as session:
-        session.add(reward_claimer)
+        session.add_all([reward_claimer, reward_admin])
         seed_economic_policy(session)
+        RewardEngineService(session).credit_promo_pool(
+            actor=reward_admin,
+            amount=Decimal("100.0000"),
+            reference="match-reward-test-pool",
+        )
         session.commit()
     app.dependency_overrides[get_current_match_user] = lambda: reward_claimer
 
