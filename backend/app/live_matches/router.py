@@ -1183,49 +1183,70 @@ def _v2_pre_match_payload(match_id: str, view_state: Any, app: Any = None) -> di
         away_win_pct = None
         win_prob_available = False
 
-    home_players = getattr(getattr(view_state, "home_team", None), "players", []) or []
-    away_players = getattr(getattr(view_state, "away_team", None), "players", []) or []
+    presentation = getattr(view_state, "presentation_package", None)
+    home_presentation = getattr(presentation, "home", None) if presentation is not None else None
+    away_presentation = getattr(presentation, "away", None) if presentation is not None else None
+    home_players = list(getattr(home_presentation, "starters", []) or [])
+    away_players = list(getattr(away_presentation, "starters", []) or [])
+
+    def _role_tokens(player: Any) -> tuple[str, set[str]]:
+        role_text = str(getattr(player, "role", "") or "").strip().lower()
+        tokens = set(role_text.replace("/", " ").replace("_", " ").replace("-", " ").replace(".", " ").split())
+        return role_text, tokens
 
     home_forward = next(
         (
-            p
-            for p in home_players
-            if any(
-                token in str(getattr(p, "role", "")).lower()
-                for token in ("forward", "attack", "striker", "winger", "st", "rw", "lw", "cf")
+            player for player in home_players
+            if (
+                (lambda role_text, tokens: (
+                    any(token in role_text for token in ("forward", "attack", "striker", "winger"))
+                    or bool(tokens & {"st", "rw", "lw", "cf", "ss", "am", "rf", "lf"})
+                ))(*_role_tokens(player))
             )
         ),
         None,
     )
     away_defender = next(
         (
-            p
-            for p in away_players
-            if any(
-                token in str(getattr(p, "role", "")).lower()
-                for token in ("defen", "back", "cb", "lb", "rb", "lwb", "rwb", "sweeper")
+            player for player in away_players
+            if (
+                (lambda role_text, tokens: (
+                    any(token in role_text for token in ("defen", "back", "sweeper"))
+                    or bool(tokens & {"cb", "lb", "rb", "lwb", "rwb", "rcb", "lcb"})
+                ))(*_role_tokens(player))
             )
         ),
         None,
     )
 
-    if home_forward is not None and away_defender is not None:
+    def _presentation_player_name(player: Any) -> str | None:
+        for field in ("player_name", "label", "name"):
+            value = str(getattr(player, field, "") or "").strip()
+            if value:
+                return value
+        return None
+
+    home_forward_name = _presentation_player_name(home_forward) if home_forward is not None else None
+    away_defender_name = _presentation_player_name(away_defender) if away_defender is not None else None
+    if home_forward is not None and away_defender is not None and home_forward_name and away_defender_name:
         key_duel = {
             "available": True,
             "home_player_id": getattr(home_forward, "player_id", None),
-            "home_player_name": getattr(home_forward, "label", getattr(home_forward, "name", "Home Forward")),
-            "home_player_role": str(getattr(home_forward, "role", "Attacker")),
+            "home_player_name": home_forward_name,
+            "home_player_role": str(getattr(home_forward, "role", "") or ""),
+            "home_player_shirt_number": getattr(home_forward, "shirt_number", None),
             "home_player_rating": getattr(home_forward, "rating", None),
             "away_player_id": getattr(away_defender, "player_id", None),
-            "away_player_name": getattr(away_defender, "label", getattr(away_defender, "name", "Away Defender")),
-            "away_player_role": str(getattr(away_defender, "role", "Defender")),
+            "away_player_name": away_defender_name,
+            "away_player_role": str(getattr(away_defender, "role", "") or ""),
+            "away_player_shirt_number": getattr(away_defender, "shirt_number", None),
             "away_player_rating": getattr(away_defender, "rating", None),
-            "description": f"Tactical duel: {getattr(home_forward, 'label', 'Forward')} vs {getattr(away_defender, 'label', 'Defender')}.",
+            "description": f"Tactical duel: {home_forward_name} vs {away_defender_name}.",
         }
     else:
         key_duel = {
             "available": False,
-            "description": "Starting lineups pending manager confirmation.",
+            "description": "A verified attacker-versus-defender matchup is unavailable until compatible lineup records exist.",
         }
 
     return {
