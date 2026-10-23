@@ -568,6 +568,17 @@ def test_tactical_validation_and_substitutions() -> None:
         assert incoming_id in current_home_ids
         assert outgoing_id not in current_home_ids
 
+        # Simulate a worker restart: the persisted viewer state must retain the
+        # active substitute rather than rebuilding the original XI from replay data.
+        app.state.live_match_hub = LiveMatchHub(session_factory=session_factory)
+        restored = client.get(f"/api/matches/{match_id}/state")
+        assert restored.status_code == 200, restored.text
+        restored_home_ids = [
+            p["player_id"] for p in restored.json()["pitch_players"] if p["is_home"]
+        ]
+        assert incoming_id in restored_home_ids
+        assert outgoing_id not in restored_home_ids
+
 
 def test_zero_zero_match_data_integrity() -> None:
     app, session_factory = _build_app()
