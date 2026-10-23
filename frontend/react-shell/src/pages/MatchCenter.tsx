@@ -429,6 +429,7 @@ function TacticalHUD({
   minute,
   homeScore,
   awayScore,
+  side,
 }: {
   formation: string;
   setFormation: (f: string) => void;
@@ -445,6 +446,7 @@ function TacticalHUD({
   minute: number;
   homeScore: number;
   awayScore: number;
+  side: "home" | "away";
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [advisorApplied, setAdvisorApplied] = useState(false);
@@ -495,7 +497,7 @@ function TacticalHUD({
         tempo: tempo,
         risk_level: risk,
         formation: formation,
-        side: "home",
+        side,
       });
       toast.success(`Tactical order dispatched: ${formation} · Press ${press}% · Line ${line}%`);
     } catch (err: any) {
@@ -1339,6 +1341,7 @@ export default function MatchCenter() {
             minute={minute}
             homeScore={score.home}
             awayScore={score.away}
+            side={side}
           />
         )}
 
