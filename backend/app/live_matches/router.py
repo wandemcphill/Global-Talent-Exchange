@@ -1382,6 +1382,7 @@ def _v2_stats_payload(frame: MatchTimelineFrameView, events: list[Any]) -> dict[
         "away_expected_goals": away_xg,
     }
 
+
 def _v2_post_match_payload(
     match_id: str, view_state: Any, frame: MatchTimelineFrameView, events: list[Any], stats: dict[str, Any]
 ) -> dict[str, object]:
@@ -1612,6 +1613,7 @@ def _v2_post_match_payload(
         "share_summary": share_text,
     }
 
+
 def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
     view_state, frame, events, is_live = _load_strict_live_view_state(match_id, app)
     home_players = [player for player in frame.players if (_enum_value(player.side) or "").lower() == "home"]
@@ -1788,6 +1790,7 @@ def update_match_v2_tactics(
             is_admin = bool(getattr(current_user, "is_admin", False) or getattr(current_user, "is_superuser", False))
             if not is_admin:
                 from app.models.club_profile import ClubProfile
+
                 target_club_id = comp_match.home_club_id if side == "home" else comp_match.away_club_id
                 club = session.get(ClubProfile, target_club_id) if target_club_id else None
                 if club is None:
