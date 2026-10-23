@@ -537,7 +537,12 @@ def test_tactical_validation_and_substitutions() -> None:
         assert invalid_sub.status_code == 400
         assert "not currently on the pitch" in invalid_sub.json()["detail"]
 
-        # Valid substitution replaces player atomically
+        # Valid substitution uses a player from the fixture's real bench.
+        bench_players = replay.visual_identity.home_team.player_visuals[11:]
+        assert bench_players, "test fixture requires a home bench"
+        incoming_player = bench_players[0]
+        incoming_id = incoming_player.player_id
+        incoming_name = incoming_player.display_name
         valid_sub = client.post(
             f"/api/matches/{match_id}/tactics",
             json={
@@ -545,10 +550,10 @@ def test_tactical_validation_and_substitutions() -> None:
                 "substitutions": [
                     {
                         "out_player_id": outgoing_id,
-                        "in_player_id": "bench-super-sub-99",
+                        "in_player_id": incoming_id,
                         "out_player_name": outgoing_name,
-                        "in_player_name": "Super Sub",
-                        "shirt_number": 99,
+                        "in_player_name": incoming_name,
+                        "shirt_number": incoming_player.shirt_number or 14,
                     }
                 ],
             },
@@ -560,7 +565,7 @@ def test_tactical_validation_and_substitutions() -> None:
         # Check subsequent frame reflects the new substitute
         new_state = client.get(f"/api/matches/{match_id}/state").json()
         current_home_ids = [p["player_id"] for p in new_state["pitch_players"] if p["is_home"]]
-        assert "bench-super-sub-99" in current_home_ids
+        assert incoming_id in current_home_ids
         assert outgoing_id not in current_home_ids
 
 
