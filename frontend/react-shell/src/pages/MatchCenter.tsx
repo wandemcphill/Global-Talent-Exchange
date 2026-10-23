@@ -810,7 +810,7 @@ function PreMatchBriefing({ match, preMatch, matchId }: { match: any; preMatch?:
               <div className="mt-3 flex justify-around text-xs">
                 <div>
                   <span className="block text-[10px] text-slate-500">RATING</span>
-                  <span className="gx-mono font-bold text-emerald-300">{keyDuel.home_player.rating ?? 7.5}</span>
+                  <span className="gx-mono font-bold text-emerald-300">{keyDuel.home_player.rating ?? "N/A"}</span>
                 </div>
               </div>
             </div>
@@ -826,7 +826,7 @@ function PreMatchBriefing({ match, preMatch, matchId }: { match: any; preMatch?:
               <div className="mt-3 flex justify-around text-xs">
                 <div>
                   <span className="block text-[10px] text-slate-500">RATING</span>
-                  <span className="gx-mono font-bold text-amber-300">{keyDuel.away_player.rating ?? 7.5}</span>
+                  <span className="gx-mono font-bold text-amber-300">{keyDuel.away_player.rating ?? "N/A"}</span>
                 </div>
               </div>
             </div>
@@ -872,8 +872,10 @@ function PostMatchAnalytics({
     player_name?: string;
   }> = postMatch?.shot_map || [];
 
-  const homeXg = Number(stats?.home_expected_goals ?? (postMatch?.xg?.home ?? 0.0));
-  const awayXg = Number(stats?.away_expected_goals ?? (postMatch?.xg?.away ?? 0.0));
+  const homeXgRaw = stats?.home_expected_goals ?? postMatch?.xg?.home;
+  const awayXgRaw = stats?.away_expected_goals ?? postMatch?.xg?.away;
+  const homeXg = homeXgRaw === null || homeXgRaw === undefined || !Number.isFinite(Number(homeXgRaw)) ? null : Number(homeXgRaw);
+  const awayXg = awayXgRaw === null || awayXgRaw === undefined || !Number.isFinite(Number(awayXgRaw)) ? null : Number(awayXgRaw);
 
   const claimRewards = async () => {
     setClaimingRewards(true);
@@ -919,25 +921,25 @@ function PostMatchAnalytics({
     <div className="space-y-6">
       {/* MOTM Celebration */}
       <Panel eyebrow="Full-time Honors" title="Player of the Match" testid="motm-card">
-        {motm ? (
+        {motm?.available === true ? (
           <div className="flex items-center justify-between rounded-md border border-amber-500/30 bg-gradient-to-r from-amber-500/10 to-slate-900 p-4">
             <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-amber-400 bg-amber-500 text-lg font-black text-slate-950">
-                #{motm.shirt_number || 10}
+                #{motm.shirt_number ?? "—"}
               </div>
               <div>
                 <p className="text-sm font-black text-amber-300">{motm.player_name}</p>
                 <p className="text-xs text-slate-400">
-                  {motm.team_name} · {motm.goals} Goal{motm.goals === 1 ? "" : "s"} · {motm.assists ?? 0} Assist{motm.assists === 1 ? "" : "s"}
+                  {motm.team_name || "Team unavailable"} · {motm.goals} Goal{motm.goals === 1 ? "" : "s"} · {motm.assists ?? "N/A"} Assist{motm.assists === 1 ? "" : "s"}
                 </p>
                 {motm.summary && <p className="mt-1 text-[11px] text-slate-300">{motm.summary}</p>}
               </div>
             </div>
             <div className="text-right">
               <span className="rounded-sm bg-amber-500 px-2 py-0.5 text-xs font-black text-slate-950">
-                {motm.rating?.toFixed(1) ?? "8.0"} RATING
+                {motm.rating === null || motm.rating === undefined ? "RATING N/A" : `${Number(motm.rating).toFixed(1)} RATING`}
               </span>
-              <p className="mt-1 text-[10px] text-amber-200">{motm.pass_acc ?? 88}% Pass Acc</p>
+              <p className="mt-1 text-[10px] text-amber-200">{motm.pass_acc === null || motm.pass_acc === undefined ? "Pass accuracy N/A" : `${motm.pass_acc}% Pass Acc`}</p>
             </div>
           </div>
         ) : (
@@ -987,7 +989,7 @@ function PostMatchAnalytics({
               <span className="flex items-center gap-1 text-red-400">● Missed</span>
             </div>
             <span className="gx-mono font-bold text-white">
-              xG: {homeXg.toFixed(2)} vs {awayXg.toFixed(2)}
+              xG: {homeXg === null ? "N/A" : homeXg.toFixed(2)} vs {awayXg === null ? "N/A" : awayXg.toFixed(2)}
             </span>
           </div>
         </div>
@@ -1161,8 +1163,10 @@ export default function MatchCenter() {
         <section className="gx-panel gx-pitch-grid gx-panel-live relative overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Chip tone={done ? "slate" : isScheduled ? "cyan" : "emerald"}>
-                {done ? (
+              <Chip tone={!liveState ? "slate" : done ? "slate" : isScheduled ? "cyan" : "emerald"}>
+                {!liveState ? (
+                  "Preview · authoritative match feed unavailable"
+                ) : done ? (
                   "Full time"
                 ) : isScheduled ? (
                   "Pre-Match Briefing"
