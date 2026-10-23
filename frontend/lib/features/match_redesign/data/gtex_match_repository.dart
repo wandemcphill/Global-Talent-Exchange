@@ -9,6 +9,7 @@ abstract class GtexMatchRepository {
     String matchId,
     GtexTacticalInstruction instruction,
   );
+  Future<void> submitPrediction(String matchId, String choice);
 }
 
 class GtexUnavailableMatchRepository implements GtexMatchRepository {
@@ -36,6 +37,11 @@ class GtexUnavailableMatchRepository implements GtexMatchRepository {
     String matchId,
     GtexTacticalInstruction instruction,
   ) {
+    return Future<void>.error(_unavailable(matchId));
+  }
+
+  @override
+  Future<void> submitPrediction(String matchId, String choice) {
     return Future<void>.error(_unavailable(matchId));
   }
 }
