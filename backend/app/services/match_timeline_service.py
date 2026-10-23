@@ -74,6 +74,11 @@ class _TeamRuntime:
     bench: list[str]
     current_formation: str
     team_stamina_pct: float | None = None
+    defensive_line: float = 50.0
+    press_intensity: float = 50.0
+    tempo: float = 50.0
+    width: float = 50.0
+    mentality: str = "balanced"
 
 
 @dataclass(slots=True)

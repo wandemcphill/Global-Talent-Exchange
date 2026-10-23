@@ -25,6 +25,25 @@ enum GtexPitchEventType {
 }
 
 @immutable
+class GtexPitchBall {
+  const GtexPitchBall({
+    required this.x,
+    required this.y,
+    this.z = 0.0,
+    this.ownerPlayerId,
+    this.state = 'rolling',
+  });
+
+  final double x;
+  final double y;
+  final double z;
+  final String? ownerPlayerId;
+  final String state;
+
+  bool get isInFlight => state == 'in_flight' || z > 0.05;
+}
+
+@immutable
 class GtexLiveMatchState {
   const GtexLiveMatchState({
     required this.matchId,
@@ -36,6 +55,7 @@ class GtexLiveMatchState {
     required this.timeline,
     required this.stats,
     required this.highlights,
+    this.ball,
     this.homeMomentumPercent,
     this.economyImpacts = const <GtexMatchEconomyImpact>[],
     this.selectedPlayerId,
@@ -51,6 +71,7 @@ class GtexLiveMatchState {
   final List<GtexMatchTimelineEvent> timeline;
   final GtexMatchStats stats;
   final List<GtexMatchHighlight> highlights;
+  final GtexPitchBall? ball;
   final int? homeMomentumPercent;
   final List<GtexMatchEconomyImpact> economyImpacts;
   final String? selectedPlayerId;
@@ -64,6 +85,7 @@ class GtexLiveMatchState {
     int? minute,
     GtexMatchPhase? phase,
     List<GtexMatchTimelineEvent>? timeline,
+    GtexPitchBall? ball,
   }) {
     return GtexLiveMatchState(
       matchId: matchId,
@@ -75,6 +97,7 @@ class GtexLiveMatchState {
       timeline: timeline ?? this.timeline,
       stats: stats,
       highlights: highlights,
+      ball: ball ?? this.ball,
       homeMomentumPercent: homeMomentumPercent,
       economyImpacts: economyImpacts,
       selectedPlayerId: selectedPlayerId ?? this.selectedPlayerId,
@@ -171,6 +194,10 @@ class GtexPitchPlayer {
     required this.y,
     required this.isHome,
     this.hasBall = false,
+    this.role,
+    this.state = 'idle',
+    this.animationState = 'idle',
+    this.staminaPct = 100.0,
   });
 
   final String playerId;
@@ -181,6 +208,10 @@ class GtexPitchPlayer {
   final double y;
   final bool isHome;
   final bool hasBall;
+  final String? role;
+  final String state;
+  final String animationState;
+  final double staminaPct;
 }
 
 @immutable

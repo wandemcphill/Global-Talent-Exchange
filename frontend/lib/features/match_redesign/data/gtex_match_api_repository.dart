@@ -140,6 +140,7 @@ GtexLiveMatchState _parseLiveMatchState(
         'status',
       ], fallback: 'scheduled'),
     ),
+    ball: _parsePitchBall(_asMap(payload['ball'])),
     pitchPlayers: _list(payload['pitch_players'] ?? payload['pitchPlayers'])
         .map((Object? value) => _parsePitchPlayer(_asMap(value)))
         .toList(growable: false),
@@ -242,6 +243,19 @@ GtexLineupPlayer _parseLineupPlayer(Map<String, Object?> json) {
   );
 }
 
+GtexPitchBall? _parsePitchBall(Map<String, Object?> json) {
+  if (json.isEmpty) {
+    return null;
+  }
+  return GtexPitchBall(
+    x: _double(json, const <String>['x'], fallback: 0.5).clamp(0, 1).toDouble(),
+    y: _double(json, const <String>['y'], fallback: 0.5).clamp(0, 1).toDouble(),
+    z: _double(json, const <String>['z'], fallback: 0.0),
+    ownerPlayerId: _nullableString(json, const <String>['owner_player_id', 'ownerPlayerId']),
+    state: _string(json, const <String>['state'], fallback: 'rolling'),
+  );
+}
+
 GtexPitchPlayer _parsePitchPlayer(Map<String, Object?> json) {
   final String name = _requiredString(json, const <String>[
     'name',
@@ -263,6 +277,10 @@ GtexPitchPlayer _parsePitchPlayer(Map<String, Object?> json) {
     y: _double(json, const <String>['y'], fallback: 0.5).clamp(0, 1).toDouble(),
     isHome: _bool(json, const <String>['is_home', 'isHome']),
     hasBall: _bool(json, const <String>['has_ball', 'hasBall']),
+    role: _nullableString(json, const <String>['role', 'position']),
+    state: _string(json, const <String>['state'], fallback: 'idle'),
+    animationState: _string(json, const <String>['animation_state', 'animationState'], fallback: 'idle'),
+    staminaPct: _double(json, const <String>['stamina_pct', 'staminaPct', 'stamina'], fallback: 100.0),
   );
 }
 

@@ -123,6 +123,9 @@ GtexLiveMatchState _demoState(String matchId, {required int minute}) {
       formation: '4-3-3',
       players: awayPlayers,
     ),
+    ball: minute.isEven
+        ? const GtexPitchBall(x: 0.58, y: 0.50, z: 0.0, ownerPlayerId: 'player-h7', state: 'controlled')
+        : const GtexPitchBall(x: 0.52, y: 0.46, z: 0.18, state: 'in_flight'),
     pitchPlayers: _pitchPlayers(homePlayers, awayPlayers, minute),
     stats: GtexMatchStats(
       homePossession: 58,
@@ -245,6 +248,10 @@ List<GtexPitchPlayer> _pitchPlayers(
         y: homeShape[i][1],
         isHome: true,
         hasBall: minute.isEven && i == 7,
+        role: i == 0 ? 'GK' : (i < 5 ? 'DEF' : (i < 9 ? 'MID' : 'FWD')),
+        state: minute.isEven && i == 7 ? 'attacking' : (minute.isOdd && i >= 5 ? 'pressing' : 'moving'),
+        animationState: minute.isEven && i == 7 ? 'sprint' : 'run',
+        staminaPct: (96.0 - (minute * 0.45) - (i * 1.5)).clamp(45.0, 100.0),
       ),
     for (var i = 0; i < away.length; i++)
       GtexPitchPlayer(
@@ -256,6 +263,10 @@ List<GtexPitchPlayer> _pitchPlayers(
         y: awayShape[i][1],
         isHome: false,
         hasBall: minute.isOdd && i == 8,
+        role: i == 0 ? 'GK' : (i < 5 ? 'DEF' : (i < 8 ? 'MID' : 'FWD')),
+        state: minute.isOdd && i == 8 ? 'attacking' : (minute.isEven && i >= 5 ? 'pressing' : 'moving'),
+        animationState: minute.isOdd && i == 8 ? 'sprint' : 'run',
+        staminaPct: (94.0 - (minute * 0.48) - (i * 1.8)).clamp(42.0, 100.0),
       ),
   ];
 }

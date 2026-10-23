@@ -1054,6 +1054,19 @@ def _v2_player_payload(player) -> dict[str, object]:
     }
 
 
+def _v2_ball_payload(ball) -> dict[str, object] | None:
+    if ball is None:
+        return None
+    pos = getattr(ball, "position", None)
+    return {
+        "x": round(_float_or_default(getattr(pos, "x", 50.0)) / 100.0, 4) if pos else 0.5,
+        "y": round(_float_or_default(getattr(pos, "y", 50.0)) / 100.0, 4) if pos else 0.5,
+        "z": round(_float_or_default(getattr(ball, "height", 0.0)), 4),
+        "owner_player_id": getattr(ball, "owner_player_id", None),
+        "state": _enum_value(getattr(ball, "state", None)) or "rolling",
+    }
+
+
 def _v2_pitch_player_payload(player) -> dict[str, object]:
     return {
         "player_id": player.player_id,
@@ -1064,6 +1077,10 @@ def _v2_pitch_player_payload(player) -> dict[str, object]:
         "y": round(_float_or_default(player.position.y) / 100.0, 4),
         "is_home": (_enum_value(player.side) or "").lower() == "home",
         "has_ball": bool(player.has_possession),
+        "role": _enum_value(getattr(player, "role", None)) or "midfielder",
+        "state": _enum_value(getattr(player, "state", None)) or "idle",
+        "animation_state": _enum_value(getattr(player, "animation_state", None)) or "idle",
+        "stamina_pct": round(_float_or_default(getattr(player, "stamina_pct", 100.0)), 1),
     }
 
 
@@ -1179,6 +1196,8 @@ def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
         "home": _v2_team_payload(view_state.home_team, players=home_players, score=frame.home_score),
         "away": _v2_team_payload(view_state.away_team, players=away_players, score=frame.away_score),
         "pitch_players": [_v2_pitch_player_payload(player) for player in frame.players],
+        "ball": _v2_ball_payload(getattr(frame, "ball", None)),
+        "tactics": ensure_live_match_hub(app).get_tactics(match_id),
         "timeline": [_v2_event_payload(event) for event in events],
         "events": [_v2_event_payload(event) for event in events],
         "stats": _v2_stats_payload(frame, events),

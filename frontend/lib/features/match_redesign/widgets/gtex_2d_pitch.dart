@@ -1,9 +1,10 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../data/gtex_match_models.dart';
 import 'gtex_match_visual_tokens.dart';
 
-class Gtex2dPitch extends StatelessWidget {
+class Gtex2dPitch extends StatefulWidget {
   const Gtex2dPitch({
     super.key,
     required this.match,
@@ -14,8 +15,16 @@ class Gtex2dPitch extends StatelessWidget {
   final ValueChanged<String> onPlayerSelected;
 
   @override
+  State<Gtex2dPitch> createState() => _Gtex2dPitchState();
+}
+
+class _Gtex2dPitchState extends State<Gtex2dPitch> {
+  bool _showTacticsOverlay = true;
+  bool _showPassingLanes = true;
+
+  @override
   Widget build(BuildContext context) {
-    if (match.pitchPlayers.isEmpty) {
+    if (widget.match.pitchPlayers.isEmpty) {
       return const AspectRatio(
         aspectRatio: 16 / 9,
         child: GtexMatchEmptyFeed(
@@ -34,9 +43,35 @@ class Gtex2dPitch extends StatelessWidget {
           aspectRatio: 16 / 9,
           child: LayoutBuilder(
             builder: (context, constraints) {
+              final double pitchWidth = constraints.maxWidth;
+              final double pitchHeight = constraints.maxHeight;
+
+              // Compute ball position
+              final GtexPitchPlayer? ballOwner = widget.match.pitchPlayers
+                  .cast<GtexPitchPlayer?>()
+                  .firstWhere(
+                    (p) => p?.hasBall ?? false,
+                    orElse: () => null,
+                  );
+
+              final double ballX = widget.match.ball?.x ??
+                  (ballOwner != null ? ballOwner.x : 0.5);
+              final double ballY = widget.match.ball?.y ??
+                  (ballOwner != null ? ballOwner.y : 0.5);
+              final double ballZ = widget.match.ball?.z ?? 0.0;
+              final bool isInFlight = widget.match.ball?.isInFlight ?? false;
+
+              // Selected player for passing lanes
+              final GtexPitchPlayer? selectedPlayer = widget.match.pitchPlayers
+                  .cast<GtexPitchPlayer?>()
+                  .firstWhere(
+                    (p) => p?.playerId == widget.match.selectedPlayerId,
+                    orElse: () => null,
+                  );
+
               return Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFF12371F),
+                  color: const Color(0xFF0F2E1A),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: GtexMatchVisualTokens.borderStrong),
                   boxShadow: const [
@@ -51,49 +86,79 @@ class Gtex2dPitch extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                   child: Stack(
                     children: [
+                      // Base pitch turf and lines
                       const Positioned.fill(child: _PitchPainterLayer()),
-                      Positioned(
-                        left: 12,
-                        top: 12,
-                        child: _PitchFeedTag(matchId: match.matchId),
-                      ),
-                      for (final GtexPitchPlayer player in match.pitchPlayers)
+
+                      // Tactical overlay: defensive lines, team compactness, passing lanes
+                      if (_showTacticsOverlay)
+                        Positioned.fill(
+                          child: CustomPaint(
+                            painter: _TacticsPitchOverlayPainter(
+                              players: widget.match.pitchPlayers,
+                              selectedPlayer: _showPassingLanes ? selectedPlayer : null,
+                              ballX: ballX,
+                              ballY: ballY,
+                            ),
+                          ),
+                        ),
+
+                      // Player Markers
+                      for (final GtexPitchPlayer player in widget.match.pitchPlayers)
                         AnimatedPositioned(
                           key: ValueKey<String>(player.playerId),
-                          duration: const Duration(milliseconds: 420),
+                          duration: const Duration(milliseconds: 380),
                           curve: Curves.easeInOutCubic,
-                          width: compact ? 116 : 100,
-                          height: 54,
-                          left: (player.x * constraints.maxWidth -
-                                  (compact ? 58 : 50))
-                              .clamp(
-                                0.0,
-                                constraints.maxWidth - (compact ? 116 : 100),
-                              )
+                          width: compact ? 116 : 104,
+                          height: 58,
+                          left: (player.x * pitchWidth - (compact ? 58 : 52))
+                              .clamp(0.0, pitchWidth - (compact ? 116 : 104))
                               .toDouble(),
-                          top: (player.y * constraints.maxHeight - 16)
-                              .clamp(0.0, constraints.maxHeight - 54)
+                          top: (player.y * pitchHeight - 18)
+                              .clamp(0.0, pitchHeight - 58)
                               .toDouble(),
                           child: _PitchPlayerMarker(
                             player: player,
-                            selected: match.selectedPlayerId == player.playerId,
+                            selected: widget.match.selectedPlayerId == player.playerId,
                             compact: compact,
-                            onTap: () => onPlayerSelected(player.playerId),
+                            onTap: () => widget.onPlayerSelected(player.playerId),
                           ),
                         ),
-                      for (final GtexPitchPlayer player
-                          in match.pitchPlayers.where((GtexPitchPlayer p) => p.hasBall))
-                        Positioned(
-                          left: (player.x * constraints.maxWidth + 9)
-                              .clamp(1.0, constraints.maxWidth - 12)
-                              .toDouble(),
-                          top: (player.y * constraints.maxHeight - 24)
-                              .clamp(1.0, constraints.maxHeight - 12)
-                              .toDouble(),
-                          child: const IgnorePointer(
-                            child: _BallToken(),
-                          ),
+
+                      // 2.5D Animated Ball Physics
+                      _DynamicBallLayer(
+                        ballX: ballX,
+                        ballY: ballY,
+                        ballZ: ballZ,
+                        isInFlight: isInFlight,
+                        pitchWidth: pitchWidth,
+                        pitchHeight: pitchHeight,
+                      ),
+
+                      // Header Toolbar: feed tag + tactical toggles
+                      Positioned(
+                        left: 10,
+                        top: 10,
+                        right: 10,
+                        child: Row(
+                          children: [
+                            _PitchFeedTag(matchId: widget.match.matchId),
+                            const Spacer(),
+                            _TacticalToolbar(
+                              compact: compact,
+                              showTactics: _showTacticsOverlay,
+                              showLanes: _showPassingLanes,
+                              onToggleTactics: () => setState(() {
+                                _showTacticsOverlay = !_showTacticsOverlay;
+                              }),
+                              onToggleLanes: () => setState(() {
+                                _showPassingLanes = !_showPassingLanes;
+                              }),
+                              ballOwner: ballOwner,
+                              isInFlight: isInFlight,
+                            ),
+                          ],
                         ),
+                      ),
                     ],
                   ),
                 ),
@@ -106,23 +171,299 @@ class Gtex2dPitch extends StatelessWidget {
   }
 }
 
-class _BallToken extends StatelessWidget {
-  const _BallToken();
+class _DynamicBallLayer extends StatelessWidget {
+  const _DynamicBallLayer({
+    required this.ballX,
+    required this.ballY,
+    required this.ballZ,
+    required this.isInFlight,
+    required this.pitchWidth,
+    required this.pitchHeight,
+  });
+
+  final double ballX;
+  final double ballY;
+  final double ballZ;
+  final bool isInFlight;
+  final double pitchWidth;
+  final double pitchHeight;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 8,
-      height: 8,
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF8E7),
-        shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFF101820), width: 1.2),
-        boxShadow: const <BoxShadow>[
-          BoxShadow(color: Color(0xAA000000), blurRadius: 4, offset: Offset(1, 2)),
+    final double groundPixelX = (ballX * pitchWidth).clamp(8.0, pitchWidth - 8.0);
+    final double groundPixelY = (ballY * pitchHeight).clamp(8.0, pitchHeight - 8.0);
+    final double elevationOffset = (ballZ * 48.0).clamp(0.0, 36.0);
+    final double ballPixelY = groundPixelY - elevationOffset;
+
+    final double shadowScale = (1.0 + ballZ * 1.8).clamp(1.0, 2.5);
+    final double shadowOpacity = (0.65 / (1.0 + ballZ * 4.0)).clamp(0.12, 0.65);
+    final double ballSize = (9.0 + ballZ * 2.5).clamp(9.0, 14.0);
+
+    return IgnorePointer(
+      child: Stack(
+        children: [
+          // Ground drop shadow
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 140),
+            curve: Curves.easeOutQuad,
+            left: groundPixelX - (6.0 * shadowScale),
+            top: groundPixelY + 2.0,
+            width: 12.0 * shadowScale,
+            height: 6.0 * shadowScale,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Color.fromRGBO(0, 0, 0, shadowOpacity),
+                borderRadius: BorderRadius.all(
+                  Radius.elliptical(12.0 * shadowScale, 6.0 * shadowScale),
+                ),
+              ),
+            ),
+          ),
+
+          // The physical ball token
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 140),
+            curve: Curves.easeOutQuad,
+            left: groundPixelX - (ballSize / 2),
+            top: ballPixelY - (ballSize / 2),
+            width: ballSize,
+            height: ballSize,
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                Container(
+                  width: ballSize,
+                  height: ballSize,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const RadialGradient(
+                      center: Alignment(-0.35, -0.4),
+                      radius: 0.8,
+                      colors: [
+                        Color(0xFFFFFFFF),
+                        Color(0xFFF0F4F8),
+                        Color(0xFFB0BAC5),
+                        Color(0xFF1E293B),
+                      ],
+                      stops: [0.0, 0.45, 0.85, 1.0],
+                    ),
+                    border: Border.all(
+                      color: const Color(0xFF0F172A),
+                      width: 1.0,
+                    ),
+                    boxShadow: [
+                      if (isInFlight)
+                        BoxShadow(
+                          color: const Color(0x8000E87A),
+                          blurRadius: 8 + ballZ * 6,
+                          spreadRadius: 1,
+                        ),
+                    ],
+                  ),
+                ),
+
+                // Height elevation badge when ball is airborne
+                if (ballZ > 0.08)
+                  Positioned(
+                    top: -16,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: const Color(0xE60F172A),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: const Color(0x8000E87A),
+                          width: 0.8,
+                        ),
+                      ),
+                      child: Text(
+                        '${(ballZ * 12).toStringAsFixed(1)}m',
+                        style: const TextStyle(
+                          color: Color(0xFF00E87A),
+                          fontSize: 8,
+                          fontWeight: FontWeight.w900,
+                          fontFamily: 'JetBrains Mono',
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );
+  }
+}
+
+class _TacticsPitchOverlayPainter extends CustomPainter {
+  const _TacticsPitchOverlayPainter({
+    required this.players,
+    required this.selectedPlayer,
+    required this.ballX,
+    required this.ballY,
+  });
+
+  final List<GtexPitchPlayer> players;
+  final GtexPitchPlayer? selectedPlayer;
+  final double ballX;
+  final double ballY;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (players.isEmpty) return;
+
+    final homePlayers = players.where((p) => p.isHome).toList();
+    final awayPlayers = players.where((p) => !p.isHome).toList();
+
+    // 1. Draw Defensive Lines (Home Cyan, Away Amber)
+    _drawDefensiveLines(canvas, size, homePlayers, awayPlayers);
+
+    // 2. Draw Compactness Zone (Translucent team hulls)
+    _drawTeamCompactness(canvas, size, homePlayers, const Color(0x1200E87A));
+    _drawTeamCompactness(canvas, size, awayPlayers, const Color(0x12FFB800));
+
+    // 3. Draw Passing Lanes from selected player
+    if (selectedPlayer != null) {
+      _drawPassingLanes(canvas, size, selectedPlayer!, players);
+    }
+  }
+
+  void _drawDefensiveLines(
+    Canvas canvas,
+    Size size,
+    List<GtexPitchPlayer> homePlayers,
+    List<GtexPitchPlayer> awayPlayers,
+  ) {
+    if (homePlayers.isEmpty || awayPlayers.isEmpty) return;
+
+    // Home defensive line: average X of defenders (excluding GK if possible)
+    final homeOutfield = homePlayers.where((p) => p.role != 'GK').toList();
+    final homeDefenders = (homeOutfield.isNotEmpty ? homeOutfield : homePlayers)
+        .take(4)
+        .toList();
+    final double homeLineX = homeDefenders.map((p) => p.x).reduce((a, b) => a + b) /
+        homeDefenders.length *
+        size.width;
+
+    // Away defensive line: average X of defenders (excluding GK if possible)
+    final awayOutfield = awayPlayers.where((p) => p.role != 'GK').toList();
+    final awayDefenders = (awayOutfield.isNotEmpty ? awayOutfield : awayPlayers)
+        .take(4)
+        .toList();
+    final double awayLineX = awayDefenders.map((p) => p.x).reduce((a, b) => a + b) /
+        awayDefenders.length *
+        size.width;
+
+    // Draw Home line
+    final Paint homePaint = Paint()
+      ..color = const Color(0x6600E87A)
+      ..strokeWidth = 1.4
+      ..style = PaintingStyle.stroke;
+    _drawDashedLine(canvas, Offset(homeLineX, 16), Offset(homeLineX, size.height - 16), homePaint, 6, 4);
+
+    // Draw Away line
+    final Paint awayPaint = Paint()
+      ..color = const Color(0x66FFB800)
+      ..strokeWidth = 1.4
+      ..style = PaintingStyle.stroke;
+    _drawDashedLine(canvas, Offset(awayLineX, 16), Offset(awayLineX, size.height - 16), awayPaint, 6, 4);
+  }
+
+  void _drawTeamCompactness(
+    Canvas canvas,
+    Size size,
+    List<GtexPitchPlayer> team,
+    Color fillColor,
+  ) {
+    if (team.length < 3) return;
+
+    final List<Offset> points = team
+        .where((p) => p.role != 'GK')
+        .map((p) => Offset(p.x * size.width, p.y * size.height))
+        .toList();
+    if (points.length < 3) return;
+
+    final Path path = Path();
+    path.moveTo(points.first.dx, points.first.dy);
+    for (int i = 1; i < points.length; i++) {
+      path.lineTo(points[i].dx, points[i].dy);
+    }
+    path.close();
+
+    final Paint fill = Paint()
+      ..color = fillColor
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, fill);
+  }
+
+  void _drawPassingLanes(
+    Canvas canvas,
+    Size size,
+    GtexPitchPlayer passer,
+    List<GtexPitchPlayer> allPlayers,
+  ) {
+    final Offset origin = Offset(passer.x * size.width, passer.y * size.height);
+    final teammates = allPlayers.where((p) => p.isHome == passer.isHome && p.playerId != passer.playerId);
+
+    final Paint lanePaint = Paint()
+      ..color = const Color(0xAA00E87A)
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke;
+
+    for (final mate in teammates) {
+      final Offset target = Offset(mate.x * size.width, mate.y * size.height);
+      final double distance = (origin - target).distance;
+
+      // Only draw lanes within sensible pass distance
+      if (distance < size.width * 0.42) {
+        _drawDashedLine(canvas, origin, target, lanePaint, 5, 4);
+
+        // Small indicator dot near the teammate
+        final Offset mid = Offset(
+          origin.dx + (target.dx - origin.dx) * 0.75,
+          origin.dy + (target.dy - origin.dy) * 0.75,
+        );
+        canvas.drawCircle(mid, 2.0, Paint()..color = const Color(0xCC00E87A));
+      }
+    }
+  }
+
+  void _drawDashedLine(
+    Canvas canvas,
+    Offset p1,
+    Offset p2,
+    Paint paint,
+    double dashWidth,
+    double dashSpace,
+  ) {
+    final double dx = p2.dx - p1.dx;
+    final double dy = p2.dy - p1.dy;
+    final double distance = math.sqrt(dx * dx + dy * dy);
+    if (distance <= 0) return;
+
+    final double ux = dx / distance;
+    final double uy = dy / distance;
+    double current = 0.0;
+
+    while (current < distance) {
+      final double next = math.min(current + dashWidth, distance);
+      canvas.drawLine(
+        Offset(p1.dx + ux * current, p1.dy + uy * current),
+        Offset(p1.dx + ux * next, p1.dy + uy * next),
+        paint,
+      );
+      current += dashWidth + dashSpace;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _TacticsPitchOverlayPainter oldDelegate) {
+    return oldDelegate.players != players ||
+        oldDelegate.selectedPlayer != selectedPlayer ||
+        oldDelegate.ballX != ballX ||
+        oldDelegate.ballY != ballY;
   }
 }
 
@@ -138,17 +479,16 @@ class _PitchPainterLayer extends StatelessWidget {
 class _PitchPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final Paint line =
-        Paint()
-          ..color = const Color(0xFFE8EDF4).withOpacity(.64)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.2;
-    final Paint grid =
-        Paint()
-          ..color = const Color(0xFFE8EDF4).withOpacity(.08)
-          ..strokeWidth = .8;
+    final Paint line = Paint()
+      ..color = const Color(0xFFE8EDF4).withOpacity(.64)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    final Paint grid = Paint()
+      ..color = const Color(0xFFE8EDF4).withOpacity(.08)
+      ..strokeWidth = .8;
     final Paint band = Paint()..style = PaintingStyle.fill;
 
+    // Grass alternating stripes
     for (var i = 0; i < 8; i++) {
       band.color = Color(i.isEven ? 0xFF12371F : 0xFF0F301B);
       canvas.drawRect(
@@ -165,18 +505,23 @@ class _PitchPainter extends CustomPainter {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
     }
 
+    // Outer pitch boundary
     canvas.drawRect(
       Rect.fromLTWH(16, 16, size.width - 32, size.height - 32),
       line,
     );
+
+    // Halfway line
     canvas.drawLine(
       Offset(size.width / 2, 16),
       Offset(size.width / 2, size.height - 16),
       line,
     );
+
+    // Center circle
     canvas.drawCircle(
       Offset(size.width / 2, size.height / 2),
-      size.height * .13,
+      size.height * .14,
       line,
     );
     canvas.drawCircle(
@@ -185,28 +530,28 @@ class _PitchPainter extends CustomPainter {
       Paint()..color = const Color(0xFFE8EDF4),
     );
 
+    // Left Penalty box
     canvas.drawRect(
-      Rect.fromLTWH(16, size.height * .31, size.width * .12, size.height * .38),
+      Rect.fromLTWH(16, size.height * .30, size.width * .13, size.height * .40),
       line,
     );
+    // Right Penalty box
     canvas.drawRect(
       Rect.fromLTWH(
-        size.width - 16 - size.width * .12,
-        size.height * .31,
-        size.width * .12,
-        size.height * .38,
-      ),
-      line,
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(
-        16,
+        size.width - 16 - size.width * .13,
+        size.height * .30,
+        size.width * .13,
         size.height * .40,
-        size.width * .045,
-        size.height * .20,
       ),
       line,
     );
+
+    // Left Goal area
+    canvas.drawRect(
+      Rect.fromLTWH(16, size.height * .40, size.width * .045, size.height * .20),
+      line,
+    );
+    // Right Goal area
     canvas.drawRect(
       Rect.fromLTWH(
         size.width - 16 - size.width * .045,
@@ -215,6 +560,18 @@ class _PitchPainter extends CustomPainter {
         size.height * .20,
       ),
       line,
+    );
+
+    // Penalty spots
+    canvas.drawCircle(
+      Offset(16 + size.width * .095, size.height / 2),
+      2.5,
+      Paint()..color = const Color(0xFFE8EDF4),
+    );
+    canvas.drawCircle(
+      Offset(size.width - 16 - size.width * .095, size.height / 2),
+      2.5,
+      Paint()..color = const Color(0xFFE8EDF4),
     );
   }
 
@@ -237,47 +594,89 @@ class _PitchPlayerMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color color =
-        player.isHome
-            ? GtexMatchVisualTokens.live
-            : GtexMatchVisualTokens.amber;
-    final Widget marker = AnimatedContainer(
-      duration: const Duration(milliseconds: 160),
-      width: selected ? 32 : 24,
-      height: selected ? 32 : 24,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color,
-        border: Border.all(
-          color:
-              player.hasBall
-                  ? GtexMatchVisualTokens.textPrimary
-                  : GtexMatchVisualTokens.surfaceBase,
-          width: player.hasBall ? 3 : 1.5,
+    final Color teamColor = player.isHome
+        ? GtexMatchVisualTokens.live
+        : GtexMatchVisualTokens.amber;
+
+    final bool isPressing = player.state.toLowerCase() == 'pressing';
+    final bool isSprint = player.animationState.toLowerCase() == 'sprint' ||
+        player.state.toLowerCase() == 'sprint';
+
+    final Widget marker = Stack(
+      alignment: Alignment.center,
+      children: [
+        // Pressing Radar Pulse
+        if (isPressing)
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: const Color(0xFFFF4D4D).withOpacity(0.7),
+                width: 1.8,
+              ),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x66FF4D4D),
+                  blurRadius: 10,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+          ),
+
+        // Stamina gauge ring
+        CustomPaint(
+          size: Size(selected ? 34 : 26, selected ? 34 : 26),
+          painter: _StaminaRingPainter(staminaPct: player.staminaPct),
         ),
-        boxShadow: [
-          if (selected || player.hasBall)
-            BoxShadow(color: color.withOpacity(.45), blurRadius: 14),
-        ],
-      ),
-      child: Center(
-        child: Text(
-          '${player.shirtNumber}',
-          style: const TextStyle(
-            color: GtexMatchVisualTokens.surfaceBase,
-            fontWeight: FontWeight.w900,
-            fontSize: 10,
-            fontFamily: 'JetBrains Mono',
+
+        // Core kit circle
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          width: selected ? 28 : 22,
+          height: selected ? 28 : 22,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: teamColor,
+            border: Border.all(
+              color: player.hasBall
+                  ? GtexMatchVisualTokens.textPrimary
+                  : const Color(0xFF0F172A),
+              width: player.hasBall ? 2.5 : 1.2,
+            ),
+            boxShadow: [
+              if (selected || player.hasBall)
+                BoxShadow(
+                  color: teamColor.withOpacity(0.55),
+                  blurRadius: 14,
+                  spreadRadius: 2,
+                ),
+            ],
+          ),
+          child: Center(
+            child: Text(
+              '${player.shirtNumber}',
+              style: const TextStyle(
+                color: Color(0xFF0A0C0F),
+                fontWeight: FontWeight.w900,
+                fontSize: 9.5,
+                fontFamily: 'JetBrains Mono',
+              ),
+            ),
           ),
         ),
-      ),
+      ],
     );
-    final bool nameplateVisible = !compact || player.hasBall || selected;
+
+    final bool nameplateVisible = !compact || player.hasBall || selected || isPressing;
     final String nameplate = player.hasBall || selected
         ? player.name
         : _surname(player.name);
+
     return Tooltip(
-      message: '${player.name} #${player.shirtNumber}',
+      message: '${player.name} #${player.shirtNumber} (${player.role ?? 'Player'}) · ${player.staminaPct.toInt()}% STA',
       child: GestureDetector(
         onTap: onTap,
         child: Column(
@@ -285,34 +684,56 @@ class _PitchPlayerMarker extends StatelessWidget {
           children: [
             marker,
             if (nameplateVisible) ...[
-              const SizedBox(height: 3),
+              const SizedBox(height: 2),
               Container(
-                constraints: BoxConstraints(maxWidth: compact ? 106 : 92),
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                constraints: BoxConstraints(maxWidth: compact ? 104 : 92),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
                 decoration: BoxDecoration(
                   color: player.hasBall
                       ? const Color(0xF507111D)
-                      : const Color(0xCC0A0C0F),
+                      : (isPressing ? const Color(0xEE2A0808) : const Color(0xDD0A0C0F)),
                   borderRadius: BorderRadius.circular(4),
                   border: Border.all(
                     color: player.hasBall
                         ? GtexMatchVisualTokens.amber
-                        : Colors.white.withOpacity(.12),
+                        : (isPressing
+                            ? const Color(0xFFFF4D4D)
+                            : (selected
+                                ? const Color(0xFF00E87A)
+                                : Colors.white.withOpacity(.12))),
+                    width: 0.8,
                   ),
                 ),
-                child: Text(
-                  nameplate.toUpperCase(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: player.hasBall
-                        ? GtexMatchVisualTokens.amber
-                        : GtexMatchVisualTokens.textPrimary,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: .2,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (isPressing) ...[
+                      const Icon(Icons.bolt, size: 8, color: Color(0xFFFF4D4D)),
+                      const SizedBox(width: 2),
+                    ] else if (isSprint) ...[
+                      const Icon(Icons.speed, size: 8, color: Color(0xFF00E87A)),
+                      const SizedBox(width: 2),
+                    ],
+                    Flexible(
+                      child: Text(
+                        nameplate.toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: player.hasBall
+                              ? GtexMatchVisualTokens.amber
+                              : (isPressing
+                                  ? const Color(0xFFFF4D4D)
+                                  : GtexMatchVisualTokens.textPrimary),
+                          fontSize: 8.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: .2,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -328,6 +749,201 @@ class _PitchPlayerMarker extends StatelessWidget {
       return name;
     }
     return parts.last;
+  }
+}
+
+class _StaminaRingPainter extends CustomPainter {
+  const _StaminaRingPainter({required this.staminaPct});
+
+  final double staminaPct;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+
+    final backgroundPaint = Paint()
+      ..color = Colors.white.withOpacity(0.12)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+    canvas.drawCircle(center, radius, backgroundPaint);
+
+    final sweep = (staminaPct.clamp(0.0, 100.0) / 100.0) * 2 * math.pi;
+    final ringColor = staminaPct > 68
+        ? const Color(0xFF00E87A)
+        : (staminaPct > 38 ? const Color(0xFFFFB800) : const Color(0xFFFF4D4D));
+
+    final staminaPaint = Paint()
+      ..color = ringColor
+      ..strokeWidth = 1.6
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -math.pi / 2,
+      sweep,
+      false,
+      staminaPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _StaminaRingPainter oldDelegate) {
+    return oldDelegate.staminaPct != staminaPct;
+  }
+}
+
+class _TacticalToolbar extends StatelessWidget {
+  const _TacticalToolbar({
+    required this.compact,
+    required this.showTactics,
+    required this.showLanes,
+    required this.onToggleTactics,
+    required this.onToggleLanes,
+    required this.ballOwner,
+    required this.isInFlight,
+  });
+
+  final bool compact;
+  final bool showTactics;
+  final bool showLanes;
+  final VoidCallback onToggleTactics;
+  final VoidCallback onToggleLanes;
+  final GtexPitchPlayer? ballOwner;
+  final bool isInFlight;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Possession Pill
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xCC0A0C0F),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: isInFlight
+                  ? const Color(0x6600E87A)
+                  : (ballOwner?.isHome ?? true
+                      ? const Color(0x6600E87A)
+                      : const Color(0x66FFB800)),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isInFlight
+                      ? const Color(0xFFFFF8E7)
+                      : (ballOwner?.isHome ?? true
+                          ? GtexMatchVisualTokens.live
+                          : GtexMatchVisualTokens.amber),
+                ),
+              ),
+              const SizedBox(width: 5),
+              Text(
+                isInFlight
+                    ? 'IN FLIGHT'
+                    : (ballOwner != null
+                        ? (ballOwner!.isHome ? 'HOME POSS' : 'AWAY POSS')
+                        : 'OPEN PLAY'),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w900,
+                  fontFamily: 'JetBrains Mono',
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 6),
+
+        // Tactics Overlay Toggle
+        InkWell(
+          onTap: onToggleTactics,
+          borderRadius: BorderRadius.circular(4),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            decoration: BoxDecoration(
+              color: showTactics ? const Color(0xE60A2E1A) : const Color(0xCC0A0C0F),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: showTactics ? const Color(0xFF00E87A) : Colors.white24,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.layers_rounded,
+                  size: 11,
+                  color: showTactics ? const Color(0xFF00E87A) : Colors.white60,
+                ),
+                if (!compact) ...[
+                  const SizedBox(width: 4),
+                  Text(
+                    'TACTICS',
+                    style: TextStyle(
+                      color: showTactics ? const Color(0xFF00E87A) : Colors.white70,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 4),
+
+        // Passing Lanes Toggle
+        InkWell(
+          onTap: onToggleLanes,
+          borderRadius: BorderRadius.circular(4),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            decoration: BoxDecoration(
+              color: showLanes ? const Color(0xE60A2E1A) : const Color(0xCC0A0C0F),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: showLanes ? const Color(0xFF00E87A) : Colors.white24,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.alt_route_rounded,
+                  size: 11,
+                  color: showLanes ? const Color(0xFF00E87A) : Colors.white60,
+                ),
+                if (!compact) ...[
+                  const SizedBox(width: 4),
+                  Text(
+                    'LANES',
+                    style: TextStyle(
+                      color: showLanes ? const Color(0xFF00E87A) : Colors.white70,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -358,7 +974,7 @@ class _PitchFeedTag extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           Text(
-            'LIVE POSITION FEED  ${_shortMatchId(matchId)}',
+            'SPATIAL 2D  ${_shortMatchId(matchId)}',
             style: const TextStyle(
               color: GtexMatchVisualTokens.textPrimary,
               fontSize: 10,
