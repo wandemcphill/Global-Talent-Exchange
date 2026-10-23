@@ -251,7 +251,7 @@ GtexLineupPlayer _parseLineupPlayer(Map<String, Object?> json) {
     ], fallback: 0),
     rating: _double(json, const <String>['rating', 'overall', 'overall_rating'], fallback: 0),
     imageUrl: _nullableString(json, const <String>['image_url', 'imageUrl', 'portrait_url', 'portraitUrl']),
-    isRegen: _bool(json, const <String>['is_regen', 'isRegen']),
+    isRegen: _boolOrDefault(json, const <String>['is_regen', 'isRegen']),
     formLabel: _nullableString(json, const <String>['form', 'form_label', 'formLabel']),
     fitnessPct: _nullableDouble(json, const <String>['fitness_pct', 'fitnessPct', 'fitness']),
   );
@@ -274,7 +274,7 @@ GtexPostMatchPackage? _parsePostMatchPackage(Map<String, Object?> json) {
     keyPasses: _int(motmMap, const <String>['key_passes', 'keyPasses'], fallback: 0),
     passAcc: _int(motmMap, const <String>['pass_acc', 'passAcc'], fallback: 0),
     summary: _string(motmMap, const <String>['summary'], fallback: 'Verified player-performance data is unavailable.'),
-    available: _bool(motmMap, const <String>['available'], fallback: false),
+    available: _boolOrDefault(motmMap, const <String>['available'], fallback: false),
     ratingAvailable: ratingRaw is num,
     assistsAvailable: assistsRaw is num,
     keyPassesAvailable: keyPassesRaw is num,
@@ -341,7 +341,7 @@ GtexPreMatchPackage? _parsePreMatchPackage(Map<String, Object?> json) {
           awayPlayerRole: _string(keyDuelMap, const <String>['away_player_role', 'awayPlayerRole'], fallback: 'N/A'),
           awayPlayerRating: _double(keyDuelMap, const <String>['away_player_rating', 'awayPlayerRating'], fallback: 0),
           description: _string(keyDuelMap, const <String>['description'], fallback: 'Recorded lineups are unavailable.'),
-          available: _bool(keyDuelMap, const <String>['available'], fallback: true),
+          available: _boolOrDefault(keyDuelMap, const <String>['available'], fallback: true),
           homePlayerRatingAvailable: homeRatingRaw is num,
           awayPlayerRatingAvailable: awayRatingRaw is num,
         )
@@ -366,10 +366,10 @@ GtexPreMatchPackage? _parsePreMatchPackage(Map<String, Object?> json) {
     totalVotes: votes,
     keyDuel: keyDuel,
     storyline: _nullableString(json, const <String>['storyline']),
-    homeFormAvailable: _bool(json, const <String>['home_form_available', 'homeFormAvailable'], fallback: homeForm.isNotEmpty),
-    awayFormAvailable: _bool(json, const <String>['away_form_available', 'awayFormAvailable'], fallback: awayForm.isNotEmpty),
-    h2hAvailable: _bool(json, const <String>['h2h_available', 'h2hAvailable'], fallback: _int(json, const <String>['h2h_total', 'h2hTotal'], fallback: 0) > 0),
-    probabilityAvailable: _bool(json, const <String>['win_probability_available', 'probabilityAvailable'], fallback: json['home_win_pct'] is num && json['draw_pct'] is num && json['away_win_pct'] is num),
+    homeFormAvailable: _boolOrDefault(json, const <String>['home_form_available', 'homeFormAvailable'], fallback: homeForm.isNotEmpty),
+    awayFormAvailable: _boolOrDefault(json, const <String>['away_form_available', 'awayFormAvailable'], fallback: awayForm.isNotEmpty),
+    h2hAvailable: _boolOrDefault(json, const <String>['h2h_available', 'h2hAvailable'], fallback: _int(json, const <String>['h2h_total', 'h2hTotal'], fallback: 0) > 0),
+    probabilityAvailable: _boolOrDefault(json, const <String>['win_probability_available', 'probabilityAvailable'], fallback: json['home_win_pct'] is num && json['draw_pct'] is num && json['away_win_pct'] is num),
     votesAvailable: votes > 0,
     homeWinRateAvailable: json['home_win_rate'] is num || json['homeWinRate'] is num,
     awayWinRateAvailable: json['away_win_rate'] is num || json['awayWinRate'] is num,
@@ -408,8 +408,8 @@ GtexPitchPlayer _parsePitchPlayer(Map<String, Object?> json) {
     ], fallback: 0),
     x: _double(json, const <String>['x'], fallback: 0.5).clamp(0, 1).toDouble(),
     y: _double(json, const <String>['y'], fallback: 0.5).clamp(0, 1).toDouble(),
-    isHome: _bool(json, const <String>['is_home', 'isHome']),
-    hasBall: _bool(json, const <String>['has_ball', 'hasBall']),
+    isHome: _boolOrDefault(json, const <String>['is_home', 'isHome']),
+    hasBall: _boolOrDefault(json, const <String>['has_ball', 'hasBall']),
     role: _nullableString(json, const <String>['role', 'position']),
     state: _string(json, const <String>['state'], fallback: 'idle'),
     animationState: _string(json, const <String>['animation_state', 'animationState'], fallback: 'idle'),
@@ -458,10 +458,10 @@ GtexMatchStats _parseStats(Map<String, Object?> json) {
     awayPassAccuracy: _int(json, const <String>['away_pass_accuracy', 'awayPassAccuracy'], fallback: 0),
     homeExpectedGoals: _double(json, const <String>['home_expected_goals', 'homeExpectedGoals'], fallback: 0),
     awayExpectedGoals: _double(json, const <String>['away_expected_goals', 'awayExpectedGoals'], fallback: 0),
-    shotsAvailable: _bool(shots, const <String>['available'], fallback: json['home_shots'] != null && json['away_shots'] != null),
-    possessionAvailable: _bool(possession, const <String>['available'], fallback: json['home_possession'] != null && json['away_possession'] != null),
-    passingAvailable: _bool(passing, const <String>['available'], fallback: json['home_pass_accuracy'] != null && json['away_pass_accuracy'] != null),
-    expectedGoalsAvailable: _bool(xg, const <String>['available'], fallback: json['home_expected_goals'] != null && json['away_expected_goals'] != null),
+    shotsAvailable: _boolOrDefault(shots, const <String>['available'], fallback: json['home_shots'] != null && json['away_shots'] != null),
+    possessionAvailable: _boolOrDefault(possession, const <String>['available'], fallback: json['home_possession'] != null && json['away_possession'] != null),
+    passingAvailable: _boolOrDefault(passing, const <String>['available'], fallback: json['home_pass_accuracy'] != null && json['away_pass_accuracy'] != null),
+    expectedGoalsAvailable: _boolOrDefault(xg, const <String>['available'], fallback: json['home_expected_goals'] != null && json['away_expected_goals'] != null),
   );
 }
 
@@ -682,6 +682,15 @@ bool _bool(Map<String, Object?> json, List<String> keys) {
     }
   }
   return false;
+}
+
+bool _boolOrDefault(
+  Map<String, Object?> json,
+  List<String> keys, {
+  required bool fallback,
+}) {
+  final bool hasValue = keys.any(json.containsKey);
+  return hasValue ? _bool(json, keys) : fallback;
 }
 
 String _shortName(String name) {
