@@ -1327,7 +1327,8 @@ def _v2_stats_payload(frame: MatchTimelineFrameView, events: list[Any]) -> dict[
 
     def recorded_xg(team_shots: list[Any], team_score: int) -> float | None:
         if not team_shots:
-            return 0.0 if team_score == 0 else None
+            # No shot records is not equivalent to a confirmed zero xG total.
+            return None
         values: list[float] = []
         for event in team_shots:
             metadata = getattr(event, "metadata", None)
