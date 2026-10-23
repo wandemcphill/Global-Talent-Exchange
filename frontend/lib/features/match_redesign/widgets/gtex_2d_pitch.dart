@@ -95,6 +95,11 @@ class _Gtex2dPitchState extends State<Gtex2dPitch> {
             builder: (context, constraints) {
               final double pitchWidth = constraints.maxWidth;
               final double pitchHeight = constraints.maxHeight;
+              final double markerWidth = compact ? 116.0 : 104.0;
+              final double maxMarkerLeft =
+                  (pitchWidth - markerWidth).clamp(0.0, double.infinity).toDouble();
+              final double maxMarkerTop =
+                  (pitchHeight - 58.0).clamp(0.0, double.infinity).toDouble();
 
               // Compute ball position
               final GtexPitchPlayer? ballOwner = widget.match.pitchPlayers
@@ -171,13 +176,13 @@ class _Gtex2dPitchState extends State<Gtex2dPitch> {
                           key: ValueKey<String>(player.playerId),
                           duration: Duration(milliseconds: markerDurationMs),
                           curve: Curves.easeInOutCubic,
-                          width: compact ? 116 : 104,
+                          width: markerWidth,
                           height: 58,
-                          left: (player.x * pitchWidth - (compact ? 58 : 52))
-                              .clamp(0.0, pitchWidth - (compact ? 116 : 104))
+                          left: (player.x * pitchWidth - markerWidth / 2)
+                              .clamp(0.0, maxMarkerLeft)
                               .toDouble(),
                           top: (player.y * pitchHeight - 18)
-                              .clamp(0.0, pitchHeight - 58)
+                              .clamp(0.0, maxMarkerTop)
                               .toDouble(),
                           child: _PitchPlayerMarker(
                             player: player,
@@ -239,10 +244,13 @@ class _Gtex2dPitchState extends State<Gtex2dPitch> {
                         left: 10,
                         top: 10,
                         right: 10,
-                        child: Row(
+                        child: Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 8,
+                          runSpacing: 6,
                           children: [
                             _PitchFeedTag(matchId: widget.match.matchId),
-                            const Spacer(),
                             _TacticalToolbar(
                               compact: compact,
                               showTactics: _showTacticsOverlay,
