@@ -375,6 +375,12 @@ GteAuthSession _roleSession({required String role, String? clubId}) {
       'username': 'contract-$role',
       'display_name': 'Contract $role',
       'role': role,
+      'account_type':
+          role == 'coin_trader'
+              ? 'coin_trader'
+              : role == 'creator'
+              ? 'creator'
+              : 'user',
       if (clubId != null) 'current_club_id': clubId,
     },
   });
