@@ -667,13 +667,17 @@ def test_rewards_claim_idempotency() -> None:
     _insert_match(session_factory, replay)
     client = TestClient(app)
 
-    app.dependency_overrides[get_current_match_user] = lambda: User(
+    reward_claimer = User(
         id="reward-claimer-001",
         email="claimer@example.com",
         username="claimer",
         password_hash="hashed-password",  # pragma: allowlist secret
         is_active=True,
     )
+    with session_factory() as session:
+        session.add(reward_claimer)
+        session.commit()
+    app.dependency_overrides[get_current_match_user] = lambda: reward_claimer
 
     # 1. First claim succeeds
     claim_res = client.post(f"/api/matches/{replay.match_id}/rewards/claim")
