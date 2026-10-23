@@ -98,76 +98,6 @@ const TACTICAL_PRESETS = [
   },
 ];
 
-// Sample pitch coordinates for 11 vs 11 players
-const HOME_FORMATION_COORDS: Record<string, Array<{ x: number; y: number; num: number; role: string }>> = {
-  "4-3-3": [
-    { x: 0.08, y: 0.50, num: 1, role: "GK" },
-    { x: 0.22, y: 0.18, num: 2, role: "RB" },
-    { x: 0.20, y: 0.38, num: 4, role: "CB" },
-    { x: 0.20, y: 0.62, num: 5, role: "CB" },
-    { x: 0.22, y: 0.82, num: 3, role: "LB" },
-    { x: 0.38, y: 0.50, num: 6, role: "DM" },
-    { x: 0.44, y: 0.32, num: 8, role: "CM" },
-    { x: 0.44, y: 0.68, num: 10, role: "AM" },
-    { x: 0.62, y: 0.20, num: 7, role: "RW" },
-    { x: 0.65, y: 0.50, num: 9, role: "ST" },
-    { x: 0.62, y: 0.80, num: 11, role: "LW" },
-  ],
-  "4-2-4": [
-    { x: 0.08, y: 0.50, num: 1, role: "GK" },
-    { x: 0.22, y: 0.18, num: 2, role: "RB" },
-    { x: 0.20, y: 0.38, num: 4, role: "CB" },
-    { x: 0.20, y: 0.62, num: 5, role: "CB" },
-    { x: 0.22, y: 0.82, num: 3, role: "LB" },
-    { x: 0.40, y: 0.38, num: 6, role: "CM" },
-    { x: 0.40, y: 0.62, num: 8, role: "CM" },
-    { x: 0.64, y: 0.16, num: 7, role: "RW" },
-    { x: 0.68, y: 0.40, num: 9, role: "ST" },
-    { x: 0.68, y: 0.60, num: 10, role: "ST" },
-    { x: 0.64, y: 0.84, num: 11, role: "LW" },
-  ],
-  "5-3-2": [
-    { x: 0.08, y: 0.50, num: 1, role: "GK" },
-    { x: 0.20, y: 0.15, num: 2, role: "RWB" },
-    { x: 0.18, y: 0.32, num: 4, role: "CB" },
-    { x: 0.17, y: 0.50, num: 5, role: "SW" },
-    { x: 0.18, y: 0.68, num: 6, role: "CB" },
-    { x: 0.20, y: 0.85, num: 3, role: "LWB" },
-    { x: 0.36, y: 0.32, num: 8, role: "CM" },
-    { x: 0.34, y: 0.50, num: 7, role: "DM" },
-    { x: 0.36, y: 0.68, num: 10, role: "CM" },
-    { x: 0.62, y: 0.40, num: 9, role: "ST" },
-    { x: 0.62, y: 0.60, num: 11, role: "ST" },
-  ],
-  "3-4-3": [
-    { x: 0.08, y: 0.50, num: 1, role: "GK" },
-    { x: 0.20, y: 0.28, num: 4, role: "CB" },
-    { x: 0.19, y: 0.50, num: 5, role: "CB" },
-    { x: 0.20, y: 0.72, num: 6, role: "CB" },
-    { x: 0.40, y: 0.14, num: 2, role: "RM" },
-    { x: 0.38, y: 0.38, num: 8, role: "CM" },
-    { x: 0.38, y: 0.62, num: 10, role: "CM" },
-    { x: 0.40, y: 0.86, num: 3, role: "LM" },
-    { x: 0.64, y: 0.22, num: 7, role: "RW" },
-    { x: 0.66, y: 0.50, num: 9, role: "ST" },
-    { x: 0.64, y: 0.78, num: 11, role: "LW" },
-  ],
-};
-
-const AWAY_PLAYERS_DEFAULT = [
-  { x: 0.92, y: 0.50, num: 1, role: "GK" },
-  { x: 0.78, y: 0.18, num: 2, role: "LB" },
-  { x: 0.80, y: 0.38, num: 4, role: "CB" },
-  { x: 0.80, y: 0.62, num: 5, role: "CB" },
-  { x: 0.78, y: 0.82, num: 3, role: "RB" },
-  { x: 0.62, y: 0.50, num: 6, role: "DM" },
-  { x: 0.56, y: 0.32, num: 8, role: "CM" },
-  { x: 0.56, y: 0.68, num: 10, role: "AM" },
-  { x: 0.38, y: 0.20, num: 7, role: "LW" },
-  { x: 0.35, y: 0.50, num: 9, role: "ST" },
-  { x: 0.38, y: 0.80, num: 11, role: "RW" },
-];
-
 function GiftRail({ match, clubId }: any) {
   const refresh = useRefreshOwner();
   const [feed, setFeed] = useState<string[]>([]);
@@ -276,7 +206,6 @@ function OwnerView({ view }: any) {
 
 // 2D Pitch Interactive View
 function Pitch2DView({
-  homeFormation,
   selectedPlayer,
   onSelectPlayer,
   showHeatmap,
@@ -286,7 +215,6 @@ function Pitch2DView({
   pitchPlayers,
   ball,
 }: {
-  homeFormation: string;
   selectedPlayer: number | null;
   onSelectPlayer: (num: number | null) => void;
   showHeatmap: boolean;
@@ -305,34 +233,30 @@ function Pitch2DView({
   }>;
   ball?: { x: number; y: number } | null;
 }) {
-  const defaultHomeCoords = HOME_FORMATION_COORDS[homeFormation] || HOME_FORMATION_COORDS["4-3-3"];
-  const liveHome = pitchPlayers
-    ?.filter((p) => p.is_home)
-    .map((p) => ({
+  const homeCoords = (pitchPlayers || [])
+    .filter((p) => p.is_home)
+    .map((p, idx) => ({
       x: p.x,
       y: p.y,
-      num: p.shirt_number || 0,
-      role: p.role || "MF",
+      num: p.shirt_number || idx + 1,
+      role: p.role || "N/A",
       hasBall: Boolean(p.has_ball),
       name: p.name,
     }));
-  const homeCoords = liveHome && liveHome.length > 0 ? liveHome : defaultHomeCoords;
-
-  const liveAway = pitchPlayers
-    ?.filter((p) => !p.is_home)
-    .map((p) => ({
+  const awayCoords = (pitchPlayers || [])
+    .filter((p) => !p.is_home)
+    .map((p, idx) => ({
       x: p.x,
       y: p.y,
-      num: p.shirt_number || 0,
-      role: p.role || "MF",
+      num: p.shirt_number || idx + 1,
+      role: p.role || "N/A",
       hasBall: Boolean(p.has_ball),
       name: p.name,
     }));
-  const awayCoords = liveAway && liveAway.length > 0 ? liveAway : AWAY_PLAYERS_DEFAULT;
 
   const selectedObj = homeCoords.find((p) => p.num === selectedPlayer);
-  const ballX = (ball ? ball.x : 0.52) * 1000;
-  const ballY = (ball ? ball.y : 0.46) * 625;
+  const ballX = ball ? ball.x * 1000 : null;
+  const ballY = ball ? ball.y * 625 : null;
 
   return (
     <div className="relative aspect-[16/10] w-full overflow-hidden rounded-lg border border-emerald-500/30 bg-[#0A1F13] shadow-2xl">
@@ -392,7 +316,7 @@ function Pitch2DView({
             {awayCoords.map((p, idx) => (
               <circle key={`heat-a-${p.num || idx}`} cx={p.x * 1000} cy={p.y * 625} r="100" fill="url(#heat-away)" />
             ))}
-            <circle cx={ballX} cy={ballY} r="130" fill="url(#heat-ball)" />
+            {ball && <circle cx={ballX ?? 0} cy={ballY ?? 0} r="130" fill="url(#heat-ball)" />}
           </g>
         )}
 
@@ -424,6 +348,12 @@ function Pitch2DView({
                 />
               ))}
           </g>
+        )}
+
+        {homeCoords.length === 0 && awayCoords.length === 0 && (
+          <text x="500" y="312" textAnchor="middle" fill="#CBD5E1" fontSize="16" fontWeight="700">
+            LIVE PLAYER COORDINATES UNAVAILABLE
+          </text>
         )}
 
         {/* Home Players */}
@@ -469,12 +399,14 @@ function Pitch2DView({
           );
         })}
 
-        {/* Live Ball */}
-        <g transform={`translate(${ballX}, ${ballY})`}>
-          <ellipse cx="0" cy="5" rx="8" ry="4" fill="#000000" opacity="0.4" />
-          <circle r="6" fill="#FFFFFF" stroke="#0F172A" strokeWidth="1" />
-          <circle r="2" fill="#00E87A" />
-        </g>
+        {/* A ball marker is rendered only when the feed supplies its position. */}
+        {ball && (
+          <g transform={`translate(${ballX}, ${ballY})`}>
+            <ellipse cx="0" cy="5" rx="8" ry="4" fill="#000000" opacity="0.4" />
+            <circle r="6" fill="#FFFFFF" stroke="#0F172A" strokeWidth="1" />
+            <circle r="2" fill="#00E87A" />
+          </g>
+        )}
       </svg>
     </div>
   );
@@ -1373,7 +1305,6 @@ export default function MatchCenter() {
 
             {/* Pitch View */}
             <Pitch2DView
-              homeFormation={formation}
               selectedPlayer={selectedPlayer}
               onSelectPlayer={setSelectedPlayer}
               showHeatmap={showHeatmap}
