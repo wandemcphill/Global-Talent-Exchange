@@ -656,10 +656,22 @@ class LiveMatchHub:
 
                 if runtime is None or runtime.viewer_state is None or not runtime.viewer_state.frames:
                     raise LiveMatchError("Substitutions cannot be validated without an authoritative active lineup.")
-                latest_frame = runtime.viewer_state.frames[-1]
+                current_minute = float(
+                    getattr(
+                        runtime.last_snapshot,
+                        "current_minute",
+                        getattr(runtime.last_snapshot, "minute", runtime.viewer_state.frames[0].clock_minute),
+                    )
+                    or 0.0
+                )
+                active_frame = min(
+                    runtime.viewer_state.frames,
+                    key=lambda frame: abs(float(frame.clock_minute) - current_minute),
+                )
+                active_minute = float(active_frame.clock_minute)
                 active_pitch_ids = {
                     str(p.player_id)
-                    for p in latest_frame.players
+                    for p in active_frame.players
                     if str(getattr(getattr(p, "side", None), "value", getattr(p, "side", "")) or "").strip().lower()
                     == side_norm
                 }
