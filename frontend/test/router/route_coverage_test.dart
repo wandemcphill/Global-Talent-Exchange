@@ -237,6 +237,12 @@ void main() {
       await tester.tap(find.text('Create free account'));
       await tester.pumpAndSettle();
 
+      // The landing CTA opens the account-type selector. Each account then
+      // follows its dedicated signup route.
+      expect(find.byType(GtexAccountSelectorScreen), findsOneWidget);
+      await tester.tap(find.text('USER ACCOUNT'));
+      await tester.pumpAndSettle();
+
       expect(find.byType(GtexUserSignupScreen), findsOneWidget);
     });
 

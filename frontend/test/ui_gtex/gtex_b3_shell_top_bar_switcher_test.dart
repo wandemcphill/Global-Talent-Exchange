@@ -52,9 +52,10 @@ void main() {
         final GteExchangeController controller = GteExchangeController(
           api: GteExchangeApiClient.fixture(),
         );
-        // Multi-role user: Club Owner + Coin Trader
+        // A normal User account may own a club. A legacy trader permission
+        // does not convert it into a dedicated Coin Trader account.
         controller.session = _buildSession(
-          role: 'trader',
+          role: 'user',
           clubId: 'club-lagos',
           clubName: 'Lagos FC',
           permissions: const <String>['coin_trader'],
@@ -91,20 +92,31 @@ void main() {
         );
         expect(find.text('4'), findsOneWidget);
 
-        // Open Workspace Switcher and switch to Trader workspace.
+        // Switch from Club to the normal Fan workspace. The dedicated Trader
+        // lane is a separate account type and must not appear in this menu.
         await tester.tap(
           find.byKey(const Key('gtex-workspace-switcher-button')),
         );
         await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const Key('gtex-workspace-option-trader')));
-        await tester.pumpAndSettle();
-
-        // Trader workspace slots: Home, Trader Desk, Market, Wallet, More
         expect(
-          find.byKey(const Key('gtex-nav-slot-traderDesk')),
+          find.byKey(const Key('gtex-workspace-option-trader')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const Key('gtex-workspace-option-fan')),
           findsOneWidget,
         );
-        expect(find.byKey(const Key('gtex-nav-slot-wallet')), findsOneWidget);
+        await tester.tap(find.byKey(const Key('gtex-workspace-option-fan')));
+        await tester.pumpAndSettle();
+
+        // Fan workspace slots: Home, Matchday, Market, World, More
+        expect(find.byKey(const Key('gtex-nav-slot-matchday')), findsOneWidget);
+        expect(find.byKey(const Key('gtex-nav-slot-world')), findsOneWidget);
+        expect(find.byKey(const Key('gtex-nav-slot-club')), findsNothing);
+        expect(
+          find.byKey(const Key('gtex-nav-slot-traderDesk')),
+          findsNothing,
+        );
       },
     );
 

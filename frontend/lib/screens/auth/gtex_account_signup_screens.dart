@@ -129,7 +129,10 @@ class GtexAccountSelectorScreen extends StatelessWidget {
                           crossAxisCount: columns,
                           crossAxisSpacing: 14,
                           mainAxisSpacing: 14,
-                          mainAxisExtent: columns == 1 ? 280 : 290,
+                          // Keep all role copy visible at phone and desktop
+                          // widths; these cards contain the account restrictions
+                          // users need to read before choosing a dedicated lane.
+                          mainAxisExtent: columns == 1 ? 340 : 330,
                         ),
                         itemBuilder: (_, i) => _AccountRoleCard(role: roles[i]),
                       );
