@@ -104,7 +104,7 @@ class GtexAccountSelectorScreen extends StatelessWidget {
                   const SizedBox(
                     width: 690,
                     child: Text(
-                      'Choose one dedicated account type: User, Creator, or Coin Trader. User accounts may create clubs after signing in. Creator promotion from an existing User account is only allowed when no club remains under that account's ownership.',
+                      'Choose one dedicated account type: User, Creator, or Coin Trader. User accounts may create clubs after signing in. Creator promotion from an existing User account is only allowed when no club remains under that account\'s ownership.',
                       style: TextStyle(
                         color: Color(0xFF93A0AA),
                         fontSize: 16,
