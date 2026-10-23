@@ -397,7 +397,6 @@ class GtexMatchTimelineEvent {
 }
 
 @immutable
-// Availability flags prevent missing match-feed metrics being presented as measurements.
 class GtexMatchStats {
   const GtexMatchStats({
     required this.homePossession,
@@ -410,6 +409,10 @@ class GtexMatchStats {
     required this.awayPassAccuracy,
     required this.homeExpectedGoals,
     required this.awayExpectedGoals,
+    this.shotsAvailable = true,
+    this.possessionAvailable = true,
+    this.passingAvailable = true,
+    this.expectedGoalsAvailable = true,
   });
 
   final int homePossession;
@@ -422,6 +425,10 @@ class GtexMatchStats {
   final int awayPassAccuracy;
   final double homeExpectedGoals;
   final double awayExpectedGoals;
+  final bool shotsAvailable;
+  final bool possessionAvailable;
+  final bool passingAvailable;
+  final bool expectedGoalsAvailable;
 }
 
 @immutable
