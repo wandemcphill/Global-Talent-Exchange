@@ -748,9 +748,7 @@ class LiveMatchHub:
                         target_team.formation = formation
                     presentation_package = runtime.viewer_state.presentation_package
                     presentation_team_for_tactics = (
-                        getattr(presentation_package, side_norm, None)
-                        if presentation_package is not None
-                        else None
+                        getattr(presentation_package, side_norm, None) if presentation_package is not None else None
                     )
                     if formation and presentation_team_for_tactics is not None:
                         presentation_team_for_tactics.formation = formation
@@ -777,7 +775,8 @@ class LiveMatchHub:
                                 starters = list(getattr(presentation_team, "starters", []) or [])
                                 starter_index = next(
                                     (
-                                        idx for idx, player in enumerate(starters)
+                                        idx
+                                        for idx, player in enumerate(starters)
                                         if str(getattr(player, "player_id", "") or "").strip() == out_id
                                     ),
                                     None,
@@ -787,7 +786,8 @@ class LiveMatchHub:
                                     starters[starter_index] = copy.deepcopy(incoming_player)
                                     presentation_team.starters = starters
                                 presentation_team.bench = [
-                                    player for player in list(getattr(presentation_team, "bench", []) or [])
+                                    player
+                                    for player in list(getattr(presentation_team, "bench", []) or [])
                                     if str(getattr(player, "player_id", "") or "").strip() != in_id
                                 ]
 
@@ -911,9 +911,7 @@ class LiveMatchHub:
                         )
                     except Exception:
                         logger.debug("Failed to restore previous tactics cache for %s", match_id, exc_info=True)
-                    raise LiveMatchPersistenceError(
-                        f"Unable to persist tactics for match '{match_id}'."
-                    ) from exc
+                    raise LiveMatchPersistenceError(f"Unable to persist tactics for match '{match_id}'.") from exc
 
         if runtime is not None and events_to_broadcast and channel is not None:
             self._publish_channel(
