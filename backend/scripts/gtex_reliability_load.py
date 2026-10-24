@@ -467,9 +467,7 @@ def run_outbox_backlog(
     duration = perf_counter() - started_at
 
     with session_factory() as session:
-        processed = list(
-            session.scalars(select(EventOutbox).where(EventOutbox.status == "processed")).all()
-        )
+        processed = list(session.scalars(select(EventOutbox).where(EventOutbox.status == "processed")).all())
     return {
         "duration_seconds": round(duration, 4),
         "events_requested": events,
@@ -549,7 +547,9 @@ class _NoDbSession:
 
 
 class _DatabaseContext:
-    def __init__(self, engine: Engine, session_factory: sessionmaker[Session], tempdir: TemporaryDirectory[str] | None) -> None:
+    def __init__(
+        self, engine: Engine, session_factory: sessionmaker[Session], tempdir: TemporaryDirectory[str] | None
+    ) -> None:
         self.engine = engine
         self.session_factory = session_factory
         self.tempdir = tempdir
