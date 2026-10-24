@@ -28,6 +28,7 @@ from app.models.user import User
 from app.owner_console import ledger
 from app.owner_console.models import (
     OwnerBroadcastEvent,
+    OwnerShowroomAsset,
     OwnerCompetition,
     OwnerCompetitionEntry,
     OwnerInboxItem,
@@ -754,7 +755,32 @@ def get_club_showroom(session: Session, user_id: str, club_id: str) -> dict[str,
             }
         )
     owned = []
-    # Fetch from OwnerBroadcastEvent or asset table
+    seen_ids = set()
+    # 1. Fetch from durable OwnerShowroomAsset table
+    asset_rows = session.scalars(
+        select(OwnerShowroomAsset)
+        .where(
+            OwnerShowroomAsset.club_id == club_id,
+            OwnerShowroomAsset.status.in_(("active", "gifted")),
+        )
+        .order_by(OwnerShowroomAsset.created_at.desc())
+    ).all()
+    for a in asset_rows:
+        seen_ids.add(a.id)
+        owned.append(
+            {
+                "id": a.id,
+                "catalog_key": a.catalog_key,
+                "custom_name": a.custom_name,
+                "category": a.category,
+                "purchase_price_gtex": float(a.purchase_price_gtex or 0),
+                "gifted_to_player_name": a.gifted_to_player_name,
+                "image_url": a.image_url,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+            }
+        )
+
+    # 2. Legacy fallback from OwnerBroadcastEvent (for past jet purchases)
     b_rows = session.scalars(
         select(OwnerBroadcastEvent)
         .where(
@@ -764,6 +790,10 @@ def get_club_showroom(session: Session, user_id: str, club_id: str) -> dict[str,
         .order_by(OwnerBroadcastEvent.created_at.desc())
     ).all()
     for b in b_rows:
+        if b.id in seen_ids:
+            continue
+        if b.ledger_event_id and any(getattr(a, "ledger_event_id", None) == b.ledger_event_id for a in asset_rows):
+            continue
         owned.append(
             {
                 "id": b.id,
@@ -816,7 +846,23 @@ def purchase_showroom_asset(
     image_url = resolve_showroom_image_url(catalog_key)
     c_name = custom_name or item["name"]
 
-    # ONLY broadcast if category is jet!
+    # Persist durable showroom asset for ALL luxury items (jets, coaches, hypercars, watches, suites)
+    asset = OwnerShowroomAsset(
+        club_id=club_id,
+        owner_user_id=user_id,
+        catalog_key=catalog_key,
+        custom_name=c_name,
+        category=str(item.get("category") or "asset"),
+        model=item.get("model"),
+        image_url=image_url,
+        purchase_price_gtex=price,
+        status="active",
+        ledger_event_id=leg.id,
+        idempotency_key=idempotency_key,
+    )
+    session.add(asset)
+
+    # ONLY broadcast globally if category is jet!
     broadcast = None
     if item.get("broadcast_on_purchase") and item.get("category") == "jet":
         broadcast = record_verified_broadcast_event(
@@ -837,6 +883,7 @@ def purchase_showroom_asset(
 
     return {
         "asset": {
+            "id": asset.id,
             "catalog_key": catalog_key,
             "custom_name": c_name,
             "price_gtex": str(price),
@@ -890,6 +937,26 @@ def gift_asset_to_squad_player(
         club_id=club_id,
         memo=f"Owner gifted {item['name']} to {player.name}",
     )
+
+    # Mark matching showroom asset as gifted if owned
+    matching_asset = None
+    if asset_id:
+        matching_asset = session.get(OwnerShowroomAsset, asset_id)
+    if matching_asset is None:
+        matching_asset = session.scalar(
+            select(OwnerShowroomAsset)
+            .where(
+                OwnerShowroomAsset.club_id == club_id,
+                OwnerShowroomAsset.catalog_key == item_key,
+                OwnerShowroomAsset.status == "active",
+            )
+            .order_by(OwnerShowroomAsset.created_at.asc())
+            .limit(1)
+        )
+    if matching_asset is not None:
+        matching_asset.status = "gifted"
+        matching_asset.gifted_to_player_id = player.id
+        matching_asset.gifted_to_player_name = player.name
 
     # Boost player morale
     old_morale = player.morale

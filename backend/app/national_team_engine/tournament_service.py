@@ -288,9 +288,14 @@ class NationalTeamTournamentService:
             )
 
     @staticmethod
-    def _as_utc_datetime(value: datetime | None) -> datetime | None:
+    def _as_utc_datetime(value: datetime | str | None) -> datetime | None:
         if value is None:
             return None
+        if isinstance(value, str):
+            try:
+                value = datetime.fromisoformat(value)
+            except Exception:
+                return None
         if value.tzinfo is None:
             return value.replace(tzinfo=UTC)
         return value.astimezone(UTC)
@@ -724,7 +729,18 @@ class NationalTeamTournamentService:
 
     def _contract_window(self, competition: NationalTeamCompetition) -> tuple[Any, Any]:
         now = utcnow()
-        return now, now + timedelta(days=DEFAULT_RENTAL_DURATION_DAYS)
+        duration_days = DEFAULT_RENTAL_DURATION_DAYS
+        metadata = dict(competition.metadata_json or {})
+        scheduled_end = (
+            metadata.get("scheduled_end_at")
+            or metadata.get("end_date")
+            or metadata.get("tournament_end_at")
+        )
+        if scheduled_end:
+            sched_dt = self._as_utc_datetime(scheduled_end)
+            if sched_dt and sched_dt > now:
+                return now, max(now + timedelta(days=duration_days), sched_dt)
+        return now, now + timedelta(days=duration_days)
 
     def _player_name(self, player: Player) -> str:
         return (
@@ -2032,18 +2048,16 @@ class NationalTeamTournamentService:
             self._extend_contract_for_finalist(contract)
         return contracts
 
-    def _extend_contract_for_finalist(self, contract: RentalContract) -> None:
+    def _extend_contract_for_finalist(self, contract: RentalContract, now: datetime | None = None) -> None:
         competition = self.session.get(NationalTeamCompetition, contract.tournament_id)
-        if competition is None or competition.completed_at is None:
+        if competition is None:
             return
+        reference_now = self._as_utc_datetime(now) or utcnow()
         start_date = self._as_utc_datetime(contract.start_date)
         end_date = self._as_utc_datetime(contract.end_date)
-        completed_at = self._as_utc_datetime(competition.completed_at)
-        if start_date is None or end_date is None or completed_at is None:
+        if start_date is None or end_date is None:
             return
-        base_end_date = start_date + timedelta(days=DEFAULT_RENTAL_DURATION_DAYS)
-        if completed_at <= base_end_date or end_date >= completed_at:
-            return
+
         finalist = self.session.scalar(
             select(NationalTeamCompetitionEntry).where(
                 NationalTeamCompetitionEntry.competition_id == competition.id,
@@ -2052,7 +2066,7 @@ class NationalTeamTournamentService:
                     (NationalTeamCompetitionEntry.qualified.is_(True))
                     | (
                         NationalTeamCompetitionEntry.status.in_(
-                            ("finalist", "final", "winner", "champion", "qualified")
+                            ("finalist", "final", "winner", "champion", "qualified", "active", "in_progress")
                         )
                     )
                 ),
@@ -2060,13 +2074,38 @@ class NationalTeamTournamentService:
         )
         if finalist is None:
             return
-        contract.end_date = completed_at
-        contract.metadata_json = {
-            **dict(contract.metadata_json or {}),
-            "extended_until": completed_at.isoformat(),
-            "extension_reason": "gtex_national_finalist",
-        }
-        self.session.flush()
+
+        metadata = dict(competition.metadata_json or {})
+        scheduled_end = (
+            metadata.get("scheduled_end_at")
+            or metadata.get("end_date")
+            or metadata.get("tournament_end_at")
+        )
+        sched_dt = self._as_utc_datetime(scheduled_end) if scheduled_end else None
+        completed_at = self._as_utc_datetime(competition.completed_at)
+
+        target_end = None
+        if completed_at is not None:
+            if completed_at > end_date:
+                target_end = completed_at
+        elif sched_dt is not None:
+            if sched_dt > end_date:
+                target_end = sched_dt
+        elif end_date <= reference_now:
+            target_end = reference_now + timedelta(days=DEFAULT_RENTAL_DURATION_DAYS)
+
+        if target_end is not None and target_end > end_date:
+            contract.end_date = target_end
+            contract.metadata_json = {
+                **dict(contract.metadata_json or {}),
+                "extended_until": target_end.isoformat(),
+                "extension_reason": (
+                    "gtex_national_finalist"
+                    if finalist.qualified or str(finalist.status).lower() in ("finalist", "final")
+                    else "active_tournament_extension"
+                ),
+            }
+            self.session.flush()
 
     def _entry_rental_members(self, entry_id: str) -> list[NationalTeamRentalSquadMember]:
         return list(
@@ -3271,14 +3310,32 @@ class NationalTeamTournamentService:
         affected_entry_ids: set[str] = set()
         released_player_ids: list[str] = []
         for contract in contracts:
-            self._extend_contract_for_finalist(contract)
+            self._extend_contract_for_finalist(contract, now=reference_now)
             competition = self.session.get(NationalTeamCompetition, contract.tournament_id)
             contract_start = self._as_utc_datetime(contract.start_date)
             contract_end = self._as_utc_datetime(contract.end_date)
             completed_at = self._as_utc_datetime(competition.completed_at) if competition is not None else None
             expired_by_window = contract_end is not None and contract_end <= reference_now
-            competition_completed = completed_at is not None
-            should_release = expired_by_window or competition_completed
+            competition_completed = completed_at is not None or (
+                competition is not None and str(competition.status).lower() in ("completed", "cancelled", "archived")
+            )
+
+            if competition is not None and not competition_completed:
+                entry = self.session.scalar(
+                    select(NationalTeamCompetitionEntry).where(
+                        NationalTeamCompetitionEntry.competition_id == contract.tournament_id,
+                        NationalTeamCompetitionEntry.user_id == contract.user_id,
+                    )
+                )
+                if entry is not None and str(entry.status).lower() in ("eliminated", "withdrawn", "disqualified"):
+                    should_release = True
+                elif entry is not None:
+                    # Active squad in ongoing multi-day tournament: protected from premature deletion
+                    should_release = False
+                else:
+                    should_release = expired_by_window
+            else:
+                should_release = expired_by_window or competition_completed
             if (
                 not should_release
                 and (contract_start is None or contract_start <= reference_now)

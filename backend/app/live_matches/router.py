@@ -1635,6 +1635,7 @@ def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
         "pitch_players": [_v2_pitch_player_payload(player) for player in frame.players],
         "ball": _v2_ball_payload(getattr(frame, "ball", None)),
         "tactics": ensure_live_match_hub(app).get_tactics(match_id),
+        "recent_gifts": ensure_live_match_hub(app).get_recent_gifts(match_id),
         "pre_match": _v2_pre_match_payload(match_id, view_state, app),
         "post_match": _v2_post_match_payload(match_id, view_state, frame, events, stats_payload),
         "timeline": [_v2_event_payload(event) for event in events],

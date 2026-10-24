@@ -6,6 +6,7 @@ from decimal import Decimal
 from hashlib import sha256
 import math
 import random
+import secrets
 from typing import Any
 
 from sqlalchemy import func, or_, select
@@ -109,7 +110,7 @@ class GtexBaseService:
         self.state_store = state_store
         self.event_publisher = event_publisher or InMemoryEventPublisher()
         self.realtime_channel = realtime_channel
-        self._random = random.Random()
+        self._random = secrets.SystemRandom()
 
     @staticmethod
     def _amount(value: Decimal | int | float | str | None) -> Decimal:

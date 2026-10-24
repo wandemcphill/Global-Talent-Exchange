@@ -257,6 +257,25 @@ class OwnerBroadcastEvent(UUIDPrimaryKeyMixin, Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
 
+class OwnerShowroomAsset(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "owner_showroom_assets"
+
+    club_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    owner_user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    catalog_key: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    custom_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    category: Mapped[str] = mapped_column(String(48), nullable=False, index=True)
+    model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    purchase_price_gtex: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
+    gifted_to_player_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    gifted_to_player_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active", index=True)
+    ledger_event_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
 class OwnerNewsroomArticle(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "owner_newsroom_articles"
 
@@ -311,6 +330,7 @@ OWNER_CONSOLE_TABLES = (
     OwnerSponsorDeal.__table__,
     SupportUnitHolding.__table__,
     OwnerBroadcastEvent.__table__,
+    OwnerShowroomAsset.__table__,
     OwnerNewsroomArticle.__table__,
     OwnerScoutingWatchlist.__table__,
 )
