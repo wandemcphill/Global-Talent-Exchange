@@ -85,15 +85,14 @@ def list_tournaments(
 
 @router.post(
     "",
-    response_model=TournamentView,
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_410_GONE,
     deprecated=True,
     responses={410: {"description": "Legacy tournament engine retired"}},
 )
 def create_tournament(
     payload: TournamentCreateRequest,
     current_user: User = Depends(get_current_user),
-) -> TournamentView:
+) -> None:
     del payload
     if current_user.role not in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
         raise HTTPException(
@@ -105,14 +104,14 @@ def create_tournament(
 
 @router.post(
     "/{tournament_id}/cancel",
-    response_model=TournamentView,
+    status_code=status.HTTP_410_GONE,
     deprecated=True,
     responses={410: {"description": "Legacy tournament engine retired"}},
 )
 def cancel_tournament(
     tournament_id: str,
     current_user: User = Depends(get_current_user),
-) -> TournamentView:
+) -> None:
     del tournament_id
     if current_user.role not in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
         raise HTTPException(
@@ -120,7 +119,6 @@ def cancel_tournament(
             detail="Only administrators may cancel platform tournaments.",
         )
     _legacy_engine_retired()
-
 
 
 @router.get("/admin/retirement/refunds/dry-run")
@@ -236,7 +234,7 @@ def get_tournament(
 
 @router.post(
     "/{tournament_id}/join",
-    response_model=TournamentView,
+    status_code=status.HTTP_410_GONE,
     deprecated=True,
     responses={410: {"description": "Legacy tournament engine retired"}},
 )
@@ -244,7 +242,7 @@ def join_tournament(
     tournament_id: str,
     payload: TournamentJoinRequest,
     current_user: User = Depends(get_current_user),
-) -> TournamentView:
+) -> None:
     del tournament_id
     if payload.user_id != current_user.id:
         raise HTTPException(
@@ -256,7 +254,7 @@ def join_tournament(
 
 @router.post(
     "/{tournament_id}/matches/{match_id}/result",
-    response_model=TournamentView,
+    status_code=status.HTTP_410_GONE,
     deprecated=True,
     responses={410: {"description": "Legacy tournament engine retired"}},
 )
@@ -265,20 +263,20 @@ def report_match_result(
     match_id: str,
     payload: TournamentMatchResultRequest,
     current_user: User = Depends(get_current_user),
-) -> TournamentView:
+) -> None:
     del tournament_id, match_id, payload, current_user
     _legacy_engine_retired()
 
 
 @router.post(
     "/{tournament_id}/advance",
-    response_model=TournamentView,
+    status_code=status.HTTP_410_GONE,
     deprecated=True,
     responses={410: {"description": "Legacy tournament engine retired"}},
 )
 def advance_tournament(
     tournament_id: str,
     current_user: User = Depends(get_current_user),
-) -> TournamentView:
+) -> None:
     del tournament_id, current_user
     _legacy_engine_retired()
