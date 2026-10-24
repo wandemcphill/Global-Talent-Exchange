@@ -17,8 +17,8 @@ from app.owner_console.models import (
     LedgerEvent,
     OwnerBroadcastEvent,
     OwnerInboxItem,
-    OwnerShowroomAsset,
     OwnerNewsroomArticle,
+    OwnerShowroomAsset,
     OwnerSquadPlayer,
 )
 from app.owner_console.service import OwnerError
