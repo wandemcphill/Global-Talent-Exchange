@@ -814,7 +814,6 @@ def get_club_showroom(session: Session, user_id: str, club_id: str) -> dict[str,
     }
 
 
-
 def _showroom_purchase_response(
     asset: OwnerShowroomAsset,
     broadcast: OwnerBroadcastEvent | None,
