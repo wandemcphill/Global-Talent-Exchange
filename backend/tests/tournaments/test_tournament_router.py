@@ -12,6 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from app.auth.dependencies import get_current_user
 from app.db import get_session
 from app.models import Base
+from app.models.event_backbone import EventOutbox
 from app.models.risk_ops import AuditLog
 from app.models.tournament import Tournament, TournamentPlayer
 from app.models.user import User, UserRole
@@ -63,6 +64,7 @@ def _build_app(database_url: str) -> tuple[TestClient, sessionmaker]:
             LedgerTransaction.__table__,
             LedgerEntry.__table__,
             LedgerBalanceProjection.__table__,
+            EventOutbox.__table__,
             AuditLog.__table__,
             Tournament.__table__,
             TournamentPlayer.__table__,
