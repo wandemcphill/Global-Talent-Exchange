@@ -910,6 +910,7 @@ def _resolve_idempotent_showroom_purchase(
 
     return _showroom_purchase_response(asset, broadcast)
 
+
 def purchase_showroom_asset(
     session: Session,
     user_id: str,
