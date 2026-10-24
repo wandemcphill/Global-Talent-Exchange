@@ -491,11 +491,12 @@ def test_gtex_full_user_journey(client, app_session_factory, auth_user_factory, 
         client.post(
             f"/api/clubs/{club_ids[club_buyer['user_id']]}/growth/academy/generate-prospects",
             headers=club_buyer["headers"],
-            json={"count": 3},
+            json={"count": 3, "seed": f"{PREFIX}-academy-prospects"},
         )
     )
     assert prospects
-    prospect_id = prospects[0]["id"]
+    eligible = [p for p in prospects if p.get("age", 0) >= 16]
+    prospect_id = (eligible[0] if eligible else prospects[0])["id"]
     youth_offer = _ok(
         client.post(
             f"/api/clubs/{club_ids[club_buyer['user_id']]}/growth/academy/prospects/{prospect_id}/offer-contract",

@@ -849,13 +849,13 @@ class ClubGrowthService:
         if image is None:
             image = PlayerImageMetadata(
                 source_provider=NEWGEN_FACE_BANK_PROVIDER,
-                provider_external_id=f"{NEWGEN_FACE_BANK_PROVIDER}:{prospect.portrait_asset_ref}",
+                provider_external_id=f"{NEWGEN_FACE_BANK_PROVIDER}:{player.id}",
                 player_id=player.id,
                 image_role="portrait",
             )
             self.session.add(image)
         image.source_provider = NEWGEN_FACE_BANK_PROVIDER
-        image.provider_external_id = f"{NEWGEN_FACE_BANK_PROVIDER}:{prospect.portrait_asset_ref}"
+        image.provider_external_id = f"{NEWGEN_FACE_BANK_PROVIDER}:{player.id}"
         image.source_url = service._generated_media_url(prospect.portrait_asset_ref)
         image.storage_key = prospect.portrait_asset_ref
         image.width = RegenPortraitService._optional_int(asset.get("width")) or 512

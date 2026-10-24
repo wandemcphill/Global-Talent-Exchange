@@ -160,7 +160,7 @@ class RegenPortraitService:
         width = self._optional_int(bank_asset.get("width")) or PORTRAIT_SIZE
         height = self._optional_int(bank_asset.get("height")) or PORTRAIT_SIZE
         source_provider = self._asset_source_provider(bank_asset)
-        provider_external_id = f"{source_provider}:{storage_key}"
+        provider_external_id = f"{source_provider}:{player.id}"
         portrait_status = self._asset_status(bank_asset)
 
         image = self._portrait_image_row(player.id)
