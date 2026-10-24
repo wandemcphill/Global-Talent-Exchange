@@ -22,7 +22,7 @@ if str(BACKEND_ROOT) not in sys.path:
 
 from app.auth.service import AuthService  # noqa: E402
 from app.economy.conversion_service import FanCoinGiftConversionService  # noqa: E402
-from app.gift_engine.service import GiftEngineService  # noqa: E402
+from app.gift_engine.canonical_service import GiftEngineService  # noqa: E402
 from app.models import (  # noqa: E402
     Base,
     EconomicConversion,
