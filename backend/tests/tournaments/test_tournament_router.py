@@ -18,6 +18,7 @@ from app.models.event_backbone import EventOutbox
 from app.models.risk_ops import AuditLog
 from app.models.tournament import Tournament, TournamentPlayer
 from app.models.user import User, UserRole
+from app.modules import DOMAIN_MODULES
 from app.models.wallet import (
     LedgerAccount,
     LedgerAccountKind,
@@ -524,3 +525,10 @@ def test_concurrent_refund_requests_never_double_credit(tournament_client) -> No
         ).all()
         assert len(refund_transactions) == 1
         assert refund_transactions[0].status == LedgerTransactionStatus.COMMITTED
+
+
+def test_retired_tournament_router_precedes_api_v1_aliases() -> None:
+    # Both modules historically registered /api/tournaments/{id} and /join.
+    # The database-backed retirement router must win before the demo alias.
+    names = [module.name for module in DOMAIN_MODULES]
+    assert names.index("tournaments") < names.index("api_v1")
