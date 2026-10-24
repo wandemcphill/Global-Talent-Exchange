@@ -285,7 +285,9 @@ def test_transaction_integrity_idempotency_failures_and_reversals(client, bootst
     )
     assert conflict_resp.status_code == 409, conflict_resp.text
     with app.state.session_factory() as session:
-        assert ledger.balance(session, ledger.club_account(club_id), ledger.GTEX) == club_balance_before - Decimal("4800")
+        assert ledger.balance(session, ledger.club_account(club_id), ledger.GTEX) == club_balance_before - Decimal(
+            "4800"
+        )
 
     # 2. Failed transaction (insufficient funds) must produce 0 broadcasts
     with app.state.session_factory() as session:
