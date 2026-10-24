@@ -158,7 +158,11 @@ def _validate_existing_refund(
 
 def _pool_balance(session: Session, tournament_id: str) -> Decimal:
     pool = session.scalar(select(LedgerAccount).where(LedgerAccount.code == _pool_code(tournament_id)))
-    if pool is None or _value(pool.unit) != LedgerUnit.CREDIT.value or _value(pool.kind) != LedgerAccountKind.SYSTEM.value:
+    if (
+        pool is None
+        or _value(pool.unit) != LedgerUnit.CREDIT.value
+        or _value(pool.kind) != LedgerAccountKind.SYSTEM.value
+    ):
         return Decimal("0.0000")
     total = session.scalar(
         select(func.coalesce(func.sum(LedgerEntry.amount), 0)).where(
@@ -245,9 +249,7 @@ def build_legacy_tournament_refund_report(
             (_amount(item["amount"]) for item in tournament_items if item["status"] == "eligible"),
             Decimal("0.0000"),
         )
-        tournament_blockers = [
-            item for item in tournament_items if item["status"] in {"blocked", "unverified"}
-        ]
+        tournament_blockers = [item for item in tournament_items if item["status"] in {"blocked", "unverified"}]
         tournament_reports.append(
             {
                 "tournament_id": tid,
@@ -311,18 +313,14 @@ def execute_legacy_tournament_refunds(
     reason: str,
 ) -> dict[str, Any]:
     """Refund verified outstanding entries for one tournament, atomically and idempotently."""
-    tournament = session.scalar(
-        select(Tournament).where(Tournament.id == tournament_id).with_for_update()
-    )
+    tournament = session.scalar(select(Tournament).where(Tournament.id == tournament_id).with_for_update())
     if tournament is None:
         raise LegacyTournamentNotFound(tournament_id)
 
     # Serialize same-tournament execution in databases that support row locks.
     list(
         session.scalars(
-            select(TournamentPlayer.id)
-            .where(TournamentPlayer.tournament_id == tournament_id)
-            .with_for_update()
+            select(TournamentPlayer.id).where(TournamentPlayer.tournament_id == tournament_id).with_for_update()
         ).all()
     )
     report = build_legacy_tournament_refund_report(session, tournament_id=tournament_id)
@@ -353,9 +351,7 @@ def execute_legacy_tournament_refunds(
         if user is None:
             raise LedgerError("Cannot refund a legacy entry whose user record is missing.")
 
-        pool_account = session.scalar(
-            select(LedgerAccount).where(LedgerAccount.code == _pool_code(tournament_id))
-        )
+        pool_account = session.scalar(select(LedgerAccount).where(LedgerAccount.code == _pool_code(tournament_id)))
         user_account = session.scalar(select(LedgerAccount).where(LedgerAccount.code == _user_code(player.user_id)))
         if pool_account is None or user_account is None:
             raise LedgerError("Required legacy tournament or user ledger account is missing.")
