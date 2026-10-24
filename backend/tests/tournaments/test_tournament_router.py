@@ -422,9 +422,7 @@ def test_pool_shortfall_blocks_entire_refund_batch(tournament_client) -> None:
 
     with session_factory() as session:
         pool = session.scalar(
-            select(LedgerAccount).where(
-                LedgerAccount.code == f"tournament:{ids['tournament_id']}:pool:credit"
-            )
+            select(LedgerAccount).where(LedgerAccount.code == f"tournament:{ids['tournament_id']}:pool:credit")
         )
         platform = WalletService().ensure_platform_account(session, LedgerUnit.CREDIT)
         assert pool is not None
@@ -469,12 +467,16 @@ def test_pool_shortfall_blocks_entire_refund_batch(tournament_client) -> None:
     assert execute.status_code == 409
     with session_factory() as session:
         assert _credit_balance(session, ids["user_id"]) == Decimal("750.0000")
-        assert session.scalar(
-            select(func.count()).select_from(LedgerTransaction).where(
-                LedgerTransaction.idempotency_key
-                == f"tournament:{ids['tournament_id']}:refund:{ids['user_id']}"
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(LedgerTransaction)
+                .where(
+                    LedgerTransaction.idempotency_key == f"tournament:{ids['tournament_id']}:refund:{ids['user_id']}"
+                )
             )
-        ) == 0
+            == 0
+        )
 
 
 def test_unknown_tournament_refund_target_returns_404(tournament_client) -> None:
