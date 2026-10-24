@@ -145,15 +145,22 @@ def test_global_live_ticker_eligibility_and_luxury_isolation(client, bootstrap_a
     assert regen_player["is_regen"] is True
     assert regen_player.get("portrait_url"), "Regen player must have resolved static portrait URL"
 
+    with app.state.session_factory() as session:
+        admin = session.scalar(select(User).where(User.email == "admin@test.gtex.local"))
+        gift_balance_before = ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)
+        regen_row = session.get(OwnerSquadPlayer, regen_player["id"])
+        morale_before_gift = regen_row.morale
+
+    gift_request = {
+        "player_id": regen_player["id"],
+        "catalog_key": "chronos_tourbillon_watch",
+        "note": "Golden Boot bonus",
+        "idempotency_key": "gift-player-1",
+    }
     gift_res = client.post(
         f"/api/owner/clubs/{club_id}/showroom/gift",
         headers=bootstrap_admin_headers,
-        json={
-            "player_id": regen_player["id"],
-            "catalog_key": "chronos_tourbillon_watch",
-            "note": "Golden Boot bonus",
-            "idempotency_key": "gift-player-1",
-        },
+        json=gift_request,
     )
     assert gift_res.status_code == 200, gift_res.text
     gift_data = gift_res.json()
@@ -161,6 +168,47 @@ def test_global_live_ticker_eligibility_and_luxury_isolation(client, bootstrap_a
     assert gift_data["broadcast_event"]["player_name"] == regen_player["name"]
     assert gift_data["broadcast_event"]["player_portrait_url"]
     assert Decimal(str(gift_data["broadcast_event"]["verified_price_gtex"])) == Decimal("220")
+    assert gift_data["morale_delta"] == min(100, morale_before_gift + 15) - morale_before_gift
+
+    # Network retries must return the exact original gift without another debit,
+    # morale boost, inbox acknowledgement, or broadcast/newsroom event.
+    retry_res = client.post(
+        f"/api/owner/clubs/{club_id}/showroom/gift",
+        headers=bootstrap_admin_headers,
+        json=gift_request,
+    )
+    assert retry_res.status_code == 200, retry_res.text
+    retry_data = retry_res.json()
+    assert retry_data["broadcast_event"]["id"] == gift_data["broadcast_event"]["id"]
+    assert retry_data["player"] == gift_data["player"]
+    assert retry_data["morale_delta"] == gift_data["morale_delta"]
+
+    with app.state.session_factory() as session:
+        assert ledger.balance(session, ledger.club_account(club_id), ledger.GTEX) == gift_balance_before - Decimal("220")
+        persisted_player = session.get(OwnerSquadPlayer, regen_player["id"])
+        assert persisted_player.morale == gift_data["player"]["morale"]
+        gift_ledger_rows = session.scalars(
+            select(LedgerEvent).where(
+                LedgerEvent.event_type == "squad_player_gift",
+                LedgerEvent.club_id == club_id,
+                LedgerEvent.user_id == admin.id,
+            )
+        ).all()
+        assert len(gift_ledger_rows) == 1
+        gift_broadcasts = session.scalars(
+            select(OwnerBroadcastEvent).where(
+                OwnerBroadcastEvent.idempotency_key == "gift-player-1"
+            )
+        ).all()
+        assert len(gift_broadcasts) == 1
+        gift_acknowledgements = session.scalars(
+            select(OwnerInboxItem).where(
+                OwnerInboxItem.user_id == admin.id,
+                OwnerInboxItem.club_id == club_id,
+                OwnerInboxItem.title == f"Thank You from {regen_player['name']}",
+            )
+        ).all()
+        assert len(gift_acknowledgements) == 1
 
     # Verify the global ticker contains ONLY the 3 eligible events
     ticker_events = client.get("/api/owner/ticker", headers=bootstrap_admin_headers).json()["events"]
