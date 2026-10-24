@@ -131,6 +131,7 @@ class RegenRetirementAcademyBridge:
         )
         if personality is None:
             return {}
+
         # Heirs inherit a softened echo — not a clone — so bloodlines rhyme.
         def soften(value: int, pull: int = 50) -> int:
             return max(1, min(99, int(round(value * 0.62 + pull * 0.38))))

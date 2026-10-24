@@ -682,7 +682,9 @@ class ClubGrowthService:
             "portrait_policy": "newgen_bank_only",
             "portrait_asset_ref": prospect.portrait_asset_ref,
             "hoyd_pathway_verified": True,
-            "manager_sporting_readiness_approved": bool((prospect.current_ability or 0) >= 38 or (prospect.potential or 0) >= 70),
+            "manager_sporting_readiness_approved": bool(
+                (prospect.current_ability or 0) >= 38 or (prospect.potential or 0) >= 70
+            ),
             "readiness_score": readiness_score,
             "governance_signoff": "hoyd_and_football_manager",
         }

@@ -240,7 +240,8 @@ class _Gtex2dPitchState extends State<Gtex2dPitch> {
                         ),
 
                       // Header Toolbar: feed tag + tactical toggles
-                      Positioned(
+                      if (pitchWidth >= 320)
+                        Positioned(
                         left: 10,
                         top: 10,
                         right: 10,
@@ -966,9 +967,12 @@ class _TacticalToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
         // Possession Pill
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
@@ -1215,8 +1219,9 @@ class _TacticalToolbar extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
+    ),
+  );
+}
 }
 
 class _PitchHeatmapPainter extends CustomPainter {

@@ -1614,6 +1614,7 @@ _COUNTRY_PROFILE_ALIASES: dict[str, tuple[str, str, str]] = {
 
 _install_country_specific_name_pools()
 
+
 def _normalized_country_name_alias(country_name: str | None) -> str:
     normalized = unicodedata.normalize("NFKD", country_name or "")
     ascii_name = normalized.encode("ascii", "ignore").decode("ascii")

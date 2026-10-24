@@ -169,6 +169,40 @@ class _GtexPostMatchPanelState extends State<GtexPostMatchPanel> {
             const SizedBox(height: 14),
 
             if (finalWhistle) ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _MatchTeamReview(
+                      team: widget.match.home,
+                      alignEnd: false,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _MatchTeamReview(
+                      team: widget.match.away,
+                      alignEnd: true,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              // Match Statistics Breakdown
+              _MatchPerformanceSummary(match: widget.match),
+              const SizedBox(height: 14),
+
+              // Goal Replays
+              if (widget.onReplayGoal != null &&
+                  widget.match.timeline.any((e) => e.type == GtexPitchEventType.goal)) ...[
+                _GoalReplaysList(
+                  match: widget.match,
+                  onReplayGoal: widget.onReplayGoal!,
+                ),
+                const SizedBox(height: 14),
+              ],
+
               // Only render analytics when supported by source records.
               if (post.motm.available)
                 _MotmCelebrationCard(motm: post.motm)
@@ -222,19 +256,7 @@ class _GtexPostMatchPanelState extends State<GtexPostMatchPanel> {
               _ManagerPressConferenceCard(match: widget.match),
               const SizedBox(height: 14),
 
-              // 6. Match Statistics Breakdown
-              _MatchPerformanceSummary(match: widget.match),
-              const SizedBox(height: 14),
 
-              // 7. Goal Replays
-              if (widget.onReplayGoal != null &&
-                  widget.match.timeline.any((e) => e.type == GtexPitchEventType.goal)) ...[
-                _GoalReplaysList(
-                  match: widget.match,
-                  onReplayGoal: widget.onReplayGoal!,
-                ),
-                const SizedBox(height: 14),
-              ],
 
               // 8. XP & Manager Token Settlement
               _PostMatchSettlementCard(match: widget.match),
@@ -1073,6 +1095,7 @@ class _GoalReplaysList extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 TextButton.icon(
+                  key: Key('gtex-post-match-goal-replay-${event.minute}'),
                   onPressed: () => onReplayGoal(event.minute),
                   icon: const Icon(Icons.replay_rounded, size: 14),
                   label: const Text('Replay', style: TextStyle(fontSize: 11)),
@@ -1145,7 +1168,7 @@ class _OwnerDecisionLoop extends StatelessWidget {
                 key: const Key('gtex-post-match-newsroom-btn'),
                 onPressed: onOpenNewsroomReport,
                 icon: const Icon(Icons.article_outlined, size: 15),
-                label: const Text('Newsroom Report', style: TextStyle(fontSize: 11)),
+                label: const Text('Open Newsroom Match Report', style: TextStyle(fontSize: 11)),
               ),
             if (onOpenReplay != null)
               TextButton.icon(
@@ -1224,6 +1247,45 @@ class _MatchPerformanceSummary extends StatelessWidget {
             homeValue: stats.expectedGoalsAvailable ? stats.homeExpectedGoals : 0,
             awayValue: stats.expectedGoalsAvailable ? stats.awayExpectedGoals : 0,
           ),
+          if (match.timeline.any((e) => e.type == GtexPitchEventType.substitution)) ...[
+            const SizedBox(height: 12),
+            const Text(
+              'TACTICAL SUBSTITUTIONS',
+              style: TextStyle(
+                color: GtexMatchVisualTokens.textSecondary,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                letterSpacing: .8,
+              ),
+            ),
+            const SizedBox(height: 7),
+            for (final GtexMatchTimelineEvent event in match.timeline.where((e) => e.type == GtexPitchEventType.substitution))
+              Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: GtexMatchVisualTokens.surfaceOverlay,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: GtexMatchVisualTokens.border),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.sync_alt_rounded, color: GtexMatchVisualTokens.amber, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${event.minute}\' ${event.title}',
+                        style: const TextStyle(
+                          color: GtexMatchVisualTokens.textPrimary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
         ],
       ),
     );
@@ -1272,7 +1334,7 @@ class _MatchStatRow extends StatelessWidget {
               Expanded(
                 child: Center(
                   child: Text(
-                    label.toUpperCase(),
+                    label,
                     style: const TextStyle(
                       color: GtexMatchVisualTokens.textSecondary,
                       fontSize: 9.5,
@@ -2013,5 +2075,87 @@ class _PostMatchSettlementCardState extends State<_PostMatchSettlementCard> {
         ),
       ],
     );
+  }
+}
+
+class _MatchTeamReview extends StatelessWidget {
+  const _MatchTeamReview({
+    required this.team,
+    required this.alignEnd,
+  });
+
+  final GtexMatchTeam team;
+  final bool alignEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color accent = _tryColor(team.primaryColorHex);
+    final CrossAxisAlignment alignment =
+        alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start;
+    return Container(
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: GtexMatchVisualTokens.surfaceRaised,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: accent.withValues(alpha: .40)),
+      ),
+      child: Column(
+        crossAxisAlignment: alignment,
+        children: <Widget>[
+          Text(
+            team.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: alignEnd ? TextAlign.right : TextAlign.left,
+            style: const TextStyle(
+              color: GtexMatchVisualTokens.textPrimary,
+              fontWeight: FontWeight.w900,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            team.formation,
+            style: TextStyle(
+              color: accent,
+              fontSize: 19,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          if (team.managerName?.trim().isNotEmpty == true) ...<Widget>[
+            const SizedBox(height: 4),
+            Text(
+              team.managerName!.trim(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: alignEnd ? TextAlign.right : TextAlign.left,
+              style: const TextStyle(
+                color: GtexMatchVisualTokens.textSecondary,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+          if (team.recentFormPercent != null) ...<Widget>[
+            const SizedBox(height: 4),
+            Text(
+              'Form ${team.recentFormPercent}%',
+              style: const TextStyle(
+                color: GtexMatchVisualTokens.textSecondary,
+                fontSize: 10,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Color _tryColor(String? raw) {
+    if (raw == null) return GtexMatchVisualTokens.live;
+    final String value = raw.trim().replaceFirst('#', '');
+    if (value.length != 6) return GtexMatchVisualTokens.live;
+    final int? parsed = int.tryParse(value, radix: 16);
+    return parsed == null ? GtexMatchVisualTokens.live : Color(0xFF000000 | parsed);
   }
 }

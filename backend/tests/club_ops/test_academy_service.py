@@ -51,6 +51,7 @@ def test_academy_service_creates_programs_players_and_graduation_events(club_ops
     assert len(overview.graduation_events) == 1
     assert cashflow.academy_spend_minor == 120_000
 
+
 def test_academy_underage_player_held_at_standout_until_sixteen(club_ops_services) -> None:
     academy = club_ops_services["academy"]
 
@@ -134,15 +135,24 @@ def test_club_growth_promote_prospect_underage_blocked_and_governance_recorded(m
 
     current_target[0] = eligible_prospect
     fake_player = MagicMock(id="player-senior-1")
-    monkeypatch.setattr(ClubGrowthService, "_ensure_senior_player_for_prospect", lambda self, club_id, prospect: fake_player)
-    monkeypatch.setattr(ClubGrowthService, "_ensure_contract_and_squad_for_promoted_prospect", lambda self, club_id, prospect, player: None)
+    monkeypatch.setattr(
+        ClubGrowthService, "_ensure_senior_player_for_prospect", lambda self, club_id, prospect: fake_player
+    )
+    monkeypatch.setattr(
+        ClubGrowthService,
+        "_ensure_contract_and_squad_for_promoted_prospect",
+        lambda self, club_id, prospect, player: None,
+    )
     monkeypatch.setattr(ClubGrowthService, "_audit", lambda *args, **kwargs: None)
-    monkeypatch.setattr(ClubGrowthService, "_academy_prospect_view", lambda self, p: {"id": p.id, "status": "promoted_to_senior"})
+    monkeypatch.setattr(
+        ClubGrowthService, "_academy_prospect_view", lambda self, p: {"id": p.id, "status": "promoted_to_senior"}
+    )
 
-    result = service.promote_prospect(actor=actor, club_id="club-1", prospect_id="pros-eligible")
+    service.promote_prospect(actor=actor, club_id="club-1", prospect_id="pros-eligible")
     assert eligible_prospect.status == "promoted_to_senior"
-    added_history = [arg[0][0] for arg in session.add.call_args_list if isinstance(arg[0][0], AcademyPromotionHistory)][0]
+    added_history = [arg[0][0] for arg in session.add.call_args_list if isinstance(arg[0][0], AcademyPromotionHistory)][
+        0
+    ]
     assert added_history.metadata_json["hoyd_pathway_verified"] is True
     assert added_history.metadata_json["manager_sporting_readiness_approved"] is True
     assert added_history.metadata_json["governance_signoff"] == "hoyd_and_football_manager"
-
