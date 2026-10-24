@@ -649,20 +649,45 @@ class LiveMatchHub:
             runtime = self._matches.get(match_id)
             active_frame = None
             active_minute = None
+            active_index = 0
             if runtime is not None and runtime.viewer_state is not None and runtime.viewer_state.frames:
-                current_minute = float(
-                    getattr(
-                        runtime.last_snapshot,
-                        "current_minute",
-                        getattr(runtime.last_snapshot, "minute", runtime.viewer_state.frames[0].clock_minute),
+                if getattr(runtime, "started_at", None) is not None:
+                    target_runtime_seconds = max(
+                        float(getattr(runtime, "target_runtime_seconds", 0.0) or 0.0),
+                        float(getattr(runtime, "step_interval_seconds", 0.0) or 0.0),
+                        1.0,
                     )
-                    or 0.0
-                )
-                active_frame = min(
-                    runtime.viewer_state.frames,
-                    key=lambda frame: abs(float(frame.clock_minute) - current_minute),
-                )
-                active_minute = float(active_frame.clock_minute)
+                    reference_time = runtime.completed_at or utcnow()
+                    elapsed_runtime_seconds = max(0.0, (reference_time - runtime.started_at).total_seconds())
+                    playback_ratio = min(1.0, max(0.0, elapsed_runtime_seconds / target_runtime_seconds))
+                    playback_span_seconds = max(
+                        float(runtime.viewer_state.duration_seconds),
+                        float(runtime.viewer_state.frames[-1].time_seconds),
+                        1.0,
+                    )
+                    sample_time_seconds = round(playback_span_seconds * playback_ratio, 2)
+                    for index in range(1, len(runtime.viewer_state.frames)):
+                        if sample_time_seconds <= runtime.viewer_state.frames[index].time_seconds:
+                            active_index = index - 1
+                            break
+                    else:
+                        active_index = len(runtime.viewer_state.frames) - 1
+                    active_frame = runtime.viewer_state.frames[active_index]
+                    active_minute = float(active_frame.clock_minute)
+                else:
+                    current_minute = float(
+                        getattr(
+                            runtime.last_snapshot,
+                            "current_minute",
+                            getattr(runtime.last_snapshot, "minute", runtime.viewer_state.frames[0].clock_minute),
+                        )
+                        or 0.0
+                    )
+                    active_index, active_frame = min(
+                        enumerate(runtime.viewer_state.frames),
+                        key=lambda pair: abs(float(pair[1].clock_minute) - current_minute),
+                    )
+                    active_minute = float(active_frame.clock_minute)
             current_sub_count = int(current.get("substitution_count", 0))
 
             if substitutions:
@@ -737,8 +762,8 @@ class LiveMatchHub:
             if runtime is not None:
                 team_name = runtime.home_team_name if side_norm == "home" else runtime.away_team_name
                 team_id = runtime.home_team_id if side_norm == "home" else runtime.away_team_id
-                minute = 0
-                if runtime.last_snapshot is not None:
+                minute = int(round(active_minute)) if active_minute is not None else 0
+                if runtime.last_snapshot is not None and active_minute is None:
                     minute = getattr(
                         runtime.last_snapshot, "current_minute", getattr(runtime.last_snapshot, "minute", 0)
                     )
@@ -796,9 +821,7 @@ class LiveMatchHub:
 
                             # Update the active frame and every future frame, leaving earlier
                             # frames intact for faithful replay history.
-                            for frame in runtime.viewer_state.frames:
-                                if float(frame.clock_minute) + 1e-6 < active_minute:
-                                    continue
+                            for frame in runtime.viewer_state.frames[active_index:]:
                                 for p in frame.players:
                                     if getattr(p, "player_id", None) == out_id:
                                         p.player_id = in_id
@@ -809,9 +832,7 @@ class LiveMatchHub:
                     # Apply tactical geometry to the active and future frames only.
                     # Earlier frames remain an accurate record of the old tactics.
                     if runtime.viewer_state.frames:
-                        for frame in runtime.viewer_state.frames:
-                            if active_minute is not None and float(frame.clock_minute) + 1e-6 < active_minute:
-                                continue
+                        for frame in runtime.viewer_state.frames[active_index:]:
                             _reposition_frame_players(
                                 frame=frame,
                                 side=side_norm,
