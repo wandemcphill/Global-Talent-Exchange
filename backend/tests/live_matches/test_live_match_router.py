@@ -25,6 +25,7 @@ from app.models.user import User, UserRole
 from backend.tests.match_engine.helpers import build_request
 from backend.tests.support.secrets import MEDIA_SIGNING_TEST_SECRET, TEST_AUTH_SECRET
 from backend.tests.support.economic_policy import seed_economic_policy
+from app.reward_engine.service import RewardEngineService
 
 
 def _build_app() -> tuple[FastAPI, sessionmaker[Session]]:
