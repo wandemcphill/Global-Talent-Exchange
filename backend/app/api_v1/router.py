@@ -291,9 +291,16 @@ def get_tournament(
 @router.post("/tournaments/{tournament_id}/join", response_model=ApiEnvelope[dict[str, Any]])
 def join_tournament(
     tournament_id: str,
+    request: Request,
     current_user: User = Depends(get_current_user),
     service: GlobalApiV1Service = Depends(get_service),
 ) -> ApiEnvelope[dict[str, Any]]:
+    if request.url.path.startswith("/api/tournaments/"):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="The legacy /api/tournaments engine is retired; use /api/streamer-tournaments.",
+            headers={"Deprecation": "true"},
+        )
     try:
         payload = service.join_tournament(current_user, tournament_id)
     except GlobalApiV1Error as exc:
@@ -318,9 +325,16 @@ def rent_tournament_player(
 def submit_tournament_squad(
     tournament_id: str,
     payload: TournamentSquadSubmitRequest,
+    request: Request,
     current_user: User = Depends(get_current_user),
     service: GlobalApiV1Service = Depends(get_service),
 ) -> ApiEnvelope[dict[str, Any]]:
+    if request.url.path.startswith("/api/tournaments/"):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="The legacy /api/tournaments engine is retired; use /api/streamer-tournaments.",
+            headers={"Deprecation": "true"},
+        )
     try:
         result = service.submit_squad(current_user, tournament_id=tournament_id, player_ids=payload.player_ids)
     except GlobalApiV1Error as exc:
