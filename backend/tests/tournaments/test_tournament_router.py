@@ -24,7 +24,6 @@ from app.models.wallet import (
     LedgerEntryReason,
     LedgerSourceTag,
     LedgerTransaction,
-    LedgerTransactionStatus,
     LedgerTransactionType,
     LedgerUnit,
 )
