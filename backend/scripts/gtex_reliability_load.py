@@ -43,7 +43,6 @@ from app.viral.schemas import (
     ViralScoreBreakdownView,
 )
 from app.viral.session_tracker import ViralSessionTracker
-from app.wallets.service import LedgerPosting, WalletService
 
 
 class _MemoryPublisher:
