@@ -508,6 +508,7 @@ def _create_users(session_factory: sessionmaker[Session], *, count: int, label: 
                 email=f"{label}-{index}-{suffix}@load.test",
                 username=f"{label}_{index}_{suffix}",
                 display_name=f"{label}-{index}",
+                # Load-test fixture only; retain the existing synthetic scan sentinel.
                 password_hash="load-test-hash",
                 role=UserRole.USER,
             )
