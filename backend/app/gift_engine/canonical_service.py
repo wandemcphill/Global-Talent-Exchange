@@ -87,28 +87,6 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             recipient_club_id=kwargs.get("recipient_club_id"),
         )
         self.ensure_football_gift_catalog()
-        normalized_idempotency_key = kwargs.get("idempotency_key")
-        normalized_idempotency_key = normalized_idempotency_key.strip() if normalized_idempotency_key else None
-        if normalized_idempotency_key:
-            existing_transaction = self.session.scalar(
-                select(GiftTransaction).where(GiftTransaction.idempotency_key == normalized_idempotency_key)
-            )
-            if existing_transaction is not None:
-                if (
-                    existing_transaction.recipient_user_id != recipient_user_id
-                    or existing_transaction.recipient_club_id != recipient_club_id
-                ):
-                    raise GiftEngineError(
-                        "Idempotent gift reference belongs to a different recipient profile or club context.",
-                        reason="recipient_identity_conflict",
-                    )
-                if existing_transaction.sender_user_id != sender.id:
-                    raise GiftEngineError(
-                        "Idempotent gift reference belongs to a different sender profile.",
-                        reason="sender_identity_conflict",
-                    )
-                return existing_transaction
-
         resolved = self._resolve_recipient_context(
             sender=sender,
             recipient_user_id=recipient_user_id,
@@ -126,6 +104,71 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             raise GiftEngineError("Gift recipient could not be resolved.")
         if recipient.id == sender.id:
             raise GiftEngineError("Users cannot send gifts to themselves.")
+
+        requested_gift_key = str(kwargs.get("gift_key") or "").strip()
+        requested_catalog_item = self.session.scalar(
+            select(GiftCatalogItem).where(GiftCatalogItem.key == requested_gift_key)
+        )
+        normalized_quantity = self._normalize_amount(kwargs.get("quantity"))
+        if normalized_quantity <= Decimal("0.0000"):
+            raise GiftEngineError("Gift quantity must be positive.")
+
+        normalized_idempotency_key = kwargs.get("idempotency_key")
+        normalized_idempotency_key = normalized_idempotency_key.strip() if normalized_idempotency_key else None
+        if normalized_idempotency_key:
+            existing_transaction = self.session.scalar(
+                select(GiftTransaction).where(GiftTransaction.idempotency_key == normalized_idempotency_key)
+            )
+            if existing_transaction is not None:
+                if existing_transaction.sender_user_id != sender.id:
+                    raise GiftEngineError(
+                        "Idempotent gift reference belongs to a different sender profile.",
+                        reason="sender_identity_conflict",
+                    )
+                if (
+                    existing_transaction.recipient_user_id != recipient.id
+                    or existing_transaction.recipient_club_id != recipient_club_id
+                    or existing_transaction.recipient_type != recipient_type
+                    or existing_transaction.recipient_entity_id != recipient_entity_id
+                ):
+                    raise GiftEngineError(
+                        "Idempotent gift reference belongs to a different recipient profile or context.",
+                        reason="recipient_identity_conflict",
+                    )
+                if (
+                    requested_catalog_item is None
+                    or existing_transaction.gift_catalog_item_id != requested_catalog_item.id
+                ):
+                    raise GiftEngineError(
+                        "Idempotent gift reference was already used for a different gift item.",
+                        reason="idempotency_key_conflict",
+                    )
+                request_identity = {
+                    "quantity": normalized_quantity,
+                    "source_scope": requested_scope,
+                    "chat_thread_id": chat_thread_id,
+                    "discussion_thread_id": discussion_thread_id,
+                    "discussion_reply_id": discussion_reply_id,
+                    "match_id": kwargs.get("match_id"),
+                    "competition_id": kwargs.get("competition_id"),
+                    "note": kwargs.get("note"),
+                }
+                stored_identity = {
+                    "quantity": self._normalize_amount(existing_transaction.quantity),
+                    "source_scope": existing_transaction.source_scope,
+                    "chat_thread_id": existing_transaction.chat_thread_id,
+                    "discussion_thread_id": existing_transaction.discussion_thread_id,
+                    "discussion_reply_id": existing_transaction.discussion_reply_id,
+                    "match_id": existing_transaction.match_id,
+                    "competition_id": existing_transaction.competition_id,
+                    "note": existing_transaction.note,
+                }
+                if request_identity != stored_identity:
+                    raise GiftEngineError(
+                        "Idempotent gift reference was already used for a different gift request.",
+                        reason="idempotency_key_conflict",
+                    )
+                return existing_transaction
 
         if requested_scope == "gtex_competition":
             # This anti-abuse control lived only in the legacy send_gift() this
@@ -145,19 +188,10 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                     reason="match_gift_rate_limited",
                 )
 
-        gift_key = str(kwargs.get("gift_key") or "").strip()
-        gift = self.session.scalar(
-            select(GiftCatalogItem).where(
-                GiftCatalogItem.key == gift_key,
-                GiftCatalogItem.active.is_(True),
-            )
-        )
+        gift_key = requested_gift_key
+        gift = requested_catalog_item if requested_catalog_item is not None and requested_catalog_item.active else None
         if gift is None:
             raise GiftEngineError("Gift catalog item was not found.")
-
-        normalized_quantity = self._normalize_amount(kwargs.get("quantity"))
-        if normalized_quantity <= Decimal("0.0000"):
-            raise GiftEngineError("Gift quantity must be positive.")
         unit_price = self._normalize_amount(gift.fancoin_price)
         gross_amount = self._normalize_amount(unit_price * normalized_quantity)
         if gross_amount <= Decimal("0.0000"):
