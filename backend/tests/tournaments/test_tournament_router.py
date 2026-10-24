@@ -377,8 +377,7 @@ def test_refund_execution_is_audited_and_retries_do_not_double_refund(tournament
         assert _credit_balance(session, ids["user_id"]) == Decimal("1000.0000")
         refund_transactions = session.scalars(
             select(LedgerTransaction).where(
-                LedgerTransaction.idempotency_key
-                == f"tournament:{ids['tournament_id']}:refund:{ids['user_id']}"
+                LedgerTransaction.idempotency_key == f"tournament:{ids['tournament_id']}:refund:{ids['user_id']}"
             )
         ).all()
         assert len(refund_transactions) == 1
@@ -405,12 +404,16 @@ def test_unverified_entry_is_reported_and_never_refunded(tournament_client) -> N
 
     with session_factory() as session:
         assert _credit_balance(session, ids["user_id"]) == Decimal("1000.0000")
-        assert session.scalar(
-            select(func.count()).select_from(LedgerTransaction).where(
-                LedgerTransaction.idempotency_key
-                == f"tournament:{ids['tournament_id']}:refund:{ids['user_id']}"
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(LedgerTransaction)
+                .where(
+                    LedgerTransaction.idempotency_key == f"tournament:{ids['tournament_id']}:refund:{ids['user_id']}"
+                )
             )
-        ) == 0
+            == 0
+        )
 
 
 def test_pool_shortfall_blocks_entire_refund_batch(tournament_client) -> None:
