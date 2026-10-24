@@ -540,7 +540,14 @@ def buy_fan_coin(session: Session, user_id: str, gtex_amount) -> dict[str, Any]:
     return {"fan_coin": str(gtex_amount * FAN_COIN_PER_GTEX)}
 
 
-def send_gift(session: Session, user, club_id: str, gift_code: str, match_id: str | None) -> dict[str, Any]:
+def send_gift(
+    session: Session,
+    user,
+    club_id: str,
+    gift_code: str,
+    match_id: str | None = None,
+    app: Any = None,
+) -> dict[str, Any]:
     gift = GIFTS.get(gift_code)
     if gift is None:
         raise OwnerError("unknown_gift")
@@ -565,7 +572,63 @@ def send_gift(session: Session, user, club_id: str, gift_code: str, match_id: st
         raise OwnerError(str(exc), 402) from exc
     state = get_state(session, club_id)
     state.fans += max(1, gift["cost"] // 10)
-    return {"gift": gift, "sender": user.username, "ledger_event": ledger.serialize(event)}
+
+    animation_map = {
+        "stadium_roar": ("fan_chant", "crowd_roar"),
+        "captains_armband": ("legend_card_reveal", "tactics_board_ping"),
+        "home_end_banner": ("club_banner_unfurl", "anthem_trumpet"),
+        "golden_boot": ("world_best_award", "stadium_award_roar"),
+        "floodlights": ("stadium_flare", "flare_burn"),
+        "legendary_stadium": ("stadium_expansion_ceremony", "grand_stadium_echo"),
+        "cheer": ("fan_chant", "crowd_cheer"),
+        "flare": ("stadium_flare", "flare_burn"),
+        "drum": ("stadium_drums", "drum_roll"),
+        "banner": ("club_banner_unfurl", "anthem_trumpet"),
+    }
+    anim_key, snd_key = animation_map.get(gift_code, ("fan_chant", "crowd_cheer"))
+    broadcast_data = {
+        "match_id": match_id,
+        "club_id": club_id,
+        "gift_code": gift_code,
+        "gift_name": gift["name"],
+        "cost": gift["cost"],
+        "sender": user.username,
+        "sender_id": user.id,
+        "animation_key": anim_key,
+        "sound_key": snd_key,
+    }
+
+    try:
+        from app.realtime.service import publish_realtime_domain_event
+        publish_realtime_domain_event("match.gift", broadcast_data)
+        if app is not None and getattr(app.state, "realtime", None):
+            from app.core.events import DomainEvent
+            app.state.realtime.handle_event(DomainEvent(name="match.gift", payload=broadcast_data))
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("Failed to publish match.gift realtime event: %s", exc)
+
+    if match_id:
+        try:
+            hub = None
+            if app is not None:
+                from app.live_matches.service import ensure_live_match_hub
+                hub = ensure_live_match_hub(app)
+            else:
+                from app.live_matches.service import get_global_live_match_hub
+                hub = get_global_live_match_hub()
+            if hub is not None:
+                hub.broadcast_match_gift(match_id, broadcast_data)
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("Failed to broadcast gift to LiveMatchHub: %s", exc)
+
+    return {
+        "gift": gift,
+        "sender": user.username,
+        "ledger_event": ledger.serialize(event),
+        "broadcast": broadcast_data,
+    }
 
 
 def supporter_leaderboard(session: Session, club_id: str) -> list[dict[str, Any]]:

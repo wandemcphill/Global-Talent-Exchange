@@ -221,6 +221,7 @@ class LiveMatchHub:
     _matches: dict[str, _LiveMatchRuntime] = field(default_factory=dict)
     _halted_matches: dict[str, dict[str, object]] = field(default_factory=dict)
     _tactics: dict[str, dict[str, dict[str, Any]]] = field(default_factory=dict)
+    _match_gifts: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     _lock: RLock = field(default_factory=RLock)
     _hot_cache: HotPathCache = field(init=False)
 
@@ -989,6 +990,20 @@ class LiveMatchHub:
             )
             return {"home": home_t, "away": away_t}
 
+    def broadcast_match_gift(self, match_id: str, gift_payload: dict[str, Any]) -> None:
+        with self._lock:
+            gifts = self._match_gifts.setdefault(match_id, [])
+            gifts.append(dict(gift_payload))
+            if len(gifts) > 20:
+                self._match_gifts[match_id] = gifts[-20:]
+            runtime = self._matches.get(match_id)
+            channel = runtime.channel if runtime is not None else f"match:{match_id}:events"
+        self._publish_channel(channel, {"kind": "gift", "payload": dict(gift_payload)})
+
+    def get_recent_gifts(self, match_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            return list(self._match_gifts.get(match_id, []))
+
     def _run_stream(self, match_id: str) -> None:
         while True:
             with self._lock:
@@ -1660,7 +1675,15 @@ def _decimal_line(probability: float) -> float:
     return round(1 / safe_probability, 2)
 
 
+_GLOBAL_LIVE_MATCH_HUB: LiveMatchHub | None = None
+
+
+def get_global_live_match_hub() -> LiveMatchHub | None:
+    return _GLOBAL_LIVE_MATCH_HUB
+
+
 def ensure_live_match_hub(app: FastAPI, *, step_interval_seconds: float | None = None) -> LiveMatchHub:
+    global _GLOBAL_LIVE_MATCH_HUB
     hub = getattr(app.state, "live_match_hub", None)
     if hub is None:
         hub = LiveMatchHub(
@@ -1682,6 +1705,7 @@ def ensure_live_match_hub(app: FastAPI, *, step_interval_seconds: float | None =
     )
     if step_interval_seconds is not None:
         hub.step_interval_seconds = step_interval_seconds
+    _GLOBAL_LIVE_MATCH_HUB = hub
     return hub
 
 
@@ -1900,4 +1924,4 @@ def _pressure_value(value: object | None) -> float:
     return _float_value(value, default=0.0)
 
 
-__all__ = ["LiveMatchError", "LiveMatchHub", "LiveMatchPlaybackContext", "ensure_live_match_hub"]
+__all__ = ["LiveMatchError", "LiveMatchHub", "LiveMatchPlaybackContext", "ensure_live_match_hub", "get_global_live_match_hub"]

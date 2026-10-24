@@ -955,8 +955,22 @@ def fan_coin(
 
 
 @router.post("/gifts/send")
-def gift(body: GiftRequest, user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
-    return _run(session, money.send_gift, session, user, body.club_id, body.gift_code, body.match_id)
+def gift(
+    body: GiftRequest,
+    request: Request,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(
+        session,
+        money.send_gift,
+        session,
+        user,
+        body.club_id,
+        body.gift_code,
+        body.match_id,
+        app=request.app,
+    )
 
 
 @router.post("/support-units/buy")

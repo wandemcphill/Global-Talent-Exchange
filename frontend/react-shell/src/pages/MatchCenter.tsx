@@ -98,7 +98,7 @@ const TACTICAL_PRESETS = [
   },
 ];
 
-function GiftRail({ match, clubId }: any) {
+function GiftRail({ match, clubId, onGiftSent }: any) {
   const refresh = useRefreshOwner();
   const [feed, setFeed] = useState<string[]>([]);
   const targets = [match.home_club_id, match.away_club_id].filter((c: string) => !c.startsWith("ai:"));
@@ -109,6 +109,12 @@ function GiftRail({ match, clubId }: any) {
       const { data } = await api.post("/owner/gifts/send", { club_id: target, gift_code: g.code, match_id: match.id });
       setFeed((f) => [`${data.sender} sent ${g.name}`, ...f].slice(0, 5));
       refresh();
+      onGiftSent?.({
+        sender: data.sender,
+        name: g.name,
+        code: g.code,
+        anim: data.broadcast?.animation_key || "fan_chant",
+      });
       toast.success(`Gift sent: ${g.name}`);
     } catch (e) {
       toast.error(errMsg(e));
@@ -214,6 +220,7 @@ function Pitch2DView({
   ballOwner,
   pitchPlayers,
   ball,
+  activeGift,
 }: {
   selectedPlayer: number | null;
   onSelectPlayer: (num: number | null) => void;
@@ -232,6 +239,7 @@ function Pitch2DView({
     role?: string;
   }>;
   ball?: { x: number; y: number } | null;
+  activeGift?: { sender: string; name: string; code: string; anim?: string } | null;
 }) {
   const homeCoords = (pitchPlayers || [])
     .filter((p) => p.is_home)
@@ -408,6 +416,28 @@ function Pitch2DView({
           </g>
         )}
       </svg>
+
+      {/* On-pitch Gift Celebration Animation */}
+      {activeGift && (
+        <div
+          data-testid="on-pitch-gift-animation"
+          className="absolute inset-x-0 top-6 z-20 flex justify-center pointer-events-none animate-bounce"
+        >
+          <div className="flex items-center gap-3 rounded-full border border-amber-400/60 bg-gradient-to-r from-amber-950/95 via-slate-900/95 to-amber-950/95 px-5 py-2.5 shadow-2xl backdrop-blur-md">
+            <span className="text-2xl">
+              {activeGift.code === "flare" ? "🔥" : activeGift.code === "drum" ? "🥁" : activeGift.code === "banner" ? "🚩" : activeGift.code === "captains_armband" ? "🎖️" : activeGift.code === "golden_boot" ? "👟" : activeGift.code === "floodlights" ? "💡" : activeGift.code === "legendary_stadium" ? "🏟️" : "🎉"}
+            </span>
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wider text-amber-300">
+                {activeGift.name} Delivered!
+              </div>
+              <div className="text-[11px] text-amber-100/90">
+                <span className="font-semibold text-emerald-400">{activeGift.sender}</span> backed the squad on pitch
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1147,6 +1177,29 @@ export default function MatchCenter() {
   const [tempo, setTempo] = useState(52);
   const [risk, setRisk] = useState(45);
 
+  // Live Gifting Broadcast Animation State
+  const [activeGift, setActiveGift] = useState<{ sender: string; name: string; code: string; anim?: string } | null>(null);
+  const [lastGiftId, setLastGiftId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const recent = (liveState as any)?.recent_gifts;
+    if (recent && recent.length > 0) {
+      const latest = recent[recent.length - 1];
+      const giftKey = `${latest.sender}-${latest.gift_code}-${latest.cost}`;
+      if (giftKey !== lastGiftId) {
+        setLastGiftId(giftKey);
+        setActiveGift({
+          sender: latest.sender,
+          name: latest.gift_name,
+          code: latest.gift_code,
+          anim: latest.animation_key,
+        });
+        const timer = setTimeout(() => setActiveGift(null), 4500);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [liveState, lastGiftId]);
+
   useEffect(() => {
     if (liveState || localMinute >= 120 || isPaused) return undefined;
     const intervalMs = Math.max(80, Math.floor(380 / speed));
@@ -1350,6 +1403,7 @@ export default function MatchCenter() {
               ballOwner={null}
               pitchPlayers={liveState?.pitch_players}
               ball={liveState?.ball}
+              activeGift={activeGift}
             />
           </div>
         )}
@@ -1417,7 +1471,14 @@ export default function MatchCenter() {
       {/* Right Column: Owner View, Gift Rail, Navigation */}
       <div className="space-y-6 lg:col-span-4">
         {done && <OwnerView view={m.narrative?.[`${side}_owner_view`]} />}
-        <GiftRail match={m} clubId={clubId} />
+        <GiftRail
+          match={m}
+          clubId={clubId}
+          onGiftSent={(g: any) => {
+            setActiveGift(g);
+            setTimeout(() => setActiveGift(null), 4500);
+          }}
+        />
         <Link
           to={`/app/competitions/${m.competition_id}`}
           className="gx-btn gx-btn-secondary flex w-full items-center justify-center gap-1.5"
