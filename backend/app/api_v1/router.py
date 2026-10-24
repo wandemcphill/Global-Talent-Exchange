@@ -308,11 +308,10 @@ def rent_tournament_player(
     current_user: User = Depends(get_current_user),
     service: GlobalApiV1Service = Depends(get_service),
 ) -> ApiEnvelope[dict[str, Any]]:
-    try:
-        result = service.rent_player(current_user, tournament_id=tournament_id, player_id=payload.player_id)
-    except GlobalApiV1Error as exc:
-        _raise_global_api_http_error(exc)
-    return ok(result)
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Tournament rentals have moved to the national team engine at /national-team-engine/entries/{entry_id}/rentals",
+    )
 
 
 @router.post("/tournaments/{tournament_id}/squad", response_model=ApiEnvelope[dict[str, Any]])

@@ -605,7 +605,8 @@ def test_direct_creator_signup_creates_a_dedicated_creator_account(app_client) -
         ),
     )
     assert response.status_code == 201, response.text
-    issued = response.json()
+    raw_issued = response.json()
+    issued = raw_issued.get("data", raw_issued)
     assert issued["user"]["account_type"] == "creator"
     assert issued["landing_route"] == "/app/hub"
 
@@ -764,15 +765,11 @@ def test_issue_274_signup_model_and_turnstile_security_regression(app_client, mo
 
     monkeypatch.setattr(turnstile.httpx, "post", fake_siteverify)
 
-    retired_creator_response = client.post(
-        "/auth/signup/creator",
-        json=creator_signup_payload(
-            email="turnstile-creator@example.com",
-            username="turnstile_creator",
-            password=TEST_PASSWORD,
-        ),
+    retired_register_response = client.post(
+        "/auth/register",
+        json={"email": "turnstile-creator@example.com", "password": TEST_PASSWORD},
     )
-    assert retired_creator_response.status_code == 410, retired_creator_response.text
+    assert retired_register_response.status_code == 410, retired_register_response.text
 
     base_payload = {
         "email": "issue274-user@example.com",

@@ -107,7 +107,7 @@ def manager_profile(snapshot: dict[str, Any]) -> dict[str, Any]:
     youth = int(clamp(rng.randint(7, 16) + (3 if "academy_promotion_bias" in traits else 0) + rarity_bonus // 2, 1, 20))
     return {
         "manager_id": manager_id,
-        "name": snapshot.get("display_name") or "Tunde Bakare",
+        "name": snapshot.get("display_name") or snapshot.get("name") or "Tunde Bakare",
         "rarity": rarity,
         "tactical_preference": snapshot.get("mentality")
         or rng.choice(["technical", "pressing", "counter", "balanced"]),

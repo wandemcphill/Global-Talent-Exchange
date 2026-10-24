@@ -10,6 +10,8 @@ from app.coin_traders.schemas import (
     CoinTraderAdminLiquidityTransferView,
     CoinTradeAdminResolutionRequest,
     CoinTradeDisputeRequest,
+    CoinTradeMessageCreateRequest,
+    CoinTradeMessageView,
     CoinTradeOrderCreateRequest,
     CoinTradeOrderView,
     CoinTradeProofRequest,
@@ -194,6 +196,35 @@ def dispute_coin_trade_order(
         _raise_coin_trader_error(exc)
 
 
+@router.post(
+    "/api/coin-traders/orders/{order_id}/messages",
+    response_model=CoinTradeMessageView,
+    status_code=status.HTTP_201_CREATED,
+)
+def post_coin_trade_order_message(
+    order_id: str,
+    payload: CoinTradeMessageCreateRequest,
+    service: CoinTraderService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> CoinTradeMessageView:
+    try:
+        return service.add_order_message(order_id, payload, actor=current_user)
+    except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
+        _raise_coin_trader_error(exc)
+
+
+@router.get("/api/coin-traders/orders/{order_id}/messages", response_model=list[CoinTradeMessageView])
+def list_coin_trade_order_messages(
+    order_id: str,
+    service: CoinTraderService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> list[CoinTradeMessageView]:
+    try:
+        return service.list_order_messages(order_id, actor=current_user)
+    except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
+        _raise_coin_trader_error(exc)
+
+
 @router.get("/api/coin-traders/{profile_id}", response_model=CoinTraderProfileView)
 def get_coin_trader_profile(profile_id: str, service: CoinTraderService = Depends(_service)) -> CoinTraderProfileView:
     try:
@@ -316,6 +347,19 @@ def admin_resolve_coin_trade_order(
         return service.admin_resolve_order(order_id, payload, admin=current_user)
     except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
         _raise_coin_trader_error(exc)
+
+
+@admin_router.post(
+    "/api/admin/coin-traders/orders/expire-stale",
+    response_model=list[CoinTradeOrderView],
+)
+def admin_expire_stale_coin_trade_orders(
+    request: Request,
+    service: CoinTraderService = Depends(_service),
+    current_user: User = Depends(get_current_admin),
+) -> list[CoinTradeOrderView]:
+    _require_liquidity_desk_permission(request, current_user)
+    return service.expire_stale_orders()
 
 
 __all__ = ["admin_router", "router"]

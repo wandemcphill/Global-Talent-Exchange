@@ -15,7 +15,6 @@ from app.models.notification_record import NotificationRecord
 from app.models.user import User
 from app.notifications.schemas import NotificationEventMatrixItemView, NotificationTestEventRequest
 
-
 NOTIFICATION_EVENT_MATRIX: tuple[dict[str, Any], ...] = (
     {
         "event_key": "transfer_listing_created",
@@ -73,6 +72,26 @@ NOTIFICATION_EVENT_MATRIX: tuple[dict[str, Any], ...] = (
         "template_key": "coin_trader.order.accepted",
         "title": "Coin trader order accepted",
         "default_message": "A coin trader accepted an order.",
+        "audience": "buyer_seller",
+        "deep_link_route": "/app/coin-traders",
+        "preference_key": "allow_market",
+    },
+    {
+        "event_key": "order_expired",
+        "topic": "coin_trader",
+        "template_key": "coin_trader.order.expired",
+        "title": "Coin trade order expired",
+        "default_message": "A coin trade order expired due to payment window elapse.",
+        "audience": "buyer_seller",
+        "deep_link_route": "/app/coin-traders",
+        "preference_key": "allow_market",
+    },
+    {
+        "event_key": "coin_trader_order_message",
+        "topic": "coin_trader",
+        "template_key": "coin_trader.order.message",
+        "title": "New trade message",
+        "default_message": "A new message was posted on your coin trade order.",
         "audience": "buyer_seller",
         "deep_link_route": "/app/coin-traders",
         "preference_key": "allow_market",
@@ -541,7 +560,11 @@ class NotificationCenter:
         created_at = event.occurred_at
         if event.name.startswith("wallet."):
             user_id = payload.get("user_id") or payload.get("owner_user_id")
-            return [self._build_notification(user_id, "wallet", event.name.replace(".", " "), payload, created_at)] if isinstance(user_id, str) else []
+            return (
+                [self._build_notification(user_id, "wallet", event.name.replace(".", " "), payload, created_at)]
+                if isinstance(user_id, str)
+                else []
+            )
         if event.name == "JACKPOT_TRIGGERED":
             notifications: list[Notification] = []
             for winner in payload.get("winners") or []:
@@ -564,20 +587,40 @@ class NotificationCenter:
             for key in ("seller_user_id", "buyer_user_id", "user_id"):
                 user_id = payload.get(key)
                 if isinstance(user_id, str):
-                    notifications.append(self._build_notification(user_id, "market", event.name.replace(".", " "), payload, created_at))
+                    notifications.append(
+                        self._build_notification(user_id, "market", event.name.replace(".", " "), payload, created_at)
+                    )
             return notifications
         if event.name.startswith("competition."):
             return self._translate_competition_event(event)
         if event.name.startswith("hosted_competition."):
             user_id = payload.get("user_id")
             topic = "competition"
-            return [self._build_notification(user_id if isinstance(user_id, str) else None, topic, event.name.replace(".", " "), payload, created_at)]
+            return [
+                self._build_notification(
+                    user_id if isinstance(user_id, str) else None,
+                    topic,
+                    event.name.replace(".", " "),
+                    payload,
+                    created_at,
+                )
+            ]
         if event.name.startswith("transfer_market."):
             notifications: list[Notification] = []
-            for key in ("user_id", "seller_user_id", "buyer_user_id", "previous_bidder_user_id", "highest_bidder_user_id"):
+            for key in (
+                "user_id",
+                "seller_user_id",
+                "buyer_user_id",
+                "previous_bidder_user_id",
+                "highest_bidder_user_id",
+            ):
                 user_id = payload.get(key)
                 if isinstance(user_id, str):
-                    notifications.append(self._build_notification(user_id, "transfer_market", event.name.replace(".", " "), payload, created_at))
+                    notifications.append(
+                        self._build_notification(
+                            user_id, "transfer_market", event.name.replace(".", " "), payload, created_at
+                        )
+                    )
             return notifications
         return []
 
@@ -632,7 +675,9 @@ class NotificationCenter:
         return None, None
 
     @staticmethod
-    def _build_notification(user_id: str | None, topic: str, message: str, payload: dict[str, Any], created_at: datetime) -> Notification:
+    def _build_notification(
+        user_id: str | None, topic: str, message: str, payload: dict[str, Any], created_at: datetime
+    ) -> Notification:
         template_key = payload.get("template_key")
         resolved_message = payload.get("message")
         return Notification(
@@ -643,7 +688,9 @@ class NotificationCenter:
             resource_id=str(payload.get("resource_id")) if payload.get("resource_id") is not None else None,
             fixture_id=str(payload.get("fixture_id")) if payload.get("fixture_id") is not None else None,
             competition_id=str(payload.get("competition_id")) if payload.get("competition_id") is not None else None,
-            message=str(resolved_message) if isinstance(resolved_message, str) and resolved_message.strip() else message,
+            message=(
+                str(resolved_message) if isinstance(resolved_message, str) and resolved_message.strip() else message
+            ),
             metadata={k: v for k, v in payload.items() if isinstance(k, str)},
             created_at=created_at,
         )
@@ -673,11 +720,20 @@ class NotificationSettingsService:
         return pref
 
     def list_subscriptions(self, *, actor: User) -> list[NotificationSubscription]:
-        stmt = select(NotificationSubscription).where(NotificationSubscription.user_id == actor.id).order_by(NotificationSubscription.updated_at.desc())
+        stmt = (
+            select(NotificationSubscription)
+            .where(NotificationSubscription.user_id == actor.id)
+            .order_by(NotificationSubscription.updated_at.desc())
+        )
         return list(self.session.scalars(stmt).all())
 
     def upsert_subscription(self, *, actor: User, payload) -> NotificationSubscription:
-        item = self.session.scalar(select(NotificationSubscription).where(NotificationSubscription.user_id == actor.id, NotificationSubscription.subscription_key == payload.subscription_key))
+        item = self.session.scalar(
+            select(NotificationSubscription).where(
+                NotificationSubscription.user_id == actor.id,
+                NotificationSubscription.subscription_key == payload.subscription_key,
+            )
+        )
         if item is None:
             item = NotificationSubscription(user_id=actor.id, subscription_key=payload.subscription_key)
             self.session.add(item)
@@ -703,7 +759,9 @@ class NotificationSettingsService:
         return list(self.session.scalars(stmt).all())
 
     def publish_announcement(self, *, actor: User, payload) -> PlatformAnnouncement:
-        item = self.session.scalar(select(PlatformAnnouncement).where(PlatformAnnouncement.announcement_key == payload.announcement_key))
+        item = self.session.scalar(
+            select(PlatformAnnouncement).where(PlatformAnnouncement.announcement_key == payload.announcement_key)
+        )
         if item is None:
             item = PlatformAnnouncement(announcement_key=payload.announcement_key, published_by_user_id=actor.id)
             self.session.add(item)
@@ -766,7 +824,9 @@ class NotificationEventMatrixService:
                 return item
         raise NotificationServiceError("notification_event_not_found")
 
-    def publish_test_event(self, *, actor: User, payload: NotificationTestEventRequest) -> tuple[NotificationRecord, NotificationEventMatrixItemView]:
+    def publish_test_event(
+        self, *, actor: User, payload: NotificationTestEventRequest
+    ) -> tuple[NotificationRecord, NotificationEventMatrixItemView]:
         item = self.get_matrix_item(payload.event_key)
         target = self.session.get(User, payload.target_user_id)
         if target is None:

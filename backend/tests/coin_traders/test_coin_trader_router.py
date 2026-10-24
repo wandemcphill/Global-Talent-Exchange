@@ -3,28 +3,71 @@ from __future__ import annotations
 from backend.tests.support.secrets import TEST_PASSWORD
 
 
-def test_normal_user_cannot_apply_to_operate_a_coin_trader_desk(
+def test_normal_user_can_apply_and_operates_desk_after_admin_approval(
     client,
     auth_user_factory,
+    bootstrap_admin_headers,
 ) -> None:
-    user = auth_user_factory(suffix="normal-user-no-trader-promotion")
+    user = auth_user_factory(suffix="normal-user-unified-desk")
     response = client.post(
         "/api/coin-traders/apply",
         headers=user["headers"],
         json={
-            "display_name": "Unpermitted Desk",
+            "display_name": "Unified Desk",
             "country_code": "NG",
             "terms": {"same_name_account_only": True},
-            "payment_methods": [],
-            "bank_accounts": [],
+            "payment_methods": [{"label": "Bank transfer", "type": "bank_transfer"}],
+            "bank_accounts": [{"bank": "Zenith"}],
             "metadata_json": {},
         },
     )
-    assert response.status_code == 403, response.text
-    assert "dedicated Coin Trader account" in response.json()["detail"]
+    assert response.status_code == 201, response.text
+    profile_id = response.json()["id"]
+    assert response.json()["status"] == "applied"
 
     own_profile = client.get("/api/coin-traders/me", headers=user["headers"])
-    assert own_profile.status_code == 403, own_profile.text
+    assert own_profile.status_code == 200, own_profile.text
+    assert own_profile.json()["status"] == "applied"
+
+    unapproved_rate = client.put(
+        "/api/coin-traders/me/rates",
+        headers=user["headers"],
+        json={
+            "coin_unit": "coin",
+            "fiat_currency": "NGN",
+            "buy_rate_fiat": "860",
+            "sell_rate_fiat": "920",
+            "min_coin_amount": "100",
+            "max_coin_amount": "50000",
+            "available_liquidity": "10000",
+            "is_active": True,
+        },
+    )
+    assert unapproved_rate.status_code == 403, unapproved_rate.text
+
+    approval = client.post(
+        f"/api/admin/coin-traders/{profile_id}/approve",
+        headers=bootstrap_admin_headers,
+        json={"tier": "bronze", "note": "approved unified user desk"},
+    )
+    assert approval.status_code == 200, approval.text
+    assert approval.json()["status"] == "approved"
+
+    approved_rate = client.put(
+        "/api/coin-traders/me/rates",
+        headers=user["headers"],
+        json={
+            "coin_unit": "coin",
+            "fiat_currency": "NGN",
+            "buy_rate_fiat": "860",
+            "sell_rate_fiat": "920",
+            "min_coin_amount": "100",
+            "max_coin_amount": "50000",
+            "available_liquidity": "10000",
+            "is_active": True,
+        },
+    )
+    assert approved_rate.status_code == 200, approved_rate.text
 
 
 def test_coin_trader_router_order_lifecycle(
@@ -461,3 +504,118 @@ def _create_scoped_admin_headers(
     login = client.post("/auth/login", json={"email": email, "password": password})
     assert login.status_code == 200, login.text
     return {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+
+def test_coin_trader_router_cannot_cancel_after_proof(
+    client,
+    auth_user_factory,
+    bootstrap_admin_headers,
+) -> None:
+    trader = auth_user_factory(suffix="router-cancel-proof-trader", funded_coin="100000", account_type="coin_trader")
+    buyer = auth_user_factory(suffix="router-cancel-proof-buyer")
+    profile_id = _approved_profile_with_rate(
+        client,
+        trader_headers=trader["headers"],
+        admin_headers=bootstrap_admin_headers,
+        suffix="cancel-proof",
+    )
+
+    created = client.post(
+        "/api/coin-traders/orders",
+        headers=buyer["headers"],
+        json={
+            "trader_profile_id": profile_id,
+            "direction": "user_buys",
+            "coin_unit": "coin",
+            "coin_amount": "500",
+            "fiat_currency": "NGN",
+            "payment_method": "bank_transfer",
+            "idempotency_key": "router-cancel-proof-001",
+        },
+    )
+    assert created.status_code == 201
+    order_id = created.json()["id"]
+
+    accepted = client.post(f"/api/coin-traders/orders/{order_id}/accept", headers=trader["headers"])
+    assert accepted.status_code == 200
+
+    proof = client.post(
+        f"/api/coin-traders/orders/{order_id}/proof",
+        headers=buyer["headers"],
+        json={"proof_reference": "ref-1234", "note": "fiat sent"},
+    )
+    assert proof.status_code == 200
+
+    # P0 fix: Seller cannot cancel after proof submitted
+    cancel_attempt = client.post(f"/api/coin-traders/orders/{order_id}/cancel", headers=trader["headers"])
+    assert cancel_attempt.status_code == 400
+    assert "submitted payment proof cannot be cancelled" in cancel_attempt.json()["detail"]
+
+
+def test_coin_trader_router_order_messages_chat(
+    client,
+    auth_user_factory,
+    bootstrap_admin_headers,
+) -> None:
+    trader = auth_user_factory(suffix="router-chat-trader", funded_coin="100000", account_type="coin_trader")
+    buyer = auth_user_factory(suffix="router-chat-buyer")
+    outsider = auth_user_factory(suffix="router-chat-outsider")
+    profile_id = _approved_profile_with_rate(
+        client,
+        trader_headers=trader["headers"],
+        admin_headers=bootstrap_admin_headers,
+        suffix="chat-flow",
+    )
+
+    created = client.post(
+        "/api/coin-traders/orders",
+        headers=buyer["headers"],
+        json={
+            "trader_profile_id": profile_id,
+            "direction": "user_buys",
+            "coin_unit": "coin",
+            "coin_amount": "500",
+            "fiat_currency": "NGN",
+            "payment_method": "bank_transfer",
+            "idempotency_key": "router-chat-001",
+        },
+    )
+    assert created.status_code == 201
+    order_id = created.json()["id"]
+
+    # Post message
+    msg_post = client.post(
+        f"/api/coin-traders/orders/{order_id}/messages",
+        headers=buyer["headers"],
+        json={"message": "Payment sent via mobile app"},
+    )
+    assert msg_post.status_code == 201
+    assert msg_post.json()["message"] == "Payment sent via mobile app"
+
+    # List messages
+    msg_list = client.get(
+        f"/api/coin-traders/orders/{order_id}/messages",
+        headers=trader["headers"],
+    )
+    assert msg_list.status_code == 200
+    assert len(msg_list.json()) == 1
+    assert msg_list.json()[0]["message"] == "Payment sent via mobile app"
+
+    # Outsider cannot view messages
+    outsider_attempt = client.get(
+        f"/api/coin-traders/orders/{order_id}/messages",
+        headers=outsider["headers"],
+    )
+    assert outsider_attempt.status_code == 403
+
+
+def test_coin_trader_router_admin_expire_stale_orders(
+    client,
+    bootstrap_admin_headers,
+) -> None:
+    res = client.post(
+        "/api/admin/coin-traders/orders/expire-stale",
+        headers=bootstrap_admin_headers,
+    )
+    assert res.status_code == 200
+    assert isinstance(res.json(), list)

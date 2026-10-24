@@ -256,6 +256,12 @@ class CreatorSignupRequest(BaseModel):
     banner_asset_ref: str | None = Field(default=None, max_length=255)
     monetization: list[str] = Field(default_factory=list, max_length=4)
     turnstile_token: str | None = Field(default=None, max_length=2048)
+    club_name: str | None = Field(default=None, max_length=160)
+    club_short_tag: str | None = Field(default=None, max_length=40)
+    club_type: ClubType | None = None
+    crest_asset_ref: str | None = Field(default=None, max_length=255)
+    primary_color: str | None = Field(default=None, max_length=32)
+    secondary_color: str | None = Field(default=None, max_length=32)
 
     @field_validator("email")
     @classmethod
@@ -269,6 +275,18 @@ class CreatorSignupRequest(BaseModel):
         if resolved is None:
             raise ValueError("Username is required.")
         return resolved
+
+    @field_validator("club_name", "club_short_tag", "crest_asset_ref", "primary_color", "secondary_color")
+    @classmethod
+    def normalize_club_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+    @property
+    def creates_club(self) -> bool:
+        return bool(self.club_name and self.club_name.strip())
 
 
 class TraderSignupRequest(BaseModel):

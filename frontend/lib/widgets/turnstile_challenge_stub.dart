@@ -11,13 +11,13 @@ class TurnstileChallenge extends StatelessWidget {
   final ValueChanged<String?> onTokenChanged;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 8),
-    child: Text(
-      siteKey.trim().isEmpty
-          ? 'Turnstile is not configured for this build.'
-          : 'Complete signup in the GTEX web app to verify this security challenge.',
-      style: const TextStyle(color: Color(0xFF93A0AA), fontSize: 12),
-    ),
-  );
+  Widget build(BuildContext context) => siteKey.trim().isEmpty
+      ? const SizedBox.shrink()
+      : const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            'Complete signup in the GTEX web app to verify this security challenge.',
+            style: TextStyle(color: Color(0xFF93A0AA), fontSize: 12),
+          ),
+        );
 }

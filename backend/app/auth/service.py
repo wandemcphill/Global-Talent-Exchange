@@ -656,8 +656,8 @@ class AuthService:
     ) -> ClubProfile:
         from app.clubs.ownership_cap import ClubOwnershipCapError, assert_can_acquire_club
 
-        if user.account_type != PublicAccountType.USER:
-            raise AuthError("Only football user accounts can create clubs.")
+        if user.account_type not in {PublicAccountType.USER, PublicAccountType.CREATOR}:
+            raise AuthError("Only football user or creator accounts can create clubs.")
         try:
             assert_can_acquire_club(session, user.id)
         except ClubOwnershipCapError as exc:
@@ -697,6 +697,27 @@ class AuthService:
         ClubDynastyService(session).ensure_progress(club.id)
         ClubTrophyService(session).ensure_cabinet(club.id)
         AccessControlService(session).ensure_club_organization(club, owner_user_id=user.id)
+        if user.account_type == PublicAccountType.CREATOR:
+            from app.models.creator_profile import CreatorProfile
+            from app.models.creator_provisioning import CreatorSquad
+
+            creator_profile = session.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id).limit(1))
+            if creator_profile is not None:
+                existing_squad = session.scalar(select(CreatorSquad).where(CreatorSquad.club_id == club.id).limit(1))
+                if existing_squad is None:
+                    session.add(
+                        CreatorSquad(
+                            club_id=club.id,
+                            creator_profile_id=creator_profile.id,
+                            metadata_json={"origin": "creator_signup"},
+                        )
+                    )
+        from app.services.regen_bootstrap_service import RegenBootstrapService
+
+        try:
+            RegenBootstrapService(session).bootstrap_for_new_club(club)
+        except Exception:
+            pass
         session.flush()
         return club
 

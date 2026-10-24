@@ -570,6 +570,70 @@ def appoint_manager(session: Session, user_id: str, club_id: str, snapshot: dict
     if state.stage == "manager":
         state.stage = "competition"
     _morale_shift(session, club_id, 3)
+
+    # Bridge to canonical club_growth staff contracts and assignments
+    try:
+        from app.models.club_growth import ClubStaffProfile, ClubStaffContract, ClubStaffAssignment
+        from app.club_growth.staff_role_policy import ROLE_FIRST_TEAM_MANAGER
+
+        mgr_id = str(profile.get("manager_id") or "default")
+        market_key = f"mgr_{mgr_id}"
+        staff_profile = session.scalar(
+            select(ClubStaffProfile).where(ClubStaffProfile.market_key == market_key)
+        )
+        if staff_profile is None:
+            staff_profile = ClubStaffProfile(
+                market_key=market_key,
+                display_name=profile.get("name", "First Team Manager"),
+                staff_type=ROLE_FIRST_TEAM_MANAGER,
+                rarity="standard",
+                rating=int(profile.get("tactical_rating") or profile.get("rating") or 70),
+                salary_minor=int(profile.get("salary") or 0) * 100,
+            )
+            session.add(staff_profile)
+            session.flush()
+
+        now = datetime.now(timezone.utc)
+        contract = session.scalar(
+            select(ClubStaffContract).where(
+                ClubStaffContract.club_id == club_id,
+                ClubStaffContract.staff_profile_id == staff_profile.id,
+                ClubStaffContract.status == "active",
+            )
+        )
+        if contract is None:
+            contract = ClubStaffContract(
+                club_id=club_id,
+                staff_profile_id=staff_profile.id,
+                status="active",
+                role_scope=ROLE_FIRST_TEAM_MANAGER,
+                started_at=now,
+                accepted_at=now,
+                salary_minor=staff_profile.salary_minor,
+            )
+            session.add(contract)
+            session.flush()
+
+        assignment = session.scalar(
+            select(ClubStaffAssignment).where(
+                ClubStaffAssignment.club_id == club_id,
+                ClubStaffAssignment.role_key == ROLE_FIRST_TEAM_MANAGER,
+            )
+        )
+        if assignment is None:
+            assignment = ClubStaffAssignment(
+                club_id=club_id,
+                staff_contract_id=contract.id,
+                role_key=ROLE_FIRST_TEAM_MANAGER,
+                active=True,
+            )
+            session.add(assignment)
+        else:
+            assignment.staff_contract_id = contract.id
+            assignment.active = True
+    except Exception as exc:
+        pass
+
     return state
 
 
@@ -597,6 +661,28 @@ def fire_manager(session: Session, user_id: str, club_id: str) -> dict[str, Any]
         raise OwnerError(str(exc), 402) from exc
     state.manager_json = engine.manager_profile(engine.DEFAULT_MANAGER)
     _morale_shift(session, club_id, -6)
+
+    # Terminate canonical club_growth staff assignment/contract
+    try:
+        from app.models.club_growth import ClubStaffContract, ClubStaffAssignment
+        from app.club_growth.staff_role_policy import ROLE_FIRST_TEAM_MANAGER
+
+        assignment = session.scalar(
+            select(ClubStaffAssignment).where(
+                ClubStaffAssignment.club_id == club_id,
+                ClubStaffAssignment.role_key == ROLE_FIRST_TEAM_MANAGER,
+            )
+        )
+        if assignment is not None:
+            assignment.active = False
+            if assignment.staff_contract_id:
+                contract = session.get(ClubStaffContract, assignment.staff_contract_id)
+                if contract and contract.status == "active":
+                    contract.status = "terminated"
+                    contract.terminated_at = datetime.now(timezone.utc)
+    except Exception as exc:
+        pass
+
     return {
         "compensation": compensation,
         "why": "Dismissal triggers contract compensation and unsettles the dressing room (-6 morale).",

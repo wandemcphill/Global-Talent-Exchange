@@ -127,13 +127,7 @@ class _TurnstileChallengeState extends State<TurnstileChallenge> {
   @override
   Widget build(BuildContext context) {
     if (widget.siteKey.trim().isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 8),
-        child: Text(
-          'Turnstile site key is missing. Configure GTE_TURNSTILE_SITE_KEY for the web build.',
-          style: TextStyle(color: Color(0xFF93A0AA), fontSize: 12),
-        ),
-      );
+      return const SizedBox.shrink();
     }
     return SizedBox(
       height: 72,

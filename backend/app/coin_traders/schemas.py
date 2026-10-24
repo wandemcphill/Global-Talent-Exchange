@@ -128,6 +128,19 @@ class CoinTradeProofRequest(CommonSchema):
     note: str | None = Field(default=None, max_length=1000)
 
 
+class CoinTradeMessageCreateRequest(CommonSchema):
+    message: str = Field(min_length=1, max_length=1000)
+
+
+class CoinTradeMessageView(CommonSchema):
+    id: str
+    order_id: str
+    sender_user_id: str
+    sender_name: str
+    message: str
+    created_at: datetime
+
+
 class CoinTradeDisputeRequest(CommonSchema):
     reason: str = Field(min_length=3, max_length=500)
     evidence: dict[str, Any] = Field(default_factory=dict)
@@ -156,6 +169,7 @@ class CoinTradeOrderView(CommonSchema):
     proof: dict[str, Any] = Field(default_factory=dict)
     terms_snapshot: dict[str, Any] = Field(default_factory=dict)
     ledger_refs: dict[str, Any] = Field(default_factory=dict)
+    messages: list[CoinTradeMessageView] = Field(default_factory=list)
     metadata_json: dict[str, Any] = Field(default_factory=dict)
 
 

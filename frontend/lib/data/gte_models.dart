@@ -648,6 +648,10 @@ class GteCreatorSignupRequest {
     required this.primaryLanguage,
     required this.monetization,
     this.turnstileToken,
+    this.clubName,
+    this.clubShortTag,
+    this.primaryColor,
+    this.secondaryColor,
   });
 
   final String creatorName;
@@ -660,6 +664,10 @@ class GteCreatorSignupRequest {
   final String primaryLanguage;
   final List<String> monetization;
   final String? turnstileToken;
+  final String? clubName;
+  final String? clubShortTag;
+  final String? primaryColor;
+  final String? secondaryColor;
 
   Map<String, Object?> toJson() => <String, Object?>{
     'creator_name': creatorName,
@@ -672,6 +680,10 @@ class GteCreatorSignupRequest {
     'primary_language': primaryLanguage,
     'monetization': monetization,
     if (turnstileToken != null) 'turnstile_token': turnstileToken,
+    if (clubName != null && clubName!.trim().isNotEmpty) 'club_name': clubName!.trim(),
+    if (clubShortTag != null && clubShortTag!.trim().isNotEmpty) 'club_short_tag': clubShortTag!.trim(),
+    if (primaryColor != null) 'primary_color': primaryColor,
+    if (secondaryColor != null) 'secondary_color': secondaryColor,
   };
 }
 

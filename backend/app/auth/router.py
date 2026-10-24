@@ -748,6 +748,23 @@ def signup_creator(
                 },
             )
         )
+        session.flush()
+        if payload.creates_club:
+            from app.models.club_profile import ClubType
+
+            service.create_explicit_club_profile(
+                session,
+                user,
+                club_name=payload.club_name or "",
+                short_name=payload.club_short_tag or (payload.club_name[:4].upper() if payload.club_name else ""),
+                club_type=payload.club_type or ClubType.COMMUNITY,
+                country_code=payload.country[:2].upper() if payload.country else "XX",
+                region_name=None,
+                city_name=None,
+                crest_asset_ref=payload.crest_asset_ref,
+                primary_color=payload.primary_color or "#0F766E",
+                secondary_color=payload.secondary_color or "#F8FAFC",
+            )
         issued_session, confirmation_code = _issue_signup_session(
             service=service,
             session=session,
@@ -826,6 +843,32 @@ def signup_trader(
             recovery_phrase_hash=payload.recovery_phrase_hash,
             security_pin_hash=payload.security_pin_hash,
         )
+        # ARCH-002: Ensure modern CoinTraderProfile exists so trader is ready on the OTC desk
+        from app.models.coin_trader import CoinTraderProfile, CoinTraderProfileStatus
+
+        existing_coin_profile = session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id))
+        if existing_coin_profile is None:
+            coin_profile = CoinTraderProfile(
+                user_id=user.id,
+                display_name=payload.trading_alias or user.display_name or user.username,
+                country_code=payload.country[:8].upper() if payload.country else "NG",
+                status=CoinTraderProfileStatus.APPLIED.value,
+                tier="bronze",
+                terms_json={
+                    "same_name_account_only": True,
+                    "payment_proof_required": True,
+                    "preferred_currency": payload.preferred_currency,
+                },
+                payment_methods_json=[{"label": "Bank transfer", "type": "bank_transfer"}],
+                bank_accounts_json=[],
+                metadata_json={
+                    "trading_experience": payload.trading_experience,
+                    "interests": list(payload.interests),
+                    "wallet_label": payload.wallet_label,
+                    "created_via": "signup_trader",
+                },
+            )
+            session.add(coin_profile)
         # KYC is intentionally NOT submitted at signup. Traders get instant access; KYC is
         # required only when they initiate a withdrawal (enforced in the treasury flow).
         issued_session, confirmation_code = _issue_signup_session(

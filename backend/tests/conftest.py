@@ -45,6 +45,7 @@ os.environ.setdefault("GTE_RUN_STARTUP_SEEDING", "0")
 os.environ.setdefault("GTE_STARTUP_PROFILE", "test")
 os.environ.setdefault("GTE_TASK_QUEUE_ENABLED", "0")
 os.environ.setdefault("GTE_TEST_AUTH_FIXTURE_MODE", "1")
+os.environ.setdefault("GTE_DISTRIBUTED_RATE_LIMIT_ENABLED", "0")
 os.environ.setdefault("GTE_VIRAL_RANKING_WORKER_ENABLED", "0")
 
 
@@ -59,6 +60,7 @@ def test_settings(tmp_path_factory: pytest.TempPathFactory):
         "DATABASE_URL": database_url,
         "GTE_DATABASE_URL": database_url,
         "GTE_MEDIA_STORAGE_ROOT": str(media_root),
+        "GTE_DISTRIBUTED_RATE_LIMIT_ENABLED": "0",
     }
     previous_env = {key: os.environ.get(key) for key in managed_env}
 

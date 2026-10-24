@@ -87,6 +87,7 @@ def get_club_sale_market_valuation(
 
 
 @router.get("/api/clubs/sale-market/listings", response_model=ClubSaleListingCollectionView)
+@router.get("/api/clubs/marketplace", response_model=ClubSaleListingCollectionView)
 @router.get("/clubs/marketplace", response_model=ClubSaleListingCollectionView)
 def list_public_club_sale_market_listings(
     limit: int = Query(default=50, ge=1, le=100),

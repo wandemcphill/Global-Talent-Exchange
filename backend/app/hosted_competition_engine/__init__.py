@@ -25,6 +25,25 @@ from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletS
 
 DEFAULT_TEMPLATES: tuple[dict[str, object], ...] = (
     {
+        'template_key': 'user-hosted-national-cup',
+        'title': 'User-Hosted National Cup',
+        'description': 'An 8-nation knockout tournament for community national team rivalries.',
+        'competition_type': 'user_hosted_national_cup',
+        'team_type': 'national_team',
+        'age_grade': 'senior',
+        'cup_or_league': 'cup',
+        'participants': 8,
+        'viewing_mode': 'broadcast',
+        'gift_rules': {'enabled': True},
+        'seeding_method': 'random',
+        'is_user_hostable': True,
+        'entry_fee_fancoin': Decimal('100.0000'),
+        'reward_pool_fancoin': Decimal('640.0000'),
+        'platform_fee_bps': 2000,
+        'metadata_json': {'family': 'national_team'},
+        'active': True,
+    },
+    {
         'template_key': 'user-hosted-cup-8',
         'title': 'User Hosted Cup',
         'description': 'An 8-team knockout cup for creator leagues and community rivalries.',

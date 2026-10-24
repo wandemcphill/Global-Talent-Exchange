@@ -296,6 +296,36 @@ class GtexCoinTraderApi {
     return GtexCoinTradeOrder.fromJson(payload);
   }
 
+  Future<GtexCoinTradeMessage> sendOrderMessage(
+    String orderId,
+    String message,
+  ) async {
+    final Object? payload = await client.post(
+      _path('/api/coin-traders/orders/$orderId/messages'),
+      body: <String, Object?>{'message': message},
+    );
+    return GtexCoinTradeMessage.fromJson(payload);
+  }
+
+  Future<List<GtexCoinTradeMessage>> fetchOrderMessages(String orderId) {
+    return client.withFallback<List<GtexCoinTradeMessage>>(() async {
+      final List<dynamic> payload = await client.getList(
+        _path('/api/coin-traders/orders/$orderId/messages'),
+      );
+      return payload
+          .map(GtexCoinTradeMessage.fromJson)
+          .toList(growable: false);
+    }, () async => const <GtexCoinTradeMessage>[]);
+  }
+
+  Future<List<GtexCoinTradeOrder>> adminExpireStaleOrders() async {
+    final Object? payload = await client.post(
+      _path('/api/admin/coin-traders/orders/expire-stale'),
+    );
+    final List<dynamic> list = payload is List<dynamic> ? payload : const <dynamic>[];
+    return list.map(GtexCoinTradeOrder.fromJson).toList(growable: false);
+  }
+
   String _path(String path) {
     final Uri base = Uri.parse(
       client.config.baseUrl.endsWith('/')

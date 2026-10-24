@@ -423,6 +423,8 @@ class _GtexCreatorSignupScreenState extends State<GtexCreatorSignupScreen> {
   final _country = TextEditingController(text: 'NG');
   final _club = TextEditingController();
   final _language = TextEditingController(text: 'English');
+  final _clubName = TextEditingController();
+  final _clubTag = TextEditingController();
   String _category = 'Football News';
   bool _submitting = false;
   String? _error;
@@ -453,7 +455,10 @@ class _GtexCreatorSignupScreenState extends State<GtexCreatorSignupScreen> {
       ], (value) => setState(() => _category = value)),
       _field(_club, 'Main Club Supported'),
       _field(_language, 'Primary Language'),
-      _sectionLabel(context, '02', 'Monetization'),
+      _sectionLabel(context, '02', 'Creator Club (Optional)'),
+      _field(_clubName, 'Club Name (optional - start your club now)', required: false),
+      _field(_clubTag, 'Club Short Tag (e.g. CFC)', required: false),
+      _sectionLabel(context, '03', 'Monetization'),
       const Text(
         'Donations • Fan Coin Revenue • Paid Streams • Sponsorships',
         style: TextStyle(color: Color(0xFF93A0AA), fontSize: 12),
@@ -469,7 +474,7 @@ class _GtexCreatorSignupScreenState extends State<GtexCreatorSignupScreen> {
   );
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_turnstileToken?.isNotEmpty != true) {
+    if (_gtexTurnstileSiteKey.isNotEmpty && _turnstileToken?.isNotEmpty != true) {
       setState(() => _error = 'Complete the security check to continue.');
       return;
     }
@@ -492,6 +497,8 @@ class _GtexCreatorSignupScreenState extends State<GtexCreatorSignupScreen> {
           category: _category,
           mainClubSupported: _club.text,
           primaryLanguage: _language.text,
+          clubName: _clubName.text.trim().isNotEmpty ? _clubName.text.trim() : null,
+          clubShortTag: _clubTag.text.trim().isNotEmpty ? _clubTag.text.trim() : null,
           monetization: const <String>[
             'donations',
             'fan_coin_revenue',
@@ -581,7 +588,7 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
   );
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_turnstileToken?.isNotEmpty != true) {
+    if (_gtexTurnstileSiteKey.isNotEmpty && _turnstileToken?.isNotEmpty != true) {
       setState(() => _error = 'Complete the security check to continue.');
       return;
     }
@@ -791,6 +798,7 @@ Widget _field(
   TextEditingController controller,
   String label, {
   bool obscure = false,
+  bool required = true,
 }) => TextFormField(
   controller: controller,
   obscureText: obscure,
@@ -815,7 +823,7 @@ Widget _field(
   ),
   validator:
       (String? value) =>
-          value == null || value.trim().isEmpty ? '$label is required' : null,
+          required && (value == null || value.trim().isEmpty) ? '$label is required' : null,
 );
 
 Widget _sectionLabel(BuildContext context, String label, String title) =>

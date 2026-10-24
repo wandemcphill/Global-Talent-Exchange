@@ -3,13 +3,22 @@
  *
  * CRA inlines PUBLIC_URL at build time. The Render publish script sets it to
  * `/console`. Local `npm start` leaves it empty, so the dev server stays at `/`.
- * Router basename, static images, and full-page navigations all read this
- * value so path handling is not repeated in each screen.
+ * If served under `/console`, runtime pathname detection automatically falls back
+ * to `/console` so routing remains robust across local and production builds.
  */
-const rawPublicUrl = (process.env.PUBLIC_URL || "").trim();
+function resolvePublicUrl(): string {
+  const rawPublicUrl = (process.env.PUBLIC_URL || "").trim().replace(/\/+$/, "");
+  if (rawPublicUrl) {
+    return rawPublicUrl;
+  }
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/console")) {
+    return "/console";
+  }
+  return "";
+}
 
-/** No trailing slash. Empty in local development. `/console` on Render. */
-export const PUBLIC_URL = rawPublicUrl.replace(/\/+$/, "");
+/** No trailing slash. Empty in local development at root. `/console` on Render. */
+export const PUBLIC_URL = resolvePublicUrl();
 
 /** React Router basename. `/` when the shell is served from the site root. */
 export const ROUTER_BASENAME = PUBLIC_URL || "/";

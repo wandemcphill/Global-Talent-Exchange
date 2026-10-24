@@ -404,3 +404,19 @@ class _RecordingWebSocket:
 
     async def receive_text(self) -> str:
         raise WebSocketDisconnect(code=1000)
+
+
+def test_legacy_tournament_rent_endpoint_returns_410_gone(app_client) -> None:
+    app, client = app_client
+    _, token = _create_authenticated_user(app)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.post(
+        "/api/v2/tournaments/t1/rent",
+        headers=headers,
+        json={"player_id": "p1"},
+    )
+    assert response.status_code == 410
+    payload = response.json()
+    detail = payload.get("detail", "")
+    assert "national team engine" in detail.lower() or "410" in str(payload)
