@@ -26,8 +26,12 @@ from app.core.database import create_session_factory, ensure_database_schema_cur
 from app.core.event_backbone import build_outbox_event
 from app.core.events import DomainEvent
 from app.models.creator_attention_earnings import ClipEarningsLog, CreatorWallet
+from app.models.tournament import TournamentGameType, TournamentPlayer
 from app.models.user import User, UserRole
+from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
 from app.services.creator_attention_earnings_service import CreatorAttentionEarningsService
+from app.tournaments.schemas import TournamentCreateRequest
+from app.tournaments.service import TournamentService, TournamentValidationError
 from app.viral.ingestion_schemas import ClipEvent, ClipEventMetadata, ClipEventType
 from app.viral.personalized_feed_service import (
     InMemoryPersonalizedFeedStore,
@@ -43,6 +47,7 @@ from app.viral.schemas import (
     ViralScoreBreakdownView,
 )
 from app.viral.session_tracker import ViralSessionTracker
+from app.wallets.service import LedgerPosting, WalletService
 
 
 class _MemoryPublisher:
@@ -109,8 +114,6 @@ def main() -> None:
     parser.add_argument(
         "--scenario",
         choices=(
-            "tournament-join-spike",
-            "tournament-burst",
             "feed-refresh-storm",
             "earnings-storm",
             "outbox-backlog",
@@ -124,26 +127,29 @@ def main() -> None:
     parser.add_argument("--events", type=int, default=5000)
     parser.add_argument("--concurrency", type=int, default=32)
     args = parser.parse_args()
-    retired_scenarios = {"tournament-join-spike", "tournament-burst"}
-    if args.scenario in retired_scenarios:
-        parser.error(
-            "The legacy /api/tournaments engine is retired. "
-            "These paid-entry load scenarios are disabled; migrate the load test to the hosted-competition engine."
-        )
 
     with _database_context(database_url=args.database_url) as context:
-        scenarios = (
-            [args.scenario]
-            if args.scenario != "all"
-            else [
-                "feed-refresh-storm",
-                "earnings-storm",
-                "outbox-backlog",
-            ]
-        )
+        scenarios = [args.scenario] if args.scenario != "all" else [
+            "feed-refresh-storm",
+            "earnings-storm",
+            "outbox-backlog",
+        ]
         summary: dict[str, Any] = {}
         for scenario in scenarios:
-            if scenario == "feed-refresh-storm":
+            if scenario == "tournament-join-spike":
+                summary[scenario] = run_tournament_join_spike(
+                    context.session_factory,
+                    users=max(args.users, 2),
+                    concurrency=max(args.concurrency, 1),
+                )
+            elif scenario == "tournament-burst":
+                summary[scenario] = run_tournament_burst(
+                    context.session_factory,
+                    tournaments=max(args.tournaments, 1),
+                    players_per_tournament=8,
+                    concurrency=max(args.concurrency, 1),
+                )
+            elif scenario == "feed-refresh-storm":
                 summary[scenario] = run_feed_refresh_storm(
                     users=max(args.users, 1),
                     concurrency=max(args.concurrency, 1),
@@ -163,6 +169,120 @@ def main() -> None:
                     batch_size=max(args.concurrency * 4, 10),
                 )
         print(json.dumps(summary, indent=2, default=_json_default))
+
+
+def run_tournament_join_spike(
+    session_factory: sessionmaker[Session],
+    *,
+    users: int,
+    concurrency: int,
+) -> dict[str, Any]:
+    user_ids = _create_users(session_factory, count=users, label="tour-spike")
+    _fund_users(session_factory, user_ids=user_ids, amount=Decimal("500.0000"))
+    with session_factory() as session:
+        tournament = TournamentService(session=session).create_tournament(
+            TournamentCreateRequest(
+                name="Reliability Join Spike",
+                game_type=TournamentGameType.SIMULATION,
+                entry_fee=50,
+                max_players=64,
+                round_timeout_minutes=5,
+            )
+        )
+        session.commit()
+    tournament_id = str(tournament["tournament_id"])
+
+    started_at = perf_counter()
+    results: list[dict[str, Any]] = []
+    with ThreadPoolExecutor(max_workers=concurrency) as executor:
+        futures = [executor.submit(_join_tournament_once, session_factory, tournament_id, user_id) for user_id in user_ids]
+        for future in as_completed(futures):
+            results.append(future.result())
+    duration = perf_counter() - started_at
+
+    with session_factory() as session:
+        view = TournamentService(session=session).get_tournament(tournament_id)
+        players = list(
+            session.scalars(
+                select(TournamentPlayer).where(TournamentPlayer.tournament_id == tournament_id)
+            ).all()
+        )
+
+    successful = [item for item in results if item["ok"]]
+    unique_players = {player.user_id for player in players}
+    unique_slots = {player.bracket_slot for player in players}
+    return {
+        "duration_seconds": round(duration, 4),
+        "requested_joins": len(user_ids),
+        "successful_joins": len(successful),
+        "player_count": len(players),
+        "unique_player_count": len(unique_players),
+        "unique_slot_count": len(unique_slots),
+        "status": view["status"],
+        "prize_pool": view["prize_pool"],
+        "expected_prize_pool": len(players) * int(view["entry_fee"]),
+        "overfill_detected": len(players) > int(view["max_players"]),
+        "duplicate_join_detected": len(players) != len(unique_players),
+        "duplicate_slot_detected": len(players) != len(unique_slots),
+        "failure_reasons": _count_values(item["reason"] for item in results if not item["ok"]),
+    }
+
+
+def run_tournament_burst(
+    session_factory: sessionmaker[Session],
+    *,
+    tournaments: int,
+    players_per_tournament: int,
+    concurrency: int,
+) -> dict[str, Any]:
+    total_users = tournaments * players_per_tournament
+    user_ids = _create_users(session_factory, count=total_users, label="tour-burst")
+    _fund_users(session_factory, user_ids=user_ids, amount=Decimal("300.0000"))
+
+    tournament_ids: list[str] = []
+    with session_factory() as session:
+        service = TournamentService(session=session)
+        for index in range(tournaments):
+            view = service.create_tournament(
+                TournamentCreateRequest(
+                    name=f"Reliability Burst {index}",
+                    game_type=TournamentGameType.SIMULATION,
+                    entry_fee=25,
+                    max_players=players_per_tournament,
+                    round_timeout_minutes=5,
+                )
+            )
+            tournament_ids.append(str(view["tournament_id"]))
+        session.commit()
+
+    assignments: list[tuple[str, str]] = []
+    cursor = 0
+    for tournament_id in tournament_ids:
+        for _ in range(players_per_tournament):
+            assignments.append((tournament_id, user_ids[cursor]))
+            cursor += 1
+
+    started_at = perf_counter()
+    with ThreadPoolExecutor(max_workers=concurrency) as executor:
+        futures = [
+            executor.submit(_join_tournament_once, session_factory, tournament_id, user_id)
+            for tournament_id, user_id in assignments
+        ]
+        outcomes = [future.result() for future in as_completed(futures)]
+    duration = perf_counter() - started_at
+
+    with session_factory() as session:
+        players = list(session.scalars(select(TournamentPlayer)).all())
+
+    return {
+        "duration_seconds": round(duration, 4),
+        "tournaments_created": tournaments,
+        "requested_joins": len(assignments),
+        "successful_joins": sum(1 for item in outcomes if item["ok"]),
+        "persisted_players": len(players),
+        "duplicate_entries_detected": len(players) != len({(player.tournament_id, player.user_id) for player in players}),
+        "failure_reasons": _count_values(item["reason"] for item in outcomes if not item["ok"]),
+    }
 
 
 def run_feed_refresh_storm(*, users: int, concurrency: int) -> dict[str, Any]:
@@ -347,7 +467,9 @@ def run_outbox_backlog(
     duration = perf_counter() - started_at
 
     with session_factory() as session:
-        processed = list(session.scalars(select(EventOutbox).where(EventOutbox.status == "processed")).all())
+        processed = list(
+            session.scalars(select(EventOutbox).where(EventOutbox.status == "processed")).all()
+        )
     return {
         "duration_seconds": round(duration, 4),
         "events_requested": events,
@@ -356,6 +478,22 @@ def run_outbox_backlog(
         "publisher_messages": len(publisher.messages),
         "batch_size": batch_size,
     }
+
+
+def _join_tournament_once(
+    session_factory: sessionmaker[Session],
+    tournament_id: str,
+    user_id: str,
+) -> dict[str, Any]:
+    with session_factory() as session:
+        service = TournamentService(session=session)
+        try:
+            service.join_tournament(tournament_id, user_id=user_id)
+            session.commit()
+            return {"ok": True, "reason": None}
+        except TournamentValidationError as exc:
+            session.rollback()
+            return {"ok": False, "reason": exc.reason}
 
 
 def _create_users(session_factory: sessionmaker[Session], *, count: int, label: str) -> list[str]:
@@ -375,6 +513,169 @@ def _create_users(session_factory: sessionmaker[Session], *, count: int, label: 
             user_ids.append(str(user.id))
         session.commit()
     return user_ids
+
+
+def _fund_users(
+    session_factory: sessionmaker[Session],
+    *,
+    user_ids: list[str],
+    amount: Decimal,
+) -> None:
+    wallet_service = WalletService()
+    with session_factory() as session:
+        treasury_account = wallet_service.ensure_operations_account(session, LedgerUnit.CREDIT)
+        users = list(session.scalars(select(User).where(User.id.in_(user_ids))).all())
+        for user in users:
+            user_account = wallet_service.get_user_account(session, user, LedgerUnit.CREDIT)
+            wallet_service.append_transaction(
+                session,
+                postings=[
+                    LedgerPosting(account=user_account, amount=amount),
+                    LedgerPosting(account=treasury_account, amount=-amount),
+                ],
+                reason=LedgerEntryReason.ADJUSTMENT,
+                source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+                transaction_type=LedgerTransactionType.ADJUSTMENT,
+                reference=f"load-fund:{user.id}",
+                description="GTEX reliability load funding",
+                idempotency_key=f"load-fund:{user.id}",
+            )
+        session.commit()
+
+
+class _NoDbSession:
+    def get_bind(self):
+        return None
+
+
+class _DatabaseContext:
+    def __init__(self, engine: Engine, session_factory: sessionmaker[Session], tempdir: TemporaryDirectory[str] | None) -> None:
+        self.engine = engine
+        self.session_factory = session_factory
+        self.tempdir = tempdir
+
+    def close(self) -> None:
+        self.engine.dispose()
+        if self.tempdir is not None:
+            self.tempdir.cleanup()
+
+
+def _database_context(*, database_url: str | None):
+    tempdir = None if database_url else TemporaryDirectory(prefix="gtex-reliability-load-")
+    resolved_database_url = database_url or f"sqlite+pysqlite:///{Path(tempdir.name) / 'load.db'}"
+    connect_args = {"check_same_thread": False} if resolved_database_url.startswith("sqlite") else {}
+    engine = create_engine(resolved_database_url, connect_args=connect_args)
+    ensure_database_schema_current(engine)
+    session_factory = create_session_factory(engine)
+    context = _DatabaseContext(engine=engine, session_factory=session_factory, tempdir=tempdir)
+    return _context_manager(context)
+
+
+def _context_manager(context: _DatabaseContext):
+    class _Manager:
+        def __enter__(self) -> _DatabaseContext:
+            return context
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            del exc_type, exc, tb
+            context.close()
+
+    return _Manager()
+
+
+def _build_clip(
+    *,
+    clip_id: str,
+    creator_id: str,
+    viral_score: int,
+    ranking_score: float,
+    event_type: str,
+    format_key: str,
+) -> ViralClipView:
+    return ViralClipView(
+        clip_id=clip_id,
+        match_id=f"match-{clip_id}",
+        highlight_id=f"highlight-{clip_id}",
+        title=clip_id,
+        event_type=event_type,
+        minute=88,
+        viral_score=viral_score,
+        engagement=80.0,
+        freshness=90.0,
+        ranking_score=ranking_score,
+        tags=[event_type],
+        breakdown=ViralScoreBreakdownView(total=viral_score, base_event=50),
+        caption=ViralCaptionView(hook=clip_id, caption=clip_id),
+        distribution_accounts=[],
+        editor=ViralEditPlanView(crop_filter="scale=1080:1920", overlay_text=clip_id),
+        formats=[],
+        analytics=ViralClipAnalyticsView(
+            clip_id=clip_id,
+            view_count=1000,
+            completions=800,
+            watch_time=12.0,
+            total_watch_time=12000.0,
+            loops=220.0,
+            loop_rate=0.22,
+            shares=90,
+            comments=24,
+            skips=200,
+            completion_rate=0.8,
+            share_rate=0.09,
+            comment_rate=0.024,
+            views_last_10min=240,
+            views_last_60min=640,
+        ),
+        feedback=ViralFeedbackLoopView(
+            performance_tier="high_retention",
+            recommendation="increase",
+            increase_similar_clips=True,
+            actions=["boost"],
+            viral_analysis="strong retention",
+        ),
+        metadata={"creator_id": creator_id, "format_key": format_key},
+    )
+
+
+def _build_session_event(
+    *,
+    event_id: str,
+    clip_id: str,
+    session_id: str,
+    event_type: ClipEventType,
+    watch_time_ms: int,
+    video_length_ms: int,
+    content_type: str,
+    format_key: str,
+    clip_event_type: str,
+) -> ClipEvent:
+    return ClipEvent(
+        event_id=event_id,
+        clip_id=clip_id,
+        user_id=None,
+        session_id=session_id,
+        timestamp=datetime.now(UTC),
+        event_type=event_type,
+        watch_time_ms=watch_time_ms,
+        video_length_ms=video_length_ms,
+        metadata=ClipEventMetadata(
+            device="ios",
+            country="NG",
+            referrer="load-test",
+            content_type=content_type,
+            format_key=format_key,
+            clip_event_type=clip_event_type,
+            tags=[clip_event_type],
+        ),
+    )
+
+
+def _count_values(values) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in values:
+        key = str(value or "unknown")
+        counts[key] = counts.get(key, 0) + 1
+    return counts
 
 
 def _json_default(value: Any) -> Any:
