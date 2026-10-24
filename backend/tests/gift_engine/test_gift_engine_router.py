@@ -13,7 +13,16 @@ from sqlalchemy.pool import StaticPool
 from app.auth.dependencies import get_current_user, get_session
 from app.auth.service import AuthService
 from app.gift_engine.router import router
-from app.models import Base, EconomicConversion, GiftCatalogItem, GiftTransaction, LedgerEntryReason, LedgerTransaction, LedgerUnit, RevenueShareRule
+from app.models import (
+    Base,
+    EconomicConversion,
+    GiftCatalogItem,
+    GiftTransaction,
+    LedgerEntryReason,
+    LedgerTransaction,
+    LedgerUnit,
+    RevenueShareRule,
+)
 from app.models.user import User
 from app.wallets.service import LedgerPosting, WalletService
 from backend.tests.support.economic_policy import seed_economic_policy
