@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from decimal import Decimal
 from pathlib import Path
 
@@ -24,6 +26,7 @@ from app.models.wallet import (
     LedgerEntryReason,
     LedgerSourceTag,
     LedgerTransaction,
+    LedgerTransactionStatus,
     LedgerTransactionType,
     LedgerUnit,
 )
@@ -496,3 +499,28 @@ def test_unknown_tournament_refund_target_returns_404(tournament_client) -> None
         headers=_headers(admin_id),
     )
     assert response.status_code == 404
+
+
+def test_concurrent_refund_requests_never_double_credit(tournament_client) -> None:
+    client, session_factory = tournament_client
+    ids = _seed_entry(session_factory, suffix=4)
+    barrier = Barrier(2)
+
+    def execute() -> object:
+        barrier.wait(timeout=5)
+        return _execute_refunds(client, ids=ids)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        responses = list(executor.map(lambda _index: execute(), range(2)))
+
+    assert all(response.status_code in {200, 409} for response in responses)
+
+    with session_factory() as session:
+        assert _credit_balance(session, ids["user_id"]) == Decimal("1000.0000")
+        refund_transactions = session.scalars(
+            select(LedgerTransaction).where(
+                LedgerTransaction.idempotency_key == f"tournament:{ids['tournament_id']}:refund:{ids['user_id']}"
+            )
+        ).all()
+        assert len(refund_transactions) == 1
+        assert refund_transactions[0].status == LedgerTransactionStatus.COMMITTED
