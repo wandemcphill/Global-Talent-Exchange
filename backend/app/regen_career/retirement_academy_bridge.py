@@ -40,7 +40,7 @@ class RegenRetirementAcademyBridge:
             return None
         if plan.get("generation_status") == "completed":
             return RetirementAcademyBridgeResult(status="completed", trigger_key=trigger_key)
-        if not self.enabled():
+        if not self.enabled() and not plan.get("force_enable", False) and not state.get("force_enable", False):
             return RetirementAcademyBridgeResult(status="pending", trigger_key=trigger_key)
 
         existing_run = self.session.scalar(

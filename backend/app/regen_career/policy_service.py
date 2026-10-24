@@ -125,13 +125,12 @@ class RegenCareerPolicyService:
         )
 
     def _generation_season_number(self, regen_profile_id: str) -> int:
-        events = list(
-            self.session.scalars(
-                select(RegenGenerationEvent)
-                .where(RegenGenerationEvent.regen_profile_id == regen_profile_id)
-                .order_by(RegenGenerationEvent.created_at.asc(), RegenGenerationEvent.id.asc())
-            )
+        scalars_result = self.session.scalars(
+            select(RegenGenerationEvent)
+            .where(RegenGenerationEvent.regen_profile_id == regen_profile_id)
+            .order_by(RegenGenerationEvent.created_at.asc(), RegenGenerationEvent.id.asc())
         )
+        events = list(scalars_result.all() if hasattr(scalars_result, "all") else scalars_result)
         for event in events:
             raw_values = (
                 event.season_label,

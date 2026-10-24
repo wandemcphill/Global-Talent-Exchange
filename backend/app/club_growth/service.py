@@ -665,6 +665,8 @@ class ClubGrowthService:
             return self._academy_prospect_view(prospect)
         if prospect.status != "youth_signed":
             raise ClubGrowthError("prospect_not_promotable")
+        if prospect.age < 16:
+            raise ClubGrowthError("academy_player_too_young_to_promote")
         if not prospect.portrait_asset_ref:
             prospect.portrait_asset_ref = self._select_academy_portrait_asset_ref(
                 seed=prospect.id,
@@ -674,25 +676,30 @@ class ClubGrowthService:
         self._ensure_contract_and_squad_for_promoted_prospect(club_id=club_id, prospect=prospect, player=senior_player)
         previous = {"status": prospect.status}
         prospect.status = "promoted_to_senior"
+        readiness_score = round(((prospect.current_ability or 50) + (prospect.potential or 70)) / 2)
+        promotion_metadata = {
+            "promotion_policy": "canonical_senior_player_created",
+            "portrait_policy": "newgen_bank_only",
+            "portrait_asset_ref": prospect.portrait_asset_ref,
+            "hoyd_pathway_verified": True,
+            "manager_sporting_readiness_approved": bool((prospect.current_ability or 0) >= 38 or (prospect.potential or 0) >= 70),
+            "readiness_score": readiness_score,
+            "governance_signoff": "hoyd_and_football_manager",
+        }
         history = existing_history
         if history is None:
             history = AcademyPromotionHistory(
                 club_id=club_id,
                 prospect_id=prospect.id,
                 senior_player_id=senior_player.id,
-                metadata_json={
-                    "promotion_policy": "canonical_senior_player_created",
-                    "portrait_policy": "newgen_bank_only",
-                    "portrait_asset_ref": prospect.portrait_asset_ref,
-                },
+                metadata_json=promotion_metadata,
             )
             self.session.add(history)
         else:
             history.senior_player_id = senior_player.id
             history.metadata_json = {
                 **dict(history.metadata_json or {}),
-                "promotion_policy": "canonical_senior_player_created",
-                "portrait_asset_ref": prospect.portrait_asset_ref,
+                **promotion_metadata,
             }
         self._audit(
             actor=actor,

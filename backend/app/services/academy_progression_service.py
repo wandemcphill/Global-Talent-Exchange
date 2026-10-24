@@ -73,6 +73,7 @@ class AcademyProgressionService:
             current_status=player.status,
             readiness_score=readiness_score,
             completed_cycles=completed_cycles,
+            age=player.age,
         )
 
         return AcademyPlayerProgressView(
@@ -99,7 +100,10 @@ class AcademyProgressionService:
         current_status: AcademyPlayerStatus,
         readiness_score: int,
         completed_cycles: int,
+        age: int | None = None,
     ) -> AcademyPlayerStatus:
+        if requested_status == AcademyPlayerStatus.PROMOTED and age is not None and age < 16:
+            return AcademyPlayerStatus.STANDOUT
         if requested_status in {AcademyPlayerStatus.PROMOTED, AcademyPlayerStatus.RELEASED}:
             return requested_status
         if requested_status in {
@@ -110,6 +114,8 @@ class AcademyProgressionService:
         }:
             return requested_status
         if readiness_score >= 85 and completed_cycles >= 3:
+            if age is not None and age < 16:
+                return AcademyPlayerStatus.STANDOUT
             return AcademyPlayerStatus.PROMOTED
         if readiness_score >= 78:
             return AcademyPlayerStatus.STANDOUT
