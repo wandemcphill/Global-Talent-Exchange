@@ -278,9 +278,16 @@ def get_club_fans(
 @router.get("/tournaments/{tournament_id}", response_model=ApiEnvelope[dict[str, Any]])
 def get_tournament(
     tournament_id: str,
+    request: Request,
     _current_user: User = Depends(get_current_user),
     service: GlobalApiV1Service = Depends(get_service),
 ) -> ApiEnvelope[dict[str, Any]]:
+    if request.url.path.startswith(("/tournaments/", "/api/tournaments/", "/api/v2/tournaments/")):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="The legacy /api/tournaments engine is retired; use /api/streamer-tournaments.",
+            headers={"Deprecation": "true"},
+        )
     try:
         payload = service.get_tournament(tournament_id)
     except GlobalApiV1Error as exc:
