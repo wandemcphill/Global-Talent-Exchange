@@ -440,3 +440,23 @@ def test_legacy_tournament_join_aliases_return_410_gone(app_client, path: str) -
     )
     assert response.status_code == 410, response.text
     assert response.headers.get("Deprecation") == "true" or "retired" in response.text.lower()
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/tournaments/t1/squad",
+        "/api/tournaments/t1/squad",
+        "/api/v2/tournaments/t1/squad",
+    ],
+)
+def test_legacy_tournament_squad_aliases_return_410_gone(app_client, path: str) -> None:
+    app, client = app_client
+    _, token = _create_authenticated_user(app)
+    response = client.post(
+        path,
+        headers={"Authorization": f"Bearer {token}"},
+        json={"player_ids": ["legacy-player"]},
+    )
+    assert response.status_code == 410, response.text
+    assert response.headers.get("Deprecation") == "true" or "retired" in response.text.lower()
