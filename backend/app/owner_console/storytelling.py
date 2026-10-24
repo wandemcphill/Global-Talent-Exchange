@@ -21,12 +21,14 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.club_profile import ClubProfile
 from app.models.user import User
 from app.owner_console import ledger
 from app.owner_console.models import (
+    LedgerEvent,
     OwnerBroadcastEvent,
     OwnerShowroomAsset,
     OwnerCompetition,
@@ -812,6 +814,105 @@ def get_club_showroom(session: Session, user_id: str, club_id: str) -> dict[str,
     }
 
 
+
+def _showroom_purchase_response(
+    asset: OwnerShowroomAsset,
+    broadcast: OwnerBroadcastEvent | None,
+) -> dict[str, Any]:
+    return {
+        "asset": {
+            "id": asset.id,
+            "catalog_key": asset.catalog_key,
+            "custom_name": asset.custom_name,
+            "price_gtex": str(asset.purchase_price_gtex),
+            "image_url": asset.image_url,
+        },
+        "broadcast_globally": bool(broadcast),
+        "broadcast_event": broadcast_dict(broadcast) if broadcast else None,
+    }
+
+
+def _resolve_idempotent_showroom_purchase(
+    session: Session,
+    *,
+    user_id: str,
+    club_id: str,
+    catalog_key: str,
+    custom_name: str | None,
+    idempotency_key: str | None,
+) -> dict[str, Any] | None:
+    if not idempotency_key:
+        return None
+
+    asset = session.scalar(
+        select(OwnerShowroomAsset).where(OwnerShowroomAsset.idempotency_key == idempotency_key)
+    )
+    broadcast = session.scalar(
+        select(OwnerBroadcastEvent).where(OwnerBroadcastEvent.idempotency_key == idempotency_key)
+    )
+    if asset is None:
+        if broadcast is not None:
+            raise OwnerError(
+                "idempotency_key_conflict",
+                409,
+                "This idempotency key is already associated with another verified broadcast event.",
+            )
+        return None
+
+    if (
+        asset.owner_user_id != user_id
+        or asset.club_id != club_id
+        or asset.catalog_key != catalog_key
+        or (custom_name and asset.custom_name != custom_name)
+    ):
+        raise OwnerError(
+            "idempotency_key_conflict",
+            409,
+            "This idempotency key was already used for a different showroom purchase.",
+        )
+
+    ledger_event = session.get(LedgerEvent, asset.ledger_event_id) if asset.ledger_event_id else None
+    if (
+        ledger_event is None
+        or ledger_event.event_type != "showroom_asset_purchase"
+        or ledger_event.status != "completed"
+        or ledger_event.club_id != club_id
+        or ledger_event.user_id != user_id
+        or ledger_event.currency != ledger.GTEX
+        or Decimal(str(ledger_event.gross_amount)) != Decimal(str(asset.purchase_price_gtex))
+    ):
+        raise OwnerError(
+            "showroom_purchase_reconciliation_failed",
+            409,
+            "The existing showroom purchase cannot be verified against its ledger event.",
+        )
+
+    item = SHOWROOM_CATALOG.get(asset.catalog_key)
+    expects_broadcast = bool(item and item.get("broadcast_on_purchase") and asset.category == "jet")
+    if broadcast is not None:
+        if (
+            not expects_broadcast
+            or broadcast.event_type != "private_jet_purchase"
+            or broadcast.club_id != club_id
+            or broadcast.owner_user_id != user_id
+            or broadcast.ledger_event_id != ledger_event.id
+            or broadcast.item_name != asset.custom_name
+            or Decimal(str(broadcast.verified_price_gtex or 0)) != Decimal(str(asset.purchase_price_gtex))
+        ):
+            raise OwnerError(
+                "showroom_purchase_reconciliation_failed",
+                409,
+                "The existing showroom broadcast does not match its purchase ledger event.",
+            )
+    elif expects_broadcast:
+        raise OwnerError(
+            "showroom_purchase_reconciliation_failed",
+            409,
+            "The existing private-jet purchase has no matching verified broadcast event.",
+        )
+
+    return _showroom_purchase_response(asset, broadcast)
+
 def purchase_showroom_asset(
     session: Session,
     user_id: str,
@@ -821,6 +922,17 @@ def purchase_showroom_asset(
     idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     state = require_state(session, club_id, user_id)
+    existing = _resolve_idempotent_showroom_purchase(
+        session,
+        user_id=user_id,
+        club_id=club_id,
+        catalog_key=catalog_key,
+        custom_name=custom_name,
+        idempotency_key=idempotency_key,
+    )
+    if existing is not None:
+        return existing
+
     item = SHOWROOM_CATALOG.get(catalog_key)
     if not item:
         raise OwnerError("invalid_showroom_item", 400, f"Item {catalog_key} does not exist in catalog.")
@@ -831,67 +943,75 @@ def purchase_showroom_asset(
     if bal < price:
         raise OwnerError("insufficient_club_cash", 400, f"Club cash {bal} GTX is insufficient for {price} GTX.")
 
-    leg = ledger.record(
-        session,
-        event_type="showroom_asset_purchase",
-        currency=ledger.GTEX,
-        gross=price,
-        source=club_acct,
-        destination=ledger.WORLD_CLUBS,
-        user_id=user_id,
-        club_id=club_id,
-        memo=f"Acquired {item['name']}",
-    )
-
     image_url = resolve_showroom_image_url(catalog_key)
     c_name = custom_name or item["name"]
-
-    # Persist durable showroom asset for ALL luxury items (jets, coaches, hypercars, watches, suites)
-    asset = OwnerShowroomAsset(
-        club_id=club_id,
-        owner_user_id=user_id,
-        catalog_key=catalog_key,
-        custom_name=c_name,
-        category=str(item.get("category") or "asset"),
-        model=item.get("model"),
-        image_url=image_url,
-        purchase_price_gtex=price,
-        status="active",
-        ledger_event_id=leg.id,
-        idempotency_key=idempotency_key,
-    )
-    session.add(asset)
-
-    # ONLY broadcast globally if category is jet!
-    broadcast = None
-    if item.get("broadcast_on_purchase") and item.get("category") == "jet":
-        broadcast = record_verified_broadcast_event(
+    try:
+        leg = ledger.record(
             session,
-            event_type="private_jet_purchase",
+            event_type="showroom_asset_purchase",
+            currency=ledger.GTEX,
+            gross=price,
+            source=club_acct,
+            destination=ledger.WORLD_CLUBS,
+            user_id=user_id,
+            club_id=club_id,
+            memo=f"Acquired {item['name']}",
+        )
+
+        # Persist durable showroom asset for ALL luxury items (jets, coaches, hypercars, watches, suites).
+        # The unique idempotency key arbitrates concurrent retries inside the same transaction.
+        asset = OwnerShowroomAsset(
             club_id=club_id,
             owner_user_id=user_id,
-            item_name=c_name,
-            item_model=item.get("model"),
-            item_image_url=image_url,
-            verified_price_gtex=price,
+            catalog_key=catalog_key,
+            custom_name=c_name,
+            category=str(item.get("category") or "asset"),
+            model=item.get("model"),
+            image_url=image_url,
+            purchase_price_gtex=price,
+            status="active",
             ledger_event_id=leg.id,
             idempotency_key=idempotency_key,
         )
+        session.add(asset)
 
-    # Apply prestige bonus
+        # ONLY broadcast globally if category is jet!
+        broadcast = None
+        if item.get("broadcast_on_purchase") and item.get("category") == "jet":
+            broadcast = record_verified_broadcast_event(
+                session,
+                event_type="private_jet_purchase",
+                club_id=club_id,
+                owner_user_id=user_id,
+                item_name=c_name,
+                item_model=item.get("model"),
+                item_image_url=image_url,
+                verified_price_gtex=price,
+                ledger_event_id=leg.id,
+                idempotency_key=idempotency_key,
+            )
+
+        session.flush()
+    except IntegrityError:
+        # A concurrent request may win the unique idempotency constraint after our initial lookup.
+        # Roll back our tentative ledger posting, then replay only the already-committed matching purchase.
+        session.rollback()
+        existing = _resolve_idempotent_showroom_purchase(
+            session,
+            user_id=user_id,
+            club_id=club_id,
+            catalog_key=catalog_key,
+            custom_name=custom_name,
+            idempotency_key=idempotency_key,
+        )
+        if existing is not None:
+            return existing
+        raise
+
+    # Apply prestige bonus only to the first successful purchase, never to an idempotent replay.
     state.prestige = min(100, state.prestige + item.get("prestige_bonus", 0))
 
-    return {
-        "asset": {
-            "id": asset.id,
-            "catalog_key": catalog_key,
-            "custom_name": c_name,
-            "price_gtex": str(price),
-            "image_url": image_url,
-        },
-        "broadcast_globally": bool(broadcast),
-        "broadcast_event": broadcast_dict(broadcast) if broadcast else None,
-    }
+    return _showroom_purchase_response(asset, broadcast)
 
 
 def gift_asset_to_squad_player(
