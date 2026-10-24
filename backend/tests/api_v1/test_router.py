@@ -420,3 +420,23 @@ def test_legacy_tournament_rent_endpoint_returns_410_gone(app_client) -> None:
     payload = response.json()
     detail = payload.get("detail", "")
     assert "national team engine" in detail.lower() or "410" in str(payload)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/tournaments/t1/join",
+        "/api/tournaments/t1/join",
+        "/api/v2/tournaments/t1/join",
+    ],
+)
+def test_legacy_tournament_join_aliases_return_410_gone(app_client, path: str) -> None:
+    app, client = app_client
+    user_id, token = _create_authenticated_user(app)
+    response = client.post(
+        path,
+        headers={"Authorization": f"Bearer {token}"},
+        json={"user_id": user_id},
+    )
+    assert response.status_code == 410, response.text
+    assert response.headers.get("Deprecation") == "true" or "retired" in response.text.lower()
