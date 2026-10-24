@@ -132,11 +132,15 @@ def main() -> None:
         )
 
     with _database_context(database_url=args.database_url) as context:
-        scenarios = [args.scenario] if args.scenario != "all" else [
-            "feed-refresh-storm",
-            "earnings-storm",
-            "outbox-backlog",
-        ]
+        scenarios = (
+            [args.scenario]
+            if args.scenario != "all"
+            else [
+                "feed-refresh-storm",
+                "earnings-storm",
+                "outbox-backlog",
+            ]
+        )
         summary: dict[str, Any] = {}
         for scenario in scenarios:
             if scenario == "feed-refresh-storm":
@@ -343,9 +347,7 @@ def run_outbox_backlog(
     duration = perf_counter() - started_at
 
     with session_factory() as session:
-        processed = list(
-            session.scalars(select(EventOutbox).where(EventOutbox.status == "processed")).all()
-        )
+        processed = list(session.scalars(select(EventOutbox).where(EventOutbox.status == "processed")).all())
     return {
         "duration_seconds": round(duration, 4),
         "events_requested": events,
