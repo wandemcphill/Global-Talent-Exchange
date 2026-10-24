@@ -549,7 +549,7 @@ def test_coin_trader_router_cannot_cancel_after_proof(
     # P0 fix: Seller cannot cancel after proof submitted
     cancel_attempt = client.post(f"/api/coin-traders/orders/{order_id}/cancel", headers=trader["headers"])
     assert cancel_attempt.status_code == 400
-    assert "submitted payment proof cannot be cancelled" in cancel_attempt.json()["detail"]
+    assert "submitted payment proof cannot be cancelled" in cancel_attempt.text
 
 
 def test_coin_trader_router_order_messages_chat(

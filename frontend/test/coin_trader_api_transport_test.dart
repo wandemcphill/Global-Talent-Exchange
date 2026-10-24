@@ -280,6 +280,7 @@ void main() {
     expect(pending.proofLabels, contains('Proof Reference: receipt-9'));
     expect(pending.ledgerLabels, contains('Escrow Lock Entry Ids: 2'));
     expect(proofSubmitted.canConfirmRelease, isTrue);
+    expect(proofSubmitted.canCancel, isFalse);
     expect(proofSubmitted.canConfirmReleaseFor(isTrader: true), isTrue);
     expect(proofSubmitted.canConfirmReleaseFor(isTrader: false), isFalse);
     expect(disputed.canAdminResolve, isTrue);
@@ -314,6 +315,63 @@ void main() {
     expect(profile.rates.single.governanceStatus, 'compliant');
     expect(profile.rates.single.isRestricted, isFalse);
   });
+
+  test('coin trader order chat and admin expiration transport endpoints', () async {
+    final _RecordingTransport transport = _RecordingTransport(
+      <GteTransportResponse>[
+        GteTransportResponse(
+          statusCode: 201,
+          body: <String, Object?>{
+            'id': 'msg-1',
+            'order_id': 'order-1',
+            'sender_user_id': 'user-1',
+            'sender_name': 'Buyer User',
+            'message': 'Paid via bank transfer',
+            'created_at': '2026-05-11T16:02:00Z',
+          },
+        ),
+        GteTransportResponse(
+          statusCode: 200,
+          body: <Object?>[
+            <String, Object?>{
+              'id': 'msg-1',
+              'order_id': 'order-1',
+              'sender_user_id': 'user-1',
+              'sender_name': 'Buyer User',
+              'message': 'Paid via bank transfer',
+              'created_at': '2026-05-11T16:02:00Z',
+            },
+          ],
+        ),
+        GteTransportResponse(
+          statusCode: 200,
+          body: <Object?>[_orderBody(status: 'cancelled')],
+        ),
+      ],
+    );
+    final GtexCoinTraderApi api = _api(transport);
+
+    final GtexCoinTradeMessage sentMsg = await api.sendOrderMessage(
+      'order-1',
+      'Paid via bank transfer',
+    );
+    expect(sentMsg.id, 'msg-1');
+    expect(sentMsg.message, 'Paid via bank transfer');
+    expect(transport.requests[0].method, 'POST');
+    expect(transport.requests[0].uri.path, '/api/coin-traders/orders/order-1/messages');
+
+    final List<GtexCoinTradeMessage> messages = await api.fetchOrderMessages('order-1');
+    expect(messages, hasLength(1));
+    expect(messages.first.senderName, 'Buyer User');
+    expect(transport.requests[1].method, 'GET');
+    expect(transport.requests[1].uri.path, '/api/coin-traders/orders/order-1/messages');
+
+    final List<GtexCoinTradeOrder> expiredOrders = await api.adminExpireStaleOrders();
+    expect(expiredOrders, hasLength(1));
+    expect(expiredOrders.first.status, 'cancelled');
+    expect(transport.requests[2].method, 'POST');
+    expect(transport.requests[2].uri.path, '/api/admin/coin-traders/orders/expire-stale');
+  });
 }
 
 GtexCoinTraderApi _api(_RecordingTransport transport) {
@@ -329,6 +387,8 @@ GtexCoinTraderApi _api(_RecordingTransport transport) {
     ),
   );
 }
+
+
 
 Map<String, Object?> _profileBody() {
   return <String, Object?>{
