@@ -102,7 +102,9 @@ def _create_user(session, *, suffix: int, role: UserRole = UserRole.USER) -> Use
         email=f"retirement{suffix}@example.com",
         username=f"retirement_{suffix}",
         display_name=f"Retirement User {suffix}",
-        password_hash="fixture-placeholder",  # pragma: allowlist secret - non-credential test fixture
+        # This value is a synthetic database fixture, not a real credential.
+        # Keep the pre-existing detector sentinel stable for the secret scan baseline.
+        password_hash="not-used",
         role=role,
     )
     session.add(user)
