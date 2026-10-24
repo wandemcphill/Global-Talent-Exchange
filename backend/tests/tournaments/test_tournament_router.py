@@ -101,7 +101,7 @@ def _create_user(session, *, suffix: int, role: UserRole = UserRole.USER) -> Use
         email=f"retirement{suffix}@example.com",
         username=f"retirement_{suffix}",
         display_name=f"Retirement User {suffix}",
-        password_hash="test-only-not-used",
+        password_hash="fixture-placeholder",  # pragma: allowlist secret - non-credential test fixture
         role=role,
     )
     session.add(user)
