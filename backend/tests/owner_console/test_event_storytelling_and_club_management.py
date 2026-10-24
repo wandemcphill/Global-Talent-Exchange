@@ -184,7 +184,9 @@ def test_global_live_ticker_eligibility_and_luxury_isolation(client, bootstrap_a
     assert retry_data["morale_delta"] == gift_data["morale_delta"]
 
     with app.state.session_factory() as session:
-        assert ledger.balance(session, ledger.club_account(club_id), ledger.GTEX) == gift_balance_before - Decimal("220")
+        assert ledger.balance(session, ledger.club_account(club_id), ledger.GTEX) == gift_balance_before - Decimal(
+            "220"
+        )
         persisted_player = session.get(OwnerSquadPlayer, regen_player["id"])
         assert persisted_player.morale == gift_data["player"]["morale"]
         gift_ledger_rows = session.scalars(
@@ -196,9 +198,7 @@ def test_global_live_ticker_eligibility_and_luxury_isolation(client, bootstrap_a
         ).all()
         assert len(gift_ledger_rows) == 1
         gift_broadcasts = session.scalars(
-            select(OwnerBroadcastEvent).where(
-                OwnerBroadcastEvent.idempotency_key == "gift-player-1"
-            )
+            select(OwnerBroadcastEvent).where(OwnerBroadcastEvent.idempotency_key == "gift-player-1")
         ).all()
         assert len(gift_broadcasts) == 1
         gift_acknowledgements = session.scalars(
@@ -265,7 +265,9 @@ def test_transaction_integrity_idempotency_failures_and_reversals(client, bootst
         assert purchase_ledger is not None
         assert purchase_ledger.event_type == "showroom_asset_purchase"
         assert purchase_ledger.gross_amount == Decimal("4800.00")
-        assert ledger.balance(session, ledger.club_account(club_id), ledger.GTEX) == club_balance_before - Decimal("4800")
+        assert ledger.balance(session, ledger.club_account(club_id), ledger.GTEX) == club_balance_before - Decimal(
+            "4800"
+        )
 
         b_rows = session.scalars(
             select(OwnerBroadcastEvent).where(OwnerBroadcastEvent.idempotency_key == "idem-jet-unique-001")
