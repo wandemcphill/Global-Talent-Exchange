@@ -843,9 +843,7 @@ def _resolve_idempotent_showroom_purchase(
     if not idempotency_key:
         return None
 
-    asset = session.scalar(
-        select(OwnerShowroomAsset).where(OwnerShowroomAsset.idempotency_key == idempotency_key)
-    )
+    asset = session.scalar(select(OwnerShowroomAsset).where(OwnerShowroomAsset.idempotency_key == idempotency_key))
     broadcast = session.scalar(
         select(OwnerBroadcastEvent).where(OwnerBroadcastEvent.idempotency_key == idempotency_key)
     )
@@ -1258,7 +1256,9 @@ def gift_asset_to_squad_player(
             raise
 
         if broadcast is None:
-            raise OwnerError("showroom_gift_broadcast_failed", 409, "The gift operation could not reserve its idempotency key.")
+            raise OwnerError(
+                "showroom_gift_broadcast_failed", 409, "The gift operation could not reserve its idempotency key."
+            )
         if broadcast.ledger_event_id is not None:
             replay = _resolve_idempotent_player_gift(
                 session,
