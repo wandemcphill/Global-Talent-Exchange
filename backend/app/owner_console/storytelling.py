@@ -1013,6 +1013,113 @@ def purchase_showroom_asset(
     return _showroom_purchase_response(asset, broadcast)
 
 
+def _resolve_idempotent_player_gift(
+    session: Session,
+    *,
+    user_id: str,
+    club_id: str,
+    player_id: str,
+    player_name: str,
+    item_key: str,
+    item: dict[str, Any],
+    asset_id: str | None,
+    idempotency_key: str | None,
+) -> dict[str, Any] | None:
+    if not idempotency_key:
+        return None
+
+    # A showroom purchase and a player gift are different operations; do not let
+    # one operation replay the other merely because the client reused its key.
+    asset_purchase = session.scalar(
+        select(OwnerShowroomAsset).where(OwnerShowroomAsset.idempotency_key == idempotency_key)
+    )
+    if asset_purchase is not None:
+        raise OwnerError(
+            "idempotency_key_conflict",
+            409,
+            "This idempotency key has already been used for a showroom purchase.",
+        )
+
+    broadcast = session.scalar(
+        select(OwnerBroadcastEvent).where(OwnerBroadcastEvent.idempotency_key == idempotency_key)
+    )
+    if broadcast is None:
+        return None
+
+    price = Decimal(str(item["price_gtex"]))
+    if (
+        broadcast.event_type != "player_gift"
+        or broadcast.club_id != club_id
+        or broadcast.owner_user_id != user_id
+        or broadcast.player_id != player_id
+        or broadcast.player_name != player_name
+        or broadcast.item_name != item["name"]
+        or Decimal(str(broadcast.verified_price_gtex or 0)) != price
+    ):
+        raise OwnerError(
+            "idempotency_key_conflict",
+            409,
+            "This idempotency key was already used for a different gift.",
+        )
+
+    request_facts = dict((broadcast.payload_json or {}).get("owner_showroom_gift_request") or {})
+    if request_facts and (
+        request_facts.get("catalog_key") != item_key
+        or request_facts.get("player_id") != player_id
+        or request_facts.get("club_id") != club_id
+        or request_facts.get("owner_user_id") != user_id
+        or request_facts.get("asset_id") != asset_id
+    ):
+        raise OwnerError(
+            "idempotency_key_conflict",
+            409,
+            "This idempotency key was already used for a different gift request.",
+        )
+
+    ledger_event = session.get(LedgerEvent, broadcast.ledger_event_id) if broadcast.ledger_event_id else None
+    if (
+        ledger_event is None
+        or ledger_event.event_type != "squad_player_gift"
+        or ledger_event.status != "completed"
+        or ledger_event.club_id != club_id
+        or ledger_event.user_id != user_id
+        or ledger_event.currency != ledger.GTEX
+        or Decimal(str(ledger_event.gross_amount)) != price
+    ):
+        raise OwnerError(
+            "showroom_gift_reconciliation_failed",
+            409,
+            "The existing gift cannot be verified against its ledger event.",
+        )
+
+    payload = dict((broadcast.payload_json or {}).get("gift_result") or {})
+    if not payload:
+        # Older gifts predate response snapshots. Never repeat their side effects;
+        # return a conservative replay from the current durable player state.
+        player = session.get(OwnerSquadPlayer, player_id)
+        if player is None:
+            raise OwnerError(
+                "showroom_gift_reconciliation_failed",
+                409,
+                "The original gifted player no longer exists, and no response snapshot was saved.",
+            )
+        payload = {
+            "player": {
+                "id": player.id,
+                "name": player.name,
+                "morale": player.morale,
+                "portrait_url": resolve_player_portrait_url(session, player.id, player.name),
+            },
+            "morale_delta": 0,
+            "asset": {
+                "catalog_key": item_key,
+                "custom_name": item["name"],
+                "image_url": resolve_showroom_image_url(item_key),
+            },
+        }
+    return {**payload, "broadcast_event": broadcast_dict(broadcast)}
+
+
 def gift_asset_to_squad_player(
     session: Session,
     user_id: str,
@@ -1024,6 +1131,43 @@ def gift_asset_to_squad_player(
     idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     require_state(session, club_id, user_id)
+    item_key = catalog_key or "chronos_tourbillon_watch"
+    item = SHOWROOM_CATALOG.get(item_key)
+    if not item or not item.get("can_gift_to_player"):
+        raise OwnerError("invalid_gift_item", 400, "Item cannot be gifted to a player.")
+
+    # Resolve a valid prior operation before checking mutable player/asset state;
+    # retries must not be charged or applied a second time.
+    if idempotency_key:
+        existing_broadcast = session.scalar(
+            select(OwnerBroadcastEvent).where(OwnerBroadcastEvent.idempotency_key == idempotency_key)
+        )
+        if existing_broadcast is not None:
+            existing_player_name = existing_broadcast.player_name or ""
+            replay = _resolve_idempotent_player_gift(
+                session,
+                user_id=user_id,
+                club_id=club_id,
+                player_id=player_id,
+                player_name=existing_player_name,
+                item_key=item_key,
+                item=item,
+                asset_id=asset_id,
+                idempotency_key=idempotency_key,
+            )
+            if replay is not None:
+                return replay
+
+        prior_asset_purchase = session.scalar(
+            select(OwnerShowroomAsset).where(OwnerShowroomAsset.idempotency_key == idempotency_key)
+        )
+        if prior_asset_purchase is not None:
+            raise OwnerError(
+                "idempotency_key_conflict",
+                409,
+                "This idempotency key has already been used for a showroom purchase.",
+            )
+
     player = session.get(OwnerSquadPlayer, player_id)
     if not player or player.club_id != club_id:
         raise OwnerError("player_not_found", 404, "Player not in club squad.")
@@ -1034,73 +1178,170 @@ def gift_asset_to_squad_player(
             "Luxury gifts can only be given to academy regens.",
         )
 
-    item_key = catalog_key or "chronos_tourbillon_watch"
-    item = SHOWROOM_CATALOG.get(item_key)
-    if not item or not item.get("can_gift_to_player"):
-        raise OwnerError("invalid_gift_item", 400, "Item cannot be gifted to a player.")
-
     price = Decimal(str(item["price_gtex"]))
     club_acct = ledger.club_account(club_id)
     bal = ledger.balance(session, club_acct, ledger.GTEX)
     if bal < price:
         raise OwnerError("insufficient_club_cash", 400, f"Club cash {bal} GTX is insufficient for {price} GTX gift.")
 
-    leg = ledger.record(
-        session,
-        event_type="squad_player_gift",
-        currency=ledger.GTEX,
-        gross=price,
-        source=club_acct,
-        destination=ledger.WORLD_CLUBS,
-        user_id=user_id,
-        club_id=club_id,
-        memo=f"Owner gifted {item['name']} to {player.name}",
-    )
-
-    # Mark matching showroom asset as gifted if owned
     matching_asset = None
     if asset_id:
         matching_asset = session.get(OwnerShowroomAsset, asset_id)
-    if matching_asset is None:
+        if (
+            matching_asset is None
+            or matching_asset.club_id != club_id
+            or matching_asset.owner_user_id != user_id
+            or matching_asset.catalog_key != item_key
+            or matching_asset.status != "active"
+        ):
+            raise OwnerError("showroom_asset_not_found", 404, "The selected active showroom asset was not found.")
+    else:
         matching_asset = session.scalar(
             select(OwnerShowroomAsset)
             .where(
                 OwnerShowroomAsset.club_id == club_id,
+                OwnerShowroomAsset.owner_user_id == user_id,
                 OwnerShowroomAsset.catalog_key == item_key,
                 OwnerShowroomAsset.status == "active",
             )
             .order_by(OwnerShowroomAsset.created_at.asc())
             .limit(1)
         )
+
+    player_portrait = resolve_player_portrait_url(session, player.id, player.name)
+    item_image = resolve_showroom_image_url(item_key)
+    broadcast = None
+
+    if idempotency_key:
+        # Reserve the unique key before debit/morale/inbox changes. A concurrent
+        # request either observes this row or loses the unique-key race and replays it.
+        try:
+            broadcast = record_verified_broadcast_event(
+                session,
+                event_type="player_gift",
+                club_id=club_id,
+                owner_user_id=user_id,
+                item_name=item["name"],
+                item_model=item.get("model"),
+                item_image_url=item_image,
+                player_id=player.id,
+                player_name=player.name,
+                player_portrait_url=player_portrait,
+                verified_price_gtex=price,
+                ledger_event_id=None,
+                idempotency_key=idempotency_key,
+                payload_json={
+                    "owner_showroom_gift_request": {
+                        "owner_user_id": user_id,
+                        "club_id": club_id,
+                        "player_id": player.id,
+                        "catalog_key": item_key,
+                        "asset_id": asset_id,
+                    },
+                },
+            )
+        except IntegrityError:
+            session.rollback()
+            replay = _resolve_idempotent_player_gift(
+                session,
+                user_id=user_id,
+                club_id=club_id,
+                player_id=player.id,
+                player_name=player.name,
+                item_key=item_key,
+                item=item,
+                asset_id=asset_id,
+                idempotency_key=idempotency_key,
+            )
+            if replay is not None:
+                return replay
+            raise
+
+        if broadcast is None:
+            raise OwnerError("showroom_gift_broadcast_failed", 409, "The gift operation could not reserve its idempotency key.")
+        if broadcast.ledger_event_id is not None:
+            replay = _resolve_idempotent_player_gift(
+                session,
+                user_id=user_id,
+                club_id=club_id,
+                player_id=player.id,
+                player_name=player.name,
+                item_key=item_key,
+                item=item,
+                asset_id=asset_id,
+                idempotency_key=idempotency_key,
+            )
+            if replay is not None:
+                return replay
+
+    try:
+        leg = ledger.record(
+            session,
+            event_type="squad_player_gift",
+            currency=ledger.GTEX,
+            gross=price,
+            source=club_acct,
+            destination=ledger.WORLD_CLUBS,
+            user_id=user_id,
+            club_id=club_id,
+            memo=f"Owner gifted {item['name']} to {player.name}",
+        )
+    except ledger.LedgerError as exc:
+        raise OwnerError(str(exc), 402) from exc
+
     if matching_asset is not None:
         matching_asset.status = "gifted"
         matching_asset.gifted_to_player_id = player.id
         matching_asset.gifted_to_player_name = player.name
 
-    # Boost player morale
     old_morale = player.morale
     player.morale = min(100, player.morale + 15)
 
-    player_portrait = resolve_player_portrait_url(session, player.id, player.name)
-    item_image = resolve_showroom_image_url(item_key)
+    result_payload = {
+        "player": {
+            "id": player.id,
+            "name": player.name,
+            "morale": player.morale,
+            "portrait_url": player_portrait,
+        },
+        "morale_delta": player.morale - old_morale,
+        "asset": {
+            "catalog_key": item_key,
+            "custom_name": item["name"],
+            "image_url": item_image,
+        },
+    }
 
-    broadcast = record_verified_broadcast_event(
-        session,
-        event_type="player_gift",
-        club_id=club_id,
-        owner_user_id=user_id,
-        item_name=item["name"],
-        item_model=item.get("model"),
-        item_image_url=item_image,
-        player_id=player.id,
-        player_name=player.name,
-        player_portrait_url=player_portrait,
-        verified_price_gtex=price,
-        ledger_event_id=leg.id,
-        idempotency_key=idempotency_key,
-    )
+    if broadcast is None:
+        broadcast = record_verified_broadcast_event(
+            session,
+            event_type="player_gift",
+            club_id=club_id,
+            owner_user_id=user_id,
+            item_name=item["name"],
+            item_model=item.get("model"),
+            item_image_url=item_image,
+            player_id=player.id,
+            player_name=player.name,
+            player_portrait_url=player_portrait,
+            verified_price_gtex=price,
+            ledger_event_id=leg.id,
+            idempotency_key=None,
+        )
+    else:
+        broadcast.ledger_event_id = leg.id
+        broadcast.payload_json = {
+            **dict(broadcast.payload_json or {}),
+            "owner_showroom_gift_request": {
+                "owner_user_id": user_id,
+                "club_id": club_id,
+                "player_id": player.id,
+                "catalog_key": item_key,
+                "asset_id": asset_id,
+            },
+            "gift_result": result_payload,
+        }
 
-    # Generate acknowledgement inbox item
     ack = OwnerInboxItem(
         user_id=user_id,
         club_id=club_id,
@@ -1120,22 +1361,9 @@ def gift_asset_to_squad_player(
         ai_generated=True,
     )
     session.add(ack)
+    session.flush()
 
-    return {
-        "player": {
-            "id": player.id,
-            "name": player.name,
-            "morale": player.morale,
-            "portrait_url": player_portrait,
-        },
-        "morale_delta": player.morale - old_morale,
-        "asset": {
-            "catalog_key": item_key,
-            "custom_name": item["name"],
-            "image_url": item_image,
-        },
-        "broadcast_event": broadcast_dict(broadcast) if broadcast else None,
-    }
+    return {**result_payload, "broadcast_event": broadcast_dict(broadcast)}
 
 
 def ensure_default_watchlist(session: Session, state: OwnerClubState) -> list[OwnerScoutingWatchlist]:
