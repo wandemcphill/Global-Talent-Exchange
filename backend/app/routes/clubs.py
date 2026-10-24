@@ -10,8 +10,8 @@ from app.club_identity.trophies.router import router as trophies_router
 from app.segments.clubs.segment_clubs import router as clubs_router
 
 base_router = APIRouter()
-base_router.include_router(clubs_router)
 base_router.include_router(club_sale_market_router)
+base_router.include_router(clubs_router)
 base_router.include_router(reputation_router, prefix="/api")
 base_router.include_router(reputation_router, prefix="/api/v2")
 base_router.include_router(reputation_router)
