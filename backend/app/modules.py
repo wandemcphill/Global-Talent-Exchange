@@ -613,6 +613,7 @@ DOMAIN_MODULES = (
         api_only=True,
     ),
     _module("auth", router_path="app.auth.router:router"),
+    _module("tournaments", router_path="app.tournaments.router:router"),
     _module(
         "api_v1",
         router_path="app.api_v1.router:router",
@@ -810,7 +811,6 @@ DOMAIN_MODULES = (
     _module("club_ops", router_path="app.routes.club_ops:router"),
     _module("competitions", router_path="app.routes.competitions:router"),
     _module("ranking_integrity", router_path="app.ranking_integrity.router:router"),
-    _module("tournaments", router_path="app.tournaments.router:router"),
     _module("creators", router_path="app.routes.creators:router"),
     _module("referrals", router_path="app.routes.referrals:router"),
     _module("admin_referrals", router_path="app.routes.admin_referrals:router"),
