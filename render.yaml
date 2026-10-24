@@ -268,7 +268,7 @@ services:
     region: frankfurt
     plan: starter
     buildCommand: "cd services/player-ingestion && npm ci"
-    startCommand: "cd services/player-ingestion && npm run migrate && npm start"
+    startCommand: "cd services/player-ingestion && npm start"
     envVars:
       - key: DATABASE_URL
         sync: false
