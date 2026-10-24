@@ -50,7 +50,12 @@ def test_club_profile_and_identity_endpoints_work(client, create_club) -> None:
     assert trophies_response.json()["cabinet"]["total_trophies"] == 0
 
 
-def test_club_sale_market_route_parity(client, create_club) -> None:
+def test_club_sale_market_route_parity(client, create_club, app_session_factory) -> None:
+    from app.models.base import Base
+    import app.models  # noqa: F401
+
+    with app_session_factory() as session:
+        Base.metadata.create_all(session.bind)
     profile = create_club()
     club_id = profile["id"]
 
