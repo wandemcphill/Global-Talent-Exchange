@@ -17,6 +17,7 @@ from app.owner_console.models import (
     LedgerEvent,
     OwnerBroadcastEvent,
     OwnerInboxItem,
+    OwnerShowroomAsset,
     OwnerNewsroomArticle,
     OwnerSquadPlayer,
 )
@@ -192,8 +193,10 @@ def test_transaction_integrity_idempotency_failures_and_reversals(client, bootst
             club_id=club_id,
         )
         session.commit()
+        club_balance_before = ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)
 
-    # 1. Duplicate idempotency key produces only 1 broadcast event and 1 newsroom article
+    # Retrying a purchase with the same intent key replays the original purchase, not another charge.
+    asset_ids: list[str] = []
     for _ in range(3):
         resp = client.post(
             f"/api/owner/clubs/{club_id}/showroom/purchase",
@@ -201,8 +204,21 @@ def test_transaction_integrity_idempotency_failures_and_reversals(client, bootst
             json={"catalog_key": "sovereign_900x_jet", "idempotency_key": "idem-jet-unique-001"},
         )
         assert resp.status_code == 200, resp.text
+        asset_ids.append(resp.json()["asset"]["id"])
+    assert len(set(asset_ids)) == 1
 
     with app.state.session_factory() as session:
+        assets = session.scalars(
+            select(OwnerShowroomAsset).where(OwnerShowroomAsset.idempotency_key == "idem-jet-unique-001")
+        ).all()
+        assert len(assets) == 1
+        assert assets[0].id == asset_ids[0]
+        purchase_ledger = session.get(LedgerEvent, assets[0].ledger_event_id)
+        assert purchase_ledger is not None
+        assert purchase_ledger.event_type == "showroom_asset_purchase"
+        assert purchase_ledger.gross_amount == Decimal("4800.00")
+        assert ledger.balance(session, ledger.club_account(club_id), ledger.GTEX) == club_balance_before - Decimal("4800")
+
         b_rows = session.scalars(
             select(OwnerBroadcastEvent).where(OwnerBroadcastEvent.idempotency_key == "idem-jet-unique-001")
         ).all()
@@ -211,6 +227,15 @@ def test_transaction_integrity_idempotency_failures_and_reversals(client, bootst
             select(OwnerNewsroomArticle).where(OwnerNewsroomArticle.idempotency_key == "news:idem-jet-unique-001")
         ).all()
         assert len(n_rows) == 1
+
+    conflict_resp = client.post(
+        f"/api/owner/clubs/{club_id}/showroom/purchase",
+        headers=bootstrap_admin_headers,
+        json={"catalog_key": "veloce_gt9_hypercar", "idempotency_key": "idem-jet-unique-001"},
+    )
+    assert conflict_resp.status_code == 409, conflict_resp.text
+    with app.state.session_factory() as session:
+        assert ledger.balance(session, ledger.club_account(club_id), ledger.GTEX) == club_balance_before - Decimal("4800")
 
     # 2. Failed transaction (insufficient funds) must produce 0 broadcasts
     with app.state.session_factory() as session:
