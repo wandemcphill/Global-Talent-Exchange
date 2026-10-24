@@ -129,11 +129,15 @@ def main() -> None:
     args = parser.parse_args()
 
     with _database_context(database_url=args.database_url) as context:
-        scenarios = [args.scenario] if args.scenario != "all" else [
-            "feed-refresh-storm",
-            "earnings-storm",
-            "outbox-backlog",
-        ]
+        scenarios = (
+            [args.scenario]
+            if args.scenario != "all"
+            else [
+                "feed-refresh-storm",
+                "earnings-storm",
+                "outbox-backlog",
+            ]
+        )
         summary: dict[str, Any] = {}
         for scenario in scenarios:
             if scenario == "tournament-join-spike":
@@ -195,7 +199,9 @@ def run_tournament_join_spike(
     started_at = perf_counter()
     results: list[dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=concurrency) as executor:
-        futures = [executor.submit(_join_tournament_once, session_factory, tournament_id, user_id) for user_id in user_ids]
+        futures = [
+            executor.submit(_join_tournament_once, session_factory, tournament_id, user_id) for user_id in user_ids
+        ]
         for future in as_completed(futures):
             results.append(future.result())
     duration = perf_counter() - started_at
@@ -203,9 +209,7 @@ def run_tournament_join_spike(
     with session_factory() as session:
         view = TournamentService(session=session).get_tournament(tournament_id)
         players = list(
-            session.scalars(
-                select(TournamentPlayer).where(TournamentPlayer.tournament_id == tournament_id)
-            ).all()
+            session.scalars(select(TournamentPlayer).where(TournamentPlayer.tournament_id == tournament_id)).all()
         )
 
     successful = [item for item in results if item["ok"]]
@@ -280,7 +284,8 @@ def run_tournament_burst(
         "requested_joins": len(assignments),
         "successful_joins": sum(1 for item in outcomes if item["ok"]),
         "persisted_players": len(players),
-        "duplicate_entries_detected": len(players) != len({(player.tournament_id, player.user_id) for player in players}),
+        "duplicate_entries_detected": len(players)
+        != len({(player.tournament_id, player.user_id) for player in players}),
         "failure_reasons": _count_values(item["reason"] for item in outcomes if not item["ok"]),
     }
 
