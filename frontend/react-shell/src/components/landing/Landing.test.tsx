@@ -38,17 +38,25 @@ describe("GTEX 2027 Landing Page Models and Pillars Test Suite", () => {
 
     const jet = kShowroomAssets.find((a) => a.catalogKey === "sovereign_900x_jet");
     expect(jet).toBeDefined();
+    expect(jet?.category).toBe("PRIVATE JET");
+    expect(jet?.name).toContain("Private Jet");
     expect(jet?.priceGtex).toBe(4800);
     expect(jet?.prestigeBonus).toBe(8);
     expect(jet?.broadcastOnPurchase).toBe(true);
 
     const coach = kShowroomAssets.find((a) => a.catalogKey === "vanguard_xii_coach");
+    expect(coach?.category).toBe("TEAM COACH BUS");
+    expect(coach?.name).toContain("Team Coach Bus");
     expect(coach?.priceGtex).toBe(320);
 
     const car = kShowroomAssets.find((a) => a.catalogKey === "veloce_gt9_hypercar");
+    expect(car?.category).toBe("LUXURY CAR");
+    expect(car?.name).toContain("Luxury Car");
     expect(car?.priceGtex).toBe(850);
 
     const watch = kShowroomAssets.find((a) => a.catalogKey === "chronos_tourbillon_watch");
+    expect(watch?.category).toBe("LUXURY WRISTWATCH");
+    expect(watch?.name).toContain("Luxury Wristwatch");
     expect(watch?.priceGtex).toBe(220);
 
     const stadium = kShowroomAssets.find((a) => a.catalogKey === "arena_imperiale_stadium");

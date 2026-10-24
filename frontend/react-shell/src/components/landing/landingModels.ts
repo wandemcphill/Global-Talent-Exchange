@@ -97,8 +97,8 @@ export interface ShowroomAssetItem {
 export const kShowroomAssets: ShowroomAssetItem[] = [
   {
     catalogKey: "sovereign_900x_jet",
-    name: "GTEX Sovereign 900X",
-    category: "Private Jet",
+    name: "GTEX Sovereign 900X Private Jet",
+    category: "PRIVATE JET",
     model: "Sovereign 900X Long-Range VIP",
     priceGtex: 4800.0,
     prestigeBonus: 8,
@@ -110,8 +110,8 @@ export const kShowroomAssets: ShowroomAssetItem[] = [
   },
   {
     catalogKey: "vanguard_xii_coach",
-    name: "Vanguard XII Team Coach",
-    category: "Team Transit",
+    name: "Vanguard XII Luxury Team Coach Bus",
+    category: "TEAM COACH BUS",
     model: "Vanguard XII Armored First-Team Bus",
     priceGtex: 320.0,
     prestigeBonus: 2,
@@ -123,8 +123,8 @@ export const kShowroomAssets: ShowroomAssetItem[] = [
   },
   {
     catalogKey: "veloce_gt9_hypercar",
-    name: "Veloce GT9 Hypercar",
-    category: "Private Hypercar",
+    name: "Veloce GT9 Luxury Car",
+    category: "LUXURY CAR",
     model: "GT9 Twin-Turbo V12",
     priceGtex: 850.0,
     prestigeBonus: 4,
@@ -136,8 +136,8 @@ export const kShowroomAssets: ShowroomAssetItem[] = [
   },
   {
     catalogKey: "chronos_tourbillon_watch",
-    name: "Chronos Tourbillon Piece Unique",
-    category: "Haute Horlogerie",
+    name: "Chronos Tourbillon Luxury Wristwatch",
+    category: "LUXURY WRISTWATCH",
     model: "Piece Unique Sapphire-Carbon",
     priceGtex: 220.0,
     prestigeBonus: 2,
