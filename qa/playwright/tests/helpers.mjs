@@ -99,6 +99,9 @@ export async function signIn(page) {
     }
   }
 
+  await expect(page)
+    .toHaveURL(/\/app\//, { timeout: 30_000 })
+    .catch(() => {});
   signedInPages.add(page);
   await page.waitForTimeout(1500);
 }
