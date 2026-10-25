@@ -13,7 +13,7 @@ from sqlalchemy.pool import StaticPool
 from app.auth.dependencies import get_current_admin, get_session
 from app.auth.service import AuthService
 from app.gift_engine.router import admin_gifts_router
-from app.gift_engine.service import GiftEngineService
+from app.gift_engine.canonical_service import GiftEngineService
 from app.models import Base, GiftAbuseFlag, LedgerEntryReason, LedgerUnit
 from app.models.user import User, UserRole
 from app.wallets.service import LedgerPosting, WalletService

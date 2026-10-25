@@ -18,7 +18,7 @@ from app.gift_engine.schemas import (
     GiftTransactionView,
 )
 from app.economy.conversion_service import EconomicConversionError, FanCoinGiftConversionService
-from app.gift_engine.service import GiftEngineError, GiftEngineService
+from app.gift_engine.canonical_service import GiftEngineError, GiftEngineService
 from app.models.club_profile import ClubProfile
 from app.models.economic_conversion import EconomicConversion
 from app.models.economy_config import GiftCatalogItem
@@ -307,7 +307,14 @@ def send_gift(
     except GiftEngineError as exc:
         status_code = (
             status.HTTP_409_CONFLICT
-            if exc.reason in {"spending_controls_blocked", "match_gift_rate_limited"}
+            if exc.reason
+            in {
+                "spending_controls_blocked",
+                "match_gift_rate_limited",
+                "idempotency_key_conflict",
+                "sender_identity_conflict",
+                "recipient_identity_conflict",
+            }
             else status.HTTP_400_BAD_REQUEST
         )
         raise HTTPException(status_code=status_code, detail=exc.detail) from exc
@@ -408,7 +415,14 @@ def send_public_gift(
     except GiftEngineError as exc:
         status_code = (
             status.HTTP_409_CONFLICT
-            if exc.reason in {"spending_controls_blocked", "match_gift_rate_limited"}
+            if exc.reason
+            in {
+                "spending_controls_blocked",
+                "match_gift_rate_limited",
+                "idempotency_key_conflict",
+                "sender_identity_conflict",
+                "recipient_identity_conflict",
+            }
             else status.HTTP_400_BAD_REQUEST
         )
         raise HTTPException(status_code=status_code, detail=exc.detail) from exc

@@ -8,7 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.auth.service import AuthService
 from app.economy.conversion_service import EconomicConversionError, FanCoinGiftConversionService
-from app.gift_engine.service import GiftEngineService
+from app.gift_engine.canonical_service import GiftEngineError, GiftEngineService
 from app.models import (
     Base,
     EconomicConversion,
@@ -248,5 +248,74 @@ def test_conversion_service_rejects_non_reconciling_currency_legs_before_ledger_
 
         assert session.scalar(select(func.count(LedgerTransaction.id))) == 0
         assert session.scalar(select(func.count(EconomicConversion.id))) == 0
+    finally:
+        session.close()
+
+
+def test_gift_idempotency_rejects_changed_request_without_moving_money() -> None:
+    session = _make_session()
+    try:
+        sender = _create_user(session, email="request-sender@example.com", username="request-sender")
+        recipient = _create_user(session, email="request-recipient@example.com", username="request-recipient")
+        _seed_gift_economy(session, sender)
+        session.add(
+            GiftCatalogItem(
+                key="conversion-another-star",
+                display_name="Another Conversion Star",
+                fancoin_price=Decimal("100.0000"),
+                active=True,
+            )
+        )
+        session.commit()
+
+        service = GiftEngineService(session)
+        request = {
+            "recipient_user_id": recipient.id,
+            "gift_key": "conversion-star",
+            "quantity": Decimal("1.0000"),
+            "note": "Good match",
+            "source_scope": "user_hosted",
+            "match_id": "match-1",
+            "competition_id": "competition-1",
+            "idempotency_key": "gift-request-identity",
+        }
+        original = service.send_gift(sender=sender, **request)
+        session.commit()
+
+        wallet = WalletService()
+        recipient_coin = wallet.get_user_account(session, recipient, LedgerUnit.COIN)
+        recipient_balance_before = wallet.get_balance(session, recipient_coin)
+
+        changed_requests = []
+        changed_item = dict(request)
+        changed_item["gift_key"] = "conversion-another-star"
+        changed_requests.append(changed_item)
+        changed_quantity = dict(request)
+        changed_quantity["quantity"] = Decimal("2.0000")
+        changed_requests.append(changed_quantity)
+        changed_scope = dict(request)
+        changed_scope["source_scope"] = "gtex_competition"
+        changed_requests.append(changed_scope)
+        changed_match = dict(request)
+        changed_match["match_id"] = "match-2"
+        changed_requests.append(changed_match)
+        changed_note = dict(request)
+        changed_note["note"] = "Different note"
+        changed_requests.append(changed_note)
+
+        for changed in changed_requests:
+            try:
+                service.send_gift(sender=sender, **changed)
+            except GiftEngineError as exc:
+                assert exc.reason == "idempotency_key_conflict"
+            else:
+                raise AssertionError("Changed gift request silently replayed an unrelated transaction.")
+
+        session.commit()
+        assert session.scalar(select(func.count(GiftTransaction.id))) == 1
+        assert session.scalar(select(func.count(EconomicConversion.id))) == 1
+        assert session.scalar(select(func.count(LedgerTransaction.id))) == 2
+        assert session.get(GiftTransaction, original.id) is not None
+        assert wallet.get_balance(session, recipient_coin) == recipient_balance_before
     finally:
         session.close()
