@@ -316,9 +316,14 @@ jobs:
           }
           if (-not (Test-Path $env:UNITY_EDITOR_PATH)) {
             $configuredUnityPath = $env:UNITY_EDITOR_PATH
+            # LOCALAPPDATA is intentionally redirected to an isolated workspace profile
+            # below. Search the runner user's real profile as well, or a per-user Unity
+            # install is accidentally hidden by that override.
             $editorRoots = @(
               (Join-Path $env:ProgramFiles 'Unity\Hub\Editor'),
               (Join-Path ${env:ProgramFiles(x86)} 'Unity\Hub\Editor'),
+              (Join-Path $env:USERPROFILE 'AppData\Local\Programs\Unity\Hub\Editor'),
+              (Join-Path $env:USERPROFILE 'Unity\Hub\Editor'),
               (Join-Path $env:LOCALAPPDATA 'Programs\Unity\Hub\Editor')
             ) | Where-Object { $_ -and (Test-Path $_) }
 
