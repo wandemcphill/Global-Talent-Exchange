@@ -5,6 +5,7 @@ import {
   collectBrowserDiagnostics,
   configured,
   credentialsConfigured,
+  enableAccessibility,
   verifyNoHorizontalOverflow,
   visitAuthedRoute,
 } from "./helpers.mjs";
