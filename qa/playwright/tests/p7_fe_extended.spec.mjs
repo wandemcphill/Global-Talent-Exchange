@@ -44,7 +44,10 @@ test("Club squad route loads the roster or explicit no-club state", async ({ pag
   } else {
     // Select the actual section label. The descriptive subtitle is not a
     // stable accessibility target across the responsive master/detail layout.
-    const squadSection = page.getByText("Squad", { exact: true }).first();
+    const squadSection = page
+      .getByText("Squad", { exact: true })
+      .filter({ visible: true })
+      .first();
     let browseSheetOpened = false;
     if (!(await squadSection.isVisible().catch(() => false))) {
       await page.getByRole("button", { name: "Club sections" }).click();
