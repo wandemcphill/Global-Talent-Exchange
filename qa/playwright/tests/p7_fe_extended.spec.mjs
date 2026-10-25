@@ -42,24 +42,49 @@ test("Club squad route loads the roster or explicit no-club state", async ({ pag
   if (await noClubEntry.isVisible().catch(() => false)) {
     await expect(page.getByText("Create club", { exact: true })).toBeVisible();
   } else {
-    // Select the actual section label. The descriptive subtitle is not a
-    // stable accessibility target across the responsive master/detail layout.
-    const squadSection = page.getByText("Squad", { exact: true }).filter({ visible: true }).first();
+    const browseButton = page.getByRole("button", { name: "Club sections" });
+    const squadSection = page
+      .getByRole("button", { name: /Squad/i })
+      .or(page.getByText(/Owned players and regens/i))
+      .first();
+
+    // In compact layouts (mobile/narrow tablet), sections are housed in a "Club sections" sheet;
+    // in desktop layouts, the left panel is rendered inline.
+    await expect
+      .poll(
+        async () =>
+          Number(await browseButton.isVisible().catch(() => false)) +
+          Number(await squadSection.isVisible().catch(() => false)),
+        { timeout: 15_000 },
+      )
+      .toBeGreaterThan(0);
+
     let browseSheetOpened = false;
-    if (!(await squadSection.isVisible().catch(() => false))) {
-      await page.getByRole("button", { name: "Club sections" }).click();
+    if (await browseButton.isVisible().catch(() => false)) {
+      await browseButton.click();
       browseSheetOpened = true;
-      await expect(squadSection).toBeVisible();
+      await page.waitForTimeout(400);
+      await enableAccessibility(page);
     }
+
+    await expect(squadSection).toBeVisible({ timeout: 15_000 });
     await squadSection.click();
 
     if (browseSheetOpened) {
-      await page.getByRole("button", { name: "Close Club sections" }).click();
+      const closeButton = page.getByRole("button", { name: /Close Club sections/i });
+      if (await closeButton.isVisible().catch(() => false)) {
+        await closeButton.click();
+        await page.waitForTimeout(400);
+      }
     }
 
-    await expect(page.getByText("Squad room", { exact: true })).toBeVisible();
-    await expect(page.getByText("Lineup & squad registration", { exact: true })).toBeVisible();
-    await expect(page.getByText("Open Lineup & Tactics", { exact: true })).toBeVisible();
+    await expect(page.getByText("Squad room", { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Lineup & squad registration", { exact: true })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText("Open Lineup & Tactics", { exact: true })).toBeVisible({
+      timeout: 15_000,
+    });
   }
 
   await verifyNoHorizontalOverflow(page);
