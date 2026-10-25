@@ -342,14 +342,15 @@ jobs:
               (Join-Path $env:LOCALAPPDATA 'Programs\Unity\Hub\Editor')
             ) | Where-Object { $_ -and (Test-Path $_) }
 
-            $detectedEditor = foreach ($root in $editorRoots) {
+            $detectedEditor = $null
+            foreach ($root in $editorRoots) {
               $candidateRoot = Join-Path $root $requiredUnityVersion
               $candidate = Join-Path $candidateRoot 'Editor\Unity.exe'
               if (Test-Path $candidate) {
-                [pscustomobject]@{ Path = $candidate; Version = $requiredUnityVersion }
+                $detectedEditor = [pscustomobject]@{ Path = $candidate; Version = $requiredUnityVersion }
                 break
               }
-            } | Select-Object -First 1
+            }
 
             if ($null -ne $detectedEditor) {
               $env:UNITY_EDITOR_PATH = $detectedEditor.Path
