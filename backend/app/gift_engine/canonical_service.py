@@ -188,7 +188,6 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                     reason="match_gift_rate_limited",
                 )
 
-        gift_key = requested_gift_key
         gift = requested_catalog_item if requested_catalog_item is not None and requested_catalog_item.active else None
         if gift is None:
             raise GiftEngineError("Gift catalog item was not found.")
