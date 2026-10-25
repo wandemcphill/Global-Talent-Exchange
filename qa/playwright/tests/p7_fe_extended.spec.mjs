@@ -42,16 +42,16 @@ test("Club squad route loads the roster or explicit no-club state", async ({ pag
   if (await noClubEntry.isVisible().catch(() => false)) {
     await expect(page.getByText("Create club", { exact: true })).toBeVisible();
   } else {
-    const squadSectionDescription = page.getByText("Owned players and regens", {
-      exact: true,
-    });
+    // Select the actual section label. The descriptive subtitle is not a
+    // stable accessibility target across the responsive master/detail layout.
+    const squadSection = page.getByText("Squad", { exact: true }).filter({ visible: true }).first();
     let browseSheetOpened = false;
-    if (!(await squadSectionDescription.isVisible().catch(() => false))) {
+    if (!(await squadSection.isVisible().catch(() => false))) {
       await page.getByRole("button", { name: "Club sections" }).click();
       browseSheetOpened = true;
+      await expect(squadSection).toBeVisible();
     }
-    await expect(squadSectionDescription).toBeVisible();
-    await squadSectionDescription.click();
+    await squadSection.click();
 
     if (browseSheetOpened) {
       await page.getByRole("button", { name: "Close Club sections" }).click();
