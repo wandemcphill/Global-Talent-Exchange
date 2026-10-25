@@ -135,14 +135,16 @@ jobs:
             throw $message
           }
           $versionLine = Get-Content $projectVersionFile | Where-Object { $_ -match '^m_EditorVersion:\s*(\S+)' } | Select-Object -First 1
-          if ($versionLine -notmatch '^m_EditorVersion:\s*(\S+)') {
+          if ($versionLine -match '^m_EditorVersion:\s*(\S+)') {
+            $requiredUnityVersion = $Matches[1]
+          } else {
             $message = "Unable to read m_EditorVersion from $projectVersionFile"
             $message | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
             throw $message
           }
-          $requiredUnityVersion = $Matches[1]
 
-          if (-not (Test-Path $env:UNITY_EDITOR_PATH)) {
+          $editorPathConfigured = -not [string]::IsNullOrWhiteSpace($env:UNITY_EDITOR_PATH)
+          if (-not $editorPathConfigured -or -not (Test-Path $env:UNITY_EDITOR_PATH)) {
             # LOCALAPPDATA is redirected to an isolated build profile; include the
             # runner user's real profile so per-user Unity Hub installs remain visible.
             $editorRoots = @(
