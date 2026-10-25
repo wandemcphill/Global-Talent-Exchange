@@ -61,7 +61,9 @@ test("Club squad route loads the roster or explicit no-club state", async ({ pag
     await expect(
       page.getByText("Lineup & squad registration", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByText("Open Lineup & Tactics", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("Open Lineup & Tactics", { exact: true }),
+    ).toBeVisible();
   }
 
   await verifyNoHorizontalOverflow(page);
