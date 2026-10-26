@@ -862,20 +862,14 @@ class TalentExchangeService:
         from app.models.club_profile import ClubProfile
 
         owned_club_ids = list(
-            self.session.scalars(
-                select(ClubProfile.id).where(ClubProfile.owner_user_id == owner.id)
-            ).all()
+            self.session.scalars(select(ClubProfile.id).where(ClubProfile.owner_user_id == owner.id)).all()
         )
         conditions = [TalentShortlist.owner_user_id == owner.id]
         if owned_club_ids:
             conditions.append(TalentShortlist.club_id.in_(owned_club_ids))
 
         rows = (
-            self.session.execute(
-                select(TalentShortlist)
-                .where(or_(*conditions))
-                .order_by(TalentShortlist.name.asc())
-            )
+            self.session.execute(select(TalentShortlist).where(or_(*conditions)).order_by(TalentShortlist.name.asc()))
             .scalars()
             .all()
         )
@@ -944,6 +938,7 @@ class TalentExchangeService:
         owns_list = shortlist.owner_user_id == owner.id
         if not owns_list and shortlist.club_id:
             from app.models.club_profile import ClubProfile
+
             club = self.session.get(ClubProfile, shortlist.club_id)
             if club and club.owner_user_id == owner.id:
                 owns_list = True

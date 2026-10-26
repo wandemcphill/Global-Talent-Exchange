@@ -13,7 +13,6 @@ Covers Issue #169 and authoritative requirements from Issue #176:
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -21,19 +20,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user, get_optional_current_user, get_session
-from app.ingestion.models import Club as IngestionClub, Country, Player
+from app.ingestion.models import Player
 from app.models.club_profile import ClubLifecycleStatus, ClubProfile, ClubType
-from app.models.regen import RegenScoutReport
-from app.models.regen import RegenProfile, RegenScoutReport
 from app.models.regen_ecosystem import Scout
 from app.models.scouting_intelligence import ScoutReport
 from app.models.transfer_market import MarketWatchlistEntry, TransferListing
 from app.models.user import KycStatus, User, UserRole
 from app.routes.player_lifecycle import router as player_lifecycle_router
-from app.talent.models import TalentProfile, TalentShortlist, TalentShortlistEntry
+from app.talent.models import TalentProfile
 from app.talent.router import admin_router, router as talent_router
 from app.transfer_market.router import router as transfer_market_router
-
 
 EXTRA_TRUNCATE_TABLES = (
     "market_watchlist_entries",
@@ -45,16 +41,19 @@ EXTRA_TRUNCATE_TABLES = (
     "club_profiles",
 )
 
+
 @pytest.fixture()
 def lifecycle_client(session: Session):
     for tbl in EXTRA_TRUNCATE_TABLES:
         try:
             session.execute(select(1))
             from sqlalchemy import text
+
             session.execute(text(f"DELETE FROM {tbl}"))
             session.commit()
         except Exception:
             session.rollback()
+
     class Identity:
         user: User | None = None
 
@@ -101,7 +100,7 @@ def _seed_club_and_user(
         id=user_id,
         email=f"{username}@example.com",
         username=username,
-        password_hash="hashed",
+        password_hash="unused",  # pragma: allowlist secret
         role=UserRole.USER,
         kyc_status=KycStatus.FULLY_VERIFIED,
     )
@@ -452,6 +451,7 @@ def test_transfer_room_handoff_from_scouting_discovery(lifecycle_client):
     )
     # Seed an open transfer listing in canonical transfer market
     from datetime import datetime, timezone, timedelta
+
     listing = TransferListing(
         id="listing-tf-star",
         player_id=player.id,

@@ -209,7 +209,7 @@ Generated deterministically from `tools/audit/generate_contract_audit.py`.
 - `GET /api/broadcast-rights/competitions/{}`: `/api/broadcast-rights/competitions/{competition_id}` in `backend/app/broadcast_rights/router.py` (read_broadcast_rights_summary) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/broadcast-rights/matches/{}/access`: `/api/broadcast-rights/matches/{match_id}/access` in `backend/app/broadcast_rights/router.py` (read_match_broadcast_access) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/broadcast/channels`: `/api/broadcast/channels` in `backend/app/broadcast_network/router.py` (list_channels) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
-- ... and 2052 more
+- ... and 2077 more
 
 ## MIGRATE_TO
 
@@ -218,3 +218,4 @@ Generated deterministically from `tools/audit/generate_contract_audit.py`.
 ## DELETE
 
 - `GET /portfolio`: `/portfolio` in `backend/app/portfolio/router.py` (get_portfolio) -> `/portfolio` - Duplicate or lower-ranked surface shadowed by `/portfolio`.
+- `GET /scout/report/{}`: `/scout/report/{player_id}` in `backend/app/segments/player_lifecycle/scouting_action.py` (get_player_scout_report) -> `/api/scout/report/{player_id}` - Duplicate or lower-ranked surface shadowed by `/api/scout/report/{player_id}`.

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -195,9 +195,11 @@ def scout_player(
             club_id=club_id,
             player_id=player.id,
             recommendation_rank=1,
-            lifecycle_phase="senior"
-            if (player.date_of_birth and (date.today().year - player.date_of_birth.year) >= 21)
-            else "youth",
+            lifecycle_phase=(
+                "senior"
+                if (player.date_of_birth and (date.today().year - player.date_of_birth.year) >= 21)
+                else "youth"
+            ),
             confidence_bps=accuracy * 100,
             fit_score=float(current_ability),
             potential_signal_score=float(future_potential),
@@ -205,9 +207,9 @@ def scout_player(
             hidden_gem_signal=bool(future_potential - current_ability >= 10),
             current_ability_estimate=current_ability,
             future_potential_estimate=future_potential,
-            value_hint_coin=int(player.current_market_reference_value or 0)
-            if player.current_market_reference_value
-            else None,
+            value_hint_coin=(
+                int(player.current_market_reference_value or 0) if player.current_market_reference_value else None
+            ),
             summary_text=summary_text,
             tags_json=["real_player", "scouted"],
             metadata_json={"scout_id": scout.id, "accuracy": accuracy},
@@ -234,7 +236,6 @@ def scout_player(
 
 
 @router.get("/scout/reports/{player_id}", response_model=ScoutReportView)
-@router.get("/scout/report/{player_id}", response_model=ScoutReportView)
 def get_player_scout_report(
     player_id: str,
     current_user: User = Depends(get_current_user),
@@ -255,9 +256,7 @@ def get_player_scout_report(
     scout_conditions = [Scout.club_user_id == current_user.id]
     if owned_club_ids:
         scout_conditions.append(Scout.club_id.in_(owned_club_ids))
-    scout_ids = list(
-        service.session.scalars(select(Scout.id).where(or_(*scout_conditions))).all()
-    )
+    scout_ids = list(service.session.scalars(select(Scout.id).where(or_(*scout_conditions))).all())
 
     # 1. Check regen scout report
     regen = service.session.scalar(
@@ -367,9 +366,7 @@ def list_club_scout_reports(
     scout_conditions = [Scout.club_user_id == current_user.id]
     if owned_club_ids:
         scout_conditions.append(Scout.club_id.in_(owned_club_ids))
-    scout_ids = list(
-        service.session.scalars(select(Scout.id).where(or_(*scout_conditions))).all()
-    )
+    scout_ids = list(service.session.scalars(select(Scout.id).where(or_(*scout_conditions))).all())
 
     reports: list[ScoutReportView] = []
 
@@ -382,9 +379,7 @@ def list_club_scout_reports(
 
     if report_conditions:
         regen_reports = service.session.scalars(
-            select(RegenScoutReport)
-            .where(or_(*report_conditions))
-            .order_by(RegenScoutReport.created_at.desc())
+            select(RegenScoutReport).where(or_(*report_conditions)).order_by(RegenScoutReport.created_at.desc())
         ).all()
         for rr in regen_reports:
             regen = service.session.get(RegenProfile, rr.regen_id)
@@ -412,9 +407,7 @@ def list_club_scout_reports(
     # 2. Real players
     if owned_club_ids:
         intel_reports = service.session.scalars(
-            select(ScoutReport)
-            .where(ScoutReport.club_id.in_(owned_club_ids))
-            .order_by(ScoutReport.created_at.desc())
+            select(ScoutReport).where(ScoutReport.club_id.in_(owned_club_ids)).order_by(ScoutReport.created_at.desc())
         ).all()
         for ir in intel_reports:
             accuracy = max(0, min(100, round(ir.confidence_bps / 100)))

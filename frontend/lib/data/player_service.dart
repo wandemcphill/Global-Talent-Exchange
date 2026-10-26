@@ -222,7 +222,7 @@ class PlayerService {
         message: 'Player id is required to fetch scout report.',
       );
     }
-    return await _client.getMap('/scout/report/$playerId', auth: true);
+    return await _client.getMap('/scout/reports/$playerId', auth: true);
   }
 
   /// Lists the caller's authorized shortlists with optional full entries.

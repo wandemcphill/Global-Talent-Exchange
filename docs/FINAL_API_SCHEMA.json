@@ -437,6 +437,12 @@
       },
       {
         "method": "POST",
+        "path": "/api/admin/coin-traders/orders/expire-stale",
+        "handler": "admin_expire_stale_coin_trade_orders",
+        "response_model": "list[CoinTradeOrderView]"
+      },
+      {
+        "method": "POST",
         "path": "/api/admin/coin-traders/orders/{order_id}/resolve",
         "handler": "admin_resolve_coin_trade_order",
         "response_model": "CoinTradeOrderView"
@@ -1808,6 +1814,12 @@
         "response_model": "list[ClubLifecycleView]"
       },
       {
+        "method": "GET",
+        "path": "/api/clubs/marketplace",
+        "handler": "list_public_club_sale_market_listings",
+        "response_model": "ClubSaleListingCollectionView"
+      },
+      {
         "method": "POST",
         "path": "/api/clubs/personal-manager",
         "handler": "create_personal_manager",
@@ -2446,6 +2458,18 @@
         "path": "/api/coin-traders/orders/{order_id}/dispute",
         "handler": "dispute_coin_trade_order",
         "response_model": "CoinTradeOrderView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/coin-traders/orders/{order_id}/messages",
+        "handler": "list_coin_trade_order_messages",
+        "response_model": "list[CoinTradeMessageView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/coin-traders/orders/{order_id}/messages",
+        "handler": "post_coin_trade_order_message",
+        "response_model": "CoinTradeMessageView"
       },
       {
         "method": "POST",
@@ -5722,6 +5746,36 @@
         "response_model": null
       },
       {
+        "method": "GET",
+        "path": "/api/matches/{match_id}/post-match",
+        "handler": "read_match_v2_post_match",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/matches/{match_id}/pre-match",
+        "handler": "read_match_v2_pre_match",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/matches/{match_id}/predictions",
+        "handler": "read_match_fan_predictions",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/matches/{match_id}/predictions",
+        "handler": "submit_match_fan_prediction",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/matches/{match_id}/rewards/claim",
+        "handler": "claim_match_rewards",
+        "response_model": null
+      },
+      {
         "method": "POST",
         "path": "/api/matches/{match_id}/spectate",
         "handler": "join_spectate",
@@ -5866,6 +5920,24 @@
         "response_model": null
       },
       {
+        "method": "GET",
+        "path": "/matches/{match_id}/predictions",
+        "handler": "read_match_fan_predictions",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/matches/{match_id}/predictions",
+        "handler": "submit_match_fan_prediction",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/matches/{match_id}/rewards/claim",
+        "handler": "claim_match_rewards",
+        "response_model": null
+      },
+      {
         "method": "POST",
         "path": "/matches/{match_id}/spectate",
         "handler": "join_spectate",
@@ -5875,6 +5947,18 @@
         "method": "WEBSOCKET",
         "path": "/matches/{match_id}/stream",
         "handler": "stream_match",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/matches/{match_id}/tactics",
+        "handler": "read_match_v2_tactics",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/matches/{match_id}/tactics",
+        "handler": "update_match_v2_tactics",
         "response_model": null
       },
       {
@@ -7729,6 +7813,12 @@
       },
       {
         "method": "POST",
+        "path": "/api/owner/clubs/{club_id}/autopick",
+        "handler": "autopick",
+        "response_model": null
+      },
+      {
+        "method": "POST",
         "path": "/api/owner/clubs/{club_id}/facilities/{kind}/upgrade",
         "handler": "upgrade",
         "response_model": null
@@ -7791,6 +7881,12 @@
         "method": "GET",
         "path": "/api/owner/clubs/{club_id}/supporters",
         "handler": "supporters",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/owner/clubs/{club_id}/unsign",
+        "handler": "unsign",
         "response_model": null
       },
       {
@@ -10358,6 +10454,24 @@
         "path": "/scout/report/{player_id}",
         "handler": "scout_player",
         "response_model": "ScoutReportView"
+      },
+      {
+        "method": "GET",
+        "path": "/scout/reports",
+        "handler": "list_club_scout_reports",
+        "response_model": "list[ScoutReportView]"
+      },
+      {
+        "method": "GET",
+        "path": "/scout/reports/{player_id}",
+        "handler": "get_player_scout_report",
+        "response_model": "ScoutReportView"
+      },
+      {
+        "method": "POST",
+        "path": "/scout/reports/{player_id}/transfer-room",
+        "handler": "handoff_scout_report_to_transfer_room",
+        "response_model": null
       }
     ],
     "segment": [
@@ -12080,6 +12194,18 @@
         "response_model": "ShortlistView"
       },
       {
+        "method": "POST",
+        "path": "/api/talent/shortlists/{shortlist_id}/entries/{entry_id}/transfer-room",
+        "handler": "handoff_shortlist_entry_to_transfer",
+        "response_model": "dict[str"
+      },
+      {
+        "method": "POST",
+        "path": "/api/talent/shortlists/{shortlist_id}/entries/{entry_id}/transfer-room",
+        "handler": "handoff_shortlist_entry_to_transfer",
+        "response_model": "dict[str"
+      },
+      {
         "method": "GET",
         "path": "/api/talent/{player_id}",
         "handler": "read_talent_profile",
@@ -12189,7 +12315,19 @@
         "method": "POST",
         "path": "/api/tournaments",
         "handler": "create_tournament",
-        "response_model": "TournamentView"
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/tournaments/admin/retirement/refunds/dry-run",
+        "handler": "dry_run_legacy_tournament_refunds",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/tournaments/admin/retirement/refunds/execute",
+        "handler": "execute_legacy_tournament_refund_batch",
+        "response_model": null
       },
       {
         "method": "GET",
@@ -12201,25 +12339,25 @@
         "method": "POST",
         "path": "/api/tournaments/{tournament_id}/advance",
         "handler": "advance_tournament",
-        "response_model": "TournamentView"
+        "response_model": null
       },
       {
         "method": "POST",
         "path": "/api/tournaments/{tournament_id}/cancel",
         "handler": "cancel_tournament",
-        "response_model": "TournamentView"
+        "response_model": null
       },
       {
         "method": "POST",
         "path": "/api/tournaments/{tournament_id}/join",
         "handler": "join_tournament",
-        "response_model": "TournamentView"
+        "response_model": null
       },
       {
         "method": "POST",
         "path": "/api/tournaments/{tournament_id}/matches/{match_id}/result",
         "handler": "report_match_result",
-        "response_model": "TournamentView"
+        "response_model": null
       }
     ],
     "trader": [

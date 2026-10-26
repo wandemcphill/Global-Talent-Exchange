@@ -495,7 +495,7 @@ void main() {
     expect(report['player_name'], 'Victor Osimhen');
     expect(
       transport.requests.single.uri.path,
-      '/api/v2/scout/report/player-osimhen',
+      '/api/v2/scout/reports/player-osimhen',
     );
     expect(
       transport.requests.single.headers['Authorization'],

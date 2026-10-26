@@ -537,8 +537,17 @@ export function TransferHub() {
             setOfferListing({ id, asking_price: 50000 });
             setOfferAmount("50000");
           }}
-          onAddToWatchlist={(id) => {
-            toast.success("Player added to scouting shortlist & transfer watchlist");
+          onAddToWatchlist={async (id) => {
+            try {
+              await api.post("/transfer-market/watchlist", {
+                player_id: id,
+                club_id: activeClub?.club_id,
+                source: "scouting_dossier",
+              });
+              toast.success("Player added to transfer market watchlist.");
+            } catch (e) {
+              toast.error(errMsg(e));
+            }
           }}
         />
       )}
