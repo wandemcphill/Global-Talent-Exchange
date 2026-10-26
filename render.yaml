@@ -100,6 +100,10 @@ services:
         value: "300"
       - key: GTE_KAFKA_BROKERS
         value: ""
+      - key: GTE_WORLD_CLOCK_PROGRESSION_RATE
+        value: "1.0"
+      - key: GTE_AUTONOMOUS_FIXTURE_EXECUTION_ENABLED
+        value: "true"
 
   - name: gtex-web
     type: web
@@ -165,6 +169,10 @@ services:
         value: sportmonks
       - key: GTE_OUTBOX_RELAY_ENABLED
         value: "false"
+      - key: GTE_AUTONOMOUS_FIXTURE_EXECUTION_ENABLED
+        value: "true"
+      - key: GTE_AUTONOMOUS_FIXTURE_INTERVAL_SECONDS
+        value: "30"
       - key: GTE_TASK_QUEUE_ENABLED
         value: "true"
 
@@ -230,7 +238,7 @@ services:
       - key: GTE_INGESTION_PROVIDER
         value: sportmonks
       - key: GTE_OUTBOX_RELAY_ENABLED
-        value: "true"
+        value: "false"
 
   - name: gtex-worker
     type: worker

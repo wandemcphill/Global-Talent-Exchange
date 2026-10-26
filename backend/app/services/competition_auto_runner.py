@@ -47,6 +47,7 @@ class CompetitionAutoRunner:
     lifecycle_service: CompetitionLifecycleService = field(init=False)
     match_service: MatchSimulationService = field(default_factory=MatchSimulationService)
     timeline_service: MatchTimelineService = field(default_factory=MatchTimelineService)
+    allow_synthetic_fallback: bool = True
     team_factory: SyntheticSquadFactory = field(init=False)
 
     def __post_init__(self) -> None:
@@ -55,7 +56,7 @@ class CompetitionAutoRunner:
         session_factory = create_session_factory(bind) if bind is not None else None
         self.team_factory = SyntheticSquadFactory(
             session_factory=session_factory,
-            allow_synthetic_fallback=False,
+            allow_synthetic_fallback=self.allow_synthetic_fallback,
         )
 
     def run_until_idle(
@@ -63,6 +64,7 @@ class CompetitionAutoRunner:
         competition: Competition,
         *,
         simulate_scheduled_matches: bool = False,
+        evaluation_time: datetime | None = None,
     ) -> Competition:
         for _ in range(32):
             self.session.refresh(competition)
@@ -83,8 +85,15 @@ class CompetitionAutoRunner:
 
             matches = self._matches(competition.id)
             scheduled = [match for match in matches if match.status == MatchStatus.SCHEDULED.value]
-            if scheduled and simulate_scheduled_matches:
-                for match in scheduled:
+            due = [
+                match
+                for match in scheduled
+                if evaluation_time is None
+                or match.scheduled_at is None
+                or _as_utc(match.scheduled_at) <= evaluation_time
+            ]
+            if due and simulate_scheduled_matches:
+                for match in due:
                     self._simulate_match(competition, match)
                 changed = True
                 matches = self._matches(competition.id)

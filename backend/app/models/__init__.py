@@ -44,6 +44,7 @@ from app.models.admin_runtime_state import AdminRuntimeState
 from app.models.attachment import Attachment
 from app.models.betting import BetAuditLog, BetIntegrityAlert, BetTicket, BettingProfile
 from app.models.calendar_engine import CalendarEvent, CalendarSeason, CompetitionLifecycleRun, GlobalEvent
+from app.models.world_clock import WorldClockState
 from app.models.base import Base
 from app.models.card_access import (
     CardLoanContract,
@@ -1382,6 +1383,7 @@ __all__ = [
     "StadiumTicket",
     "TicketReaction",
     "TicketWaitlist",
+    "WorldClockState",
 ]
 
 

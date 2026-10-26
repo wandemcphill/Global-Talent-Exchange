@@ -355,15 +355,24 @@ class RegenUniverseService:
             last_season = self.session.scalar(select(RegenSeason).order_by(RegenSeason.season_number.desc()))
             today = date.today()
             season_number = (last_season.season_number + 1) if last_season is not None else 1
+            from app.services.world_clock_service import WorldClockService
+
+            v_index = WorldClockService(self.session).season_virtual_month_index(season_number)
             self.session.add(
                 RegenSeason(
                     season_number=season_number,
                     start_date=date(today.year, 1, 1),
                     end_date=date(today.year, 12, 31),
                     is_active=True,
-                    metadata_json={"auto_seeded": True},
+                    metadata_json={
+                        "auto_seeded": True,
+                        "virtual_age_month_index": v_index,
+                    },
                 )
             )
+        from app.services.world_clock_service import WorldClockService
+
+        WorldClockService(self.session).backfill_existing_seasons()
         self.session.flush()
         self.announce_rising_stars_to_story_feed(limit=5)
 
@@ -447,12 +456,19 @@ class RegenUniverseService:
             active = self.session.scalar(select(RegenSeason).where(RegenSeason.is_active.is_(True)))
             if active is not None:
                 raise RegenUniverseError("regen_universe_active_season_exists")
+        from app.services.world_clock_service import WorldClockService
+
+        v_index = WorldClockService(self.session).season_virtual_month_index(season_number)
+        metadata = {
+            "source_ingestion_season_ids": list(source_ingestion_season_ids or []),
+            "virtual_age_month_index": v_index,
+        }
         season = RegenSeason(
             season_number=season_number,
             start_date=start_date,
             end_date=end_date,
             is_active=is_active,
-            metadata_json={"source_ingestion_season_ids": list(source_ingestion_season_ids or [])},
+            metadata_json=metadata,
         )
         self.session.add(season)
         self.session.flush()
@@ -2670,12 +2686,16 @@ class RegenUniverseService:
         duration = season.end_date - season.start_date
         next_start = season.end_date + timedelta(days=1)
         next_end = next_start + duration
+        from app.services.world_clock_service import WorldClockService
+
+        next_season_num = season.season_number + 1
+        v_index = WorldClockService(self.session).season_virtual_month_index(next_season_num)
         next_season = RegenSeason(
-            season_number=season.season_number + 1,
+            season_number=next_season_num,
             start_date=next_start,
             end_date=next_end,
             is_active=True,
-            metadata_json={},
+            metadata_json={"virtual_age_month_index": v_index},
         )
         self.session.add(next_season)
         self.session.flush()

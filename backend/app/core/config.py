@@ -225,6 +225,26 @@ class SettingsSource(BaseModel):
         default=True,
         validation_alias="GTE_KAFKA_SIMULATION_CONSUMER_ENABLED",
     )
+    world_clock_progression_rate: float = Field(
+        default=1.0,
+        validation_alias="GTE_WORLD_CLOCK_PROGRESSION_RATE",
+    )
+    world_clock_virtual_start_date: str = Field(
+        default="2026-01-01",
+        validation_alias="GTE_WORLD_CLOCK_VIRTUAL_START_DATE",
+    )
+    world_clock_virtual_months_per_season: int = Field(
+        default=12,
+        validation_alias="GTE_WORLD_CLOCK_VIRTUAL_MONTHS_PER_SEASON",
+    )
+    autonomous_fixture_execution_enabled: bool = Field(
+        default=True,
+        validation_alias="GTE_AUTONOMOUS_FIXTURE_EXECUTION_ENABLED",
+    )
+    autonomous_fixture_interval_seconds: int = Field(
+        default=60,
+        validation_alias="GTE_AUTONOMOUS_FIXTURE_INTERVAL_SECONDS",
+    )
     projection_workers_enabled: bool = Field(default=True, validation_alias="GTE_PROJECTION_WORKERS_ENABLED")
     observability_metrics_enabled: bool = Field(default=True, validation_alias="GTE_METRICS_ENABLED")
     observability_metrics_port: int = Field(default=0, validation_alias="GTE_METRICS_PORT")
@@ -838,6 +858,11 @@ class Settings:
     outbox_relay_poll_interval_ms: int
     kafka_api_queue_consumer_enabled: bool
     kafka_simulation_consumer_enabled: bool
+    world_clock_progression_rate: float
+    world_clock_virtual_start_date: str
+    world_clock_virtual_months_per_season: int
+    autonomous_fixture_execution_enabled: bool
+    autonomous_fixture_interval_seconds: int
     projection_workers_enabled: bool
     observability_metrics_enabled: bool
     observability_metrics_port: int
@@ -2188,6 +2213,11 @@ def load_settings(
         outbox_relay_poll_interval_ms=source.outbox_relay_poll_interval_ms,
         kafka_api_queue_consumer_enabled=source.kafka_api_queue_consumer_enabled,
         kafka_simulation_consumer_enabled=source.kafka_simulation_consumer_enabled,
+        world_clock_progression_rate=max(0.0001, float(source.world_clock_progression_rate)),
+        world_clock_virtual_start_date=str(source.world_clock_virtual_start_date or "2026-01-01"),
+        world_clock_virtual_months_per_season=max(1, int(source.world_clock_virtual_months_per_season)),
+        autonomous_fixture_execution_enabled=source.autonomous_fixture_execution_enabled,
+        autonomous_fixture_interval_seconds=max(1, int(source.autonomous_fixture_interval_seconds)),
         projection_workers_enabled=source.projection_workers_enabled,
         observability_metrics_enabled=source.observability_metrics_enabled,
         observability_metrics_port=source.observability_metrics_port,

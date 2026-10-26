@@ -1602,6 +1602,14 @@ class CompetitionOrchestrator:
         self.session.refresh(competition)
         return self._to_summary(competition)
 
+    def execute_due_fixtures(self, *, reference_at: datetime | None = None, limit: int = 50) -> dict[str, Any]:
+        from app.services.autonomous_match_service import AutonomousMatchExecutionService
+
+        service = AutonomousMatchExecutionService(self.session)
+        result = service.scan_and_execute_due_fixtures(reference_at=reference_at, limit=limit)
+        self.session.commit()
+        return result
+
     def _record_competition_ranking_placements(self, competition: Competition) -> None:
         try:
             rule_set = self._rule_set(competition.id)
