@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import logging
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.common.enums.competition_format import CompetitionFormat
@@ -56,18 +56,23 @@ class AutonomousMatchExecutionService:
         """
         eval_time = _as_utc(reference_at) or self.world_clock.now_virtual()
 
-        # 1. Discover due matches
+        # 1. Discover candidate due matches
         stmt = (
             select(CompetitionMatch)
             .where(
                 CompetitionMatch.status == MatchStatus.SCHEDULED.value,
                 or_(
-                    CompetitionMatch.scheduled_at.is_(None),
                     CompetitionMatch.scheduled_at <= eval_time,
+                    and_(
+                        CompetitionMatch.scheduled_at.is_(None),
+                        CompetitionMatch.match_date.is_not(None),
+                    ),
+                    CompetitionMatch.scheduled_at.is_(None),
                 ),
             )
             .order_by(
-                CompetitionMatch.scheduled_at.asc().nullsfirst(),
+                CompetitionMatch.scheduled_at.asc().nullslast(),
+                CompetitionMatch.match_date.asc().nullslast(),
                 CompetitionMatch.created_at.asc(),
             )
             .limit(max(1, limit))
@@ -76,7 +81,20 @@ class AutonomousMatchExecutionService:
         if _supports_row_locks(self.session):
             stmt = stmt.with_for_update(skip_locked=True)
 
-        due_matches = list(self.session.scalars(stmt).all())
+        candidate_matches = list(self.session.scalars(stmt).all())
+
+        # Resolve authoritative kickoff; exclude fixtures whose kickoff is unresolved or future
+        executable_matches: list[tuple[CompetitionMatch, Competition, datetime]] = []
+        for match in candidate_matches:
+            comp = self.session.get(Competition, match.competition_id)
+            if comp is None:
+                continue
+            kickoff = self.auto_runner.effective_kickoff_at(comp, match)
+            if kickoff is None or kickoff > eval_time:
+                continue
+            if match.scheduled_at is None:
+                match.scheduled_at = kickoff
+            executable_matches.append((match, comp, kickoff))
 
         executed = 0
         failed = 0
@@ -87,59 +105,68 @@ class AutonomousMatchExecutionService:
         # Track competitions affected so we can finalize/advance them once their round completes
         competitions_to_check: dict[str, Competition] = {}
 
-        for match in due_matches:
-            comp = self.session.get(Competition, match.competition_id)
-            if comp is None:
-                continue
-
+        for match, comp, kickoff in executable_matches:
             competitions_to_check[comp.id] = comp
 
             # If competition is not yet active (e.g. SEEDED), launch it
             comp_status = CompetitionStatus(comp.status)
-            if comp_status is CompetitionStatus.SEEDED or self.auto_runner._should_launch(comp):
+            if comp_status is CompetitionStatus.SEEDED or self.auto_runner._should_launch(comp, now_virtual=eval_time):
                 try:
-                    self.auto_runner.lifecycle_service.launch_competition(comp)
+                    with self.session.begin_nested():
+                        self.auto_runner.lifecycle_service.launch_competition(comp)
                 except Exception as exc:
                     logger.warning("Failed to auto-launch competition %s: %s", comp.id, exc)
 
             try:
-                # Mark in-progress to claim fixture
-                match.status = MatchStatus.IN_PROGRESS.value
-                self.session.flush()
+                with self.session.begin_nested():
+                    # Mark in-progress to claim fixture
+                    match.status = MatchStatus.IN_PROGRESS.value
+                    self.session.flush()
 
-                # Simulate through canonical MatchSimulationService & SyntheticSquadFactory
-                self.auto_runner._simulate_match(comp, match)
-                self.session.flush()
+                    # Simulate through canonical MatchSimulationService & SyntheticSquadFactory
+                    self.auto_runner._simulate_match(comp, match)
+                    self.session.flush()
                 executed += 1
             except Exception as exc:
                 failed += 1
                 errors.append(f"Match {match.id}: {exc}")
                 logger.exception("Error executing due fixture %s in competition %s", match.id, comp.id)
-                # Rollback match status to scheduled so it can be retried later
-                match.status = MatchStatus.SCHEDULED.value
-                self.session.flush()
+                # Atomic savepoint rollback: clean up partial writes, restore SCHEDULED status, record retry
+                try:
+                    with self.session.begin_nested():
+                        self.session.refresh(match)
+                        match.status = MatchStatus.SCHEDULED.value
+                        meta = dict(match.metadata_json or {})
+                        meta["execution_attempts"] = int(meta.get("execution_attempts", 0)) + 1
+                        meta["last_execution_error"] = str(exc)
+                        meta["last_attempt_virtual_at"] = eval_time.isoformat()
+                        match.metadata_json = meta
+                        self.session.flush()
+                except Exception as meta_exc:
+                    logger.warning("Failed to record retry metadata on match %s: %s", match.id, meta_exc)
 
         # 2. Check and advance / finalize competitions where all matches in round are complete
         for comp_id, comp in competitions_to_check.items():
             try:
-                self.session.refresh(comp)
-                matches = self.auto_runner._matches(comp.id)
-                if matches and self.auto_runner._all_matches_complete(matches):
-                    if CompetitionFormat(comp.format) is CompetitionFormat.LEAGUE:
-                        if CompetitionStatus(comp.status) is not CompetitionStatus.SETTLED:
-                            self.auto_runner.lifecycle_service.finalize_competition(comp, settle=True)
-                            settled_competitions.append(comp.id)
-                    else:
-                        prev_round = comp.current_round
-                        self.auto_runner.lifecycle_service.advance_competition(comp, force=False)
-                        matches_after = self.auto_runner._matches(comp.id)
-                        if comp.current_round != prev_round:
-                            advanced_competitions.append(comp.id)
-                        if matches_after and self.auto_runner._all_matches_complete(matches_after):
+                with self.session.begin_nested():
+                    self.session.refresh(comp)
+                    matches = self.auto_runner._matches(comp.id)
+                    if matches and self.auto_runner._all_matches_complete(matches):
+                        if CompetitionFormat(comp.format) is CompetitionFormat.LEAGUE:
                             if CompetitionStatus(comp.status) is not CompetitionStatus.SETTLED:
                                 self.auto_runner.lifecycle_service.finalize_competition(comp, settle=True)
                                 settled_competitions.append(comp.id)
-                self.session.flush()
+                        else:
+                            prev_round = comp.current_round
+                            self.auto_runner.lifecycle_service.advance_competition(comp, force=False)
+                            matches_after = self.auto_runner._matches(comp.id)
+                            if comp.current_round != prev_round:
+                                advanced_competitions.append(comp.id)
+                            if matches_after and self.auto_runner._all_matches_complete(matches_after):
+                                if CompetitionStatus(comp.status) is not CompetitionStatus.SETTLED:
+                                    self.auto_runner.lifecycle_service.finalize_competition(comp, settle=True)
+                                    settled_competitions.append(comp.id)
+                    self.session.flush()
             except Exception as exc:
                 logger.exception("Failed to advance/settle competition %s: %s", comp_id, exc)
 
@@ -160,18 +187,19 @@ class AutonomousMatchExecutionService:
             ).all()
         )
         for comp in pending_launch:
-            if self.auto_runner._should_launch(comp):
+            if self.auto_runner._should_launch(comp, now_virtual=eval_time):
                 try:
-                    self.auto_runner.lifecycle_service.launch_competition(comp)
-                    launched_competitions.append(comp.id)
-                    self.session.flush()
+                    with self.session.begin_nested():
+                        self.auto_runner.lifecycle_service.launch_competition(comp)
+                        launched_competitions.append(comp.id)
+                        self.session.flush()
                 except Exception as exc:
                     logger.warning("Failed to auto-launch pending competition %s: %s", comp.id, exc)
 
         return {
             "status": "success",
             "eval_time": eval_time.isoformat(),
-            "discovered_due": len(due_matches),
+            "discovered_due": len(executable_matches),
             "executed": executed,
             "failed": failed,
             "settled_competitions": settled_competitions,
@@ -188,10 +216,7 @@ class AutonomousMatchExecutionService:
         overdue_count = self.session.scalar(
             select(func.count(CompetitionMatch.id)).where(
                 CompetitionMatch.status == MatchStatus.SCHEDULED.value,
-                or_(
-                    CompetitionMatch.scheduled_at.is_(None),
-                    CompetitionMatch.scheduled_at <= eval_time,
-                ),
+                CompetitionMatch.scheduled_at <= eval_time,
             )
         ) or 0
 

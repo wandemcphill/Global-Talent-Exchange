@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import uuid4
 
@@ -13,15 +13,19 @@ import app.predictions.models  # noqa: F401
 from app.common.enums.competition_format import CompetitionFormat
 from app.common.enums.competition_status import CompetitionStatus
 from app.common.enums.match_status import MatchStatus
+from app.ingestion.models import Player
 from app.models.base import Base
 from app.models.club_profile import ClubProfile
 from app.models.competition import Competition
 from app.models.competition_match import CompetitionMatch
+from app.models.competition_match_event import CompetitionMatchEvent
 from app.models.competition_round import CompetitionRound
 from app.models.competition_rule_set import CompetitionRuleSet
+from app.models.player_contract import PlayerContract
 from app.models.user import KycStatus, User, UserRole
 from app.owner_console.engine import simulate_match as owner_simulate_match
 from app.services.autonomous_match_service import AutonomousMatchExecutionService
+from app.services.competition_lifecycle_service import CompetitionLifecycleService
 from app.services.world_clock_service import WorldClockService
 
 
@@ -35,7 +39,49 @@ def session_factory(tmp_path_factory):
     engine.dispose()
 
 
-def _create_user_and_club(session, name: str) -> tuple[User, ClubProfile]:
+def _seed_club_squad(session, club: ClubProfile, count: int = 15, as_of: date | None = None) -> list[Player]:
+    base_date = as_of or date(2026, 1, 1)
+    roles = [
+        "goalkeeper", "defender", "defender", "defender", "defender",
+        "midfielder", "midfielder", "midfielder", "forward", "forward", "forward",
+        "midfielder", "forward", "defender", "goalkeeper"
+    ]
+    players = []
+    for i in range(count):
+        pos = roles[i % len(roles)]
+        player_id = str(uuid4())
+        player = Player(
+            id=player_id,
+            source_provider="test_provider",
+            provider_external_id=f"ext_{player_id[:12]}",
+            full_name=f"{club.club_name} Player {i+1}",
+            first_name=f"Player{i+1}",
+            last_name=club.club_name,
+            position=pos,
+            normalized_position=pos,
+            date_of_birth=date(2000, 1, 1),
+            is_real_player=False,
+            is_tradable=True,
+            current_club_profile_id=club.id,
+        )
+        session.add(player)
+        contract = PlayerContract(
+            id=str(uuid4()),
+            player_id=player_id,
+            club_id=club.id,
+            status="active",
+            signed_on=base_date - timedelta(days=30),
+            starts_on=base_date - timedelta(days=30),
+            ends_on=base_date + timedelta(days=365),
+            wage_amount=Decimal("1000.00"),
+        )
+        session.add(contract)
+        players.append(player)
+    session.flush()
+    return players
+
+
+def _create_user_and_club(session, name: str, seed_squad: bool = True) -> tuple[User, ClubProfile]:
     user = User(
         id=str(uuid4()),
         email=f"{name.lower().replace(' ', '_')}@test.local",
@@ -56,11 +102,13 @@ def _create_user_and_club(session, name: str) -> tuple[User, ClubProfile]:
     )
     session.add(club)
     session.flush()
+    if seed_squad:
+        _seed_club_squad(session, club)
     return user, club
 
 
 def _create_test_competition(session, name: str = "Test Auto League") -> Competition:
-    host_user, _ = _create_user_and_club(session, f"Host_{uuid4().hex[:6]}")
+    host_user, _ = _create_user_and_club(session, f"Host_{uuid4().hex[:6]}", seed_squad=False)
     comp = Competition(
         id=str(uuid4()),
         host_user_id=host_user.id,
@@ -114,8 +162,9 @@ def test_due_fixtures_discovery_and_filtering(session_factory) -> None:
             round_id=round_1.id,
             round_number=1,
             stage="league",
-            home_club_id=club_a.owner_user_id,
-            away_club_id=club_b.owner_user_id,
+            home_club_id=club_a.id,
+            away_club_id=club_b.id,
+            match_date=eval_time.date(),
             scheduled_at=eval_time - timedelta(hours=2),
             status=MatchStatus.SCHEDULED.value,
         )
@@ -128,8 +177,9 @@ def test_due_fixtures_discovery_and_filtering(session_factory) -> None:
             round_id=round_1.id,
             round_number=1,
             stage="league",
-            home_club_id=club_b.owner_user_id,
-            away_club_id=club_c.owner_user_id,
+            home_club_id=club_b.id,
+            away_club_id=club_c.id,
+            match_date=eval_time.date(),
             scheduled_at=eval_time + timedelta(hours=2),
             status=MatchStatus.SCHEDULED.value,
         )
@@ -181,8 +231,9 @@ def test_downtime_catchup_in_chronological_order(session_factory) -> None:
             round_id=round_1.id,
             round_number=1,
             stage="league",
-            home_club_id=club_a.owner_user_id,
-            away_club_id=club_b.owner_user_id,
+            home_club_id=club_a.id,
+            away_club_id=club_b.id,
+            match_date=eval_time.date(),
             scheduled_at=eval_time - timedelta(hours=5),
             status=MatchStatus.SCHEDULED.value,
         )
@@ -221,8 +272,9 @@ def test_idempotent_execution_and_no_duplicate_simulation(session_factory) -> No
             round_id=round_1.id,
             round_number=1,
             stage="league",
-            home_club_id=club_a.owner_user_id,
-            away_club_id=club_b.owner_user_id,
+            home_club_id=club_a.id,
+            away_club_id=club_b.id,
+            match_date=eval_time.date(),
             scheduled_at=eval_time - timedelta(hours=1),
             status=MatchStatus.SCHEDULED.value,
         )
@@ -241,6 +293,153 @@ def test_idempotent_execution_and_no_duplicate_simulation(session_factory) -> No
 
         session.refresh(m)
         assert m.status == MatchStatus.COMPLETED.value
+
+
+def test_unresolved_missing_kickoff_not_run_prematurely(session_factory) -> None:
+    eval_time = datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+    with session_factory() as session:
+        comp = _create_test_competition(session, "Unresolved Kickoff League")
+        comp.scheduled_start_at = None
+        session.flush()
+
+        round_1 = CompetitionRound(
+            id=str(uuid4()),
+            competition_id=comp.id,
+            round_number=1,
+            stage="league",
+            status="active",
+        )
+        session.add(round_1)
+
+        _, club_a = _create_user_and_club(session, "Club Unres A")
+        _, club_b = _create_user_and_club(session, "Club Unres B")
+        _, club_c = _create_user_and_club(session, "Club Unres C")
+        _, club_d = _create_user_and_club(session, "Club Unres D")
+
+        # Match 1: completely unresolvable (no scheduled_at, no match_date, comp.scheduled_start_at is None)
+        unresolvable_match = CompetitionMatch(
+            id=str(uuid4()),
+            competition_id=comp.id,
+            round_id=round_1.id,
+            round_number=1,
+            stage="league",
+            home_club_id=club_a.id,
+            away_club_id=club_b.id,
+            match_date=None,
+            scheduled_at=None,
+            status=MatchStatus.SCHEDULED.value,
+        )
+        session.add(unresolvable_match)
+
+        # Match 2: match_date is in future (kickoff will be future)
+        future_date_match = CompetitionMatch(
+            id=str(uuid4()),
+            competition_id=comp.id,
+            round_id=round_1.id,
+            round_number=1,
+            stage="league",
+            home_club_id=club_c.id,
+            away_club_id=club_d.id,
+            match_date=eval_time.date() + timedelta(days=2),
+            scheduled_at=None,
+            status=MatchStatus.SCHEDULED.value,
+        )
+        session.add(future_date_match)
+        session.commit()
+
+        service = AutonomousMatchExecutionService(session)
+        result = service.scan_and_execute_due_fixtures(reference_at=eval_time)
+        session.commit()
+
+        # Neither unresolvable nor future should be executed
+        session.refresh(unresolvable_match)
+        assert unresolvable_match.status == MatchStatus.SCHEDULED.value
+        assert unresolvable_match.scheduled_at is None
+
+        session.refresh(future_date_match)
+        assert future_date_match.status == MatchStatus.SCHEDULED.value
+
+
+def test_atomic_retry_rolls_back_partial_writes(session_factory, monkeypatch) -> None:
+    eval_time = datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+    with session_factory() as session:
+        comp = _create_test_competition(session, "Atomic Retry League")
+        round_1 = CompetitionRound(
+            id=str(uuid4()),
+            competition_id=comp.id,
+            round_number=1,
+            stage="league",
+            status="active",
+        )
+        session.add(round_1)
+
+        _, club_a = _create_user_and_club(session, "Atomic A")
+        _, club_b = _create_user_and_club(session, "Atomic B")
+
+        match = CompetitionMatch(
+            id=str(uuid4()),
+            competition_id=comp.id,
+            round_id=round_1.id,
+            round_number=1,
+            stage="league",
+            home_club_id=club_a.id,
+            away_club_id=club_b.id,
+            match_date=eval_time.date(),
+            scheduled_at=eval_time - timedelta(hours=1),
+            status=MatchStatus.SCHEDULED.value,
+        )
+        session.add(match)
+        session.commit()
+
+        # 1. Simulate failure during complete_match (after viewer payload & events have been written)
+        def _exploding_complete_match(self, *args, **kwargs):
+            raise RuntimeError("Database connection lost during settlement")
+
+        monkeypatch.setattr(CompetitionLifecycleService, "complete_match", _exploding_complete_match)
+
+        service = AutonomousMatchExecutionService(session)
+        result = service.scan_and_execute_due_fixtures(reference_at=eval_time)
+        session.commit()
+
+        assert result["failed"] == 1
+        assert len(result["errors"]) == 1
+        assert "Database connection lost during settlement" in result["errors"][0]
+
+        session.refresh(match)
+        # Status rolled back cleanly to SCHEDULED
+        assert match.status == MatchStatus.SCHEDULED.value
+        # Retry metadata recorded
+        assert match.metadata_json is not None
+        assert match.metadata_json["execution_attempts"] == 1
+        assert "Database connection lost during settlement" in match.metadata_json["last_execution_error"]
+
+        # Partial events written before the exception rolled back with savepoint!
+        events = list(
+            session.scalars(
+                select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == match.id)
+            ).all()
+        )
+        assert len(events) == 0
+
+        # 2. Now remove monkeypatch and rerun: match executes cleanly and idempotently
+        monkeypatch.undo()
+
+        res2 = service.scan_and_execute_due_fixtures(reference_at=eval_time)
+        session.commit()
+
+        assert res2["executed"] == 1
+        session.refresh(match)
+        assert match.status == MatchStatus.COMPLETED.value
+        assert match.completed_at is not None
+        # Events exist exactly once
+        events_after = list(
+            session.scalars(
+                select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == match.id)
+            ).all()
+        )
+        assert len(events_after) > 0
 
 
 def test_health_telemetry_reporting(session_factory) -> None:
@@ -297,3 +496,9 @@ def test_owner_console_simulate_match_canonical_dispatch() -> None:
     assert "momentum" in result
     assert "gap" in result
     assert len(result["events"]) > 0
+
+
+def test_owner_console_honest_failure_on_invalid_input() -> None:
+    # Invalid side input missing required fields must raise honestly rather than falling back to Poisson
+    with pytest.raises(Exception):
+        owner_simulate_match("bad_seed", {"invalid": True}, {"invalid": True})

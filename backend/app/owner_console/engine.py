@@ -297,216 +297,151 @@ def _poisson(rng: random.Random, lam: float) -> int:
 
 
 def simulate_match(seed: str, home: dict[str, Any], away: dict[str, Any]) -> dict[str, Any]:
-    """home/away: name, strength, mentality, scorers(list[str]), manager(dict|None)."""
-    try:
-        from app.match_engine.schemas import (
-            MatchCompetitionContextInput,
-            MatchPlayerInput,
-            MatchSimulationRequest,
-            MatchTeamInput,
-            TeamTacticalPlanInput,
-        )
-        from app.match_engine.services.match_simulation_service import MatchSimulationService
-        from app.match_engine.simulation.models import MatchCompetitionType, PlayerRole, TacticalStyle
+    """Simulate a match using the canonical MatchSimulationService exclusively.
 
-        seed_int = int(hashlib.sha256(str(seed).encode()).hexdigest()[:8], 16)
+    home/away: name, strength, mentality, scorers(list[str]), manager(dict|None).
+    """
+    from app.match_engine.schemas import (
+        MatchCompetitionContextInput,
+        MatchPlayerInput,
+        MatchSimulationRequest,
+        MatchTeamInput,
+        TeamTacticalPlanInput,
+    )
+    from app.match_engine.services.match_simulation_service import MatchSimulationService
+    from app.match_engine.simulation.models import MatchCompetitionType, PlayerRole, TacticalStyle
 
-        def _build_side_input(side_id: str, side_data: dict[str, Any]) -> MatchTeamInput:
-            mentality = side_data.get("mentality", "balanced")
-            style = {
-                "attacking": TacticalStyle.ATTACKING,
-                "defensive": TacticalStyle.DEFENSIVE,
-            }.get(mentality, TacticalStyle.BALANCED)
-            base_rating = int(clamp(float(side_data.get("strength", 70)), 40, 95))
-            roles = [
-                PlayerRole.GOALKEEPER,
-                PlayerRole.DEFENDER,
-                PlayerRole.DEFENDER,
-                PlayerRole.DEFENDER,
-                PlayerRole.DEFENDER,
-                PlayerRole.MIDFIELDER,
-                PlayerRole.MIDFIELDER,
-                PlayerRole.MIDFIELDER,
-                PlayerRole.FORWARD,
-                PlayerRole.FORWARD,
-                PlayerRole.FORWARD,
-            ]
-            scorers = list(side_data.get("scorers") or [])
-            starters = []
-            for i, role in enumerate(roles):
-                p_name = scorers[i % len(scorers)] if scorers else f"{side_data.get('name', 'Team')} Player {i+1}"
-                starters.append(
-                    MatchPlayerInput(
-                        player_id=f"{side_id}-player-{i+1}",
-                        player_name=p_name,
-                        role=role,
-                        overall=base_rating,
-                        finishing=base_rating if role == PlayerRole.FORWARD else 50,
-                        defending=base_rating if role in (PlayerRole.DEFENDER, PlayerRole.GOALKEEPER) else 50,
-                        goalkeeping=base_rating if role == PlayerRole.GOALKEEPER else 1,
-                    )
-                )
-            bench = [
-                MatchPlayerInput(
-                    player_id=f"{side_id}-sub-1",
-                    player_name=f"{side_data.get('name', 'Team')} Sub 1",
-                    role=PlayerRole.MIDFIELDER,
-                    overall=max(40, base_rating - 2),
-                )
-            ]
-            return MatchTeamInput(
-                team_id=side_id,
-                team_name=str(side_data.get("name", side_id)),
-                tactics=TeamTacticalPlanInput(style=style, mentality=style),
-                starters=starters,
-                bench=bench,
-            )
+    seed_int = int(hashlib.sha256(str(seed).encode()).hexdigest()[:8], 16)
 
-        req = MatchSimulationRequest(
-            match_id=str(seed),
-            seed=seed_int,
-            competition=MatchCompetitionContextInput(
-                competition_type=MatchCompetitionType.LEAGUE,
-                stage="Round",
-            ),
-            home_team=_build_side_input("home", home),
-            away_team=_build_side_input("away", away),
-        )
-        service = MatchSimulationService()
-        replay = service.build_replay_payload(req)
-        hg = replay.summary.home_score
-        ag = replay.summary.away_score
-
-        events = [
-            {"minute": 0, "type": "kickoff", "team": None, "text": f"Kick-off between {home['name']} and {away['name']}."}
+    def _build_side_input(side_id: str, side_data: dict[str, Any]) -> MatchTeamInput:
+        mentality = side_data.get("mentality", "balanced")
+        style = {
+            "attacking": TacticalStyle.ATTACKING,
+            "defensive": TacticalStyle.DEFENSIVE,
+        }.get(mentality, TacticalStyle.BALANCED)
+        base_rating = int(clamp(float(side_data.get("strength", 70)), 40, 95))
+        roles = [
+            PlayerRole.GOALKEEPER,
+            PlayerRole.DEFENDER,
+            PlayerRole.DEFENDER,
+            PlayerRole.DEFENDER,
+            PlayerRole.DEFENDER,
+            PlayerRole.MIDFIELDER,
+            PlayerRole.MIDFIELDER,
+            PlayerRole.MIDFIELDER,
+            PlayerRole.FORWARD,
+            PlayerRole.FORWARD,
+            PlayerRole.FORWARD,
         ]
-        score = {"home": 0, "away": 0}
-        for ev in replay.timeline.events:
-            ev_type = getattr(ev.event_type, "value", str(ev.event_type))
-            side_key = "home" if ev.team_id == "home" else ("away" if ev.team_id == "away" else None)
-            team_name = home["name"] if side_key == "home" else away["name"]
-            if ev_type in {"goal", "penalty_goal", "penalty_scored"}:
-                if side_key:
-                    score[side_key] += 1
-                scorer = ev.primary_player.player_name if ev.primary_player else f"{team_name} Scorer"
-                events.append({
-                    "minute": ev.minute,
-                    "type": "goal",
-                    "team": side_key,
-                    "scorer": scorer,
-                    "score": f"{score['home']}-{score['away']}",
-                    "text": ev.commentary or f"{scorer} scores for {team_name}!",
-                })
-            elif ev_type in {"shot_missed", "shot_saved", "shot_blocked"}:
-                events.append({
-                    "minute": ev.minute,
-                    "type": "chance",
-                    "team": side_key,
-                    "text": ev.commentary or f"Chance for {team_name}.",
-                })
-            elif ev_type in {"yellow_card", "red_card"}:
-                events.append({
-                    "minute": ev.minute,
-                    "type": "flavour",
-                    "team": side_key,
-                    "text": ev.commentary or f"Card shown for {team_name}.",
-                })
-
-        events.append({"minute": 45, "type": "half", "team": None, "text": "Half-time whistle."})
-        events.append(
-            {"minute": 90, "type": "full", "team": None, "text": f"Full-time: {home['name']} {hg}-{ag} {away['name']}."}
-        )
-        events.sort(key=lambda e: (e["minute"], e["type"] == "full"))
-
-        gap = (home["strength"] + 2.5 - away["strength"]) / 11
-        momentum = []
-        for block in range(18):
-            start, end = block * 5, block * 5 + 5
-            weight = (
-                50
-                + (gap * 10)
-                + sum((8 if e.get("team") == "home" else -8) for e in events if start <= e.get("minute", 0) < end and e.get("team"))
+        scorers = list(side_data.get("scorers") or [])
+        starters = []
+        for i, role in enumerate(roles):
+            p_name = scorers[i % len(scorers)] if scorers else f"{side_data.get('name', 'Team')} Player {i+1}"
+            starters.append(
+                MatchPlayerInput(
+                    player_id=f"{side_id}-player-{i+1}",
+                    player_name=p_name,
+                    role=role,
+                    overall=base_rating,
+                    finishing=base_rating if role == PlayerRole.FORWARD else 50,
+                    defending=base_rating if role in (PlayerRole.DEFENDER, PlayerRole.GOALKEEPER) else 50,
+                    goalkeeping=base_rating if role == PlayerRole.GOALKEEPER else 1,
+                )
             )
-            momentum.append(int(clamp(weight, 5, 95)))
+        bench = [
+            MatchPlayerInput(
+                player_id=f"{side_id}-sub-1",
+                player_name=f"{side_data.get('name', 'Team')} Sub 1",
+                role=PlayerRole.MIDFIELDER,
+                overall=max(40, base_rating - 2),
+            )
+        ]
+        return MatchTeamInput(
+            team_id=side_id,
+            team_name=str(side_data.get("name", side_id)),
+            tactics=TeamTacticalPlanInput(style=style, mentality=style),
+            starters=starters,
+            bench=bench,
+        )
 
-        result = {
-            "home_goals": hg,
-            "away_goals": ag,
-            "events": events,
-            "momentum": momentum,
-            "lambda": [round(replay.summary.home_stats.shots * 0.15 + 0.5, 2), round(replay.summary.away_stats.shots * 0.15 + 0.5, 2)],
-            "gap": round(gap, 3),
-        }
-        if replay.summary.decided_by_penalties:
-            result["penalty_winner"] = "home" if replay.summary.winner_team_id == "home" else "away"
-        return result
-    except Exception as exc:
-        pass
+    req = MatchSimulationRequest(
+        match_id=str(seed),
+        seed=seed_int,
+        competition=MatchCompetitionContextInput(
+            competition_type=MatchCompetitionType.LEAGUE,
+            stage="Round",
+        ),
+        home_team=_build_side_input("home", home),
+        away_team=_build_side_input("away", away),
+    )
+    service = MatchSimulationService()
+    replay = service.build_replay_payload(req)
+    hg = replay.summary.home_score
+    ag = replay.summary.away_score
 
-    # Deterministic fallback
-    rng = seeded("match", seed)
-    h_att, h_def = MENTALITY.get(home["mentality"], (1.0, 1.0))
-    a_att, a_def = MENTALITY.get(away["mentality"], (1.0, 1.0))
-    gap = (home["strength"] + 2.5 - away["strength"]) / 11
-    lam_home = clamp(1.35 * math.exp(gap) * h_att * a_def, 0.15, 4.5)
-    lam_away = clamp(1.1 * math.exp(-gap) * a_att * h_def, 0.15, 4.5)
-    hg, ag = _poisson(rng, lam_home), _poisson(rng, lam_away)
-    events: list[dict[str, Any]] = [
+    events = [
         {"minute": 0, "type": "kickoff", "team": None, "text": f"Kick-off between {home['name']} and {away['name']}."}
     ]
-    goal_minutes = sorted(
-        [("home", rng.randint(2, 90)) for _ in range(hg)] + [("away", rng.randint(2, 90)) for _ in range(ag)],
-        key=lambda x: x[1],
-    )
-    for _ in range(rng.randint(6, 9)):
-        side = "home" if rng.random() < lam_home / (lam_home + lam_away) else "away"
-        team = home if side == "home" else away
-        pool = CHANCE_LINES if rng.random() < 0.65 else FLAVOUR_LINES
-        events.append(
-            {
-                "minute": rng.randint(3, 89),
-                "type": "chance" if pool is CHANCE_LINES else "flavour",
-                "team": side,
-                "text": rng.choice(pool).format(team=team["name"]),
-            }
-        )
     score = {"home": 0, "away": 0}
-    for side, minute in goal_minutes:
-        team = home if side == "home" else away
-        score[side] += 1
-        scorer = rng.choice(team["scorers"]) if team["scorers"] else f"{team['name']} No. {rng.randint(7, 11)}"
-        events.append(
-            {
-                "minute": minute,
+    for ev in replay.timeline.events:
+        ev_type = getattr(ev.event_type, "value", str(ev.event_type))
+        side_key = "home" if ev.team_id == "home" else ("away" if ev.team_id == "away" else None)
+        team_name = home["name"] if side_key == "home" else away["name"]
+        if ev_type in {"goal", "penalty_goal", "penalty_scored"}:
+            if side_key:
+                score[side_key] += 1
+            scorer = ev.primary_player.player_name if ev.primary_player else f"{team_name} Scorer"
+            events.append({
+                "minute": ev.minute,
                 "type": "goal",
-                "team": side,
+                "team": side_key,
                 "scorer": scorer,
                 "score": f"{score['home']}-{score['away']}",
-                "text": rng.choice(GOAL_LINES).format(team=team["name"], scorer=scorer),
-            }
-        )
+                "text": ev.commentary or f"{scorer} scores for {team_name}!",
+            })
+        elif ev_type in {"shot_missed", "shot_saved", "shot_blocked"}:
+            events.append({
+                "minute": ev.minute,
+                "type": "chance",
+                "team": side_key,
+                "text": ev.commentary or f"Chance for {team_name}.",
+            })
+        elif ev_type in {"yellow_card", "red_card"}:
+            events.append({
+                "minute": ev.minute,
+                "type": "flavour",
+                "team": side_key,
+                "text": ev.commentary or f"Card shown for {team_name}.",
+            })
+
     events.append({"minute": 45, "type": "half", "team": None, "text": "Half-time whistle."})
     events.append(
         {"minute": 90, "type": "full", "team": None, "text": f"Full-time: {home['name']} {hg}-{ag} {away['name']}."}
     )
     events.sort(key=lambda e: (e["minute"], e["type"] == "full"))
+
+    gap = (home["strength"] + 2.5 - away["strength"]) / 11
     momentum = []
     for block in range(18):
         start, end = block * 5, block * 5 + 5
         weight = (
             50
             + (gap * 10)
-            + sum((8 if e["team"] == "home" else -8) for e in events if start <= e["minute"] < end and e["team"])
+            + sum((8 if e.get("team") == "home" else -8) for e in events if start <= e.get("minute", 0) < end and e.get("team"))
         )
-        momentum.append(int(clamp(weight + rng.randint(-6, 6), 5, 95)))
-    return {
+        momentum.append(int(clamp(weight, 5, 95)))
+
+    result = {
         "home_goals": hg,
         "away_goals": ag,
         "events": events,
         "momentum": momentum,
-        "lambda": [round(lam_home, 2), round(lam_away, 2)],
+        "lambda": [round(replay.summary.home_stats.shots * 0.15 + 0.5, 2), round(replay.summary.away_stats.shots * 0.15 + 0.5, 2)],
         "gap": round(gap, 3),
     }
+    if replay.summary.decided_by_penalties:
+        result["penalty_winner"] = "home" if replay.summary.winner_team_id == "home" else "away"
+    return result
 
 
 def manager_reaction(manager: dict[str, Any], result: str) -> str:
