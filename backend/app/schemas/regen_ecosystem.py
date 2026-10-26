@@ -37,7 +37,7 @@ class AcademyGenerationRequest(CommonSchema):
 class AcademyGeneratedPlayerView(CommonSchema):
     academy_candidate_id: str
     player_id: str
-    regen_profile_id: str
+    regen_profile_id: str | None = None
     regen_id: str
     display_name: str
     age: int
@@ -96,7 +96,8 @@ class ScoutDiscoveryResultView(CommonSchema):
 class ScoutReportView(CommonSchema):
     scout_id: str
     player_id: str
-    regen_profile_id: str
+    regen_profile_id: str | None = None
+    club_id: str | None = None
     accuracy: int = Field(ge=0, le=100)
     visible_stats: dict[str, int] = Field(default_factory=dict)
     hidden_stats: dict[str, int | None] = Field(default_factory=dict)

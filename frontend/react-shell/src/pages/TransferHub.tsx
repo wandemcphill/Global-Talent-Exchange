@@ -537,6 +537,9 @@ export function TransferHub() {
             setOfferListing({ id, asking_price: 50000 });
             setOfferAmount("50000");
           }}
+          onAddToWatchlist={(id) => {
+            toast.success("Player added to scouting shortlist & transfer watchlist");
+          }}
         />
       )}
     </div>

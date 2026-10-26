@@ -112,6 +112,14 @@ class GteAuthedApi {
     return request('POST', path, query: query, body: body, auth: auth);
   }
 
+  Future<Object?> delete(
+    String path, {
+    Map<String, Object?> query = const <String, Object?>{},
+    bool auth = true,
+  }) {
+    return request('DELETE', path, query: query, auth: auth);
+  }
+
   Future<Map<String, dynamic>> getMap(
     String path, {
     Map<String, Object?> query = const <String, Object?>{},

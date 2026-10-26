@@ -859,16 +859,33 @@ class TalentExchangeService:
     # ------------------------------------------------------------------
 
     def list_shortlists(self, *, owner: User, include_entries: bool = False) -> list[dict[str, Any]]:
+        from app.models.club_profile import ClubProfile
+
+        owned_club_ids = list(
+            self.session.scalars(
+                select(ClubProfile.id).where(ClubProfile.owner_user_id == owner.id)
+            ).all()
+        )
+        conditions = [TalentShortlist.owner_user_id == owner.id]
+        if owned_club_ids:
+            conditions.append(TalentShortlist.club_id.in_(owned_club_ids))
+
         rows = (
             self.session.execute(
                 select(TalentShortlist)
-                .where(TalentShortlist.owner_user_id == owner.id)
+                .where(or_(*conditions))
                 .order_by(TalentShortlist.name.asc())
             )
             .scalars()
             .all()
         )
-        return [self._shortlist_view(row, include_entries=include_entries, viewer=owner) for row in rows]
+        seen_ids: set[str] = set()
+        deduped: list[TalentShortlist] = []
+        for r in rows:
+            if r.id not in seen_ids:
+                seen_ids.add(r.id)
+                deduped.append(r)
+        return [self._shortlist_view(row, include_entries=include_entries, viewer=owner) for row in deduped]
 
     def create_shortlist(
         self,
@@ -878,6 +895,23 @@ class TalentExchangeService:
         description: str | None = None,
         club_id: str | None = None,
     ) -> TalentShortlist:
+        from app.models.club_profile import ClubProfile
+
+        is_admin = getattr(owner, "role", None) in {"admin", "superadmin", "platform_admin"}
+        if club_id is not None:
+            club = self.session.get(ClubProfile, club_id)
+            if club is None:
+                raise TalentNotFoundError(f"Club with id '{club_id}' not found.")
+            if club.owner_user_id != owner.id and not is_admin:
+                raise TalentAccessDeniedError(f"You do not have permission to create a shortlist for club '{club_id}'.")
+        else:
+            # Derive primary owned club from server-side authenticated identity
+            owned_club = self.session.scalar(
+                select(ClubProfile).where(ClubProfile.owner_user_id == owner.id).order_by(ClubProfile.created_at.asc())
+            )
+            if owned_club is not None:
+                club_id = owned_club.id
+
         existing_count = int(
             self.session.execute(
                 select(func.count()).select_from(TalentShortlist).where(TalentShortlist.owner_user_id == owner.id)
@@ -906,7 +940,14 @@ class TalentExchangeService:
         shortlist = self.session.get(TalentShortlist, shortlist_id)
         if shortlist is None:
             raise TalentNotFoundError(f"No shortlist exists with id '{shortlist_id}'.")
-        if shortlist.owner_user_id != owner.id:
+        is_admin = getattr(owner, "role", None) in {"admin", "superadmin", "platform_admin"}
+        owns_list = shortlist.owner_user_id == owner.id
+        if not owns_list and shortlist.club_id:
+            from app.models.club_profile import ClubProfile
+            club = self.session.get(ClubProfile, shortlist.club_id)
+            if club and club.owner_user_id == owner.id:
+                owns_list = True
+        if not owns_list and not is_admin:
             # Deliberately the same error a missing list produces: existence of
             # another scout's shortlist is not this caller's to learn.
             raise TalentNotFoundError(f"No shortlist exists with id '{shortlist_id}'.")
@@ -947,7 +988,14 @@ class TalentExchangeService:
         note: str | None = None,
     ) -> TalentShortlistEntry:
         shortlist = self.get_owned_shortlist(shortlist_id, owner=owner)
-        profile = self.get_profile_row(player_id)
+        try:
+            profile = self.get_profile_row(player_id)
+        except TalentNotFoundError:
+            player = self.session.get(Player, player_id)
+            if player is not None:
+                profile = self.sync_profile_from_player(player_id)
+            else:
+                raise TalentNotFoundError(f"No player exists with id '{player_id}'.")
         scope = privacy.resolve_viewer_scope(profile, owner)
         if not privacy.can_view_profile(profile, scope):
             raise TalentNotFoundError(f"No published talent profile exists for player '{player_id}'.")
@@ -1012,6 +1060,65 @@ class TalentExchangeService:
             raise TalentNotFoundError(f"No shortlist entry exists with id '{entry_id}'.")
         self.session.delete(entry)
         self.session.flush()
+        self.session.expire(shortlist, ["entries"])
+
+    def handoff_to_transfer(
+        self,
+        shortlist_id: str,
+        entry_id: str,
+        *,
+        owner: User,
+    ) -> dict[str, Any]:
+        """Hand off a shortlisted talent discovery directly into the canonical transfer room."""
+        from app.models.club_profile import ClubProfile
+        from app.models.transfer_market import TransferListing
+        from app.transfer_market.schemas import WatchlistEntryCreateRequest
+        from app.transfer_market.service import TransferMarketService
+
+        shortlist = self.get_owned_shortlist(shortlist_id, owner=owner)
+        entry = self.session.get(TalentShortlistEntry, entry_id)
+        if entry is None or entry.shortlist_id != shortlist.id:
+            raise TalentNotFoundError(f"No shortlist entry exists with id '{entry_id}'.")
+
+        club_id = shortlist.club_id
+        if not club_id:
+            owned_club = self.session.scalar(
+                select(ClubProfile).where(ClubProfile.owner_user_id == owner.id).order_by(ClubProfile.created_at.asc())
+            )
+            if owned_club:
+                club_id = owned_club.id
+        if not club_id:
+            raise TalentValidationError("A club affiliation is required to hand off a player to the transfer room.")
+
+        market_service = TransferMarketService(self.session)
+        watchlist_req = WatchlistEntryCreateRequest(
+            player_id=entry.player_id,
+            club_id=club_id,
+            source="scouting_shortlist",
+            metadata_json={"notes": entry.note} if entry.note else {},
+        )
+        watchlist_entry = market_service.add_watchlist_entry(watchlist_req, actor=owner, club_id=club_id)
+
+        listing = self.session.scalar(
+            select(TransferListing)
+            .where(
+                TransferListing.player_id == entry.player_id,
+                TransferListing.status.in_(["active", "open", "listed"]),
+            )
+            .order_by(TransferListing.created_at.desc())
+        )
+
+        return {
+            "status": "handed_off",
+            "shortlist_id": shortlist_id,
+            "entry_id": entry_id,
+            "player_id": entry.player_id,
+            "club_id": club_id,
+            "watchlist_entry_id": watchlist_entry.id,
+            "listing_id": listing.id if listing else None,
+            "has_active_listing": listing is not None,
+            "market_status": "open_opportunity" if listing else "watching",
+        }
 
     def shortlist_view(self, shortlist: TalentShortlist, *, viewer: User) -> dict[str, Any]:
         return self._shortlist_view(shortlist, include_entries=True, viewer=viewer)
