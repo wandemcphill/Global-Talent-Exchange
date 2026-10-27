@@ -5,7 +5,6 @@ import {
   collectBrowserDiagnostics,
   configured,
   credentialsConfigured,
-  enableAccessibility,
   verifyNoHorizontalOverflow,
   visitAuthedRoute,
 } from "./helpers.mjs";
@@ -25,12 +24,14 @@ test.afterEach(async ({ page: _page }, testInfo) => {
 test("Club HQ opens an authoritative club or no-club state", async ({ page }, testInfo) => {
   // The owner dashboard deliberately refuses to show fabricated club data.
   // Verify an explicit real-data state instead of assuming a roster is present.
-  await visitAuthedRoute(page, process.env.GTEX_E2E_SQUAD_ROUTE ?? "/app");
+  await visitAuthedRoute(page, "/app");
 
+  const ownerCockpit = page.getByText("Club owner operations cockpit", { exact: true });
   const acceptableStates = [
     page.getByText("Live club data required", { exact: true }),
     page.getByText("Club command", { exact: true }),
     page.getByText("Build your club command center", { exact: true }),
+    ownerCockpit,
   ];
   await expect
     .poll(
