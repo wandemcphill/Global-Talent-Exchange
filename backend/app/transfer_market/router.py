@@ -434,6 +434,19 @@ def upsert_transfer_market_team_dynamics(
         _raise_transfer_market_error(exc)
 
 
+@router.get("/api/transfer-hub/watchlist", response_model=list[MarketWatchlistEntryView])
+@router.get("/api/transfer-market/watchlist", response_model=list[MarketWatchlistEntryView])
+def list_transfer_market_watchlist(
+    club_id: str | None = Query(default=None),
+    service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> list[MarketWatchlistEntryView]:
+    try:
+        return service.list_watchlist_entries(actor=current_user, club_id=club_id)
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
+        _raise_transfer_market_error(exc)
+
+
 @router.post(
     "/api/transfer-hub/watchlist", response_model=MarketWatchlistEntryView, status_code=status.HTTP_201_CREATED
 )
