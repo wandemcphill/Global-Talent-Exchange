@@ -467,6 +467,11 @@ def _post_match_club(
     return notes
 
 
+def ensure_owner_console_execution_allowed(comp: OwnerCompetition) -> None:
+    """Keep global GTEX fixtures on the canonical CompetitionMatch execution rail."""
+    ensure_owner_console_execution_allowed(comp)
+
+
 def play_next(
     session: Session, user_id: str, competition_id: str, club_id: str, mentality: str, lineup_mode: str
 ) -> dict[str, Any]:
