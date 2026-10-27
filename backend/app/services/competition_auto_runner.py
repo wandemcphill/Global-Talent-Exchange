@@ -213,9 +213,7 @@ class CompetitionAutoRunner:
             MatchStatus.SCHEDULED.value,
             MatchStatus.IN_PROGRESS.value,
         }:
-            raise ValueError(
-                f"Canonical fixture {match.id} is {locked_match.status} and cannot be simulated."
-            )
+            raise ValueError(f"Canonical fixture {match.id} is {locked_match.status} and cannot be simulated.")
         match = locked_match
 
         job = self._simulation_job(competition, match)
@@ -279,9 +277,7 @@ class CompetitionAutoRunner:
             plan_data.update(tuning)
             plan_data["style"] = style
             plan_data["mentality"] = style
-            updated_team = team.model_copy(
-                update={"tactics": TeamTacticalPlanInput.model_validate(plan_data)}
-            )
+            updated_team = team.model_copy(update={"tactics": TeamTacticalPlanInput.model_validate(plan_data)})
             return updated_team
 
         return request.model_copy(
