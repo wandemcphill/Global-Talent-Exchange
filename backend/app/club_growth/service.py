@@ -1095,14 +1095,17 @@ class ClubGrowthService:
         scout_quality = sum(
             item.staff_profile.rating
             for item in active
-            if item.staff_profile.staff_type in {"scout", "academy_director"}
-            or role_keys[item.id] == ROLE_SCOUT
+            if role_keys[item.id] == ROLE_SCOUT
+            or (
+                role_keys[item.id] == "club"
+                and item.staff_profile.staff_type in {"scout", "academy_director"}
+            )
         )
         training_bonus = sum(
             item.staff_profile.rating
             for item in active
-            if item.staff_profile.staff_type in {"coach", "manager"}
-            or role_keys[item.id] in {ROLE_FIRST_TEAM_MANAGER, ROLE_FIRST_TEAM_COACH, ROLE_YOUTH_COACH}
+            if role_keys[item.id] in {ROLE_FIRST_TEAM_MANAGER, ROLE_FIRST_TEAM_COACH, ROLE_YOUTH_COACH}
+            or (role_keys[item.id] == "club" and item.staff_profile.staff_type in {"coach", "manager"})
         )
         general_manager_quality = sum(
             item.staff_profile.rating for item in active if role_keys[item.id] == ROLE_GENERAL_MANAGER
@@ -1113,8 +1116,9 @@ class ClubGrowthService:
         negotiation_bonus = sum(
             item.staff_profile.rating
             for item in active
-            if item.staff_profile.staff_type in {"agent", "negotiation_specialist"}
+            if role_keys[item.id] == ROLE_AGENT
             or role_keys[item.id] == ROLE_GENERAL_MANAGER
+            or (role_keys[item.id] == "club" and item.staff_profile.staff_type == "negotiation_specialist")
         )
         return {
             "scout_quality": min(100, scout_quality),
