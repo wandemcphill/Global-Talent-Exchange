@@ -433,7 +433,11 @@ def simulate_match(seed: str, home: dict[str, Any], away: dict[str, Any]) -> dic
         weight = (
             50
             + (gap * 10)
-            + sum((8 if e.get("team") == "home" else -8) for e in events if start <= e.get("minute", 0) < end and e.get("team"))
+            + sum(
+                (8 if e.get("team") == "home" else -8)
+                for e in events
+                if start <= e.get("minute", 0) < end and e.get("team")
+            )
         )
         momentum.append(int(clamp(weight, 5, 95)))
 
