@@ -292,7 +292,9 @@ async function setupOwnerParityRoutes(page) {
     });
   });
 
-  await page.route("**/owner/clubs/club-parity-1/showroom/purchase", async (route) => {
+  await page.route(
+    "**/owner/clubs/club-parity-1/showroom/purchase",
+    async (route) => {
     const postData = route.request().postDataJSON() || {};
     await route.fulfill({
       status: 200,
@@ -304,14 +306,20 @@ async function setupOwnerParityRoutes(page) {
           price_gtex: 250,
         },
         broadcast_globally: postData.catalog_key === "falcon_7x_private_jet",
-        broadcast_event: postData.catalog_key === "falcon_7x_private_jet" ? { id: "bcast-1" } : null,
+        broadcast_event:
+          postData.catalog_key === "falcon_7x_private_jet"
+            ? { id: "bcast-1" }
+            : null,
       }),
     });
   });
 
-  await page.route("**/owner/clubs/club-parity-1/showroom/gift", async (route) => {
+  await page.route(
+    "**/owner/clubs/club-parity-1/showroom/gift",
+    async (route) => {
     const postData = route.request().postDataJSON() || {};
-    const recipient = mockSquad.find((p) => p.id === postData.player_id) || mockSquad[0];
+    const recipient =
+      mockSquad.find((p) => p.id === postData.player_id) || mockSquad[0];
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -359,7 +367,9 @@ async function setupOwnerParityRoutes(page) {
 }
 
 test.describe("Prestige, Story, and Showroom Parity (Agent B5)", () => {
-  test("Showroom navigation, verified catalogue, purchase flow and idempotency", async ({ page }) => {
+  test(
+    "Showroom navigation, verified catalogue, purchase flow and idempotency",
+    async ({ page }) => {
     await setupOwnerParityRoutes(page);
     await page.goto("/app/showroom");
 
@@ -373,18 +383,24 @@ test.describe("Prestige, Story, and Showroom Parity (Agent B5)", () => {
     await expect(page.getByText("Community Gifting (FanCoin)")).toBeVisible();
 
     // Verify Catalogue Items Render Verified GTX Prices and Wire Badges
-    const jetItem = page.locator('[data-testid="showroom-item-falcon_7x_private_jet"]');
+    const jetItem = page.locator(
+      '[data-testid="showroom-item-falcon_7x_private_jet"]',
+    );
     await expect(jetItem).toBeVisible();
     await expect(jetItem.getByText("Global Wire Notice")).toBeVisible();
     await expect(jetItem.getByText("4,800 GTX")).toBeVisible();
 
-    const watchItem = page.locator('[data-testid="showroom-item-chronos_tourbillon_watch"]');
+    const watchItem = page.locator(
+      '[data-testid="showroom-item-chronos_tourbillon_watch"]',
+    );
     await expect(watchItem).toBeVisible();
     await expect(watchItem.getByText("Private Collection")).toBeVisible();
     await expect(watchItem.getByText("250 GTX")).toBeVisible();
 
     // Click Acquire on watch item -> verify purchase confirm modal
-    await watchItem.locator('[data-testid="acquire-btn-chronos_tourbillon_watch"]').click();
+    await watchItem
+      .locator('[data-testid="acquire-btn-chronos_tourbillon_watch"]')
+      .click();
     const purchaseModal = page.locator('[data-testid="showroom-purchase-confirm"]');
     await expect(purchaseModal).toBeVisible();
     await expect(purchaseModal.getByText("Treasury Authorization")).toBeVisible();
@@ -399,7 +415,9 @@ test.describe("Prestige, Story, and Showroom Parity (Agent B5)", () => {
     await expect(receiptModal).toBeHidden();
   });
 
-  test("Owner-to-Player luxury gifting strictly targets academy regens with verified receipt", async ({ page }) => {
+  test(
+    "Owner-to-Player luxury gifting strictly targets academy regens with verified receipt",
+    async ({ page }) => {
     await setupOwnerParityRoutes(page);
     await page.goto("/app/showroom");
 
@@ -427,13 +445,17 @@ test.describe("Prestige, Story, and Showroom Parity (Agent B5)", () => {
     await expect(giftReceipt).toBeVisible();
     await expect(giftReceipt.getByText("Luxury Gift Delivered")).toBeVisible();
     await expect(giftReceipt.getByText("Morale +15 · Confirmed")).toBeVisible();
-    await expect(giftReceipt.getByText("Exemplary performance in the continental cup.")).toBeVisible();
+    await expect(
+      giftReceipt.getByText("Exemplary performance in the continental cup."),
+    ).toBeVisible();
 
     await giftReceipt.locator('[data-testid="close-gift-receipt"]').click();
     await expect(giftReceipt).toBeHidden();
   });
 
-  test("Club Story chronicle displays verified lore, schedule, manager, and dispatches", async ({ page }) => {
+  test(
+    "Club Story chronicle displays verified lore, schedule, manager, and dispatches",
+    async ({ page }) => {
     await setupOwnerParityRoutes(page);
     await page.goto("/app/story");
 
@@ -455,7 +477,9 @@ test.describe("Prestige, Story, and Showroom Parity (Agent B5)", () => {
     // Switch to Club Dispatches tab
     await page.locator('[data-testid="tab-dispatches"]').click();
     await expect(page.locator('[data-testid="dispatches-tab-content"]')).toBeVisible();
-    await expect(page.getByText("Lagos Atlantic SC Commissions Executive Fleet Aviation")).toBeVisible();
+    await expect(
+      page.getByText("Lagos Atlantic SC Commissions Executive Fleet Aviation"),
+    ).toBeVisible();
 
     // Switch to Staff & Squad tab
     await page.locator('[data-testid="tab-relationships"]').click();
@@ -471,7 +495,9 @@ test.describe("Prestige, Story, and Showroom Parity (Agent B5)", () => {
     await expect(page.getByText("Lagos Atlantic SC 3 - 1 Enyimba FC")).toBeVisible();
   });
 
-  test("AI Newsroom dispatches verified grounded stories and category filters", async ({ page }) => {
+  test(
+    "AI Newsroom dispatches verified grounded stories and category filters",
+    async ({ page }) => {
     await setupOwnerParityRoutes(page);
     await page.goto("/app/newsroom");
 
@@ -485,10 +511,14 @@ test.describe("Prestige, Story, and Showroom Parity (Agent B5)", () => {
 
     // Lead story
     await expect(page.locator('[data-testid="lead-story-card"]')).toBeVisible();
-    await expect(page.getByText("Lagos Atlantic SC Commissions Executive Fleet Aviation").first()).toBeVisible();
+    await expect(
+      page.getByText("Lagos Atlantic SC Commissions Executive Fleet Aviation").first(),
+    ).toBeVisible();
   });
 
-  test("Multi-viewport responsiveness without horizontal overflow", async ({ page }) => {
+  test(
+    "Multi-viewport responsiveness without horizontal overflow",
+    async ({ page }) => {
     await setupOwnerParityRoutes(page);
 
     const viewports = [
@@ -508,7 +538,10 @@ test.describe("Prestige, Story, and Showroom Parity (Agent B5)", () => {
 
         // Verify no horizontal overflow
         const hasOverflow = await page.evaluate(() => {
-          return document.documentElement.scrollWidth > document.documentElement.clientWidth;
+          return (
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth
+          );
         });
 
         expect(
