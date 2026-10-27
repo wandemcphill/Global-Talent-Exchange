@@ -97,7 +97,7 @@ def _create_user_and_club(session, name: str, seed_squad: bool = True) -> tuple[
         id=str(uuid4()),
         email=f"{name.lower().replace(' ', '_')}@test.local",
         username=f"user_{name.lower().replace(' ', '_')[:15]}",
-        password_hash="test_hash",
+        password_hash="test_hash",  # pragma: allowlist secret — fixed non-secret test fixture
         role=UserRole.USER,
         kyc_status=KycStatus.VERIFIED,
     )
