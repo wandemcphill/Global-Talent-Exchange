@@ -677,7 +677,9 @@ def test_stale_worker_retry_cannot_reexecute_a_completed_fixture(session_factory
         assert len(participants) == 2
         assert all(participant.played == 1 for participant in participants)
 
-def test_global_owner_fixture_reconciles_and_executes_only_on_canonical_runner(session_factory) -> None:
+def test_global_owner_fixture_reconciles_and_executes_only_on_canonical_runner(
+    session_factory,
+) -> None:
     from types import SimpleNamespace
 
     from app.models.owner_competition_lifecycle_mapping import (
