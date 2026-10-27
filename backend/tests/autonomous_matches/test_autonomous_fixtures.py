@@ -21,6 +21,8 @@ from app.models.competition_match import CompetitionMatch
 from app.models.competition_match_event import CompetitionMatchEvent
 from app.models.competition_round import CompetitionRound
 from app.models.competition_rule_set import CompetitionRuleSet
+from app.models.competition_reward import CompetitionReward
+from app.models.competition_reward_pool import CompetitionRewardPool
 from app.models.competition_participant import CompetitionParticipant
 from app.models.player_contract import PlayerContract
 from app.models.user import KycStatus, User, UserRole
@@ -817,4 +819,48 @@ def test_global_owner_fixture_reconciles_and_executes_only_on_canonical_runner(
         ) == original_event_count
         assert session.get(OwnerCompetitionLifecycleMapping, competition_mapping.id) is not None
         assert session.get(OwnerMatchLifecycleMapping, fixture_mapping.id) is not None
+
+        # A retry of competition finalization must return the existing payout
+        # pools and reward ledger references without issuing another settlement.
+        reward_snapshot = sorted(
+            (
+                reward.id,
+                reward.ledger_transaction_id,
+                reward.status,
+            )
+            for reward in session.scalars(
+                select(CompetitionReward).where(
+                    CompetitionReward.competition_id == competition.id
+                )
+            ).all()
+        )
+        pool_ids_before = sorted(
+            pool.id
+            for pool in session.scalars(
+                select(CompetitionRewardPool).where(
+                    CompetitionRewardPool.competition_id == competition.id
+                )
+            ).all()
+        )
+        settled_at_before = competition.settled_at
+        repeated_pools = CompetitionLifecycleService(session).finalize_competition(
+            competition
+        )
+        session.commit()
+        session.refresh(competition)
+
+        assert sorted(pool.id for pool in repeated_pools) == pool_ids_before
+        assert sorted(
+            (
+                reward.id,
+                reward.ledger_transaction_id,
+                reward.status,
+            )
+            for reward in session.scalars(
+                select(CompetitionReward).where(
+                    CompetitionReward.competition_id == competition.id
+                )
+            ).all()
+        ) == reward_snapshot
+        assert competition.settled_at == settled_at_before
 
