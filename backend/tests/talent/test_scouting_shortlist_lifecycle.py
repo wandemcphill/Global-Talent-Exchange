@@ -240,6 +240,59 @@ def test_scout_real_player_success_and_persistence(lifecycle_client):
     assert db_report.future_potential_estimate == 89
 
 
+
+@pytest.mark.parametrize(
+    ("dna_profile", "expected_detail"),
+    [
+        ({"pace": 88, "potential_rating": 89}, "overall_rating is unavailable"),
+        ({"overall_rating": 84, "pace": 88}, "potential rating is unavailable"),
+    ],
+)
+def test_real_player_scouting_does_not_invent_missing_ratings(
+    lifecycle_client, dna_profile: dict[str, int], expected_detail: str
+):
+    client, identity, session = lifecycle_client
+    user, club = _seed_club_and_user(
+        session,
+        user_id="user-scout-missing-rating",
+        username="scout_missing_rating",
+        club_id="club-missing-rating",
+        club_name="Data Integrity FC",
+    )
+    player = _seed_real_player(
+        session,
+        player_id=f"real-missing-{expected_detail.split()[0]}",
+        name="Unrated Player",
+    )
+    player.dna_profile = dna_profile
+    scout = Scout(
+        id=f"scout-missing-{expected_detail.split()[0]}",
+        club_user_id=user.id,
+        club_id=club.id,
+        region="Global",
+        skill_rating=85,
+        specialty="General",
+        active=True,
+    )
+    session.add(scout)
+    session.commit()
+    identity.user = user
+
+    response = client.post(f"/scout/report/{player.id}")
+
+    assert response.status_code == 409, response.text
+    assert expected_detail in response.json()["detail"]
+    assert (
+        session.scalar(
+            select(ScoutReport).where(
+                ScoutReport.player_id == player.id,
+                ScoutReport.club_id == club.id,
+            )
+        )
+        is None
+    )
+
+
 def test_scout_regen_player_success_and_persistence(lifecycle_client):
     client, identity, session = lifecycle_client
     user, club = _seed_club_and_user(
