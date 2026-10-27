@@ -229,8 +229,9 @@ class SettingsSource(BaseModel):
         default=1.0,
         validation_alias="GTE_WORLD_CLOCK_PROGRESSION_RATE",
     )
+    # Empty means anchor the new virtual clock to current UTC time; an explicit ISO date is an intentional game-calendar override.
     world_clock_virtual_start_date: str = Field(
-        default="2026-01-01",
+        default="",
         validation_alias="GTE_WORLD_CLOCK_VIRTUAL_START_DATE",
     )
     world_clock_virtual_months_per_season: int = Field(
@@ -2214,7 +2215,7 @@ def load_settings(
         kafka_api_queue_consumer_enabled=source.kafka_api_queue_consumer_enabled,
         kafka_simulation_consumer_enabled=source.kafka_simulation_consumer_enabled,
         world_clock_progression_rate=max(0.0001, float(source.world_clock_progression_rate)),
-        world_clock_virtual_start_date=str(source.world_clock_virtual_start_date or "2026-01-01"),
+        world_clock_virtual_start_date=str(source.world_clock_virtual_start_date or ""),
         world_clock_virtual_months_per_season=max(1, int(source.world_clock_virtual_months_per_season)),
         autonomous_fixture_execution_enabled=source.autonomous_fixture_execution_enabled,
         autonomous_fixture_interval_seconds=max(1, int(source.autonomous_fixture_interval_seconds)),
