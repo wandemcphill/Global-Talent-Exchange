@@ -21,7 +21,7 @@ Widget _host(Widget child) => MaterialApp(
 
 void main() {
   group('WorldClock contract (GET /api/world/clock)', () {
-    test('uses the published path', () => expect(kWorldClockPath, '/world/clock'));
+    test('uses the published path', () => expect(kWorldClockPath, '/api/world/clock'));
 
     test('parses the PR #347 shape and formats in UTC', () {
       final WorldClock c = WorldClock.fromJson(_valid());
