@@ -5,6 +5,7 @@ declare const expect: any;
 import {
   buildLineupPayload,
   lineupRoleLabels,
+  lineupFormationRows,
   normalizeLineupPlan,
   normalizeLineupSquad,
 } from "./lineupModel";
@@ -38,6 +39,7 @@ describe("React club lineup model", () => {
     expect(lineupRoleLabels("4-2-3-1")).toHaveLength(11);
     expect(lineupRoleLabels("4-2-3-1")[0]).toBe("Goalkeeper");
     expect(lineupRoleLabels("4-2-3-1")[10]).toBe("Forward 1");
+    expect(lineupFormationRows("4-2-3-1").map((row) => row.length)).toEqual([1, 4, 2, 3, 1]);
   });
 
   test("builds a save payload without duplicate starters or bench overlap", () => {
