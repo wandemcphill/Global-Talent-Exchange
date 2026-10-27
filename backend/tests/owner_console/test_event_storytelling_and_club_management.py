@@ -786,7 +786,9 @@ def _lifecycle_mapping_test_id() -> str:
     return str(uuid4())
 
 
-def _lifecycle_mapping_test_canonical_competition(session, name: str):
+def _lifecycle_mapping_test_canonical_competition(
+    session, name: str, source_type: str = "gtex"
+):
     from app.models.competition import UserCompetition
 
     competition = UserCompetition(
@@ -794,7 +796,7 @@ def _lifecycle_mapping_test_canonical_competition(session, name: str):
         name=name,
         format="league",
         currency="coin",
-        source_type="gtex_global",
+        source_type=source_type,
         source_id=_lifecycle_mapping_test_id(),
         status="draft",
         stage="registration",
@@ -815,6 +817,9 @@ def test_global_competition_mapping_is_idempotent_and_one_to_one(app):
         legacy = OwnerCompetition(name=f"Global Cup {_lifecycle_mapping_test_id()}", host_type="gtex")
         canonical = _lifecycle_mapping_test_canonical_competition(session, "Canonical Global Cup")
         another_canonical = _lifecycle_mapping_test_canonical_competition(session, "Another Canonical Cup")
+        user_hosted_canonical = _lifecycle_mapping_test_canonical_competition(
+            session, "User Hosted Canonical Cup", source_type="user"
+        )
         session.add(legacy)
         session.flush()
 
@@ -833,6 +838,13 @@ def test_global_competition_mapping_is_idempotent_and_one_to_one(app):
         with pytest.raises(OwnerCompetitionLifecycleMappingError) as exc_info:
             service.bind_competition(another_legacy.id, canonical.id)
         assert exc_info.value.code == "canonical_competition_already_mapped"
+
+        unlinked_legacy = OwnerCompetition(name=f"Global Cup {_lifecycle_mapping_test_id()}", host_type="gtex")
+        session.add(unlinked_legacy)
+        session.flush()
+        with pytest.raises(OwnerCompetitionLifecycleMappingError) as exc_info:
+            service.bind_competition(unlinked_legacy.id, user_hosted_canonical.id)
+        assert exc_info.value.code == "canonical_competition_not_global"
 
         assert session.scalar(
             select(OwnerCompetitionLifecycleMapping).where(
