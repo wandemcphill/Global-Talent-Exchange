@@ -21,6 +21,7 @@ from app.models.competition_match import CompetitionMatch
 from app.models.competition_match_event import CompetitionMatchEvent
 from app.models.competition_round import CompetitionRound
 from app.models.competition_rule_set import CompetitionRuleSet
+from app.models.competition_participant import CompetitionParticipant
 from app.models.player_contract import PlayerContract
 from app.models.user import KycStatus, User, UserRole
 from app.owner_console.engine import simulate_match as owner_simulate_match
@@ -602,3 +603,74 @@ def test_owner_pre_match_tactics_reach_canonical_runner_request(session_factory)
         assert request.home_team.tactics.style.value == "attacking"
         assert request.away_team.tactics.mentality.value == "defensive"
         assert request.away_team.tactics.style.value == "defensive"
+
+
+def test_stale_worker_retry_cannot_reexecute_a_completed_fixture(session_factory) -> None:
+    from types import SimpleNamespace
+
+    with session_factory() as session:
+        competition = _create_test_competition(session, "Idempotent Match Runner")
+        round_row = CompetitionRound(
+            id=str(uuid4()),
+            competition_id=competition.id,
+            round_number=1,
+            stage="league",
+            status="active",
+        )
+        session.add(round_row)
+        _, home_club = _create_user_and_club(session, "Idempotent Home")
+        _, away_club = _create_user_and_club(session, "Idempotent Away")
+        session.add_all(
+            [
+                CompetitionParticipant(competition_id=competition.id, club_id=home_club.id, status="joined"),
+                CompetitionParticipant(competition_id=competition.id, club_id=away_club.id, status="joined"),
+            ]
+        )
+        kickoff_at = datetime(2026, 1, 1, 9, 0, tzinfo=timezone.utc)
+        match = CompetitionMatch(
+            id=str(uuid4()),
+            competition_id=competition.id,
+            round_id=round_row.id,
+            round_number=1,
+            stage="league",
+            home_club_id=home_club.id,
+            away_club_id=away_club.id,
+            match_date=kickoff_at.date(),
+            scheduled_at=kickoff_at,
+            status=MatchStatus.SCHEDULED.value,
+            metadata_json={},
+        )
+        session.add(match)
+        session.commit()
+
+        runner = CompetitionAutoRunner(session)
+        completed = runner._simulate_match(competition, match)
+        session.commit()
+        session.refresh(completed)
+        assert completed.status == MatchStatus.COMPLETED.value
+        original_score = (completed.home_score, completed.away_score)
+        original_events = len(
+            session.scalars(
+                select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == completed.id)
+            ).all()
+        )
+        assert original_events > 0
+
+        # Represents another worker that selected the fixture before the first
+        # worker committed and is retrying with a stale scheduled snapshot.
+        stale_snapshot = SimpleNamespace(id=completed.id, status=MatchStatus.SCHEDULED.value)
+        retried = runner._simulate_match(competition, stale_snapshot)
+        session.commit()
+
+        assert retried.status == MatchStatus.COMPLETED.value
+        assert (retried.home_score, retried.away_score) == original_score
+        assert len(
+            session.scalars(
+                select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == completed.id)
+            ).all()
+        ) == original_events
+        participants = session.scalars(
+            select(CompetitionParticipant).where(CompetitionParticipant.competition_id == competition.id)
+        ).all()
+        assert len(participants) == 2
+        assert all(participant.played == 1 for participant in participants)
