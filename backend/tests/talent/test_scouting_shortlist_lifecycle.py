@@ -230,6 +230,10 @@ def test_scout_real_player_success_and_persistence(lifecycle_client):
     assert payload["accuracy"] == 85
     assert payload["visible_stats"]["pace"] == 88
     assert payload["visible_stats"]["shooting"] == 85
+    # The seeded TalentProfile has no persisted ranking snapshot, so the
+    # service must not expose its database-default neutral consistency score.
+    assert payload["hidden_stats"]["consistency"] is None
+    assert "form" not in payload["visible_stats"]
 
     # Assert persisted ScoutReport in canonical intelligence table
     db_report = session.scalar(
