@@ -4,7 +4,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AlertTriangle, Check, ShoppingCart, Sparkles, Trash2 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
-import { validateClubLocation } from "./clubCreationLocation";
+import { clubCreateErrorMessage } from "./clubLocationCatalog";
+import { ClubLocationFields, clubLocationPayload, useClubLocation } from "@/components/gtex/ClubLocationFields";
 import { useAuth } from "@/lib/auth";
 import { fmt, useClub } from "@/lib/owner";
 import { Btn, Chip, Coin, Loading, Panel } from "@/components/gtex/ui";
@@ -420,17 +421,16 @@ function CompetitionStep({ clubId, onDone }: any) {
 
 function CreateFirstClub({ onDone, onCancel }: any) {
   const [name, setName] = useState("");
-  const [countryCode, setCountryCode] = useState("");
-  const [cityName, setCityName] = useState("");
+  const loc = useClubLocation();
   const [busy, setBusy] = useState(false);
-  const location = validateClubLocation(countryCode, cityName);
+  const location = loc.validation;
   const clubName = name.trim();
   const create = async () => {
     if (clubName.length < 3) {
       toast.error("Enter a club name with at least 3 characters.");
       return;
     }
-    const validatedLocation = validateClubLocation(countryCode, cityName);
+    const validatedLocation = loc.validation;
     if ("error" in validatedLocation) {
       toast.error(validatedLocation.error);
       return;
@@ -445,13 +445,12 @@ function CreateFirstClub({ onDone, onCancel }: any) {
         primary_color: "#0F766E",
         secondary_color: "#F8FAFC",
         accent_color: "#F59E0B",
-        country_code: validatedLocation.countryCode,
-        city_name: validatedLocation.cityName,
+        ...clubLocationPayload(validatedLocation),
         club_type: "community",
       });
       onDone();
     } catch (e) {
-      toast.error(errMsg(e));
+      toast.error(clubCreateErrorMessage(e, errMsg));
     } finally {
       setBusy(false);
     }
@@ -470,26 +469,8 @@ function CreateFirstClub({ onDone, onCancel }: any) {
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <input
-            data-testid="first-club-country-input"
-            aria-label="Country code"
-            className="gx-input"
-            placeholder="Country code (NG)"
-            autoComplete="country"
-            maxLength={2}
-            value={countryCode}
-            onChange={(e) => setCountryCode(e.target.value)}
-          />
-          <input
-            data-testid="first-club-city-input"
-            aria-label="City"
-            className="gx-input"
-            placeholder="City"
-            autoComplete="address-level2"
-            value={cityName}
-            onChange={(e) => setCityName(e.target.value)}
-          />
+        <div className="mt-3">
+          <ClubLocationFields state={loc} testIdPrefix="first-club" disabled={busy} />
         </div>
         <Btn
           className="mt-4 w-full"
