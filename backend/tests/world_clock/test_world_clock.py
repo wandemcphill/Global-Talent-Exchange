@@ -24,6 +24,36 @@ def session_factory(tmp_path_factory):
     engine.dispose()
 
 
+
+def test_new_clock_defaults_to_current_utc_instead_of_an_unrelated_fixed_date(monkeypatch) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine)
+    monkeypatch.setattr(WorldClockService, "_get_settings", lambda self: None)
+
+    before = datetime.now(timezone.utc)
+    with factory() as session:
+        state = WorldClockService(session).get_or_create_state()
+        virtual_start = state.virtual_start_time
+        real_epoch = state.epoch_real_utc
+        session.commit()
+    after = datetime.now(timezone.utc)
+    engine.dispose()
+
+    if virtual_start.tzinfo is None:
+        virtual_start = virtual_start.replace(tzinfo=timezone.utc)
+    else:
+        virtual_start = virtual_start.astimezone(timezone.utc)
+    if real_epoch.tzinfo is None:
+        real_epoch = real_epoch.replace(tzinfo=timezone.utc)
+    else:
+        real_epoch = real_epoch.astimezone(timezone.utc)
+
+    assert before <= virtual_start <= after
+    assert abs((virtual_start - real_epoch).total_seconds()) < 1
+
+
+
 def test_clock_persistence_and_deterministic_progression(session_factory) -> None:
     # Session 1: initialize clock state
     with session_factory() as session:
