@@ -680,6 +680,7 @@ def test_stale_worker_retry_cannot_reexecute_a_completed_fixture(session_factory
         assert len(participants) == 2
         assert all(participant.played == 1 for participant in participants)
 
+
 def test_global_owner_fixture_reconciles_and_executes_only_on_canonical_runner(
     session_factory,
     monkeypatch,
@@ -805,13 +806,14 @@ def test_global_owner_fixture_reconciles_and_executes_only_on_canonical_runner(
         assert completed.completed_at is not None
         assert competition.status == CompetitionStatus.SETTLED.value
         assert competition.settled_at is not None
-        assert len(
-            session.scalars(
-                select(CompetitionMatchEvent).where(
-                    CompetitionMatchEvent.match_id == canonical_match.id
-                )
-            ).all()
-        ) > 0
+        assert (
+            len(
+                session.scalars(
+                    select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == canonical_match.id)
+                ).all()
+            )
+            > 0
+        )
         assert legacy_match.status == "scheduled"
         assert legacy_match.home_goals is None
         assert legacy_match.away_goals is None
@@ -820,9 +822,7 @@ def test_global_owner_fixture_reconciles_and_executes_only_on_canonical_runner(
         original_score = (completed.home_score, completed.away_score)
         original_event_count = len(
             session.scalars(
-                select(CompetitionMatchEvent).where(
-                    CompetitionMatchEvent.match_id == canonical_match.id
-                )
+                select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == canonical_match.id)
             ).all()
         )
         retried = runner._simulate_match(
@@ -833,13 +833,14 @@ def test_global_owner_fixture_reconciles_and_executes_only_on_canonical_runner(
 
         assert retried.status == MatchStatus.COMPLETED.value
         assert (retried.home_score, retried.away_score) == original_score
-        assert len(
-            session.scalars(
-                select(CompetitionMatchEvent).where(
-                    CompetitionMatchEvent.match_id == canonical_match.id
-                )
-            ).all()
-        ) == original_event_count
+        assert (
+            len(
+                session.scalars(
+                    select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == canonical_match.id)
+                ).all()
+            )
+            == original_event_count
+        )
         assert session.get(OwnerCompetitionLifecycleMapping, competition_mapping.id) is not None
         assert session.get(OwnerMatchLifecycleMapping, fixture_mapping.id) is not None
 
@@ -852,48 +853,41 @@ def test_global_owner_fixture_reconciles_and_executes_only_on_canonical_runner(
                 reward.status,
             )
             for reward in session.scalars(
-                select(CompetitionReward).where(
-                    CompetitionReward.competition_id == competition.id
-                )
+                select(CompetitionReward).where(CompetitionReward.competition_id == competition.id)
             ).all()
         )
         pool_ids_before = sorted(
             pool.id
             for pool in session.scalars(
-                select(CompetitionRewardPool).where(
-                    CompetitionRewardPool.competition_id == competition.id
-                )
+                select(CompetitionRewardPool).where(CompetitionRewardPool.competition_id == competition.id)
             ).all()
         )
         settled_at_before = competition.settled_at
         settlement_attempt_count_before_retry = sum(
-            1 for competition_id, _ in settlement_attempts
-            if competition_id == competition.id
+            1 for competition_id, _ in settlement_attempts if competition_id == competition.id
         )
         assert settlement_attempt_count_before_retry >= 1
 
-        repeated_pools = CompetitionLifecycleService(session).finalize_competition(
-            competition
-        )
+        repeated_pools = CompetitionLifecycleService(session).finalize_competition(competition)
         session.commit()
         session.refresh(competition)
 
         assert sorted(pool.id for pool in repeated_pools) == pool_ids_before
-        assert sorted(
-            (
-                reward.id,
-                reward.ledger_transaction_id,
-                reward.status,
-            )
-            for reward in session.scalars(
-                select(CompetitionReward).where(
-                    CompetitionReward.competition_id == competition.id
+        assert (
+            sorted(
+                (
+                    reward.id,
+                    reward.ledger_transaction_id,
+                    reward.status,
                 )
-            ).all()
-        ) == reward_snapshot
+                for reward in session.scalars(
+                    select(CompetitionReward).where(CompetitionReward.competition_id == competition.id)
+                ).all()
+            )
+            == reward_snapshot
+        )
         assert competition.settled_at == settled_at_before
-        assert sum(
-            1 for competition_id, _ in settlement_attempts
-            if competition_id == competition.id
-        ) == settlement_attempt_count_before_retry
-
+        assert (
+            sum(1 for competition_id, _ in settlement_attempts if competition_id == competition.id)
+            == settlement_attempt_count_before_retry
+        )

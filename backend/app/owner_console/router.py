@@ -1070,13 +1070,15 @@ def flag_decision(
 def release(event_id: str, admin=Depends(get_current_admin), session: Session = Depends(get_session)) -> dict[str, Any]:
     return ledger.serialize(_run(session, money.release_payout, session, event_id))
 
+
 # ---------- canonical global competition reconciliation ----------
 
 
 def _raise_mapping_error(exc: OwnerCompetitionLifecycleMappingError) -> None:
     status_code = (
         404
-        if exc.code in {
+        if exc.code
+        in {
             "legacy_competition_not_found",
             "canonical_competition_not_found",
             "legacy_match_not_found",
@@ -1168,4 +1170,3 @@ def map_global_match_to_canonical(
         "canonical_match_id": mapping.canonical_match_id,
         "mapping_status": mapping.mapping_status,
     }
-
