@@ -17,6 +17,7 @@ jest.mock("@/lib/owner", () => ({
     clubs: [{ club_id: "club-1", club_name: "Test Athletic" }],
     active: { club_id: "club-1", club_name: "Test Athletic" },
   }),
+  fmt: (value: unknown) => String(value ?? 0),
 }));
 
 const roster = {
@@ -49,7 +50,7 @@ describe("React lineup page", () => {
     queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
     });
-    (api.get as any) = jest.fn((url: string) => {
+    jest.spyOn(api, "get").mockImplementation(((url: string) => {
       if (url.includes("/market/clubs/")) return Promise.resolve({ data: roster });
       if (url.includes("/lineup")) {
         return Promise.resolve({
@@ -62,10 +63,10 @@ describe("React lineup page", () => {
         });
       }
       return Promise.reject(new Error("Unexpected GET " + url));
-    });
-    (api.put as any) = jest.fn((_url: string, payload: any) =>
+    }) as any);
+    jest.spyOn(api, "put").mockImplementation(((_url: string, payload: any) =>
       Promise.resolve({ data: { club_id: "club-1", ...payload } }),
-    );
+    ) as any);
   });
 
   afterEach(async () => {
