@@ -171,8 +171,10 @@ export function TransferHub() {
     try {
       await api.post(`/transfer-hub/listings/${offerListing.id}/offers`, {
         bidder_club_id: activeClub.club_id,
-        amount: Number(offerAmount),
-        proposed_wage: offerWage ? Number(offerWage) : undefined,
+        offer_type: "transfer",
+        cash_amount: Number(offerAmount),
+        conditional_terms: offerWage ? { proposed_weekly_wage: Number(offerWage) } : {},
+        message: offerWage ? `Proposed weekly wage: ${Number(offerWage)} GTX/w` : undefined,
       });
       toast.success(`Formal offer of ${fmt(offerAmount)} GTX submitted to selling club!`);
       setOfferListing(null);
@@ -725,6 +727,7 @@ export function TransferHub() {
                 source: "scouting_dossier",
               });
               toast.success("Player added to transfer market watchlist.");
+              await qc.invalidateQueries({ queryKey: ["transfer-market-watchlist", activeClub?.club_id] });
             } catch (e) {
               toast.error(errMsg(e));
             }
