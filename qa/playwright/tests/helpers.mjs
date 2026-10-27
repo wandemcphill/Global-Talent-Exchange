@@ -79,52 +79,15 @@ export async function signIn(page) {
 
   await enableAccessibility(page);
 
-  const emailInput = page
-    .locator('input[aria-label="Email"]')
-    .or(page.locator('input[type="email"]'))
-    .or(page.locator('input[autocomplete="username"]'))
-    .first();
-  const passwordInput = page
-    .locator('input[aria-label="Password"]')
-    .or(page.locator('input[type="password"]'))
-    .or(page.locator('input[autocomplete="current-password"]'))
-    .first();
-  const semanticEmail = page.getByRole("textbox", { name: /^Email$/i }).first();
-  const semanticPassword = page
-    .getByRole("textbox", { name: /^Password$/i })
-    .first();
-  const enterBtn = page.getByRole("button", { name: /^ENTER GTEX$/i });
-
-  const isVisible = async (locator) => locator.isVisible().catch(() => false);
-  const enterFieldValue = async (locator, value) => {
-    try {
-      await locator.fill(value, { timeout: 1_500 });
-      return true;
-    } catch {
-      if (!(await isVisible(locator))) return false;
-      await locator.click({ timeout: 1_500 });
-      await page.keyboard.press("Control+A").catch(() => {});
-      await page.keyboard.type(value);
-      return true;
-    }
-  };
-
-  if (await isVisible(emailInput) && await isVisible(passwordInput)) {
+  const emailInput = page.locator('input[aria-label="Email"]').first();
+  if (await emailInput.isVisible().catch(() => false)) {
     await emailInput.fill(process.env.GTEX_E2E_EMAIL);
+    const passwordInput = page.locator('input[aria-label="Password"]').first();
+    await expect(passwordInput).toBeVisible({ timeout: 30_000 });
     await passwordInput.fill(process.env.GTEX_E2E_PASSWORD);
+    const enterBtn = page.getByRole("button", { name: "ENTER GTEX" });
     await expect(enterBtn).toBeVisible({ timeout: 30_000 });
     await enterBtn.click({ force: true });
-  } else if (
-    await isVisible(semanticEmail) &&
-    await isVisible(semanticPassword)
-  ) {
-    await enterFieldValue(semanticEmail, process.env.GTEX_E2E_EMAIL);
-    await enterFieldValue(semanticPassword, process.env.GTEX_E2E_PASSWORD);
-    if (await isVisible(enterBtn)) {
-      await enterBtn.click({ force: true });
-    } else {
-      await page.keyboard.press("Enter");
-    }
   } else {
     // A valid persisted session may redirect away from the login form. Detect
     // the authenticated shell before attempting coordinate-based form entry.
@@ -132,16 +95,10 @@ export async function signIn(page) {
       signedInPages.add(page);
       return;
     }
-
-    // Flutter web can expose text fields only through its semantics layer.
-    // Keep this as a last resort, using the current login card's field/button
-    // positions rather than the obsolete coordinates from the previous shell.
     const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
     const isNarrow = viewport.width < 820;
-    const x = isNarrow
-      ? Math.round(viewport.width * 0.5)
-      : Math.round(viewport.width * 0.72);
-    const emailY = isNarrow ? 230 : 410;
+    const x = isNarrow ? Math.round(viewport.width * 0.5) : Math.round(viewport.width * 0.72);
+    const emailY = 250;
     await page.mouse.click(x, emailY);
     await page.waitForTimeout(200);
     await page.keyboard.press("Control+A").catch(() => {});
@@ -151,11 +108,8 @@ export async function signIn(page) {
     await page.keyboard.type(process.env.GTEX_E2E_PASSWORD);
     await page.keyboard.press("Enter");
     await page.waitForTimeout(800);
-    const atAuthenticatedRoute = isHashRouting
-      ? /#\/app(?:\/|$)/.test(page.url())
-      : /\/app\//.test(new URL(page.url()).pathname);
-    if (!atAuthenticatedRoute) {
-      const enterY = isNarrow ? 370 : 555;
+    if (!page.url().includes("/app/")) {
+      const enterY = 365;
       await page.mouse.click(x, enterY);
     }
   }
