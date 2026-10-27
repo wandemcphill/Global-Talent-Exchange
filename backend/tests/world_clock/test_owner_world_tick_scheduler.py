@@ -231,7 +231,6 @@ def test_new_active_owner_state_gets_one_initial_tick(monkeypatch) -> None:
     engine.dispose()
 
 
-
 def test_academy_intake_uses_a_separate_sequence_not_world_day(monkeypatch) -> None:
     session, engine = _session()
     state = _state(
