@@ -87,7 +87,20 @@ function SquadCards({ club }: any) {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" data-testid="squad-cards-grid">
         {club.squad.map((p: any) => (
           <div key={p.id} className="cursor-pointer" onClick={() => setSelected(p)}>
-            <PlayerCard player={p} variant="compact" />
+            <PlayerCard
+              name={p.name}
+              rating={p.rating}
+              potential={p.potential}
+              position={p.position}
+              age={p.age}
+              nationality={p.nationality}
+              club={club.club_name}
+              image={p.image || p.portrait_url || p.image_url}
+              regen={Boolean(p.is_regen)}
+              variant="compact"
+              testid={`squad-player-${p.id}`}
+              onClick={() => setSelected(p)}
+            />
           </div>
         ))}
       </div>
