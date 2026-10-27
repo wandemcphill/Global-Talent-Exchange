@@ -931,29 +931,38 @@ class OwnerConsoleApi implements OwnerConsoleReader, GtexOwnerInboxDataSource, O
     // The existing legacy inventory uses an offer/accept ownership transfer.
     // The club owner is authorized to accept a gift addressed to a player in
     // their own squad, which invokes the canonical player-gift broadcast path.
-    final Object? offeredPayload = await client.post(
-      '/owner/legacy/$clubId/desk',
-      body: <String, Object?>{
-        'action': 'gift',
-        'payload': <String, Object?>{
-          'asset_id': assetId,
-          'recipient_ref': playerId,
+    try {
+      final Object? offeredPayload = await client.post(
+        '/owner/legacy/$clubId/desk',
+        body: <String, Object?>{
+          'action': 'gift',
+          'payload': <String, Object?>{
+            'asset_id': assetId,
+            'recipient_ref': playerId,
+          },
         },
-      },
-    );
-    final Map<String, dynamic> offered = _map(offeredPayload);
-    final String? giftId = _text(offered['id']) ?? _text(_map(offered['gift'])['id']);
-    if (giftId == null) {
-      throw const FormatException(
-        'GTEX did not return a gift reference. The asset transfer could not be confirmed.',
       );
+      final Map<String, dynamic> offered = _map(offeredPayload);
+      final String? giftId = _text(offered['id']) ?? _text(_map(offered['gift'])['id']);
+      if (giftId != null) {
+        await client.post(
+          '/owner/legacy/$clubId/desk',
+          body: <String, Object?>{
+            'action': 'accept_gift',
+            'payload': <String, Object?>{'gift_id': giftId},
+          },
+        );
+        return;
+      }
+    } catch (_) {
+      // Legacy desk gift failed or unavailable; fallback to canonical showroom gift below
     }
 
     await client.post(
-      '/owner/legacy/$clubId/desk',
+      '/owner/clubs/$clubId/showroom/gift',
       body: <String, Object?>{
-        'action': 'accept_gift',
-        'payload': <String, Object?>{'gift_id': giftId},
+        'player_id': playerId,
+        'asset_id': assetId,
       },
     );
   }
@@ -964,10 +973,47 @@ class OwnerConsoleApi implements OwnerConsoleReader, GtexOwnerInboxDataSource, O
     if (resolvedClubId == null) {
       return const <ShowroomExhibit>[];
     }
-    final Map<String, dynamic> room = await client.getMap(
-      '/owner/legacy/$resolvedClubId/showroom',
-    );
-    return _maps(room['exhibits']).map(ShowroomExhibit.fromJson).toList();
+    try {
+      final Map<String, dynamic> room = await client.getMap(
+        '/owner/legacy/$resolvedClubId/showroom',
+      );
+      final List<Map<String, dynamic>> exhibits = _maps(room['exhibits']);
+      if (exhibits.isNotEmpty) {
+        return exhibits.map(ShowroomExhibit.fromJson).toList();
+      }
+    } catch (_) {
+      // Legacy flag disabled or endpoint unavailable; fallback to canonical showroom below
+    }
+
+    try {
+      final Map<String, dynamic> canonical = await client.getMap(
+        '/owner/clubs/$resolvedClubId/showroom',
+      );
+      final List<Map<String, dynamic>> catalog = _maps(canonical['catalog']);
+      final Set<String> ownedKeys = _maps(canonical['owned_assets'])
+          .map((Map<String, dynamic> m) => '${m['catalog_key'] ?? m['id']}')
+          .toSet();
+
+      return catalog.map((Map<String, dynamic> item) {
+        final String key = '${item['catalog_key'] ?? item['id']}';
+        final bool isOwned = ownedKeys.contains(key);
+        final String cat = '${item['category'] ?? 'watch'}';
+        return ShowroomExhibit(
+          id: key,
+          name: '${item['name'] ?? 'Asset'}',
+          category: cat,
+          ownershipLabel: isOwned ? 'Owned Asset' : 'Available',
+          fallbackLabel: '${item['model'] ?? item['name']}',
+          sku: key,
+          price: '${item['price_gtex'] ?? '0'}',
+          ownerClass: 'club',
+          status: 'active',
+          owned: isOwned,
+        );
+      }).toList();
+    } catch (_) {
+      return const <ShowroomExhibit>[];
+    }
   }
 
   @override

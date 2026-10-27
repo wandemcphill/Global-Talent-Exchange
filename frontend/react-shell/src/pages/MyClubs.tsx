@@ -196,9 +196,19 @@ function ShowroomPanel({ club }: any) {
             Acquire prestige assets through the club treasury, or purchase a player-eligible gift and deliver it directly to a registered squad member. Only eligible, verified events are published to the global wire.
           </p>
         </div>
-        <div className="sm:ml-auto shrink-0 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2">
-          <div className="text-[9px] uppercase tracking-wider text-slate-500">Treasury</div>
-          <div className="font-mono text-sm font-bold text-amber-200">{fmt(club.cash)} GTX</div>
+        <div className="sm:ml-auto flex items-center gap-3 shrink-0">
+          <Link
+            to="/app/showroom"
+            className="flex items-center gap-1 rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs font-bold text-amber-200 hover:bg-amber-400/20 transition-colors"
+            data-testid="open-dedicated-showroom-link"
+          >
+            <span>Dedicated Showroom</span>
+            <ExternalLink className="h-3 w-3" />
+          </Link>
+          <div className="shrink-0 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2">
+            <div className="text-[9px] uppercase tracking-wider text-slate-500">Treasury</div>
+            <div className="font-mono text-sm font-bold text-amber-200">{fmt(club.cash)} GTX</div>
+          </div>
         </div>
       </div>
 
