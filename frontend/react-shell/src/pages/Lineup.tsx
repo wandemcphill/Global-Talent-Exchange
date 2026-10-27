@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Check, CircleHelp, Save, ShieldCheck, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, CircleHelp, Save, ShieldCheck, Users } from "lucide-react";
 import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
 import { useActiveClub } from "@/lib/owner";
@@ -10,6 +10,7 @@ import {
   buildLineupPayload,
   LINEUP_FORMATIONS,
   lineupRoleLabels,
+  lineupFormationRows,
   normalizeLineupPlan,
   normalizeLineupSquad,
   type LineupPlayer,
@@ -143,32 +144,22 @@ export default function Lineup() {
                 <div className="pointer-events-none absolute left-1/2 top-2 bottom-2 w-px bg-white/15" />
                 <div className="pointer-events-none absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/15" />
                 <div className="relative flex flex-col items-center gap-2">
-                  {[0, 1, 2, 3].map((line) => {
-                    const slots = roles
-                      .map((role, index) => ({ role, index }))
-                      .filter((item) => {
-                        if (line === 0) return item.index === 0;
-                        const label = item.role.split(" ")[0];
-                        if (line === 1) return label === "Defender";
-                        if (line === 2) return label === "Midfielder";
-                        return label === "Forward";
-                      });
-                    if (!slots.length) return null;
-                    return (
-                      <div key={line} className="flex w-full flex-wrap justify-center gap-2">
-                        {slots.map((slot) => {
-                          const player = players.find((item) => item.player_id === starters[slot.index]);
-                          return (
-                            <div key={slot.index} className="flex min-w-0 max-w-[31%] flex-1 flex-col items-center rounded-sm border border-white/15 bg-slate-950/80 px-2 py-2 text-center">
-                              <span className="mb-1 flex h-7 w-7 items-center justify-center rounded-full border border-emerald-300/40 bg-emerald-400/10 text-[10px] font-bold text-emerald-100">{player ? (player.rating ? Math.round(player.rating) : "XI") : slot.index + 1}</span>
-                              <span className="w-full truncate text-[10px] font-semibold text-white">{player?.player_name || slot.role}</span>
-                              <span className="w-full truncate text-[9px] text-slate-400">{slot.role}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
+                  {lineupFormationRows(formation).map((row, lineIndex) => (
+                    <div key={lineIndex} className="flex w-full flex-wrap justify-center gap-2">
+                      {row.map((slotIndex) => {
+                        const role = roles[slotIndex] || "Player";
+                        const player = players.find((item) => item.player_id === starters[slotIndex]);
+                        return (
+                          <div key={slotIndex} className="flex min-w-0 max-w-[31%] flex-1 flex-col items-center rounded-sm border border-white/15 bg-slate-950/80 px-2 py-2 text-center">
+                            <span className="mb-1 flex h-7 w-7 items-center justify-center rounded-full border border-emerald-300/40 bg-emerald-400/10 text-[10px] font-bold text-emerald-100">{player ? (player.rating ? Math.round(player.rating) : "XI") : slotIndex + 1}</span>
+                            <span className="w-full truncate text-[10px] font-semibold text-white">{player?.player_name || role}</span>
+                            <span className="w-full truncate text-[9px] text-slate-400">{role}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+
                 </div>
               </div>
               <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
