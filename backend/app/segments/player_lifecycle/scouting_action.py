@@ -23,6 +23,7 @@ from app.services.regen_ecosystem_service import (
     RegenEcosystemService,
     RegenEcosystemValidationError,
 )
+from app.talent.models import TalentRankingSnapshot
 from app.talent.service import TalentExchangeService
 from app.transfer_market.schemas import WatchlistEntryCreateRequest
 from app.transfer_market.service import TransferMarketService
@@ -151,9 +152,25 @@ def scout_player(
             detail="A trusted potential rating is unavailable; this player cannot receive a potential estimate yet.",
         )
 
+    latest_ranking = service.session.scalar(
+        select(TalentRankingSnapshot)
+        .where(TalentRankingSnapshot.player_id == player.id)
+        .order_by(TalentRankingSnapshot.as_of.desc(), TalentRankingSnapshot.created_at.desc())
+    )
+    components = (
+        {
+            str(item.get("code")): item
+            for item in latest_ranking.components_json
+            if isinstance(item, dict) and item.get("code")
+        }
+        if latest_ranking is not None and isinstance(latest_ranking.components_json, list)
+        else {}
+    )
+
     visible_stats: dict[str, int] = {"rating": current_ability}
-    if float(talent_profile.ranking_confidence or 0.0) > 0:
-        form_score = authoritative_rating(talent_profile.form_score)
+    form_component = components.get("recent_form")
+    if isinstance(form_component, dict) and int(form_component.get("sample_size") or 0) > 0:
+        form_score = authoritative_rating(form_component.get("score"))
         if form_score is not None:
             visible_stats["form"] = form_score
     if float(talent_profile.experience_years or 0.0) > 0:
@@ -162,11 +179,12 @@ def scout_player(
         if isinstance(value, (int, float)) and not isinstance(value, bool):
             visible_stats[str(key)] = int(value)
 
-    consistency_score = (
-        authoritative_rating(talent_profile.consistency_score)
-        if float(talent_profile.ranking_confidence or 0.0) > 0
-        else None
-    )
+    # Consistency is only meaningful when the ranking pipeline has sufficient
+    # rated appearances. Never expose a neutral database default as observed form.
+    consistency_component = components.get("consistency")
+    consistency_score = None
+    if isinstance(consistency_component, dict) and int(consistency_component.get("sample_size") or 0) >= 3:
+        consistency_score = authoritative_rating(consistency_component.get("score"))
     hidden_stats: dict[str, int | None] = {
         "potential_ceiling": future_potential,
         "consistency": consistency_score,
