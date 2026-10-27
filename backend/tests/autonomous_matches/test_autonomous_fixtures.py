@@ -765,13 +765,21 @@ def test_global_owner_fixture_reconciles_and_executes_only_on_canonical_runner(
         session.commit()
 
         runner = CompetitionAutoRunner(session)
-        completed = runner._simulate_match(competition, canonical_match)
+        runner.run_until_idle(
+            competition,
+            simulate_scheduled_matches=True,
+            evaluation_time=eval_time,
+        )
         session.commit()
-        session.refresh(completed)
+        session.refresh(competition)
+        completed = session.get(CompetitionMatch, canonical_match.id)
+        assert completed is not None
         session.refresh(legacy_match)
 
         assert completed.status == MatchStatus.COMPLETED.value
         assert completed.completed_at is not None
+        assert competition.status == CompetitionStatus.SETTLED.value
+        assert competition.settled_at is not None
         assert len(
             session.scalars(
                 select(CompetitionMatchEvent).where(
