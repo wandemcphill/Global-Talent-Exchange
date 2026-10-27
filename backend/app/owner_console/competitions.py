@@ -489,15 +489,15 @@ def _save_global_competition_tactics(
 ) -> dict[str, Any]:
     if mentality not in engine.MENTALITY:
         raise OwnerError("invalid_mentality")
-    by_id = {entry.club_id: entry for entry in entries(session, comp.id)}
-    if club_id not in by_id:
-        raise OwnerError("club_not_entered", 409)
     if comp.status != "running":
         raise OwnerError(
             "canonical_fixture_mapping_required",
             409,
             "Global GTEX competitions must be reconciled to scheduled canonical fixtures before tactics can be submitted.",
         )
+    by_id = {entry.club_id: entry for entry in entries(session, comp.id)}
+    if club_id not in by_id:
+        raise OwnerError("club_not_entered", 409)
 
     round_matches = list(
         session.scalars(
