@@ -2405,8 +2405,51 @@ class TransferMarketService:
             metadata_json=dict(dynamics.metadata_json or {}),
         )
 
-    @staticmethod
-    def _to_watchlist_entry_view(entry: MarketWatchlistEntry) -> MarketWatchlistEntryView:
+    def list_watchlist_entries(
+        self,
+        *,
+        actor: User,
+        club_id: str | None = None,
+    ) -> list[MarketWatchlistEntryView]:
+        resolved_club_id = self._resolve_actor_club_id(
+            actor,
+            club_id,
+            allowed_roles=TRANSFER_MARKET_WATCHLIST_ROLES,
+            forbidden_detail="transfer_market_club_access_required",
+        )
+        entries = list(
+            self.session.scalars(
+                select(MarketWatchlistEntry)
+                .where(MarketWatchlistEntry.club_id == resolved_club_id)
+                .order_by(MarketWatchlistEntry.updated_at.desc(), MarketWatchlistEntry.id.asc())
+            ).all()
+        )
+        return [self._to_watchlist_entry_view(entry) for entry in entries]
+
+    def _to_watchlist_entry_view(self, entry: MarketWatchlistEntry) -> MarketWatchlistEntryView:
+        player = self.session.get(Player, entry.player_id)
+        if player is None:
+            raise TransferMarketNotFoundError(f"Player {entry.player_id} was not found.")
+
+        current_club = (
+            self.session.get(ClubProfile, player.current_club_profile_id) if player.current_club_profile_id else None
+        )
+        active_listing = self.session.scalar(
+            select(TransferListing)
+            .where(TransferListing.player_id == player.id, TransferListing.status == "open")
+            .order_by(TransferListing.expires_at.desc(), TransferListing.created_at.desc())
+        )
+        player_view = TransferMarketPlayerView(
+            id=player.id,
+            full_name=player.canonical_display_name or player.full_name,
+            normalized_position=player.normalized_position,
+            current_club_id=player.current_club_profile_id,
+            current_club_name=current_club.club_name if current_club is not None else None,
+            current_competition_id=player.current_competition_id,
+            nationality_id=player.country_id,
+            market_value=Decimal(str(player.market_value_eur)) if player.market_value_eur is not None else None,
+            is_real_player=bool(player.is_real_player),
+        )
         return MarketWatchlistEntryView(
             id=entry.id,
             club_id=entry.club_id,
@@ -2414,6 +2457,10 @@ class TransferMarketService:
             source=entry.source,
             discovery_score=entry.discovery_score,
             metadata_json=dict(entry.metadata_json or {}),
+            player=player_view,
+            active_listing=(
+                self.to_listing_view(active_listing, reference_at=utcnow()) if active_listing is not None else None
+            ),
         )
 
     @staticmethod
