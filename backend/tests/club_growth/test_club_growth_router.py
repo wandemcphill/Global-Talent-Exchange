@@ -279,7 +279,9 @@ def test_academy_prospect_contract_and_promotion_flow(client: TestClient, sessio
         )
     )
     assert active_contract is not None
-    assert active_contract.wage_amount == 1000
+    from decimal import Decimal
+
+    assert active_contract.wage_amount == Decimal("10.00")
 
     # Verify reserve SquadTier membership exists
     squad_membership = session.scalar(

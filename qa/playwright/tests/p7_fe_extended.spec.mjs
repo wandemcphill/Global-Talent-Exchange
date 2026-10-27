@@ -91,6 +91,46 @@ test("Club squad route loads the roster or explicit no-club state", async ({ pag
   await captureScreenshot(page, testInfo, "lineup");
 });
 
+test("Club HQ opens an authoritative club or no-club state", async ({ page }, testInfo) => {
+  // Owner operations must show real club context or a truthful unavailable state,
+  // never fabricated demo-club data.
+  await visitAuthedRoute(page, "/app");
+
+  const ownerCockpit = page.getByText("Club owner operations cockpit", { exact: true });
+  const acceptableStates = [
+    page.getByText("Live club data required", { exact: true }),
+    page.getByText("Club command", { exact: true }),
+    page.getByText("Build your club command center", { exact: true }),
+    ownerCockpit,
+  ];
+  await expect
+    .poll(
+      async () => {
+        for (const state of acceptableStates) {
+          if (await state.isVisible().catch(() => false)) return true;
+        }
+        return false;
+      },
+      { timeout: 60_000 },
+    )
+    .toBeTruthy();
+
+  const liveDataRequired = page.getByText("Live club data required", { exact: true });
+  if (await liveDataRequired.isVisible().catch(() => false)) {
+    await expect(page.getByText(/generated demo club data/i)).toBeVisible();
+  } else {
+    const noClubEntry = page.getByText("Build your club command center", { exact: true });
+    if (await noClubEntry.isVisible().catch(() => false)) {
+      await expect(page.getByText("Create club", { exact: true })).toBeVisible();
+    } else {
+      await expect(ownerCockpit).toBeVisible();
+    }
+  }
+
+  await verifyNoHorizontalOverflow(page);
+  await captureScreenshot(page, testInfo, "club-command-authoritative-state");
+});
+
 test("A targeted notification opens its supplied target", async ({ page }, testInfo) => {
   test.skip(
     !process.env.GTEX_E2E_NOTIFICATION_TEXT || !process.env.GTEX_E2E_NOTIFICATION_TARGET,
