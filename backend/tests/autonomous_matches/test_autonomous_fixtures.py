@@ -691,6 +691,8 @@ def test_global_owner_fixture_reconciles_and_executes_only_on_canonical_runner(s
     with session_factory() as session:
         eval_time = datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
         competition = _create_test_competition(session, "Reconciled Global League")
+        competition.source_type = "gtex"
+        competition.source_id = str(uuid4())
         round_row = CompetitionRound(
             id=str(uuid4()),
             competition_id=competition.id,
@@ -733,6 +735,8 @@ def test_global_owner_fixture_reconciles_and_executes_only_on_canonical_runner(s
             status="running",
             current_round=1,
         )
+        session.add(legacy_competition)
+        session.flush()
         legacy_match = OwnerMatch(
             competition_id=legacy_competition.id,
             round_number=1,
@@ -742,7 +746,7 @@ def test_global_owner_fixture_reconciles_and_executes_only_on_canonical_runner(s
             away_name=away_club.club_name,
             status="scheduled",
         )
-        session.add_all([canonical_match, legacy_competition, legacy_match])
+        session.add_all([canonical_match, legacy_match])
         session.flush()
 
         mapping_service = OwnerCompetitionLifecycleMappingService(session)
