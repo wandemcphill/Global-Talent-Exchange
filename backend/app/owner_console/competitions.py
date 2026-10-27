@@ -479,6 +479,86 @@ def ensure_owner_console_execution_allowed(comp: OwnerCompetition) -> None:
         )
 
 
+def _save_global_competition_tactics(
+    session: Session,
+    user_id: str,
+    comp: OwnerCompetition,
+    club_id: str,
+    mentality: str,
+    lineup_mode: str,
+) -> dict[str, Any]:
+    if mentality not in engine.MENTALITY:
+        raise OwnerError("invalid_mentality")
+    by_id = {entry.club_id: entry for entry in entries(session, comp.id)}
+    if club_id not in by_id:
+        raise OwnerError("club_not_entered", 409)
+    if comp.status != "running":
+        raise OwnerError(
+            "canonical_fixture_mapping_required",
+            409,
+            "Global GTEX competitions must be reconciled to scheduled canonical fixtures before tactics can be submitted.",
+        )
+
+    round_matches = list(
+        session.scalars(
+            select(OwnerMatch).where(
+                OwnerMatch.competition_id == comp.id,
+                OwnerMatch.round_number == comp.current_round,
+                OwnerMatch.status == "scheduled",
+            )
+        ).all()
+    )
+    my_match = next(
+        (match for match in round_matches if club_id in (match.home_club_id, match.away_club_id)),
+        None,
+    )
+    if my_match is None:
+        raise OwnerError(
+            "no_fixture_this_round",
+            409,
+            "Your club has no scheduled fixture in the current round.",
+        )
+
+    from app.services.owner_competition_lifecycle_mapping_service import (
+        OwnerCompetitionLifecycleMappingError,
+        OwnerCompetitionLifecycleMappingService,
+    )
+
+    try:
+        canonical_match = OwnerCompetitionLifecycleMappingService(session).save_pre_match_tactics(
+            legacy_match_id=my_match.id,
+            club_id=club_id,
+            user_id=user_id,
+            mentality=mentality,
+            lineup_mode=lineup_mode,
+        )
+    except OwnerCompetitionLifecycleMappingError as exc:
+        raise OwnerError(exc.code, 409, exc.detail) from exc
+
+    return {
+        "execution": "canonical_fixture",
+        "tactics_saved": True,
+        "match": {
+            "id": canonical_match.id,
+            "legacy_match_id": my_match.id,
+            "competition_id": canonical_match.competition_id,
+            "round": canonical_match.round_number,
+            "home_club_id": canonical_match.home_club_id,
+            "away_club_id": canonical_match.away_club_id,
+            "status": canonical_match.status,
+            "home_goals": canonical_match.home_score,
+            "away_goals": canonical_match.away_score,
+            "played_at": None,
+            "tactics": {
+                "mentality": mentality,
+                "lineup_mode": lineup_mode,
+                "club_id": club_id,
+            },
+        },
+        "competition": comp_dict(session, comp, user_id),
+    }
+
+
 def play_next(
     session: Session, user_id: str, competition_id: str, club_id: str, mentality: str, lineup_mode: str
 ) -> dict[str, Any]:
@@ -486,6 +566,8 @@ def play_next(
     comp = session.get(OwnerCompetition, competition_id)
     if comp is None:
         raise OwnerError("competition_not_found", 404)
+    if comp.host_type == "gtex":
+        return _save_global_competition_tactics(session, user_id, comp, club_id, mentality, lineup_mode)
     ensure_owner_console_execution_allowed(comp)
     if mentality not in engine.MENTALITY:
         raise OwnerError("invalid_mentality")
