@@ -24,6 +24,7 @@ from app.models.competition_rule_set import CompetitionRuleSet
 from app.models.competition_reward import CompetitionReward
 from app.models.competition_reward_pool import CompetitionRewardPool
 from app.models.competition_participant import CompetitionParticipant
+from app.models.competition_prize_rule import CompetitionPrizeRule
 from app.models.player_contract import PlayerContract
 from app.models.user import KycStatus, User, UserRole
 from app.owner_console.engine import simulate_match as owner_simulate_match
@@ -698,6 +699,14 @@ def test_global_owner_fixture_reconciles_and_executes_only_on_canonical_runner(
         competition = _create_test_competition(session, "Reconciled Global League")
         competition.source_type = "gtex"
         competition.source_id = str(uuid4())
+        session.add(
+            CompetitionPrizeRule(
+                competition_id=competition.id,
+                payout_mode="percentage",
+                top_n=2,
+                payout_percentages=[70, 30],
+            )
+        )
         round_row = CompetitionRound(
             id=str(uuid4()),
             competition_id=competition.id,
