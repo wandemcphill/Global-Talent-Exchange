@@ -431,7 +431,7 @@ function CreateFirstClub({ onDone, onCancel }: any) {
       return;
     }
     const validatedLocation = validateClubLocation(countryCode, cityName);
-    if (!validatedLocation.valid) {
+    if ("error" in validatedLocation) {
       toast.error(validatedLocation.error);
       return;
     }
