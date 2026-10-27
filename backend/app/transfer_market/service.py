@@ -747,12 +747,11 @@ class TransferMarketService:
             sibling.status = "rejected"
             sibling.resolved_at = effective_at
 
-        # Accepting the selling club's cash terms is not the same as completing
-        # the player transfer. Create the canonical negotiation row consumed by
-        # submit_contract_offer(), player/agent decisions and _complete_transfer().
-        # That lifecycle performs the eventual player-contract movement and ledger
-        # settlement using the accepted cash amount, with its existing safeguards.
-        self._ensure_hub_offer_negotiation(listing, offer, effective_at)
+        # Accepting cash terms starts the existing canonical private-negotiation
+        # lifecycle. The Session before_flush hook materializes or updates the
+        # TransferNegotiation from the accepted offer; do not insert a second row
+        # here. Player/agent/coach decisions and _complete_transfer() perform the
+        # eventual player-contract movement and ledger settlement.
         self.session.commit()
         self.session.refresh(offer)
         self._push_listing_event(
@@ -2030,60 +2029,6 @@ class TransferMarketService:
         else:
             negotiation.winning_bid_id = winning_bid.id
             negotiation.bidder_club_id = winning_bid.bidder_club_id
-        return negotiation
-
-    def _ensure_hub_offer_negotiation(
-        self,
-        listing: TransferListing,
-        offer: TransferHubOffer,
-        effective_at: datetime,
-    ) -> TransferNegotiation:
-        negotiation = self.session.scalar(
-            select(TransferNegotiation).where(TransferNegotiation.listing_id == listing.id)
-        )
-        if negotiation is not None:
-            metadata = dict(negotiation.metadata_json or {})
-            if (
-                metadata.get("hub_offer_id") == offer.id
-                and negotiation.bidder_club_id == offer.bidder_club_id
-            ):
-                return negotiation
-            raise TransferMarketValidationError(
-                "A different transfer negotiation already exists for this listing."
-            )
-
-        conditional_terms = dict(offer.conditional_terms_json or {})
-        proposed_wage = None
-        raw_wage = conditional_terms.get("proposed_weekly_wage")
-        if raw_wage is not None:
-            try:
-                parsed_wage = Decimal(str(raw_wage))
-            except (InvalidOperation, TypeError, ValueError):
-                parsed_wage = None
-            if parsed_wage is not None and parsed_wage.is_finite() and parsed_wage >= Decimal("0"):
-                proposed_wage = parsed_wage
-
-        negotiation = TransferNegotiation(
-            listing_id=listing.id,
-            winning_bid_id=None,
-            player_id=listing.player_id,
-            selling_club_id=listing.selling_club_id,
-            bidder_club_id=offer.bidder_club_id,
-            status="awaiting_contract_offer",
-            wage_offer_amount=proposed_wage,
-            contract_years=3,
-            decision_due_at=effective_at + timedelta(hours=PLAYER_DECISION_DELAY_HOURS),
-            metadata_json={
-                "source": "transfer_hub",
-                "hub_offer_id": offer.id,
-                "cash_amount": str(offer.cash_amount),
-                "offer_type": offer.offer_type,
-                "conditional_terms": conditional_terms,
-                "notes": offer.message or "",
-            },
-        )
-        self.session.add(negotiation)
-        self.session.flush()
         return negotiation
 
     def _resolve_window_id(self, *, listing: TransferListing, reference_at: date) -> tuple[str, bool]:
