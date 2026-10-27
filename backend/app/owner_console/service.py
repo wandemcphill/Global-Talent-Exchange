@@ -1578,6 +1578,7 @@ def process_due_owner_world_ticks(
     user_id: str | None = None,
     limit: int = 500,
     max_days_per_club: int = 7,
+    include_details: bool = False,
 ) -> dict[str, Any]:
     """Advance active owner-club simulation from the persisted GTEX world calendar.
 
@@ -1619,6 +1620,7 @@ def process_due_owner_world_ticks(
             "clubs_backlogged": 0,
             "ticks_failed": 0,
             "clock_paused": bool(clock_state.is_paused),
+            **({"tick_results": []} if include_details else {}),
         }
 
     anchored = 0
@@ -1638,11 +1640,13 @@ def process_due_owner_world_ticks(
             "ticks_failed": 0,
             "legacy_anchors_created": anchored,
             "clock_paused": True,
+            **({"tick_results": []} if include_details else {}),
         }
 
     ticks_executed = 0
     clubs_backlogged = 0
     ticks_failed = 0
+    tick_results: list[dict[str, Any]] = []
     catch_up_limit = max(1, int(max_days_per_club))
 
     for state in states:
@@ -1669,7 +1673,7 @@ def process_due_owner_world_ticks(
                 # in the same savepoint. A failed tick remains retryable without
                 # reverting completed ticks for other clubs in this cycle.
                 with session.begin_nested():
-                    tick_club(
+                    tick_result = tick_club(
                         session,
                         state,
                         use_ai=False,
@@ -1686,6 +1690,14 @@ def process_due_owner_world_ticks(
                 session.refresh(state)
                 break
             ticks_executed += 1
+            if include_details:
+                tick_results.append(
+                    {
+                        "club_id": state.club_id,
+                        "world_date": next_world_date.isoformat(),
+                        **tick_result,
+                    }
+                )
 
         if state.last_world_tick_date is not None and state.last_world_tick_date < target_date:
             clubs_backlogged += 1
@@ -1699,6 +1711,7 @@ def process_due_owner_world_ticks(
         "ticks_failed": ticks_failed,
         "legacy_anchors_created": anchored,
         "clock_paused": False,
+        **({"tick_results": tick_results} if include_details else {}),
     }
 
 
