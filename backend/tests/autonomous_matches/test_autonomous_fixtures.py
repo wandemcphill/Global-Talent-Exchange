@@ -42,9 +42,21 @@ def session_factory(tmp_path_factory):
 def _seed_club_squad(session, club: ClubProfile, count: int = 15, as_of: date | None = None) -> list[Player]:
     base_date = as_of or date(2026, 1, 1)
     roles = [
-        "goalkeeper", "defender", "defender", "defender", "defender",
-        "midfielder", "midfielder", "midfielder", "forward", "forward", "forward",
-        "midfielder", "forward", "defender", "goalkeeper"
+        "goalkeeper",
+        "defender",
+        "defender",
+        "defender",
+        "defender",
+        "midfielder",
+        "midfielder",
+        "midfielder",
+        "forward",
+        "forward",
+        "forward",
+        "midfielder",
+        "forward",
+        "defender",
+        "goalkeeper",
     ]
     players = []
     for i in range(count):
@@ -417,9 +429,7 @@ def test_atomic_retry_rolls_back_partial_writes(session_factory, monkeypatch) ->
 
         # Partial events written before the exception rolled back with savepoint!
         events = list(
-            session.scalars(
-                select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == match.id)
-            ).all()
+            session.scalars(select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == match.id)).all()
         )
         assert len(events) == 0
 
@@ -435,9 +445,7 @@ def test_atomic_retry_rolls_back_partial_writes(session_factory, monkeypatch) ->
         assert match.completed_at is not None
         # Events exist exactly once
         events_after = list(
-            session.scalars(
-                select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == match.id)
-            ).all()
+            session.scalars(select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == match.id)).all()
         )
         assert len(events_after) > 0
 
