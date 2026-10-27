@@ -24,32 +24,34 @@ export function TransferHub() {
   const [submittingOffer, setSubmittingOffer] = useState(false);
 
   // Lane 1: Listings Query
-  const { data: listingsData, isLoading: loadingListings } = useQuery({
+  const {
+    data: listingsData,
+    isLoading: loadingListings,
+    error: listingsError,
+    refetch: refetchListings,
+  } = useQuery({
     queryKey: ["transfer-listings", selectedPosition],
     queryFn: async () => {
-      try {
-        const params: any = { status: "active" };
-        if (selectedPosition !== "ALL") params.position = selectedPosition;
-        const { data } = await api.get("/transfer-hub/listings", { params });
-        return data || [];
-      } catch {
-        return [];
-      }
+      const params: any = { status: "active" };
+      if (selectedPosition !== "ALL") params.position = selectedPosition;
+      const { data } = await api.get("/transfer-hub/listings", { params });
+      return data || [];
     },
   });
 
   // Lane 2: Offers Query (Incoming & Outgoing for active club)
-  const { data: offersData, isLoading: loadingOffers, refetch: refetchOffers } = useQuery({
+  const {
+    data: offersData,
+    isLoading: loadingOffers,
+    error: offersError,
+    refetch: refetchOffers,
+  } = useQuery({
     queryKey: ["transfer-offers", activeClub?.club_id],
     queryFn: async () => {
-      try {
-        const params: any = {};
-        if (activeClub?.club_id) params.club_id = activeClub.club_id;
-        const { data } = await api.get("/transfer-hub/offers", { params });
-        return data || [];
-      } catch {
-        return [];
-      }
+      const params: any = {};
+      if (activeClub?.club_id) params.club_id = activeClub.club_id;
+      const { data } = await api.get("/transfer-hub/offers", { params });
+      return data || [];
     },
     enabled: !!activeClub?.club_id && lane === "offers",
   });
@@ -115,8 +117,9 @@ export function TransferHub() {
   // Actions on Offers
   const handleAcceptOffer = async (offerId: string) => {
     try {
-      await api.post(`/transfer-hub/offers/${offerId}/accept`);
-      toast.success("Transfer offer accepted! Deal submitted for league registration.");
+      const { data } = await api.post(`/transfer-hub/offers/${offerId}/accept`);
+      const resolvedStatus = String(data?.status || "updated").replace(/_/g, " ");
+      toast.success(`Transfer offer ${resolvedStatus}.`);
       refetchOffers();
     } catch (e) {
       toast.error(errMsg(e));
@@ -189,7 +192,7 @@ export function TransferHub() {
   // Filter listings
   const filteredListings = (listingsData || []).filter((l: any) => {
     const p = l.player || {};
-    const name = (p.name || p.player_name || l.player_id || "").toLowerCase();
+    const name = (p.full_name || p.name || p.player_name || l.player_id || "").toLowerCase();
     if (search && !name.includes(search.toLowerCase())) return false;
     return true;
   });
@@ -400,7 +403,7 @@ export function TransferHub() {
                         {offer.player_name || `Target Player #${offer.player_id?.slice(0, 6)}`}
                       </h4>
                       <p className="text-xs text-slate-300">
-                        Offered: <b className="text-amber-300 font-mono">{fmt(offer.amount)} GTX</b> · Proposed Wage: <b className="text-white font-mono">{fmt(offer.proposed_wage || 2000)} GTX/w</b>
+                        Offered: <b className="text-amber-300 font-mono">{fmt(offer.cash_amount)} GTX</b> · Proposed Wage: <b className="text-white font-mono">{offer.conditional_terms?.proposed_weekly_wage != null ? `${fmt(offer.conditional_terms.proposed_weekly_wage)} GTX/w` : "Not specified"}</b>
                       </p>
                     </div>
 
