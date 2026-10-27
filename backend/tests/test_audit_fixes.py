@@ -95,6 +95,7 @@ def test_fix_4_owner_appoint_and_fire_manager_syncs_club_growth(db_session):
     # Fire manager
     try:
         from app.models.wallet import LedgerAccount, LedgerAccountKind, LedgerUnit
+
         acc = LedgerAccount(
             id="acc_club",
             owner_id="club_test_mgr",
