@@ -1,10 +1,21 @@
 # GTEX remediation roadmap
 
-Baseline: `main` `3e2e94b661c060dbd67512756923d0b4eecc0b8a`, audit date 2026-10-18. Findings are defined in `docs/audits/GTEX_COMPREHENSIVE_PLATFORM_AUDIT.md`. Screen and role rows cite those ids.
+Current review baseline: `main` `bb6d82a9b8b5867318f9a0baf19789cef5b25637` (2026-10-27). The 2026-10-18 evidence at `45e29ef6` is retained as historical, not current-main certification. Findings are defined in `docs/audits/GTEX_COMPREHENSIVE_PLATFORM_AUDIT.md`; this roadmap records the current deltas below.
 
 **Second pass (2026-10-18, `45e29ef6`)**: re-verified on a working environment — all CI backend slices green, `flutter analyze` clean, `flutter test` 1259 pass/20 fail (CI-failing rot), live seeded API + HTTP checks. Corrected FND-003 (routers mounted), FND-004 (#265 merged), FND-016 (#272 merged), FND-008 (route lives at `/api/v2`). New runtime findings added below.
 
 Nothing here is permission to merge. Each repair is a reviewable pull request. Do not start a shell rewrite. Do not run live deposits, withdrawals, jackpot funding, or payouts to close a row.
+
+
+## Current-main checkpoint (2026-10-27, `bb6d82a9`)
+
+- Current `main` Quality Gates and Phase A Economic Regressions passed; the Android debug build passed. Final Platform Certification and the wider CI/staging workflow were still running when checked. See the linked current-run table in `GTEX_COMPREHENSIVE_PLATFORM_AUDIT.md`; do not carry forward the 2026-10-18 test totals as current results.
+- The Club HQ/squad spec is consolidated in `qa/playwright/tests/p7_fe_extended.spec.mjs`: squad at `/app/club`, Club HQ at `/app`, truthful live/no-club states and horizontal-overflow assertions. CI config covers mobile, tablet (768×1024) and desktop (1440×900). The matrix was still running on #337's branch and that branch used an older helper copy, so a green result must be confirmed against the current-main revision before calling this complete.
+- Flutter signup no longer sends `dev-bypass`; it uses the Turnstile widget. Keep server-side challenge enforcement/configuration under review rather than marking the entire auth finding production-certified.
+- Showroom purchase and gift interactions are now wired in the main Flutter owner console; PR #299 merged. Continue to require current tests and economic/ledger certification before certifying the path end-to-end.
+- React `/console` and explicit desk auction/bid target changes landed via #265 and #272. Remaining concrete signup/onboarding defect: React add-club and first-club creation still hardcode NG/Lagos rather than collecting geography.
+- Lifecycle implementation PRs #337, #338 and #339 are merged, and issues #169/#176 are closed. That is a code/issue status, not a blanket test sign-off.
+- PR #334 is closed as redundant because its one-line `enableAccessibility` import is already on current main.
 
 ## Dependency order (revised, second pass)
 
@@ -27,9 +38,9 @@ Steps 0–1 are the highest-risk items: arbitrary writes into competition settle
 
 ## Second-pass repair PRs
 
-### PR-280 — Authorization on competition match writes (CMP-NEW-01) — **open**
+### PR-280 — Authorization on competition match writes (CMP-NEW-01) — **merged 2026-10-19**
 
-**Severity:** P0. **Merged:** no, review pending.
+**Severity:** P0. PR [#280](https://github.com/wandemcphill/Global-Talent-Exchange/pull/280) is merged. Keep the regression test and re-run it on current main; do not track it as an open repair.
 
 **Change:** `record_match_event` and `complete_match` in `backend/app/segments/competitions/segment_competitions.py` now load the `Competition` and call `_require_manage_competitions_or_creator(request, actor, competition)` — the same guard `cancel_competition`/`settle_competition_payouts` already use. Previously any authenticated user could write events/results to any competition, feeding `ranking_integrity_service.record_match_result` and corrupting standings/settlement input.
 
@@ -58,7 +69,7 @@ Steps 0–1 are the highest-risk items: arbitrary writes into competition settle
 
 ### PR-A — Club desk must name its target (FND-016)
 
-**Severity:** P1. **Depends on:** nothing. **Do not merge from the audit branch.**
+**Status:** Resolved by merged PR [#272](https://github.com/wandemcphill/Global-Talent-Exchange/pull/272) on 2026-10-18. Do not reintroduce implicit first-asset/first-listing selection from the older audit branch.
 
 **Change:** `perform_desk_action` rejects `list_auction` without `asset_id` and `place_bid` without `listing_id`. Remove the query that picks the first owned asset or the first other auction. Flutter sends the id from the desk snapshot. Add `auctionable_assets` (owned, unlisted) and `can_bid` on market rows so the client has a real target.
 
@@ -192,7 +203,7 @@ These are not duplicates of #2, #169, #176, #228, #263, or #136.
 | [#274](https://github.com/wandemcphill/Global-Talent-Exchange/issues/274) Normal-account signup and Turnstile bypass | FND-001, FND-005 | PR-C acceptance |
 | [#275](https://github.com/wandemcphill/Global-Talent-Exchange/issues/275) Unmounted club-sale and identity routes | FND-003 | PR-B acceptance |
 | [#276](https://github.com/wandemcphill/Global-Talent-Exchange/issues/276) One staff hire path; GM and HYD decision | FND-009 | PR-D acceptance, decision recorded in the PR |
-| [#272](https://github.com/wandemcphill/Global-Talent-Exchange/pull/272) Explicit desk auction and bid targets | FND-016 | PR-A acceptance. Draft PR open, not merged |
+| [#272](https://github.com/wandemcphill/Global-Talent-Exchange/pull/272) Explicit desk auction and bid targets | FND-016 | Resolved — PR #272 merged |
 
 #228 already covers browser certification, regen seeds, and the card rebuild. #263 already covers `/console`. #176 already covers lifecycle bridges. Link those instead of filing them again.
 
