@@ -130,6 +130,8 @@ void main() {
         '/football/transfer-center',
         '/streamer-tournaments',
         '/viral-feed',
+        // Dedicated authenticated screen registered in the app route catalog.
+        '/app/inbox',
       };
       final Set<String> directCatalogCollisions =
           seenDirectPaths.where(catalogPaths.contains).toSet();
@@ -274,7 +276,8 @@ void main() {
         '/payments',
         '/social',
         '/chat',
-        '/inbox',
+        // /inbox now redirects to the dedicated owner decision inbox screen,
+        // not the generic premium shell.
         '/play',
       ]) {
         await tester.pumpWidget(
