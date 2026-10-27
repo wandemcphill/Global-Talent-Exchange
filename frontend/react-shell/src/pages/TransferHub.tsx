@@ -423,136 +423,229 @@ export function TransferHub() {
         </div>
       )}
 
-      {/* Lane 3: Negotiations */}
+      {/* Lane 3: Persisted negotiations only */}
       {lane === "negotiations" && (
         <div className="space-y-4" data-testid="lane-negotiations-view">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="rounded-xl border border-white/10 bg-slate-900/60 p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="rounded bg-amber-500/20 text-amber-300 px-2 py-0.5 text-[9px] font-black uppercase">
-                  Contract Talks In Progress
-                </span>
-                <span className="gx-mono text-xs text-slate-400">Stage: Agent Terms</span>
-              </div>
-              <h4 className="gx-display text-xl font-bold uppercase text-white">Tariq Mansoor · Playmaker</h4>
-              <p className="text-xs text-slate-300">
-                Player demanding Starting XI assurance and a 15% promotion wage bonus clause.
-              </p>
-              <div className="pt-2 border-t border-white/10 flex items-center justify-between">
-                <span className="gx-mono text-xs text-slate-400">Asking Wage: <b>4,500 GTX/w</b></span>
-                <button
-                  type="button"
-                  onClick={() => toast.success("Counter-terms dispatched to agent.")}
-                  className="gx-btn gx-btn-secondary text-xs"
-                >
-                  Adjust Terms
-                </button>
-              </div>
+          {loadingNegotiations ? (
+            <Loading label="Loading persisted transfer negotiations..." />
+          ) : !activeClub?.club_id ? (
+            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+              <MessageSquare className="mx-auto size-10 text-emerald-400/50 mb-3" />
+              <p className="gx-display text-xl font-bold uppercase text-white">Choose an active club</p>
+              <p className="text-sm text-slate-400 mt-1">Negotiations are scoped to a club you are authorized to manage.</p>
             </div>
-
-            <div className="rounded-xl border border-white/10 bg-slate-900/60 p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="rounded bg-emerald-500/20 text-emerald-300 px-2 py-0.5 text-[9px] font-black uppercase">
-                  Agreed in Principle
-                </span>
-                <span className="gx-mono text-xs text-slate-400">Stage: Medical Pending</span>
-              </div>
-              <h4 className="gx-display text-xl font-bold uppercase text-white">Moussa Sene · Centre-Back</h4>
-              <p className="text-xs text-slate-300">
-                Personal terms finalized on a 3-year deal. Medical assessment scheduled before window close.
+          ) : (negotiationsData || []).length === 0 ? (
+            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+              <MessageSquare className="mx-auto size-10 text-emerald-400/50 mb-3" />
+              <p className="gx-display text-xl font-bold uppercase text-white">No accessible active negotiations</p>
+              <p className="text-sm text-slate-400 mt-1">
+                This view only shows negotiations returned by the authenticated API. Browse market listings or active offers to start a real transfer workflow.
               </p>
-              <div className="pt-2 border-t border-white/10 flex items-center justify-between">
-                <span className="gx-mono text-xs text-slate-400">Agreed Wage: <b>3,200 GTX/w</b></span>
-                <button
-                  type="button"
-                  onClick={() => toast.success("Medical cleared. Deal finalized!")}
-                  className="gx-btn gx-btn-primary text-xs"
-                >
-                  Confirm Registration
-                </button>
-              </div>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-3">
+              {(negotiationsData || []).map((negotiation: any) => (
+                <div key={negotiation.id} className="rounded-xl border border-white/10 bg-slate-900/60 p-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="rounded bg-amber-500/20 text-amber-300 px-2 py-0.5 text-[9px] font-black uppercase">
+                      {String(negotiation.status || "unknown").replaceAll("_", " ")}
+                    </span>
+                    <span className="gx-mono text-xs text-slate-400">Negotiation {String(negotiation.id).slice(0, 8)}</span>
+                  </div>
+                  <h4 className="gx-display text-xl font-bold uppercase text-white">
+                    {negotiation.listing?.player?.full_name || `Player ${negotiation.player_id}`}
+                  </h4>
+                  <p className="text-xs text-slate-300">
+                    Listing {String(negotiation.listing_id).slice(0, 8)} · Expected role: {negotiation.expected_role || "Not recorded"}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {negotiation.wage_offer_amount != null
+                      ? `Recorded wage offer: ${fmt(negotiation.wage_offer_amount)} GTX/w`
+                      : "No wage offer is recorded for this negotiation."}
+                  </p>
+                  <div className="pt-2 border-t border-white/10">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPlayerId(negotiation.player_id)}
+                      className="gx-btn gx-btn-secondary text-xs"
+                    >
+                      View player dossier
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Lane 4: Window Bids */}
+      {/* Lane 4: Persisted market bids */}
       {lane === "bids" && (
         <div className="space-y-4" data-testid="lane-bids-view">
           <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-4 text-xs text-amber-200 flex items-center gap-2">
-            <Clock size={16} /> Window Closes in 48h 12m · Active bids receive auto-extension if matched within 5 minutes.
+            <Clock size={16} /> Bids below or equal to the current highest bid are rejected by the market.
           </div>
-          <div className="space-y-3">
-            {[
-              { id: "bid-1", player: "Adeola Alabi", leader: "Lagos FC", topBid: 120000, deadline: "04:12:00" },
-              { id: "bid-2", player: "Kofi Boateng", leader: "Accra United", topBid: 95000, deadline: "12:45:00" },
-            ].map((b) => (
-              <div key={b.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-xl border border-white/10 bg-slate-900/60 p-4">
-                <div>
-                  <h4 className="gx-display text-lg font-bold uppercase text-white">{b.player}</h4>
-                  <p className="text-xs text-slate-400">Current Leader: <b className="text-slate-200">{b.leader}</b></p>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <p className="text-[10px] uppercase font-bold text-slate-400">Top Bid</p>
-                    <p className="gx-mono text-lg font-black text-amber-300">{fmt(b.topBid)} GTX</p>
+          {!activeClub?.club_id ? (
+            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+              <Clock className="mx-auto size-10 text-emerald-400/50 mb-3" />
+              <p className="gx-display text-xl font-bold uppercase text-white">Choose an active club</p>
+              <p className="text-sm text-slate-400 mt-1">Bids can only be submitted for a club you are authorized to manage.</p>
+            </div>
+          ) : bidListings.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+              <Clock className="mx-auto size-10 text-emerald-400/50 mb-3" />
+              <p className="gx-display text-xl font-bold uppercase text-white">No active listings with bids</p>
+              <p className="text-sm text-slate-400 mt-1">This lane only shows live bid state returned by the transfer-market API.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {bidListings.map((listing: any) => {
+                const currentHighest = Number(listing.current_highest_bid || 0);
+                const enteredAmount = bidAmounts[listing.id] || "";
+                const amountIsValid = enteredAmount.trim() !== ""
+                  && Number.isFinite(Number(enteredAmount))
+                  && Number(enteredAmount) > currentHighest;
+                return (
+                  <div key={listing.id} className="flex flex-col gap-4 rounded-xl border border-white/10 bg-slate-900/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <h4 className="gx-display text-lg font-bold uppercase text-white">
+                        {listing.player?.full_name || listing.player_id}
+                      </h4>
+                      <p className="text-xs text-slate-400">
+                        Highest bidder: {listing.current_bid?.club_name || "Name unavailable"}
+                        {" · "}Time remaining: {Math.ceil(Number(listing.time_remaining || 0) / 60)} min
+                      </p>
+                      <p className="gx-mono mt-1 text-sm font-black text-amber-300">
+                        Current highest: {fmt(listing.current_highest_bid)} GTX
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-2 sm:w-64">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Your bid (GTX)
+                      </label>
+                      <input
+                        type="number"
+                        min={currentHighest + 0.01}
+                        value={enteredAmount}
+                        onChange={(event) => setBidAmounts((previous) => ({
+                          ...previous,
+                          [listing.id]: event.target.value,
+                        }))}
+                        placeholder={`Greater than ${String(listing.current_highest_bid)}`}
+                        className="gx-input"
+                        data-testid={`bid-amount-${listing.id}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handlePlaceBid(listing)}
+                        disabled={!amountIsValid || placingBidId === listing.id}
+                        className="gx-btn gx-btn-primary text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                        data-testid={`place-bid-${listing.id}`}
+                      >
+                        {placingBidId === listing.id ? "Submitting..." : "Submit bid"}
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => toast.success(`Bid of ${fmt(b.topBid + 5000)} GTX placed!`)}
-                    className="gx-btn gx-btn-primary text-xs"
-                  >
-                    Raise Bid (+5k)
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Lane 5: Shortlist */}
+      {/* Lane 5: Persisted club shortlist */}
       {lane === "shortlist" && (
         <div className="space-y-4" data-testid="lane-shortlist-view">
-          <div className="flex items-center justify-between">
-            <p className="gx-eyebrow text-emerald-400">Target Scouting Shortlist</p>
-            <span className="text-xs text-slate-400">Monitored for price dips & availability</span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="gx-eyebrow text-emerald-400">Club Scouting Shortlist</p>
+              <p className="text-xs text-slate-400 mt-1">Players saved by scouting actions for the active club.</p>
+            </div>
+            <span className="text-xs text-slate-400">
+              {(shortlistData || []).length} saved target{(shortlistData || []).length === 1 ? "" : "s"}
+            </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[
-              { id: "sl-1", name: "David Okoye", pos: "GK", rating: 76, val: 45000, reason: "First-choice target if current GK sold" },
-              { id: "sl-2", name: "Ibrahim Conteh", pos: "MID", rating: 74, val: 32000, reason: "Breakthrough dribbling metrics" },
-              { id: "sl-3", name: "Lars Lindstrom", pos: "DEF", rating: 75, val: 40000, reason: "Aerial coverage target" },
-            ].map((p) => (
-              <div key={p.id} className="rounded-xl border border-white/10 bg-slate-900/60 p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="gx-mono text-xs font-bold text-emerald-400">{p.pos} · OVR {p.rating}</span>
-                  <span className="gx-mono text-xs font-bold text-amber-300">{fmt(p.val)} GTX</span>
-                </div>
-                <h4 className="gx-display text-lg font-bold uppercase text-white">{p.name}</h4>
-                <p className="text-xs text-slate-400 italic">"{p.reason}"</p>
-                <div className="pt-2 border-t border-white/10 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedPlayerId(p.id)}
-                    className="gx-btn gx-btn-secondary text-xs flex-1"
-                  >
-                    Dossier
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOfferListing({ id: p.id, asking_price: p.val });
-                      setOfferAmount(String(p.val));
-                    }}
-                    className="gx-btn gx-btn-primary text-xs flex-1"
-                  >
-                    Offer
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+          {loadingShortlist ? (
+            <Loading label="Loading the club's persisted scouting shortlist..." />
+          ) : !activeClub?.club_id ? (
+            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+              <Sparkles className="mx-auto size-10 text-emerald-400/50 mb-3" />
+              <p className="gx-display text-xl font-bold uppercase text-white">Choose an active club</p>
+              <p className="text-sm text-slate-400 mt-1">Shortlist entries are private to the authenticated club context.</p>
+            </div>
+          ) : shortlistError ? (
+            <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 p-6 text-center">
+              <p className="gx-display text-lg font-bold uppercase text-white">Could not load shortlist</p>
+              <p className="text-sm text-slate-300 mt-1">{errMsg(shortlistError)}</p>
+              <button type="button" onClick={() => refetchShortlist()} className="gx-btn gx-btn-secondary mt-3 text-xs">Retry</button>
+            </div>
+          ) : (shortlistData || []).length === 0 ? (
+            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+              <Sparkles className="mx-auto size-10 text-emerald-400/50 mb-3" />
+              <p className="gx-display text-xl font-bold uppercase text-white">No saved scouting targets</p>
+              <p className="text-sm text-slate-400 mt-1">
+                Open a real player's dossier and use Add to Watchlist. Saved targets will appear here after the backend confirms the write.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {(shortlistData || []).map((entry: any) => {
+                const player = entry.player || {};
+                const listing = entry.active_listing;
+                const hasListing = Boolean(listing?.id);
+                return (
+                  <div key={entry.id} className="rounded-xl border border-white/10 bg-slate-900/60 p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="gx-mono text-xs font-bold text-emerald-400">
+                        {player.normalized_position || "Position not recorded"}
+                      </span>
+                      {listing ? (
+                        <span className="gx-mono text-xs font-bold text-amber-300">
+                          {fmt(listing.base_price)} GTX
+                        </span>
+                      ) : (
+                        <span className="gx-mono text-xs text-slate-400">Not listed</span>
+                      )}
+                    </div>
+                    <h4 className="gx-display text-lg font-bold uppercase text-white">
+                      {player.full_name || entry.player_id}
+                    </h4>
+                    <p className="text-xs text-slate-400">
+                      {player.current_club_name ? `Current club: ${player.current_club_name}` : "No current club is recorded."}
+                    </p>
+                    {player.market_value != null && (
+                      <p className="text-xs text-slate-400">
+                        Imported market value: €{new Intl.NumberFormat("en-IE", { maximumFractionDigits: 0 }).format(Number(player.market_value))}
+                      </p>
+                    )}
+                    <p className="text-xs text-slate-500">Saved via {entry.source || "scouting"}.</p>
+                    <div className="pt-2 border-t border-white/10 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPlayerId(entry.player_id)}
+                        className="gx-btn gx-btn-secondary text-xs flex-1"
+                      >
+                        Dossier
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!hasListing || !activeClub?.club_id}
+                        onClick={() => {
+                          if (!listing) return;
+                          setOfferListing(listing);
+                          setOfferAmount(String(listing.base_price));
+                        }}
+                        className="gx-btn gx-btn-primary text-xs flex-1 disabled:cursor-not-allowed disabled:opacity-50"
+                        title={hasListing ? "Prepare a formal offer for this market listing" : "This player has no active transfer listing"}
+                      >
+                        Offer
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
