@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, CircleHelp, Save, ShieldCheck, Users } from "lucide-react";
@@ -27,6 +27,7 @@ export default function Lineup() {
   const [bench, setBench] = useState<string[]>([]);
   const [benchCandidate, setBenchCandidate] = useState("");
   const [saving, setSaving] = useState(false);
+  const initializedClubRef = useRef<string | null>(null);
   const rosterQuery = useQuery({
     queryKey: ["lineup-squad", clubId],
     queryFn: async () =>
@@ -48,11 +49,12 @@ export default function Lineup() {
   );
 
   useEffect(() => {
-    if (!planQuery.data) return;
+    if (!planQuery.data || initializedClubRef.current === clubId) return;
+    initializedClubRef.current = clubId || null;
     setFormation(planQuery.data.formation);
     setStarters([...planQuery.data.starter_player_ids.slice(0, 11), ...Array(11).fill("")].slice(0, 11));
     setBench(planQuery.data.bench_player_ids);
-  }, [planQuery.data]);
+  }, [clubId, planQuery.data]);
 
   const setStarter = (index: number, playerId: string) => {
     setStarters((current) => current.map((currentId, slot) => slot === index ? playerId : currentId));
