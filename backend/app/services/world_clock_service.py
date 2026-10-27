@@ -41,19 +41,28 @@ class WorldClockService:
     def get_or_create_state(self) -> WorldClockState:
         state = self.session.get(WorldClockState, DEFAULT_CLOCK_ID)
         if state is None:
+            now_real = utcnow()
             settings = self._get_settings()
             rate = float(getattr(settings, "world_clock_progression_rate", 1.0) or 1.0)
-            start_date_str = str(getattr(settings, "world_clock_virtual_start_date", "2026-01-01") or "2026-01-01")
+            start_date_str = str(getattr(settings, "world_clock_virtual_start_date", "") or "").strip()
             months_per_season = int(getattr(settings, "world_clock_virtual_months_per_season", 12) or 12)
-            try:
-                parsed_start = date.fromisoformat(start_date_str)
-                virtual_start = datetime(
-                    parsed_start.year, parsed_start.month, parsed_start.day, 0, 0, 0, tzinfo=timezone.utc
-                )
-            except Exception:
-                virtual_start = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+            if start_date_str:
+                try:
+                    parsed_start = date.fromisoformat(start_date_str)
+                    virtual_start = datetime(
+                        parsed_start.year, parsed_start.month, parsed_start.day, 0, 0, 0, tzinfo=timezone.utc
+                    )
+                except ValueError:
+                    logger.warning(
+                        "world_clock.invalid_virtual_start_date value=%r; anchoring new clock to current UTC",
+                        start_date_str,
+                    )
+                    virtual_start = now_real
+            else:
+                # Default to a coherent calendar: newly scheduled wall-date fixtures
+                # are comparable to virtual time from the very first worker tick.
+                virtual_start = now_real
 
-            now_real = utcnow()
             state = WorldClockState(
                 id=DEFAULT_CLOCK_ID,
                 epoch_real_utc=now_real,
