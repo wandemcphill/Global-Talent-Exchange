@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.models.club_profile import ClubProfile
@@ -261,7 +261,11 @@ def _bootstrap_starter_club(session: Session, user_id: str, state: OwnerClubStat
     if league is not None and already_in is None and state.stage != "squad":
         comps.enter_competition(session, user_id, league.id, state.club_id)
     if state.last_tick_at is None and state.stage in ("competition", "active"):
-        tick_club(session, state)
+        tick_club(
+            session,
+            state,
+            world_tick_date=WorldClockService(session).now_virtual_date(),
+        )
     if state.stage == "competition":
         state.stage = "active"
 
@@ -761,6 +765,26 @@ def academy_intake(session: Session, user_id: str, club_id: str) -> list[OwnerSq
     state = require_state(session, club_id, user_id)
     level = int((state.facilities_json or {}).get("academy", 1))
     cost = 1_500 * level
+
+    # Intake is an owner decision within the shared world; it must not advance
+    # this club's private simulation day. Claim a distinct persisted sequence so
+    # two same-day intakes produce different deterministic cohorts and separate
+    # ledger references.
+    next_sequence = int(state.academy_intake_sequence or 0) + 1
+    claimed_sequence = session.execute(
+        update(OwnerClubState)
+        .where(
+            OwnerClubState.id == state.id,
+            OwnerClubState.academy_intake_sequence == int(state.academy_intake_sequence or 0),
+        )
+        .values(academy_intake_sequence=next_sequence)
+        .returning(OwnerClubState.academy_intake_sequence)
+        .execution_options(synchronize_session=False)
+    ).scalar_one_or_none()
+    if claimed_sequence is None:
+        raise OwnerError("academy_intake_conflict", 409)
+    state.academy_intake_sequence = int(claimed_sequence)
+
     try:
         ledger.record(
             session,
@@ -772,16 +796,17 @@ def academy_intake(session: Session, user_id: str, club_id: str) -> list[OwnerSq
             club_id=club_id,
             user_id=user_id,
             related_type="academy",
-            related_id=str(state.world_day),
+            related_id=f"intake:{state.academy_intake_sequence}",
             memo="Academy scouting intake",
         )
     except ledger.LedgerError as exc:
         raise OwnerError(str(exc), 402) from exc
+
     youth = int((state.manager_json or {}).get("youth_development", 10))
-    state.world_day += 1
+    generation_key = f"world-day:{state.world_day}:intake:{state.academy_intake_sequence}"
     return [
         _add_regen(session, club_id, r)
-        for r in engine.generate_regens(club_id, state.world_day, level, youth, 1 + level // 2)
+        for r in engine.generate_regens(club_id, generation_key, level, youth, 1 + level // 2)
     ]
 
 
