@@ -137,14 +137,11 @@ function SquadRegistrationPanel({ club }: any) {
   });
   const registration = registrationQuery.data || null;
   const status = String(registration?.status || "not synced").toLowerCase();
-  const rosterIds = Array.from(
-    new Set((club.squad || []).map((player: any) => String(player.id || "")).filter(Boolean)),
-  );
   const endpoint = "/clubs/" + encodeURIComponent(club.club_id) + "/squad-registration";
   const sync = async () => {
     setBusy("sync");
     try {
-      await api.post(endpoint, { season_label: "launch", player_ids: rosterIds });
+      await api.post(endpoint, { season_label: "launch", player_ids: [] });
       await registrationQuery.refetch();
       toast.success("Club squad synced for registration.");
     } catch (error) {
@@ -202,6 +199,13 @@ function SquadRegistrationPanel({ club }: any) {
           </span>
           <span className="text-xs text-slate-500">Season: {registration?.season_label || "launch"}</span>
         </div>
+        {registration && Object.keys(registration.position_summary || {}).length > 0 && (
+          <div className="flex flex-wrap gap-2" data-testid="squad-registration-position-summary">
+            {Object.entries(registration.position_summary || {}).map(([position, count]: [string, any]) => (
+              <Chip key={position}>{position}: {count}</Chip>
+            ))}
+          </div>
+        )}
         <p className="max-w-3xl text-sm leading-6 text-slate-400">
           Sync the current club roster, submit it for eligibility checks, then lock it when ready. Registration is persisted separately from the tactical starting XI.
         </p>
