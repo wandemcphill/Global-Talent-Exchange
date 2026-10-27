@@ -134,6 +134,8 @@ def comp_dict(session: Session, comp: OwnerCompetition, user_id: str | None = No
         mapping = _active_owner_competition_mapping(session, comp.id)
         data["execution_model"] = "canonical"
         data["canonical_lifecycle_status"] = "active" if mapping is not None else "unmapped"
+        data["history_read_only"] = mapping is None
+        data["standings_source"] = "canonical" if mapping is not None else "legacy_historical"
         if mapping is not None:
             from decimal import Decimal
 
@@ -346,7 +348,15 @@ def mapped_match_dict(session: Session, legacy_match: OwnerMatch, *, full: bool 
 
     canonical_match = OwnerCompetitionLifecycleMappingService(session).canonical_match_for_legacy_match(legacy_match.id)
     if canonical_match is None:
-        return match_dict(legacy_match, full=full)
+        data = match_dict(legacy_match, full=full)
+        legacy_competition = session.get(OwnerCompetition, legacy_match.competition_id)
+        if legacy_competition is not None and legacy_competition.host_type == "gtex":
+            data.update(
+                execution_model="legacy_historical",
+                canonical_lifecycle_status="unmapped",
+                history_read_only=True,
+            )
+        return data
     return _canonical_match_dict(session, canonical_match, legacy_match=legacy_match, full=full)
 
 
