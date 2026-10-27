@@ -112,11 +112,7 @@ class CompetitionAutoRunner:
 
             matches = self._matches(competition.id)
             scheduled = [match for match in matches if match.status == MatchStatus.SCHEDULED.value]
-            due = [
-                match
-                for match in scheduled
-                if self.is_match_due(competition, match, eval_time)
-            ]
+            due = [match for match in scheduled if self.is_match_due(competition, match, eval_time)]
             if due and simulate_scheduled_matches:
                 for match in due:
                     self._simulate_match(competition, match)
@@ -261,7 +257,9 @@ class CompetitionAutoRunner:
             )
             or self.world_clock.now_virtual_date()
         )
-        scheduled_kickoff_at = match.scheduled_at or self.effective_kickoff_at(competition, match) or window.kickoff_at(match_date)
+        scheduled_kickoff_at = (
+            match.scheduled_at or self.effective_kickoff_at(competition, match) or window.kickoff_at(match_date)
+        )
         return MatchSimulationJob(
             fixture_id=match.id,
             competition_id=competition.id,
