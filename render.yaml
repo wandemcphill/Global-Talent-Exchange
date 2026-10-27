@@ -207,6 +207,12 @@ services:
         value: sportmonks
       - key: GTE_OUTBOX_RELAY_ENABLED
         value: "false"
+      - key: GTE_AUTONOMOUS_FIXTURE_EXECUTION_ENABLED
+        value: "true"
+      - key: GTE_AUTONOMOUS_FIXTURE_INTERVAL_SECONDS
+        value: "30"
+      - key: GTE_WORLD_CLOCK_PROGRESSION_RATE
+        value: "1.0"
 
   - name: gtex-outbox-relay
     type: worker
