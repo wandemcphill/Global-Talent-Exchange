@@ -87,7 +87,7 @@ function SquadCards({ club }: any) {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" data-testid="squad-cards-grid">
         {club.squad.map((p: any) => (
           <div key={p.id} className="cursor-pointer" onClick={() => setSelected(p)}>
-            <PlayerCard player={p} variant="tactics" />
+            <PlayerCard player={p} variant="compact" />
           </div>
         ))}
       </div>
