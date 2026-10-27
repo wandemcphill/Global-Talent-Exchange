@@ -115,7 +115,8 @@ const mockStory = {
       id: "time-1",
       category: "private_jet_purchase",
       title: "Atlantic Wings One Commissioned",
-      summary: "Executive long-range aviation acquired for continental transit.",
+      summary:
+        "Executive long-range aviation acquired for continental transit.",
       verified_price_gtex: 4800,
       created_at: new Date(Date.now() - 86400000 * 3).toISOString(),
     },
@@ -132,7 +133,8 @@ const mockStory = {
       id: "issue-1",
       category: "staff_contracts",
       title: "Head Scout Contract Extension",
-      body: "Chief Analyst requests a 2-year retention agreement before national tournament.",
+      body:
+        "Chief Analyst requests a 2-year retention agreement before national tournament.",
       deadline_at: new Date(Date.now() + 3600000 * 6).toISOString(),
     },
   ],
@@ -156,7 +158,8 @@ const mockStory = {
       potential_rating: 89,
       estimated_value_gtex: 850,
       priority: "high",
-      scout_notes: "Dominant aerial target with clinical finishing under physical pressure.",
+      scout_notes:
+        "Dominant aerial target with clinical finishing under physical pressure.",
       recommendation: "Priority Target",
     },
   ],
@@ -186,7 +189,8 @@ const mockStory = {
       category: "private_jet_purchase",
       headline: "Lagos Atlantic SC Commissions Executive Fleet Aviation",
       subheadline: "Boardroom completes acquisition of Dassault Falcon 7X.",
-      editorial_narration: "A significant benchmark in the modern era of the club.",
+      editorial_narration:
+        "A significant benchmark in the modern era of the club.",
       created_at: new Date().toISOString(),
     },
   ],
@@ -219,7 +223,8 @@ const mockNewsroom = {
       headline: "Lagos Atlantic SC Commissions Executive Fleet Aviation",
       subheadline: "Long-range transit commissioned for squad logistics",
       hero_image_url: "https://example.com/assets/falcon7x.jpg",
-      editorial_narration: "Grounding report verifies ledger transaction of 4,800 GTX.",
+      editorial_narration:
+        "Grounding report verifies ledger transaction of 4,800 GTX.",
       created_at: new Date().toISOString(),
       world_day: 14,
     },
@@ -374,12 +379,18 @@ test.describe("Prestige, Story, and Showroom Parity (Agent B5)", () => {
       await page.goto("/app/showroom");
 
       // Verify Showroom Screen loads with GTEX Styling & Header
-      await expect(page.locator('[data-testid="showroom-screen"]')).toBeVisible();
-      await expect(page.getByText("Owner Showroom & Luxury Fleet")).toBeVisible();
+      await expect(
+        page.locator('[data-testid="showroom-screen"]'),
+      ).toBeVisible();
+      await expect(
+        page.getByText("Owner Showroom & Luxury Fleet"),
+      ).toBeVisible();
       await expect(page.getByText("Club Treasury")).toBeVisible();
 
       // Verify Demarcation Banner: Owner Luxury Gifting vs Community Gifting
-      await expect(page.getByText("Owner Luxury Gifting (Club GTEX Coin)")).toBeVisible();
+      await expect(
+        page.getByText("Owner Luxury Gifting (Club GTEX Coin)"),
+      ).toBeVisible();
       await expect(page.getByText("Community Gifting (FanCoin)")).toBeVisible();
 
       // Verify Catalogue Items Render Verified GTX Prices and Wire Badges
@@ -401,17 +412,29 @@ test.describe("Prestige, Story, and Showroom Parity (Agent B5)", () => {
       await watchItem
         .locator('[data-testid="acquire-btn-chronos_tourbillon_watch"]')
         .click();
-      const purchaseModal = page.locator('[data-testid="showroom-purchase-confirm"]');
+      const purchaseModal = page.locator(
+        '[data-testid="showroom-purchase-confirm"]',
+      );
       await expect(purchaseModal).toBeVisible();
-      await expect(purchaseModal.getByText("Treasury Authorization")).toBeVisible();
+      await expect(
+        purchaseModal.getByText("Treasury Authorization"),
+      ).toBeVisible();
       await expect(purchaseModal.getByText("250 GTX")).toBeVisible();
 
       // Confirm purchase -> verify confirmed receipt modal
-      await purchaseModal.locator('[data-testid="confirm-purchase-button"]').click();
-      const receiptModal = page.locator('[data-testid="showroom-purchase-receipt"]');
+      await purchaseModal
+        .locator('[data-testid="confirm-purchase-button"]')
+        .click();
+      const receiptModal = page.locator(
+        '[data-testid="showroom-purchase-receipt"]',
+      );
       await expect(receiptModal).toBeVisible();
-      await expect(receiptModal.getByText("Acquisition Confirmed")).toBeVisible();
-      await receiptModal.locator('[data-testid="close-purchase-receipt"]').click();
+      await expect(
+        receiptModal.getByText("Acquisition Confirmed"),
+      ).toBeVisible();
+      await receiptModal
+        .locator('[data-testid="close-purchase-receipt"]')
+        .click();
       await expect(receiptModal).toBeHidden();
     },
   );
@@ -422,11 +445,15 @@ test.describe("Prestige, Story, and Showroom Parity (Agent B5)", () => {
       await setupOwnerParityRoutes(page);
       await page.goto("/app/showroom");
 
-      const watchItem = page.locator('[data-testid="showroom-item-chronos_tourbillon_watch"]');
+      const watchItem = page.locator(
+        '[data-testid="showroom-item-chronos_tourbillon_watch"]',
+      );
       await expect(watchItem).toBeVisible();
 
       // Click Gift Regen button -> open gift confirm modal
-      await watchItem.locator('[data-testid="gift-btn-chronos_tourbillon_watch"]').click();
+      await watchItem
+        .locator('[data-testid="gift-btn-chronos_tourbillon_watch"]')
+        .click();
       const giftModal = page.locator('[data-testid="showroom-gift-confirm"]');
       await expect(giftModal).toBeVisible();
       await expect(giftModal.getByText("Owner Luxury Gifting")).toBeVisible();
@@ -444,8 +471,12 @@ test.describe("Prestige, Story, and Showroom Parity (Agent B5)", () => {
       await giftModal.locator('[data-testid="confirm-gift-button"]').click();
       const giftReceipt = page.locator('[data-testid="showroom-gift-receipt"]');
       await expect(giftReceipt).toBeVisible();
-      await expect(giftReceipt.getByText("Luxury Gift Delivered")).toBeVisible();
-      await expect(giftReceipt.getByText("Morale +15 · Confirmed")).toBeVisible();
+      await expect(
+        giftReceipt.getByText("Luxury Gift Delivered"),
+      ).toBeVisible();
+      await expect(
+        giftReceipt.getByText("Morale +15 · Confirmed"),
+      ).toBeVisible();
       await expect(
         giftReceipt.getByText("Exemplary performance in the continental cup."),
       ).toBeVisible();
@@ -462,39 +493,61 @@ test.describe("Prestige, Story, and Showroom Parity (Agent B5)", () => {
       await page.goto("/app/story");
 
       // Verify screen title and club identity
-      await expect(page.locator('[data-testid="club-story-screen"]')).toBeVisible();
+      await expect(
+        page.locator('[data-testid="club-story-screen"]'),
+      ).toBeVisible();
       await expect(page.locator('[data-testid="club-story-title"]')).toHaveText("Lagos Atlantic SC");
       await expect(page.getByText("World Day 14")).toBeVisible();
 
       // Verify Surface Directory navigation buttons exist
-      await expect(page.locator('[data-testid="link-to-showroom"]')).toBeVisible();
-      await expect(page.locator('[data-testid="link-to-newsroom"]')).toBeVisible();
+      await expect(
+        page.locator('[data-testid="link-to-showroom"]'),
+      ).toBeVisible();
+      await expect(
+        page.locator('[data-testid="link-to-newsroom"]'),
+      ).toBeVisible();
       await expect(page.locator('[data-testid="link-to-inbox"]')).toBeVisible();
 
       // Verify Timeline Tab
-      await expect(page.locator('[data-testid="timeline-tab-content"]')).toBeVisible();
-      await expect(page.getByText("Atlantic Wings One Commissioned")).toBeVisible();
-      await expect(page.getByText("Dominant Derby Victory (3 - 1)")).toBeVisible();
+      await expect(
+        page.locator('[data-testid="timeline-tab-content"]'),
+      ).toBeVisible();
+      await expect(
+        page.getByText("Atlantic Wings One Commissioned"),
+      ).toBeVisible();
+      await expect(
+        page.getByText("Dominant Derby Victory (3 - 1)"),
+      ).toBeVisible();
 
       // Switch to Club Dispatches tab
       await page.locator('[data-testid="tab-dispatches"]').click();
-      await expect(page.locator('[data-testid="dispatches-tab-content"]')).toBeVisible();
+      await expect(
+        page.locator('[data-testid="dispatches-tab-content"]'),
+      ).toBeVisible();
       await expect(
         page.getByText("Lagos Atlantic SC Commissions Executive Fleet Aviation"),
       ).toBeVisible();
 
       // Switch to Staff & Squad tab
       await page.locator('[data-testid="tab-relationships"]').click();
-      await expect(page.locator('[data-testid="relationships-tab-content"]')).toBeVisible();
+      await expect(
+        page.locator('[data-testid="relationships-tab-content"]'),
+      ).toBeVisible();
       await expect(page.getByText("Tunde Bakare")).toBeVisible();
       await expect(page.getByText("Chidi Nnamdi")).toBeVisible();
       await expect(page.getByText("Academy Regen")).toBeVisible();
 
       // Switch to Save Fixtures tab
       await page.locator('[data-testid="tab-schedule"]').click();
-      await expect(page.locator('[data-testid="schedule-tab-content"]')).toBeVisible();
-      await expect(page.getByText("Lagos Atlantic SC vs Kano Pillars")).toBeVisible();
-      await expect(page.getByText("Lagos Atlantic SC 3 - 1 Enyimba FC")).toBeVisible();
+      await expect(
+        page.locator('[data-testid="schedule-tab-content"]'),
+      ).toBeVisible();
+      await expect(
+        page.getByText("Lagos Atlantic SC vs Kano Pillars"),
+      ).toBeVisible();
+      await expect(
+        page.getByText("Lagos Atlantic SC 3 - 1 Enyimba FC"),
+      ).toBeVisible();
     },
   );
 
@@ -504,16 +557,26 @@ test.describe("Prestige, Story, and Showroom Parity (Agent B5)", () => {
       await setupOwnerParityRoutes(page);
       await page.goto("/app/newsroom");
 
-      await expect(page.locator('[data-testid="newsroom-screen"]')).toBeVisible();
+      await expect(
+        page.locator('[data-testid="newsroom-screen"]'),
+      ).toBeVisible();
       await expect(page.getByText("The Boardroom Chronicle")).toBeVisible();
-      await expect(page.getByText("Grounding & Privacy Certified")).toBeVisible();
+      await expect(
+        page.getByText("Grounding & Privacy Certified"),
+      ).toBeVisible();
 
       // Verify categories
-      await expect(page.locator('[data-testid="cat-private_jet_purchase"]')).toBeVisible();
-      await expect(page.locator('[data-testid="cat-player_gift"]')).toBeVisible();
+      await expect(
+        page.locator('[data-testid="cat-private_jet_purchase"]'),
+      ).toBeVisible();
+      await expect(
+        page.locator('[data-testid="cat-player_gift"]'),
+      ).toBeVisible();
 
       // Lead story
-      await expect(page.locator('[data-testid="lead-story-card"]')).toBeVisible();
+      await expect(
+        page.locator('[data-testid="lead-story-card"]'),
+      ).toBeVisible();
       await expect(
         page.getByText("Lagos Atlantic SC Commissions Executive Fleet Aviation").first(),
       ).toBeVisible();
@@ -550,7 +613,7 @@ test.describe("Prestige, Story, and Showroom Parity (Agent B5)", () => {
 
           expect(
             hasOverflow,
-            `Horizontal overflow detected on ${route} at ${vp.name} (${vp.width}x${vp.height})`
+            `Horizontal overflow detected on ${route} at ${vp.name} (${vp.width}x${vp.height})`,
           ).toBe(false);
         }
       }
