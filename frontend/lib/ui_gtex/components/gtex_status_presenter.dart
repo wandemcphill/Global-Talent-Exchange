@@ -77,6 +77,9 @@ class GtexStatusPresenter {
     'open',
     'recommended',
     'scheduled',
+    'awaiting_contract_offer',
+    'player_delayed',
+    'counter_offer',
   };
 
   static const Set<String> _processingInfoValues = <String>{
@@ -104,6 +107,8 @@ class GtexStatusPresenter {
     'canceled',
     'expired',
     'blocked',
+    'coach_blocked',
+    'collapsed',
   };
 
   static const Set<String> _reversedDangerOutlineValues = <String>{
@@ -281,6 +286,12 @@ class GtexStatusPresenter {
         return context == GtexStatusContext.decisionRequired
             ? 'Awaiting you'
             : 'Pending';
+      case 'awaiting_contract_offer':
+        return 'Awaiting Contract Offer';
+      case 'player_delayed':
+        return 'Player Delayed';
+      case 'counter_offer':
+        return 'Counter Offer';
       default:
         if (context == GtexStatusContext.review) {
           return 'In review';
@@ -312,6 +323,10 @@ class GtexStatusPresenter {
     switch (normalized) {
       case 'rejected':
         return 'Rejected';
+      case 'coach_blocked':
+        return 'Coach Blocked';
+      case 'collapsed':
+        return 'Collapsed';
       case 'expired':
         return 'Expired';
       case 'blocked':
