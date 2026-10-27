@@ -215,13 +215,13 @@ export function TransferHub() {
             <div className="rounded-lg border border-white/10 bg-black/40 px-3.5 py-2">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Transfer Budget</p>
               <p className="gx-mono text-lg font-black text-emerald-300">
-                {fmt(activeClub?.transfer_budget ?? 450000)} <span className="text-[10px] text-emerald-400/80">GTX</span>
+                {activeClub?.transfer_budget != null ? fmt(activeClub.transfer_budget) : "—"} <span className="text-[10px] text-emerald-400/80">GTX</span>
               </p>
             </div>
             <div className="rounded-lg border border-white/10 bg-black/40 px-3.5 py-2">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Wage Room</p>
               <p className="gx-mono text-lg font-black text-amber-300">
-                {fmt(activeClub?.wage_budget ?? 35000)} <span className="text-[10px] text-amber-400/80">GTX/w</span>
+                {activeClub?.wage_budget != null ? fmt(activeClub.wage_budget) : "—"} <span className="text-[10px] text-amber-400/80">GTX/w</span>
               </p>
             </div>
           </div>
@@ -233,9 +233,9 @@ export function TransferHub() {
         {[
           { id: "listings", label: "Market Listings", count: listingsData?.length, icon: ArrowLeftRight },
           { id: "offers", label: "Active Offers", count: offersData?.length, icon: Handshake },
-          { id: "negotiations", label: "Negotiations", count: 2, icon: MessageSquare },
-          { id: "bids", label: "Window Bids", count: 3, icon: Clock },
-          { id: "shortlist", label: "Shortlist", count: 5, icon: Sparkles },
+          { id: "negotiations", label: "Negotiations", count: negotiationsData?.length, icon: MessageSquare },
+          { id: "bids", label: "Window Bids", count: bidListings.length, icon: Clock },
+          { id: "shortlist", label: "Shortlist", count: shortlistData?.length, icon: Sparkles },
         ].map((item) => {
           const Icon = item.icon;
           const active = lane === item.id;
