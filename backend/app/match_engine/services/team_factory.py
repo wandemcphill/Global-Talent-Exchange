@@ -96,6 +96,7 @@ class SyntheticSquadFactory:
             base_overall=job.home_strength_rating or 75,
             match_date=job.match_date,
             lifecycle_service=lifecycle_service,
+            lineup_mode=job.home_lineup_mode,
         )
         away_team = self.build_team(
             team_id=job.away_club_id or "away",
@@ -103,6 +104,7 @@ class SyntheticSquadFactory:
             base_overall=job.away_strength_rating or 75,
             match_date=job.match_date,
             lifecycle_service=lifecycle_service,
+            lineup_mode=job.away_lineup_mode,
         )
         from app.regen_universe.expansion_service import RegenUniverseExpansionService
 
@@ -117,6 +119,7 @@ class SyntheticSquadFactory:
         match_date: date | None = None,
         lifecycle_service: PlayerLifecycleService | None = None,
         manager_profile_override: dict[str, object] | None = None,
+        lineup_mode: str = "strongest",
     ) -> MatchTeamInput:
         session = lifecycle_service.session if lifecycle_service is not None else None
         manager_profile = manager_profile_override
@@ -134,6 +137,7 @@ class SyntheticSquadFactory:
                 base_overall=base_overall,
                 match_date=match_date,
                 manager_profile_override=manager_profile,
+                lineup_mode=lineup_mode,
             )
             if managed_team is not None:
                 return managed_team
@@ -197,6 +201,7 @@ class SyntheticSquadFactory:
         base_overall: int,
         match_date: date,
         manager_profile_override: dict[str, object] | None = None,
+        lineup_mode: str = "strongest",
     ) -> MatchTeamInput | None:
         squad_status = lifecycle_service.list_club_squad_status(team_id, on_date=match_date)
         if not squad_status:
@@ -220,7 +225,9 @@ class SyntheticSquadFactory:
                 lifecycle_service.session if lifecycle_service is not None else None,
                 team_id,
             )
-        starters, bench, formation = self._resolve_lineup(lifecycle_service.session, team_id, eligible, manager_profile)
+        starters, bench, formation = self._resolve_lineup(
+            lifecycle_service.session, team_id, eligible, manager_profile, lineup_mode=lineup_mode
+        )
         dynamics_snapshot = TeamDynamicsService(lifecycle_service.session).build_snapshot(
             club_id=team_id,
             squad=starters + bench,
@@ -310,6 +317,8 @@ class SyntheticSquadFactory:
         team_id: str,
         eligible: list[Player],
         manager_profile: dict[str, object] | None,
+        *,
+        lineup_mode: str = "strongest",
     ) -> tuple[list[tuple[Player, PlayerRole]], list[tuple[Player, PlayerRole]], str]:
         """Resolve starters/bench/formation with layered, always-safe fallback:
         owner-saved exact XI -> owner-saved formation -> coach formation -> 4-3-3
@@ -319,6 +328,8 @@ class SyntheticSquadFactory:
 
         exact = self._starters_from_plan(plan, eligible_by_id)
         if exact is not None:
+            if lineup_mode == "rotate":
+                return self._rotate_saved_lineup(exact)
             return exact
 
         candidates: list[str] = []
@@ -336,6 +347,47 @@ class SyntheticSquadFactory:
             except PlayerLifecycleValidationError:
                 continue
         return self._ai_coach_auto_draft(eligible, candidates[0])
+
+    def _rotate_saved_lineup(
+        self,
+        lineup: tuple[list[tuple[Player, PlayerRole]], list[tuple[Player, PlayerRole]], str],
+    ) -> tuple[list[tuple[Player, PlayerRole]], list[tuple[Player, PlayerRole]], str]:
+        """Rotate up to three outfield starters against a valid saved owner XI."""
+        starters, bench, formation = lineup
+        starters = list(starters)
+        bench = list(bench)
+        if len(bench) == 0:
+            return starters, bench, formation
+
+        outfield_indices = list(range(1, len(starters)))
+        weakest_first = sorted(
+            outfield_indices,
+            key=lambda index: (self._managed_player_sort_key(starters[index][0]), index),
+        )
+        rotations = 0
+        for starter_index in weakest_first:
+            required_role = starters[starter_index][1]
+            candidates = [
+                (
+                    self._role_fit_score(player, required_role),
+                    self._managed_player_sort_key(player),
+                    bench_index,
+                )
+                for bench_index, (player, _) in enumerate(bench)
+                if self._resolve_player_role(player) is not PlayerRole.GOALKEEPER
+                and self._role_fit_score(player, required_role) > 0
+            ]
+            if not candidates:
+                continue
+            _, _, bench_index = max(candidates)
+            replacement, _ = bench[bench_index]
+            outgoing, _ = starters[starter_index]
+            starters[starter_index] = (replacement, required_role)
+            bench[bench_index] = (outgoing, self._resolve_player_role(outgoing))
+            rotations += 1
+            if rotations >= 3:
+                break
+        return starters, bench, formation
 
     def _ai_coach_auto_draft(
         self,
