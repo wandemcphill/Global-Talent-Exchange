@@ -268,10 +268,9 @@ def unsign(
 
 
 @router.post("/clubs/{club_id}/autopick")
-def autopick(
-    club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)
-) -> dict[str, Any]:
+def autopick(club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
     return _run(session, service.autopick_squad, session, user.id, club_id)
+
 
 @router.get("/market/quote")
 def quote(player_ids: str, session: Session = Depends(get_session), user=Depends(get_current_user)) -> dict[str, Any]:
