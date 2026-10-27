@@ -80,13 +80,19 @@ export async function signIn(page) {
   await enableAccessibility(page);
 
   const emailInput = page
-    .locator('input[aria-label="Email"], input[type="email"], input[autocomplete="username"]')
+    .locator(
+      'input[aria-label="Email"], input[type="email"], input[autocomplete="username"]',
+    )
     .first();
   const passwordInput = page
-    .locator('input[aria-label="Password"], input[type="password"], input[autocomplete="current-password"]')
+    .locator(
+      'input[aria-label="Password"], input[type="password"], input[autocomplete="current-password"]',
+    )
     .first();
   const semanticEmail = page.getByRole("textbox", { name: /^Email$/i }).first();
-  const semanticPassword = page.getByRole("textbox", { name: /^Password$/i }).first();
+  const semanticPassword = page
+    .getByRole("textbox", { name: /^Password$/i })
+    .first();
   const enterBtn = page.getByRole("button", { name: /^ENTER GTEX$/i });
 
   const isVisible = async (locator) => locator.isVisible().catch(() => false);
