@@ -12,6 +12,7 @@ from app.admin_engine.service import AdminEngineService
 from app.club_legacy.operations import seed_catalogue
 from app.models.admin_rules import AdminFeatureFlag
 from app.models.user import User
+from app.models.world_clock import WorldClockState
 from app.owner_console import alerts, competitions as comps, ledger, service, storytelling
 from app.owner_console.models import (
     LedgerEvent,
@@ -22,6 +23,7 @@ from app.owner_console.models import (
     OwnerSquadPlayer,
 )
 from app.owner_console.service import OwnerError
+from app.services.world_clock_service import DEFAULT_CLOCK_ID, WorldClockService
 
 
 def _enable_legacy(app) -> None:
@@ -404,7 +406,21 @@ def test_personal_inbox_categories_deadlines_and_recipient_authorization(client,
     """
     club_id = _claim_and_activate(client, bootstrap_admin_headers, city="Kano")
 
-    # Advance world day to generate inbox items (including scouting_report / contract_negotiation / requests)
+    # Move the shared virtual calendar forward by one day in this test database.
+    # The owner /advance route now performs global-clock catch-up instead of
+    # privately incrementing a club's world day.
+    with app.state.session_factory() as session:
+        clock = WorldClockService(session)
+        clock_state = clock.get_or_create_state()
+        virtual_now = datetime.now(timezone.utc)
+        clock_state.epoch_real_utc = virtual_now
+        clock_state.virtual_start_time = virtual_now + timedelta(days=1)
+        clock_state.progression_rate = 1.0
+        clock_state.is_paused = False
+        clock_state.paused_at_virtual_time = None
+        session.commit()
+
+    # Catch up the owner club to the newly advanced shared world date.
     adv = client.post(f"/api/owner/clubs/{club_id}/advance", headers=bootstrap_admin_headers)
     assert adv.status_code == 200, adv.text
 
