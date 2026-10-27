@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+import logging
 from decimal import Decimal
 from typing import Any
 
@@ -11,6 +12,7 @@ from app.models.club_profile import ClubProfile
 from app.models.user import PublicAccountType, User
 from app.owner_console import engine, ledger
 from app.owner_console.ai import inbox_body
+from app.services.world_clock_service import WorldClockService
 from app.owner_console.models import (
     IntegrityFlag,
     OwnerClubState,
@@ -923,9 +925,17 @@ def _item(
     return item, prompt
 
 
-def tick_club(session: Session, state: OwnerClubState, use_ai: bool = True) -> dict[str, Any]:
+def tick_club(
+    session: Session,
+    state: OwnerClubState,
+    use_ai: bool = True,
+    *,
+    world_tick_date: date | None = None,
+) -> dict[str, Any]:
     state.world_day += 1
     state.last_tick_at = now()
+    if world_tick_date is not None:
+        state.last_world_tick_date = world_tick_date
     rng = engine.seeded("tick", state.club_id, state.world_day)
     manager = state.manager_json or engine.manager_profile(engine.DEFAULT_MANAGER)
     facilities = state.facilities_json or {}
@@ -1531,11 +1541,146 @@ def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
     }
 
 
+def _owner_tick_supports_row_locks(session: Session) -> bool:
+    bind = session.get_bind()
+    dialect = getattr(bind, "dialect", None)
+    return bool(getattr(dialect, "name", "") not in {"sqlite"})
+
+
+def process_due_owner_world_ticks(
+    session: Session,
+    *,
+    user_id: str | None = None,
+    limit: int = 500,
+    max_days_per_club: int = 7,
+) -> dict[str, Any]:
+    """Advance active owner-club simulation from the persisted GTEX world calendar.
+
+    The owner console previously advanced one private world_day only when a user
+    visited the control centre. This scheduler is safe to run from the simulation
+    worker or as an opportunistic catch-up on owner login. PostgreSQL row locks
+    prevent the worker and a concurrent owner request from advancing one club at
+    the same time. Legacy rows receive a forward-only date anchor on first use;
+    their old wall-clock tick history is not replayed because it was not recorded
+    against the canonical virtual calendar.
+    """
+    if user_id is not None:
+        _require_normal_user_account(session, user_id)
+
+    clock = WorldClockService(session)
+    clock_state = clock.get_or_create_state()
+    target_date = clock.now_virtual().date()
+
+    stmt = (
+        select(OwnerClubState)
+        .where(OwnerClubState.stage.in_(("competition", "active")))
+        .order_by(
+            OwnerClubState.last_world_tick_date.asc().nullsfirst(),
+            OwnerClubState.created_at.asc(),
+        )
+        .limit(max(1, int(limit)))
+    )
+    if user_id is not None:
+        stmt = stmt.where(OwnerClubState.owner_user_id == user_id)
+    if _owner_tick_supports_row_locks(session):
+        stmt = stmt.with_for_update(skip_locked=True)
+
+    states = list(session.scalars(stmt).all())
+    if not states:
+        return {
+            "target_world_date": target_date.isoformat(),
+            "clubs_considered": 0,
+            "ticks_executed": 0,
+            "clubs_backlogged": 0,
+            "ticks_failed": 0,
+            "clock_paused": bool(clock_state.is_paused),
+        }
+
+    anchored = 0
+    if clock_state.is_paused:
+        # Anchor legacy rows while paused but do not advance them until the
+        # shared clock resumes.
+        for state in states:
+            if state.last_world_tick_date is None:
+                state.last_world_tick_date = target_date
+                anchored += 1
+        session.flush()
+        return {
+            "target_world_date": target_date.isoformat(),
+            "clubs_considered": len(states),
+            "ticks_executed": 0,
+            "clubs_backlogged": 0,
+            "ticks_failed": 0,
+            "legacy_anchors_created": anchored,
+            "clock_paused": True,
+        }
+
+    ticks_executed = 0
+    clubs_backlogged = 0
+    ticks_failed = 0
+    catch_up_limit = max(1, int(max_days_per_club))
+
+    for state in states:
+        if state.last_world_tick_date is None:
+            # Preserve existing world_day/progression. Old ticks were gated by
+            # visits and wall-clock thresholds, so historical virtual dates
+            # cannot be reconstructed reliably. Start the shared-calendar
+            # contract from this date. An active state with no prior tick gets
+            # one initial simulation day now.
+            if state.last_tick_at is None:
+                state.last_world_tick_date = target_date - timedelta(days=1)
+            else:
+                state.last_world_tick_date = target_date
+            anchored += 1
+
+        due_days = (target_date - state.last_world_tick_date).days
+        if due_days <= 0:
+            continue
+
+        for _ in range(min(due_days, catch_up_limit)):
+            next_world_date = state.last_world_tick_date + timedelta(days=1)
+            try:
+                # Keep each day's world-date anchor and all gameplay/inbox writes
+                # in the same savepoint. A failed tick remains retryable without
+                # reverting completed ticks for other clubs in this cycle.
+                with session.begin_nested():
+                    tick_club(
+                        session,
+                        state,
+                        use_ai=False,
+                        world_tick_date=next_world_date,
+                    )
+                    session.flush()
+            except Exception:
+                ticks_failed += 1
+                logger.exception(
+                    "owner_console.world_tick_failed club_id=%s world_date=%s",
+                    state.club_id,
+                    next_world_date.isoformat(),
+                )
+                session.refresh(state)
+                break
+            ticks_executed += 1
+
+        if state.last_world_tick_date is not None and state.last_world_tick_date < target_date:
+            clubs_backlogged += 1
+
+    session.flush()
+    return {
+        "target_world_date": target_date.isoformat(),
+        "clubs_considered": len(states),
+        "ticks_executed": ticks_executed,
+        "clubs_backlogged": clubs_backlogged,
+        "ticks_failed": ticks_failed,
+        "legacy_anchors_created": anchored,
+        "clock_paused": False,
+    }
+
+
 def maybe_auto_tick(session: Session, user_id: str) -> None:
-    for state in user_states(session, user_id):
-        last = aware(state.last_tick_at)
-        if state.stage in ("competition", "active") and (last is None or now() - last > timedelta(hours=6)):
-            tick_club(session, state, use_ai=False)
+    # Keep an opportunistic catch-up for owner visits, but use the exact same
+    # persisted-world scheduling service as the autonomous worker.
+    process_due_owner_world_ticks(session, user_id=user_id)
 
 
 def get_owner_newsroom(*args, **kwargs):
