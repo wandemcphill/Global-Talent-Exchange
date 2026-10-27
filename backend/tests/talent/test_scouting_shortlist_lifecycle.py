@@ -296,10 +296,9 @@ def test_real_player_scouting_does_not_invent_missing_ratings(
     )
 
 
-
 def test_mislinked_scout_cannot_write_reports_to_another_club(lifecycle_client):
     client, identity, session = lifecycle_client
-    user_a, club_a = _seed_club_and_user(
+    user_a, _ = _seed_club_and_user(
         session,
         user_id="user-scout-mismatch-a",
         username="scout_mismatch_a",
