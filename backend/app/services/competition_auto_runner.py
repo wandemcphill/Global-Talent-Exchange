@@ -209,7 +209,10 @@ class CompetitionAutoRunner:
             raise ValueError(f"Canonical fixture {match.id} disappeared before execution.")
         if locked_match.status == MatchStatus.COMPLETED.value:
             return locked_match
-        if locked_match.status != MatchStatus.SCHEDULED.value:
+        if locked_match.status not in {
+            MatchStatus.SCHEDULED.value,
+            MatchStatus.IN_PROGRESS.value,
+        }:
             raise ValueError(
                 f"Canonical fixture {match.id} is {locked_match.status} and cannot be simulated."
             )
