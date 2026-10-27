@@ -426,9 +426,7 @@ class TransferMarketService:
                 requested_position = position.strip()
                 group_aliases = POSITION_GROUP_ALIASES.get(requested_position.upper())
                 if group_aliases is not None:
-                    statement = statement.where(
-                        func.lower(Player.normalized_position).in_(group_aliases)
-                    )
+                    statement = statement.where(func.lower(Player.normalized_position).in_(group_aliases))
                 else:
                     statement = statement.where(Player.normalized_position == requested_position)
             if country_id is not None:
@@ -1645,9 +1643,7 @@ class TransferMarketService:
             listing_id=negotiation.listing_id,
             winning_bid_id=negotiation.winning_bid_id,
             player_id=negotiation.player_id,
-            player_name=(
-                player.canonical_display_name or player.full_name if player is not None else None
-            ),
+            player_name=(player.canonical_display_name or player.full_name if player is not None else None),
             selling_club_id=negotiation.selling_club_id,
             bidder_club_id=negotiation.bidder_club_id,
             status=negotiation.status,
