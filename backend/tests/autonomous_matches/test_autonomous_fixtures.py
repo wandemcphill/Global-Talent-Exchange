@@ -25,6 +25,7 @@ from app.models.player_contract import PlayerContract
 from app.models.user import KycStatus, User, UserRole
 from app.owner_console.engine import simulate_match as owner_simulate_match
 from app.services.autonomous_match_service import AutonomousMatchExecutionService
+from app.services.competition_auto_runner import CompetitionAutoRunner
 from app.services.competition_lifecycle_service import CompetitionLifecycleService
 
 
@@ -552,3 +553,52 @@ def test_owner_console_honest_failure_on_invalid_input() -> None:
     # Invalid side input missing required fields must raise honestly rather than falling back to Poisson
     with pytest.raises(Exception):
         owner_simulate_match("bad_seed", {"invalid": True}, {"invalid": True})
+
+
+def test_owner_pre_match_tactics_reach_canonical_runner_request(session_factory) -> None:
+    with session_factory() as session:
+        competition = _create_test_competition(session, "Owner Tactics Pipeline")
+        round_row = CompetitionRound(
+            id=str(uuid4()),
+            competition_id=competition.id,
+            round_number=1,
+            stage="league",
+            status="active",
+        )
+        session.add(round_row)
+        _, home_club = _create_user_and_club(session, "Owner Tactics Home")
+        _, away_club = _create_user_and_club(session, "Owner Tactics Away")
+        kickoff_at = datetime(2026, 1, 1, 9, 0, tzinfo=timezone.utc)
+        match = CompetitionMatch(
+            id=str(uuid4()),
+            competition_id=competition.id,
+            round_id=round_row.id,
+            round_number=1,
+            stage="league",
+            home_club_id=home_club.id,
+            away_club_id=away_club.id,
+            match_date=kickoff_at.date(),
+            scheduled_at=kickoff_at,
+            status=MatchStatus.SCHEDULED.value,
+            metadata_json={
+                "owner_pre_match_tactics": {
+                    home_club.id: {"mentality": "attacking", "lineup_mode": "rotate"},
+                    away_club.id: {"mentality": "defensive", "lineup_mode": "strongest"},
+                }
+            },
+        )
+        session.add(match)
+        session.flush()
+
+        runner = CompetitionAutoRunner(session)
+        job = runner._simulation_job(competition, match)
+        assert job.home_lineup_mode == "rotate"
+        assert job.away_lineup_mode == "strongest"
+
+        request = runner.team_factory.build_request(job, session=session)
+        request = runner._apply_owner_pre_match_tactics(request, match)
+        assert request.match_id == match.id
+        assert request.home_team.tactics.mentality.value == "attacking"
+        assert request.home_team.tactics.style.value == "attacking"
+        assert request.away_team.tactics.mentality.value == "defensive"
+        assert request.away_team.tactics.style.value == "defensive"
