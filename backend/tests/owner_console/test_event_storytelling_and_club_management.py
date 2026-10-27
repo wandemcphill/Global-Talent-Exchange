@@ -773,6 +773,50 @@ def test_global_competitions_cannot_use_owner_console_simulator(monkeypatch):
     assert exc_info.value.status == 409
 
 
+def test_unmapped_global_fixture_history_is_explicitly_read_only(monkeypatch):
+    from app.services.owner_competition_lifecycle_mapping_service import (
+        OwnerCompetitionLifecycleMappingService,
+    )
+
+    global_competition = OwnerCompetition(
+        id="global-history-1",
+        name="Historical Global Cup",
+        host_type="gtex",
+    )
+    legacy_match = OwnerMatch(
+        id="legacy-history-match-1",
+        competition_id=global_competition.id,
+        round_number=1,
+        home_club_id="club-home",
+        away_club_id="club-away",
+        home_name="Home FC",
+        away_name="Away FC",
+        status="completed",
+        home_goals=2,
+        away_goals=1,
+    )
+
+    class SessionStub:
+        def get(self, model, identifier):
+            assert model is OwnerCompetition
+            assert identifier == global_competition.id
+            return global_competition
+
+    monkeypatch.setattr(
+        OwnerCompetitionLifecycleMappingService,
+        "canonical_match_for_legacy_match",
+        lambda self, legacy_match_id: None,
+    )
+
+    historical = comps.mapped_match_dict(SessionStub(), legacy_match)
+
+    assert historical["home_goals"] == 2
+    assert historical["away_goals"] == 1
+    assert historical["execution_model"] == "legacy_historical"
+    assert historical["canonical_lifecycle_status"] == "unmapped"
+    assert historical["history_read_only"] is True
+
+
 def test_user_hosted_competitions_keep_their_separate_execution_rail():
     """User-hosted tournaments remain supported while global lifecycle is reconciled."""
     user_competition = OwnerCompetition(id="user-comp-1", name="Friends Cup", host_type="user", host_user_id="owner-1")
