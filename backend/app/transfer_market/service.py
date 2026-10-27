@@ -991,6 +991,29 @@ class TransferMarketService:
         )
         return snapshot
 
+    def list_negotiations(
+        self,
+        *,
+        actor: User,
+        club_id: str | None = None,
+    ) -> list[TransferNegotiationView]:
+        """List only negotiations belonging to the actor's selected authorized club."""
+        resolved_club_id = self._resolve_actor_club_id(
+            actor,
+            club_id,
+            allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
+            forbidden_detail="transfer_market_negotiation_access_required",
+        )
+        negotiations = self.session.scalars(
+            select(TransferNegotiation)
+            .where(
+                (TransferNegotiation.selling_club_id == resolved_club_id)
+                | (TransferNegotiation.bidder_club_id == resolved_club_id)
+            )
+            .order_by(TransferNegotiation.updated_at.desc(), TransferNegotiation.id.asc())
+        ).all()
+        return [self.to_negotiation_view(item) for item in negotiations]
+
     def get_negotiation(self, listing_id: str, *, actor: User) -> TransferNegotiationView:
         negotiation = self._require_negotiation_by_listing(listing_id)
         self._require_actor_any_club_access(
@@ -1541,14 +1564,21 @@ class TransferMarketService:
         raw_agent = dict(negotiation.metadata_json or {}).get("agent_negotiation")
         if isinstance(raw_agent, dict):
             agent_negotiation = AgentNegotiationView.model_validate(raw_agent)
+        player = self.session.get(Player, negotiation.player_id)
+        listing = self.session.get(TransferListing, negotiation.listing_id)
         return TransferNegotiationView(
             id=negotiation.id,
             listing_id=negotiation.listing_id,
             winning_bid_id=negotiation.winning_bid_id,
             player_id=negotiation.player_id,
+            player_name=(
+                player.canonical_display_name or player.full_name if player is not None else None
+            ),
             selling_club_id=negotiation.selling_club_id,
             bidder_club_id=negotiation.bidder_club_id,
             status=negotiation.status,
+            listing_status=listing.status if listing is not None else None,
+            listing_base_price=listing.base_price if listing is not None else None,
             wage_offer_amount=negotiation.wage_offer_amount,
             contract_years=negotiation.contract_years,
             expected_role=negotiation.expected_role,
