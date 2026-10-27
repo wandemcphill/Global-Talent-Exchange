@@ -407,9 +407,10 @@ def test_transfer_market_rejects_listing_player_without_a_current_club(
 
     assert response.status_code == 400, response.text
     assert "free-agent" in response.json()["detail"].lower()
-    assert transfer_market_session.scalar(
-        select(TransferListing).where(TransferListing.player_id == free_agent.id)
-    ) is None
+    assert (
+        transfer_market_session.scalar(select(TransferListing).where(TransferListing.player_id == free_agent.id))
+        is None
+    )
 
 
 def _prime_player_and_coach_to_accept(api: TestClient, context: dict[str, str], seller_headers, buyer_headers) -> None:
