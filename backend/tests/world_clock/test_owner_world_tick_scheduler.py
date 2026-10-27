@@ -99,7 +99,11 @@ def test_owner_ticks_catch_up_to_world_date_and_are_idempotent(monkeypatch) -> N
         tick_date=date(2026, 10, 24),
     )
 
-    result = owner_service.process_due_owner_world_ticks(session, max_days_per_club=7)
+    result = owner_service.process_due_owner_world_ticks(
+        session,
+        max_days_per_club=7,
+        include_details=True,
+    )
     session.commit()
 
     assert result["target_world_date"] == "2026-10-27"
@@ -112,6 +116,13 @@ def test_owner_ticks_catch_up_to_world_date_and_are_idempotent(monkeypatch) -> N
     ]
     assert state.world_day == 15
     assert state.last_world_tick_date == WORLD_DATE
+    assert [row["world_date"] for row in result["tick_results"]] == [
+        "2026-10-25",
+        "2026-10-26",
+        "2026-10-27",
+    ]
+    assert all(row["club_id"] == state.club_id for row in result["tick_results"])
+    assert all(row["growth"] == [] for row in result["tick_results"])
 
     second = owner_service.process_due_owner_world_ticks(session)
     session.commit()
