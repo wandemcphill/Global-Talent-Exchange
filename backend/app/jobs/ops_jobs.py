@@ -167,5 +167,13 @@ class OpsJobRunner:
             session.commit()
         return results
 
+    def run_due_fixtures_cycle(self, *, limit: int = 50) -> dict[str, Any]:
+        from app.services.autonomous_match_service import AutonomousMatchExecutionService
+
+        with self.session_factory() as session:
+            results = AutonomousMatchExecutionService(session).scan_and_execute_due_fixtures(limit=limit)
+            session.commit()
+        return results
+
 
 __all__ = ["OpsJobRunner"]

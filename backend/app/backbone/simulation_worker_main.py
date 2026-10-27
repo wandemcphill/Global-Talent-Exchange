@@ -37,12 +37,13 @@ def main() -> None:
         service_name=service_name,
         environment=settings.app_env,
     )
-    if not settings.kafka_simulation_consumer_enabled:
-        _park_disabled_worker(reason="consumer_disabled")
-        return
-    if not settings.kafka_brokers:
-        _park_disabled_worker(reason="no_kafka_brokers")
-        return
+    use_kafka_consumer = bool(settings.kafka_brokers and settings.kafka_simulation_consumer_enabled)
+    use_autonomous_scanner = bool(getattr(settings, "autonomous_fixture_execution_enabled", False))
+    if not use_kafka_consumer and not use_autonomous_scanner:
+        raise RuntimeError(
+            "Simulation worker misconfigured: no active Kafka simulation consumer and "
+            "GTE_AUTONOMOUS_FIXTURE_EXECUTION_ENABLED is false. Worker cannot start."
+        )
     try:
         context = build_application_context(settings=settings)
         configure_tracing(
@@ -84,22 +85,45 @@ def main() -> None:
             repository=DatabaseReplayArchiveRepository(session_factory=context.database.session_factory),
         )
         context.event_publisher.subscribe(replay_archive.handle_event)
-        consumer = KafkaJsonConsumer(
-            brokers=settings.kafka_brokers,
-            group_id=f"{settings.kafka_queue_consumer_group}-simulation",
-            client_id=f"{settings.kafka_client_id}-simulation",
-            topics=KafkaJsonConsumer.topic_names(
-                prefix=settings.kafka_topic_prefix,
-                topics=("match.scheduled",),
-            ),
-        )
-        runtime = SimulationQueueConsumerService(
-            consumer=consumer,
-            worker=worker,
-            metrics=context.metrics,
-        )
-        runtime.start()
-        ThreadEvent().wait()
+        if use_kafka_consumer:
+            consumer = KafkaJsonConsumer(
+                brokers=settings.kafka_brokers,
+                group_id=f"{settings.kafka_queue_consumer_group}-simulation",
+                client_id=f"{settings.kafka_client_id}-simulation",
+                topics=KafkaJsonConsumer.topic_names(
+                    prefix=settings.kafka_topic_prefix,
+                    topics=("match.scheduled",),
+                ),
+            )
+            runtime = SimulationQueueConsumerService(
+                consumer=consumer,
+                worker=worker,
+                metrics=context.metrics,
+            )
+            runtime.start()
+            ThreadEvent().wait()
+        else:
+            from app.services.autonomous_match_service import AutonomousMatchExecutionService
+
+            stop_event = ThreadEvent()
+            interval = max(1, getattr(settings, "autonomous_fixture_interval_seconds", 30) or 30)
+            logger.info(
+                "simulation_worker.running mode=autonomous_fixture_scanner interval_seconds=%s",
+                interval,
+            )
+            while not stop_event.is_set():
+                try:
+                    with context.database.session_factory() as session:
+                        scanner = AutonomousMatchExecutionService(session)
+                        results = scanner.scan_and_execute_due_fixtures()
+                        if results.get("failed", 0) > 0:
+                            logger.error("simulation_worker.fixture_execution_failures results=%s", results)
+                        elif results.get("executed", 0) > 0 or results.get("settled_competitions"):
+                            logger.info("simulation_worker.executed_due_fixtures results=%s", results)
+                        session.commit()
+                except Exception as exc:
+                    logger.exception("simulation_worker.autonomous_cycle_error error=%s", exc)
+                stop_event.wait(interval)
     finally:
         if runtime is not None:
             runtime.stop()
