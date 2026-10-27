@@ -228,6 +228,28 @@ class CompetitionLifecycleService:
         return fixtures
 
     def finalize_competition(self, competition: Competition, *, settle: bool = True) -> list[CompetitionRewardPool]:
+        # Serialize finalization by competition row. A second worker may have
+        # loaded a stale in-progress object before the last fixture completed;
+        # refresh under lock and return the existing payouts if already settled.
+        locked_competition = self.session.scalar(
+            select(Competition)
+            .where(Competition.id == competition.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if locked_competition is None:
+            raise ValueError(f"Competition {competition.id} no longer exists.")
+        competition = locked_competition
+        existing_reward_pools = list(
+            self.session.scalars(
+                select(CompetitionRewardPool).where(
+                    CompetitionRewardPool.competition_id == competition.id
+                )
+            ).all()
+        )
+        if CompetitionStatus(competition.status) is CompetitionStatus.SETTLED:
+            return existing_reward_pools
+
         matches = list(
             self.session.scalars(
                 select(CompetitionMatch).where(CompetitionMatch.competition_id == competition.id)
