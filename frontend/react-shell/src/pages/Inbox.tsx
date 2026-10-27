@@ -35,9 +35,11 @@ export default function InboxPage() {
   const initialStatus = searchParams.get("status") || "open";
   const initialCategory = searchParams.get("category") || "all";
   const queryClubId = searchParams.get("club_id");
+  const initialUnreadOnly = searchParams.get("unread_only") === "true";
 
   const [status, setStatus] = useState(initialStatus);
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
+  const [unreadOnly, setUnreadOnly] = useState(initialUnreadOnly);
   const { clubs, active, select } = useActiveClub();
   const [selectedClubId, setSelectedClubId] = useState<string>(
     queryClubId || (active?.club_id ? active.club_id : "all")
@@ -48,13 +50,16 @@ export default function InboxPage() {
   const effectiveStatus = isArchiveCategory ? "archived" : status;
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["inbox", effectiveStatus, selectedCategory, selectedClubId],
+    queryKey: ["inbox", effectiveStatus, selectedCategory, selectedClubId, unreadOnly],
     queryFn: async () => {
       const params: any = {
         status: effectiveStatus,
       };
       if (selectedClubId !== "all") {
         params.club_id = selectedClubId;
+      }
+      if (unreadOnly) {
+        params.unread_only = true;
       }
       if (selectedCategory !== "all" && selectedCategory !== "archive") {
         params.category = selectedCategory;
@@ -90,6 +95,21 @@ export default function InboxPage() {
                 ))}
               </select>
             )}
+
+            <button
+              type="button"
+              data-testid="inbox-filter-unread"
+              aria-pressed={unreadOnly}
+              onClick={() => setUnreadOnly((current) => !current)}
+              className={`flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-semibold border transition-colors ${
+                unreadOnly
+                  ? "bg-amber-500 text-slate-950 border-amber-400"
+                  : "bg-slate-900 text-slate-400 border-slate-800 hover:text-white"
+              }`}
+            >
+              <CheckCheck className="w-3.5 h-3.5" />
+              Unread only
+            </button>
 
             {/* Status Toggles (hidden in archive view) */}
             {!isArchiveCategory && (
