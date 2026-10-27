@@ -8,7 +8,7 @@
 /// honest unavailable state. These types are the typed boundary a verified-event card needs.
 library;
 
-const String kWorldClockPath = '/world/clock';
+const String kWorldClockPath = '/api/world/clock';
 const String? kOwnerBriefingEndpoint = null;
 
 class WorldClockContractException implements Exception {
