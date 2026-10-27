@@ -280,6 +280,41 @@ void main() {
       );
     });
 
+    test('gift acceptance failure never falls back to a second canonical gift', () async {
+      final _FakeAuthedApi fakeApi = _FakeAuthedApi(
+        postHandler: (String path, Object? body) async {
+          final Map<String, dynamic> payload = Map<String, dynamic>.from(body as Map);
+          if (path == '/owner/legacy/club-test-1/desk' &&
+              payload['action'] == 'gift') {
+            return <String, dynamic>{'id': 'gift-created-1'};
+          }
+          if (path == '/owner/legacy/club-test-1/desk' &&
+              payload['action'] == 'accept_gift') {
+            throw StateError('accept response timed out');
+          }
+          return <String, dynamic>{'status': 'unexpected'};
+        },
+      );
+      final OwnerConsoleApi api = OwnerConsoleApi(
+        client: fakeApi,
+        activeClubId: 'club-test-1',
+      );
+
+      await expectLater(
+        api.giftOwnedAssetToPlayer(assetId: 'asset-45', playerId: 'regen-1'),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(
+        fakeApi.recordedPosts.any(
+          (Map<String, dynamic> post) =>
+              post['path'] == '/owner/clubs/club-test-1/showroom/gift',
+        ),
+        isFalse,
+        reason: 'An existing gift offer must not trigger a second gift fallback.',
+      );
+    });
+
     testWidgets('ClubLegacyShowroom renders luxury asset card and handles gift button for regens', (WidgetTester tester) async {
       final List<ShowroomExhibit> exhibits = <ShowroomExhibit>[
         const ShowroomExhibit(
