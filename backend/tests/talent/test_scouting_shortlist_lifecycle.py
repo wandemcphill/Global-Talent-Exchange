@@ -579,7 +579,6 @@ def test_shortlist_entry_lifecycle_and_duplicate_prevention(lifecycle_client):
     assert check_res.json()["entry_count"] == 0
 
 
-
 def test_negotiation_list_returns_closed_listing_for_authorized_club_only(lifecycle_client):
     client, identity, session = lifecycle_client
     user_a, club_a = _seed_club_and_user(
@@ -640,7 +639,6 @@ def test_negotiation_list_returns_closed_listing_for_authorized_club_only(lifecy
 
     forbidden = client.get(f"/api/transfer-market/negotiations?club_id={club_b.id}")
     assert forbidden.status_code in {403, 404}
-
 
 
 def test_transfer_room_handoff_from_scouting_discovery(lifecycle_client):
