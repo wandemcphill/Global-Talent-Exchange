@@ -529,7 +529,9 @@ test.describe("Prestige, Story, and Showroom Parity (Agent B5)", () => {
         page.locator('[data-testid="dispatches-tab-content"]'),
       ).toBeVisible();
       await expect(
-        page.getByText("Lagos Atlantic SC Commissions Executive Fleet Aviation"),
+        page.getByText(
+          "Lagos Atlantic SC Commissions Executive Fleet Aviation",
+        ),
       ).toBeVisible();
 
       // Switch to Staff & Squad tab
