@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.common.enums.competition_format import CompetitionFormat
+from app.common.enums.fixture_window import FixtureWindow
 from app.models.competition import UserCompetition
 from app.models.competition_match import CompetitionMatch
 from app.models.owner_competition_lifecycle_mapping import (
@@ -13,6 +16,7 @@ from app.models.owner_competition_lifecycle_mapping import (
     OwnerMatchLifecycleMapping,
 )
 from app.owner_console.models import OwnerCompetition, OwnerMatch
+from app.services.world_clock_service import WorldClockService
 
 
 class OwnerCompetitionLifecycleMappingError(ValueError):
@@ -226,6 +230,131 @@ class OwnerCompetitionLifecycleMappingService:
                 "fixture_mapping_conflict",
                 "A concurrent mapping claimed one of these fixture identities.",
             ) from exc
+
+    def save_pre_match_tactics(
+        self,
+        *,
+        legacy_match_id: str,
+        club_id: str,
+        user_id: str,
+        mentality: str,
+        lineup_mode: str,
+    ) -> CompetitionMatch:
+        """Persist owner instructions on the mapped canonical fixture, never simulate it."""
+        if mentality not in {"defensive", "balanced", "attacking"}:
+            raise OwnerCompetitionLifecycleMappingError(
+                "invalid_mentality", "Choose defensive, balanced, or attacking mentality."
+            )
+        if lineup_mode not in {"strongest", "rotate"}:
+            raise OwnerCompetitionLifecycleMappingError(
+                "invalid_lineup_mode", "Choose strongest or rotate lineup mode."
+            )
+
+        legacy_match = self.session.get(OwnerMatch, legacy_match_id)
+        if legacy_match is None:
+            raise OwnerCompetitionLifecycleMappingError(
+                "legacy_match_not_found", "The owner-console fixture does not exist."
+            )
+        legacy_competition = self.session.get(OwnerCompetition, legacy_match.competition_id)
+        if legacy_competition is None or legacy_competition.host_type != "gtex":
+            raise OwnerCompetitionLifecycleMappingError(
+                "user_hosted_competition_uses_separate_lifecycle",
+                "Only global GTEX fixtures accept canonical pre-match instructions.",
+            )
+        if legacy_match.status != "scheduled" or legacy_match.played_at is not None:
+            raise OwnerCompetitionLifecycleMappingError(
+                "fixture_is_not_unplayed", "Instructions can only be changed for an unplayed fixture."
+            )
+        if club_id not in {legacy_match.home_club_id, legacy_match.away_club_id}:
+            raise OwnerCompetitionLifecycleMappingError(
+                "club_not_in_fixture", "The selected club is not one of the clubs in this fixture."
+            )
+
+        legacy_entry = self.session.scalar(
+            select(OwnerCompetitionLifecycleMapping).where(
+                OwnerCompetitionLifecycleMapping.legacy_competition_id == legacy_competition.id,
+                OwnerCompetitionLifecycleMapping.mapping_status == "active",
+            )
+        )
+        if legacy_entry is None:
+            raise OwnerCompetitionLifecycleMappingError(
+                "canonical_fixture_mapping_required",
+                "This global competition has not been reconciled with a canonical GTEX competition yet.",
+            )
+        fixture_mapping = self.session.scalar(
+            select(OwnerMatchLifecycleMapping).where(
+                OwnerMatchLifecycleMapping.legacy_match_id == legacy_match_id,
+                OwnerMatchLifecycleMapping.competition_mapping_id == legacy_entry.id,
+                OwnerMatchLifecycleMapping.mapping_status == "active",
+            )
+        )
+        if fixture_mapping is None:
+            raise OwnerCompetitionLifecycleMappingError(
+                "canonical_fixture_mapping_required",
+                "This fixture has not been linked to its canonical GTEX fixture yet.",
+            )
+
+        canonical_match = self.session.scalar(
+            select(CompetitionMatch)
+            .where(CompetitionMatch.id == fixture_mapping.canonical_match_id)
+            .with_for_update()
+        )
+        if canonical_match is None:
+            raise OwnerCompetitionLifecycleMappingError(
+                "canonical_match_not_found", "The canonical fixture no longer exists."
+            )
+        if canonical_match.status != "scheduled" or canonical_match.completed_at is not None:
+            raise OwnerCompetitionLifecycleMappingError(
+                "fixture_is_not_unplayed", "Instructions can only be changed before the canonical fixture starts."
+            )
+
+        canonical_competition = self.session.get(UserCompetition, canonical_match.competition_id)
+        if canonical_competition is None:
+            raise OwnerCompetitionLifecycleMappingError(
+                "canonical_competition_not_found", "The canonical GTEX competition does not exist."
+            )
+        kickoff_at = canonical_match.scheduled_at
+        if kickoff_at is not None and kickoff_at.tzinfo is None:
+            kickoff_at = kickoff_at.replace(tzinfo=timezone.utc)
+        if kickoff_at is None:
+            match_date = canonical_match.match_date
+            if match_date is None and canonical_competition.scheduled_start_at is not None:
+                scheduled_start = canonical_competition.scheduled_start_at
+                if scheduled_start.tzinfo is None:
+                    scheduled_start = scheduled_start.replace(tzinfo=timezone.utc)
+                match_date = scheduled_start.date()
+            if match_date is None:
+                raise OwnerCompetitionLifecycleMappingError(
+                    "canonical_kickoff_unresolved",
+                    "The canonical fixture has no authoritative kickoff date; instructions cannot be accepted.",
+                )
+            format_enum = CompetitionFormat(canonical_competition.format)
+            default_window = (
+                FixtureWindow.SENIOR_1
+                if format_enum is CompetitionFormat.LEAGUE
+                else FixtureWindow.FAST_CUP_OPEN
+            )
+            window = FixtureWindow(canonical_match.window) if canonical_match.window else default_window
+            kickoff_at = window.kickoff_at(match_date)
+
+        now_virtual = WorldClockService(self.session).now_virtual()
+        if kickoff_at <= now_virtual:
+            raise OwnerCompetitionLifecycleMappingError(
+                "kickoff_already_due", "Pre-match instructions must be saved before the scheduled virtual kickoff."
+            )
+
+        metadata = dict(canonical_match.metadata_json or {})
+        owner_tactics = dict(metadata.get("owner_pre_match_tactics") or {})
+        owner_tactics[club_id] = {
+            "mentality": mentality,
+            "lineup_mode": lineup_mode,
+            "saved_by_user_id": user_id,
+            "saved_at_virtual_time": now_virtual.isoformat(),
+        }
+        metadata["owner_pre_match_tactics"] = owner_tactics
+        canonical_match.metadata_json = metadata
+        self.session.flush()
+        return canonical_match
 
     def canonical_match_for_legacy_match(self, legacy_match_id: str) -> CompetitionMatch | None:
         mapping = self.session.scalar(
