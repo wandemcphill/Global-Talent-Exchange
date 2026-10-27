@@ -277,6 +277,37 @@ def mapped_match_dict(session: Session, legacy_match: OwnerMatch, *, full: bool 
     return _canonical_match_dict(session, canonical_match, legacy_match=legacy_match, full=full)
 
 
+def canonical_match_detail(session: Session, canonical_match_id: str, *, full: bool = False):
+    from app.models.competition_match import CompetitionMatch
+    from app.models.owner_competition_lifecycle_mapping import (
+        OwnerCompetitionLifecycleMapping,
+        OwnerMatchLifecycleMapping,
+    )
+
+    canonical_match = session.get(CompetitionMatch, canonical_match_id)
+    if canonical_match is None:
+        return None
+    competition_mapping = session.scalar(
+        select(OwnerCompetitionLifecycleMapping).where(
+            OwnerCompetitionLifecycleMapping.canonical_competition_id == canonical_match.competition_id,
+            OwnerCompetitionLifecycleMapping.mapping_status == "active",
+        )
+    )
+    if competition_mapping is None:
+        return None
+    match_mapping = session.scalar(
+        select(OwnerMatchLifecycleMapping).where(
+            OwnerMatchLifecycleMapping.canonical_match_id == canonical_match.id,
+            OwnerMatchLifecycleMapping.competition_mapping_id == competition_mapping.id,
+            OwnerMatchLifecycleMapping.mapping_status == "active",
+        )
+    )
+    legacy_match = (
+        session.get(OwnerMatch, match_mapping.legacy_match_id) if match_mapping is not None else None
+    )
+    return _canonical_match_dict(session, canonical_match, legacy_match=legacy_match, full=full)
+
+
 def _canonical_competition_standings(session: Session, legacy_competition_id: str, canonical_competition_id: str):
     from app.models.competition_participant import CompetitionParticipant
     from app.models.competition_rule_set import CompetitionRuleSet
