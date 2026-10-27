@@ -36,9 +36,7 @@ class OwnerCompetitionLifecycleMapping(UUIDPrimaryKeyMixin, TimestampMixin, Base
         ForeignKey("user_competitions.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    mapping_status: Mapped[str] = mapped_column(
-        String(24), nullable=False, default="active", server_default="active"
-    )
+    mapping_status: Mapped[str] = mapped_column(String(24), nullable=False, default="active", server_default="active")
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
 
@@ -76,9 +74,7 @@ class OwnerMatchLifecycleMapping(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("competition_matches.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    mapping_status: Mapped[str] = mapped_column(
-        String(24), nullable=False, default="active", server_default="active"
-    )
+    mapping_status: Mapped[str] = mapped_column(String(24), nullable=False, default="active", server_default="active")
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
 
