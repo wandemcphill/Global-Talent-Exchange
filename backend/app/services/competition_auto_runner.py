@@ -120,6 +120,9 @@ class CompetitionAutoRunner:
                     self._simulate_match(competition, match)
                 changed = True
                 matches = self._matches(competition.id)
+                # Another worker may have completed and settled this competition
+                # while this worker waited on a fixture row lock.
+                self.session.refresh(competition)
 
             if simulate_scheduled_matches and matches and self._all_matches_complete(matches):
                 if CompetitionFormat(competition.format) is CompetitionFormat.LEAGUE:
