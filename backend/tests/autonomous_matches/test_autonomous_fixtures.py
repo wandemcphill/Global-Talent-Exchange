@@ -417,6 +417,7 @@ def test_atomic_retry_rolls_back_partial_writes(session_factory, monkeypatch) ->
         result = service.scan_and_execute_due_fixtures(reference_at=eval_time)
         session.commit()
 
+        assert result["status"] == "failure"
         assert result["failed"] == 1
         assert len(result["errors"]) == 1
         assert "Database connection lost during settlement" in result["errors"][0]
