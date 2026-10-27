@@ -302,6 +302,12 @@ export function TransferHub() {
 
           {loadingListings ? (
             <Loading label="Querying transfer market listings..." />
+          ) : listingsError ? (
+            <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 p-6 text-center">
+              <p className="gx-display text-lg font-bold uppercase text-white">Market listings unavailable</p>
+              <p className="text-sm text-slate-300 mt-1">{errMsg(listingsError)}</p>
+              <button type="button" onClick={() => refetchListings()} className="gx-btn gx-btn-secondary mt-3 text-xs">Retry</button>
+            </div>
           ) : filteredListings.length === 0 ? (
             <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
               <ArrowLeftRight className="mx-auto size-10 text-emerald-400/50 mb-3" />
@@ -373,6 +379,18 @@ export function TransferHub() {
         <div className="space-y-4" data-testid="lane-offers-view">
           {loadingOffers ? (
             <Loading label="Gathering offer transactions..." />
+          ) : !activeClub?.club_id ? (
+            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+              <Handshake className="mx-auto size-10 text-emerald-400/50 mb-3" />
+              <p className="gx-display text-xl font-bold uppercase text-white">Choose an active club</p>
+              <p className="text-sm text-slate-400 mt-1">Offers are scoped to a club you are authorized to manage.</p>
+            </div>
+          ) : offersError ? (
+            <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 p-6 text-center">
+              <p className="gx-display text-lg font-bold uppercase text-white">Transfer offers unavailable</p>
+              <p className="text-sm text-slate-300 mt-1">{errMsg(offersError)}</p>
+              <button type="button" onClick={() => refetchOffers()} className="gx-btn gx-btn-secondary mt-3 text-xs">Retry</button>
+            </div>
           ) : (offersData || []).length === 0 ? (
             <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
               <Handshake className="mx-auto size-10 text-emerald-400/50 mb-3" />
