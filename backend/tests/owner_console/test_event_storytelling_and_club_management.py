@@ -994,9 +994,7 @@ def test_pre_match_tactics_are_saved_on_canonical_fixture_and_kickoff_is_enforce
             status="running",
             current_round=1,
         )
-        canonical_competition = _lifecycle_mapping_test_canonical_competition(
-            session, "Canonical Tactical Cup"
-        )
+        canonical_competition = _lifecycle_mapping_test_canonical_competition(session, "Canonical Tactical Cup")
         virtual_now = WorldClockService(session).now_virtual()
         kickoff_at = virtual_now + timedelta(days=2)
         canonical_competition.scheduled_start_at = kickoff_at
