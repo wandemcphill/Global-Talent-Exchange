@@ -177,11 +177,7 @@ def scout_player(
     if float(talent_profile.experience_years or 0.0) > 0:
         visible_stats["experience"] = min(30, int(round(talent_profile.experience_years)))
     for key, value in dna_profile.items():
-        if (
-            isinstance(value, (int, float))
-            and not isinstance(value, bool)
-            and math.isfinite(float(value))
-        ):
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)):
             visible_stats[str(key)] = int(value)
 
     # Consistency is only meaningful when the ranking pipeline has sufficient
