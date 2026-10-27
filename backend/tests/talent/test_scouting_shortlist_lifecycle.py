@@ -13,6 +13,7 @@ Covers Issue #169 and authoritative requirements from Issue #176:
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -24,7 +25,7 @@ from app.ingestion.models import Player
 from app.models.club_profile import ClubLifecycleStatus, ClubProfile, ClubType
 from app.models.regen_ecosystem import Scout
 from app.models.scouting_intelligence import ScoutReport
-from app.models.transfer_market import MarketWatchlistEntry, TransferListing
+from app.models.transfer_market import MarketWatchlistEntry, TransferListing, TransferNegotiation
 from app.models.user import KycStatus, User, UserRole
 from app.routes.player_lifecycle import router as player_lifecycle_router
 from app.talent.models import TalentProfile
@@ -572,6 +573,70 @@ def test_shortlist_entry_lifecycle_and_duplicate_prevention(lifecycle_client):
     check_res = client.get(f"/talent/shortlists/{sl_id}")
     assert check_res.status_code == 200
     assert check_res.json()["entry_count"] == 0
+
+
+
+def test_negotiation_list_returns_closed_listing_for_authorized_club_only(lifecycle_client):
+    client, identity, session = lifecycle_client
+    user_a, club_a = _seed_club_and_user(
+        session,
+        user_id="user-negotiation-list-a",
+        username="negotiation_list_a",
+        club_id="club-negotiation-list-a",
+        club_name="Negotiation Bidder FC",
+    )
+    _, club_b = _seed_club_and_user(
+        session,
+        user_id="user-negotiation-list-b",
+        username="negotiation_list_b",
+        club_id="club-negotiation-list-b",
+        club_name="Negotiation Seller FC",
+    )
+    player = _seed_real_player(
+        session,
+        player_id="real-negotiation-list-player",
+        name="Negotiation Target",
+    )
+    from datetime import datetime, timedelta, timezone
+
+    listing = TransferListing(
+        id="listing-negotiation-list",
+        player_id=player.id,
+        selling_club_id=club_b.id,
+        base_price=Decimal("45000.00"),
+        current_highest_bid=Decimal("45000.00"),
+        status="closed",
+        expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+    )
+    negotiation = TransferNegotiation(
+        id="negotiation-list-record",
+        listing_id=listing.id,
+        player_id=player.id,
+        selling_club_id=club_b.id,
+        bidder_club_id=club_a.id,
+        status="awaiting_contract_offer",
+        wage_offer_amount=Decimal("2800.00"),
+        contract_years=3,
+        expected_role="starter",
+    )
+    session.add_all([listing, negotiation])
+    session.commit()
+    identity.user = user_a
+
+    response = client.get(f"/api/transfer-market/negotiations?club_id={club_a.id}")
+
+    assert response.status_code == 200, response.text
+    records = response.json()
+    assert len(records) == 1
+    assert records[0]["id"] == negotiation.id
+    assert records[0]["listing_id"] == listing.id
+    assert records[0]["player_name"] == player.full_name
+    assert records[0]["listing_status"] == "closed"
+    assert Decimal(str(records[0]["listing_base_price"])) == Decimal("45000.00")
+
+    forbidden = client.get(f"/api/transfer-market/negotiations?club_id={club_b.id}")
+    assert forbidden.status_code in {403, 404}
+
 
 
 def test_transfer_room_handoff_from_scouting_discovery(lifecycle_client):
