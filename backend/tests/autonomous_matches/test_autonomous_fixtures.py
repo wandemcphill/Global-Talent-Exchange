@@ -362,6 +362,8 @@ def test_unresolved_missing_kickoff_not_run_prematurely(session_factory) -> None
 
         service = AutonomousMatchExecutionService(session)
         result = service.scan_and_execute_due_fixtures(reference_at=eval_time)
+        assert result["executed"] == 0
+        assert result["failed"] == 0
         session.commit()
 
         # Neither unresolvable nor future should be executed
