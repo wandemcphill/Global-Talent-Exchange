@@ -38,6 +38,10 @@ export async function attachDiagnostics(testInfo) {
 
 export async function enableAccessibility(page) {
   try {
+    // Do not toggle accessibility if the labelled form is already exposed.
+    const emailInput = page.locator('input[aria-label="Email"]').first();
+    if (await emailInput.isVisible().catch(() => false)) return;
+
     // Flutter's accessibility toggle is stateful. Dispatching both element.click()
     // and a synthetic click can toggle semantics on and immediately back off,
     // leaving signIn() with no labelled inputs and forcing brittle coordinate entry.
