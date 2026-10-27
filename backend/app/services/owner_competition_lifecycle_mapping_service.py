@@ -59,6 +59,11 @@ class OwnerCompetitionLifecycleMappingService:
             raise OwnerCompetitionLifecycleMappingError(
                 "canonical_competition_not_found", "The canonical GTEX competition does not exist."
             )
+        if not self._is_platform_competition(canonical.source_type):
+            raise OwnerCompetitionLifecycleMappingError(
+                "canonical_competition_not_global",
+                "Only explicitly platform-hosted canonical competitions can be linked to global GTEX tournaments.",
+            )
 
         by_legacy = self.session.scalar(
             select(OwnerCompetitionLifecycleMapping).where(
@@ -313,6 +318,20 @@ class OwnerCompetitionLifecycleMappingService:
             raise OwnerCompetitionLifecycleMappingError(
                 "canonical_competition_not_found", "The canonical GTEX competition does not exist."
             )
+        if not self._is_platform_competition(canonical_competition.source_type):
+            raise OwnerCompetitionLifecycleMappingError(
+                "canonical_competition_not_global",
+                "The mapped fixture no longer belongs to a platform-hosted global competition.",
+            )
+        if (
+            legacy_match.home_club_id != canonical_match.home_club_id
+            or legacy_match.away_club_id != canonical_match.away_club_id
+            or club_id not in {canonical_match.home_club_id, canonical_match.away_club_id}
+        ):
+            raise OwnerCompetitionLifecycleMappingError(
+                "fixture_club_identity_mismatch",
+                "The mapped canonical fixture no longer matches the legacy home/away club identities.",
+            )
         kickoff_at = canonical_match.scheduled_at
         if kickoff_at is not None and kickoff_at.tzinfo is None:
             kickoff_at = kickoff_at.replace(tzinfo=timezone.utc)
@@ -355,6 +374,16 @@ class OwnerCompetitionLifecycleMappingService:
         canonical_match.metadata_json = metadata
         self.session.flush()
         return canonical_match
+
+    @staticmethod
+    def _is_platform_competition(source_type: str | None) -> bool:
+        return (source_type or "").strip().lower() in {
+            "gtex",
+            "platform",
+            "gtex_platform",
+            "gtex_competition",
+            "gtex_hosted",
+        }
 
     def canonical_match_for_legacy_match(self, legacy_match_id: str) -> CompetitionMatch | None:
         mapping = self.session.scalar(
