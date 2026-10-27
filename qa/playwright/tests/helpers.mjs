@@ -98,7 +98,7 @@ export async function signIn(page) {
     const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
     const isNarrow = viewport.width < 820;
     const x = isNarrow ? Math.round(viewport.width * 0.5) : Math.round(viewport.width * 0.72);
-    const emailY = isNarrow ? 265 : 335;
+    const emailY = 250;
     await page.mouse.click(x, emailY);
     await page.waitForTimeout(200);
     await page.keyboard.press("Control+A").catch(() => {});
@@ -109,7 +109,7 @@ export async function signIn(page) {
     await page.keyboard.press("Enter");
     await page.waitForTimeout(800);
     if (!page.url().includes("/app/")) {
-      const enterY = isNarrow ? 415 : 485;
+      const enterY = 365;
       await page.mouse.click(x, enterY);
     }
   }
