@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { InboxItem } from "@/components/gtex/InboxItem";
 import { Empty, Loading, PageHeader } from "@/components/gtex/ui";
@@ -30,16 +31,23 @@ const CATEGORIES = [
 ];
 
 export default function InboxPage() {
-  const [status, setStatus] = useState("open");
-  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [searchParams] = useSearchParams();
+  const initialStatus = searchParams.get("status") || "open";
+  const initialCategory = searchParams.get("category") || "all";
+  const queryClubId = searchParams.get("club_id");
+
+  const [status, setStatus] = useState(initialStatus);
+  const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   const { clubs, active, select } = useActiveClub();
-  const [selectedClubId, setSelectedClubId] = useState<string>("all");
+  const [selectedClubId, setSelectedClubId] = useState<string>(
+    queryClubId || (active?.club_id ? active.club_id : "all")
+  );
   const refresh = useRefreshOwner();
 
   const isArchiveCategory = selectedCategory === "archive";
   const effectiveStatus = isArchiveCategory ? "archived" : status;
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["inbox", effectiveStatus, selectedCategory, selectedClubId],
     queryFn: async () => {
       const params: any = {
@@ -136,6 +144,17 @@ export default function InboxPage() {
       {/* Inbox Items Feed */}
       {isLoading ? (
         <Loading />
+      ) : error ? (
+        <div data-testid="inbox-error-state" className="p-6 rounded-xl bg-red-950/20 border border-red-500/30 text-red-300">
+          <p className="font-semibold">Unable to load owner inbox</p>
+          <p className="text-xs text-red-400 mt-1">{(error as any)?.message || "Failed to reach GTEX owner services."}</p>
+          <button
+            onClick={() => refetch()}
+            className="mt-3 px-3 py-1 bg-red-900/40 hover:bg-red-900/60 border border-red-700/50 rounded text-xs text-white"
+          >
+            Retry
+          </button>
+        </div>
       ) : items.length === 0 ? (
         <Empty
           title="No Messages"
