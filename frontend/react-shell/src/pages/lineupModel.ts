@@ -88,6 +88,21 @@ export function lineupRoleLabels(formation: string): string[] {
   return labels.slice(0, 11);
 }
 
+export function lineupFormationRows(formation: string): number[][] {
+  const valid = (LINEUP_FORMATIONS as readonly string[]).includes(formation)
+    ? formation
+    : "4-3-3";
+  const rows = [[0]];
+  let nextIndex = 1;
+  valid.split("-").forEach((part) => {
+    const count = Number(part);
+    const row = Array.from({ length: count }, (_, offset) => nextIndex + offset);
+    rows.push(row);
+    nextIndex += count;
+  });
+  return rows;
+}
+
 export function buildLineupPayload(
   formation: string,
   starters: string[],
