@@ -227,7 +227,9 @@ def test_canonical_sale_flow_settles_only_at_accepted_offer_price(session) -> No
     listing_row = session.scalar(select(ClubSaleListing).where(ClubSaleListing.listing_id == listing["listing_id"]))
     inquiry_row = session.scalar(select(ClubSaleInquiry).where(ClubSaleInquiry.inquiry_id == inquiry["inquiry_id"]))
     offer_row = session.scalar(select(ClubSaleOffer).where(ClubSaleOffer.offer_id == offer["offer_id"]))
-    transfer_row = session.scalar(select(ClubSaleTransfer).where(ClubSaleTransfer.transfer_id == transfer["transfer_id"]))
+    transfer_row = session.scalar(
+        select(ClubSaleTransfer).where(ClubSaleTransfer.transfer_id == transfer["transfer_id"])
+    )
     transfer_row_id = transfer_row.id if transfer_row is not None else ""
     transfer_story = session.scalar(
         select(StoryFeedItem).where(
@@ -396,7 +398,9 @@ def test_only_current_owner_can_create_one_active_listing(session) -> None:
 
 
 def test_offer_counterparty_switches_to_buyer_on_seller_counter(session) -> None:
-    seller = _create_user(session, user_id="seller-counter", email="seller-counter@example.com", username="seller-counter")
+    seller = _create_user(
+        session, user_id="seller-counter", email="seller-counter@example.com", username="seller-counter"
+    )
     buyer = _create_user(session, user_id="buyer-counter", email="buyer-counter@example.com", username="buyer-counter")
     club = _create_club(session, club_id="club-counter", owner_user_id=seller.id)
     wallet = WalletService()
@@ -555,7 +559,9 @@ def test_settled_transfer_amounts_are_immutable(session) -> None:
         executed_sale_price=Decimal("80.0000"),
     )
 
-    transfer_row = session.scalar(select(ClubSaleTransfer).where(ClubSaleTransfer.transfer_id == transfer["transfer_id"]))
+    transfer_row = session.scalar(
+        select(ClubSaleTransfer).where(ClubSaleTransfer.transfer_id == transfer["transfer_id"])
+    )
     assert transfer_row is not None
 
     transfer_row.platform_fee_amount = Decimal("0.0000")
