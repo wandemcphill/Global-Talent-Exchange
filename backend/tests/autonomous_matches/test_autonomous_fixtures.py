@@ -300,6 +300,7 @@ def test_idempotent_execution_and_no_duplicate_simulation(session_factory) -> No
 
         # Second execution immediately after finds nothing more for this match
         res2 = service.scan_and_execute_due_fixtures(reference_at=eval_time)
+        assert res2["executed"] == 0
         session.commit()
 
         session.refresh(m)
@@ -436,6 +437,7 @@ def test_atomic_retry_rolls_back_partial_writes(session_factory, monkeypatch) ->
         monkeypatch.undo()
 
         res2 = service.scan_and_execute_due_fixtures(reference_at=eval_time)
+        assert res2["executed"] == 0
         session.commit()
 
         assert res2["executed"] == 1
