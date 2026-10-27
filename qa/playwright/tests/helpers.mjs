@@ -58,12 +58,17 @@ export async function signIn(page) {
   const currentUrl = page.url();
   if (signedInPages.has(page)) return;
 
-  const profileButton = page.getByRole("button", { name: /Profile and settings/i });
+  const profileButton = page.getByRole("button", {
+    name: /Profile and settings/i,
+  });
   const isHashRouting = Boolean(process.env.GTEX_E2E_HASH_ROUTING);
   const looksLikeAppRoute = isHashRouting
     ? currentUrl.includes("#/app/")
     : new URL(currentUrl || "http://localhost").pathname.startsWith("/app/");
-  if (looksLikeAppRoute && await profileButton.isVisible().catch(() => false)) {
+  if (
+    looksLikeAppRoute &&
+    (await profileButton.isVisible().catch(() => false))
+  ) {
     signedInPages.add(page);
     return;
   }
