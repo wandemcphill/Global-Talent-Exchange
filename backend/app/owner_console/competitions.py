@@ -189,7 +189,7 @@ def comp_dict(session: Session, comp: OwnerCompetition, user_id: str | None = No
                 data["my_club_ids"] = [
                     entry.club_id
                     for entry in rows
-                    if entry.owner_user_id == user_id and entry.club_id in canonical_club_ids
+                    if user_id and entry.owner_user_id == user_id and entry.club_id in canonical_club_ids
                 ]
                 canonical_matches = list(
                     session.scalars(
