@@ -76,7 +76,7 @@ These affect durable game rules and must not be invented independently by either
 
 | ID | Decision needed | Implementation rule until resolved |
 |---|---|---|
-| D1 | World-clock progression rate and virtual calendar start | Preserve the persisted clock and current configured behavior. Do not change rate in production without an approved schedule. |
+| D1 | World-clock progression rate, virtual calendar start, and owner simulation step cadence | Preserve the persisted clock and configured rate. PR #348 proposes one owner simulation step per virtual world-date instead of the old six-hour, page-visit-triggered gate; treat that cadence as a product decision and do not merge/deploy the scheduler until the intended owner-tick cadence is approved. Do not change the clock rate or season/age cadence here. |
 | D2 | GTEX season duration, regen ageing, retirement and career cadence | Keep current canonical age mapping; do not change cadence or retroactively age players without a migration plan. |
 | D3 | Transfer Hub accepted-offer semantics and funds reservation/escrow | Make statuses honest. Do not mark a transfer complete unless player/contract movement and approved financial postings succeed. Require explicit policy for reservation timing if not already defined. |
 | D4 | Club competition entry fees, prize pools and broadcast/TV money | Reuse the Economic Constitution and currently approved settlement path. No invented TV payout formula or currency. |
