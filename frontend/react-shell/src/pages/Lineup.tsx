@@ -59,6 +59,31 @@ export default function Lineup() {
     if (playerId) setBench((current) => current.filter((id) => id !== playerId));
   };
 
+  const autoFillLineup = () => {
+    const isKeeper = (player: LineupPlayer) =>
+      /(^|[^a-z])(gk|goalkeeper|keeper)([^a-z]|$)/i.test(player.position || "");
+    const keepers = players
+      .filter(isKeeper)
+      .sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
+    const goalkeeper = keepers[0];
+    const outfield = players
+      .filter((player) => !isKeeper(player))
+      .sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
+    const next = [
+      goalkeeper?.player_id || "",
+      ...outfield.slice(0, 10).map((player) => player.player_id),
+    ];
+    setStarters([...next, ...Array(11).fill("")].slice(0, 11));
+    const selected = new Set(next.filter(Boolean));
+    setBench((current) => current.filter((id) => !selected.has(id)));
+    if (!goalkeeper) {
+      toast.warning("No goalkeeper was identified in this roster. Select the goalkeeper position manually.");
+    } else {
+      toast.success("Best available XI selected by rating, with a goalkeeper in goal.");
+    }
+  };
+
+
   const saveLineup = async () => {
     if (!clubId) return;
     const payload = buildLineupPayload(
@@ -208,12 +233,26 @@ export default function Lineup() {
               })}
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-2">
+              <Btn variant="secondary" onClick={autoFillLineup} disabled={players.length === 0} data-testid="auto-fill-lineup-button">
+                <Users className="mr-2 h-4 w-4" /> Auto-fill XI
+              </Btn>
               <Btn onClick={saveLineup} disabled={saving || players.length === 0} data-testid="save-lineup-button">
                 <Save className="mr-2 h-4 w-4" /> {saving ? "Saving lineup…" : "Save lineup"}
               </Btn>
               <span className="text-xs text-slate-500">Saved lineups are persisted through GTEX's club-lineup API.</span>
             </div>
           </div>
+        </div>
+      </Panel>
+
+      <Panel title="Manager & coaching staff" eyebrow="Tactical support" testid="lineup-manager-panel">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="max-w-2xl text-sm leading-6 text-slate-400">
+            Choose a manager whose tactical style fits the selected formation. React's manager hiring and management actions are available from the Squad room.
+          </p>
+          <Link to="/app/squad" className="gx-btn gx-btn-secondary inline-flex shrink-0 items-center" data-testid="lineup-manage-manager-link">
+            Manage manager <ArrowRight className="ml-2 h-4 w-4" />
+          </Link>
         </div>
       </Panel>
 
