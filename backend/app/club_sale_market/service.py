@@ -96,11 +96,7 @@ class ClubSaleMarketService:
             settings = {}
         enabled = bool(settings.get("enabled", False))
         minimum_price = settings.get("minimum_price")
-        normalized_minimum = (
-            self._normalize_amount(minimum_price)
-            if minimum_price is not None
-            else None
-        )
+        normalized_minimum = self._normalize_amount(minimum_price) if minimum_price is not None else None
         return {
             "enabled": enabled,
             "minimum_price": normalized_minimum,
@@ -190,9 +186,7 @@ class ClubSaleMarketService:
         return listing
 
     def _get_inquiry_by_public_id(self, inquiry_id: str) -> ClubSaleInquiry:
-        inquiry = self.session.scalar(
-            select(ClubSaleInquiry).where(ClubSaleInquiry.inquiry_id == inquiry_id)
-        )
+        inquiry = self.session.scalar(select(ClubSaleInquiry).where(ClubSaleInquiry.inquiry_id == inquiry_id))
         if inquiry is None:
             raise ClubSaleMarketError("Inquiry was not found.", reason="club_sale_inquiry_not_found")
         return inquiry
@@ -204,7 +198,9 @@ class ClubSaleMarketService:
         return offer
 
     def _valuation_breakdown_payload(self, breakdown: ClubValuationBreakdown | ClubValuationSnapshot) -> dict[str, Any]:
-        metadata_source = breakdown.metadata if isinstance(breakdown, ClubValuationBreakdown) else breakdown.metadata_json
+        metadata_source = (
+            breakdown.metadata if isinstance(breakdown, ClubValuationBreakdown) else breakdown.metadata_json
+        )
         metadata_json = dict(metadata_source or {})
         return {
             "first_team_value": self._json_amount(getattr(breakdown, "first_team_value_coin")),
@@ -234,9 +230,7 @@ class ClubSaleMarketService:
         return self._normalize_amount(getattr(finance_profile, "balance", Decimal("0.0000")))
 
     def _club_identity_metrics(self, club_id: str) -> ClubIdentityMetrics | None:
-        return self.session.scalar(
-            select(ClubIdentityMetrics).where(ClubIdentityMetrics.club_id == club_id)
-        )
+        return self.session.scalar(select(ClubIdentityMetrics).where(ClubIdentityMetrics.club_id == club_id))
 
     def _brand_strength_value(self, club_id: str) -> tuple[Decimal, dict[str, Any]]:
         metrics = self._club_identity_metrics(club_id)
@@ -291,8 +285,7 @@ class ClubSaleMarketService:
             elif match.winner_club_id is None or goals_for == goals_against:
                 points += 1
         value = self._normalize_amount(
-            (Decimal(points) * Decimal("1.6000"))
-            + (Decimal(goal_difference) * Decimal("0.5500"))
+            (Decimal(points) * Decimal("1.6000")) + (Decimal(goal_difference) * Decimal("0.5500"))
         )
         return value, {
             "matches_considered": len(matches),
@@ -433,9 +426,7 @@ class ClubSaleMarketService:
     ) -> list[dict[str, Any]]:
         comparables: list[dict[str, Any]] = []
         transfers = list(
-            self.session.scalars(
-                select(ClubSaleTransfer).order_by(ClubSaleTransfer.created_at.desc()).limit(20)
-            ).all()
+            self.session.scalars(select(ClubSaleTransfer).order_by(ClubSaleTransfer.created_at.desc()).limit(20)).all()
         )
         for transfer in transfers:
             comparable_club = self._require_club(transfer.club_id)
@@ -733,9 +724,7 @@ class ClubSaleMarketService:
     def _ownership_history_payload(self, *, club: ClubProfile, limit: int) -> dict[str, Any]:
         transfer_count = int(
             self.session.scalar(
-                select(func.count())
-                .select_from(ClubSaleTransfer)
-                .where(ClubSaleTransfer.club_id == club.id)
+                select(func.count()).select_from(ClubSaleTransfer).where(ClubSaleTransfer.club_id == club.id)
             )
             or 0
         )
@@ -802,9 +791,7 @@ class ClubSaleMarketService:
         }
 
     def _dynasty_snapshot_payload(self, *, club_id: str, ownership_history: dict[str, Any]) -> dict[str, Any]:
-        progress = self.session.scalar(
-            select(ClubDynastyProgress).where(ClubDynastyProgress.club_id == club_id)
-        )
+        progress = self.session.scalar(select(ClubDynastyProgress).where(ClubDynastyProgress.club_id == club_id))
         continuity_transfers = sum(
             1
             for item in ownership_history["recent_transfers"]
@@ -997,9 +984,7 @@ class ClubSaleMarketService:
         )
 
     def _preserve_shareholders_after_transfer(self, club_id: str, *, new_owner_user_id: str, transfer_id: str) -> int:
-        market = self.session.scalar(
-            select(CreatorClubShareMarket).where(CreatorClubShareMarket.club_id == club_id)
-        )
+        market = self.session.scalar(select(CreatorClubShareMarket).where(CreatorClubShareMarket.club_id == club_id))
         if market is None:
             return 0
         market.creator_user_id = new_owner_user_id
@@ -1877,9 +1862,7 @@ class ClubSaleMarketService:
                 "A valid active sale listing is required before transfer execution.",
                 reason="club_sale_transfer_path_invalid",
             )
-        existing_transfer = self.session.scalar(
-            select(ClubSaleTransfer).where(ClubSaleTransfer.offer_id == offer.id)
-        )
+        existing_transfer = self.session.scalar(select(ClubSaleTransfer).where(ClubSaleTransfer.offer_id == offer.id))
         if existing_transfer is not None:
             raise ClubSaleMarketError(
                 "This accepted offer has already been settled.",
@@ -1905,9 +1888,7 @@ class ClubSaleMarketService:
                 "Executed sale price must be greater than zero.",
                 reason="club_sale_transfer_price_invalid",
             )
-        platform_fee_amount = self._normalize_amount(
-            executed_sale_price * Decimal(PLATFORM_FEE_BPS) / Decimal(10_000)
-        )
+        platform_fee_amount = self._normalize_amount(executed_sale_price * Decimal(PLATFORM_FEE_BPS) / Decimal(10_000))
         seller_net_amount = self._normalize_amount(executed_sale_price - platform_fee_amount)
         valuation_snapshot = self.valuation_service.capture_snapshot(
             club_id=club_id,
@@ -1976,9 +1957,7 @@ class ClubSaleMarketService:
         club.owner_user_id = buyer.id
         prior_transfer_count = int(
             self.session.scalar(
-                select(func.count())
-                .select_from(ClubSaleTransfer)
-                .where(ClubSaleTransfer.club_id == club_id)
+                select(func.count()).select_from(ClubSaleTransfer).where(ClubSaleTransfer.club_id == club_id)
             )
             or 0
         )
