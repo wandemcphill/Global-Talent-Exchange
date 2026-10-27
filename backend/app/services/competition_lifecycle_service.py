@@ -242,9 +242,7 @@ class CompetitionLifecycleService:
         competition = locked_competition
         existing_reward_pools = list(
             self.session.scalars(
-                select(CompetitionRewardPool).where(
-                    CompetitionRewardPool.competition_id == competition.id
-                )
+                select(CompetitionRewardPool).where(CompetitionRewardPool.competition_id == competition.id)
             ).all()
         )
         if CompetitionStatus(competition.status) is CompetitionStatus.SETTLED:
