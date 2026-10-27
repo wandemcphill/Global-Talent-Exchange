@@ -65,10 +65,7 @@ export async function signIn(page) {
   const looksLikeAppRoute = isHashRouting
     ? currentUrl.includes("#/app/")
     : new URL(currentUrl || "http://localhost").pathname.startsWith("/app/");
-  if (
-    looksLikeAppRoute &&
-    (await profileButton.isVisible().catch(() => false))
-  ) {
+  if (looksLikeAppRoute && (await profileButton.isVisible().catch(() => false))) {
     signedInPages.add(page);
     return;
   }
