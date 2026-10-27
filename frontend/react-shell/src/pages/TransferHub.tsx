@@ -135,6 +135,35 @@ export function TransferHub() {
     }
   };
 
+  const handlePlaceBid = async (listing: any) => {
+    const rawAmount = bidAmounts[listing.id];
+    const amount = Number(rawAmount);
+    if (!activeClub?.club_id) {
+      toast.error("Select an active club before placing a bid.");
+      return;
+    }
+    if (!rawAmount || !Number.isFinite(amount) || amount <= Number(listing.current_highest_bid || 0)) {
+      toast.error("Enter a valid bid greater than the current highest bid.");
+      return;
+    }
+
+    setPlacingBidId(listing.id);
+    try {
+      await api.post(`/transfer-market/listings/${listing.id}/bids`, {
+        bidder_club_id: activeClub.club_id,
+        amount,
+        activity_context: "react_transfer_hub_bid_lane",
+      });
+      toast.success("Bid submitted to the transfer market.");
+      setBidAmounts((previous) => ({ ...previous, [listing.id]: "" }));
+      await qc.invalidateQueries({ queryKey: ["transfer-listings"] });
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setPlacingBidId(null);
+    }
+  };
+
   // Submit new offer
   const handleSubmitOffer = async () => {
     if (!offerListing || !offerAmount || !activeClub?.club_id) return;
