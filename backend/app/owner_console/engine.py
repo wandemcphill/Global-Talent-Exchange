@@ -391,28 +391,34 @@ def simulate_match(seed: str, home: dict[str, Any], away: dict[str, Any]) -> dic
             if side_key:
                 score[side_key] += 1
             scorer = ev.primary_player.player_name if ev.primary_player else f"{team_name} Scorer"
-            events.append({
-                "minute": ev.minute,
-                "type": "goal",
-                "team": side_key,
-                "scorer": scorer,
-                "score": f"{score['home']}-{score['away']}",
-                "text": ev.commentary or f"{scorer} scores for {team_name}!",
-            })
+            events.append(
+                {
+                    "minute": ev.minute,
+                    "type": "goal",
+                    "team": side_key,
+                    "scorer": scorer,
+                    "score": f"{score['home']}-{score['away']}",
+                    "text": ev.commentary or f"{scorer} scores for {team_name}!",
+                }
+            )
         elif ev_type in {"shot_missed", "shot_saved", "shot_blocked"}:
-            events.append({
-                "minute": ev.minute,
-                "type": "chance",
-                "team": side_key,
-                "text": ev.commentary or f"Chance for {team_name}.",
-            })
+            events.append(
+                {
+                    "minute": ev.minute,
+                    "type": "chance",
+                    "team": side_key,
+                    "text": ev.commentary or f"Chance for {team_name}.",
+                }
+            )
         elif ev_type in {"yellow_card", "red_card"}:
-            events.append({
-                "minute": ev.minute,
-                "type": "flavour",
-                "team": side_key,
-                "text": ev.commentary or f"Card shown for {team_name}.",
-            })
+            events.append(
+                {
+                    "minute": ev.minute,
+                    "type": "flavour",
+                    "team": side_key,
+                    "text": ev.commentary or f"Card shown for {team_name}.",
+                }
+            )
 
     events.append({"minute": 45, "type": "half", "team": None, "text": "Half-time whistle."})
     events.append(
@@ -436,7 +442,10 @@ def simulate_match(seed: str, home: dict[str, Any], away: dict[str, Any]) -> dic
         "away_goals": ag,
         "events": events,
         "momentum": momentum,
-        "lambda": [round(replay.summary.home_stats.shots * 0.15 + 0.5, 2), round(replay.summary.away_stats.shots * 0.15 + 0.5, 2)],
+        "lambda": [
+            round(replay.summary.home_stats.shots * 0.15 + 0.5, 2),
+            round(replay.summary.away_stats.shots * 0.15 + 0.5, 2),
+        ],
         "gap": round(gap, 3),
     }
     if replay.summary.decided_by_penalties:
