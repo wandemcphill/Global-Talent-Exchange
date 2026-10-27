@@ -39,6 +39,8 @@ import 'package:gte_frontend/screens/manager_market_screen.dart';
 import 'package:gte_frontend/features/player_detail/gtex_fm_player_profile_screen.dart';
 import 'package:gte_frontend/features/club/gtex_lineup_editor_screen.dart';
 import 'package:gte_frontend/screens/match/gtex_match_center_screen_v2.dart';
+import 'package:gte_frontend/screens/clubs/gtex_public_club_profile_screen_v2.dart';
+import 'package:gte_frontend/features/club_redesign/presentation/gtex_public_club_home_v3.dart';
 import 'package:gte_frontend/screens/notifications/gte_notifications_screen_v2.dart';
 import 'package:gte_frontend/screens/profile/gtex_live_profile_screen.dart';
 import 'package:gte_frontend/screens/support/gte_support_dispute_screens.dart';
@@ -137,6 +139,42 @@ GoRouter buildGtexAppRouter({
         },
       ),
       GoRoute(
+        // Public-facing, privacy-filtered club dossier. The backend returns 404
+        // for private clubs, so a guessed ID cannot reveal private club data.
+        path: '/clubs/:clubId/profile',
+        pageBuilder: (BuildContext context, GoRouterState state) {
+          final String clubId = state.pathParameters['clubId']?.trim() ?? '';
+          return NoTransitionPage<void>(
+            key: state.pageKey,
+            child: GtexPublicClubProfileScreenV2(
+              clubId: clubId,
+              baseUrl: config.apiBaseUrl,
+              backendMode: config.activeShellBackendMode,
+              isAuthenticated: controller.isAuthenticated,
+              onOpenLogin: () => context.go(gtexLoginRoute),
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        // Public owner dossier; private wallet details are never returned.
+        path: '/owners/:ownerUserId/profile',
+        pageBuilder: (BuildContext context, GoRouterState state) {
+          final String ownerUserId =
+              state.pathParameters['ownerUserId']?.trim() ?? '';
+          return NoTransitionPage<void>(
+            key: state.pageKey,
+            child: GtexPublicOwnerProfileScreen(
+              ownerUserId: ownerUserId,
+              baseUrl: config.apiBaseUrl,
+              backendMode: config.activeShellBackendMode,
+              isAuthenticated: controller.isAuthenticated,
+              onOpenLogin: () => context.go(gtexLoginRoute),
+            ),
+          );
+        },
+      ),
+      GoRoute(
         path: '/app',
         redirect:
             (BuildContext context, GoRouterState state) =>
@@ -152,12 +190,18 @@ GoRouter buildGtexAppRouter({
         path: gtexAccountSelectRoute,
         pageBuilder:
             (BuildContext context, GoRouterState state) =>
-                const NoTransitionPage<void>(
-                  child: GtexAccountSelectorScreen(),
+                NoTransitionPage<void>(
+                  key: state.pageKey,
+                  child: const GtexAccountSelectorScreen(),
                 ),
       ),
       GoRoute(
         path: gtexLoginRoute,
+        redirect:
+            (BuildContext context, GoRouterState state) =>
+                controller.isAuthenticated
+                    ? const GteNavigationRoute.home().path
+                    : null,
         pageBuilder:
             (BuildContext context, GoRouterState state) =>
                 NoTransitionPage<void>(
@@ -173,6 +217,11 @@ GoRouter buildGtexAppRouter({
       ),
       GoRoute(
         path: gtexUserSignupRoute,
+        redirect:
+            (BuildContext context, GoRouterState state) =>
+                controller.isAuthenticated
+                    ? const GteNavigationRoute.home().path
+                    : null,
         pageBuilder:
             (BuildContext context, GoRouterState state) =>
                 NoTransitionPage<void>(
@@ -185,6 +234,11 @@ GoRouter buildGtexAppRouter({
       ),
       GoRoute(
         path: gtexCreatorSignupRoute,
+        redirect:
+            (BuildContext context, GoRouterState state) =>
+                controller.isAuthenticated
+                    ? const GteNavigationRoute.home().path
+                    : null,
         pageBuilder:
             (BuildContext context, GoRouterState state) =>
                 NoTransitionPage<void>(
@@ -197,6 +251,11 @@ GoRouter buildGtexAppRouter({
       ),
       GoRoute(
         path: gtexTraderSignupRoute,
+        redirect:
+            (BuildContext context, GoRouterState state) =>
+                controller.isAuthenticated
+                    ? const GteNavigationRoute.home().path
+                    : null,
         pageBuilder:
             (BuildContext context, GoRouterState state) =>
                 NoTransitionPage<void>(
@@ -699,7 +758,7 @@ List<RouteBase> _buildLegacyAliasRoutes({
         final GteNavigationDependencies dependencies = dependenciesBuilder(
           context,
         );
-        final String clubId = dependencies.currentClubId ?? '';
+        final String clubId = (dependencies.currentClubId ?? state.uri.queryParameters['club_id'] ?? '').trim();
         return NoTransitionPage<void>(
           key: state.pageKey,
           child:
@@ -935,9 +994,16 @@ List<RouteBase> _buildLegacyAliasRoutes({
       path: '/matches/viewer/:matchKey',
       pageBuilder: (BuildContext context, GoRouterState state) {
         final String matchKey = state.pathParameters['matchKey']?.trim() ?? '';
+        final int? replayMinute = int.tryParse(
+          state.uri.queryParameters['minute']?.trim() ?? '',
+        );
         return NoTransitionPage<void>(
           key: state.pageKey,
-          child: MatchViewerRouteScreen(matchKey: matchKey),
+          child: MatchViewerRouteScreen(
+            matchKey: matchKey,
+            initialReplayMinute: replayMinute,
+            onOpenMatchCenter: () => context.go('/live-match/$matchKey'),
+          ),
         );
       },
     ),
@@ -990,8 +1056,29 @@ List<RouteBase> _buildLegacyAliasRoutes({
         final String matchKey = state.pathParameters['matchKey']?.trim() ?? '';
         return NoTransitionPage<void>(
           key: state.pageKey,
-          child: MatchViewerRouteScreen(matchKey: matchKey),
+          child: MatchViewerRouteScreen(
+            matchKey: matchKey,
+            onOpenMatchCenter: () => context.go('/live-match/$matchKey'),
+          ),
         );
+      },
+    ),
+    GoRoute(
+      path: '/match/:matchId',
+      redirect: (BuildContext context, GoRouterState state) {
+        final String matchId = state.pathParameters['matchId']?.trim() ?? '';
+        return matchId.isEmpty
+            ? const BroadcastDeskRouteData().toUri().toString()
+            : '/live-match/$matchId';
+      },
+    ),
+    GoRoute(
+      path: '/match-center/:matchId',
+      redirect: (BuildContext context, GoRouterState state) {
+        final String matchId = state.pathParameters['matchId']?.trim() ?? '';
+        return matchId.isEmpty
+            ? const BroadcastDeskRouteData().toUri().toString()
+            : '/live-match/$matchId';
       },
     ),
     GoRoute(
@@ -1302,7 +1389,7 @@ Page<void> _landingPage({
   return NoTransitionPage<void>(
     key: state.pageKey,
     child: GtexPublicLandingRouteScreenV2(
-      onSignup: () => router.push(gtexUserSignupRoute),
+      onSignup: () => router.push(gtexAccountSelectRoute),
       onLogin: () => router.push(gtexLoginRoute),
       onCreatorSignup: () => router.push(gtexCreatorSignupRoute),
       onTraderSignup: () => router.push(gtexTraderSignupRoute),

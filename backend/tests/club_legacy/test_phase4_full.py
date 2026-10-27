@@ -50,9 +50,7 @@ def _enable(app, enabled: bool = True) -> None:
 
 
 def _claim(client, headers) -> str:
-    response = client.post(
-        "/api/owner/clubs/claim", headers=headers, json={"city_name": "Lagos", "country_code": "NG"}
-    )
+    response = client.post("/api/owner/clubs/claim", headers=headers, json={"city_name": "Lagos", "country_code": "NG"})
     assert response.status_code == 200, response.text
     return response.json()["club_id"]
 
@@ -132,14 +130,18 @@ def test_purchase_debits_the_club_once_and_reuses_the_idempotency_key(client, bo
         assert first.status == "owned"
         assert (
             session.scalar(
-                select(func.count()).select_from(LedgerTransaction).where(LedgerTransaction.idempotency_key == "asset:p4-jet-once")
+                select(func.count())
+                .select_from(LedgerTransaction)
+                .where(LedgerTransaction.idempotency_key == "asset:p4-jet-once")
             )
             == 1
         )
         assert _debit_account_id(session, "asset:p4-jet-once") == treasury.id
         assert (
             session.scalar(
-                select(func.count()).select_from(ClubLegacyAsset).where(ClubLegacyAsset.idempotency_key == "p4-jet-once")
+                select(func.count())
+                .select_from(ClubLegacyAsset)
+                .where(ClubLegacyAsset.idempotency_key == "p4-jet-once")
             )
             == 1
         )
@@ -154,7 +156,9 @@ def test_purchase_debits_the_club_once_and_reuses_the_idempotency_key(client, bo
     with app.state.session_factory() as session:
         assert (
             session.scalar(
-                select(func.count()).select_from(LedgerTransaction).where(LedgerTransaction.idempotency_key == "asset:p4-jet-once")
+                select(func.count())
+                .select_from(LedgerTransaction)
+                .where(LedgerTransaction.idempotency_key == "asset:p4-jet-once")
             )
             == 1
         )
@@ -225,7 +229,9 @@ def test_transfer_is_atomic_and_writes_provenance(client, bootstrap_admin_header
             memo="Rival float",
         )
         session.add(
-            ClubLegacyMarketSettings(settings_key="club_legacy_market", transfer_fee_rate=Decimal("0.1000"), jet_cap=5, coach_cap=10)
+            ClubLegacyMarketSettings(
+                settings_key="club_legacy_market", transfer_fee_rate=Decimal("0.1000"), jet_cap=5, coach_cap=10
+            )
         )
         session.flush()
         priced = transfer_asset(
@@ -241,7 +247,9 @@ def test_transfer_is_atomic_and_writes_provenance(client, bootstrap_admin_header
         assert priced.price == Decimal("1000.00")
         assert priced.from_owner_ref == club_id
         assert priced.to_owner_ref == rival_club.id
-        fee_tx = session.scalar(select(LedgerTransaction).where(LedgerTransaction.idempotency_key == "transfer-fee:p4-priced"))
+        fee_tx = session.scalar(
+            select(LedgerTransaction).where(LedgerTransaction.idempotency_key == "transfer-fee:p4-priced")
+        )
         assert fee_tx is not None
         assert "fee" in (fee_tx.description or "").lower()
         fee_entries = session.scalars(select(LedgerEntry).where(LedgerEntry.transaction_id == fee_tx.id)).all()
@@ -292,7 +300,7 @@ def test_gift_waits_for_acceptance_and_does_not_max_loyalty(client, bootstrap_ad
         assert owned.status == "offered"
         assert owned.owner_class == owner_class
         assert owned.owner_ref == admin.id
-        resolve_gift(session, gift_id=gift.id, accept=False)
+        resolve_gift(session, gift_id=gift.id, accept=False, actor_user_id=admin.id)
         session.refresh(owned)
         assert owned.owner_class == "owner"
         gift = offer_gift(session, asset_id=owned.id, user_id=admin.id, recipient_ref="player-1")
@@ -325,6 +333,146 @@ def test_gift_waits_for_acceptance_and_does_not_max_loyalty(client, bootstrap_ad
             for player in session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all()
         ]
         assert after == morale
+        session.commit()
+
+
+def test_luxury_player_gifts_are_regen_only(client, bootstrap_admin_headers, app):
+    club_id = _claim(client, bootstrap_admin_headers)
+    _enable(app)
+    with app.state.session_factory() as session:
+        admin = _admin(session)
+        _cheap(session, "gtex-watch-icon", price="100", supply=5)
+        ordinary = OwnerSquadPlayer(
+            id="p4-ordinary-player",
+            club_id=club_id,
+            name="First-Team Player",
+            position="ST",
+            is_regen=False,
+        )
+        regen = OwnerSquadPlayer(
+            id="p4-eligible-regen",
+            club_id=club_id,
+            name="Academy Regen",
+            position="AM",
+            is_regen=True,
+        )
+        session.add_all([ordinary, regen])
+        session.flush()
+        owned = purchase_asset(
+            session,
+            club_id=club_id,
+            user_id=admin.id,
+            sku="gtex-watch-icon",
+            owner_class="owner",
+            idempotency_key="p4-regen-only-gift",
+        )
+
+        with pytest.raises(LegacyError) as rejected:
+            offer_gift(
+                session,
+                asset_id=owned.id,
+                user_id=admin.id,
+                recipient_ref=ordinary.id,
+            )
+        assert rejected.value.status == 400
+        assert rejected.value.code == "player_not_eligible_for_gift"
+        session.refresh(owned)
+        assert owned.status == "owned"
+
+        accepted_offer = offer_gift(
+            session,
+            asset_id=owned.id,
+            user_id=admin.id,
+            recipient_ref=regen.id,
+        )
+        assert accepted_offer.status == "offered"
+        session.commit()
+
+
+def test_gift_resolution_authorization_checks(client, bootstrap_admin_headers, app):
+    club_id = _claim(client, bootstrap_admin_headers)
+    _enable(app)
+    with app.state.session_factory() as session:
+        admin = _admin(session)
+        other_user = _user(session, "p4-other@gte.local", "p4_other")
+        recipient_user = _user(session, "p4-recipient@gte.local", "p4_recipient")
+
+        _cheap(session, "gtex-watch-icon", price="100", supply=5)
+        owned_a = purchase_asset(
+            session,
+            club_id=club_id,
+            user_id=admin.id,
+            sku="gtex-watch-icon",
+            owner_class="owner",
+            idempotency_key="p4-gift-auth-a",
+        )
+        owned_b = purchase_asset(
+            session,
+            club_id=club_id,
+            user_id=admin.id,
+            sku="gtex-watch-icon",
+            owner_class="owner",
+            idempotency_key="p4-gift-auth-b",
+        )
+
+        gift_a = offer_gift(session, asset_id=owned_a.id, user_id=admin.id, recipient_ref=recipient_user.id)
+        gift_b = offer_gift(session, asset_id=owned_b.id, user_id=admin.id, recipient_ref=recipient_user.id)
+
+        # A missing actor must be rejected before either gift or asset is mutated.
+        with pytest.raises(LegacyError) as missing_actor:
+            resolve_gift(session, gift_id=gift_a.id, accept=True)
+        assert missing_actor.value.status == 403
+        assert missing_actor.value.code == "gift_actor_required"
+        session.refresh(gift_a)
+        session.refresh(owned_a)
+        assert gift_a.status == "offered"
+        assert owned_a.status == "offered"
+
+        # Unauthorized user receives 403 when resolving recipient_user's gift
+        with pytest.raises(LegacyError) as exc_info:
+            resolve_gift(session, gift_id=gift_a.id, accept=True, actor_user_id=other_user.id)
+        assert exc_info.value.status == 403
+        assert exc_info.value.code == "not_gift_recipient"
+
+        # Intended recipient can accept directly (user id)
+        resolved_a = resolve_gift(session, gift_id=gift_a.id, accept=True, actor_user_id=recipient_user.id)
+        assert resolved_a.status == "accepted"
+
+        # Gift sent to a player in recipient_user's club can be accepted by recipient_user
+        recipient_club = _club(session, recipient_user.id, "Recipient FC", "recipient-fc")
+        player = OwnerSquadPlayer(
+            id="squad-player-1",
+            club_id=recipient_club.id,
+            name="Star Player",
+            position="ST",
+            is_regen=True,
+        )
+        session.add(player)
+        session.flush()
+
+        owned_c = purchase_asset(
+            session,
+            club_id=club_id,
+            user_id=admin.id,
+            sku="gtex-watch-icon",
+            owner_class="owner",
+            idempotency_key="p4-gift-auth-c",
+        )
+        gift_c = offer_gift(session, asset_id=owned_c.id, user_id=admin.id, recipient_ref=player.id)
+
+        # Other user cannot resolve gift sent to squad player
+        with pytest.raises(LegacyError) as exc_info:
+            resolve_gift(session, gift_id=gift_c.id, accept=True, actor_user_id=other_user.id)
+        assert exc_info.value.status == 403
+
+        # Owner of the player's club can accept
+        resolved_c = resolve_gift(session, gift_id=gift_c.id, accept=True, actor_user_id=recipient_user.id)
+        assert resolved_c.status == "accepted"
+
+        # Admin user can decline on behalf of recipient
+        resolved_b = resolve_gift(session, gift_id=gift_b.id, accept=False, actor_user_id=admin.id)
+        assert resolved_b.status == "declined"
+
         session.commit()
 
 
@@ -382,7 +530,9 @@ def test_supply_cap_holds_for_two_concurrent_purchases_and_club_caps_stay(client
         admin = _admin(session)
         _cheap(session, "gtex-jet-harbour", price="100", supply=20)
         session.add(
-            ClubLegacyMarketSettings(settings_key="club_legacy_market", transfer_fee_rate=Decimal("0.0500"), jet_cap=1, coach_cap=1)
+            ClubLegacyMarketSettings(
+                settings_key="club_legacy_market", transfer_fee_rate=Decimal("0.0500"), jet_cap=1, coach_cap=1
+            )
         )
         session.flush()
         owned = session.scalar(
@@ -431,7 +581,12 @@ def test_listings_reject_wash_trades_and_a_failed_resale_stays_open(client, boot
         _cheap(session, "gtex-jet-harbour", price="100", supply=20)
         _cheap(session, "gtex-coach-lagoon", price="100", supply=20)
         jet = purchase_asset(
-            session, club_id=club_id, user_id=admin.id, sku="gtex-jet-harbour", owner_class="club", idempotency_key="p4-auction-jet"
+            session,
+            club_id=club_id,
+            user_id=admin.id,
+            sku="gtex-jet-harbour",
+            owner_class="club",
+            idempotency_key="p4-auction-jet",
         )
         auction = list_asset(session, asset_id=jet.id, user_id=admin.id, price="1000", kind="auction")
         with pytest.raises(LegacyError) as seller_bid:
@@ -537,7 +692,9 @@ def test_fee_comes_from_the_admin_row_or_the_documented_default(client, bootstra
         listing = list_asset(session, asset_id=asset.id, user_id=admin.id, price="1000")
         assert listing.fee == Decimal("50.00")
         session.add(
-            ClubLegacyMarketSettings(settings_key="club_legacy_market", transfer_fee_rate=Decimal("0.2500"), jet_cap=4, coach_cap=8)
+            ClubLegacyMarketSettings(
+                settings_key="club_legacy_market", transfer_fee_rate=Decimal("0.2500"), jet_cap=4, coach_cap=8
+            )
         )
         session.flush()
         assert market_limits(session)[0] == Decimal("0.2500")
@@ -562,7 +719,9 @@ def test_fee_comes_from_the_admin_row_or_the_documented_default(client, bootstra
             idempotency_key="p4-fee-sale",
         )
         assert bought.fee == Decimal("250.00")
-        fee_tx = session.scalar(select(LedgerTransaction).where(LedgerTransaction.idempotency_key == "sale-fee:p4-fee-sale"))
+        fee_tx = session.scalar(
+            select(LedgerTransaction).where(LedgerTransaction.idempotency_key == "sale-fee:p4-fee-sale")
+        )
         assert fee_tx is not None
         account = session.get(LedgerAccount, _debit_account_id(session, "sale-fee:p4-fee-sale"))
         assert account is not None

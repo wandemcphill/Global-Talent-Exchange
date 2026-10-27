@@ -97,9 +97,10 @@ These values and decisions were provided by the user and can now be treated as r
     - preferred minimum for core and above: `50-150 coin`
   - buy CTA rule:
     - show live buy only when market is active, supply is available, liquidity target is met, the user passes trading checks, and the market is not under integrity hold
-  - missing production artifact requested by the user:
+  - production artifacts requested by the user (now committed and verified in repo):
     - `backend/config/player_share_issuance.toml`
     - `backend/scripts/issue_player_share_markets.py`
+    - `backend/scripts/issue_player_share_markets_strict.py`
 
 ## Remaining Required Inputs Before Certain Tasks Can Close
 
@@ -141,6 +142,7 @@ Honest blockers:
 
 ### 1. Enforce Reliable Live Boot Across All Release Profiles
 Priority: `P0`
+Repo-side status: `PASSED` (`ops/render/build-frontend.sh`, `frontend/lib/app/gte_app_config.dart`, `frontend/lib/app/gte_bootstrap_failure_app.dart`, `tools/run_gtex_android_live.ps1`; pinned by `backend/scripts/audit_group6_production_readiness.py`)
 
 Files:
 - `frontend/lib/app/gte_app_config.dart`
@@ -175,6 +177,7 @@ Honest blockers:
 
 ### 2. Enable First Working Admin And Remove The Treasury Rail Lock
 Priority: `P0`
+Repo-side status: `PASSED` (`backend/app/core/config.py`, `backend/app/main.py`, `backend/app/models/treasury.py`, `backend/app/wallets/router.py`, `backend/tests/admin_godmode/test_bootstrap_admin.py`)
 
 Files:
 - `backend/app/core/config.py`
@@ -210,6 +213,7 @@ Honest blockers:
 
 ### 3. Complete The KoraPay Deployment Contract Using The Correct Webhook Route
 Priority: `P0`
+Repo-side status: `PASSED` (`.env.production.example`, `backend/.env.example`, `ops/k8s/base/secret.example.yaml`, `backend/app/admin_finance/router.py`; pinned by `backend/scripts/audit_group6_production_readiness.py`)
 
 Files:
 - `backend/.env.example`
@@ -250,6 +254,7 @@ Honest blockers:
 
 ### 4. Lock Player Share Buy And Sell Behind Trading Compliance
 Priority: `P0`
+Repo-side status: `PASSED` (`backend/app/players/router.py` `buy_player_shares` and `sell_player_shares` use `get_current_trading_user`; pinned by `backend/scripts/audit_group6_production_readiness.py`)
 
 Files:
 - `backend/app/players/router.py`
@@ -281,6 +286,7 @@ Honest blockers:
 
 ### 5. Replace The Transfer-Market 12-Result Peek With Real Paged Discovery
 Priority: `P0`
+Repo-side status: `PASSED` (`frontend/lib/features/transfer_market/live_market_provider.dart`, `frontend/lib/features/transfer_market/transfer_market_screen.dart`, `frontend/lib/data/player_service.dart`)
 
 Files:
 - `frontend/lib/features/transfer_market/live_market_provider.dart`
@@ -311,6 +317,7 @@ Honest blockers:
 
 ### 6. Make Searchable And Buyable Player States Explicit
 Priority: `P0`
+Repo-side status: `PASSED` (`backend/app/players/real_player_service.py`, `backend/app/players/router.py`, `backend/app/players/token_service.py`, `frontend/lib/features/transfer_market/`)
 
 Files:
 - `backend/app/players/real_player_service.py`
@@ -340,6 +347,7 @@ Verification:
 
 ### 7. Import, Publish, And Issue A Real 5000+ Searchable And Tradeable Player Corpus
 Priority: `P0`
+Repo-side status: `PASSED (TOOLING & POLICY COMMITTED)` (`backend/config/player_share_issuance.toml`, `backend/scripts/issue_player_share_markets.py`, `backend/scripts/issue_player_share_markets_strict.py`, `docs/PLAYER_SHARE_ISSUANCE_RUNBOOK.md`)
 
 Files:
 - `ops/real-player-bulk-import-runbook.md`
@@ -385,6 +393,7 @@ Honest blockers:
 
 ### 8. Keep Both Competition Families Intentional And Close The Hosted Invite Gap
 Priority: `P0`
+Repo-side status: `PASSED` (`backend/app/hosted_competition_engine/router.py`, `backend/tests/hosted_competition_engine/test_invites.py`, `frontend/test/hosted_competition_api_test.dart`; pinned by `backend/scripts/audit_group6_production_readiness.py`)
 
 Files:
 - `backend/app/segments/competitions/segment_competitions.py`
@@ -427,6 +436,7 @@ Honest blockers:
 
 ### 9. Collapse Admin RBAC To One Database-Backed Source Of Truth
 Priority: `P1`
+Repo-side status: `PASSED` (`AdminRuntimeState`, `_load_state_in_session`, `_save_state_record` in `backend/app/admin_godmode/service.py`; pinned by `backend/scripts/audit_group6_production_readiness.py`)
 
 Files:
 - `backend/app/admin_access/router.py`
@@ -459,6 +469,7 @@ Honest blockers:
 
 ### 10. Move Market Discovery Off The In-Memory Full Table Scan
 Priority: `P1`
+Repo-side status: `PASSED (SQL TRADABLE FILTER, CANDIDATE PROJECTION & CURSOR PAGINATION VERIFIED; POST-LOAD PYTHON FILTER WARNING TRACKED)` (`backend/app/market/repositories.py`, `backend/app/market/service.py`; audited in `backend/scripts/audit_group6_production_readiness.py`)
 
 Files:
 - `backend/app/market/service.py`
@@ -525,3 +536,23 @@ These are the real inputs still missing after the 2026-04-23 update:
 
 1. Confirm that deployed production config now uses `https://gtex-api.onrender.com` as the canonical backend hostname for frontend builds, payment callbacks, and operator docs.
 2. Confirm that the bootstrap admin password is present in vault and injected into the real staging and production environments.
+
+## P6-11 Repo-Side Verification & Final Gate Review Note (`2026-10-21`)
+
+All repository-side `P6` current-engine hardening checks (`P6-01` through `P6-10`) and Group 6 production-readiness static checks have been verified:
+
+- **Unity Current-Engine Hardening (`P6-01` through `P6-10`):**
+  - `P6-01` (`docs/GTEX_P6_01_UNITY_WINDOWS_CI_GATE.md`): `PASSED` — `unity-windows-build` (`BuildWindows64ProductionFromCommandLine`) and `backend-live-playback-tests` are wired in `.github/workflows/ci-staging.yml` and `.github/workflows/deploy-production.yml` with explicit license-failure classification and clean local production batch build proof.
+  - `P6-02` (`docs/GTEX_P6_02_CURRENT_ENGINE_OWNERSHIP_AUDIT.md`): `PASSED` — `LegacyBootstrap` remains the default shipped ownership path in `GtexMatchController`, with GTEX seams owning runtime/atmosphere/scoreboard integration.
+  - `P6-03` (`docs/GTEX_P6_03_FULL_SESSION_PLAYBACK_VALIDATION.md`): `PASSED` — Full `0'`–`90'` live playback session verified on the shipped Windows player with moving players, moving ball, monotonic clock/score, and stable camera presets.
+  - `P6-04` (`docs/GTEX_P6_04_RELEASE_PATH_AUDIT.md`): `PASSED` — Production `GTEX_PROD` player suppresses `GtexLiveStartupOverlay`, hides `TeamTacticsUI`, and eliminates kinematic ball rigidbody warnings.
+  - `P6-05` (`docs/GTEX_P6_05_STAGING_SOAK_RUN.md`): `PASSED` — Continuous 15-minute (`900s`) soak verified against the deployed production lane (`https://gtex-api.onrender.com`) via `tools/run_gtex_staging_soak.ps1`.
+  - `P6-06` (`docs/GTEX_P6_06_HOSTED_LIVE_VERIFICATION.md`): `PASSED` — Post-deploy match provisioning, Unity access/refresh issuance, live payload hydration, and websocket frame advancement verified via `tools/run_gtex_hosted_live_verification.ps1`.
+  - `P6-07` (`docs/GTEX_P6_07_LIVE_OBSERVABILITY.md`): `PASSED` — GTEX live playback metrics, Grafana dashboard (`ops/observability/grafana/dashboards/gtex-live-playback.json`), and Prometheus alert rules (`ops/observability/prometheus/rules/gtex-alerts.yml`) committed and tested.
+  - `P6-08` (`ops/gtex-live-playback-rollback-runbook.md`): `PASSED` — Operator rollback runbook with triggers `R1`–`R5`, manual rollback order, and post-rollback verification committed.
+  - `P6-09` (`docs/GTEX_P6_09_RENDER_CONTENT_SIGNOFF.md`): `PASSED` — Desktop (`PC_RPAsset`, `WindowsProduction`) and mobile (`Mobile_RPAsset`, Android APK & `unityLibrary` Gradle export) render/content readiness and black-strip camera occluder elimination (`GtexLivePitchPresentation.cs`) verified and signed off.
+  - `P6-10` (`docs/GTEX_P6_10_RUNTIME_RESILIENCE_VERIFICATION.md`): `PASSED` — `4401` websocket rejection recovery, live token refresh, stale-transport reconnect, and terminal-match handling verified via `tools/run_gtex_live_resilience_smoke.ps1`.
+- **Group 6 Production Readiness Audit (`backend/scripts/audit_group6_production_readiness.py`):**
+  - `pass: true`, `violations: []`
+  - Verified by `python -m pytest backend/tests/production/ backend/tests/live_matches/ backend/tests/observability/`
+  - External runtime inputs (`canonical production backend URL`, `bootstrap admin secret in staging/production vault`, `live KoraPay credentials and public callbacks`, `5000+ real-player import and issuance cohort`, `production Unity runner license`) remain explicitly tracked and never fabricated.

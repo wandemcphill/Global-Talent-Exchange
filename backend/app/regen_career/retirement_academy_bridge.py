@@ -40,7 +40,7 @@ class RegenRetirementAcademyBridge:
             return None
         if plan.get("generation_status") == "completed":
             return RetirementAcademyBridgeResult(status="completed", trigger_key=trigger_key)
-        if not self.enabled():
+        if not self.enabled() and not plan.get("force_enable", False) and not state.get("force_enable", False):
             return RetirementAcademyBridgeResult(status="pending", trigger_key=trigger_key)
 
         existing_run = self.session.scalar(
@@ -131,6 +131,7 @@ class RegenRetirementAcademyBridge:
         )
         if personality is None:
             return {}
+
         # Heirs inherit a softened echo — not a clone — so bloodlines rhyme.
         def soften(value: int, pull: int = 50) -> int:
             return max(1, min(99, int(round(value * 0.62 + pull * 0.38))))

@@ -61,8 +61,25 @@ def commentary_topic(match_id: str) -> str:
     return f"commentary:{match_id}"
 
 
+def global_ticker_topic() -> str:
+    return "global_ticker"
+
+
+def save_context_topic(save_context_id: str) -> str:
+    return f"save:{save_context_id}"
+
+
+_GLOBAL_REALTIME_HUB: RealtimeHub | None = None
+
+
+def get_global_realtime_hub() -> RealtimeHub | None:
+    return _GLOBAL_REALTIME_HUB
+
+
 class RealtimeHub:
     def __init__(self) -> None:
+        global _GLOBAL_REALTIME_HUB
+        _GLOBAL_REALTIME_HUB = self
         self.total_events = 0
         self.channels: dict[str, int] = {}
         self.last_event_name: str | None = None
@@ -266,6 +283,68 @@ class RealtimeHub:
 
     def _map_domain_event(self, event: DomainEvent) -> list[RealtimeDispatch]:
         payload = dict(event.payload or {})
+        if event.name == "storytelling.ticker.broadcast":
+            topics = ["global_ticker"]
+            save_ctx = _optional_string(payload.get("save_context_id"))
+            if save_ctx:
+                topics.append(f"save:{save_ctx}")
+            club_id = _optional_string(payload.get("club_id"))
+            if club_id:
+                topics.append(f"club:{club_id}")
+            return [
+                RealtimeDispatch(
+                    type="global_ticker_announcement",
+                    topics=tuple(topics),
+                    data=payload,
+                )
+            ]
+        if event.name in {"match.gift", "gift.sent", "gift_sent"}:
+            match_id = _optional_string(payload.get("match_id"))
+            club_id = _optional_string(payload.get("club_id"))
+            gift_name = _optional_string(payload.get("gift_name") or payload.get("gift_display_name")) or "Gift"
+            sender = _optional_string(payload.get("sender") or payload.get("sender_username")) or "Fan"
+            gift_payload = {
+                "type": "gift_animation",
+                "gift_code": payload.get("gift_code") or payload.get("gift_key"),
+                "gift_name": gift_name,
+                "sender": sender,
+                "sender_id": payload.get("sender_id") or payload.get("sender_user_id"),
+                "club_id": club_id,
+                "match_id": match_id,
+                "amount": payload.get("amount") or payload.get("cost"),
+                "animation_key": payload.get("animation_key") or "fan_chant",
+                "sound_key": payload.get("sound_key") or "crowd_cheer",
+            }
+            dispatches: list[RealtimeDispatch] = []
+            if match_id:
+                dispatches.append(
+                    RealtimeDispatch(
+                        type="gift_broadcast",
+                        topics=(match_topic(match_id), commentary_topic(match_id)),
+                        data=gift_payload,
+                    )
+                )
+            if club_id:
+                dispatches.append(
+                    RealtimeDispatch(
+                        type="gift_broadcast",
+                        topics=(f"club:{club_id}",),
+                        data=gift_payload,
+                    )
+                )
+            dispatches.append(
+                RealtimeDispatch(
+                    type="global_ticker_announcement",
+                    topics=("global_ticker",),
+                    data={
+                        "headline": f"{sender} sent {gift_name}!",
+                        "category": "gift",
+                        "related_id": match_id or club_id,
+                    },
+                )
+            )
+            return dispatches
+
         if event.name == "wallet.balance.updated":
             owner_user_id = _optional_string(payload.get("owner_user_id"))
             if owner_user_id is None:
@@ -494,6 +573,14 @@ def _payload_for_dispatch(dispatch: RealtimeDispatch) -> dict[str, Any]:
         "source_tag": REALTIME_SOURCE_TAG,
         "published_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def publish_realtime_domain_event(name: str, payload: dict[str, Any], **kwargs: Any) -> None:
+    from app.core.events import DomainEvent
+
+    hub = _GLOBAL_REALTIME_HUB
+    if hub is not None:
+        hub.handle_event(DomainEvent(name=name, payload={**payload, **kwargs}))
 
 
 __all__ = [

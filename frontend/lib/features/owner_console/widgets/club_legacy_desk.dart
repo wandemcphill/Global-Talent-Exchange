@@ -13,6 +13,9 @@ class ClubLegacyDeskData {
     required this.cases,
     this.market = const <Map<String, dynamic>>[],
     this.auctionable = const <Map<String, dynamic>>[],
+    this.recommendations = const <Map<String, dynamic>>[],
+    this.facilities = const <Map<String, dynamic>>[],
+    this.clubLegacyEnabled = true,
   });
 
   factory ClubLegacyDeskData.fromJson(Map<String, dynamic> json) {
@@ -28,6 +31,9 @@ class ClubLegacyDeskData {
       cases: _rows(json['cases']),
       market: _rows(json['market']),
       auctionable: _rows(json['auctionable_assets']),
+      recommendations: _rows(json['recommendations']),
+      facilities: _rows(json['facilities']),
+      clubLegacyEnabled: json['club_legacy_enabled'] != false,
     );
   }
 
@@ -41,6 +47,14 @@ class ClubLegacyDeskData {
   final List<Map<String, dynamic>> cases;
   final List<Map<String, dynamic>> market;
   final List<Map<String, dynamic>> auctionable;
+  final List<Map<String, dynamic>> recommendations;
+  final List<Map<String, dynamic>> facilities;
+  final bool clubLegacyEnabled;
+
+  bool get gmHired => staff.any(
+    (Map<String, dynamic> row) =>
+        '${row['role'] ?? ''}'.trim().toLowerCase() == 'gm',
+  );
 }
 
 List<Map<String, dynamic>> _rows(Object? value) => (value is List ? value : const <dynamic>[])

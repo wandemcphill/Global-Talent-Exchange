@@ -1490,7 +1490,7 @@ def _install_country_specific_name_pools() -> None:
         # Do not clobber hand-engineered, ethnicity/region-coherent profiles
         # (e.g. NG's Yoruba/Igbo/Hausa sub-profiles). The flat single-pool draws
         # given names and surnames independently, which mixes sub-ethnicities.
-        if code in _NAMING_PROFILES:
+        if code in _NAMING_PROFILES or code in _COUNTRY_PROFILE_ALIASES:
             continue
         _NAMING_PROFILES[code] = _country_profile(
             country_code=code,
@@ -1508,8 +1508,6 @@ def _install_country_specific_name_pools() -> None:
             ),
         )
 
-
-_install_country_specific_name_pools()
 
 _COUNTRY_PROFILE_ALIASES: dict[str, tuple[str, str, str]] = {
     "DZ": ("MA", "Algiers", "Algiers"),
@@ -1613,6 +1611,8 @@ _COUNTRY_PROFILE_ALIASES: dict[str, tuple[str, str, str]] = {
     "PS": ("EG", "Ramallah", "Ramallah"),
     "TM": ("TR", "Ashgabat", "Ashgabat"),
 }
+
+_install_country_specific_name_pools()
 
 
 def _normalized_country_name_alias(country_name: str | None) -> str:

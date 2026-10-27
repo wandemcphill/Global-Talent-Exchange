@@ -9,56 +9,44 @@ import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
   testWidgets(
-      'creator access request screen submits a creator application after contact confirmation',
-      (WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1600, 2400);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
+    'creator application cannot self-verify contacts or submit without trusted verification',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1600, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
 
-    final GteExchangeController controller = GteExchangeController(
-      api: GteExchangeApiClient.fixture(),
-    );
-    controller.session = _authenticatedSession(
-      userId: 'creator-user',
-      userName: 'Creator User',
-      phoneNumber: '1234567890',
-    );
+      final GteExchangeController controller = GteExchangeController(
+        api: GteExchangeApiClient.fixture(),
+      );
+      controller.session = _authenticatedSession(
+        userId: 'creator-user',
+        userName: 'Creator User',
+        phoneNumber: '1234567890',
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: GteShellTheme.build(),
-        home: CreatorAccessRequestScreen(exchangeController: controller),
-      ),
-    );
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: CreatorAccessRequestScreen(exchangeController: controller),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Use account email'), findsOneWidget);
-    expect(find.text('Use account phone'), findsOneWidget);
+      expect(find.text('Contact readiness'), findsOneWidget);
+      expect(find.text('Use account email'), findsNothing);
+      expect(find.text('Use account phone'), findsNothing);
+      expect(find.text('Secure phone verification unavailable'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Use account email'));
-    await tester.tap(find.text('Use account email'));
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Use account phone'));
-    await tester.tap(find.text('Use account phone'));
-    await tester.pumpAndSettle();
-
-    await tester.enterText(find.byType(TextField).at(0), 'creator.one');
-    await tester.enterText(find.byType(TextField).at(1), 'Creator One');
-    await tester.enterText(find.byType(TextField).at(2), '250000');
-    await tester.enterText(
-      find.byType(TextField).at(3),
-      'https://youtube.com/@creatorone',
-    );
-
-    await tester.ensureVisible(find.text('Submit creator application'));
-    await tester.tap(find.text('Submit creator application'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Creator application pending review'), findsOneWidget);
-  });
+      final Finder submitButton =
+          find.widgetWithText(FilledButton, 'Submit creator application');
+      expect(submitButton, findsOneWidget);
+      expect(tester.widget<FilledButton>(submitButton).onPressed, isNull);
+      expect(find.text('Creator application pending review'), findsNothing);
+    },
+  );
 }
 
 GteAuthSession _authenticatedSession({

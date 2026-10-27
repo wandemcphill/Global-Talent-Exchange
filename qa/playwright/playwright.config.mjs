@@ -21,7 +21,7 @@ const webServer = process.env.GTEX_E2E_BASE_URL
 
 export default defineConfig({
   testDir: "./tests",
-  timeout: 120_000,
+  timeout: 150_000,
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,

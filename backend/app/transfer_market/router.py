@@ -338,6 +338,18 @@ def close_transfer_market_listing(
         _raise_transfer_market_error(exc)
 
 
+@router.get("/api/transfer-market/negotiations", response_model=list[TransferNegotiationView])
+def list_transfer_market_negotiations(
+    club_id: str | None = Query(default=None),
+    service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> list[TransferNegotiationView]:
+    try:
+        return service.list_negotiations(actor=current_user, club_id=club_id)
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
+        _raise_transfer_market_error(exc)
+
+
 @router.get("/api/transfer-hub/listings/{listing_id}/negotiation", response_model=TransferNegotiationView)
 @router.get("/api/transfer-market/listings/{listing_id}/negotiation", response_model=TransferNegotiationView)
 def get_transfer_market_negotiation(
@@ -430,6 +442,19 @@ def upsert_transfer_market_team_dynamics(
 ) -> ClubTeamDynamicsView:
     try:
         return service.upsert_team_dynamics(club_id, payload, actor=current_user)
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
+        _raise_transfer_market_error(exc)
+
+
+@router.get("/api/transfer-hub/watchlist", response_model=list[MarketWatchlistEntryView])
+@router.get("/api/transfer-market/watchlist", response_model=list[MarketWatchlistEntryView])
+def list_transfer_market_watchlist(
+    club_id: str | None = Query(default=None),
+    service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> list[MarketWatchlistEntryView]:
+    try:
+        return service.list_watchlist_entries(actor=current_user, club_id=club_id)
     except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
         _raise_transfer_market_error(exc)
 

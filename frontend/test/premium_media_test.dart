@@ -72,7 +72,7 @@ void main() {
     // desk and its club-creation prompt.
     expect(find.text('No-club user command desk'), findsOneWidget);
     expect(find.text('GET READY TO OWN A FOOTBALL OPERATION'), findsOneWidget);
-    expect(find.text('Transfer Hub'), findsWidgets);
+    expect(find.text('Market'), findsWidgets);
   });
 
   testWidgets('premium media assets are present in AssetManifest', (

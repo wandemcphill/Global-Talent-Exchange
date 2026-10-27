@@ -743,9 +743,14 @@ def record_match_event(
     competition_id: str,
     match_id: str,
     payload: CompetitionMatchEventRequest,
-    _: User = Depends(get_current_user),
+    request: Request,
+    actor: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionMatchEventView:
+    competition = orchestrator.session.get(Competition, competition_id)
+    if competition is None:
+        raise _not_found(competition_id)
+    _require_manage_competitions_or_creator(request, actor, competition)
     result = _handle_competition_errors(lambda: orchestrator.record_match_event(competition_id, match_id, payload))
     if result is None:
         raise _not_found(competition_id)
@@ -769,9 +774,14 @@ def complete_match(
     competition_id: str,
     match_id: str,
     payload: CompetitionMatchResultRequest,
-    _: User = Depends(get_current_user),
+    request: Request,
+    actor: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionMatchView:
+    competition = orchestrator.session.get(Competition, competition_id)
+    if competition is None:
+        raise _not_found(competition_id)
+    _require_manage_competitions_or_creator(request, actor, competition)
     # CompetitionMatchService.complete_match raises plain ValueError for an
     # already-settled/terminal match (see competition_match_service.py). That is a
     # client-correctable conflict, not a server fault, so it must not fall through

@@ -7,4 +7,15 @@ module.exports = {
       "@": path.resolve(__dirname, "src"),
     },
   },
+  devServer: (devServerConfig) => {
+    devServerConfig.historyApiFallback = true;
+    return devServerConfig;
+  },
+  jest: {
+    configure: (jestConfig) => {
+      // Normalize Windows slashes for glob matching in directories containing dots like .gemini
+      jestConfig.testMatch = ["**/src/**/__tests__/**/*.{js,jsx,ts,tsx}", "**/src/**/*.{spec,test}.{js,jsx,ts,tsx}"];
+      return jestConfig;
+    },
+  },
 };

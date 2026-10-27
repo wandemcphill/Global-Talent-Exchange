@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/features/competitions/live_competitions_provider.dart';
+import 'package:gte_frontend/features/national_teams/live_national_teams_provider.dart';
 import 'package:gte_frontend/features/shared/data/gte_feature_support.dart';
 import 'package:gte_frontend/features/streamer_tournament_engine/data/streamer_tournament_engine_models.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/hosted_competition_models.dart';
+import 'package:gte_frontend/models/national_team_models.dart';
 import 'package:gte_frontend/shared/providers/auth_provider.dart';
 import 'package:gte_frontend/shared/providers/live_clients_provider.dart';
 import 'package:gte_frontend/ui_gtex/components/gtex_command_center.dart';
@@ -15,18 +17,35 @@ import 'package:gte_frontend/ui_gtex/theme/gtex_colors.dart';
 import 'package:gte_frontend/ui_gtex/theme/gtex_spacing.dart';
 import 'package:gte_frontend/ui_gtex/theme/gtex_typography.dart';
 
-/// The canonical, provider-backed competition hub. It does not merge GTEX,
-/// hosted, and creator tournament records because those families have distinct
-/// lifecycle and participation contracts.
+/// Canonical Matchday Lane sub-navigation (Document G15):
+/// `Fixtures · Competitions · Live · National · Calendar`.
+enum GtexMatchdaySubTab {
+  fixtures('Fixtures', Icons.event_note_outlined),
+  competitions('Competitions', Icons.emoji_events_outlined),
+  live('Live', Icons.sensors_rounded),
+  national('National', Icons.flag_outlined),
+  calendar('Calendar', Icons.calendar_month_outlined);
+
+  const GtexMatchdaySubTab(this.label, this.icon);
+
+  final String label;
+  final IconData icon;
+}
+
+/// The canonical, provider-backed competition & matchday hub. It does not merge
+/// GTEX, hosted, and creator tournament records because those families have
+/// distinct lifecycle and participation contracts (Decision O-02).
 class GtexLiveCompetitionsCommandScreen extends ConsumerStatefulWidget {
   const GtexLiveCompetitionsCommandScreen({
     super.key,
     required this.isAuthenticated,
     required this.onOpenLogin,
+    this.initialSubTab = GtexMatchdaySubTab.competitions,
   });
 
   final bool isAuthenticated;
   final VoidCallback onOpenLogin;
+  final GtexMatchdaySubTab initialSubTab;
 
   @override
   ConsumerState<GtexLiveCompetitionsCommandScreen> createState() =>
@@ -35,9 +54,16 @@ class GtexLiveCompetitionsCommandScreen extends ConsumerStatefulWidget {
 
 class _GtexLiveCompetitionsCommandScreenState
     extends ConsumerState<GtexLiveCompetitionsCommandScreen> {
+  late GtexMatchdaySubTab _subTab;
   CompetitionFamilyRoute _family = CompetitionFamilyRoute.gtex;
   String? _selectedCompetitionId;
   bool _joining = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _subTab = widget.initialSubTab;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -168,62 +194,85 @@ class _GtexLiveCompetitionsCommandScreenState
             ),
           ],
         ),
-        const SizedBox(height: GtexSpacing.lg),
-        GtexCompetitionFamilySelector<CompetitionFamilyRoute>(
-          value: _family,
-          onChanged:
-              (CompetitionFamilyRoute value) => setState(() {
-                _family = value;
-                _selectedCompetitionId = null;
-              }),
-          items: const <GtexCompetitionFamilyItem<CompetitionFamilyRoute>>[
-            GtexCompetitionFamilyItem<CompetitionFamilyRoute>(
-              value: CompetitionFamilyRoute.gtex,
-              label: 'GTEX competitions',
-              accent: GtexColors.accentPrimary,
-            ),
-            GtexCompetitionFamilyItem<CompetitionFamilyRoute>(
-              value: CompetitionFamilyRoute.hosted,
-              label: 'Hosted competitions',
-              accent: GtexColors.accentBlue,
-            ),
-            GtexCompetitionFamilyItem<CompetitionFamilyRoute>(
-              value: CompetitionFamilyRoute.streamer,
-              label: 'Creator tournaments',
-              accent: GtexColors.accentAmber,
-            ),
-          ],
-        ),
         const SizedBox(height: GtexSpacing.md),
-        LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final Widget browse = _CompetitionBrowseList(
-              family: _family,
-              cards: cards,
-              selectedId: selection,
-              onSelected:
-                  (String id) => setState(() => _selectedCompetitionId = id),
-            );
-            final Widget detail = _buildDetail(selection);
-            if (constraints.maxWidth < 900) {
-              return Column(
+        _MatchdaySubTabBar(
+          selected: _subTab,
+          onSelected: (GtexMatchdaySubTab tab) => setState(() => _subTab = tab),
+        ),
+        const SizedBox(height: GtexSpacing.lg),
+        if (_subTab == GtexMatchdaySubTab.competitions) ...<Widget>[
+          GtexCompetitionFamilySelector<CompetitionFamilyRoute>(
+            value: _family,
+            onChanged:
+                (CompetitionFamilyRoute value) => setState(() {
+                  _family = value;
+                  _selectedCompetitionId = null;
+                }),
+            items: const <GtexCompetitionFamilyItem<CompetitionFamilyRoute>>[
+              GtexCompetitionFamilyItem<CompetitionFamilyRoute>(
+                value: CompetitionFamilyRoute.gtex,
+                label: 'GTEX competitions',
+                accent: GtexColors.accentPrimary,
+              ),
+              GtexCompetitionFamilyItem<CompetitionFamilyRoute>(
+                value: CompetitionFamilyRoute.hosted,
+                label: 'Hosted competitions',
+                accent: GtexColors.accentBlue,
+              ),
+              GtexCompetitionFamilyItem<CompetitionFamilyRoute>(
+                value: CompetitionFamilyRoute.streamer,
+                label: 'Creator tournaments',
+                accent: GtexColors.accentAmber,
+              ),
+            ],
+          ),
+          const SizedBox(height: GtexSpacing.md),
+          LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final Widget browse = _CompetitionBrowseList(
+                family: _family,
+                cards: cards,
+                selectedId: selection,
+                onSelected:
+                    (String id) => setState(() => _selectedCompetitionId = id),
+              );
+              final Widget detail = _buildDetail(selection);
+              if (constraints.maxWidth < 900) {
+                return Column(
+                  children: <Widget>[
+                    browse,
+                    const SizedBox(height: GtexSpacing.md),
+                    detail,
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  browse,
-                  const SizedBox(height: GtexSpacing.md),
-                  detail,
+                  SizedBox(width: 360, child: browse),
+                  const SizedBox(width: GtexSpacing.md),
+                  Expanded(child: detail),
                 ],
               );
-            }
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                SizedBox(width: 360, child: browse),
-                const SizedBox(width: GtexSpacing.md),
-                Expanded(child: detail),
-              ],
-            );
-          },
-        ),
+            },
+          ),
+        ] else if (_subTab == GtexMatchdaySubTab.fixtures)
+          _MatchdayFixturesSubTabView(
+            data: data,
+            onSelectCompetition: (CompetitionFamilyRoute family, String id) {
+              setState(() {
+                _subTab = GtexMatchdaySubTab.competitions;
+                _family = family;
+                _selectedCompetitionId = id;
+              });
+            },
+          )
+        else if (_subTab == GtexMatchdaySubTab.live)
+          _MatchdayLive2dSubTabView(data: data)
+        else if (_subTab == GtexMatchdaySubTab.national)
+          const _MatchdayNationalSubTabView()
+        else if (_subTab == GtexMatchdaySubTab.calendar)
+          _MatchdayCalendarSubTabView(data: data),
       ],
     );
   }
@@ -1116,3 +1165,511 @@ String? _score(JsonMap map) {
 
 String _money(double amount, String currency) =>
     '${amount.toStringAsFixed(2)} $currency';
+
+class _MatchdaySubTabBar extends StatelessWidget {
+  const _MatchdaySubTabBar({required this.selected, required this.onSelected});
+
+  final GtexMatchdaySubTab selected;
+  final ValueChanged<GtexMatchdaySubTab> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      key: const Key('gtex-matchday-subtab-bar'),
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: GtexMatchdaySubTab.values
+            .map((GtexMatchdaySubTab tab) {
+              final bool isSelected = tab == selected;
+              return Padding(
+                padding: const EdgeInsets.only(right: GtexSpacing.sm),
+                child: ChoiceChip(
+                  key: Key('gtex-matchday-subtab-${tab.name}'),
+                  avatar: Icon(
+                    tab.icon,
+                    size: 16,
+                    color:
+                        isSelected
+                            ? GtexColors.accentPrimary
+                            : GtexColors.textSecondary,
+                  ),
+                  label: Text(tab.label),
+                  selected: isSelected,
+                  onSelected: (_) => onSelected(tab),
+                  selectedColor: GtexColors.accentPrimary.withValues(
+                    alpha: 0.16,
+                  ),
+                  backgroundColor: GtexColors.surfaceRaised,
+                  side: BorderSide(
+                    color:
+                        isSelected
+                            ? GtexColors.accentPrimary
+                            : GtexColors.surfaceBorder,
+                  ),
+                ),
+              );
+            })
+            .toList(growable: false),
+      ),
+    );
+  }
+}
+
+class _MatchdayFixturesSubTabView extends StatelessWidget {
+  const _MatchdayFixturesSubTabView({
+    required this.data,
+    required this.onSelectCompetition,
+  });
+
+  final CompetitionHubData data;
+  final void Function(CompetitionFamilyRoute family, String id)
+  onSelectCompetition;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<CompetitionSummary> gtex = data.gtexCompetitions;
+    final List<HostedCompetition> hosted = data.hostedCompetitions;
+    final List<StreamerTournament> streamer = data.streamerTournaments;
+    if (gtex.isEmpty && hosted.isEmpty && streamer.isEmpty) {
+      return const _CompetitionStatePanel(
+        title: 'No fixtures scheduled',
+        detail:
+            'Fixture slates appear here as soon as GTEX, Hosted, or Creator competition rounds are published.',
+        icon: Icons.event_busy_outlined,
+      );
+    }
+    return Column(
+      key: const Key('gtex-matchday-fixtures-view'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        for (final CompetitionSummary comp in gtex)
+          Padding(
+            padding: const EdgeInsets.only(bottom: GtexSpacing.sm),
+            child: _MatchdayFixtureSlateRow(
+              badge: 'GTEX',
+              title: comp.name,
+              subtitle:
+                  '${_competitionStatusLabel(comp.status)} · ${comp.participantCount}/${comp.capacity} clubs',
+              accent: GtexColors.accentPrimary,
+              onInspect:
+                  () =>
+                      onSelectCompetition(CompetitionFamilyRoute.gtex, comp.id),
+            ),
+          ),
+        for (final HostedCompetition comp in hosted)
+          Padding(
+            padding: const EdgeInsets.only(bottom: GtexSpacing.sm),
+            child: _MatchdayFixtureSlateRow(
+              badge: 'HOSTED',
+              title: comp.title,
+              subtitle:
+                  '${comp.status} · up to ${comp.maxParticipants} entrants',
+              accent: GtexColors.accentBlue,
+              onInspect:
+                  () => onSelectCompetition(
+                    CompetitionFamilyRoute.hosted,
+                    comp.id,
+                  ),
+            ),
+          ),
+        for (final StreamerTournament comp in streamer)
+          Padding(
+            padding: const EdgeInsets.only(bottom: GtexSpacing.sm),
+            child: _MatchdayFixtureSlateRow(
+              badge: 'CREATOR',
+              title: comp.title,
+              subtitle: '${comp.status} · ${comp.tournamentType}',
+              accent: GtexColors.accentAmber,
+              onInspect:
+                  () => onSelectCompetition(
+                    CompetitionFamilyRoute.streamer,
+                    comp.id,
+                  ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _MatchdayFixtureSlateRow extends StatelessWidget {
+  const _MatchdayFixtureSlateRow({
+    required this.badge,
+    required this.title,
+    required this.subtitle,
+    required this.accent,
+    required this.onInspect,
+  });
+
+  final String badge;
+  final String title;
+  final String subtitle;
+  final Color accent;
+  final VoidCallback onInspect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(GtexSpacing.md),
+      decoration: BoxDecoration(
+        color: GtexColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
+        border: Border.all(color: GtexColors.surfaceBorder),
+      ),
+      child: Row(
+        children: <Widget>[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(GtexSpacing.radiusSm),
+              border: Border.all(color: accent.withValues(alpha: 0.45)),
+            ),
+            child: Text(
+              badge,
+              style: GtexText.labelSM.copyWith(color: accent),
+            ),
+          ),
+          const SizedBox(width: GtexSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(title, style: GtexText.displaySM),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: GtexText.bodySM.copyWith(
+                    color: GtexColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton.icon(
+            onPressed: onInspect,
+            icon: const Icon(Icons.open_in_new_rounded, size: 16),
+            label: const Text('Inspect fixtures'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MatchdayLive2dSubTabView extends StatelessWidget {
+  const _MatchdayLive2dSubTabView({required this.data});
+
+  final CompetitionHubData data;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<CompetitionSummary> liveCompetitions = data.gtexCompetitions
+        .where(
+          (CompetitionSummary item) =>
+              item.status == CompetitionStatus.inProgress,
+        )
+        .toList(growable: false);
+    final bool canRoute = GoRouter.maybeOf(context) != null;
+
+    return Column(
+      key: const Key('gtex-matchday-live-view'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Container(
+          key: const Key('gtex-matchday-2d-rule-banner'),
+          width: double.infinity,
+          padding: const EdgeInsets.all(GtexSpacing.md),
+          decoration: BoxDecoration(
+            color: GtexColors.surfaceRaised,
+            borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
+            border: Border.all(
+              color: GtexColors.accentPrimary.withValues(alpha: 0.45),
+            ),
+          ),
+          child: Row(
+            children: <Widget>[
+              const Icon(
+                Icons.grid_view_rounded,
+                color: GtexColors.accentPrimary,
+              ),
+              const SizedBox(width: GtexSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      '2D Tactical Match Centre',
+                      style: GtexText.displaySM,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Flutter Matchday stays 2D tactical; Unity owns 3D broadcast runtime.',
+                      style: GtexText.bodySM.copyWith(
+                        color: GtexColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: GtexSpacing.md),
+        if (liveCompetitions.isEmpty)
+          const _CompetitionStatePanel(
+            title: 'No live matches in progress',
+            detail:
+                'When a GTEX matchday kicks off, open the 2D Tactical Match Centre from here for live pitch dots, timeline events, momentum, and valuation impact.',
+            icon: Icons.sensors_off_rounded,
+          )
+        else
+          for (final CompetitionSummary live in liveCompetitions)
+            Padding(
+              padding: const EdgeInsets.only(bottom: GtexSpacing.sm),
+              child: Container(
+                padding: const EdgeInsets.all(GtexSpacing.md),
+                decoration: BoxDecoration(
+                  color: GtexColors.surfaceRaised,
+                  borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
+                  border: Border.all(color: GtexColors.surfaceBorder),
+                ),
+                child: Row(
+                  children: <Widget>[
+                    const Icon(
+                      Icons.sensors_rounded,
+                      color: GtexColors.accentPrimary,
+                    ),
+                    const SizedBox(width: GtexSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(live.name, style: GtexText.displaySM),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Matchday live · ${live.participantCount}/${live.capacity} clubs',
+                            style: GtexText.bodySM.copyWith(
+                              color: GtexColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (canRoute)
+                      FilledButton.icon(
+                        key: Key('gtex-matchday-open-2d-${live.id}'),
+                        onPressed:
+                            () => context.push('/matches-v2/${live.id}'),
+                        icon: const Icon(
+                          Icons.sports_soccer_rounded,
+                          size: 16,
+                        ),
+                        label: const Text('Open 2D Match Centre'),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+      ],
+    );
+  }
+}
+
+class _MatchdayNationalSubTabView extends ConsumerWidget {
+  const _MatchdayNationalSubTabView();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<NationalTeamsHubData> nationalHub = ref.watch(
+      nationalTeamsHubProvider,
+    );
+    return nationalHub.when(
+      loading:
+          () => const _CompetitionStatePanel(
+            title: 'Loading national teams & international competitions',
+            detail:
+                'Connecting to the National Teams & international rankings feed.',
+            icon: Icons.flag_outlined,
+          ),
+      error:
+          (Object error, StackTrace _) => _CompetitionStatePanel(
+            title: 'National teams feed unavailable',
+            detail: 'Retry when the national team competition service responds.',
+            icon: Icons.cloud_off_rounded,
+            action: GtexCommandAction(
+              label: 'Retry national feed',
+              icon: Icons.refresh_rounded,
+              accent: GtexColors.accentRed,
+              onPressed: () => ref.invalidate(nationalTeamsHubProvider),
+            ),
+          ),
+      data: (NationalTeamsHubData data) {
+        return Column(
+          key: const Key('gtex-matchday-national-view'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            _DetailSection(
+              title:
+                  'International competitions (${data.competitions.length})',
+              child:
+                  data.competitions.isEmpty
+                      ? const _CompetitionStatePanel(
+                        title: 'No active international tournaments',
+                        detail:
+                            'International qualifiers and federation tournaments appear here.',
+                        icon: Icons.flag_outlined,
+                      )
+                      : Column(
+                        children: data.competitions
+                            .map(
+                              (NationalTeamCompetition comp) => Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: GtexSpacing.sm,
+                                ),
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(GtexSpacing.md),
+                                  decoration: BoxDecoration(
+                                    color: GtexColors.surfaceRaised,
+                                    borderRadius: BorderRadius.circular(
+                                      GtexSpacing.radiusMd,
+                                    ),
+                                    border: Border.all(
+                                      color: GtexColors.surfaceBorder,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: <Widget>[
+                                      const Icon(
+                                        Icons.public_rounded,
+                                        color: GtexColors.accentBlue,
+                                      ),
+                                      const SizedBox(width: GtexSpacing.md),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: <Widget>[
+                                            Text(
+                                              comp.title,
+                                              style: GtexText.displaySM,
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              '${comp.seasonLabel} · ${comp.regionType.toUpperCase()} · ${comp.ageBand.toUpperCase()} · ${comp.status}',
+                                              style: GtexText.bodySM.copyWith(
+                                                color: GtexColors.textSecondary,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Text(
+                                        comp.formatType.toUpperCase(),
+                                        style: GtexText.monoSM.copyWith(
+                                          color: GtexColors.accentPrimary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            )
+                            .toList(growable: false),
+                      ),
+            ),
+            if (data.rankings.isNotEmpty) ...<Widget>[
+              const SizedBox(height: GtexSpacing.md),
+              _DetailSection(
+                title: 'Country ELO rankings (${data.rankings.length})',
+                child: Wrap(
+                  spacing: GtexSpacing.sm,
+                  runSpacing: GtexSpacing.sm,
+                  children: data.rankings
+                      .take(8)
+                      .map(
+                        (NationalTeamCountryRankingRecord rank) => Container(
+                          padding: const EdgeInsets.all(GtexSpacing.md),
+                          decoration: BoxDecoration(
+                            color: GtexColors.surfaceRaised,
+                            borderRadius: BorderRadius.circular(
+                              GtexSpacing.radiusSm,
+                            ),
+                            border: Border.all(color: GtexColors.surfaceBorder),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                '${rank.countryName} (${rank.countryCode})',
+                                style: GtexText.bodyMD,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'ELO ${rank.eloRating.toStringAsFixed(0)} · W${rank.wins}-D${rank.draws}-L${rank.losses}',
+                                style: GtexText.monoSM.copyWith(
+                                  color: GtexColors.accentAmber,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
+                ),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _MatchdayCalendarSubTabView extends StatelessWidget {
+  const _MatchdayCalendarSubTabView({required this.data});
+
+  final CompetitionHubData data;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      key: const Key('gtex-matchday-calendar-view'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        _DetailSection(
+          title: 'Matchday & competition calendar',
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(GtexSpacing.md),
+            decoration: BoxDecoration(
+              color: GtexColors.surfaceRaised,
+              borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
+              border: Border.all(color: GtexColors.surfaceBorder),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'GTEX competitions: ${data.gtexCompetitions.length} scheduled windows',
+                  style: GtexText.bodyMD,
+                ),
+                const SizedBox(height: GtexSpacing.xs),
+                Text(
+                  'Hosted competitions: ${data.hostedCompetitions.length} organizer slates',
+                  style: GtexText.bodyMD,
+                ),
+                const SizedBox(height: GtexSpacing.xs),
+                Text(
+                  'Creator tournaments: ${data.streamerTournaments.length} circuit windows',
+                  style: GtexText.bodyMD,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}

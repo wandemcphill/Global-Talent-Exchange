@@ -232,8 +232,8 @@ def get_current_trading_user(
     del request
     _enforce_account_type(
         current_user,
-        {PublicAccountType.USER},
-        "Football player trading is only available to football user accounts.",
+        {PublicAccountType.USER, PublicAccountType.CREATOR},
+        "Football player trading is only available to normal user or creator accounts.",
     )
     from app.risk_ops_engine.service import RiskActionBlockedError, RiskOpsService
     from app.wallets.funding_service import WalletFundingError, WalletFundingService

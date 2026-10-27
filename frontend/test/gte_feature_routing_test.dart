@@ -321,7 +321,7 @@ void main() {
       // Home the way production does.
       expect(find.text('Home sync'), findsOneWidget);
       expect(find.text('Create club'), findsWidgets);
-      expect(find.text('Transfer Hub'), findsWidgets);
+      expect(find.text('Market'), findsWidgets);
       expect(find.text('No canonical club is selected'), findsNothing);
       expect(find.text('Create or join a club to unlock Home'), findsNothing);
       expect(
@@ -333,14 +333,11 @@ void main() {
         findsNothing,
       );
 
-      final Finder browseClubMarketButton = find.text('Transfer Hub').first;
+      final Finder browseClubMarketButton = find.byKey(
+        const Key('gtex-rail-slot-market'),
+      );
       expect(browseClubMarketButton, findsOneWidget);
 
-      await _scrollUntilVisible(
-        tester,
-        browseClubMarketButton,
-        scrollable: find.byType(Scrollable).first,
-      );
       await tester.tap(browseClubMarketButton);
       await _pumpUntilText(tester, 'Transfer Hub');
       await tester.pumpAndSettle();

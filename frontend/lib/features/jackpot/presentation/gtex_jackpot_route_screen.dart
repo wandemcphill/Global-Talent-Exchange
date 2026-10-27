@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:gte_frontend/core/app_feedback.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
+import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 import 'package:gte_frontend/widgets/gte_formatters.dart';
 import 'package:gte_frontend/widgets/gte_metric_chip.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
@@ -179,6 +180,28 @@ class _GtexJackpotRouteScreenState extends State<GtexJackpotRouteScreen> {
       await _openLogin();
       return;
     }
+    final String idempotencyKey =
+        'jackpot-contrib-${DateTime.now().microsecondsSinceEpoch}';
+    final bool confirmed =
+        (await GtexConfirmSheet.show(
+          context,
+          title: 'Confirm Jackpot Contribution',
+          summary:
+              'Direct GTEX Coin contribution settles into the live jackpot pool.',
+          variant: GtexConfirmVariant.financial,
+          confirmLabel: 'Confirm Contribution',
+          idempotencyKey: idempotencyKey,
+          financialDetails: GtexConfirmFinancialDetails(
+            amountLabel: gteFormatCredits(amount),
+            currencyCode: 'GTC',
+            idempotencyKey: idempotencyKey,
+          ),
+          onConfirm: (String _) async {},
+        )) ??
+        false;
+    if (!confirmed || !mounted) {
+      return;
+    }
     setState(() {
       _submittingContribution = true;
     });
@@ -190,12 +213,14 @@ class _GtexJackpotRouteScreenState extends State<GtexJackpotRouteScreen> {
         body: <String, Object?>{
           'source_type': 'platform_activity',
           'source_id': 'jackpot-ui-${DateTime.now().millisecondsSinceEpoch}',
+          'idempotency_key': idempotencyKey,
           'entry_fee': _decimalString(amount),
           'contribution_amount': _decimalString(amount),
           'eligibility_score': '1.0000',
           'metadata': <String, Object?>{
             'source': 'gtex_jackpot_route_screen',
             'manual': true,
+            'idempotency_key': idempotencyKey,
           },
         },
       );
@@ -382,12 +407,22 @@ class _GtexJackpotRouteScreenState extends State<GtexJackpotRouteScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(
-                  'GTEX JACKPOT',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: GteShellTheme.accentWarm,
-                    letterSpacing: 1.1,
-                  ),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        'GTEX JACKPOT',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: GteShellTheme.accentWarm,
+                          letterSpacing: 1.1,
+                        ),
+                      ),
+                    ),
+                    GtexStatusChip.fromBackendStatus(
+                      state.status,
+                      context: GtexStatusContext.financial,
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
                 Text(
@@ -726,9 +761,19 @@ class _HistoryTile extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(
-              'Round ${item.roundNumber} | ${_humanize(item.status)}',
-              style: Theme.of(context).textTheme.titleMedium,
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    'Round ${item.roundNumber} | ${_humanize(item.status)}',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                GtexStatusChip.fromBackendStatus(
+                  item.status,
+                  context: GtexStatusContext.financial,
+                ),
+              ],
             ),
             const SizedBox(height: 6),
             Text(

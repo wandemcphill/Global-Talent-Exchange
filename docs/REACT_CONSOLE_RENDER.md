@@ -50,6 +50,7 @@ React Router's basename comes from `PUBLIC_URL` (`frontend/react-shell/src/lib/p
 | --- | --- | --- |
 | `GTE_API_BASE_URL` | `https://gtex-api-opea.onrender.com` | Flutter `--dart-define` and the React shell's `REACT_APP_BACKEND_URL` |
 | `GTE_BACKEND_MODE` | `live` | Flutter |
+| `GTEX_SHELL_V3` | `true` by default; set `false` only for rollback | Flutter P9-SHELL activation |
 | `NODE_VERSION` | `20` | React toolchain on the static-site build image |
 
 No React secrets are added. Do not set `GTEX_WEB_PUBLISH_DIR` on Render; the publish script rejects that override when `RENDER=true`.

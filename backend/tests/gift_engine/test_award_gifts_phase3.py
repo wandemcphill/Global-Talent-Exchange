@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.admin_engine.schemas import AdminRewardRuleStabilityControls
 from app.auth.service import AuthService
-from app.gift_engine.service import GiftEngineService
+from app.gift_engine.canonical_service import GiftEngineService
 from app.models import (
     Base,
     ClubRankingEvent,

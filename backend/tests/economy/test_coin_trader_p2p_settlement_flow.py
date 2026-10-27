@@ -17,7 +17,7 @@ from app.models.coin_trader import (
     CoinTraderTier,
 )
 from app.models.treasury import TreasurySettings
-from app.models.user import User, UserRole
+from app.models.user import PublicAccountType, User, UserRole
 from app.models.wallet import LedgerAccount, LedgerAccountKind, LedgerEntryReason, LedgerUnit
 from app.wallets.service import LedgerPosting, WalletService
 
@@ -39,6 +39,7 @@ def _user(session, user_id: str, role: UserRole) -> User:
         username=user_id,
         password_hash="test-hash",  # pragma: allowlist secret
         role=role,
+        account_type=(PublicAccountType.COIN_TRADER if role == UserRole.COIN_TRADER else PublicAccountType.USER),
     )
     session.add(user)
     session.flush()

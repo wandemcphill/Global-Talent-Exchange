@@ -569,7 +569,9 @@ def test_player_story_dna_and_rivalries_routes(app_client) -> None:
     avatar_payload = avatar_response.json()
     assert avatar_payload["player_id"] == wonderkid.id
     assert avatar_payload["render_format"] == "json"
-    assert avatar_payload["portrait_url"].startswith("http://127.0.0.1:8000/generated-media/")
+    assert avatar_payload["portrait_url"].startswith(
+        ("http://127.0.0.1:8000/generated-media/", "https://res.cloudinary.com/")
+    )
     assert "/regen_newgen_faces/script_skin_hair/" in avatar_payload["portrait_url"]
     assert avatar_payload["portrait_source_provider"] == "gtex_regen_newgen_face_bank"
     assert avatar_payload["portrait_source_collection"] == "script_skin_tone_hair_colour"

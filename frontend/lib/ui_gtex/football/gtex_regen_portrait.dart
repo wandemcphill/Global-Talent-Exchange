@@ -11,6 +11,9 @@ class GtexRegenPortrait extends StatelessWidget {
     required this.nationalityCode,
     this.jerseyColor,
     this.borderRadius = 8,
+    this.aspectRatio = 1,
+    this.cacheWidth,
+    this.cacheHeight,
   });
 
   final String? portraitUrl;
@@ -19,37 +22,12 @@ class GtexRegenPortrait extends StatelessWidget {
   final String nationalityCode;
   final Color? jerseyColor;
   final double borderRadius;
+  final double aspectRatio;
+  final int? cacheWidth;
+  final int? cacheHeight;
 
-  @override
-  Widget build(BuildContext context) {
-    final String? resolvedUrl =
-        (portraitUrl ?? '').trim().isEmpty
-            ? null
-            : _resolveMediaUrl(portraitUrl!.trim());
-    final Widget pendingState = _PortraitPendingState(
-      position: position,
-      nationalityCode: nationalityCode,
-      jerseyColor: jerseyColor,
-    );
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(borderRadius),
-      child: AspectRatio(
-        aspectRatio: 1,
-        child:
-            resolvedUrl == null || !_isApprovedRegenPortraitUrl(resolvedUrl)
-                ? pendingState
-                : Image.network(
-                  resolvedUrl,
-                  key: const Key('gtex-regen-bank-portrait'),
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => pendingState,
-                ),
-      ),
-    );
-  }
-
-  bool _isApprovedRegenPortraitUrl(String url) {
+  /// Canonical URL policy shared with `GtexPortrait` (Document F8 / F9).
+  static bool isApprovedRegenPortraitUrl(String url) {
     final Uri? parsed = Uri.tryParse(url);
     final String lowerPath = parsed?.path.toLowerCase() ?? url.toLowerCase();
     final bool isRaster =
@@ -72,7 +50,8 @@ class GtexRegenPortrait extends StatelessWidget {
     return isGeneratedMediaPath || isCloudinaryFaceBankPath;
   }
 
-  String _resolveMediaUrl(String url) {
+  /// Resolve a generated-media path against `GTE_API_BASE_URL` when configured.
+  static String resolveMediaUrl(String url) {
     final Uri? parsed = Uri.tryParse(url);
     final String? generatedPath = _generatedMediaPath(parsed, url);
     if (generatedPath == null) return url;
@@ -89,7 +68,7 @@ class GtexRegenPortrait extends StatelessWidget {
     return '${trimmedBase.replaceFirst(RegExp(r'/+$'), '')}$generatedPath';
   }
 
-  String? _generatedMediaPath(Uri? parsed, String rawUrl) {
+  static String? _generatedMediaPath(Uri? parsed, String rawUrl) {
     if (rawUrl.startsWith('/generated-media/')) {
       return rawUrl;
     }
@@ -99,6 +78,37 @@ class GtexRegenPortrait extends StatelessWidget {
       return null;
     }
     return path.substring(marker);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final String? resolvedUrl =
+        (portraitUrl ?? '').trim().isEmpty
+            ? null
+            : resolveMediaUrl(portraitUrl!.trim());
+    final Widget pendingState = _PortraitPendingState(
+      position: position,
+      nationalityCode: nationalityCode,
+      jerseyColor: jerseyColor,
+    );
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: AspectRatio(
+        aspectRatio: aspectRatio,
+        child:
+            resolvedUrl == null || !isApprovedRegenPortraitUrl(resolvedUrl)
+                ? pendingState
+                : Image.network(
+                  resolvedUrl,
+                  key: const Key('gtex-regen-bank-portrait'),
+                  fit: BoxFit.cover,
+                  cacheWidth: cacheWidth,
+                  cacheHeight: cacheHeight,
+                  errorBuilder: (_, __, ___) => pendingState,
+                ),
+      ),
+    );
   }
 }
 

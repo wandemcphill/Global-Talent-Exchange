@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 
 from app.models.transfer_market import TransferHubOffer, TransferListing, TransferNegotiation
 
-
 _TERMINAL_NEGOTIATION_STATUSES = frozenset({"completed"})
 
 
@@ -21,14 +20,12 @@ def _hub_terms(offer: TransferHubOffer) -> dict[str, Any]:
         "loan_terms": dict(offer.loan_terms_json or {}),
         "swap_terms": dict(offer.swap_terms_json or {}),
         "conditional_terms": dict(offer.conditional_terms_json or {}),
-        "sell_on_percentage": (
-            str(offer.sell_on_percentage) if offer.sell_on_percentage is not None else None
-        ),
+        "sell_on_percentage": (str(offer.sell_on_percentage) if offer.sell_on_percentage is not None else None),
     }
 
 
 def _accepted_hub_offer(session: Session, listing: TransferListing) -> TransferHubOffer | None:
-    for candidate in session.dirty:
+    for candidate in [*session.new, *session.dirty]:
         if (
             isinstance(candidate, TransferHubOffer)
             and candidate.listing_id == listing.id
@@ -46,16 +43,14 @@ def _accepted_hub_offer(session: Session, listing: TransferListing) -> TransferH
 
 
 def _ensure_private_negotiation(session: Session, listing: TransferListing) -> None:
-    if listing.listing_type != "private_negotiation" or listing.status != "accepted":
+    if listing.status != "accepted":
         return
 
     offer = _accepted_hub_offer(session, listing)
     if offer is None:
         return
 
-    negotiation = session.scalar(
-        select(TransferNegotiation).where(TransferNegotiation.listing_id == listing.id)
-    )
+    negotiation = session.scalar(select(TransferNegotiation).where(TransferNegotiation.listing_id == listing.id))
     if negotiation is not None and negotiation.status in _TERMINAL_NEGOTIATION_STATUSES:
         return
 
@@ -94,10 +89,8 @@ def _materialize_private_negotiation_on_accept(
 ) -> None:
     accepted_listings = [
         listing
-        for listing in session.dirty
-        if isinstance(listing, TransferListing)
-        and listing.status == "accepted"
-        and listing.listing_type == "private_negotiation"
+        for listing in [*session.new, *session.dirty]
+        if isinstance(listing, TransferListing) and listing.status == "accepted"
     ]
     for listing in accepted_listings:
         _ensure_private_negotiation(session, listing)

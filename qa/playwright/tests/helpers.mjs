@@ -9,6 +9,7 @@ export const credentialsConfigured = Boolean(
 );
 
 const diagnosticsByTest = new Map();
+const signedInPages = new WeakSet();
 
 export async function collectBrowserDiagnostics(page, testInfo) {
   const consoleErrors = [];
@@ -35,48 +36,131 @@ export async function attachDiagnostics(testInfo) {
   }
 }
 
+export async function enableAccessibility(page) {
+  try {
+    await page.evaluate(() => {
+      const element = document.querySelector('[aria-label="Enable accessibility"]');
+      if (element) {
+        element.focus?.();
+        element.click?.();
+        element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      }
+    });
+    await page.waitForTimeout(300);
+  } catch {
+    // Accessibility button may already have been consumed or not present
+  }
+}
+
 export async function signIn(page) {
   if (!credentialsConfigured) return;
 
-  const loginUrl = process.env.GTEX_E2E_HASH_ROUTING ? "/#/auth/login" : "/auth/login";
+  const currentUrl = page.url();
+  if (signedInPages.has(page)) return;
+
+  const profileButton = page.getByRole("button", {
+    name: /Profile and settings/i,
+  });
+  const isHashRouting = Boolean(process.env.GTEX_E2E_HASH_ROUTING);
+  const looksLikeAppRoute = isHashRouting
+    ? currentUrl.includes("#/app/")
+    : new URL(currentUrl || "http://localhost").pathname.startsWith("/app/");
+  if (looksLikeAppRoute && (await profileButton.isVisible().catch(() => false))) {
+    signedInPages.add(page);
+    return;
+  }
+
+  const loginUrl = isHashRouting ? "/#/auth/login" : "/auth/login";
   await page.goto(loginUrl, { waitUntil: "domcontentloaded", timeout: 120_000 });
 
   const surface = page.locator("flt-glass-pane, flutter-view, canvas").first();
   await expect(surface).toBeVisible({ timeout: 120_000 });
+  await page.waitForTimeout(1500);
 
-  const accessibilityButton = page.locator('[aria-label="Enable accessibility"]').first();
-  await expect(accessibilityButton).toBeVisible({ timeout: 120_000 });
-  await accessibilityButton.evaluate((element) => element.click());
-  await page.waitForTimeout(750);
+  await enableAccessibility(page);
 
   const emailInput = page.locator('input[aria-label="Email"]').first();
-  await expect(emailInput).toBeVisible({ timeout: 60_000 });
-  await emailInput.fill(process.env.GTEX_E2E_EMAIL);
+  if (await emailInput.isVisible().catch(() => false)) {
+    await emailInput.fill(process.env.GTEX_E2E_EMAIL);
+    const passwordInput = page.locator('input[aria-label="Password"]').first();
+    await expect(passwordInput).toBeVisible({ timeout: 30_000 });
+    await passwordInput.fill(process.env.GTEX_E2E_PASSWORD);
+    const enterBtn = page.getByRole("button", { name: "ENTER GTEX" });
+    await expect(enterBtn).toBeVisible({ timeout: 30_000 });
+    await enterBtn.click({ force: true });
+  } else {
+    // A valid persisted session may redirect away from the login form. Detect
+    // the authenticated shell before attempting coordinate-based form entry.
+    if (await profileButton.isVisible().catch(() => false)) {
+      signedInPages.add(page);
+      return;
+    }
+    const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
+    const isNarrow = viewport.width < 820;
+    const x = isNarrow ? Math.round(viewport.width * 0.5) : Math.round(viewport.width * 0.72);
+    const emailY = isNarrow ? 265 : 335;
+    await page.mouse.click(x, emailY);
+    await page.waitForTimeout(200);
+    await page.keyboard.press("Control+A").catch(() => {});
+    await page.keyboard.type(process.env.GTEX_E2E_EMAIL);
+    await page.keyboard.press("Tab");
+    await page.waitForTimeout(150);
+    await page.keyboard.type(process.env.GTEX_E2E_PASSWORD);
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(800);
+    if (!page.url().includes("/app/")) {
+      const enterY = isNarrow ? 415 : 485;
+      await page.mouse.click(x, enterY);
+    }
+  }
 
-  const passwordInput = page.locator('input[aria-label="Password"]').first();
-  await expect(passwordInput).toBeVisible({ timeout: 30_000 });
-  await passwordInput.fill(process.env.GTEX_E2E_PASSWORD);
-
-  const enterBtn = page.getByRole("button", { name: "ENTER GTEX" });
-  await expect(enterBtn).toBeVisible({ timeout: 30_000 });
-  await enterBtn.click({ force: true });
-
-  await expect(page).toHaveURL(/\/(?:#\/)?app\/home/, { timeout: 60_000 });
+  const authenticatedRoute = isHashRouting ? /#\/app(?:\/|$)/ : /\/app\//;
+  await expect(page).toHaveURL(authenticatedRoute, { timeout: 30_000 });
+  await expect(profileButton).toBeVisible({ timeout: 30_000 });
+  signedInPages.add(page);
+  await page.waitForTimeout(1500);
 }
 
 export async function visitAuthedRoute(page, route) {
   await signIn(page);
-  const targetRoute = process.env.GTEX_E2E_HASH_ROUTING ? `/#${route}` : route;
-  await page.goto(targetRoute, { waitUntil: "domcontentloaded", timeout: 120_000 });
-  await page.waitForTimeout(5000);
+
+  const isHashRouting = Boolean(process.env.GTEX_E2E_HASH_ROUTING);
+  const targetRoute = isHashRouting ? `/#${route}` : route;
+
+  let isAlreadyAtRoute = false;
+  try {
+    const currentUrl = page.url();
+    const urlObj = new URL(currentUrl);
+    if (isHashRouting) {
+      isAlreadyAtRoute = urlObj.hash === `#${route}`;
+    } else {
+      isAlreadyAtRoute =
+        urlObj.pathname === route ||
+        (route === "/app/home" && urlObj.pathname.includes("/app/home"));
+    }
+  } catch {
+    // Current URL may not be valid or parseable; fall through to navigate.
+  }
+
+  if (!isAlreadyAtRoute) {
+    await page.goto(targetRoute, { waitUntil: "domcontentloaded", timeout: 120_000 });
+    const surface = page.locator("flt-glass-pane, flutter-view, canvas").first();
+    await expect(surface).toBeVisible({ timeout: 120_000 });
+    await enableAccessibility(page);
+    await page.waitForTimeout(1200);
+  } else {
+    await enableAccessibility(page);
+    await page.waitForTimeout(400);
+  }
 }
 
 export async function captureScreenshot(page, testInfo, name) {
   const surface = page.locator("flt-glass-pane, flutter-view, canvas").first();
   await expect(surface).toBeVisible({ timeout: 120_000 });
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(800);
   await page.screenshot({
     path: testInfo.outputPath(`${name}-${testInfo.project.name}.png`),
+    animations: "disabled",
   });
 }
 

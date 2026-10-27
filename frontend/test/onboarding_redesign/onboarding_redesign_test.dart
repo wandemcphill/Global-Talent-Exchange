@@ -10,12 +10,10 @@ void main() {
     await tester.pumpWidget(
       const MaterialApp(home: GtexPublicLandingScreenV2()),
     );
-    expect(find.text('GTEX'), findsOneWidget);
-    expect(find.text('OWN A CLUB.\nSIGN THE STARS.'), findsOneWidget);
-    expect(find.text('WIN IT ALL.'), findsOneWidget);
-    expect(find.text('CHOOSE YOUR PATH'), findsOneWidget);
-    expect(find.text('HOW YOU PLAY'), findsOneWidget);
+    expect(find.text('GTEX'), findsWidgets);
+    expect(find.text('FOOTBALL,\nREBUILT.'), findsOneWidget);
     expect(find.text('Create free account'), findsOneWidget);
+    expect(find.text('Sign in'), findsOneWidget);
   });
 
   testWidgets('login screen validates required form fields', (tester) async {

@@ -224,7 +224,7 @@ void main() {
 
       expect(find.text('MATCHDAY → OWNER DECISION LOOP'), findsOneWidget);
       expect(
-        find.textContaining('Performance in this fixture has updated published player valuations'),
+        find.textContaining('Financial and valuation effects are shown only when confirmed'),
         findsOneWidget,
       );
 
@@ -234,10 +234,14 @@ void main() {
       expect(portfolioBtn, findsOneWidget);
       expect(marketBtn, findsOneWidget);
 
+      await tester.ensureVisible(portfolioBtn);
+      await tester.pumpAndSettle();
       await tester.tap(portfolioBtn);
       await tester.pump();
       expect(portfolioOpened, isTrue);
 
+      await tester.ensureVisible(marketBtn);
+      await tester.pumpAndSettle();
       await tester.tap(marketBtn);
       await tester.pump();
       expect(marketOpened, isTrue);

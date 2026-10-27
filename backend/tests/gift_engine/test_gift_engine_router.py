@@ -6,14 +6,23 @@ from decimal import Decimal
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.auth.dependencies import get_current_user, get_session
 from app.auth.service import AuthService
 from app.gift_engine.router import router
-from app.models import Base, GiftCatalogItem, LedgerEntryReason, LedgerUnit, RevenueShareRule
+from app.models import (
+    Base,
+    EconomicConversion,
+    GiftCatalogItem,
+    GiftTransaction,
+    LedgerEntryReason,
+    LedgerTransaction,
+    LedgerUnit,
+    RevenueShareRule,
+)
 from app.models.user import User
 from app.wallets.service import LedgerPosting, WalletService
 from backend.tests.support.economic_policy import seed_economic_policy
@@ -73,6 +82,14 @@ def state(session: Session) -> dict[str, User]:
             key="fire",
             display_name="Fire",
             fancoin_price=Decimal("2.0000"),
+            active=True,
+        )
+    )
+    session.add(
+        GiftCatalogItem(
+            key="different-fire",
+            display_name="Different Fire",
+            fancoin_price=Decimal("3.0000"),
             active=True,
         )
     )
@@ -153,3 +170,46 @@ def test_send_gift_rejects_self_send(client: TestClient, state: dict[str, User])
     )
     assert response.status_code == 400
     assert "cannot send gifts to themselves" in response.text.lower()
+
+
+def test_send_gift_idempotency_conflicts_return_409_and_do_not_debit_again(
+    client: TestClient,
+    state: dict[str, User],
+    session: Session,
+) -> None:
+    sender = state["current_user"]
+    recipient = state["recipient"]
+    wallet = WalletService()
+    sender_fancoin = wallet.get_user_account(session, sender, LedgerUnit.CREDIT)
+
+    payload = {
+        "recipient_user_id": recipient.id,
+        "gift_key": "fire",
+        "quantity": "2.0000",
+        "note": "For the knockout drama",
+        "source_scope": "user_hosted",
+        "idempotency_key": "gift-router-identity",
+    }
+    first = client.post("/api/gift-engine/send", json=payload)
+    assert first.status_code == 200, first.text
+    replay = client.post("/api/gift-engine/send", json=payload)
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["id"] == first.json()["id"]
+
+    balance_after_first = wallet.get_balance(session, sender_fancoin)
+    conversion_count = session.scalar(select(func.count(EconomicConversion.id)))
+    gift_count = session.scalar(select(func.count(GiftTransaction.id)))
+    ledger_count = session.scalar(select(func.count(LedgerTransaction.id)))
+
+    changed_item = {**payload, "gift_key": "different-fire"}
+    changed_quantity = {**payload, "quantity": "3.0000"}
+    changed_scope = {**payload, "source_scope": "gtex_competition"}
+    for changed in (changed_item, changed_quantity, changed_scope):
+        response = client.post("/api/gift-engine/send", json=changed)
+        assert response.status_code == 409, response.text
+        assert "idempotent gift reference" in response.text.lower()
+
+    assert wallet.get_balance(session, sender_fancoin) == balance_after_first
+    assert session.scalar(select(func.count(EconomicConversion.id))) == conversion_count == 1
+    assert session.scalar(select(func.count(GiftTransaction.id))) == gift_count == 1
+    assert session.scalar(select(func.count(LedgerTransaction.id))) == ledger_count == 2

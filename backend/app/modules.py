@@ -43,6 +43,12 @@ LAZY_HYDRATION_BYPASS_PREFIXES = (
     "/matches",
     "/streamer-tournaments",
     "/admin/streamer-tournaments",
+    "/scout",
+    "/api/scout",
+    "/api/v2/scout",
+    "/talent",
+    "/api/talent",
+    "/api/v2/talent",
 )
 EAGER_MODULE_NAMES = frozenset(
     {
@@ -60,6 +66,8 @@ EAGER_MODULE_NAMES = frozenset(
         "hosted_competition_engine_admin",
         "streamer_tournament_engine",
         "world_simulation",
+        "talent_exchange",
+        "player_lifecycle",
     }
 )
 
@@ -553,6 +561,8 @@ DOMAIN_MODULES = (
         "national_team_engine",
         router_path="app.national_team_engine.router:router",
         api_only=True,
+        on_startup=("app.national_team_engine.worker:bind_national_team_scheduler",),
+        on_shutdown=("app.national_team_engine.worker:shutdown_national_team_scheduler",),
     ),
     _module(
         "national_team_engine_admin",
@@ -611,6 +621,7 @@ DOMAIN_MODULES = (
         api_only=True,
     ),
     _module("auth", router_path="app.auth.router:router"),
+    _module("tournaments", router_path="app.tournaments.router:router"),
     _module(
         "api_v1",
         router_path="app.api_v1.router:router",
@@ -778,7 +789,7 @@ DOMAIN_MODULES = (
         ),
     ),
     _module("regen_universe_admin", router_path="app.regen_universe.router:admin_router"),
-    _module("player_lifecycle", router_path="app.routes.player_lifecycle:router"),
+    _module("player_lifecycle", router_path="app.routes.player_lifecycle:router", with_api_alias=True),
     _module("player_agency", router_path="app.routes.player_agency:router"),
     _module("regen_living_star", router_path="app.routes.regen_living_star:router"),
     _module("transfer_market", router_path="app.transfer_market.router:router"),
@@ -808,7 +819,6 @@ DOMAIN_MODULES = (
     _module("club_ops", router_path="app.routes.club_ops:router"),
     _module("competitions", router_path="app.routes.competitions:router"),
     _module("ranking_integrity", router_path="app.ranking_integrity.router:router"),
-    _module("tournaments", router_path="app.tournaments.router:router"),
     _module("creators", router_path="app.routes.creators:router"),
     _module("referrals", router_path="app.routes.referrals:router"),
     _module("admin_referrals", router_path="app.routes.admin_referrals:router"),

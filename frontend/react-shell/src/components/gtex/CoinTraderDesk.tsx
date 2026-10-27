@@ -100,16 +100,114 @@ function OrderForm({ traders }: any) {
 
 export function CoinTraderDesk() {
   const { user } = useAuth();
+  const qc = useQueryClient();
+  const accountType = String(user?.account_type || user?.accountType || "user").toLowerCase();
+  const isDedicatedTraderAccount = accountType === "coin_trader";
   const { data: traders } = useQuery({ queryKey: ["coin-traders"], queryFn: async () => (await api.get("/coin-traders")).data });
   const { data: orders } = useQuery({ queryKey: ["coin-orders", "me"], queryFn: async () => (await api.get("/coin-traders/orders")).data });
-  const { data: me } = useQuery({ queryKey: ["coin-trader-me"], queryFn: async () => (await api.get("/coin-traders/me")).data, retry: false });
-  const isTrader = me && String(me.status) === "approved";
+  const meQuery = useQuery({
+    queryKey: ["coin-trader-me"],
+    queryFn: async () => (await api.get("/coin-traders/me")).data,
+    retry: false,
+    enabled: isDedicatedTraderAccount,
+  });
+  const me = meQuery.data;
+  const status = String(me?.status || "").toLowerCase();
+  const isTrader = isDedicatedTraderAccount && me && status === "approved";
+  const missingProfile = !meQuery.isLoading && !me && [403, 404].includes(Number((meQuery.error as any)?.response?.status));
+  const showApplication = isDedicatedTraderAccount && (missingProfile || status === "rejected");
   const { data: deskOrders } = useQuery({ queryKey: ["coin-orders", "desk"], queryFn: async () => (await api.get("/coin-traders/orders", { params: { as_trader: true } })).data, enabled: !!isTrader });
   const list = (traders || []).filter((t: any) => t.user_id !== user?.id);
+  const [applyName, setApplyName] = useState(String(user?.display_name || user?.username || ""));
+  const [countryCode, setCountryCode] = useState("");
+  const [applying, setApplying] = useState(false);
+  const [applyError, setApplyError] = useState("");
+
+  const submitTraderApplication = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setApplyError("");
+    if (applyName.trim().length < 2) {
+      setApplyError("Enter the public name for your trader desk.");
+      return;
+    }
+    setApplying(true);
+    try {
+      await api.post("/coin-traders/apply", {
+        display_name: applyName.trim(),
+        ...(countryCode.trim() ? { country_code: countryCode.trim().toUpperCase() } : {}),
+        terms: {
+          same_name_account_only: true,
+          payment_proof_required: true,
+          kyc_required: true,
+        },
+        payment_methods: [],
+        bank_accounts: [],
+        metadata_json: {},
+      });
+      await qc.invalidateQueries({ queryKey: ["coin-trader-me"] });
+      await qc.invalidateQueries({ queryKey: ["coin-traders"] });
+      toast.success("Coin Trader application submitted. Trading tools unlock after approval.");
+    } catch (error: any) {
+      setApplyError(errMsg(error));
+    } finally {
+      setApplying(false);
+    }
+  };
+
   return (
-    <Panel eyebrow="Peer-to-peer · escrow protected" title="Coin traders" testid="coin-traders-panel" className="lg:col-span-12">
-      <p className="mb-4 text-sm text-slate-400">Buy or sell GTEX Coin with verified Naira coin traders. Trades settle in the same wallet that funds your clubs, so coins you buy here can be injected into a club straight away.</p>
-      {list.length === 0 ? <Empty title="No verified traders yet" body="Approved coin traders will appear here." /> : <OrderForm traders={list} />}
+    <Panel eyebrow="GTEX Coin · P2P marketplace" title="Coin Traders" testid="coin-traders-panel" className="lg:col-span-12">
+      <p className="mb-4 text-sm text-slate-400">
+        User accounts can buy or sell GTEX Coin with approved Naira traders through escrow-protected orders. Operating a trader desk requires a dedicated Coin Trader account created through the Coin Trader signup path; a User account cannot be promoted into that lane.
+      </p>
+      {!isDedicatedTraderAccount && (
+        <div className="mb-5 rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm text-slate-400" data-testid="dedicated-trader-signup-notice">
+          This is a customer account lane, not a trader-desk application. Sign out and create a separate Coin Trader account to operate a trader desk.
+        </div>
+      )}
+
+      {showApplication && (
+        <div className="mb-6 rounded-xl border border-amber-400/25 bg-amber-500/[0.05] p-4" data-testid="coin-trader-application">
+          <p className="gx-label text-amber-300">{status === "rejected" ? "Resubmit desk application" : "Set up trader desk"}</p>
+          <h3 className="gx-display mt-1 text-xl font-bold uppercase text-white">Set up your trader desk</h3>
+          <p className="mt-2 max-w-3xl text-sm leading-5 text-slate-400">
+            Your dedicated Coin Trader account needs an approved desk profile before it can quote rates or accept client orders. Desk approval does not change account type.
+          </p>
+          <form onSubmit={submitTraderApplication} className="mt-4 grid gap-3 md:grid-cols-3">
+            <label className="block">
+              <span className="gx-label">Trader desk name</span>
+              <input required minLength={2} maxLength={120} className="gx-input mt-2" value={applyName} onChange={(e) => setApplyName(e.target.value)} placeholder="Lagos Liquidity Desk" />
+            </label>
+            <label className="block">
+              <span className="gx-label">Country code (optional)</span>
+              <input maxLength={8} className="gx-input mt-2" value={countryCode} onChange={(e) => setCountryCode(e.target.value)} placeholder="NG" />
+            </label>
+            <div className="flex items-end">
+              <Btn type="submit" disabled={applying} className="w-full">{applying ? "Submitting..." : "Submit trader application"}</Btn>
+            </div>
+            {applyError && <p role="alert" className="md:col-span-3 text-sm text-red-300">{applyError}</p>}
+          </form>
+        </div>
+      )}
+
+      {meQuery.isLoading && <p className="mb-4 text-sm text-slate-500">Checking your trader application...</p>}
+      {meQuery.isError && !missingProfile && (
+        <div className="mb-4 rounded border border-red-500/20 bg-red-950/20 p-3 text-sm text-red-200" data-testid="coin-trader-profile-error">
+          Trader application status could not be loaded: {errMsg(meQuery.error)}
+        </div>
+      )}
+      {me && status !== "approved" && (
+        <div className="mb-6 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] p-4" data-testid="coin-trader-application-status">
+          <p className="gx-label">Your trader application</p>
+          <p className="mt-1 text-sm font-bold text-white">{me.display_name} · {label(status)}</p>
+          <p className="mt-2 text-sm text-slate-400">
+            {status === "applied" || status === "pending"
+              ? "Your dedicated Coin Trader account is awaiting desk approval. It remains in the Coin Trader lane while approval is pending."
+              : "Trader operations are not enabled for this application status."}
+          </p>
+        </div>
+      )}
+
+      {list.length === 0 ? <Empty title="No approved traders yet" body="The marketplace will show approved liquidity partners when available." /> : <OrderForm traders={list} />}
       <p className="gx-label mt-6">My orders</p>
       <div className="space-y-2" data-testid="my-coin-orders">
         {(orders || []).length === 0 && <p className="text-sm text-slate-500">No coin trades yet.</p>}

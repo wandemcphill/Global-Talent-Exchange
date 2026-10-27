@@ -29,6 +29,7 @@ from app.match_engine.services.team_factory import SyntheticSquadFactory
 from app.players.performance_recorder import PlayerMatchPerformanceRecorder
 from app.services.competition_lifecycle_service import CompetitionLifecycleService
 from app.services.match_timeline_service import MatchTimelineService
+from app.services.world_clock_service import WorldClockService
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +46,14 @@ def _as_utc(value: datetime | None) -> datetime | None:
 class CompetitionAutoRunner:
     session: Session
     lifecycle_service: CompetitionLifecycleService = field(init=False)
+    world_clock: WorldClockService = field(init=False)
     match_service: MatchSimulationService = field(default_factory=MatchSimulationService)
     timeline_service: MatchTimelineService = field(default_factory=MatchTimelineService)
     team_factory: SyntheticSquadFactory = field(init=False)
 
     def __post_init__(self) -> None:
         self.lifecycle_service = CompetitionLifecycleService(self.session)
+        self.world_clock = WorldClockService(self.session)
         bind = self.session.get_bind()
         session_factory = create_session_factory(bind) if bind is not None else None
         self.team_factory = SyntheticSquadFactory(
@@ -58,12 +61,38 @@ class CompetitionAutoRunner:
             allow_synthetic_fallback=False,
         )
 
+    def effective_kickoff_at(self, competition: Competition, match: CompetitionMatch) -> datetime | None:
+        """Determine authoritative kickoff datetime. Returns None if kickoff is unresolved."""
+        if match.scheduled_at is not None:
+            return _as_utc(match.scheduled_at)
+        match_date = match.match_date
+        if match_date is None and competition.scheduled_start_at is not None:
+            match_date = _as_utc(competition.scheduled_start_at).date()
+        if match_date is None:
+            return None
+        format_enum = CompetitionFormat(competition.format)
+        window = (
+            FixtureWindow(match.window)
+            if match.window is not None
+            else (FixtureWindow.SENIOR_1 if format_enum is CompetitionFormat.LEAGUE else FixtureWindow.FAST_CUP_OPEN)
+        )
+        return _as_utc(window.kickoff_at(match_date))
+
+    def is_match_due(self, competition: Competition, match: CompetitionMatch, evaluation_time: datetime) -> bool:
+        """A match is due only if its authoritative kickoff has arrived."""
+        kickoff = self.effective_kickoff_at(competition, match)
+        if kickoff is None:
+            return False
+        return kickoff <= _as_utc(evaluation_time)
+
     def run_until_idle(
         self,
         competition: Competition,
         *,
         simulate_scheduled_matches: bool = False,
+        evaluation_time: datetime | None = None,
     ) -> Competition:
+        eval_time = _as_utc(evaluation_time) or self.world_clock.now_virtual()
         for _ in range(32):
             self.session.refresh(competition)
             status = CompetitionStatus(competition.status)
@@ -77,14 +106,15 @@ class CompetitionAutoRunner:
                 break
 
             changed = False
-            if self._should_launch(competition):
+            if self._should_launch(competition, now_virtual=eval_time):
                 self.lifecycle_service.launch_competition(competition)
                 changed = True
 
             matches = self._matches(competition.id)
             scheduled = [match for match in matches if match.status == MatchStatus.SCHEDULED.value]
-            if scheduled and simulate_scheduled_matches:
-                for match in scheduled:
+            due = [match for match in scheduled if self.is_match_due(competition, match, eval_time)]
+            if due and simulate_scheduled_matches:
+                for match in due:
                     self._simulate_match(competition, match)
                 changed = True
                 matches = self._matches(competition.id)
@@ -121,7 +151,7 @@ class CompetitionAutoRunner:
 
         return competition
 
-    def _should_launch(self, competition: Competition) -> bool:
+    def _should_launch(self, competition: Competition, now_virtual: datetime | None = None) -> bool:
         status = CompetitionStatus(competition.status)
         if status is CompetitionStatus.SEEDED:
             return True
@@ -133,7 +163,7 @@ class CompetitionAutoRunner:
             return False
 
         scheduled_start = _as_utc(competition.scheduled_start_at)
-        now = datetime.now(timezone.utc)
+        now = _as_utc(now_virtual) or self.world_clock.now_virtual()
         if scheduled_start is not None and scheduled_start > now:
             return False
 
@@ -225,9 +255,11 @@ class CompetitionAutoRunner:
                 if competition.scheduled_start_at is not None
                 else None
             )
-            or datetime.now(timezone.utc).date()
+            or self.world_clock.now_virtual_date()
         )
-        scheduled_kickoff_at = match.scheduled_at or window.kickoff_at(match_date)
+        scheduled_kickoff_at = (
+            match.scheduled_at or self.effective_kickoff_at(competition, match) or window.kickoff_at(match_date)
+        )
         return MatchSimulationJob(
             fixture_id=match.id,
             competition_id=competition.id,
@@ -305,6 +337,10 @@ class CompetitionAutoRunner:
             )
 
     def _club_name(self, competition_id: str, club_id: str) -> str:
+        club_profile = self.session.get(ClubProfile, club_id)
+        if club_profile is not None:
+            return club_profile.club_name
+
         club_profile = self.session.scalar(select(ClubProfile).where(ClubProfile.owner_user_id == club_id))
         if club_profile is not None:
             return club_profile.club_name

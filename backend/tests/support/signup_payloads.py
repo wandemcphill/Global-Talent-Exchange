@@ -10,10 +10,11 @@ def user_signup_payload(
     full_name: str = "Test User",
     password: str = TEST_PASSWORD,
     country: str = "NG",
+    club_name: str | None = None,
 ) -> dict[str, object]:
     resolved_username = username or email.split("@", maxsplit=1)[0].replace("-", "_").replace(".", "_")
     club_token = resolved_username.replace("_", "-")[:32] or "test"
-    return {
+    payload: dict[str, object] = {
         "email": email,
         "username": resolved_username,
         "password": password,
@@ -24,19 +25,20 @@ def user_signup_payload(
         "is_over_18": True,
         "date_of_birth": "1998-01-15",
         "turnstile_token": "dev-bypass",
-        "club_name": f"{full_name} Sporting",
-        "club_short_tag": club_token[:8].upper(),
-        "club_country": country,
-        "club_state": "Test State",
-        "club_locality": "Test City",
-        "club_type": "community",
         "football_identity": "club_owner",
-        "compliance": {
-            "government_id_attachment_id": f"gov-{club_token}",
-            "selfie_attachment_id": f"selfie-{club_token}",
-            "country_confirmation": country,
-        },
     }
+    if club_name is not None:
+        payload.update(
+            {
+                "club_name": club_name,
+                "club_short_tag": club_token[:8].upper(),
+                "club_country": country,
+                "club_state": "Test State",
+                "club_locality": "Test City",
+                "club_type": "community",
+            }
+        )
+    return payload
 
 
 def creator_signup_payload(
@@ -57,6 +59,7 @@ def creator_signup_payload(
         "main_club_supported": "GTEX FC",
         "primary_language": "English",
         "monetization": ["donations", "fan_coin_revenue"],
+        "turnstile_token": "dev-bypass",
     }
 
 
@@ -86,6 +89,7 @@ def trader_signup_payload(
         "recovery_phrase_hash": f"recovery-hash-{trader_token}",
         "security_pin_hash": f"security-pin-hash-{trader_token}",
         "totp_code": totp_code,
+        "turnstile_token": "dev-bypass",
         "compliance": {
             "government_id_attachment_id": f"gov-{trader_token}",
             "selfie_attachment_id": f"selfie-{trader_token}",

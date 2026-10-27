@@ -6,7 +6,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.owner_console import alerts, competitions as comps
-from app.owner_console import ledger, money, service
+from app.owner_console import ledger, money, service, storytelling
 from app.owner_console.models import (
     IntegrityFlag,
     LedgerEvent,
@@ -59,6 +59,41 @@ class SignRequest(BaseModel):
 
 class DecideRequest(BaseModel):
     action: str
+
+
+class InboxReadRequest(BaseModel):
+    is_read: bool = True
+
+
+class InboxArchiveRequest(BaseModel):
+    archive: bool = True
+
+
+class ShowroomPurchaseRequest(BaseModel):
+    catalog_key: str
+    custom_name: str | None = None
+    idempotency_key: str | None = None
+
+
+class ShowroomGiftRequest(BaseModel):
+    player_id: str
+    catalog_key: str | None = None
+    asset_id: str | None = None
+    note: str = ""
+    idempotency_key: str | None = None
+
+
+class WatchlistAddRequest(BaseModel):
+    player_id: str | None = None
+    player_name: str | None = None
+    position: str = "MID"
+    age: int = 19
+    current_rating: int = 68
+    potential_rating: int = 83
+    estimated_value_gtex: float = 120.0
+    priority: str = "medium"
+    scout_notes: str = ""
+    recommendation: str = "Monitor closely"
 
 
 class EnterRequest(BaseModel):
@@ -209,6 +244,23 @@ def sign(
     }
 
 
+class UnsignRequest(BaseModel):
+    player_id: str
+
+
+@router.post("/clubs/{club_id}/unsign")
+def unsign(
+    club_id: str, body: UnsignRequest, user=Depends(get_current_user), session: Session = Depends(get_session)
+) -> dict[str, Any]:
+    return _run(session, service.unsign_market_player, session, user.id, club_id, body.player_id)
+
+
+@router.post("/clubs/{club_id}/autopick")
+def autopick(
+    club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)
+) -> dict[str, Any]:
+    return _run(session, service.autopick_squad, session, user.id, club_id)
+
 @router.get("/market/quote")
 def quote(player_ids: str, session: Session = Depends(get_session), user=Depends(get_current_user)) -> dict[str, Any]:
     from app.ingestion.models import Player
@@ -250,6 +302,106 @@ def finish_onboarding(
 @router.get("/clubs/{club_id}")
 def club(club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
     return _run(session, service.club_detail, session, user.id, club_id)
+
+
+@router.get("/clubs/{club_id}/story")
+def club_story(club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
+    return _run(session, storytelling.build_club_story, session, user.id, club_id)
+
+
+@router.get("/clubs/{club_id}/showroom")
+def club_showroom(
+    club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)
+) -> dict[str, Any]:
+    return _run(session, storytelling.get_club_showroom, session, user.id, club_id)
+
+
+@router.post("/clubs/{club_id}/showroom/purchase")
+def purchase_showroom(
+    club_id: str,
+    body: ShowroomPurchaseRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(
+        session,
+        storytelling.purchase_showroom_asset,
+        session,
+        user.id,
+        club_id,
+        body.catalog_key,
+        custom_name=body.custom_name,
+        idempotency_key=body.idempotency_key,
+    )
+
+
+@router.post("/clubs/{club_id}/showroom/gift")
+def gift_showroom(
+    club_id: str,
+    body: ShowroomGiftRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(
+        session,
+        storytelling.gift_asset_to_squad_player,
+        session,
+        user.id,
+        club_id,
+        body.player_id,
+        catalog_key=body.catalog_key,
+        asset_id=body.asset_id,
+        note=body.note,
+        idempotency_key=body.idempotency_key,
+    )
+
+
+@router.get("/clubs/{club_id}/watchlist")
+def club_watchlist(
+    club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)
+) -> dict[str, Any]:
+    def go():
+        state = service.require_state(session, club_id, user.id)
+        rows = storytelling.ensure_default_watchlist(session, state)
+        return {"watchlist": [storytelling.watchlist_dict(r) for r in rows]}
+
+    return _run(session, go)
+
+
+@router.post("/clubs/{club_id}/watchlist")
+def add_watchlist(
+    club_id: str,
+    body: WatchlistAddRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(
+        session,
+        storytelling.add_to_watchlist,
+        session,
+        user.id,
+        club_id,
+        player_id=body.player_id,
+        player_name=body.player_name,
+        position=body.position,
+        age=body.age,
+        current_rating=body.current_rating,
+        potential_rating=body.potential_rating,
+        estimated_value_gtex=body.estimated_value_gtex,
+        priority=body.priority,
+        scout_notes=body.scout_notes,
+        recommendation=body.recommendation,
+    )
+
+
+@router.delete("/clubs/{club_id}/watchlist/{item_id}")
+def delete_watchlist(
+    club_id: str,
+    item_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(session, storytelling.remove_from_watchlist, session, user.id, club_id, item_id)
 
 
 @router.put("/clubs/{club_id}/mentality")
@@ -367,6 +519,7 @@ def control_center(user=Depends(get_current_user), session: Session = Depends(ge
             "ownership_group": service.group_label(session, user.id),
             "inbox": [service.inbox_dict(i) for i in items[:8]],
             "inbox_open_count": len(items),
+            "inbox_unread_count": sum(1 for i in items if not i.is_read),
             "decisions": [
                 service.inbox_dict(i)
                 for i in sorted(
@@ -374,6 +527,8 @@ def control_center(user=Depends(get_current_user), session: Session = Depends(ge
                     key=lambda i: alerts.respond_by(i) or datetime.max.replace(tzinfo=timezone.utc),
                 )
             ][:6],
+            "ticker": storytelling.list_ticker_events(session, user_id=user.id, limit=12),
+            "newsroom": storytelling.list_newsroom_articles(session, user_id=user.id, limit=8),
             "health": [service.club_health(session, s) for s in states],
             "board": board,
             "fixtures": {
@@ -402,14 +557,154 @@ def control_center(user=Depends(get_current_user), session: Session = Depends(ge
 
 @router.get("/inbox")
 def inbox(
-    status: str = "open", user=Depends(get_current_user), session: Session = Depends(get_session)
+    status: str = "open",
+    category: str = "all",
+    club_id: str | None = None,
+    save_context_id: str | None = None,
+    unread_only: bool = False,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
 ) -> dict[str, Any]:
     _run(session, alerts.sweep_decisions, session, user.id)
-    stmt = select(OwnerInboxItem).where(OwnerInboxItem.user_id == user.id)
-    if status != "all":
-        stmt = stmt.where(OwnerInboxItem.status == status)
-    items = session.scalars(stmt.order_by(OwnerInboxItem.created_at.desc()).limit(100)).all()
-    return {"items": [service.inbox_dict(i) for i in items]}
+    all_rows = session.scalars(
+        select(OwnerInboxItem)
+        .where(OwnerInboxItem.user_id == user.id)
+        .order_by(OwnerInboxItem.created_at.desc())
+        .limit(200)
+    ).all()
+    serialized = [service.inbox_dict(i) for i in all_rows]
+
+    counts: dict[str, int] = {
+        "all": 0,
+        "requests": 0,
+        "deadlines": 0,
+        "staff_recommendations": 0,
+        "player_issues": 0,
+        "scouting_reports": 0,
+        "negotiations": 0,
+        "scheduling": 0,
+        "archive": 0,
+        "unread": 0,
+        "open": 0,
+    }
+    for row in serialized:
+        if club_id and row.get("club_id") != club_id:
+            continue
+        if save_context_id and row.get("save_context_id") != save_context_id:
+            continue
+        is_archived = bool(row.get("archived_at")) or row.get("status") == "archived"
+        if is_archived:
+            counts["archive"] += 1
+            continue
+        counts["all"] += 1
+        cat = str(row.get("category") or "requests")
+        if cat in counts:
+            counts[cat] += 1
+        if not row.get("is_read"):
+            counts["unread"] += 1
+        if row.get("status") == "open":
+            counts["open"] += 1
+        payload = row.get("payload") or {}
+        if payload.get("respond_by") and row.get("status") == "open" and cat != "deadlines":
+            counts["deadlines"] += 1
+
+    filtered: list[dict[str, Any]] = []
+    for row in serialized:
+        if club_id and row.get("club_id") != club_id:
+            continue
+        if save_context_id and row.get("save_context_id") != save_context_id:
+            continue
+        is_archived = bool(row.get("archived_at")) or row.get("status") == "archived"
+        if category == "archive" or status == "archived":
+            if not is_archived:
+                continue
+        else:
+            if is_archived and status != "all":
+                continue
+            if status not in ("all", "archived") and row.get("status") != status:
+                continue
+            if category != "all":
+                row_cat = str(row.get("category") or "requests")
+                payload = row.get("payload") or {}
+                has_deadline = bool(payload.get("respond_by")) and row.get("status") == "open"
+                if category == "deadlines":
+                    if row_cat != "deadlines" and not has_deadline:
+                        continue
+                elif row_cat != category:
+                    continue
+        if unread_only and row.get("is_read"):
+            continue
+        filtered.append(row)
+
+    return {"items": filtered[:100], "counts": counts}
+
+
+@router.post("/inbox/{item_id}/read")
+def mark_read(
+    item_id: str,
+    body: InboxReadRequest | None = None,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    payload = body or InboxReadRequest()
+    item = _run(session, service.mark_inbox_read, session, user.id, item_id, is_read=payload.is_read)
+    return service.inbox_dict(item)
+
+
+@router.post("/inbox/{item_id}/archive")
+def archive_item(
+    item_id: str,
+    body: InboxArchiveRequest | None = None,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    payload = body or InboxArchiveRequest()
+    item = _run(session, service.archive_inbox_item, session, user.id, item_id, archive=payload.archive)
+    return service.inbox_dict(item)
+
+
+@router.get("/ticker")
+def global_ticker(
+    club_id: str | None = Query(default=None),
+    save_context_id: str | None = Query(default=None),
+    limit: int = Query(default=30, ge=1, le=100),
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    events = storytelling.list_ticker_events(
+        session,
+        user_id=user.id,
+        club_id=club_id,
+        save_context_id=save_context_id,
+        limit=max(1, min(limit, 100)),
+    )
+    return {"events": events}
+
+
+@router.get("/newsroom")
+def newsroom_feed(
+    club_id: str | None = Query(default=None),
+    save_context_id: str | None = Query(default=None),
+    category: str | None = Query(default=None),
+    limit: int = Query(default=30, ge=1, le=100),
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    resolved_save_context_id = save_context_id
+    if resolved_save_context_id is None and club_id:
+        resolved_save_context_id = storytelling.resolve_save_context_id(session, club_id)
+    articles = storytelling.list_newsroom_articles(
+        session,
+        user_id=user.id,
+        club_id=club_id,
+        save_context_id=resolved_save_context_id,
+        category=category,
+        limit=max(1, min(limit, 100)),
+    )
+    return {"articles": articles}
+
+
+get_owner_newsroom = newsroom_feed
 
 
 def _run_alert_sweep() -> None:
@@ -441,6 +736,26 @@ def public_showroom(code: str, session: Session = Depends(get_session)) -> dict[
     from app.owner_console.public_showroom import public_showroom as public_card
 
     return _run(session, public_card, session, code)
+
+
+@router.get("/public/profile/{owner_user_id}")
+def get_public_owner_profile(
+    owner_user_id: str,
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Public owner persona; no private inbox, wallet controls, or per-account balances."""
+    from app.services.club_public_profile_service import (
+        ClubPublicProfileNotFound,
+        public_owner_profile,
+    )
+
+    try:
+        return public_owner_profile(session, owner_user_id)
+    except ClubPublicProfileNotFound as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Public owner profile not found.",
+        ) from exc
 
 
 @router.post("/inbox/{item_id}/decide")
@@ -640,8 +955,22 @@ def fan_coin(
 
 
 @router.post("/gifts/send")
-def gift(body: GiftRequest, user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
-    return _run(session, money.send_gift, session, user, body.club_id, body.gift_code, body.match_id)
+def gift(
+    body: GiftRequest,
+    request: Request,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(
+        session,
+        money.send_gift,
+        session,
+        user,
+        body.club_id,
+        body.gift_code,
+        body.match_id,
+        app=request.app,
+    )
 
 
 @router.post("/support-units/buy")

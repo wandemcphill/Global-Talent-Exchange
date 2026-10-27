@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../features/onboarding_redesign/gtex_22_home_screen.dart';
+import '../features/onboarding_redesign/gtex_public_landing_screen_v2.dart';
 
+/// Production route host screen mounting the canonical GTEX 2027 homepage.
 class GtexPublicLandingRouteScreenV2 extends StatelessWidget {
   const GtexPublicLandingRouteScreenV2({
     super.key,
@@ -20,7 +21,7 @@ class GtexPublicLandingRouteScreenV2 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Gtex22HomeScreen(
+    return GtexPublicLandingScreenV2(
       onSignup: onSignup,
       onLogin: onLogin,
       onCreatorSignup: onCreatorSignup,

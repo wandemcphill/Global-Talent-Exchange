@@ -143,7 +143,29 @@ def regen_tournament_scheduling_job(*, days_ahead: int) -> dict[str, Any]:
         raise
 
 
+def expire_stale_coin_trade_orders_job() -> dict[str, Any]:
+    job_id = _job_id()
+    context = _context()
+    logger.info("worker.expire_stale_coin_trade_orders.started job_id=%s", job_id)
+    try:
+        from app.coin_traders.service import CoinTraderService
+
+        with context.database.session_factory() as session:
+            service = CoinTraderService(session)
+            expired = service.expire_stale_orders()
+        logger.info(
+            "worker.expire_stale_coin_trade_orders.completed job_id=%s expired_count=%d",
+            job_id,
+            len(expired),
+        )
+        return {"job_id": job_id, "expired_count": len(expired), "order_ids": [o.id for o in expired]}
+    except Exception:
+        logger.exception("worker.expire_stale_coin_trade_orders.failed job_id=%s", job_id)
+        raise
+
+
 __all__ = [
+    "expire_stale_coin_trade_orders_job",
     "regen_dna_evolution_job",
     "regen_rivalry_detection_job",
     "regen_story_regeneration_job",

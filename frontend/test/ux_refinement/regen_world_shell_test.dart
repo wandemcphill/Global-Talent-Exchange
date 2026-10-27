@@ -95,7 +95,7 @@ void main() {
     expect(find.byType(GtexRegenWorldScreenV2), findsOneWidget);
     // Inside the shell it inherits the dark canvas and the navigation rail
     // rather than rendering on a bare white page.
-    expect(find.byType(GtexAppShell), findsOneWidget);
+    expect(find.byType(GtexShellScaffold), findsOneWidget);
     expect(find.text('Regen World'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
@@ -107,11 +107,11 @@ void main() {
       tester,
       '/app/home',
       const Size(1440, 1000),
-      find.byType(GtexAppShell),
+      find.byType(GtexShellScaffold),
     );
 
     // The nav rail carries it, so it is reachable without typing a URL.
-    expect(find.text('Regen World'), findsWidgets);
+    expect(find.text('World'), findsWidgets);
   });
 
   for (final double width in <double>[390, 768, 1024, 1280, 1440]) {

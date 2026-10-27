@@ -107,6 +107,9 @@ void main() {
           .map((RegExpMatch match) => match.group(1)!)
           .where((String path) => path.startsWith('/'));
 
+      expect(directRouterPaths, contains('/clubs/:clubId/profile'));
+      expect(directRouterPaths, contains('/owners/:ownerUserId/profile'));
+
       final Set<String> seenDirectPaths = <String>{};
       final Set<String> duplicateDirectPaths = <String>{};
       for (final String path in directRouterPaths) {
@@ -232,6 +235,12 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Create free account'));
+      await tester.pumpAndSettle();
+
+      // The landing CTA opens the account-type selector. Each account then
+      // follows its dedicated signup route.
+      expect(find.byType(GtexAccountSelectorScreen), findsOneWidget);
+      await tester.tap(find.text('USER ACCOUNT'));
       await tester.pumpAndSettle();
 
       expect(find.byType(GtexUserSignupScreen), findsOneWidget);

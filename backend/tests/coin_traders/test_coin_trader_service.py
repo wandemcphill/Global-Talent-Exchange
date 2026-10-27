@@ -22,10 +22,15 @@ from app.coin_traders.schemas import (
 )
 from app.coin_traders.service import CoinTraderPermissionError, CoinTraderService, CoinTraderValidationError
 from app.models.base import Base
-from app.models.coin_trader import CoinTradeOrderStatus, CoinTraderProfileStatus, CoinTraderRate
+from app.models.coin_trader import (
+    CoinTradeOrderStatus,
+    CoinTraderProfile,
+    CoinTraderProfileStatus,
+    CoinTraderRate,
+)
 from app.models.notification_record import NotificationRecord
 from app.models.risk_ops import SystemEvent
-from app.models.user import KycStatus, User, UserRole
+from app.models.user import KycStatus, PublicAccountType, User, UserRole
 from app.models.wallet import LedgerSourceTag, LedgerUnit
 from app.wallets.service import WalletService
 
@@ -63,6 +68,7 @@ def _seed_users(session: Session) -> dict[str, User]:
         display_name="Trader",
         password_hash="x",
         role=UserRole.USER,
+        account_type=PublicAccountType.COIN_TRADER,
         kyc_status=KycStatus.FULLY_VERIFIED,
     )
     buyer = User(
@@ -144,7 +150,7 @@ def test_coin_trader_buy_order_locks_and_releases_escrow(coin_trader_session: Se
     coin_trader_session.commit()
 
     profile = _approve_trader_with_rate(service, users)
-    assert users["trader"].role == UserRole.COIN_TRADER
+    assert users["trader"].account_type == PublicAccountType.COIN_TRADER
     assert service.get_my_profile(users["trader"]).status == CoinTraderProfileStatus.APPROVED.value
 
     order = service.create_order(
@@ -749,13 +755,350 @@ def test_frozen_or_rejected_coin_trader_cannot_trade(coin_trader_session: Sessio
         )
 
 
-def test_admin_cannot_approve_own_coin_trader_profile(coin_trader_session: Session) -> None:
+def test_normal_account_cannot_operate_a_legacy_approved_coin_trader_profile(
+    coin_trader_session: Session,
+) -> None:
     users = _seed_users(coin_trader_session)
+    legacy_profile = CoinTraderProfile(
+        user_id=users["buyer"].id,
+        display_name="Legacy Buyer Desk",
+        status=CoinTraderProfileStatus.APPROVED.value,
+        tier="gold",
+        terms_json={},
+        payment_methods_json=[],
+        bank_accounts_json=[],
+        metadata_json={},
+    )
+    coin_trader_session.add(legacy_profile)
+    coin_trader_session.commit()
+
     service = CoinTraderService(coin_trader_session)
-    profile = service.create_or_update_profile(
-        CoinTraderProfileCreateRequest(display_name="Admin Desk", country_code="NG"),
-        actor=users["admin"],
+    with pytest.raises(CoinTraderPermissionError, match="dedicated Coin Trader account"):
+        service.upsert_rate(
+            CoinTraderRateUpsertRequest(
+                coin_unit=LedgerUnit.COIN,
+                fiat_currency="NGN",
+                buy_rate_fiat=Decimal("860"),
+                sell_rate_fiat=Decimal("920"),
+                min_coin_amount=Decimal("100"),
+                max_coin_amount=Decimal("10000"),
+                available_liquidity=Decimal("1000"),
+            ),
+            actor=users["buyer"],
+        )
+
+
+def test_admin_cannot_approve_own_legacy_coin_trader_profile(coin_trader_session: Session) -> None:
+    users = _seed_users(coin_trader_session)
+    profile = CoinTraderProfile(
+        user_id=users["admin"].id,
+        display_name="Admin Legacy Desk",
+        status=CoinTraderProfileStatus.APPLIED.value,
+        tier="bronze",
+        terms_json={},
+        payment_methods_json=[],
+        bank_accounts_json=[],
+        metadata_json={},
+    )
+    coin_trader_session.add(profile)
+    coin_trader_session.commit()
+
+    service = CoinTraderService(coin_trader_session)
+    with pytest.raises(CoinTraderValidationError, match="cannot approve their own"):
+        service.approve_trader(
+            profile.id,
+            CoinTraderAdminDecisionRequest(tier="gold"),
+            admin=users["admin"],
+        )
+
+
+def test_coin_trade_cannot_cancel_after_proof_submitted(coin_trader_session: Session) -> None:
+    users = _seed_users(coin_trader_session)
+    wallet_service = WalletService()
+    service = CoinTraderService(coin_trader_session, wallet_service=wallet_service)
+    wallet_service.credit_trade_proceeds(
+        coin_trader_session,
+        user=users["trader"],
+        amount=Decimal("100000.0000"),
+        unit=LedgerUnit.COIN,
+        reference="seed:trader-cancel-guard",
+        description="Seed trader liquidity",
+        external_reference="seed",
+        source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+    )
+    coin_trader_session.commit()
+    profile = _approve_trader_with_rate(service, users)
+    order = service.create_order(
+        CoinTradeOrderCreateRequest(
+            trader_profile_id=profile.id,
+            direction="user_buys",
+            coin_unit=LedgerUnit.COIN,
+            coin_amount=Decimal("5000"),
+            fiat_currency="NGN",
+            payment_method="bank_transfer",
+            idempotency_key="cancel-guard-order-key-1",
+        ),
+        actor=users["buyer"],
+    )
+    service.accept_order(order.id, actor=users["trader"])
+    service.submit_proof(
+        order.id,
+        CoinTradeProofRequest(proof_reference="buyer-receipt-paid"),
+        actor=users["buyer"],
+    )
+    # Neither buyer nor trader can cancel once proof is submitted (P0 fix)
+    with pytest.raises(CoinTraderValidationError, match="submitted payment proof cannot be cancelled"):
+        service.cancel_order(order.id, actor=users["trader"])
+    with pytest.raises(CoinTraderValidationError, match="submitted payment proof cannot be cancelled"):
+        service.cancel_order(order.id, actor=users["buyer"])
+
+
+def test_seller_cannot_cancel_before_payment_window_expires_but_can_after(
+    coin_trader_session: Session,
+) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    users = _seed_users(coin_trader_session)
+    wallet_service = WalletService()
+    service = CoinTraderService(coin_trader_session, wallet_service=wallet_service)
+    wallet_service.credit_trade_proceeds(
+        coin_trader_session,
+        user=users["trader"],
+        amount=Decimal("100000.0000"),
+        unit=LedgerUnit.COIN,
+        reference="seed:trader-window-guard",
+        description="Seed trader liquidity",
+        external_reference="seed",
+        source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+    )
+    coin_trader_session.commit()
+    profile = _approve_trader_with_rate(service, users)
+    order = service.create_order(
+        CoinTradeOrderCreateRequest(
+            trader_profile_id=profile.id,
+            direction="user_buys",
+            coin_unit=LedgerUnit.COIN,
+            coin_amount=Decimal("5000"),
+            fiat_currency="NGN",
+            payment_method="bank_transfer",
+            idempotency_key="window-guard-order-key-1",
+        ),
+        actor=users["buyer"],
+    )
+    service.accept_order(order.id, actor=users["trader"])
+
+    # Seller (trader) cannot cancel while payment window is active
+    with pytest.raises(CoinTraderValidationError, match="payment window expires"):
+        service.cancel_order(order.id, actor=users["trader"])
+
+    # Buyer (fiat sender) CAN cancel anytime in payment_pending
+    # But let's test seller cancellation after window expires:
+    db_order = service._require_order(order.id)
+    db_order.payment_window_expires_at = datetime.now(timezone.utc) - timedelta(minutes=5)
+    coin_trader_session.commit()
+
+    # Now seller CAN cancel because window has expired
+    cancelled = service.cancel_order(order.id, actor=users["trader"])
+    assert cancelled.status == CoinTradeOrderStatus.REFUNDED.value
+
+
+def test_normal_user_can_apply_and_is_promoted_on_admin_approval(
+    coin_trader_session: Session,
+) -> None:
+    users = _seed_users(coin_trader_session)
+    normal_user = users["buyer"]
+    assert normal_user.account_type == PublicAccountType.USER
+
+    service = CoinTraderService(coin_trader_session)
+    # Normal user can submit application (P1 ARCH-001)
+    applied = service.create_or_update_profile(
+        CoinTraderProfileCreateRequest(
+            display_name="Unified ID Desk",
+            country_code="NG",
+            terms={"same_name_only": True},
+            payment_methods=[{"type": "bank_transfer"}],
+            bank_accounts=[{"bank": "Access Bank"}],
+        ),
+        actor=normal_user,
+    )
+    assert applied.status == CoinTraderProfileStatus.APPLIED.value
+
+    # Admin approves application -> user is promoted to COIN_TRADER
+    approved = service.approve_trader(
+        applied.id,
+        CoinTraderAdminDecisionRequest(tier="bronze", note="Approved unified applicant"),
+        admin=users["admin"],
+    )
+    assert approved.status == CoinTraderProfileStatus.APPROVED.value
+    assert normal_user.account_type == PublicAccountType.COIN_TRADER
+
+
+def test_expire_stale_orders_sweeps_and_refunds_escrow(
+    coin_trader_session: Session,
+) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    users = _seed_users(coin_trader_session)
+    wallet_service = WalletService()
+    service = CoinTraderService(coin_trader_session, wallet_service=wallet_service)
+    wallet_service.credit_trade_proceeds(
+        coin_trader_session,
+        user=users["trader"],
+        amount=Decimal("100000.0000"),
+        unit=LedgerUnit.COIN,
+        reference="seed:trader-sweep-liquidity",
+        description="Seed trader liquidity",
+        external_reference="seed",
+        source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+    )
+    coin_trader_session.commit()
+    profile = _approve_trader_with_rate(service, users)
+    order = service.create_order(
+        CoinTradeOrderCreateRequest(
+            trader_profile_id=profile.id,
+            direction="user_buys",
+            coin_unit=LedgerUnit.COIN,
+            coin_amount=Decimal("5000"),
+            fiat_currency="NGN",
+            payment_method="bank_transfer",
+            idempotency_key="sweep-order-key-1",
+        ),
+        actor=users["buyer"],
+    )
+    service.accept_order(order.id, actor=users["trader"])
+    trader_summary = wallet_service.get_wallet_summary(coin_trader_session, users["trader"], currency=LedgerUnit.COIN)
+    assert trader_summary.reserved_balance == Decimal("5000.0000")
+
+    # Set window in the past
+    db_order = service._require_order(order.id)
+    db_order.payment_window_expires_at = datetime.now(timezone.utc) - timedelta(minutes=10)
+    coin_trader_session.commit()
+
+    # Expire stale orders
+    expired = service.expire_stale_orders()
+    assert len(expired) == 1
+    assert expired[0].id == order.id
+    assert expired[0].status == CoinTradeOrderStatus.CANCELLED.value
+
+    # Verify escrow was refunded back to trader
+    trader_summary = wallet_service.get_wallet_summary(coin_trader_session, users["trader"], currency=LedgerUnit.COIN)
+    assert trader_summary.reserved_balance == Decimal("0.0000")
+    assert trader_summary.available_balance == Decimal("100000.0000")
+
+
+def test_order_creation_enforces_kyc_when_terms_require_kyc(
+    coin_trader_session: Session,
+) -> None:
+    users = _seed_users(coin_trader_session)
+    service = CoinTraderService(coin_trader_session, wallet_service=WalletService())
+    profile = _approve_trader_with_rate(service, users)
+
+    # Set kyc_required on trader profile
+    db_profile = service._require_profile(profile.id)
+    db_profile.terms_json = {"kyc_required": True, "same_name_only": True}
+    coin_trader_session.commit()
+
+    # Unverified user tries to create order
+    unverified_buyer = User(
+        id="unverified-buyer-1",
+        email="unverified@example.com",
+        username="unverified",
+        display_name="Unverified",
+        password_hash="x",
+        role=UserRole.USER,
+        kyc_status=KycStatus.UNVERIFIED,
+    )
+    coin_trader_session.add(unverified_buyer)
+    coin_trader_session.commit()
+
+    with pytest.raises(CoinTraderValidationError, match="requires KYC verification"):
+        service.create_order(
+            CoinTradeOrderCreateRequest(
+                trader_profile_id=profile.id,
+                direction="user_buys",
+                coin_unit=LedgerUnit.COIN,
+                coin_amount=Decimal("1000"),
+                fiat_currency="NGN",
+                payment_method="bank_transfer",
+                idempotency_key="kyc-test-order-key-1",
+            ),
+            actor=unverified_buyer,
+        )
+
+
+def test_in_order_transactional_messages_chat(
+    coin_trader_session: Session,
+) -> None:
+    from app.coin_traders.schemas import CoinTradeMessageCreateRequest
+
+    users = _seed_users(coin_trader_session)
+    wallet_service = WalletService()
+    service = CoinTraderService(coin_trader_session, wallet_service=wallet_service)
+    wallet_service.credit_trade_proceeds(
+        coin_trader_session,
+        user=users["trader"],
+        amount=Decimal("100000.0000"),
+        unit=LedgerUnit.COIN,
+        reference="seed:trader-chat-liquidity",
+        description="Seed trader liquidity",
+        external_reference="seed",
+        source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+    )
+    coin_trader_session.commit()
+    profile = _approve_trader_with_rate(service, users)
+    order = service.create_order(
+        CoinTradeOrderCreateRequest(
+            trader_profile_id=profile.id,
+            direction="user_buys",
+            coin_unit=LedgerUnit.COIN,
+            coin_amount=Decimal("5000"),
+            fiat_currency="NGN",
+            payment_method="bank_transfer",
+            idempotency_key="chat-order-key-1",
+        ),
+        actor=users["buyer"],
     )
 
-    with pytest.raises(CoinTraderValidationError):
-        service.approve_trader(profile.id, CoinTraderAdminDecisionRequest(tier="gold"), admin=users["admin"])
+    # Buyer sends message
+    msg1 = service.add_order_message(
+        order.id,
+        CoinTradeMessageCreateRequest(message="Hello, transferring via GTBank now."),
+        actor=users["buyer"],
+    )
+    assert msg1.message == "Hello, transferring via GTBank now."
+    assert msg1.sender_user_id == users["buyer"].id
+
+    # Trader responds
+    msg2 = service.add_order_message(
+        order.id,
+        CoinTradeMessageCreateRequest(message="Received, awaiting your proof of payment."),
+        actor=users["trader"],
+    )
+    assert msg2.message == "Received, awaiting your proof of payment."
+    assert msg2.sender_user_id == users["trader"].id
+
+    # Non-participant is forbidden
+    outsider = User(
+        id="outsider-user-1",
+        email="outsider@example.com",
+        username="outsider",
+        display_name="Outsider",
+        password_hash="x",
+        role=UserRole.USER,
+        kyc_status=KycStatus.FULLY_VERIFIED,
+    )
+    coin_trader_session.add(outsider)
+    coin_trader_session.commit()
+
+    with pytest.raises(CoinTraderPermissionError):
+        service.add_order_message(
+            order.id,
+            CoinTradeMessageCreateRequest(message="I shouldn't be here"),
+            actor=outsider,
+        )
+
+    # Messages appear in order view
+    order_view = service.to_order_view(service._require_order(order.id))
+    assert len(order_view.messages) == 2
+    assert order_view.messages[0].message == "Hello, transferring via GTBank now."
+    assert order_view.messages[1].message == "Received, awaiting your proof of payment."

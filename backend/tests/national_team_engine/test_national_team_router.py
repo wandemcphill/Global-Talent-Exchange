@@ -6,9 +6,12 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import select
 
 from backend.tests.support.secrets import DASHBOARD_TEST_ADMIN_PASSWORD
+from backend.tests.support.signup_payloads import user_signup_payload
 from app.ingestion.models import Country, Player
+from app.models.club_profile import ClubProfile
 from app.models.player_agency_state import PlayerAgencyState
 from app.models.player_contract import PlayerContract
 from app.models.player_injury_case import PlayerInjuryCase
@@ -302,6 +305,64 @@ def test_rental_pool_empty_country_is_valid_response(client, national_admin_head
     assert payload["items"] == []
     assert payload["total"] == 0
     assert payload["partial"] is False
+
+
+def test_new_user_without_club_can_enter_and_rent_for_national_team(
+    client, app_session_factory, national_admin_headers
+) -> None:
+    nonce = uuid4().hex[:10]
+    signup_response = client.post(
+        "/auth/signup/user",
+        json=user_signup_payload(
+            email=f"no-club-national-{nonce}@test.gtex.local",
+            username=f"no_club_{nonce}",
+            full_name="No Club National Manager",
+        ),
+    )
+    assert signup_response.status_code == 201, signup_response.text
+    issued = signup_response.json()
+    user_id = issued["user"]["id"]
+    user_headers = {"Authorization": f"Bearer {issued['access_token']}"}
+
+    # Signup must persist a user account only; national-team participation
+    # must not require creating a ClubProfile or club-owner state.
+    with app_session_factory() as session:
+        assert session.scalar(select(ClubProfile).where(ClubProfile.owner_user_id == user_id)) is None
+
+    competition = _create_competition(
+        client, national_admin_headers, key_prefix=f"no-club-national-{nonce}"
+    )
+    player_ids = _seed_national_pool(
+        app_session_factory,
+        prefix=f"no-club-national-{nonce}",
+        funded_user_id=user_id,
+        home_code="NP2",
+        home_name="Nation Prime Two",
+        away_code="AX2",
+        away_name="Away X Two",
+    )
+    entry_response = client.post(
+        f"/api/national-team-engine/competitions/{competition['id']}/rental-entry",
+        headers=user_headers,
+        json={"country_code": "NP2", "country_name": "Nation Prime Two"},
+    )
+    assert entry_response.status_code == 200, entry_response.text
+    entry = entry_response.json()
+    assert entry["entry_owner_user_id"] == user_id
+
+    rent_response = client.post(
+        f"/api/national-team-engine/entries/{entry['id']}/rentals",
+        headers=user_headers,
+        json={"player_id": player_ids["home-st"]},
+    )
+    assert rent_response.status_code == 200, rent_response.text
+    rented = rent_response.json()
+    assert any(
+        member["player_id"] == player_ids["home-st"]
+        for member in rented["rental_squad_members"]
+    )
+    with app_session_factory() as session:
+        assert session.scalar(select(ClubProfile).where(ClubProfile.owner_user_id == user_id)) is None
 
 
 def test_multiple_users_can_rent_same_national_team(client, demo_seed, national_admin_headers) -> None:
@@ -880,3 +941,160 @@ def test_qualifier_lock_blocks_new_entries_and_updates_country_rankings(
     assert rankings_by_country["NG"]["matches_played"] >= 1
     assert rankings_by_country["GH"]["matches_played"] >= 1
     assert rankings_by_country["NG"]["elo_rating"] != 1500.0 or rankings_by_country["GH"]["elo_rating"] != 1500.0
+
+
+def test_submit_squad_rejects_unrented_player(client, demo_seed, app_session_factory, national_admin_headers) -> None:
+    first_user = demo_seed.demo_users[0]
+    user_headers = _login(client, email=first_user.email, password=first_user.password)
+    player_ids = _seed_national_pool(
+        app_session_factory,
+        prefix="unrented-squad",
+        funded_user_id=first_user.user_id,
+        home_code="NG",
+        home_name="Nigeria",
+        away_code="GH",
+        away_name="Ghana",
+    )
+    unrented_player_id = player_ids["home-st"]
+
+    competition = client.post(
+        "/api/admin/national-team-engine/competitions",
+        headers=national_admin_headers,
+        json={
+            "key": "unrented-squad-test",
+            "title": "Unrented Squad Test",
+            "season_label": "2030",
+            "region_type": "global",
+            "age_band": "senior",
+            "format_type": "cup",
+            "status": "published",
+            "metadata_json": {
+                "minimum_squad_size": 1,
+                "maximum_squad_size": 11,
+            },
+        },
+    ).json()
+
+    # A stale ACTIVE contract must not make an expired player eligible.
+    from app.models.national_team_tournament import RentalContract, RentalContractStatus
+
+    now = datetime.now(timezone.utc)
+    with app_session_factory() as session:
+        session.add(
+            RentalContract(
+                player_id=unrented_player_id,
+                user_id=first_user.user_id,
+                tournament_id=competition["id"],
+                start_date=now - timedelta(days=3),
+                end_date=now - timedelta(days=1),
+                status=RentalContractStatus.ACTIVE,
+            )
+        )
+        session.commit()
+
+    # Submit squad containing an expired rental record
+    submit_response = client.post(
+        f"/api/national-team-engine/competitions/{competition['id']}/entries",
+        headers=user_headers,
+        json={
+            "country_code": "NG",
+            "country_name": "Nigeria",
+            "squad": [
+                {
+                    "player_id": unrented_player_id,
+                    "player_name": "Unrented Striker",
+                    "overall_rating": 80,
+                    "position": "ST",
+                }
+            ],
+        },
+    )
+    assert submit_response.status_code == 409, submit_response.text
+    assert _error_message(submit_response) == "player_not_rented"
+
+    # A future ACTIVE rental is also not valid before its start time.
+    with app_session_factory() as session:
+        contract = session.query(RentalContract).filter_by(player_id=unrented_player_id).one()
+        contract.start_date = now + timedelta(days=1)
+        contract.end_date = now + timedelta(days=2)
+        session.commit()
+
+    future_response = client.post(
+        f"/api/national-team-engine/competitions/{competition['id']}/entries",
+        headers=user_headers,
+        json={
+            "country_code": "NG",
+            "country_name": "Nigeria",
+            "squad": [
+                {
+                    "player_id": unrented_player_id,
+                    "player_name": "Unrented Striker",
+                    "overall_rating": 80,
+                    "position": "ST",
+                }
+            ],
+        },
+    )
+    assert future_response.status_code == 409, future_response.text
+    assert _error_message(future_response) == "player_not_rented"
+
+
+def test_rental_status_and_national_entry_auth_enforcement(client, demo_seed, national_admin_headers) -> None:
+    user_a = demo_seed.demo_users[0]
+    user_b = demo_seed.demo_users[1]
+    user_a_headers = _login(client, email=user_a.email, password=user_a.password)
+    user_b_headers = _login(client, email=user_b.email, password=user_b.password)
+
+    competition = client.post(
+        "/api/admin/national-team-engine/competitions",
+        headers=national_admin_headers,
+        json={
+            "key": "rental-status-auth-test",
+            "title": "Rental Status Auth Test",
+            "season_label": "2030",
+            "region_type": "global",
+            "age_band": "senior",
+            "format_type": "cup",
+            "status": "published",
+        },
+    ).json()
+
+    entry = client.post(
+        f"/api/national-team-engine/competitions/{competition['id']}/rental-entry",
+        headers=user_a_headers,
+        json={"country_code": "NG", "country_name": "Nigeria"},
+    ).json()
+
+    # 1. Anonymous rental-status read should fail with 401
+    anon_status = client.get(f"/api/national-team-engine/entries/{entry['id']}/rental-status")
+    assert anon_status.status_code == 401, anon_status.text
+
+    # 2. Unauthorized user rental-status read should fail with 403
+    unauth_status = client.get(
+        f"/api/national-team-engine/entries/{entry['id']}/rental-status",
+        headers=user_b_headers,
+    )
+    assert unauth_status.status_code == 403, unauth_status.text
+
+    # 3. Authorized owner rental-status read should succeed (200 OK)
+    auth_status = client.get(
+        f"/api/national-team-engine/entries/{entry['id']}/rental-status",
+        headers=user_a_headers,
+    )
+    assert auth_status.status_code == 200, auth_status.text
+    assert auth_status.json()["entry"]["id"] == entry["id"]
+
+    # 4. GET /api/v2/national/entries/{entry_id} with auth should succeed with 200 OK (no 500 error)
+    national_entry = client.get(
+        f"/api/national/entries/{entry['id']}",
+        headers=user_a_headers,
+    )
+    assert national_entry.status_code == 200, national_entry.text
+    assert national_entry.json()["id"] == entry["id"]
+
+    # Another authenticated user must not be able to read this entry.
+    forbidden_entry = client.get(
+        f"/api/national/entries/{entry['id']}",
+        headers=user_b_headers,
+    )
+    assert forbidden_entry.status_code == 403, forbidden_entry.text

@@ -404,3 +404,74 @@ class _RecordingWebSocket:
 
     async def receive_text(self) -> str:
         raise WebSocketDisconnect(code=1000)
+
+
+def test_legacy_tournament_rent_endpoint_returns_410_gone(app_client) -> None:
+    app, client = app_client
+    _, token = _create_authenticated_user(app)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.post(
+        "/api/v2/tournaments/t1/rent",
+        headers=headers,
+        json={"player_id": "p1"},
+    )
+    assert response.status_code == 410
+    payload = response.json()
+    detail = payload.get("detail", "")
+    assert "national team engine" in detail.lower() or "410" in str(payload)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/tournaments/t1/join",
+        "/api/tournaments/t1/join",
+        "/api/v2/tournaments/t1/join",
+    ],
+)
+def test_legacy_tournament_join_aliases_return_410_gone(app_client, path: str) -> None:
+    app, client = app_client
+    user_id, token = _create_authenticated_user(app)
+    response = client.post(
+        path,
+        headers={"Authorization": f"Bearer {token}"},
+        json={"user_id": user_id},
+    )
+    assert response.status_code == 410, response.text
+    assert response.headers.get("Deprecation") == "true" or "retired" in response.text.lower()
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/tournaments/t1/squad",
+        "/api/tournaments/t1/squad",
+        "/api/v2/tournaments/t1/squad",
+    ],
+)
+def test_legacy_tournament_squad_aliases_return_410_gone(app_client, path: str) -> None:
+    app, client = app_client
+    _, token = _create_authenticated_user(app)
+    response = client.post(
+        path,
+        headers={"Authorization": f"Bearer {token}"},
+        json={"player_ids": ["legacy-player"]},
+    )
+    assert response.status_code == 410, response.text
+    assert response.headers.get("Deprecation") == "true" or "retired" in response.text.lower()
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/tournaments/t1",
+        "/api/v2/tournaments/t1",
+    ],
+)
+def test_legacy_tournament_demo_read_aliases_return_410_gone(app_client, path: str) -> None:
+    app, client = app_client
+    _, token = _create_authenticated_user(app)
+    response = client.get(path, headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 410, response.text
+    assert response.headers.get("Deprecation") == "true" or "retired" in response.text.lower()

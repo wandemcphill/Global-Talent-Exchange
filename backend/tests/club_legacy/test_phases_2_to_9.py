@@ -18,7 +18,6 @@ from app.club_legacy.operations import (
     club_page,
     club_valuation,
     decide_manager_offer,
-    development_score,
     economic_interest,
     hire_executive,
     invite_preseason,
@@ -43,6 +42,7 @@ from app.club_legacy.operations import (
     settle_preseason,
     simulate_season,
 )
+from app.club_legacy.ratings import development_score
 from app.club_legacy.delegation import LegacyError
 from app.models.admin_rules import AdminFeatureFlag
 from app.models.club_profile import ClubLifecycleStatus, ClubProfile, ClubType
@@ -187,11 +187,11 @@ def test_phase4_purchase_gift_and_resale_cannot_double(client, bootstrap_admin_h
         )
         gift = offer_gift(session, asset_id=owned.id, user_id=admin.id, recipient_ref="player-1")
         assert owned.status == "offered"
-        resolve_gift(session, gift_id=gift.id, accept=False)
+        resolve_gift(session, gift_id=gift.id, accept=False, actor_user_id=admin.id)
         session.refresh(owned)
         assert owned.owner_class == "owner"
         gift = offer_gift(session, asset_id=owned.id, user_id=admin.id, recipient_ref="player-1")
-        resolve_gift(session, gift_id=gift.id, accept=True)
+        resolve_gift(session, gift_id=gift.id, accept=True, actor_user_id=admin.id)
         session.refresh(owned)
         assert owned.owner_class == "player"
         assert owned.owner_ref == "player-1"
@@ -447,7 +447,7 @@ def test_showroom_labels_club_ownership_and_keeps_a_static_fallback(client, boot
         assert personal
         assert personal[0]["owner_class"] == "owner"
         assert personal[0]["model_file"] == "assets/showroom/chronos_tourbillon_watch.glb"
-        assert personal[0]["preview_file"] == "assets/showroom/chronos_tourbillon_watch.png"
+        assert personal[0]["preview_file"] == "assets/showroom/chronos_tourbillon_watch.webp"
         assert all(
             item["ownership_label"] == "Club"
             for item in room["exhibits"]

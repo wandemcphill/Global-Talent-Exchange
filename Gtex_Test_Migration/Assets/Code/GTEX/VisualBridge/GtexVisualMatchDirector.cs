@@ -147,19 +147,20 @@ namespace FStudio.GTEX.VisualBridge
 
         public void ResolveCurrentVisualScore(out int homeScore, out int awayScore, out float matchMinute)
         {
-            homeScore = Mathf.Max(0, lastLocalHomeScore);
-            awayScore = Mathf.Max(0, lastLocalAwayScore);
-            matchMinute = Mathf.Max(0f, lastLocalClockPublished);
+            var authoritativeScore = GtexScoreAuthority.Current;
+            homeScore = Mathf.Max(0, authoritativeScore != null ? authoritativeScore.homeScore : lastLocalHomeScore);
+            awayScore = Mathf.Max(0, authoritativeScore != null ? authoritativeScore.awayScore : lastLocalAwayScore);
+            matchMinute = Mathf.Max(0f, authoritativeScore != null ? authoritativeScore.matchMinute : lastLocalClockPublished);
 
-            if (localSimEngine == null)
+            if (localSimEngine == null || !localSimEngine.IsRunning)
             {
                 return;
             }
 
-            homeScore = Mathf.Max(0, localSimEngine.HomeScore);
-            awayScore = Mathf.Max(0, localSimEngine.AwayScore);
+            homeScore = Mathf.Max(homeScore, localSimEngine.HomeScore);
+            awayScore = Mathf.Max(awayScore, localSimEngine.AwayScore);
             matchMinute = localSimEngine.Clock != null
-                ? Mathf.Max(0f, localSimEngine.Clock.CurrentMatchMinute)
+                ? Mathf.Max(matchMinute, localSimEngine.Clock.CurrentMatchMinute)
                 : matchMinute;
         }
 
@@ -583,6 +584,8 @@ namespace FStudio.GTEX.VisualBridge
         {
             startLiveFeedAfterBootstrap = false;
             startLocalSimulationAfterBootstrap = false;
+            StopLiveFeed();
+            StopLocalSimulation();
             if (launchReplayRoutine != null)
             {
                 StopCoroutine(launchReplayRoutine);
@@ -597,6 +600,8 @@ namespace FStudio.GTEX.VisualBridge
         {
             startLiveFeedAfterBootstrap = false;
             startLocalSimulationAfterBootstrap = false;
+            StopLiveFeed();
+            StopLocalSimulation();
             if (launchReplayRoutine != null)
             {
                 StopCoroutine(launchReplayRoutine);
@@ -625,6 +630,16 @@ namespace FStudio.GTEX.VisualBridge
                 yield break;
             }
 
+            StopLiveFeed();
+            StopLocalSimulation();
+            var previousNativeAutonomousPlay = FStudio.GTEX.Core.GtexOriginalVisualRuntimePolicy.NativeAutonomousPlay;
+            FStudio.GTEX.Core.GtexOriginalVisualRuntimePolicy.NativeAutonomousPlay = false;
+            if (MatchManager.Current != null)
+            {
+                MatchManager.Current.SetGoalColliders(false);
+                MatchManager.Current.SetOutColliders(false);
+            }
+
             scriptedReplayActive = true;
             var wideBuilt = false;
             var centralBuilt = false;
@@ -640,6 +655,7 @@ namespace FStudio.GTEX.VisualBridge
 
             EnsureReferences();
             originalSim.ConfigureOriginalRuntime();
+            originalSim.StartMatch();
             originalSim.RebuildPlayerMap();
             wideBuilt = GtexVisualSequencePatternLibrary.TryBuild(
                 GtexVisualSequencePatternLibrary.WideCrossChance,
@@ -673,6 +689,7 @@ namespace FStudio.GTEX.VisualBridge
                 }
             }
 
+            originalSim.StartMatch();
             originalSim.RebuildPlayerMap();
             centralBuilt = GtexVisualSequencePatternLibrary.TryBuild(
                 GtexVisualSequencePatternLibrary.CentralBuildupShot,
@@ -703,6 +720,7 @@ namespace FStudio.GTEX.VisualBridge
             }
 
             HandleCommand(new GtexVisualCommand { type = GtexVisualCommandType.ResetKickoff });
+            FStudio.GTEX.Core.GtexOriginalVisualRuntimePolicy.NativeAutonomousPlay = previousNativeAutonomousPlay;
             scriptedReplayActive = false;
 
             var succeeded = wideBuilt && centralBuilt && wideSucceeded && centralSucceeded;
@@ -735,6 +753,8 @@ namespace FStudio.GTEX.VisualBridge
                 return;
             }
 
+            StopLiveFeed();
+            StopLocalSimulation();
             if (manualHomeAttackRoutine != null)
             {
                 StopCoroutine(manualHomeAttackRoutine);
@@ -1885,6 +1905,8 @@ namespace FStudio.GTEX.VisualBridge
             }
 
             Debug.Log("[GTEX VisualBridge] Scripted replay starting.");
+            StopLiveFeed();
+            StopLocalSimulation();
             scriptedReplayActive = true;
             yield return RunScriptedSequencePatternRoutine();
             scriptedReplayActive = false;

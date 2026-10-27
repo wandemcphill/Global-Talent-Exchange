@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
@@ -286,6 +286,19 @@ class NationalTeamTournamentService:
             raise NationalTeamTournamentError(
                 "Tournament squads are locked while the tournament is live.", reason=reason
             )
+
+    @staticmethod
+    def _as_utc_datetime(value: datetime | str | None) -> datetime | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            try:
+                value = datetime.fromisoformat(value)
+            except Exception:
+                return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
 
     @staticmethod
     def _coerce_datetime_pair(value: datetime, *, now: datetime) -> tuple[datetime, datetime]:
@@ -716,7 +729,18 @@ class NationalTeamTournamentService:
 
     def _contract_window(self, competition: NationalTeamCompetition) -> tuple[Any, Any]:
         now = utcnow()
-        return now, now + timedelta(days=DEFAULT_RENTAL_DURATION_DAYS)
+        duration_days = DEFAULT_RENTAL_DURATION_DAYS
+        metadata = dict(competition.metadata_json or {})
+        scheduled_end = (
+            metadata.get("scheduled_end_at")
+            or metadata.get("end_date")
+            or metadata.get("tournament_end_at")
+        )
+        if scheduled_end:
+            sched_dt = self._as_utc_datetime(scheduled_end)
+            if sched_dt and sched_dt > now:
+                return now, max(now + timedelta(days=duration_days), sched_dt)
+        return now, now + timedelta(days=duration_days)
 
     def _player_name(self, player: Player) -> str:
         return (
@@ -2024,32 +2048,64 @@ class NationalTeamTournamentService:
             self._extend_contract_for_finalist(contract)
         return contracts
 
-    def _extend_contract_for_finalist(self, contract: RentalContract) -> None:
+    def _extend_contract_for_finalist(self, contract: RentalContract, now: datetime | None = None) -> None:
         competition = self.session.get(NationalTeamCompetition, contract.tournament_id)
-        if competition is None or competition.completed_at is None:
+        if competition is None:
             return
-        base_end_date = contract.start_date + timedelta(days=DEFAULT_RENTAL_DURATION_DAYS)
-        if competition.completed_at <= base_end_date or contract.end_date >= competition.completed_at:
+        reference_now = self._as_utc_datetime(now) or utcnow()
+        start_date = self._as_utc_datetime(contract.start_date)
+        end_date = self._as_utc_datetime(contract.end_date)
+        if start_date is None or end_date is None:
             return
+
         finalist = self.session.scalar(
             select(NationalTeamCompetitionEntry).where(
                 NationalTeamCompetitionEntry.competition_id == competition.id,
                 NationalTeamCompetitionEntry.user_id == contract.user_id,
                 (
                     (NationalTeamCompetitionEntry.qualified.is_(True))
-                    | (NationalTeamCompetitionEntry.status.in_(("finalist", "final", "winner", "qualified")))
+                    | (
+                        NationalTeamCompetitionEntry.status.in_(
+                            ("finalist", "final", "winner", "champion", "qualified", "active", "in_progress")
+                        )
+                    )
                 ),
             )
         )
         if finalist is None:
             return
-        contract.end_date = competition.completed_at
-        contract.metadata_json = {
-            **dict(contract.metadata_json or {}),
-            "extended_until": competition.completed_at.isoformat(),
-            "extension_reason": "gtex_national_finalist",
-        }
-        self.session.flush()
+
+        metadata = dict(competition.metadata_json or {})
+        scheduled_end = (
+            metadata.get("scheduled_end_at")
+            or metadata.get("end_date")
+            or metadata.get("tournament_end_at")
+        )
+        sched_dt = self._as_utc_datetime(scheduled_end) if scheduled_end else None
+        completed_at = self._as_utc_datetime(competition.completed_at)
+
+        target_end = None
+        if completed_at is not None:
+            if completed_at > end_date:
+                target_end = completed_at
+        elif sched_dt is not None:
+            if sched_dt > end_date:
+                target_end = sched_dt
+        elif end_date <= reference_now:
+            target_end = reference_now + timedelta(days=DEFAULT_RENTAL_DURATION_DAYS)
+
+        if target_end is not None and target_end > end_date:
+            contract.end_date = target_end
+            contract.metadata_json = {
+                **dict(contract.metadata_json or {}),
+                "extended_until": target_end.isoformat(),
+                "extension_reason": (
+                    "gtex_national_finalist"
+                    if finalist.qualified or str(finalist.status).lower() in ("finalist", "final")
+                    else "active_tournament_extension"
+                ),
+            }
+            self.session.flush()
 
     def _entry_rental_members(self, entry_id: str) -> list[NationalTeamRentalSquadMember]:
         return list(
@@ -2261,6 +2317,45 @@ class NationalTeamTournamentService:
             "updated_at": event.updated_at,
         }
 
+    def _resolve_owning_club_provenance(
+        self,
+        *,
+        player_id: str,
+        extra_metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        metadata = dict(extra_metadata or {})
+        player = self.session.get(Player, player_id)
+        owning_club_id: str | None = metadata.get("owning_club_id")
+        owning_club_profile_id: str | None = metadata.get("owning_club_profile_id")
+        owning_club_name: str | None = metadata.get("owning_club_name") or metadata.get("current_club_name")
+        if player is not None:
+            active_contract = self.session.scalar(
+                select(PlayerContract)
+                .where(PlayerContract.player_id == player.id)
+                .order_by(PlayerContract.ends_on.desc(), PlayerContract.created_at.desc())
+                .limit(1)
+            )
+            owning_club_id = (
+                owning_club_id
+                or player.current_club_id
+                or player.current_club_profile_id
+                or (active_contract.club_id if active_contract is not None else None)
+            )
+            owning_club_profile_id = owning_club_profile_id or player.current_club_profile_id
+            if not owning_club_name:
+                club_lookup_id = owning_club_profile_id or owning_club_id
+                if club_lookup_id:
+                    club_profile = self.session.get(ClubProfile, club_lookup_id)
+                    if club_profile is not None:
+                        owning_club_name = club_profile.club_name
+                if not owning_club_name:
+                    owning_club_name = player.real_world_club_name
+        return {
+            "owning_club_id": owning_club_id,
+            "owning_club_profile_id": owning_club_profile_id,
+            "owning_club_name": owning_club_name,
+        }
+
     def _create_rental_contract(
         self,
         *,
@@ -2279,6 +2374,10 @@ class NationalTeamTournamentService:
         extra_metadata: dict[str, Any] | None = None,
     ) -> RentalContract:
         start_date, end_date = self._contract_window(entry.competition)
+        club_provenance = self._resolve_owning_club_provenance(
+            player_id=player_id,
+            extra_metadata=extra_metadata,
+        )
         contract = RentalContract(
             player_id=player_id,
             user_id=actor.id,
@@ -2300,6 +2399,7 @@ class NationalTeamTournamentService:
                 "source_bucket": source_bucket,
                 "gsi": gsi,
                 "supply_mode": supply_mode,
+                **club_provenance,
                 **dict(extra_metadata or {}),
             },
         )
@@ -3112,23 +3212,150 @@ class NationalTeamTournamentService:
         stmt = stmt.order_by(StoryEvent.created_at.desc()).limit(limit)
         return [self._story_payload(item) for item in self.session.scalars(stmt).all()]
 
-    def cleanup_expired_rentals(self, *, competition_id: str | None = None) -> dict[str, Any]:
-        now = utcnow()
-        stmt = select(RentalContract).where(RentalContract.status == RentalContractStatus.ACTIVE)
+    def _release_player_to_owning_club(
+        self,
+        contract: RentalContract,
+        *,
+        now: datetime,
+        release_reason: str,
+    ) -> dict[str, Any]:
+        metadata = dict(contract.metadata_json or {})
+        club_provenance = self._resolve_owning_club_provenance(
+            player_id=contract.player_id,
+            extra_metadata=metadata,
+        )
+        owning_club_id = club_provenance["owning_club_id"]
+        owning_club_profile_id = club_provenance["owning_club_profile_id"]
+        owning_club_name = club_provenance["owning_club_name"]
+
+        remaining_active = int(
+            self.session.scalar(
+                select(func.count())
+                .select_from(RentalContract)
+                .where(
+                    RentalContract.id != contract.id,
+                    RentalContract.player_id == contract.player_id,
+                    RentalContract.status == RentalContractStatus.ACTIVE,
+                    RentalContract.end_date > now,
+                )
+            )
+            or 0
+        )
+
+        player = self.session.get(Player, contract.player_id)
+        if player is not None:
+            if owning_club_id and not player.current_club_id:
+                player.current_club_id = owning_club_id
+            if owning_club_profile_id and not player.current_club_profile_id:
+                player.current_club_profile_id = owning_club_profile_id
+            if remaining_active == 0:
+                if isinstance(player.dna_profile, dict):
+                    updated_dna = dict(player.dna_profile)
+                    changed_dna = False
+                    for lock_key in (
+                        "national_rental_locked",
+                        "rental_contract_locked",
+                        "active_national_rental_contract_id",
+                    ):
+                        if lock_key in updated_dna:
+                            updated_dna.pop(lock_key, None)
+                            changed_dna = True
+                    if changed_dna:
+                        player.dna_profile = updated_dna
+                locked_contracts = list(
+                    self.session.scalars(
+                        select(PlayerContract).where(
+                            PlayerContract.player_id == player.id,
+                            PlayerContract.status == "loan_locked",
+                        )
+                    ).all()
+                )
+                for player_contract in locked_contracts:
+                    player_contract.status = "active"
+
+        contract.metadata_json = {
+            **metadata,
+            **club_provenance,
+            "player_released": True,
+            "released_at": now.isoformat(),
+            "release_reason": release_reason,
+            "returned_to_club_id": owning_club_id,
+            "returned_to_club_profile_id": owning_club_profile_id,
+            "returned_to_club_name": owning_club_name,
+        }
+        return {
+            "player_id": contract.player_id,
+            "returned_to_club_id": owning_club_id,
+            "returned_to_club_profile_id": owning_club_profile_id,
+            "returned_to_club_name": owning_club_name,
+        }
+
+    def cleanup_expired_rentals(
+        self,
+        *,
+        competition_id: str | None = None,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        reference_now = self._as_utc_datetime(now) or utcnow()
+        stmt = (
+            select(RentalContract)
+            .where(RentalContract.status == RentalContractStatus.ACTIVE)
+            .order_by(RentalContract.created_at.asc(), RentalContract.id.asc())
+        )
         if competition_id is not None:
             stmt = stmt.where(RentalContract.tournament_id == competition_id)
         contracts = list(self.session.scalars(stmt).all())
         expiring_notifications = 0
         released = 0
         affected_entry_ids: set[str] = set()
+        released_player_ids: list[str] = []
         for contract in contracts:
+            self._extend_contract_for_finalist(contract, now=reference_now)
             competition = self.session.get(NationalTeamCompetition, contract.tournament_id)
-            should_release = contract.end_date <= now or (
-                competition is not None and competition.completed_at is not None
+            contract_start = self._as_utc_datetime(contract.start_date)
+            contract_end = self._as_utc_datetime(contract.end_date)
+            completed_at = self._as_utc_datetime(competition.completed_at) if competition is not None else None
+            expired_by_window = contract_end is not None and contract_end <= reference_now
+            competition_completed = completed_at is not None or (
+                competition is not None and str(competition.status).lower() in ("completed", "cancelled", "archived")
             )
-            if not should_release and contract.end_date <= (now + timedelta(hours=RENTAL_EXPIRING_WARNING_HOURS)):
+
+            if competition is not None and not competition_completed:
+                entry = self.session.scalar(
+                    select(NationalTeamCompetitionEntry).where(
+                        NationalTeamCompetitionEntry.competition_id == contract.tournament_id,
+                        NationalTeamCompetitionEntry.user_id == contract.user_id,
+                    )
+                )
+                if entry is not None and str(entry.status).lower() in ("eliminated", "withdrawn", "disqualified"):
+                    should_release = True
+                elif entry is not None:
+                    # Active squad in ongoing multi-day tournament: protected from premature deletion
+                    should_release = False
+                else:
+                    should_release = expired_by_window
+            else:
+                should_release = expired_by_window or competition_completed
+            if (
+                not should_release
+                and (contract_start is None or contract_start <= reference_now)
+                and contract_end is not None
+                and contract_end <= (reference_now + timedelta(hours=RENTAL_EXPIRING_WARNING_HOURS))
+            ):
                 metadata = dict(contract.metadata_json or {})
-                if not metadata.get("expiring_notified_at"):
+                already_notified = bool(metadata.get("expiring_notified_at")) or (
+                    self.session.scalar(
+                        select(NotificationRecord.id)
+                        .where(
+                            NotificationRecord.template_key == "RENTAL_EXPIRING",
+                            NotificationRecord.resource_type == "national_team_rental_contract",
+                            NotificationRecord.resource_id == contract.id,
+                        )
+                        .limit(1)
+                    )
+                    is not None
+                )
+                if not already_notified:
                     self.session.add(
                         NotificationRecord(
                             user_id=contract.user_id,
@@ -3137,36 +3364,70 @@ class NationalTeamTournamentService:
                             resource_type="national_team_rental_contract",
                             resource_id=contract.id,
                             competition_id=contract.tournament_id,
-                            message=f"Rental access for {(metadata.get('player_name') or contract.player_id)} is expiring soon.",
-                            metadata_json={"entry_id": contract.entry_id, "end_date": contract.end_date.isoformat()},
+                            message=(
+                                f"Rental access for {(metadata.get('player_name') or contract.player_id)} "
+                                "is expiring soon."
+                            ),
+                            metadata_json={
+                                "entry_id": contract.entry_id,
+                                "end_date": contract_end.isoformat(),
+                            },
                         )
                     )
-                    contract.metadata_json = {**metadata, "expiring_notified_at": now.isoformat()}
+                    contract.metadata_json = {**metadata, "expiring_notified_at": reference_now.isoformat()}
                     expiring_notifications += 1
                 continue
             if not should_release:
                 continue
-            contract.status = (
-                RentalContractStatus.EXPIRED if contract.end_date <= now else RentalContractStatus.RELEASED
+            contract.status = RentalContractStatus.EXPIRED if expired_by_window else RentalContractStatus.RELEASED
+            release_reason = "rental_window_expired" if expired_by_window else "competition_completed"
+            self._release_player_to_owning_club(
+                contract,
+                now=reference_now,
+                release_reason=release_reason,
             )
-            if contract.entry_id:
-                affected_entry_ids.add(contract.entry_id)
-                member = self.session.scalar(
+            members = list(
+                self.session.scalars(
                     select(NationalTeamRentalSquadMember).where(
                         NationalTeamRentalSquadMember.rental_contract_id == contract.id
                     )
-                )
-                if member is not None:
-                    self.session.delete(member)
+                ).all()
+            )
+            for member in members:
+                if member.entry_id:
+                    affected_entry_ids.add(member.entry_id)
+                self.session.delete(member)
+            if contract.entry_id:
+                affected_entry_ids.add(contract.entry_id)
             released += 1
-        for entry_id in affected_entry_ids:
-            entry = self._require_entry(entry_id)
-            self._refresh_entry_squad_size(entry)
+            released_player_ids.append(contract.player_id)
+
+        orphan_stmt = (
+            select(NationalTeamRentalSquadMember)
+            .join(
+                RentalContract,
+                RentalContract.id == NationalTeamRentalSquadMember.rental_contract_id,
+            )
+            .where(RentalContract.status.in_((RentalContractStatus.EXPIRED, RentalContractStatus.RELEASED)))
+        )
+        if competition_id is not None:
+            orphan_stmt = orphan_stmt.where(RentalContract.tournament_id == competition_id)
+        for orphan_member in self.session.scalars(orphan_stmt).all():
+            if orphan_member.entry_id:
+                affected_entry_ids.add(orphan_member.entry_id)
+            self.session.delete(orphan_member)
+
+        self.session.flush()
+        for entry_id in sorted(affected_entry_ids):
+            entry = self.session.get(NationalTeamEntry, entry_id)
+            if entry is not None:
+                self._refresh_entry_squad_size(entry)
         self.session.flush()
         return {
             "released_contracts": released,
             "expiring_notifications": expiring_notifications,
             "affected_entries": sorted(affected_entry_ids),
+            "released_player_ids": released_player_ids,
         }
 
     def build_competition_presentation_payload(
@@ -3183,8 +3444,8 @@ class NationalTeamTournamentService:
             "story_events": self.list_story_events(competition_id=competition_id, limit=limit_story_events),
         }
 
-    def build_rental_status_payload(self, *, entry_id: str) -> dict[str, Any]:
-        entry = self._require_entry(entry_id)
+    def build_rental_status_payload(self, *, entry_id: str, actor: User) -> dict[str, Any]:
+        entry = self._require_managed_entry(entry_id, actor)
         self._refresh_entry_squad_size(entry)
         competition = entry.competition
         assert competition is not None

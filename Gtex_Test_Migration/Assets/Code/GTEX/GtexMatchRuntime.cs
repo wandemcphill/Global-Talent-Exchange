@@ -300,7 +300,9 @@ namespace FStudio.GTEX
 
         public static bool TryAutoStart(GtexMatchConfig config)
         {
-            if (config == null ||
+            if (!GtexOriginalVisualRuntimePolicy.AllowGtexTransformPlayback ||
+                GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() ||
+                config == null ||
                 config.ResolveRuntimeMode() != GtexRuntimeMode.LivePlayback ||
                 !config.CanAutoStartLivePlayback)
             {
@@ -382,6 +384,13 @@ namespace FStudio.GTEX
 
         private void ApplyBootstrapGuardsForCurrentContext()
         {
+            if (!GtexOriginalVisualRuntimePolicy.AllowGtexTransformPlayback ||
+                GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime())
+            {
+                skipBootstrap = true;
+                return;
+            }
+
             if (!Application.isBatchMode || skipBootstrap)
             {
                 return;
@@ -2695,7 +2704,10 @@ namespace FStudio.GTEX
 
         private void ApplyState(MatchResponse state, bool forceSnap)
         {
-            if (state == null || playbackApplier == null)
+            if (!GtexOriginalVisualRuntimePolicy.AllowGtexTransformPlayback ||
+                GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() ||
+                state == null ||
+                playbackApplier == null)
             {
                 return;
             }

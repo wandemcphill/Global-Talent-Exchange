@@ -1,59 +1,63 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gte_frontend/features/navigation/model/gtex_shell_navigation_model.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
-void main() {
-  testWidgets('GtexAppShell renders LivingFootballOSBackground behind shell', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: GtexAppShell(
-          title: 'GTEX Command',
-          subtitle: 'Football operating system',
-          destinations: <GtexShellDestination>[
-            GtexShellDestination(
-              label: 'Home',
-              icon: Icons.home_outlined,
-              selectedIcon: Icons.home,
-              isSelected: true,
-              onTap: () {},
-            ),
-            GtexShellDestination(
-              label: 'Market',
-              icon: Icons.storefront_outlined,
-              selectedIcon: Icons.storefront,
-              isSelected: false,
-              onTap: () {},
-            ),
-          ],
-          child: const Center(child: Text('Route content')),
-        ),
-      ),
-    );
-    await tester.pump();
+const ShellNavigationModel _testNavigationModel = ShellNavigationModel(
+  capabilities: GtexShellCapabilities(
+    isAuthenticated: true,
+    ownedClubIds: <String>['royal-lagos-fc'],
+    activeClubId: 'royal-lagos-fc',
+    isAdmin: true,
+    clubLegacyEnabled: true,
+  ),
+);
 
-    expect(find.byType(LivingFootballOSBackground), findsOneWidget);
-    expect(
-      find.byKey(const Key('living-football-os-background')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const Key('living-football-os-atmosphere')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const Key('living-football-os-stadium-lights')),
-      findsOneWidget,
-    );
-    expect(find.byKey(const Key('living-football-os-tactics')), findsOneWidget);
-    expect(
-      find.byKey(const Key('living-football-os-particles')),
-      findsOneWidget,
-    );
-    expect(find.text('GTEX Command'), findsOneWidget);
-    expect(find.text('Route content'), findsOneWidget);
-  });
+void main() {
+  testWidgets(
+    'GtexShellScaffold renders LivingFootballOSBackground behind shell',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: GtexShellScaffold(
+            navigationModel: _testNavigationModel,
+            selectedSlotId: GtexShellSlotId.home,
+            onSelectSlot: (_) {},
+            topBar: const GtexTopBar(
+              title: 'GTEX Command',
+              subtitle: 'Football operating system',
+            ),
+            child: const Center(child: Text('Route content')),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(LivingFootballOSBackground), findsOneWidget);
+      expect(
+        find.byKey(const Key('living-football-os-background')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('living-football-os-atmosphere')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('living-football-os-stadium-lights')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('living-football-os-tactics')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('living-football-os-particles')),
+        findsOneWidget,
+      );
+      expect(find.text('GTEX Command'), findsOneWidget);
+      expect(find.text('Route content'), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'LivingFootballOSBackground uses static fallback when motion is off',
@@ -122,46 +126,11 @@ void main() {
     for (final String routeLabel in routeLabels) {
       await tester.pumpWidget(
         MaterialApp(
-          home: GtexAppShell(
-            title: 'GTEX Command',
-            subtitle: routeLabel,
-            destinations: <GtexShellDestination>[
-              GtexShellDestination(
-                label: 'Home',
-                icon: Icons.home_outlined,
-                selectedIcon: Icons.home,
-                isSelected: routeLabel.startsWith('Home'),
-                onTap: () {},
-              ),
-              GtexShellDestination(
-                label: 'Transfer Hub',
-                icon: Icons.storefront_outlined,
-                selectedIcon: Icons.storefront,
-                isSelected: routeLabel.startsWith('Transfer'),
-                onTap: () {},
-              ),
-              GtexShellDestination(
-                label: 'Wallet',
-                icon: Icons.account_balance_wallet_outlined,
-                selectedIcon: Icons.account_balance_wallet,
-                isSelected: routeLabel.startsWith('Wallet'),
-                onTap: () {},
-              ),
-              GtexShellDestination(
-                label: 'Club',
-                icon: Icons.shield_outlined,
-                selectedIcon: Icons.shield,
-                isSelected: routeLabel.startsWith('Club'),
-                onTap: () {},
-              ),
-              GtexShellDestination(
-                label: 'Social',
-                icon: Icons.forum_outlined,
-                selectedIcon: Icons.forum,
-                isSelected: routeLabel.startsWith('Social'),
-                onTap: () {},
-              ),
-            ],
+          home: GtexShellScaffold(
+            navigationModel: _testNavigationModel,
+            selectedSlotId: GtexShellSlotId.home,
+            onSelectSlot: (_) {},
+            topBar: GtexTopBar(title: 'GTEX Command', subtitle: routeLabel),
             child: Center(child: Text(routeLabel)),
           ),
         ),
@@ -188,27 +157,17 @@ void main() {
     });
 
     String? tapped;
-    GtexShellDestination destination(String label, IconData icon) {
-      return GtexShellDestination(
-        label: label,
-        icon: icon,
-        selectedIcon: icon,
-        isSelected: false,
-        onTap: () => tapped = label,
-      );
-    }
 
     await tester.pumpWidget(
       MaterialApp(
-        home: GtexAppShell(
-          destinations: <GtexShellDestination>[
-            destination('Home', Icons.home_outlined),
-            destination('Market', Icons.storefront_outlined),
-            destination('Wallet', Icons.account_balance_wallet_outlined),
-            destination('Club', Icons.shield_outlined),
-            destination('Social', Icons.forum_outlined),
-            destination('Admin', Icons.admin_panel_settings_outlined),
-          ],
+        home: GtexShellScaffold(
+          navigationModel: _testNavigationModel,
+          selectedSlotId: GtexShellSlotId.home,
+          onSelectSlot: (_) {},
+          onSelectSecondary: (GtexSecondaryDestinationSpec item) {
+            tapped = item.label;
+          },
+          topBar: const GtexTopBar(title: 'GTEX Command'),
           child: const SizedBox.shrink(),
         ),
       ),

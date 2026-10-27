@@ -30,20 +30,20 @@ class TraderDashboardScreen extends StatelessWidget {
             controller.session?.user.accountType.trim().toLowerCase() ?? '';
         if (!controller.isAuthenticated) {
           return _TraderGate(
-            title: 'Trader access required',
+            title: 'Sign in to GTEX',
             message:
-                'Choose Coin Trader during signup to open markets, orders, P2P, watchlists, wallet security, and analytics.',
-            actionLabel: 'Choose account type',
-            onAction: () => context.go(gtexAccountSelectRoute),
+                'Coin Trader tools are optional capabilities on a normal GTEX account. Sign in or create your GTEX ID first, then apply for trader status from Coin Traders.',
+            actionLabel: 'Sign in',
+            onAction: () => context.go('/auth/login'),
           );
         }
         if (accountType != 'coin_trader') {
           return _TraderGate(
-            title: 'Coin trading is a separate account lane',
+            title: 'Use Coin Traders with your GTEX ID',
             message:
-                'This dashboard is restricted to COIN_TRADER accounts. Football users and creators keep their own dashboards and cannot place coin-market orders here.',
-            actionLabel: 'Go home',
-            onAction: () => context.go('/app/home'),
+                'You do not need a separate trader account. Open the Coin Traders desk to place user orders or apply to become an approved liquidity partner on this GTEX account.',
+            actionLabel: 'Open Coin Traders',
+            onAction: () => context.go('/app/coin-traders'),
           );
         }
         final TraderApi api =

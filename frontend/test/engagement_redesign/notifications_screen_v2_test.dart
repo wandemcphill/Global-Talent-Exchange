@@ -135,6 +135,83 @@ void main() {
         gtexNotificationDeepLinkRoute(fixtureNotification, isAdmin: false),
         '/matches/viewer/fixture-42',
       );
+
+      // O-11 / J-M4: Payload resolution beyond direct fixtureId
+      final GteNotification metadataFixture = GteNotification(
+        notificationId: 'notification-meta-fix',
+        userId: 'user-1',
+        topic: 'matches',
+        templateKey: null,
+        resourceId: null,
+        fixtureId: null,
+        competitionId: null,
+        message: 'Match ready.',
+        metadata: const <String, Object?>{'fixture_id': 'fixture-99'},
+        createdAt: null,
+        readAt: null,
+        isRead: false,
+      );
+      expect(
+        gtexNotificationDeepLinkRoute(metadataFixture, isAdmin: false),
+        '/matches/viewer/fixture-99',
+      );
+
+      final GteNotification competitionNotification = GteNotification(
+        notificationId: 'notification-comp',
+        userId: 'user-1',
+        topic: 'competition',
+        templateKey: 'competition_round_active',
+        resourceId: null,
+        fixtureId: null,
+        competitionId: 'comp-africa-cup',
+        message: 'Round 2 is active.',
+        metadata: const <String, Object?>{},
+        createdAt: null,
+        readAt: null,
+        isRead: false,
+      );
+      expect(
+        gtexNotificationDeepLinkRoute(competitionNotification, isAdmin: false),
+        '/app/play?competition=comp-africa-cup',
+      );
+
+      final GteNotification playerResourceNotification = GteNotification(
+        notificationId: 'notification-player',
+        userId: 'user-1',
+        topic: 'player_transfer',
+        templateKey: null,
+        resourceId: 'player-77',
+        fixtureId: null,
+        competitionId: null,
+        message: 'Player transfer completed.',
+        metadata: const <String, Object?>{'resource_type': 'player'},
+        createdAt: null,
+        readAt: null,
+        isRead: false,
+      );
+      expect(
+        gtexNotificationDeepLinkRoute(playerResourceNotification, isAdmin: false),
+        '/players/player-77/profile',
+      );
+
+      final GteNotification clubResourceNotification = GteNotification(
+        notificationId: 'notification-club',
+        userId: 'user-1',
+        topic: 'club_ownership',
+        templateKey: null,
+        resourceId: 'club-lagos-stars',
+        fixtureId: null,
+        competitionId: null,
+        message: 'Club takeover confirmed.',
+        metadata: const <String, Object?>{'resource_type': 'club'},
+        createdAt: null,
+        readAt: null,
+        isRead: false,
+      );
+      expect(
+        gtexNotificationDeepLinkRoute(clubResourceNotification, isAdmin: false),
+        '/world/clubs/club-lagos-stars',
+      );
     },
   );
 }

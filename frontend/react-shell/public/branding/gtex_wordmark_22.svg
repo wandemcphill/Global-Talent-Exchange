@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 112" role="img" aria-label="GTEX Global Talent Exchange">
+  <defs><linearGradient id="g" x1="70" y1="18" x2="430" y2="96" gradientUnits="userSpaceOnUse"><stop stop-color="#F5FFF0"/><stop offset=".42" stop-color="#B9FF3D"/><stop offset=".72" stop-color="#36E38A"/><stop offset="1" stop-color="#00A7FF"/></linearGradient></defs>
+  <g transform="translate(8 8)"><path d="M48 4 4 29v46l44 25 44-25V29L48 4Z" fill="#07110D" stroke="#36E38A" stroke-width="3"/><path d="m19 32 29-17 29 17-8 4.6-21-12.2-21 12.2v24.7l21 12.1 21-12.1V47l-13 7.4v9.4l-8 4.7-12-6.9V38l12-6.9 12 6.9-8 4.6-4-2.3-4 2.3v6.4l4 2.3 12-6.9V32Z" fill="url(#g)"/></g>
+  <text x="112" y="68" fill="url(#g)" font-family="Arial,Helvetica,sans-serif" font-size="56" font-weight="900" letter-spacing="2">GTEX</text>
+  <text x="116" y="92" fill="#8B98A7" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="700" letter-spacing="5">GLOBAL TALENT EXCHANGE</text>
+</svg>

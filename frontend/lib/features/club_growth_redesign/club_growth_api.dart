@@ -88,6 +88,32 @@ class GtexClubGrowthApi {
     }, () => _requireFixtures().acceptStaffContract(clubId, contractId));
   }
 
+  Future<GtexStaffContract> terminateStaffContract(
+    String clubId,
+    String contractId, {
+    String? reason,
+  }) {
+    final String encodedClubId = Uri.encodeComponent(clubId);
+    final String encodedContractId = Uri.encodeComponent(contractId);
+    return client.withFallback<GtexStaffContract>(
+      () async {
+        final Object? payload = await client.post(
+          '/api/clubs/$encodedClubId/growth/staff-contracts/$encodedContractId/terminate',
+          body: <String, Object?>{
+            if (reason != null && reason.trim().isNotEmpty)
+              'reason': reason.trim(),
+          },
+        );
+        return GtexStaffContract.fromJson(payload);
+      },
+      () => _requireFixtures().terminateStaffContract(
+        clubId,
+        contractId,
+        reason: reason,
+      ),
+    );
+  }
+
   Future<List<GtexAcademyProspect>> generateProspects(String clubId) {
     final String encodedClubId = Uri.encodeComponent(clubId);
     return client.withFallback<List<GtexAcademyProspect>>(() async {
@@ -175,7 +201,10 @@ class GtexClubGrowthFixtures {
       commissionBps: 350,
       rating: 62,
       active: true,
-      metadata: const <String, Object?>{},
+      metadata: const <String, Object?>{
+        'suitability': 'High club fit',
+        'reputation': 'Regional',
+      },
     );
     final GtexStaffProfile scout = GtexStaffProfile(
       id: 'staff-scout',
@@ -287,36 +316,69 @@ class GtexClubGrowthFixtures {
     return next.firstWhere((GtexStaffContract item) => item.id == contractId);
   }
 
+  Future<GtexStaffContract> terminateStaffContract(
+    String clubId,
+    String contractId, {
+    String? reason,
+  }) async {
+    final DateTime now = DateTime.now().toUtc();
+    final List<GtexStaffContract> next = _dashboard.staffContracts
+        .map((GtexStaffContract item) {
+          if (item.id != contractId) {
+            return item;
+          }
+          return GtexStaffContract(
+            id: item.id,
+            clubId: item.clubId,
+            staffProfile: item.staffProfile,
+            status: 'terminated',
+            salaryMinor: item.salaryMinor,
+            commissionBps: item.commissionBps,
+            durationDays: item.durationDays,
+            roleScope: item.roleScope,
+            exclusive: item.exclusive,
+            startedAt: item.startedAt,
+            endsAt: item.endsAt,
+            acceptedAt: item.acceptedAt,
+            terminatedAt: now,
+            updatedAt: now,
+          );
+        })
+        .toList(growable: false);
+    _dashboard = _replaceContracts(next);
+    return next.firstWhere((GtexStaffContract item) => item.id == contractId);
+  }
+
   Future<List<GtexAcademyProspect>> generateProspects(String clubId) async {
     final int offset = _dashboard.academyProspects.length;
     final DateTime now = DateTime.now().toUtc();
-    final List<GtexAcademyProspect>
-    generated = List<GtexAcademyProspect>.generate(
-      3,
-      (int index) => GtexAcademyProspect(
-        id: 'prospect-${offset + index + 1}',
-        clubId: clubId,
-        displayName:
-            'Academy Regen ${(offset + index + 1).toString().padLeft(3, '0')}',
-        nationality: 'NG',
-        position: const <String>['GK', 'CB', 'CM', 'ST'][index % 4],
-        age: 16,
-        personality: const <String, Object?>{
-          'temperament': 'focused',
-          'training_style': 'methodical',
-        },
-        currentAbility: 38 + index,
-        potential: 72 + index,
-        portraitAssetRef:
-            'newgen/ng-academy-${(offset + index + 1).toString().padLeft(3, '0')}',
-        status: 'discovered',
-        metadata: const <String, Object?>{
-          'portrait_policy': 'newgen_bank_only',
-          'portrait_source_pack': 'approved_newgen_fixture_bank',
-        },
-        updatedAt: now,
-      ),
-    );
+    final List<GtexAcademyProspect> generated =
+        List<GtexAcademyProspect>.generate(
+          3,
+          (int index) => GtexAcademyProspect(
+            id: 'prospect-${offset + index + 1}',
+            clubId: clubId,
+            displayName:
+                'Academy Regen ${(offset + index + 1).toString().padLeft(3, '0')}',
+            nationality: 'NG',
+            position: const <String>['GK', 'CB', 'CM', 'ST'][index % 4],
+            age: 16,
+            personality: const <String, Object?>{
+              'temperament': 'focused',
+              'training_style': 'methodical',
+            },
+            currentAbility: 38 + index,
+            potential: 72 + index,
+            portraitAssetRef:
+                'newgen/ng-academy-${(offset + index + 1).toString().padLeft(3, '0')}',
+            status: 'discovered',
+            metadata: const <String, Object?>{
+              'portrait_policy': 'newgen_bank_only',
+              'portrait_source_pack': 'approved_newgen_fixture_bank',
+            },
+            updatedAt: now,
+          ),
+        );
     _dashboard = _replaceProspects(<GtexAcademyProspect>[
       ...generated,
       ..._dashboard.academyProspects,

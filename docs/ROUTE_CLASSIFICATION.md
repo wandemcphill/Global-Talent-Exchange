@@ -17,6 +17,7 @@ Generated deterministically from `tools/audit/generate_contract_audit.py`.
 - `DELETE /api/community/watchlist/{}`: `/api/community/watchlist/{competition_key}` in `backend/app/community_engine/router.py` (remove_watchlist) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `DELETE /api/discovery/saved-searches/{}`: `/api/discovery/saved-searches/{search_id}` in `backend/app/discovery_engine/router.py` (delete_saved_search) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `DELETE /api/notifications/subscriptions/{}`: `/api/notifications/subscriptions/{subscription_id}` in `backend/app/notifications/router.py` (delete_subscription) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
+- `DELETE /api/owner/clubs/{}/watchlist/{}`: `/api/owner/clubs/{club_id}/watchlist/{item_id}` in `backend/app/owner_console/router.py` (delete_watchlist) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `DELETE /api/player-cards/watchlist/{}`: `/api/player-cards/watchlist/{watchlist_id}` in `backend/app/player_cards/router.py` (remove_watchlist) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `DELETE /api/social/follows`: `/api/social/follows` in `backend/app/club_social/router.py` (unfollow_target) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `DELETE /api/talent/shortlists/{}`: `/api/talent/shortlists/{shortlist_id}` in `backend/app/talent/router.py` (delete_shortlist) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
@@ -208,8 +209,7 @@ Generated deterministically from `tools/audit/generate_contract_audit.py`.
 - `GET /api/broadcast-rights/competitions/{}`: `/api/broadcast-rights/competitions/{competition_id}` in `backend/app/broadcast_rights/router.py` (read_broadcast_rights_summary) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/broadcast-rights/matches/{}/access`: `/api/broadcast-rights/matches/{match_id}/access` in `backend/app/broadcast_rights/router.py` (read_match_broadcast_access) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/broadcast/channels`: `/api/broadcast/channels` in `backend/app/broadcast_network/router.py` (list_channels) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
-- `GET /api/broadcast/home`: `/api/broadcast/home` in `backend/app/broadcast_network/router.py` (read_broadcast_home) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
-- ... and 1976 more
+- ... and 2077 more
 
 ## MIGRATE_TO
 
@@ -218,3 +218,4 @@ Generated deterministically from `tools/audit/generate_contract_audit.py`.
 ## DELETE
 
 - `GET /portfolio`: `/portfolio` in `backend/app/portfolio/router.py` (get_portfolio) -> `/portfolio` - Duplicate or lower-ranked surface shadowed by `/portfolio`.
+- `GET /scout/report/{}`: `/scout/report/{player_id}` in `backend/app/segments/player_lifecycle/scouting_action.py` (get_player_scout_report) -> `/api/scout/report/{player_id}` - Duplicate or lower-ranked surface shadowed by `/api/scout/report/{player_id}`.

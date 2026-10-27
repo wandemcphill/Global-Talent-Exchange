@@ -438,6 +438,9 @@ class WalletService:
             )
             session.add(account)
             session.flush()
+        elif allow_negative and not account.allow_negative:
+            account.allow_negative = True
+            session.flush()
         return account
 
     def ensure_platform_account(self, session: Session, unit: LedgerUnit) -> LedgerAccount:

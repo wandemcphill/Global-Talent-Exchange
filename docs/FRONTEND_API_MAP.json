@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "call_count": 682,
+  "call_count": 696,
   "calls": [
     {
       "file": "frontend/lib/core/runtime/gtex_realtime_client.dart",
@@ -416,6 +416,18 @@
       "method": "PATCH",
       "endpoint": "/api/clubs/$clubId/jerseys",
       "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/club_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/clubs/$clubId/public-profile",
+      "expected_shape": "map/envelope",
       "base_url_source": "hardcoded_localhost",
       "platforms": [
         "web",
@@ -3771,6 +3783,18 @@
       ]
     },
     {
+      "file": "frontend/lib/data/player_service.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/transfer-market/watchlist",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
       "file": "frontend/lib/data/policy_admin_api.dart",
       "transport_call": "hardcoded_url",
       "method": "N/A",
@@ -4495,6 +4519,18 @@
       "transport_call": "string_reference",
       "method": "INFERRED",
       "endpoint": "/api/clubs/$encodedClubId/growth/staff-contracts/$encodedContractId/accept",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_growth_redesign/club_growth_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/clubs/$encodedClubId/growth/staff-contracts/$encodedContractId/terminate",
       "expected_shape": "list",
       "base_url_source": "hardcoded_localhost",
       "platforms": [
@@ -4521,6 +4557,30 @@
       "endpoint": "http://127.0.0.1:8000",
       "expected_shape": null,
       "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_growth_redesign/club_growth_models.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/generated-media/",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_growth_redesign/club_growth_models.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/generated-media/$ref",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
       "platforms": [
         "web",
         "mobile"
@@ -4903,7 +4963,7 @@
       "transport_call": "string_reference",
       "method": "INFERRED",
       "endpoint": "/api/clubs/owned/${club.id}/activate",
-      "expected_shape": null,
+      "expected_shape": "list",
       "base_url_source": "injected",
       "platforms": [
         "web",
@@ -5226,6 +5286,18 @@
       "file": "frontend/lib/features/coin_trader_redesign/coin_trader_api.dart",
       "transport_call": "string_reference",
       "method": "INFERRED",
+      "endpoint": "/api/admin/coin-traders/orders/expire-stale",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/coin_trader_redesign/coin_trader_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
       "endpoint": "/api/coin-traders",
       "expected_shape": null,
       "base_url_source": "hardcoded_localhost",
@@ -5335,6 +5407,18 @@
       "transport_call": "string_reference",
       "method": "INFERRED",
       "endpoint": "/api/coin-traders/orders/$orderId/dispute",
+      "expected_shape": "list",
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/coin_trader_redesign/coin_trader_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/coin-traders/orders/$orderId/messages",
       "expected_shape": "list",
       "base_url_source": "hardcoded_localhost",
       "platforms": [
@@ -6343,7 +6427,7 @@
       "transport_call": "string_reference",
       "method": "INFERRED",
       "endpoint": "/api/matches/$matchId/tactics",
-      "expected_shape": "map/envelope",
+      "expected_shape": null,
       "base_url_source": "injected",
       "platforms": [
         "web",
@@ -6583,6 +6667,18 @@
       "transport_call": "string_reference",
       "method": "INFERRED",
       "endpoint": "/api/national-team-engine/rankings",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/navigation/model/gtex_route_alias_table.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/auth/login",
       "expected_shape": null,
       "base_url_source": "injected",
       "platforms": [
@@ -7049,6 +7145,78 @@
     {
       "file": "frontend/lib/features/transfer_center/live_transfer_center_provider.dart",
       "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/transfer-hub/listings/$listingId/offers",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_center/live_transfer_center_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/transfer-hub/offers",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_center/live_transfer_center_provider.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/transfer-hub/offers/$offerId/accept",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_center/live_transfer_center_provider.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/transfer-hub/offers/$offerId/cancel",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_center/live_transfer_center_provider.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/transfer-hub/offers/$offerId/counter",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_center/live_transfer_center_provider.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/transfer-hub/offers/$offerId/reject",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/transfer_center/live_transfer_center_provider.dart",
+      "transport_call": "string_reference",
       "method": "INFERRED",
       "endpoint": "/api/transfer-market/listings",
       "expected_shape": null,
@@ -7063,7 +7231,7 @@
       "transport_call": "string_reference",
       "method": "INFERRED",
       "endpoint": "/api/transfer-market/listings/$listingId",
-      "expected_shape": null,
+      "expected_shape": "list",
       "base_url_source": "injected",
       "platforms": [
         "web",
@@ -7099,7 +7267,7 @@
       "transport_call": "string_reference",
       "method": "INFERRED",
       "endpoint": "/api/transfer-market/listings/$listingId/negotiation",
-      "expected_shape": null,
+      "expected_shape": "list",
       "base_url_source": "injected",
       "platforms": [
         "web",
@@ -7722,30 +7890,6 @@
       "file": "frontend/lib/screens/auth/gtex_22_auth_gateway.dart",
       "transport_call": "string_reference",
       "method": "INFERRED",
-      "endpoint": "/auth/signup/creator",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/screens/auth/gtex_22_auth_gateway.dart",
-      "transport_call": "string_reference",
-      "method": "INFERRED",
-      "endpoint": "/auth/signup/trader",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/screens/auth/gtex_22_auth_gateway.dart",
-      "transport_call": "string_reference",
-      "method": "INFERRED",
       "endpoint": "/auth/signup/user",
       "expected_shape": null,
       "base_url_source": "injected",
@@ -8067,6 +8211,18 @@
       ]
     },
     {
+      "file": "frontend/lib/screens/trader/trader_dashboard_screen.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/auth/login",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
       "file": "frontend/lib/screens/wallet/gtex_capital_desk_api.dart",
       "transport_call": "string_reference",
       "method": "INFERRED",
@@ -8181,6 +8337,18 @@
       "endpoint": "/generated-media/regen_newgen_faces/script_skin_hair/",
       "expected_shape": null,
       "base_url_source": "runtime_env",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/widgets/turnstile_challenge_web.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit",
+      "expected_shape": null,
+      "base_url_source": "injected",
       "platforms": [
         "web",
         "mobile"

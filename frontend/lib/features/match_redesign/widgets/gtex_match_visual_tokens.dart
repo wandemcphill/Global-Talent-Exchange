@@ -1,22 +1,24 @@
 import 'package:flutter/material.dart';
 
+import '../../../ui_gtex/theme/gtex_colors.dart';
+
 class GtexMatchVisualTokens {
   const GtexMatchVisualTokens._();
 
-  static const Color surfaceBase = Color(0xFF0A0C0F);
-  static const Color surfaceRaised = Color(0xFF111418);
-  static const Color surfaceOverlay = Color(0xFF181C22);
-  static const Color surfaceHover = Color(0xFF1E2530);
-  static const Color border = Color(0xFF252D38);
-  static const Color borderStrong = Color(0xFF2E3A48);
-  static const Color textPrimary = Color(0xFFE8EDF4);
-  static const Color textSecondary = Color(0xFF8A97A8);
-  static const Color textTertiary = Color(0xFF4D5D6E);
-  static const Color live = Color(0xFF00E87A);
-  static const Color amber = Color(0xFFFFB800);
-  static const Color red = Color(0xFFFF3D3D);
-  static const Color blue = Color(0xFF2F80ED);
-  static const Color regen = Color(0xFF9B5FFF);
+  static const Color surfaceBase = GtexNavyColors.bgBase;
+  static const Color surfaceRaised = GtexNavyColors.bgRaised;
+  static const Color surfaceOverlay = GtexNavyColors.bgOverlay;
+  static const Color surfaceHover = GtexNavyColors.bgOverlay;
+  static const Color border = GtexNavyColors.lineSubtle;
+  static const Color borderStrong = GtexNavyColors.lineStrong;
+  static const Color textPrimary = GtexNavyColors.textPrimary;
+  static const Color textSecondary = GtexNavyColors.textSecondary;
+  static const Color textTertiary = GtexNavyColors.textTertiary;
+  static const Color live = GtexNavyColors.success;
+  static const Color amber = GtexNavyColors.warning;
+  static const Color red = GtexNavyColors.danger;
+  static const Color blue = GtexNavyColors.info;
+  static const Color regen = GtexNavyColors.gold300;
 
   static BoxDecoration panelDecoration({
     Color? borderColor,
@@ -29,7 +31,7 @@ class GtexMatchVisualTokens {
       border: Border.all(color: borderColor ?? border),
       boxShadow: const [
         BoxShadow(
-          color: Color(0x40000000),
+          color: GtexNavyColors.scrim,
           blurRadius: 12,
           offset: Offset(0, 6),
         ),

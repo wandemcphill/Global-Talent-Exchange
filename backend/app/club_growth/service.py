@@ -512,7 +512,7 @@ class ClubGrowthService:
         club_id: str,
         payload: AcademyGenerateProspectsRequest,
     ) -> list[AcademyProspectView]:
-        club = self._ensure_club(club_id)
+        club = self._require_club_access(actor=actor, club_id=club_id)
         academy = self.ensure_academy_profile(club_id=club_id)
         facility_service = AcademyFacilityEconomyService(self.session)
         capacity, quality_score = facility_service.get_academy_capacity_and_quality(club_id)
@@ -602,6 +602,7 @@ class ClubGrowthService:
         prospect_id: str,
         payload: AcademyContractOfferRequest,
     ) -> AcademyContractOfferView:
+        self._require_club_access(actor=actor, club_id=club_id)
         prospect = self._get_prospect(club_id=club_id, prospect_id=prospect_id)
         if prospect.status not in {"discovered", "trial", "academy", "contract_rejected"}:
             raise ClubGrowthError("prospect_not_contract_eligible")
@@ -634,6 +635,7 @@ class ClubGrowthService:
         offer_id: str,
         payload: AcademyContractResponseRequest,
     ) -> AcademyContractOfferView:
+        self._require_club_access(actor=actor, club_id=club_id)
         offer = self.session.get(AcademyRegenContractOffer, offer_id)
         if offer is None or offer.club_id != club_id:
             raise ClubGrowthError("academy_contract_offer_not_found")
@@ -655,16 +657,43 @@ class ClubGrowthService:
         return self._academy_contract_offer_view(offer)
 
     def promote_prospect(self, *, actor: User, club_id: str, prospect_id: str) -> AcademyProspectView:
+        self._require_club_access(actor=actor, club_id=club_id)
         prospect = self._get_prospect(club_id=club_id, prospect_id=prospect_id)
         existing_history = self._promotion_history(prospect_id=prospect.id)
-        if (
-            prospect.status == "promoted_to_senior"
-            and existing_history is not None
-            and existing_history.senior_player_id
-        ):
-            return self._academy_prospect_view(prospect)
+        provider_external_id = f"academy:{prospect.id}"
+        existing_player = self.session.scalar(
+            select(Player).where(
+                Player.source_provider == "gtex_academy_regen",
+                Player.provider_external_id == provider_external_id,
+            )
+        )
+        if prospect.status == "promoted_to_senior" and (existing_history is not None or existing_player is not None):
+            senior_player = existing_player or (
+                self.session.get(Player, existing_history.senior_player_id)
+                if existing_history and existing_history.senior_player_id
+                else None
+            )
+            if senior_player is not None:
+                self._ensure_contract_and_squad_for_promoted_prospect(
+                    club_id=club_id, prospect=prospect, player=senior_player
+                )
+                return self._academy_prospect_view(prospect)
+
         if prospect.status != "youth_signed":
             raise ClubGrowthError("prospect_not_promotable")
+        if prospect.age < 16:
+            raise ClubGrowthError("academy_player_too_young_to_promote")
+
+        accepted_offer = self.session.scalar(
+            select(AcademyRegenContractOffer).where(
+                AcademyRegenContractOffer.prospect_id == prospect.id,
+                AcademyRegenContractOffer.club_id == club_id,
+                AcademyRegenContractOffer.status == "accepted",
+            )
+        )
+        if accepted_offer is None:
+            raise ClubGrowthError("accepted_youth_contract_required")
+
         if not prospect.portrait_asset_ref:
             prospect.portrait_asset_ref = self._select_academy_portrait_asset_ref(
                 seed=prospect.id,
@@ -674,25 +703,32 @@ class ClubGrowthService:
         self._ensure_contract_and_squad_for_promoted_prospect(club_id=club_id, prospect=prospect, player=senior_player)
         previous = {"status": prospect.status}
         prospect.status = "promoted_to_senior"
+        readiness_score = round(((prospect.current_ability or 50) + (prospect.potential or 70)) / 2)
+        promotion_metadata = {
+            "promotion_policy": "canonical_senior_player_created",
+            "portrait_policy": "newgen_bank_only",
+            "portrait_asset_ref": prospect.portrait_asset_ref,
+            "hoyd_pathway_verified": True,
+            "manager_sporting_readiness_approved": bool(
+                (prospect.current_ability or 0) >= 38 or (prospect.potential or 0) >= 70
+            ),
+            "readiness_score": readiness_score,
+            "governance_signoff": "hoyd_and_football_manager",
+        }
         history = existing_history
         if history is None:
             history = AcademyPromotionHistory(
                 club_id=club_id,
                 prospect_id=prospect.id,
                 senior_player_id=senior_player.id,
-                metadata_json={
-                    "promotion_policy": "canonical_senior_player_created",
-                    "portrait_policy": "newgen_bank_only",
-                    "portrait_asset_ref": prospect.portrait_asset_ref,
-                },
+                metadata_json=promotion_metadata,
             )
             self.session.add(history)
         else:
             history.senior_player_id = senior_player.id
             history.metadata_json = {
                 **dict(history.metadata_json or {}),
-                "promotion_policy": "canonical_senior_player_created",
-                "portrait_asset_ref": prospect.portrait_asset_ref,
+                **promotion_metadata,
             }
         self._audit(
             actor=actor,
@@ -712,8 +748,31 @@ class ClubGrowthService:
     def _ensure_contract_and_squad_for_promoted_prospect(
         self, *, club_id: str, prospect: AcademyProspect, player: Player
     ) -> None:
+        from app.models.club_squad_tier import ClubSquadTierMembership
         from app.models.player_contract import PlayerContract
         from app.squad_tiers.service import SquadTierService
+
+        # Guard against mismatched contract state with another club
+        other_contract = self.session.scalar(
+            select(PlayerContract).where(
+                PlayerContract.player_id == player.id,
+                PlayerContract.status == "active",
+                PlayerContract.club_id != club_id,
+            )
+        )
+        if other_contract is not None:
+            raise ClubGrowthError("player_contract_club_mismatch")
+
+        # Guard against mismatched squad membership with another club
+        other_squad = self.session.scalar(
+            select(ClubSquadTierMembership).where(
+                ClubSquadTierMembership.player_id == player.id,
+                ClubSquadTierMembership.status == "active",
+                ClubSquadTierMembership.club_id != club_id,
+            )
+        )
+        if other_squad is not None:
+            raise ClubGrowthError("player_squad_club_mismatch")
 
         active_contract = self.session.scalar(
             select(PlayerContract).where(
@@ -730,8 +789,11 @@ class ClubGrowthService:
                     AcademyRegenContractOffer.status == "accepted",
                 )
             )
-            wage_amount = Decimal(str(accepted_offer.wage_minor)) if accepted_offer is not None else Decimal("1000.00")
-            duration_months = accepted_offer.duration_months if accepted_offer is not None else 24
+            if accepted_offer is None:
+                raise ClubGrowthError("accepted_youth_contract_required")
+
+            wage_amount = self._minor_to_currency(accepted_offer.wage_minor)
+            duration_months = accepted_offer.duration_months
             now_date = utcnow().date()
             contract = PlayerContract(
                 player_id=player.id,
@@ -781,6 +843,9 @@ class ClubGrowthService:
             )
         )
         if existing is not None:
+            if existing.current_club_profile_id is not None and existing.current_club_profile_id != club_id:
+                raise ClubGrowthError("player_club_mismatch")
+            existing.current_club_profile_id = club_id
             self._ensure_player_portrait_metadata(player=existing, prospect=prospect)
             return existing
 
@@ -825,10 +890,29 @@ class ClubGrowthService:
         return player
 
     def _ensure_player_portrait_metadata(self, *, player: Player, prospect: AcademyProspect) -> None:
-        if not prospect.portrait_asset_ref:
-            raise ClubGrowthError("academy_portrait_asset_missing")
         service = RegenPortraitService(self.session)
-        asset = service._face_bank_asset_by_storage_key(prospect.portrait_asset_ref)
+        if not prospect.portrait_asset_ref:
+            try:
+                prospect.portrait_asset_ref = self._select_academy_portrait_asset_ref(
+                    seed=prospect.id,
+                    nationality=prospect.nationality,
+                )
+            except Exception:
+                pass
+        asset = (
+            service._face_bank_asset_by_storage_key(prospect.portrait_asset_ref)
+            if prospect.portrait_asset_ref
+            else None
+        )
+        if asset is None:
+            try:
+                prospect.portrait_asset_ref = self._select_academy_portrait_asset_ref(
+                    seed=prospect.id,
+                    nationality=prospect.nationality,
+                )
+                asset = service._face_bank_asset_by_storage_key(prospect.portrait_asset_ref)
+            except Exception:
+                asset = None
         if asset is None:
             raise ClubGrowthError("academy_portrait_asset_missing")
         image = self.session.scalar(
@@ -840,13 +924,13 @@ class ClubGrowthService:
         if image is None:
             image = PlayerImageMetadata(
                 source_provider=NEWGEN_FACE_BANK_PROVIDER,
-                provider_external_id=f"{NEWGEN_FACE_BANK_PROVIDER}:{prospect.portrait_asset_ref}",
+                provider_external_id=f"{NEWGEN_FACE_BANK_PROVIDER}:{player.id}",
                 player_id=player.id,
                 image_role="portrait",
             )
             self.session.add(image)
         image.source_provider = NEWGEN_FACE_BANK_PROVIDER
-        image.provider_external_id = f"{NEWGEN_FACE_BANK_PROVIDER}:{prospect.portrait_asset_ref}"
+        image.provider_external_id = f"{NEWGEN_FACE_BANK_PROVIDER}:{player.id}"
         image.source_url = service._generated_media_url(prospect.portrait_asset_ref)
         image.storage_key = prospect.portrait_asset_ref
         image.width = RegenPortraitService._optional_int(asset.get("width")) or 512
@@ -868,6 +952,30 @@ class ClubGrowthService:
             "portraitUrl": image.source_url,
         }
         self.session.flush()
+
+    @staticmethod
+    def _minor_to_currency(amount_minor: int | None) -> Decimal:
+        """Convert minor currency units (cents/pence) to standard 2-decimal currency amount."""
+        if amount_minor is None:
+            return Decimal("0.00")
+        return (Decimal(int(amount_minor)) / Decimal("100")).quantize(Decimal("0.01"))
+
+    def _require_club_access(
+        self,
+        *,
+        actor: User,
+        club_id: str,
+        forbidden_detail: str = "club_owner_required",
+    ) -> ClubProfile:
+        from app.access_control.service import AccessControlService
+        from app.models.access_control import OrganizationRole
+
+        return AccessControlService(self.session).require_club_access(
+            user=actor,
+            club_id=club_id,
+            allowed_roles={OrganizationRole.CLUB},
+            forbidden_detail=forbidden_detail,
+        )
 
     def _ensure_club(self, club_id: str) -> ClubProfile:
         club = self.session.get(ClubProfile, club_id)
@@ -1064,6 +1172,17 @@ class ClubGrowthService:
 
     def _academy_prospect_view(self, prospect: AcademyProspect) -> AcademyProspectView:
         history = self._promotion_history(prospect_id=prospect.id)
+        senior_player_id = history.senior_player_id if history is not None else None
+        if not senior_player_id:
+            provider_external_id = f"academy:{prospect.id}"
+            player_id = self.session.scalar(
+                select(Player.id).where(
+                    Player.source_provider == "gtex_academy_regen",
+                    Player.provider_external_id == provider_external_id,
+                )
+            )
+            if player_id:
+                senior_player_id = player_id
         return AcademyProspectView(
             id=prospect.id,
             club_id=prospect.club_id,
@@ -1075,7 +1194,7 @@ class ClubGrowthService:
             current_ability=prospect.current_ability,
             potential=prospect.potential,
             portrait_asset_ref=prospect.portrait_asset_ref,
-            senior_player_id=history.senior_player_id if history is not None else None,
+            senior_player_id=senior_player_id,
             status=prospect.status,
             metadata=dict(prospect.metadata_json or {}),
             updated_at=prospect.updated_at,

@@ -167,9 +167,13 @@ class CreatorApplicationController extends ChangeNotifier {
     final String message = AppFeedback.messageFor(error);
     switch (message.toLowerCase()) {
       case 'email_verification_required':
-        return 'Confirm the account email before you submit a creator request.';
+        return 'Confirm the account email using the GTEX signup-confirmation flow before submitting a creator request.';
+      case 'email_verification_must_use_auth_confirmation':
+        return 'This shortcut cannot verify email ownership. Use the confirmation link/code sent by GTEX.';
       case 'phone_verification_required':
         return 'Confirm the account phone number before you submit a creator request.';
+      case 'secure_phone_verification_unavailable':
+        return 'Secure phone verification is not available yet. Creator applications remain blocked until a real verification challenge is configured.';
       case 'phone_number_required_for_creator_verification':
         return 'Add a phone number to this GTEX account before you request creator access.';
       case 'creator_already_approved':
@@ -179,6 +183,13 @@ class CreatorApplicationController extends ChangeNotifier {
         return 'That creator handle is already taken.';
       case 'creator_application_not_found':
         return 'We could not find a creator application for this account.';
+      case 'club_ownership_prevents_creator_promotion':
+        return 'Creator promotion is available only when this User account no longer owns any clubs. Sell or transfer every club you still own, then apply again.';
+      case 'active_club_prevents_creator_promotion':
+        return 'Creator promotion is blocked while you own an active club. Sell or transfer your active club(s) before applying.';
+      case 'coin_trader_account_cannot_be_promoted_to_creator':
+      case 'creator_promotion_requires_normal_account':
+        return 'Creator promotion is only available from a normal User account. Creator and Coin Trader accounts are dedicated account types and cannot be switched into one another.';
       default:
         return message;
     }

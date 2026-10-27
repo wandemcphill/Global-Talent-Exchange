@@ -49,9 +49,7 @@ RELATIONSHIP_MORALE = 9
 
 
 def market_limits(session: Session) -> tuple[Decimal, int, int]:
-    row = session.scalar(
-        select(ClubLegacyMarketSettings).where(ClubLegacyMarketSettings.settings_key == SETTINGS_KEY)
-    )
+    row = session.scalar(select(ClubLegacyMarketSettings).where(ClubLegacyMarketSettings.settings_key == SETTINGS_KEY))
     if row is None:
         return DEFAULT_TRANSFER_FEE_RATE, DEFAULT_JET_CAP, DEFAULT_COACH_CAP
     return Decimal(row.transfer_fee_rate), int(row.jet_cap), int(row.coach_cap)
@@ -108,6 +106,18 @@ def purchase_asset(
         amount=Decimal(item.price),
         description=f"Buy {item.name}",
     )
+    if item.category == "jet":
+        from app.owner_console import storytelling
+
+        storytelling.record_verified_broadcast_event(
+            session,
+            event_type="private_jet_purchase",
+            club_id=club_id,
+            owner_user_id=user_id,
+            item_name=item.name,
+            verified_price_gtex=Decimal(item.price),
+            idempotency_key=idempotency_key,
+        )
     session.flush()
     return asset
 
@@ -276,11 +286,40 @@ def offer_gift(session: Session, *, asset_id: str, user_id: str, recipient_ref: 
         raise LegacyError("not_asset_owner", 403)
     elif asset.owner_class not in {"club", "owner"} and asset.club_id is not None:
         require_owner(session, asset.club_id, user_id)
+
+    # Club luxury incentives are reserved for academy regens. Leave ordinary
+    # user-to-user gifts unchanged when the recipient_ref is not a squad player.
+    from app.owner_console.models import OwnerSquadPlayer
+
+    player_recipient = session.get(OwnerSquadPlayer, recipient_ref)
+    if player_recipient is not None and not player_recipient.is_regen:
+        raise LegacyError(
+            "player_not_eligible_for_gift",
+            400,
+            "Luxury gifts can only be given to academy regens.",
+        )
+
     asset.status = "offered"
     gift = ClubLegacyGift(asset_id=asset.id, sender_user_id=user_id, recipient_ref=recipient_ref, status="offered")
     session.add(gift)
     session.flush()
     return gift
+
+
+def _is_gift_recipient(session: Session, gift: ClubLegacyGift, actor_user_id: str) -> bool:
+    if actor_user_id == gift.recipient_ref:
+        return True
+    club = session.get(ClubProfile, gift.recipient_ref)
+    if club is not None and club.owner_user_id == actor_user_id:
+        return True
+    from app.owner_console.models import OwnerSquadPlayer
+
+    player = session.get(OwnerSquadPlayer, gift.recipient_ref)
+    if player is not None and player.club_id is not None:
+        player_club = session.get(ClubProfile, player.club_id)
+        if player_club is not None and player_club.owner_user_id == actor_user_id:
+            return True
+    return False
 
 
 def resolve_gift(session: Session, *, gift_id: str, accept: bool, actor_user_id: str | None = None) -> ClubLegacyGift:
@@ -290,6 +329,16 @@ def resolve_gift(session: Session, *, gift_id: str, accept: bool, actor_user_id:
     asset = session.get(ClubLegacyAsset, gift.asset_id)
     if asset is None:
         raise LegacyError("asset_unavailable", 409)
+    if not actor_user_id:
+        raise LegacyError("gift_actor_required", 403, "An authenticated actor is required to resolve this gift.")
+
+    from app.models.user import User, UserRole
+
+    actor = session.get(User, actor_user_id)
+    is_admin = actor is not None and actor.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}
+    is_recipient = _is_gift_recipient(session, gift, actor_user_id)
+    if not (is_recipient or is_admin):
+        raise LegacyError("not_gift_recipient", 403, "Caller is not authorized to resolve this gift.")
     if accept:
         asset.owner_class = "player"
         asset.owner_ref = gift.recipient_ref
@@ -299,13 +348,31 @@ def resolve_gift(session: Session, *, gift_id: str, accept: bool, actor_user_id:
             ClubLegacyRelationshipEvent(
                 gift_id=gift.id,
                 asset_id=asset.id,
-                actor_user_id=actor_user_id or gift.sender_user_id,
+                actor_user_id=actor_user_id,
                 recipient_ref=gift.recipient_ref,
                 kind="accepted",
                 loyalty=RELATIONSHIP_LOYALTY,
                 morale=RELATIONSHIP_MORALE,
             )
         )
+        from app.owner_console import storytelling
+        from app.owner_console.models import OwnerSquadPlayer
+
+        player = session.get(OwnerSquadPlayer, gift.recipient_ref)
+        catalogue_item = session.get(ClubLegacyCatalogueItem, asset.catalogue_id)
+        club_id = asset.club_id or (player.club_id if player else None)
+        if club_id and catalogue_item:
+            storytelling.record_verified_broadcast_event(
+                session,
+                event_type="player_gift",
+                club_id=club_id,
+                owner_user_id=gift.sender_user_id,
+                item_name=catalogue_item.name,
+                player_id=player.id if player else gift.recipient_ref,
+                player_name=player.name if player else None,
+                verified_price_gtex=Decimal(catalogue_item.price),
+                idempotency_key=f"legacy-gift:{gift.id}",
+            )
     else:
         asset.status = "owned"
         gift.status = "declined"
@@ -451,7 +518,6 @@ def _reject_related_trade(session: Session, *, asset: ClubLegacyAsset, buyer_clu
         raise LegacyError("wash_trade", 409, "Related clubs cannot trade this asset with each other.")
 
 
-
 def place_bid(session: Session, *, listing_id: str, bidder_user_id: str, amount) -> ClubLegacyBid:
     listing = session.get(ClubLegacyListing, listing_id)
     if listing is None or listing.status != "auction":
@@ -479,11 +545,13 @@ def place_bid(session: Session, *, listing_id: str, bidder_user_id: str, amount)
 
     if asset is not None and asset.club_id is not None:
         seller_club = session.get(ClubProfile, asset.club_id)
-        bidder_clubs = session.scalars(
-            select(ClubProfile).where(ClubProfile.owner_user_id == bidder_user_id)
-        ).all()
+        bidder_clubs = session.scalars(select(ClubProfile).where(ClubProfile.owner_user_id == bidder_user_id)).all()
         for club in bidder_clubs:
-            if seller_club is not None and club.owner_user_id == seller_club.owner_user_id and club.id != seller_club.id:
+            if (
+                seller_club is not None
+                and club.owner_user_id == seller_club.owner_user_id
+                and club.id != seller_club.id
+            ):
                 remember_refusal(
                     session,
                     club_id=seller_club.id,

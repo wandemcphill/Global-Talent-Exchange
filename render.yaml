@@ -50,6 +50,8 @@ services:
         value: "1"
       - key: GTE_AUTH_SECRET
         sync: false
+      - key: GTE_TURNSTILE_SECRET_KEY
+        sync: false
       - key: GTE_FIELD_ENCRYPTION_KEY
         sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
@@ -92,8 +94,16 @@ services:
         value: https://res.cloudinary.com/dvxiniqew/image/upload
       - key: GTE_MARKET_RECORDS_CACHE_TTL_SECONDS
         value: "300"
+      - key: GTE_NATIONAL_TEAM_WORKER_ENABLED
+        value: "true"
+      - key: GTE_NATIONAL_TEAM_WORKER_INTERVAL_SECONDS
+        value: "300"
       - key: GTE_KAFKA_BROKERS
         value: ""
+      - key: GTE_WORLD_CLOCK_PROGRESSION_RATE
+        value: "1.0"
+      - key: GTE_AUTONOMOUS_FIXTURE_EXECUTION_ENABLED
+        value: "true"
 
   - name: gtex-web
     type: web
@@ -117,8 +127,13 @@ services:
     envVars:
       - key: GTE_API_BASE_URL
         value: https://gtex-api-opea.onrender.com
+      - key: GTE_TURNSTILE_SITE_KEY
+        sync: false
       - key: GTE_BACKEND_MODE
         value: live
+      # Keep P9-SHELL active in the production Flutter build; false is an explicit rollback only.
+      - key: GTEX_SHELL_V3
+        value: "true"
       # Pins the static-site build image so the React shell matches CI (Node 20).
       - key: NODE_VERSION
         value: "20"
@@ -154,6 +169,10 @@ services:
         value: sportmonks
       - key: GTE_OUTBOX_RELAY_ENABLED
         value: "false"
+      - key: GTE_AUTONOMOUS_FIXTURE_EXECUTION_ENABLED
+        value: "true"
+      - key: GTE_AUTONOMOUS_FIXTURE_INTERVAL_SECONDS
+        value: "30"
       - key: GTE_TASK_QUEUE_ENABLED
         value: "true"
 
@@ -188,6 +207,12 @@ services:
         value: sportmonks
       - key: GTE_OUTBOX_RELAY_ENABLED
         value: "false"
+      - key: GTE_AUTONOMOUS_FIXTURE_EXECUTION_ENABLED
+        value: "true"
+      - key: GTE_AUTONOMOUS_FIXTURE_INTERVAL_SECONDS
+        value: "30"
+      - key: GTE_WORLD_CLOCK_PROGRESSION_RATE
+        value: "1.0"
 
   - name: gtex-outbox-relay
     type: worker
@@ -219,7 +244,37 @@ services:
       - key: GTE_INGESTION_PROVIDER
         value: sportmonks
       - key: GTE_OUTBOX_RELAY_ENABLED
+        value: "false"
+
+  - name: gtex-worker
+    type: worker
+    runtime: python
+    region: frankfurt
+    plan: starter
+    buildCommand: "pip install -r backend/requirements.lock"
+    startCommand: "cd backend && python -m app.gtex.worker_main"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_ENABLED
         value: "true"
+      - key: GTE_REDIS_URL
+        fromService:
+          type: keyvalue
+          name: gtex-cache
+          property: connectionString
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_FIELD_ENCRYPTION_KEY
+        sync: false
+      - key: GTE_MEDIA_SIGNING_SECRET
+        sync: false
+      - key: GTE_RUN_MIGRATION_CHECK
+        value: "true"
+      - key: GTE_GTEX_WORKERS
+        value: "valuation,matchmaker,brain,jackpot"
 
   - name: gtex-player-ingestion-worker
     type: worker
@@ -227,7 +282,7 @@ services:
     region: frankfurt
     plan: starter
     buildCommand: "cd services/player-ingestion && npm ci"
-    startCommand: "cd services/player-ingestion && npm run migrate && npm start"
+    startCommand: "cd services/player-ingestion && npm start"
     envVars:
       - key: DATABASE_URL
         sync: false

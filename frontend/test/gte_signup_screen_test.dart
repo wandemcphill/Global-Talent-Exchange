@@ -7,7 +7,7 @@ import 'package:gte_frontend/screens/gte_signup_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
-  testWidgets('signup surface exposes creator access request entry',
+  testWidgets('signup surface renders normal GTEX ID form',
       (WidgetTester tester) async {
     tester.view.physicalSize = const Size(1600, 2200);
     tester.view.devicePixelRatio = 1.0;
@@ -28,13 +28,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Apply for creator access'), findsOneWidget);
-
-    await tester.ensureVisible(find.text('Apply for creator access'));
-    await tester.tap(find.text('Apply for creator access'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Creator access request'), findsOneWidget);
-    expect(find.text('Create account to continue'), findsOneWidget);
+    expect(find.text('Join GTEX'), findsOneWidget);
+    expect(find.text('Display name'), findsOneWidget);
+    expect(find.text('@username'), findsOneWidget);
+    expect(find.text('Password (at least 8 characters)'), findsOneWidget);
   });
 }

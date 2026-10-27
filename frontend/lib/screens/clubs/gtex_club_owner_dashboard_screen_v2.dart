@@ -265,6 +265,10 @@ class _GtexClubOwnerDashboardScreenV2State
               () => context.go(const GteNavigationRoute.market().path),
           onCreateCompetition:
               () => context.go(const GteNavigationRoute.competitions().path),
+          onOpenLineup:
+              () => context.push('/lineup?club_id=${widget.clubId}'),
+          onOpenCoachMarket: () => context.push('/coaches'),
+          confirmConsequentialLifecycleActions: true,
           initialSnapshot: snapshot,
           lifecycleDashboard: lifecycleController?.dashboard,
           lifecycleLoading: lifecycleController?.busy ?? false,

@@ -60,6 +60,32 @@ void _expectHeavyModel(WidgetTester tester, String fileName) {
 }
 
 void main() {
+  test('owner gift recipient parses regen eligibility from the API', () {
+    final OwnerGiftRecipient regen = OwnerGiftRecipient.fromJson(
+      <String, dynamic>{
+        'id': 'regen-1',
+        'name': 'Academy Prospect',
+        'position': 'AM',
+        'rating': 72,
+        'morale': 81,
+        'is_regen': true,
+      },
+    );
+    final OwnerGiftRecipient firstTeamPlayer = OwnerGiftRecipient.fromJson(
+      <String, dynamic>{
+        'id': 'senior-1',
+        'name': 'First-Team Player',
+        'position': 'CB',
+        'rating': 86,
+        'morale': 74,
+        'is_regen': false,
+      },
+    );
+
+    expect(regen.isRegen, isTrue);
+    expect(firstTeamPlayer.isRegen, isFalse);
+  });
+
   testWidgets('showroom labels the owner and turns the preview', (
     WidgetTester tester,
   ) async {
@@ -178,7 +204,7 @@ void main() {
                 ownershipLabel: 'Club',
                 fallbackLabel: 'Static jet card',
                 modelFile: 'assets/showroom/does_not_exist.glb',
-                previewFile: 'assets/showroom/sovereign_900x_jet.png',
+                previewFile: 'assets/showroom/sovereign_900x_jet.webp',
                 owned: true,
               ),
             ],
@@ -216,6 +242,151 @@ void main() {
     expect(find.text('Turn 0.0'), findsNothing);
   });
 
+  testWidgets('renders buy button for unowned items and gift button for owned items', (
+    WidgetTester tester,
+  ) async {
+    const ShowroomExhibit unownedJet = ShowroomExhibit(
+      id: 'catalogue:gtex-jet-harbour',
+      sku: 'gtex-jet-harbour',
+      name: 'Harbour Jet',
+      category: 'jet',
+      ownershipLabel: 'Not owned',
+      fallbackLabel: 'Static jet card',
+      owned: false,
+    );
+    String? actionTriggered;
+    Map<String, Object?>? actionPayload;
+
+    tester.view.physicalSize = const Size(900, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ClubLegacyShowroom(
+            exhibits: const <ShowroomExhibit>[unownedJet, _watch],
+            onAction: (String action, Map<String, Object?> payload) async {
+              actionTriggered = action;
+              actionPayload = payload;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final Finder buyButton = find.byKey(const Key('club-showroom-buy-gtex-jet-harbour'));
+    expect(buyButton, findsOneWidget);
+    await tester.tap(buyButton);
+    await tester.pump();
+
+    expect(actionTriggered, equals('purchase'));
+    expect(actionPayload?['sku'], equals('gtex-jet-harbour'));
+    final Object? firstPurchaseKey = actionPayload?['idempotency_key'];
+    expect(firstPurchaseKey, isNotNull);
+
+    // A purchase confirmation now includes a visible arrival receipt.
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('club-showroom-arrival-close')));
+    await tester.pumpAndSettle();
+
+    // A retry for the same item must reuse the intent key, even after the
+    // in-flight guard is released.
+    await tester.tap(buyButton);
+    await tester.pumpAndSettle();
+    expect(actionTriggered, equals('purchase'));
+    expect(actionPayload?['idempotency_key'], equals(firstPurchaseKey));
+    await tester.tap(find.byKey(const Key('club-showroom-arrival-close')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('club-showroom-pick-watch-1')));
+    await tester.pumpAndSettle();
+
+    final Finder giftButton = find.byKey(const Key('club-showroom-gift-watch-1'));
+    expect(giftButton, findsOneWidget);
+    await tester.tap(giftButton);
+    await tester.pumpAndSettle();
+
+    final Finder recipientField = find.byKey(const Key('club-showroom-gift-recipient'));
+    expect(recipientField, findsOneWidget);
+    await tester.enterText(recipientField, 'recipient-user-id');
+    await tester.tap(find.byKey(const Key('club-showroom-gift-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(actionTriggered, equals('gift'));
+    expect(actionPayload?['asset_id'], equals('watch-1'));
+    expect(actionPayload?['recipient_ref'], equals('recipient-user-id'));
+  });
+
+  testWidgets('owner can select a real squad player and confirm luxury gift delivery', (
+    WidgetTester tester,
+  ) async {
+    String? giftedAssetId;
+    String? giftedPlayerId;
+    tester.view.physicalSize = const Size(900, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ClubLegacyShowroom(
+            exhibits: const <ShowroomExhibit>[_watch],
+            onAction: (String action, Map<String, Object?> payload) async {},
+            loadGiftRecipients: () async => const <OwnerGiftRecipient>[
+              OwnerGiftRecipient(
+                id: 'player-9',
+                name: 'Darius Vale',
+                position: 'ST',
+                rating: 91,
+                morale: 76,
+                isRegen: true,
+              ),
+              OwnerGiftRecipient(
+                id: 'first-team-1',
+                name: 'Senior First-Team Player',
+                position: 'CB',
+                rating: 88,
+                morale: 82,
+                isRegen: false,
+              ),
+            ],
+            giftOwnedAsset: ({
+              required String assetId,
+              required String playerId,
+            }) async {
+              giftedAssetId = assetId;
+              giftedPlayerId = playerId;
+            },
+            onGiftCompleted: () async {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('club-showroom-gift-watch-1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose an academy regen'), findsOneWidget);
+    expect(find.text('Darius Vale'), findsOneWidget);
+    expect(find.text('Senior First-Team Player'), findsNothing);
+    expect(find.text('REGEN'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('club-showroom-recipient-player-9')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('club-showroom-gift-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(giftedAssetId, equals('watch-1'));
+    expect(giftedPlayerId, equals('player-9'));
+    expect(find.text('Icon Watch gifted'), findsOneWidget);
+    expect(find.text('Darius Vale'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('club-showroom-arrival-close')));
+    await tester.pumpAndSettle();
+  });
+
   test('all six starter models load at their source size', () async {
     TestWidgetsFlutterBinding.ensureInitialized();
     const Map<String, int> triangles = <String, int>{
@@ -248,40 +419,5 @@ void main() {
     expect(watch.sourceExtent, greaterThan(1));
     expect(stadium.sourceExtent, greaterThan(1));
     expect(campus.sourceExtent, greaterThan(1));
-  });
-
-  testWidgets('catalogue exhibits call purchase with sku', (
-    WidgetTester tester,
-  ) async {
-    final List<String> bought = <String>[];
-    tester.view.physicalSize = const Size(900, 1400);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: ClubLegacyShowroom(
-            forceStatic: true,
-            onPurchaseSku: (String sku) async {
-              bought.add(sku);
-            },
-            exhibits: const <ShowroomExhibit>[
-              ShowroomExhibit(
-                id: 'catalogue:gtex-jet-harbour',
-                name: 'Harbour Jet',
-                category: 'jet',
-                ownershipLabel: 'Not owned',
-                fallbackLabel: 'Static jet card',
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('club-showroom-buy-gtex-jet-harbour')), findsOneWidget);
-    await tester.tap(find.byKey(const Key('club-showroom-buy-gtex-jet-harbour')));
-    await tester.pumpAndSettle();
-    expect(bought, <String>['gtex-jet-harbour']);
   });
 }

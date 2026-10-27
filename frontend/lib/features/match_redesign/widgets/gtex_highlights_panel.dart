@@ -4,9 +4,14 @@ import '../data/gtex_match_models.dart';
 import 'gtex_match_visual_tokens.dart';
 
 class GtexHighlightsPanel extends StatelessWidget {
-  const GtexHighlightsPanel({super.key, required this.highlights});
+  const GtexHighlightsPanel({
+    super.key,
+    required this.highlights,
+    this.onReplayGoal,
+  });
 
   final List<GtexMatchHighlight> highlights;
+  final ValueChanged<int>? onReplayGoal;
 
   @override
   Widget build(BuildContext context) {
@@ -82,6 +87,25 @@ class GtexHighlightsPanel extends StatelessWidget {
                         style: const TextStyle(
                           color: GtexMatchVisualTokens.textSecondary,
                           height: 1.3,
+                        ),
+                      ),
+                    ],
+                    if (onReplayGoal != null &&
+                        '${item.title} ${item.summary}'.toLowerCase().contains('goal')) ...<Widget>[
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton.icon(
+                          key: Key('gtex-highlight-goal-replay-${item.minute}'),
+                          onPressed: () => onReplayGoal!(item.minute),
+                          icon: const Icon(Icons.replay_circle_filled_outlined, size: 16),
+                          label: Text('Replay goal · ${item.minute}\''),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: GtexMatchVisualTokens.amber,
+                            side: BorderSide(color: GtexMatchVisualTokens.amber.withOpacity(.40)),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            minimumSize: const Size(0, 36),
+                          ),
                         ),
                       ),
                     ],

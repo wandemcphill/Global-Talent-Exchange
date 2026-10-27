@@ -118,7 +118,8 @@ class UserClubSignupRequest(BaseModel):
     """Easy signup: display name + @handle + password; email/club optional.
 
     Older clients that still POST club + country continue to work. When club
-    fields are omitted, signup defers club create (requires_club bootstrap).
+    fields are omitted, signup creates a normal user account and leaves club
+    ownership as an optional next step in session bootstrap.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -254,6 +255,13 @@ class CreatorSignupRequest(BaseModel):
     avatar_asset_ref: str | None = Field(default=None, max_length=255)
     banner_asset_ref: str | None = Field(default=None, max_length=255)
     monetization: list[str] = Field(default_factory=list, max_length=4)
+    turnstile_token: str | None = Field(default=None, max_length=2048)
+    club_name: str | None = Field(default=None, max_length=160)
+    club_short_tag: str | None = Field(default=None, max_length=40)
+    club_type: ClubType | None = None
+    crest_asset_ref: str | None = Field(default=None, max_length=255)
+    primary_color: str | None = Field(default=None, max_length=32)
+    secondary_color: str | None = Field(default=None, max_length=32)
 
     @field_validator("email")
     @classmethod
@@ -267,6 +275,18 @@ class CreatorSignupRequest(BaseModel):
         if resolved is None:
             raise ValueError("Username is required.")
         return resolved
+
+    @field_validator("club_name", "club_short_tag", "crest_asset_ref", "primary_color", "secondary_color")
+    @classmethod
+    def normalize_club_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+    @property
+    def creates_club(self) -> bool:
+        return bool(self.club_name and self.club_name.strip())
 
 
 class TraderSignupRequest(BaseModel):
@@ -289,6 +309,7 @@ class TraderSignupRequest(BaseModel):
     # KYC is no longer collected at signup (only required when a trader withdraws).
     # Optional so older clients that still POST compliance don't 400; it is ignored.
     compliance: ComplianceSubmissionRequest | None = None
+    turnstile_token: str | None = Field(default=None, max_length=2048)
 
     @field_validator("email")
     @classmethod
@@ -414,6 +435,8 @@ class CurrentUserResponse(BaseModel):
     full_name: str | None
     phone_number: str | None
     age_confirmed_at: datetime | None
+    email_verified_at: datetime | None = None
+    phone_verified_at: datetime | None = None
     display_name: str | None
     avatar_url: str | None
     favourite_club: str | None

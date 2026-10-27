@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../ui_gtex/theme/gtex_colors.dart';
+import '../ui_gtex/theme/gtex_motion.dart';
+import '../ui_gtex/theme/gtex_spacing.dart';
 import 'gte_theme_extensions.dart';
 import 'gte_theme_metadata.dart';
 import 'gte_theme_specs.dart';
@@ -48,6 +51,126 @@ class GteThemeDefinition {
 
 class GteThemeRegistry {
   const GteThemeRegistry._();
+
+  /// Canonical "GTEX Navy" shell definition (Master Plan Document F, Decision O-06).
+  static const GteThemeDefinition gtexNavy = GteThemeDefinition(
+    metadata: GteThemeMetadata(
+      id: GteThemeId.menloNightBlue,
+      label: 'GTEX Navy',
+      tagline: 'Executive football management & financial command shell',
+      description:
+          'Deep navy institutional surfaces (#0B1626 -> #13233A -> #1A2E4A) with warm gold signal accents (#D4AF37) and WCAG AA contrast pairings.',
+      icon: Icons.shield_outlined,
+      brightness: Brightness.dark,
+    ),
+    tokens: GteThemeTokens(
+      background: GtexNavyColors.bgBase,
+      backgroundSoft: GtexNavyColors.bgInset,
+      panel: GtexNavyColors.bgRaised,
+      panelStrong: GtexNavyColors.bgOverlay,
+      panelElevated: GtexNavyColors.bgOverlay,
+      stroke: GtexNavyColors.lineSubtle,
+      outline: GtexNavyColors.lineStrong,
+      surfaceHighlight: GtexNavyColors.textPrimary,
+      shadow: Color(0xFF02060D),
+      accent: GtexNavyColors.gold500,
+      accentWarm: GtexNavyColors.gold300,
+      accentArena: GtexNavyColors.success,
+      accentCommunity: GtexNavyColors.info,
+      accentCapital: GtexNavyColors.gold500,
+      accentClub: GtexNavyColors.info,
+      accentAdmin: GtexNavyColors.warning,
+      textPrimary: GtexNavyColors.textPrimary,
+      textMuted: GtexNavyColors.textSecondary,
+      textInverse: GtexNavyColors.textInverse,
+      positive: GtexNavyColors.success,
+      negative: GtexNavyColors.danger,
+      warning: GtexNavyColors.warning,
+      spaceXs: GtexSpacing.xs,
+      spaceSm: GtexSpacing.sm,
+      spaceMd: GtexSpacing.md,
+      spaceLg: GtexSpacing.xl,
+      spaceXl: GtexSpacing.xxl,
+      radiusSmall: GtexRadius.chip,
+      radiusMedium: GtexRadius.card,
+      radiusLarge: GtexRadius.sheet,
+      radiusPill: GtexRadius.pill,
+    ),
+    visuals: GteThemeVisuals(
+      shellStyle: 'GTEX Navy executive football command shell',
+      glass: false,
+      surfaceOpacity: 0.98,
+      surfaceBlurSigma: 6,
+      ambientPrimary: GtexNavyColors.gold500,
+      ambientSecondary: GtexNavyColors.info,
+      ambientTertiary: GtexNavyColors.success,
+      heroStart: GtexNavyColors.bgOverlay,
+      heroEnd: GtexNavyColors.bgBase,
+      heroAccent: GtexNavyColors.gold500,
+      shellFill: Color(0xF50B1626),
+      shellBorder: GtexNavyColors.lineSubtle,
+      navGlow: GtexNavyColors.gold500,
+      chartPositive: GtexNavyColors.success,
+      chartNegative: GtexNavyColors.danger,
+      chartNeutral: GtexNavyColors.textSecondary,
+      chartHighlight: GtexNavyColors.gold500,
+      chartSecondary: GtexNavyColors.info,
+      scorebugBackground: GtexNavyColors.bgInset,
+      scorebugBorder: GtexNavyColors.lineStrong,
+      scorebugAccent: GtexNavyColors.gold500,
+      scorebugText: GtexNavyColors.textPrimary,
+    ),
+    typography: GteThemeTypography(
+      styleName: 'GTEX Navy editorial & tabular command sans',
+      displaySize: 40,
+      displayWeight: FontWeight.w700,
+      displayLetterSpacing: 0,
+      displayHeight: 1.1,
+      headlineSize: 28,
+      headlineWeight: FontWeight.w700,
+      headlineLetterSpacing: 0,
+      titleSize: 17,
+      titleWeight: FontWeight.w600,
+      titleLetterSpacing: 0,
+      bodySize: 14,
+      bodyWeight: FontWeight.w400,
+      bodyHeight: 1.43,
+      bodyLetterSpacing: 0,
+      captionSize: 13,
+      captionLetterSpacing: 0,
+      labelSize: 12,
+      labelWeight: FontWeight.w600,
+      labelLetterSpacing: 0.4,
+    ),
+    button: GteThemeButtonSpec(
+      styleName: 'GTEX Navy precision capsule',
+      cornerRadius: GtexRadius.card,
+      strokeWidth: 1.0,
+      horizontalPadding: 20,
+      verticalPadding: 14,
+      filledElevation: 0,
+      labelWeight: FontWeight.w700,
+      labelLetterSpacing: 0.24,
+    ),
+    motion: GteThemeMotion(
+      feel: 'Measured, responsive, reduced-motion safe',
+      fast: GtexMotion.stateDuration,
+      medium: GtexMotion.enterExitDuration,
+      slow: GtexMotion.sheetRouteDuration,
+      emphasizedCurve: GtexMotion.curve,
+      standardCurve: GtexMotion.standardCurve,
+    ),
+    usage: GteThemeUsageGuidance(
+      feed:
+          'Primary GTEX Navy shell for Home, Club, Matchday, Market, Newsroom, and Boardroom.',
+      dashboard:
+          'Gold (#D4AF37) is reserved for primary actions, selected nav indicators, and headline KPIs (<=10% of screen pixels).',
+      profile:
+          'Portraits and crests take center stage on deep navy surfaces separated by tone rather than heavy drop shadows.',
+      accessibility:
+          'All text and button foregrounds exceed WCAG 2.x AA (14.8:1 primary on base, 8.7:1 inverse navy on gold).',
+    ),
+  );
 
   static const GteThemeDefinition foundersBlack = GteThemeDefinition(
     metadata: GteThemeMetadata(
@@ -765,6 +888,9 @@ class GteThemeRegistry {
 
   static const GteThemeDefinition defaultTheme = foundersBlack;
 
+  /// Reversible fallback reference (`O-06`).
+  static const GteThemeDefinition pitchBlackStadiumFallback = foundersBlack;
+
   static const List<GteThemeDefinition> themes = <GteThemeDefinition>[
     foundersBlack,
     paloAltoGlass,
@@ -774,7 +900,13 @@ class GteThemeRegistry {
     gtexDaylight,
   ];
 
-  static GteThemeDefinition resolve(GteThemeId id) {
+  static GteThemeDefinition resolve(
+    GteThemeId id, {
+    bool preferGtexNavy = false,
+  }) {
+    if (preferGtexNavy) {
+      return gtexNavy;
+    }
     switch (id) {
       case GteThemeId.foundersBlack:
         return foundersBlack;

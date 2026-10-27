@@ -9,6 +9,9 @@ class GtexText {
   static const String monoFamily = 'DMMono';
   static const String bodyFamily = 'Inter';
 
+  static const double maxDecorativeTextScaleFactor = 1.3;
+  static const double maxSupportedTextScaleFactor = 2.0;
+
   static const TextStyle display2XL = TextStyle(
     fontFamily: displayFamily,
     fontSize: 56,
@@ -33,6 +36,79 @@ class GtexText {
     fontFamily: displayFamily,
     fontSize: 18,
     fontWeight: FontWeight.w500,
+  );
+
+  /// Canonical Document F4 typography tokens (`display.l`, `display.m`,
+  /// `title.l`, `title.m`, `title.s`, `body`, `body.s`, `label`, `numeric.l/m/s`).
+  static const TextStyle displayL = TextStyle(
+    fontFamily: displayFamily,
+    fontSize: 40,
+    height: 44 / 40,
+    fontWeight: FontWeight.w700,
+  );
+  static const TextStyle displayM = TextStyle(
+    fontFamily: displayFamily,
+    fontSize: 28,
+    height: 32 / 28,
+    fontWeight: FontWeight.w700,
+  );
+  static const TextStyle titleL = TextStyle(
+    fontFamily: displayFamily,
+    fontSize: 22,
+    height: 26 / 22,
+    fontWeight: FontWeight.w600,
+  );
+  static const TextStyle titleM = TextStyle(
+    fontFamily: bodyFamily,
+    fontSize: 17,
+    height: 22 / 17,
+    fontWeight: FontWeight.w600,
+  );
+  static const TextStyle titleS = TextStyle(
+    fontFamily: bodyFamily,
+    fontSize: 15,
+    height: 20 / 15,
+    fontWeight: FontWeight.w600,
+  );
+  static const TextStyle body = TextStyle(
+    fontFamily: bodyFamily,
+    fontSize: 14,
+    height: 20 / 14,
+    fontWeight: FontWeight.w400,
+  );
+  static const TextStyle bodyS = TextStyle(
+    fontFamily: bodyFamily,
+    fontSize: 13,
+    height: 18 / 13,
+    fontWeight: FontWeight.w400,
+  );
+  static const TextStyle label = TextStyle(
+    fontFamily: bodyFamily,
+    fontSize: 12,
+    height: 16 / 12,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0.4,
+  );
+  static const TextStyle numericL = TextStyle(
+    fontFamily: monoFamily,
+    fontSize: 20,
+    height: 24 / 20,
+    fontWeight: FontWeight.w500,
+    fontFeatures: <FontFeature>[FontFeature.tabularFigures()],
+  );
+  static const TextStyle numericM = TextStyle(
+    fontFamily: monoFamily,
+    fontSize: 15,
+    height: 20 / 15,
+    fontWeight: FontWeight.w500,
+    fontFeatures: <FontFeature>[FontFeature.tabularFigures()],
+  );
+  static const TextStyle numericS = TextStyle(
+    fontFamily: monoFamily,
+    fontSize: 12,
+    height: 16 / 12,
+    fontWeight: FontWeight.w500,
+    fontFeatures: <FontFeature>[FontFeature.tabularFigures()],
   );
 
   static const TextStyle bodyLG = TextStyle(
@@ -95,4 +171,43 @@ class GtexText {
     fontWeight: FontWeight.w400,
     fontFeatures: <FontFeature>[FontFeature.tabularFigures()],
   );
+}
+
+
+/// Canonical Document F4 typography helper (`GtexTypography`).
+class GtexTypography {
+  const GtexTypography._();
+
+  static TextStyle displayL({Color? color}) =>
+      color == null ? GtexText.displayL : GtexText.displayL.copyWith(color: color);
+
+  static TextStyle displayM({Color? color}) =>
+      color == null ? GtexText.displayM : GtexText.displayM.copyWith(color: color);
+
+  static TextStyle titleL({Color? color}) =>
+      color == null ? GtexText.titleL : GtexText.titleL.copyWith(color: color);
+
+  static TextStyle titleM({Color? color}) =>
+      color == null ? GtexText.titleM : GtexText.titleM.copyWith(color: color);
+
+  static TextStyle titleS({Color? color}) =>
+      color == null ? GtexText.titleS : GtexText.titleS.copyWith(color: color);
+
+  static TextStyle body({Color? color}) =>
+      color == null ? GtexText.body : GtexText.body.copyWith(color: color);
+
+  static TextStyle bodyS({Color? color}) =>
+      color == null ? GtexText.bodyS : GtexText.bodyS.copyWith(color: color);
+
+  static TextStyle label({Color? color}) =>
+      color == null ? GtexText.label : GtexText.label.copyWith(color: color);
+
+  static TextStyle numericL({Color? color}) =>
+      color == null ? GtexText.numericL : GtexText.numericL.copyWith(color: color);
+
+  static TextStyle numericM({Color? color}) =>
+      color == null ? GtexText.numericM : GtexText.numericM.copyWith(color: color);
+
+  static TextStyle numericS({Color? color}) =>
+      color == null ? GtexText.numericS : GtexText.numericS.copyWith(color: color);
 }

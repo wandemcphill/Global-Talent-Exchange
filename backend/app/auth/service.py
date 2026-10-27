@@ -453,14 +453,33 @@ class AuthService:
             if normalized_permissions & GOD_MODE_LANDING_PERMISSIONS:
                 return PROFILE_GOD_MODE_ROUTE
             return PROFILE_ADMIN_ROUTE
+        # Dedicated account types determine their lane. Approved creator
+        # promotion updates account_type; profiles alone never create a
+        # switchable creator/trader capability on a normal account.
         if user.account_type == PublicAccountType.CREATOR:
             return "/app/hub"
         if user.account_type == PublicAccountType.COIN_TRADER:
-            return "/trader"
+            return "/app/coin-traders"
         return "/app/home"
+
+    @staticmethod
+    def _account_aware_public_role(user: User, effective_role: UserRole) -> UserRole:
+        # Public account type is authoritative for the dedicated Creator and
+        # Coin Trader lanes. Historic additive Trader role rows on a normal
+        # User account must not leak a Trader persona through session bootstrap.
+        if effective_role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+            return effective_role
+        if user.account_type == PublicAccountType.COIN_TRADER:
+            return UserRole.COIN_TRADER
+        if user.account_type == PublicAccountType.CREATOR:
+            return UserRole.USER
+        if effective_role == UserRole.COIN_TRADER:
+            return UserRole.USER
+        return effective_role
 
     def build_user_public(self, session: Session, user: User) -> UserPublic:
         access_context = AccessControlService(session).bind_user_access_context(user)
+        public_role = self._account_aware_public_role(user, access_context.effective_role)
         return UserPublic(
             id=user.id,
             email=user.email,
@@ -468,7 +487,7 @@ class AuthService:
             full_name=user.full_name,
             phone_number=user.phone_number,
             display_name=user.display_name,
-            role=access_context.effective_role,
+            role=public_role,
             account_type=user.account_type,
             kyc_status=user.kyc_status,
             is_active=user.is_active,
@@ -484,6 +503,7 @@ class AuthService:
         profile_fields = self._get_profile_fields(session, user.id)
         region_code = PolicyService(session).resolve_country_code_for_user(user=user)
         access_context = AccessControlService(session).bind_user_access_context(user)
+        public_role = self._account_aware_public_role(user, access_context.effective_role)
         return CurrentUserResponse(
             id=user.id,
             email=user.email,
@@ -491,13 +511,15 @@ class AuthService:
             full_name=user.full_name,
             phone_number=user.phone_number,
             age_confirmed_at=user.age_confirmed_at,
+            email_verified_at=user.email_verified_at,
+            phone_verified_at=user.phone_verified_at,
             display_name=profile_fields["display_name"],
             avatar_url=profile_fields["avatar_url"],
             favourite_club=profile_fields["favourite_club"],
             nationality=profile_fields["nationality"],
             region_code=region_code,
             preferred_position=profile_fields["preferred_position"],
-            role=access_context.effective_role,
+            role=public_role,
             account_type=user.account_type,
             kyc_status=user.kyc_status,
             is_active=user.is_active,
@@ -634,8 +656,8 @@ class AuthService:
     ) -> ClubProfile:
         from app.clubs.ownership_cap import ClubOwnershipCapError, assert_can_acquire_club
 
-        if user.account_type != PublicAccountType.USER:
-            raise AuthError("Only football user accounts can create clubs.")
+        if user.account_type not in {PublicAccountType.USER, PublicAccountType.CREATOR}:
+            raise AuthError("Only football user or creator accounts can create clubs.")
         try:
             assert_can_acquire_club(session, user.id)
         except ClubOwnershipCapError as exc:
@@ -675,6 +697,27 @@ class AuthService:
         ClubDynastyService(session).ensure_progress(club.id)
         ClubTrophyService(session).ensure_cabinet(club.id)
         AccessControlService(session).ensure_club_organization(club, owner_user_id=user.id)
+        if user.account_type == PublicAccountType.CREATOR:
+            from app.models.creator_profile import CreatorProfile
+            from app.models.creator_provisioning import CreatorSquad
+
+            creator_profile = session.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id).limit(1))
+            if creator_profile is not None:
+                existing_squad = session.scalar(select(CreatorSquad).where(CreatorSquad.club_id == club.id).limit(1))
+                if existing_squad is None:
+                    session.add(
+                        CreatorSquad(
+                            club_id=club.id,
+                            creator_profile_id=creator_profile.id,
+                            metadata_json={"origin": "creator_signup"},
+                        )
+                    )
+        from app.services.regen_bootstrap_service import RegenBootstrapService
+
+        try:
+            RegenBootstrapService(session).bootstrap_for_new_club(club)
+        except Exception:
+            pass
         session.flush()
         return club
 

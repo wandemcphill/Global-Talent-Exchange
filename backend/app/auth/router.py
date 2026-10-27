@@ -282,6 +282,7 @@ def _build_wallet_bootstrap(service: AuthService, session: Session, user: User) 
 
 
 def _build_creator_bootstrap(session: Session, user: User) -> SessionBootstrapCreatorState | None:
+    # Creator is a dedicated, one-way account lane granted after review.
     if user.account_type != PublicAccountType.CREATOR:
         return None
     profile = session.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
@@ -299,6 +300,7 @@ def _build_creator_bootstrap(session: Session, user: User) -> SessionBootstrapCr
 
 
 def _build_coin_trader_bootstrap(session: Session, user: User) -> SessionBootstrapCoinTraderState | None:
+    # Coin trading is a dedicated account type, never an additive user capability.
     if user.account_type != PublicAccountType.COIN_TRADER:
         return None
     profile = session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id))
@@ -324,22 +326,21 @@ def _build_onboarding_bootstrap(
     creator: SessionBootstrapCreatorState | None,
     coin_trader: SessionBootstrapCoinTraderState | None,
 ) -> SessionBootstrapOnboardingState:
+    # Dedicated account types are exclusive lanes. Never add club-owner,
+    # creator, or trader switching actions to another account's bootstrap.
+    if user.account_type == PublicAccountType.COIN_TRADER:
+        return SessionBootstrapOnboardingState(
+            has_club=False,
+            requires_club=False,
+            suggested_route="/app/coin-traders",
+            available_actions=["coin_trader_dashboard", "wallet", "coin_trader_marketplace"],
+        )
     if user.account_type == PublicAccountType.CREATOR:
         return SessionBootstrapOnboardingState(
             has_club=False,
             requires_club=False,
             suggested_route="/app/hub",
-            available_actions=["creator_dashboard", "community"],
-        )
-    if user.account_type == PublicAccountType.COIN_TRADER:
-        trader_route = (
-            "/app/trader-dashboard" if coin_trader is not None and coin_trader.is_approved else "/app/coin-traders"
-        )
-        return SessionBootstrapOnboardingState(
-            has_club=False,
-            requires_club=False,
-            suggested_route=trader_route,
-            available_actions=["coin_trader_dashboard", "wallet", "coin_trader_marketplace"],
+            available_actions=["creator_dashboard", "community", "market", "wallet"],
         )
     if club_present:
         return SessionBootstrapOnboardingState(
@@ -348,11 +349,21 @@ def _build_onboarding_bootstrap(
             suggested_route="/app/club",
             available_actions=["club_workspace", "market", "competitions", "community"],
         )
+    actions = [
+        "continue_as_fan",
+        "national_team_rentals",
+        "market",
+        "community",
+        "create_club",
+        "join_club",
+        "creator_access",
+        "coin_trader_marketplace",
+    ]
     return SessionBootstrapOnboardingState(
         has_club=False,
-        requires_club=True,
-        suggested_route="/app/club",
-        available_actions=["create_club", "join_club", "continue_as_fan"],
+        requires_club=False,
+        suggested_route="/app/home",
+        available_actions=actions,
     )
 
 
@@ -378,15 +389,23 @@ def _build_session_roles(
     creator: SessionBootstrapCreatorState | None,
     coin_trader: SessionBootstrapCoinTraderState | None,
 ) -> list[str]:
-    role_values = {
-        str(getattr(user.role, "value", user.role)),
-        str(getattr(user.account_type, "value", user.account_type)),
-    }
-    if club_present:
+    account_type = str(getattr(user.account_type, "value", user.account_type))
+    role = str(getattr(user.role, "value", user.role))
+    # Public account type is authoritative. Filter historic Creator/Trader
+    # role values from normal accounts so a legacy row cannot change its lane.
+    if account_type == PublicAccountType.CREATOR.value:
+        role_values = {account_type, "creator"}
+    elif account_type == PublicAccountType.COIN_TRADER.value:
+        role_values = {account_type, "coin_trader"}
+    else:
+        role_values = {account_type}
+        if role.lower() not in {"creator", "coin_trader"}:
+            role_values.add(role)
+    if user.account_type == PublicAccountType.USER and club_present:
         role_values.add("club_owner")
-    if creator is not None:
+    if user.account_type == PublicAccountType.CREATOR and creator is not None and creator.is_active:
         role_values.add("creator")
-    if coin_trader is not None:
+    if user.account_type == PublicAccountType.COIN_TRADER and coin_trader is not None and coin_trader.is_approved:
         role_values.add("coin_trader")
     return sorted(value for value in role_values if value)
 
@@ -468,7 +487,11 @@ def _build_session_bootstrap_response(
     coin_trader = _build_coin_trader_bootstrap(session, user)
     session_records = _list_user_auth_sessions(session, user)
     now = datetime.now(UTC)
-    club_present = bootstrap.club is not None
+    is_dedicated_account = user.account_type in {
+        PublicAccountType.CREATOR,
+        PublicAccountType.COIN_TRADER,
+    }
+    club_present = not is_dedicated_account and bootstrap.club is not None
     return SessionBootstrapResponse(
         user=bootstrap.user,
         roles=_build_session_roles(
@@ -477,7 +500,7 @@ def _build_session_bootstrap_response(
             creator=creator,
             coin_trader=coin_trader,
         ),
-        club=None if bootstrap.club is None else ClubProfileCore.model_validate(bootstrap.club),
+        club=(ClubProfileCore.model_validate(bootstrap.club) if club_present and bootstrap.club is not None else None),
         wallet=wallet,
         compliance=compliance,
         permissions=bootstrap.permissions,
@@ -683,12 +706,17 @@ def signup_creator(
     session: Session = Depends(get_session),
     request: Request = None,
 ) -> TokenResponse:
+    """Create a dedicated Creator account directly (separate from promotions)."""
+    from app.auth.turnstile import verify_turnstile_token
+
     service = _build_auth_service(request)
     telemetry = _AuthRouteTelemetry("signup_creator")
     user: User | None = None
     issued_session: IssuedAuthSession | None = None
     confirmation_code: str | None = None
     try:
+        remote_ip = request.client.host if request is not None and request.client is not None else None
+        verify_turnstile_token(payload.turnstile_token, remote_ip=remote_ip)
         user = service.register_user(
             session,
             email=payload.email,
@@ -720,6 +748,23 @@ def signup_creator(
                 },
             )
         )
+        session.flush()
+        if payload.creates_club:
+            from app.models.club_profile import ClubType
+
+            service.create_explicit_club_profile(
+                session,
+                user,
+                club_name=payload.club_name or "",
+                short_name=payload.club_short_tag or (payload.club_name[:4].upper() if payload.club_name else ""),
+                club_type=payload.club_type or ClubType.COMMUNITY,
+                country_code=payload.country[:2].upper() if payload.country else "XX",
+                region_name=None,
+                city_name=None,
+                crest_asset_ref=payload.crest_asset_ref,
+                primary_color=payload.primary_color or "#0F766E",
+                secondary_color=payload.secondary_color or "#F8FAFC",
+            )
         issued_session, confirmation_code = _issue_signup_session(
             service=service,
             session=session,
@@ -759,12 +804,16 @@ def signup_trader(
     session: Session = Depends(get_session),
     request: Request = None,
 ) -> TokenResponse:
+    from app.auth.turnstile import verify_turnstile_token
+
     service = _build_auth_service(request)
     telemetry = _AuthRouteTelemetry("signup_trader")
     user: User | None = None
     issued_session: IssuedAuthSession | None = None
     confirmation_code: str | None = None
     try:
+        remote_ip = request.client.host if request is not None and request.client is not None else None
+        verify_turnstile_token(payload.turnstile_token, remote_ip=remote_ip)
         user = service.register_user(
             session,
             email=payload.email,
@@ -794,6 +843,32 @@ def signup_trader(
             recovery_phrase_hash=payload.recovery_phrase_hash,
             security_pin_hash=payload.security_pin_hash,
         )
+        # ARCH-002: Ensure modern CoinTraderProfile exists so trader is ready on the OTC desk
+        from app.models.coin_trader import CoinTraderProfile, CoinTraderProfileStatus
+
+        existing_coin_profile = session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id))
+        if existing_coin_profile is None:
+            coin_profile = CoinTraderProfile(
+                user_id=user.id,
+                display_name=payload.trading_alias or user.display_name or user.username,
+                country_code=payload.country[:8].upper() if payload.country else "NG",
+                status=CoinTraderProfileStatus.APPLIED.value,
+                tier="bronze",
+                terms_json={
+                    "same_name_account_only": True,
+                    "payment_proof_required": True,
+                    "preferred_currency": payload.preferred_currency,
+                },
+                payment_methods_json=[{"label": "Bank transfer", "type": "bank_transfer"}],
+                bank_accounts_json=[],
+                metadata_json={
+                    "trading_experience": payload.trading_experience,
+                    "interests": list(payload.interests),
+                    "wallet_label": payload.wallet_label,
+                    "created_via": "signup_trader",
+                },
+            )
+            session.add(coin_profile)
         # KYC is intentionally NOT submitted at signup. Traders get instant access; KYC is
         # required only when they initiate a withdrawal (enforced in the treasury flow).
         issued_session, confirmation_code = _issue_signup_session(

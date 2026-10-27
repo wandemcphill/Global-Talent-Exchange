@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 import os
+import time
 from pathlib import Path
 from uuid import uuid4
 
@@ -16,7 +17,7 @@ from backend.tests.support.secrets import (
     TEST_AUTH_SECRET,
     TEST_PASSWORD,
 )
-from backend.tests.support.signup_payloads import user_signup_payload
+from backend.tests.support.signup_payloads import trader_signup_payload, user_signup_payload
 
 SMOKE_DEMO_PLAYER_COUNT = 12
 DEFAULT_TEST_DATABASE_URL = (
@@ -44,6 +45,7 @@ os.environ.setdefault("GTE_RUN_STARTUP_SEEDING", "0")
 os.environ.setdefault("GTE_STARTUP_PROFILE", "test")
 os.environ.setdefault("GTE_TASK_QUEUE_ENABLED", "0")
 os.environ.setdefault("GTE_TEST_AUTH_FIXTURE_MODE", "1")
+os.environ.setdefault("GTE_DISTRIBUTED_RATE_LIMIT_ENABLED", "0")
 os.environ.setdefault("GTE_VIRAL_RANKING_WORKER_ENABLED", "0")
 
 
@@ -58,6 +60,7 @@ def test_settings(tmp_path_factory: pytest.TempPathFactory):
         "DATABASE_URL": database_url,
         "GTE_DATABASE_URL": database_url,
         "GTE_MEDIA_STORAGE_ROOT": str(media_root),
+        "GTE_DISTRIBUTED_RATE_LIMIT_ENABLED": "0",
     }
     previous_env = {key: os.environ.get(key) for key in managed_env}
 
@@ -216,20 +219,39 @@ def auth_user_factory(client, app_session_factory):
         suffix: str | None = None,
         funded_credit: Decimal | str | None = None,
         funded_coin: Decimal | str | None = None,
+        account_type: str = "user",
     ) -> dict[str, str]:
         unique_suffix = suffix or uuid4().hex[:8]
         email = f"{unique_suffix}@example.com"
         username = unique_suffix.replace("-", "_")
         password = TEST_PASSWORD
-        response = client.post(
-            "/auth/signup/user",
-            json=user_signup_payload(
+        if account_type == "coin_trader":
+            from app.trader.service import _totp
+
+            totp_secret = "JBSWY3DPEHPK3PXP"  # pragma: allowlist secret
+            trader_payload = trader_signup_payload(
                 email=email,
-                username=username,
+                trading_alias=username,
+                full_name=f"Trader {unique_suffix}",
                 password=password,
-                full_name=f"User {unique_suffix}",
-            ),
-        )
+                country="NG",
+                totp_secret=totp_secret,
+                totp_code=_totp(totp_secret, int(time.time()) // 30),
+            )
+            response = client.post("/auth/signup/trader", json=trader_payload)
+        elif account_type == "user":
+            response = client.post(
+                "/auth/signup/user",
+                json=user_signup_payload(
+                    email=email,
+                    username=username,
+                    password=password,
+                    full_name=f"User {unique_suffix}",
+                    club_name=f"User {unique_suffix} FC",
+                ),
+            )
+        else:
+            raise ValueError(f"Unsupported auth_user_factory account_type: {account_type}")
         assert response.status_code == 201, response.text
         payload = response.json()
         user_id = payload["user"]["id"]

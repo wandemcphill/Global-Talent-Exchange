@@ -8,6 +8,10 @@ import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
+import 'package:gte_frontend/widgets/turnstile_challenge.dart';
+
+const String _gtexTurnstileSiteKey =
+    String.fromEnvironment('GTE_TURNSTILE_SITE_KEY');
 
 final String _totpSetupAlphabet = String.fromCharCodes(<int>[
   for (var code = 65; code <= 90; code += 1) code,
@@ -34,24 +38,24 @@ class GtexAccountSelectorScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final roles = <_AccountRole>[
       const _AccountRole(
-        'PLAYER / CLUB',
-        'Build your football identity, discover talent, manage squads and compete.',
-        Icons.sports_soccer_rounded,
+        'USER ACCOUNT',
+        'Create a normal GTEX member account. You can create a club any time after signing in. Creator promotion is available only when you no longer own any clubs; sell or transfer every club you still own first.',
+        Icons.person_outline_rounded,
         Color(0xFFB9FF3D),
         '/auth/signup/user',
       ),
       const _AccountRole(
-        'CREATOR',
-        'Publish football stories, grow a following and build your community.',
-        Icons.campaign_rounded,
-        Color(0xFFFF5FA2),
+        'CREATOR ACCOUNT',
+        'Register directly into a dedicated Creator account for publishing and creator tools. Creator accounts cannot switch back to User or Club Owner.',
+        Icons.campaign_outlined,
+        Color(0xFFFF7BC5),
         '/auth/signup/creator',
       ),
       const _AccountRole(
-        'TRADER',
-        'Access the GTEX economy with dedicated trading and wallet security.',
+        'COIN TRADER ACCOUNT',
+        'A dedicated lane for Coin Trader desk activity using this account. It cannot switch to User, Club Owner, or Creator.',
         Icons.candlestick_chart_rounded,
-        Color(0xFFFFC857),
+        Color(0xFFFFD166),
         '/auth/signup/trader',
       ),
     ];
@@ -100,7 +104,7 @@ class GtexAccountSelectorScreen extends StatelessWidget {
                   const SizedBox(
                     width: 690,
                     child: Text(
-                      'One identity opens a living football ecosystem of talent, clubs, markets, matches and community. Pick the way you want to play.',
+                      'Choose one dedicated account type: User, Creator, or Coin Trader. User accounts may create clubs after signing in. Creator promotion from an existing User account is only allowed when no club remains under that account\'s ownership.',
                       style: TextStyle(
                         color: Color(0xFF93A0AA),
                         fontSize: 16,
@@ -125,8 +129,10 @@ class GtexAccountSelectorScreen extends StatelessWidget {
                           crossAxisCount: columns,
                           crossAxisSpacing: 14,
                           mainAxisSpacing: 14,
-                          childAspectRatio: 1.25,
-                          mainAxisExtent: columns == 1 ? 210 : null,
+                          // Keep all role copy visible at phone and desktop
+                          // widths; these cards contain the account restrictions
+                          // users need to read before choosing a dedicated lane.
+                          mainAxisExtent: columns == 1 ? 340 : 330,
                         ),
                         itemBuilder: (_, i) => _AccountRoleCard(role: roles[i]),
                       );
@@ -137,7 +143,7 @@ class GtexAccountSelectorScreen extends StatelessWidget {
                     OutlinedButton.icon(
                       onPressed: onOpenCreatorAccessRequest,
                       icon: const Icon(Icons.how_to_reg_outlined),
-                      label: const Text('Apply for creator access'),
+                      label: const Text('Have a GTEX ID? Apply for creator access'),
                     ),
                   ],
                   const SizedBox(height: 24),
@@ -261,10 +267,10 @@ class GtexUserSignupScreen extends StatefulWidget {
   const GtexUserSignupScreen({
     super.key,
     required this.controller,
-    required this.config,
+    this.config,
   });
   final GteExchangeController controller;
-  final GteAppConfig config;
+  final GteAppConfig? config;
   @override
   State<GtexUserSignupScreen> createState() => _GtexUserSignupScreenState();
 }
@@ -281,10 +287,11 @@ class _GtexUserSignupScreenState extends State<GtexUserSignupScreen> {
   bool _isOver18 = false;
   bool _submitting = false;
   String? _error;
+  String? _turnstileToken;
   @override
   Widget build(BuildContext context) => _SignupScaffold(
     title: 'Join GTEX',
-    subtitle: 'Display name, @handle, password — create your club after you land.',
+    subtitle: 'Display name, @username, password — create your GTEX ID.',
     icon: Icons.sports_soccer_rounded,
     error: _error,
     submitting: _submitting,
@@ -339,10 +346,11 @@ class _GtexUserSignupScreenState extends State<GtexUserSignupScreen> {
           controlAffinity: ListTileControlAffinity.leading,
         ),
       ),
-      const Text(
-        'Club creation happens in the Hub after signup. '
-        'If this environment requires a security check, the server will reject signup until a valid token is provided.',
-        style: TextStyle(fontSize: 12, color: Color(0xFF8B97A5)),
+      TurnstileChallenge(
+        siteKey: _gtexTurnstileSiteKey,
+        onTokenChanged: (String? token) {
+          if (mounted) setState(() => _turnstileToken = token);
+        },
       ),
     ],
   );
@@ -352,20 +360,26 @@ class _GtexUserSignupScreenState extends State<GtexUserSignupScreen> {
       setState(() => _error = 'Confirm you are 18 or older to continue.');
       return;
     }
+    if (_gtexTurnstileSiteKey.isNotEmpty && _turnstileToken?.isNotEmpty != true) {
+      setState(() => _error = 'Complete the security check to continue.');
+      return;
+    }
     setState(() {
       _submitting = true;
       _error = null;
     });
     try {
+      final GteAppConfig activeConfig = widget.config ??
+          GteAppConfig(
+            apiBaseUrl: widget.controller.api.config.baseUrl,
+            backendMode: widget.controller.api.config.mode,
+          );
       final client = GteExchangeApiClient.standard(
-        baseUrl: widget.config.apiBaseUrl,
-        mode: widget.config.backendMode,
+        baseUrl: activeConfig.apiBaseUrl,
+        mode: activeConfig.backendMode,
       );
       final String dob =
           '$_birthYear-${_birthMonth.toString().padLeft(2, '0')}-${_birthDay.toString().padLeft(2, '0')}';
-      // Never send a hardcoded Turnstile bypass. When no secret is configured the
-      // API accepts a missing token; when production requires Turnstile the client
-      // must obtain a real token (see issue #274).
       final session = await client.signupUser(
         GteUserSignupRequest(
           fullName: _name.text.trim(),
@@ -374,6 +388,7 @@ class _GtexUserSignupScreenState extends State<GtexUserSignupScreen> {
           password: _password.text,
           isOver18: _isOver18,
           dateOfBirth: dob,
+          turnstileToken: _turnstileToken,
         ),
       );
       widget.controller.syncSession(session);
@@ -408,9 +423,12 @@ class _GtexCreatorSignupScreenState extends State<GtexCreatorSignupScreen> {
   final _country = TextEditingController(text: 'NG');
   final _club = TextEditingController();
   final _language = TextEditingController(text: 'English');
+  final _clubName = TextEditingController();
+  final _clubTag = TextEditingController();
   String _category = 'Football News';
   bool _submitting = false;
   String? _error;
+  String? _turnstileToken;
   @override
   Widget build(BuildContext context) => _SignupScaffold(
     title: 'Creator',
@@ -437,15 +455,29 @@ class _GtexCreatorSignupScreenState extends State<GtexCreatorSignupScreen> {
       ], (value) => setState(() => _category = value)),
       _field(_club, 'Main Club Supported'),
       _field(_language, 'Primary Language'),
-      _sectionLabel(context, '02', 'Monetization'),
+      _sectionLabel(context, '02', 'Creator Club (Optional)'),
+      _field(_clubName, 'Club Name (optional - start your club now)', required: false),
+      _field(_clubTag, 'Club Short Tag (e.g. CFC)', required: false),
+      _sectionLabel(context, '03', 'Monetization'),
       const Text(
         'Donations • Fan Coin Revenue • Paid Streams • Sponsorships',
         style: TextStyle(color: Color(0xFF93A0AA), fontSize: 12),
+      ),
+      const SizedBox(height: 8),
+      TurnstileChallenge(
+        siteKey: _gtexTurnstileSiteKey,
+        onTokenChanged: (String? token) {
+          if (mounted) setState(() => _turnstileToken = token);
+        },
       ),
     ],
   );
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_gtexTurnstileSiteKey.isNotEmpty && _turnstileToken?.isNotEmpty != true) {
+      setState(() => _error = 'Complete the security check to continue.');
+      return;
+    }
     setState(() {
       _submitting = true;
       _error = null;
@@ -465,12 +497,15 @@ class _GtexCreatorSignupScreenState extends State<GtexCreatorSignupScreen> {
           category: _category,
           mainClubSupported: _club.text,
           primaryLanguage: _language.text,
+          clubName: _clubName.text.trim().isNotEmpty ? _clubName.text.trim() : null,
+          clubShortTag: _clubTag.text.trim().isNotEmpty ? _clubTag.text.trim() : null,
           monetization: const <String>[
             'donations',
             'fan_coin_revenue',
             'paid_streams',
             'sponsorships',
           ],
+          turnstileToken: _turnstileToken,
         ),
       );
       widget.controller.syncSession(session);
@@ -508,6 +543,7 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
   String _experience = 'beginner';
   bool _submitting = false;
   String? _error;
+  String? _turnstileToken;
   late final String _setupSecret = _generateTotpSetupSecret();
   @override
   Widget build(BuildContext context) => _SignupScaffold(
@@ -541,10 +577,21 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
         style: const TextStyle(color: Color(0xFF93A0AA), fontSize: 11),
       ),
       _field(_totpCode, '2FA Authenticator Code'),
+      const SizedBox(height: 8),
+      TurnstileChallenge(
+        siteKey: _gtexTurnstileSiteKey,
+        onTokenChanged: (String? token) {
+          if (mounted) setState(() => _turnstileToken = token);
+        },
+      ),
     ],
   );
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_gtexTurnstileSiteKey.isNotEmpty && _turnstileToken?.isNotEmpty != true) {
+      setState(() => _error = 'Complete the security check to continue.');
+      return;
+    }
     setState(() {
       _submitting = true;
       _error = null;
@@ -569,6 +616,7 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
           totpCode: _totpCode.text,
           recoveryPhraseHash: 'client-confirmed-recovery-phrase-hash',
           securityPinHash: 'client-confirmed-security-pin-hash',
+          turnstileToken: _turnstileToken,
         ),
       );
       widget.controller.syncSession(session);
@@ -750,6 +798,7 @@ Widget _field(
   TextEditingController controller,
   String label, {
   bool obscure = false,
+  bool required = true,
 }) => TextFormField(
   controller: controller,
   obscureText: obscure,
@@ -774,7 +823,7 @@ Widget _field(
   ),
   validator:
       (String? value) =>
-          value == null || value.trim().isEmpty ? '$label is required' : null,
+          required && (value == null || value.trim().isEmpty) ? '$label is required' : null,
 );
 
 Widget _sectionLabel(BuildContext context, String label, String title) =>

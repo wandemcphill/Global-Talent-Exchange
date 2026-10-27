@@ -310,17 +310,65 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path (Split-Path $env:GTEX_UNITY_BUILD_LOG) | Out-Null
 
-          if ([string]::IsNullOrWhiteSpace($env:UNITY_EDITOR_PATH)) {
-            "Missing GTEX_UNITY_EDITOR_PATH on runner." | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
-            throw "Set repository variable GTEX_UNITY_EDITOR_PATH to the Unity editor executable on the Windows runner."
-          }
-          if (-not (Test-Path $env:UNITY_EDITOR_PATH)) {
-            "Unity editor path does not exist: $env:UNITY_EDITOR_PATH" | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
-            throw "Unity editor path does not exist: $env:UNITY_EDITOR_PATH"
-          }
           if (-not (Test-Path $env:GTEX_UNITY_PROJECT_PATH)) {
             "Unity project path does not exist: $env:GTEX_UNITY_PROJECT_PATH" | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
             throw "Unity project path does not exist: $env:GTEX_UNITY_PROJECT_PATH"
+          }
+
+          $configuredUnityPath = $env:UNITY_EDITOR_PATH
+          $projectVersionFile = Join-Path $env:GTEX_UNITY_PROJECT_PATH 'ProjectSettings\ProjectVersion.txt'
+          if (-not (Test-Path $projectVersionFile)) {
+            $message = "Unity project version file does not exist: $projectVersionFile"
+            $message | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
+            throw $message
+          }
+          $versionLine = Get-Content $projectVersionFile | Where-Object { $_ -match '^m_EditorVersion:\s*(\S+)' } | Select-Object -First 1
+          if ($versionLine -match '^m_EditorVersion:\s*(\S+)') {
+            $requiredUnityVersion = $Matches[1]
+          } else {
+            $message = "Unable to read m_EditorVersion from $projectVersionFile"
+            $message | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
+            throw $message
+          }
+
+          $editorPathConfigured = -not [string]::IsNullOrWhiteSpace($env:UNITY_EDITOR_PATH)
+          if (-not $editorPathConfigured -or -not (Test-Path $env:UNITY_EDITOR_PATH)) {
+            # LOCALAPPDATA is redirected to an isolated build profile; include the
+            # runner user's real profile so per-user Unity Hub installs remain visible.
+            $editorRoots = @(
+              (Join-Path $env:ProgramFiles 'Unity\Hub\Editor'),
+              (Join-Path ${env:ProgramFiles(x86)} 'Unity\Hub\Editor'),
+              (Join-Path $env:USERPROFILE 'AppData\Local\Programs\Unity\Hub\Editor'),
+              (Join-Path $env:USERPROFILE 'AppData\Local\Unity\Hub\Editor'),
+              (Join-Path $env:USERPROFILE 'Unity\Hub\Editor'),
+              (Join-Path $env:LOCALAPPDATA 'Programs\Unity\Hub\Editor')
+            ) | Where-Object { $_ -and (Test-Path $_) }
+
+            $detectedEditor = $null
+            foreach ($root in $editorRoots) {
+              $candidateRoot = Join-Path $root $requiredUnityVersion
+              $candidate = Join-Path $candidateRoot 'Editor\Unity.exe'
+              if (Test-Path $candidate) {
+                $detectedEditor = [pscustomobject]@{ Path = $candidate; Version = $requiredUnityVersion }
+                break
+              }
+            }
+
+            if ($null -ne $detectedEditor) {
+              $env:UNITY_EDITOR_PATH = $detectedEditor.Path
+              Write-Warning "Configured Unity editor path '$configuredUnityPath' is missing; using Unity $requiredUnityVersion at '$($detectedEditor.Path)'."
+            } else {
+              $message = "Unity $requiredUnityVersion is required by the project, but the configured editor path '$configuredUnityPath' does not exist and no matching installation was found. Set GTEX_UNITY_EDITOR_PATH to the exact Unity $requiredUnityVersion Editor\Unity.exe path."
+              $message | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
+              throw $message
+            }
+          } else {
+            $configuredVersion = Split-Path (Split-Path $env:UNITY_EDITOR_PATH -Parent) -Leaf
+            if ($configuredVersion -ne $requiredUnityVersion) {
+              $message = "Configured Unity editor version '$configuredVersion' does not match project version '$requiredUnityVersion'."
+              $message | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
+              throw $message
+            }
           }
 
           foreach ($path in @(
@@ -526,8 +574,33 @@ jobs:
             throw "Set repository variable GTEX_UNITY_EDITOR_PATH to the Unity editor executable on the Windows runner."
           }
           if (-not (Test-Path $env:UNITY_EDITOR_PATH)) {
-            "Unity editor path does not exist: $env:UNITY_EDITOR_PATH" | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
-            throw "Unity editor path does not exist: $env:UNITY_EDITOR_PATH"
+            $configuredUnityPath = $env:UNITY_EDITOR_PATH
+            $editorRoots = @(
+              (Join-Path $env:ProgramFiles 'Unity\Hub\Editor'),
+              (Join-Path ${env:ProgramFiles(x86)} 'Unity\Hub\Editor'),
+              (Join-Path $env:LOCALAPPDATA 'Programs\Unity\Hub\Editor')
+            ) | Where-Object { $_ -and (Test-Path $_) }
+
+            $detectedEditors = foreach ($root in $editorRoots) {
+              Get-ChildItem -Path $root -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                $candidate = Join-Path $_.FullName 'Editor\Unity.exe'
+                if (Test-Path $candidate) {
+                  $versionText = [regex]::Match($_.Name, '\d+(?:\.\d+)+').Value
+                  try { $version = [version]$versionText } catch { $version = [version]'0.0' }
+                  [pscustomobject]@{ Path = $candidate; Version = $version; Name = $_.Name }
+                }
+              }
+            }
+
+            $detectedEditor = $detectedEditors | Sort-Object Version -Descending | Select-Object -First 1
+            if ($null -ne $detectedEditor) {
+              $env:UNITY_EDITOR_PATH = $detectedEditor.Path
+              Write-Warning "Configured Unity editor path '$configuredUnityPath' is missing; using detected install '$($detectedEditor.Path)' ($($detectedEditor.Name))."
+            } else {
+              $message = "Unity editor path does not exist: $configuredUnityPath. No Unity Hub editor was found in standard install locations."
+              $message | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
+              throw $message
+            }
           }
           if (-not (Test-Path $env:GTEX_UNITY_PROJECT_PATH)) {
             "Unity project path does not exist: $env:GTEX_UNITY_PROJECT_PATH" | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG

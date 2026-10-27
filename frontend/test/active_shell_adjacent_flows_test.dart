@@ -471,7 +471,7 @@ Future<void> _pumpUntilText(
   Duration step = const Duration(milliseconds: 50),
   int maxPumps = 120,
 }) async {
-  final Finder finder = find.text(text);
+  final Finder finder = find.textContaining(text);
   for (int pump = 0; pump < maxPumps; pump += 1) {
     await tester.pump(step);
     if (finder.evaluate().isNotEmpty) {

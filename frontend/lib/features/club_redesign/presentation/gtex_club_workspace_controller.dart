@@ -8,15 +8,30 @@ enum GtexClubOwnerSection {
   squad,
   staff,
   academy,
+  recruitment,
   sponsorships,
   transfers,
   finances,
+  boardroom,
   competitions,
   identity,
   trophies,
   news,
   orders,
-  settings,
+  settings;
+
+  /// Canonical 9-tab sequence for the Club lane (Master Plan Document G7).
+  static const List<GtexClubOwnerSection> canonicalTabs = <GtexClubOwnerSection>[
+    GtexClubOwnerSection.overview,
+    GtexClubOwnerSection.squad,
+    GtexClubOwnerSection.staff,
+    GtexClubOwnerSection.academy,
+    GtexClubOwnerSection.recruitment,
+    GtexClubOwnerSection.transfers,
+    GtexClubOwnerSection.finances,
+    GtexClubOwnerSection.boardroom,
+    GtexClubOwnerSection.identity,
+  ];
 }
 
 enum GtexPublicClubSection {
@@ -35,9 +50,11 @@ extension GtexClubOwnerSectionCopy on GtexClubOwnerSection {
     GtexClubOwnerSection.squad => 'Squad',
     GtexClubOwnerSection.staff => 'Staff',
     GtexClubOwnerSection.academy => 'Academy',
+    GtexClubOwnerSection.recruitment => 'Recruitment',
     GtexClubOwnerSection.sponsorships => 'Sponsors',
     GtexClubOwnerSection.transfers => 'Transfers',
     GtexClubOwnerSection.finances => 'Finances',
+    GtexClubOwnerSection.boardroom => 'Boardroom',
     GtexClubOwnerSection.competitions => 'Competitions',
     GtexClubOwnerSection.identity => 'Identity',
     GtexClubOwnerSection.trophies => 'Trophies',
@@ -52,9 +69,11 @@ extension GtexClubOwnerSectionCopy on GtexClubOwnerSection {
     GtexClubOwnerSection.squad => 'Owned players and regens',
     GtexClubOwnerSection.staff => 'Managers, agents, scouts',
     GtexClubOwnerSection.academy => 'Prospects and promotion',
+    GtexClubOwnerSection.recruitment => 'Scouting pipeline and shortlist',
     GtexClubOwnerSection.sponsorships => 'Revenue and leads',
     GtexClubOwnerSection.transfers => 'Shortlist, buying, rental impact',
     GtexClubOwnerSection.finances => 'Wallet, orders, shares',
+    GtexClubOwnerSection.boardroom => 'Facilities, showroom, policies',
     GtexClubOwnerSection.competitions => 'Tournaments and progress',
     GtexClubOwnerSection.identity => 'Badge, jersey, public brand',
     GtexClubOwnerSection.trophies => 'Honors and dynasty',

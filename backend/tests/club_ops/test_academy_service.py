@@ -50,3 +50,184 @@ def test_academy_service_creates_programs_players_and_graduation_events(club_ops
     assert len(overview.training_cycles) == 1
     assert len(overview.graduation_events) == 1
     assert cashflow.academy_spend_minor == 120_000
+
+
+def test_academy_underage_player_held_at_standout_until_sixteen(club_ops_services) -> None:
+    academy = club_ops_services["academy"]
+
+    program = academy.create_program(
+        "club-academy-youth",
+        CreateAcademyProgramRequest(
+            name="Junior Pathway",
+            program_type="fundamentals",
+            budget_minor=60_000,
+            cycle_length_weeks=4,
+            focus_attributes=("technical", "tactical"),
+        ),
+    )
+    # 15 year old prodigy
+    player = academy.create_player(
+        "club-academy-youth",
+        CreateAcademyPlayerRequest(
+            program_id=program.id,
+            display_name="Wonderkid Junior",
+            age=15,
+            primary_position="AM",
+        ),
+    )
+    # High readiness (85+) and 3+ cycles: should be held at STANDOUT, not PROMOTED
+    updated = academy.update_player(
+        "club-academy-youth",
+        player.id,
+        UpdateAcademyPlayerRequest(
+            attendance_score=98,
+            coach_assessment=96,
+            completed_cycles_delta=3,
+            attribute_deltas={"technical": 30, "tactical": 28, "physical": 25, "mentality": 25},
+            status=AcademyPlayerStatus.PROMOTED,
+        ),
+    )
+    assert updated.status == AcademyPlayerStatus.STANDOUT, "Underage player (<16) must be held at STANDOUT"
+
+
+def test_club_growth_promote_prospect_underage_blocked_and_governance_recorded(monkeypatch) -> None:
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+    from app.access_control.service import AccessControlService
+    from app.club_growth.service import ClubGrowthService, ClubGrowthError
+    from app.models.access_control import AccessAuditLog, Organization, OrganizationMembership
+    from app.models.base import Base
+    from app.models.club_growth import AcademyProspect, AcademyPromotionHistory, AcademyRegenContractOffer
+    from app.models.club_profile import ClubProfile
+    from app.ingestion.models import Player
+    from app.models.user import KycStatus, User, UserRole
+    import pytest
+
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(
+        engine,
+        tables=[
+            User.__table__,
+            ClubProfile.__table__,
+            Organization.__table__,
+            OrganizationMembership.__table__,
+            AccessAuditLog.__table__,
+            AcademyProspect.__table__,
+            AcademyPromotionHistory.__table__,
+            AcademyRegenContractOffer.__table__,
+            Player.__table__,
+        ],
+    )
+    session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    session = session_factory()
+
+    actor = User(
+        id="user-1",
+        email="owner@gtex.club",
+        username="owner",
+        display_name="Owner",
+        password_hash="x",
+        role=UserRole.USER,
+        kyc_status=KycStatus.FULLY_VERIFIED,
+    )
+    club = ClubProfile(
+        id="club-1",
+        owner_user_id=actor.id,
+        club_name="Academy FC",
+        short_name="AFC",
+        slug="academy-fc",
+        primary_color="#000000",
+        secondary_color="#FFFFFF",
+        accent_color="#FF0000",
+        home_venue_name="Academy Park",
+        country_code="GB",
+    )
+    session.add_all([actor, club])
+    session.flush()
+    AccessControlService(session).ensure_club_organization(club, owner_user_id=actor.id)
+
+    underage_prospect = AcademyProspect(
+        id="pros-underage",
+        club_id="club-1",
+        display_name="Young Talent",
+        position="CM",
+        academy_profile_id="acad-1",
+        age=15,
+        status="youth_signed",
+        current_ability=55,
+        potential=88,
+    )
+    offer_underage = AcademyRegenContractOffer(
+        id="offer-underage",
+        club_id="club-1",
+        prospect_id="pros-underage",
+        status="accepted",
+        wage_minor=1000,
+        duration_months=24,
+    )
+    eligible_prospect = AcademyProspect(
+        id="pros-eligible",
+        club_id="club-1",
+        display_name="Senior Ready",
+        position="ST",
+        academy_profile_id="acad-1",
+        age=16,
+        status="youth_signed",
+        current_ability=60,
+        potential=85,
+        portrait_asset_ref="asset://portrait/1",
+    )
+    offer_eligible = AcademyRegenContractOffer(
+        id="offer-eligible",
+        club_id="club-1",
+        prospect_id="pros-eligible",
+        status="accepted",
+        wage_minor=1000,
+        duration_months=24,
+    )
+    session.add_all([underage_prospect, offer_underage, eligible_prospect, offer_eligible])
+    session.commit()
+
+    service = ClubGrowthService(session)
+
+    fake_player = Player(
+        id="player-senior-1",
+        first_name="Senior",
+        last_name="Ready",
+        full_name="Senior Ready",
+        position="ST",
+        source_provider="gtex_academy_regen",
+        provider_external_id="academy:pros-eligible",
+    )
+    monkeypatch.setattr(
+        ClubGrowthService, "_ensure_senior_player_for_prospect", lambda self, club_id, prospect: fake_player
+    )
+    monkeypatch.setattr(
+        ClubGrowthService,
+        "_ensure_contract_and_squad_for_promoted_prospect",
+        lambda self, club_id, prospect, player: None,
+    )
+    monkeypatch.setattr(ClubGrowthService, "_audit", lambda *args, **kwargs: None)
+
+    # 1. Underage check fails:
+    with pytest.raises(ClubGrowthError) as exc_info:
+        service.promote_prospect(actor=actor, club_id="club-1", prospect_id="pros-underage")
+    assert "academy_player_too_young_to_promote" in str(exc_info.value)
+
+    # 2. Eligible promotion succeeds with governance recorded:
+    result = service.promote_prospect(actor=actor, club_id="club-1", prospect_id="pros-eligible")
+    assert eligible_prospect.status == "promoted_to_senior"
+    assert result.status == "promoted_to_senior"
+
+    history = session.scalar(
+        select(AcademyPromotionHistory).where(AcademyPromotionHistory.prospect_id == "pros-eligible")
+    )
+    assert history is not None
+    assert history.metadata_json["hoyd_pathway_verified"] is True
+    assert history.metadata_json["manager_sporting_readiness_approved"] is True
+    assert history.metadata_json["governance_signoff"] == "hoyd_and_football_manager"

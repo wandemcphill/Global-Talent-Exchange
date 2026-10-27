@@ -26,7 +26,13 @@ import 'package:gte_frontend/features/competitions_hub/routing/competition_hub_d
 import 'package:gte_frontend/features/global_search_redesign/global_search_redesign.dart';
 import 'package:gte_frontend/features/home/home_screen.dart';
 import 'package:gte_frontend/features/launch_control_redesign/launch_control_feature_gate.dart';
+import 'package:gte_frontend/features/club_redesign/widgets/gtex_empire_club_switcher.dart';
+import 'package:gte_frontend/features/navigation/model/gtex_shell_navigation_model.dart';
+import 'package:gte_frontend/features/navigation/presentation/gtex_shell_command_home_entry.dart';
+import 'package:gte_frontend/features/navigation/presentation/gtex_shell_sync_status_builder.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
+import 'package:gte_frontend/ui_gtex/layout/gtex_shell_scaffold.dart';
+import 'package:gte_frontend/ui_gtex/layout/gtex_top_bar.dart';
 import 'package:gte_frontend/features/owner_console/data/owner_console_api.dart';
 import 'package:gte_frontend/features/owner_console/presentation/owner_console_screen.dart';
 import 'package:gte_frontend/features/regen_redesign/data/gtex_share_market_api.dart';
@@ -55,10 +61,6 @@ import 'package:gte_frontend/services/ambient_audio_controller.dart';
 import 'package:gte_frontend/services/audio/gtex_audio_context.dart';
 import 'package:gte_frontend/shared/providers/auth_provider.dart';
 import 'package:gte_frontend/theme/gte_theme_picker_sheet.dart';
-import 'package:gte_frontend/ui_gtex/components/gtex_button.dart';
-import 'package:gte_frontend/ui_gtex/components/gtex_metric_tile.dart';
-import 'package:gte_frontend/ui_gtex/components/gtex_panel.dart';
-import 'package:gte_frontend/ui_gtex/layout/gtex_app_shell.dart';
 import 'package:gte_frontend/ui_gtex/routes/gtex_current_route_adapter.dart';
 import 'package:gte_frontend/ui_gtex/theme/gtex_colors.dart';
 import 'package:gte_frontend/ui_gtex/theme/gtex_spacing.dart';
@@ -84,6 +86,10 @@ class GteNavigationShellScreen extends StatefulWidget {
     this.initialRoute = const GteNavigationRoute.home(),
     this.onRouteChanged,
     this.navigationDependencies,
+    this.enableShellV3,
+    this.customLaneBuilders,
+    this.initialOwnedClubs = const <GtexOwnedClubOption>[],
+    this.attentionBadgeCount = 0,
   });
 
   factory GteNavigationShellScreen.fromPath({
@@ -115,6 +121,10 @@ class GteNavigationShellScreen extends StatefulWidget {
   final GteNavigationRoute initialRoute;
   final ValueChanged<GteNavigationRoute>? onRouteChanged;
   final GteNavigationDependencies? navigationDependencies;
+  final bool? enableShellV3;
+  final Map<GtePrimaryDestination, WidgetBuilder>? customLaneBuilders;
+  final List<GtexOwnedClubOption> initialOwnedClubs;
+  final int attentionBadgeCount;
 
   @override
   State<GteNavigationShellScreen> createState() =>
@@ -197,6 +207,10 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   late String? _competitionUserName;
   late String? _creatorAccessToken;
   final PageStorageBucket _pageStorageBucket = PageStorageBucket();
+  final Map<GtePrimaryDestination, Widget> _retainedLaneWidgets =
+      <GtePrimaryDestination, Widget>{};
+  late List<GtexOwnedClubOption> _ownedClubs;
+  GtexWorkspaceKind? _selectedWorkspaceOverride;
   bool _startupWorkScheduled = false;
   Timer? _liveRefreshTimer;
 
@@ -207,6 +221,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   void initState() {
     super.initState();
     _route = widget.initialRoute;
+    _ownedClubs = List<GtexOwnedClubOption>.from(widget.initialOwnedClubs);
     widget.controller.addListener(_handleExchangeControllerChanged);
     _competitionUserId = _resolveCompetitionUserId();
     _competitionUserName = _resolveCompetitionUserName();
@@ -295,25 +310,17 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
             openPlayer: _openPlayer,
             child: PageStorage(
               bucket: _pageStorageBucket,
-              child: KeyedSubtree(
-                key: ValueKey<String>(
-                  'shell-${_route.primaryDestination.name}',
-                ),
-                child: _buildCurrentDestination(),
-              ),
+              child: _buildRetainedLaneStack(context),
             ),
           );
 
-          return GtexAppShell(
-            destinations: GtexCurrentRouteAdapter.destinations(
-              current: _route.primaryDestination,
-              onOpen: _openPrimaryDestination,
-              badgeLabels: _destinationBadgesForWorkspace(),
-              items: _primaryDestinationsForWorkspace(),
-            ),
-            title: _routeTitle(),
-            subtitle: '${_routeSubtitle()} - ${_routeContextLine()}',
-            actions: _buildGtexShellActions(context, compactViewport),
+          final ShellNavigationModel navModel = _buildShellNavigationModel();
+          return GtexShellScaffold(
+            navigationModel: navModel,
+            selectedSlotId: _selectedSlotIdForRoute(navModel),
+            onSelectSlot: _handleSelectShellSlot,
+            onSelectSecondary: _handleSelectSecondaryDestination,
+            activeRoute: _route.path,
             status:
                 showShellStatusCard
                     ? Padding(
@@ -324,6 +331,42 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
             livePulseStrip: const FootballWorldPulseTicker(),
             worldPulseRail:
                 showWorldPulseRail ? const FootballWorldPulseRail() : null,
+            topBar: GtexTopBar(
+              title: _routeTitle(),
+              subtitle: '${_routeSubtitle()} - ${_routeContextLine()}',
+              availableWorkspaces: navModel.availableWorkspaces,
+              activeWorkspace: navModel.activeWorkspace,
+              onWorkspaceSelected: (GtexWorkspaceKind nextWorkspace) {
+                setState(() {
+                  _selectedWorkspaceOverride = nextWorkspace;
+                });
+              },
+              ownedClubs:
+                  navModel.capabilities.isClubOwner
+                      ? _effectiveOwnedClubs()
+                      : const <GtexOwnedClubOption>[],
+              activeClubId:
+                  navModel.capabilities.isClubOwner ? _canonicalClubId() : null,
+              activeClubName:
+                  navModel.capabilities.isClubOwner ? _canonicalClubName() : null,
+              onClubSelected: (GtexOwnedClubOption club) {
+                unawaited(_handleTopBarClubSwitch(club));
+              },
+              attentionCount: navModel.topBarAttentionCount,
+              onOpenAttention: _openNotifications,
+              onOpenSearch: _openGlobalSearch,
+              walletBalanceGtc:
+                  widget.controller.walletSummary?.availableBalance,
+              onOpenWallet:
+                  () => _openPrimaryDestination(GtePrimaryDestination.wallet),
+              onOpenAdmin: _isAdminSession ? _openAdminCommandCenter : null,
+              onOpenProfile:
+                  widget.controller.isAuthenticated
+                      ? _openProfileSettings
+                      : () => _openLogin(),
+              isAuthenticated: widget.controller.isAuthenticated,
+              extraActions: _buildShellV3ExtraActions(context),
+            ),
             child: workspace,
           );
         },
@@ -331,161 +374,21 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     );
   }
 
-  List<Widget> _buildGtexShellActions(
-    BuildContext context,
-    bool compactViewport,
-  ) {
-    if (compactViewport) {
-      return <Widget>[
-        if (widget.controller.isAuthenticated)
-          IconButton(
-            tooltip: 'Search GTEX',
-            onPressed: _openGlobalSearch,
-            icon: const Icon(
-              Icons.manage_search_outlined,
-              color: GtexColors.text,
-            ),
+  Widget _buildClubDestination() {
+    if (_isCoinTraderSession || _isCreatorSession) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(GtexSpacing.lg),
+          child: Text(
+            'Club ownership tools belong to normal GTEX member accounts. This account remains in its dedicated lane.',
+            textAlign: TextAlign.center,
           ),
-        // The admin command center was only ever offered in the wide action
-        // set, which was survivable while Home itself rendered it for admin
-        // sessions. It no longer does, so the entry has to exist at every
-        // viewport width or an admin on a phone has no way into operations.
-        if (_isAdminSession)
-          IconButton(
-            tooltip: 'Admin dashboard',
-            onPressed: _openAdminCommandCenter,
-            icon: const Icon(
-              Icons.admin_panel_settings_outlined,
-              color: GtexColors.text,
-            ),
-          ),
-        if (widget.controller.isAuthenticated)
-          IconButton(
-            tooltip: 'Profile and settings',
-            onPressed: _openProfileSettings,
-            icon: const Icon(
-              Icons.account_circle_outlined,
-              color: GtexColors.text,
-            ),
-          ),
-        IconButton(
-          tooltip: widget.controller.isAuthenticated ? 'Sign out' : 'Sign in',
-          onPressed:
-              widget.controller.isAuthenticated
-                  ? () async {
-                    await widget.controller.signOut();
-                    if (!mounted) {
-                      return;
-                    }
-                    _setRoute(const GteNavigationRoute.home());
-                  }
-                  : () => _openLogin(),
-          icon: Icon(
-            widget.controller.isAuthenticated ? Icons.logout : Icons.login,
-            color: GtexColors.text,
-          ),
-        ),
-      ];
-    }
-
-    final List<Widget> actions = <Widget>[
-      _buildThemePickerAction(context),
-      _buildAmbientAction(),
-      _buildCapitalAction(),
-    ];
-
-    if (!widget.controller.isAuthenticated) {
-      actions.add(
-        GtexButton(
-          label: 'Sign in',
-          icon: Icons.login,
-          compact: true,
-          onPressed: () => _openLogin(),
         ),
       );
-      return actions;
     }
-
-    actions.addAll(<Widget>[
-      IconButton(
-        tooltip: 'Search GTEX',
-        onPressed: _openGlobalSearch,
-        icon: const Icon(Icons.manage_search_outlined, color: GtexColors.text),
-      ),
-      Padding(
-        padding: const EdgeInsets.only(right: 8),
-        child: Center(
-          child: Text(
-            widget.controller.session!.user.username,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: GtexColors.text,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-      ),
-      IconButton(
-        tooltip: 'Profile and settings',
-        onPressed: _openProfileSettings,
-        icon: const Icon(Icons.account_circle_outlined, color: GtexColors.text),
-      ),
-      IconButton(
-        tooltip: 'Creator access request',
-        onPressed: () => _pushCreatorAccessRequest(context),
-        icon: const Icon(Icons.how_to_reg_outlined, color: GtexColors.text),
-      ),
-      if (_hasApprovedCreatorAccess)
-        IconButton(
-          tooltip: 'Creator community',
-          onPressed: () => _openPrimaryDestination(GtePrimaryDestination.hub),
-          icon: const Icon(Icons.campaign_outlined, color: GtexColors.text),
-        ),
-      IconButton(
-        tooltip: 'Notifications',
-        onPressed: _openNotifications,
-        icon: const Icon(
-          Icons.notifications_active_outlined,
-          color: GtexColors.text,
-        ),
-      ),
-      IconButton(
-        tooltip: 'Transfer Hub',
-        onPressed: _openCoachMarket,
-        icon: const Icon(Icons.sports_soccer_outlined, color: GtexColors.text),
-      ),
-      if (_isAdminSession)
-        IconButton(
-          tooltip: 'Admin dashboard',
-          onPressed: _openAdminCommandCenter,
-          icon: const Icon(
-            Icons.admin_panel_settings_outlined,
-            color: GtexColors.text,
-          ),
-        ),
-      GtexButton(
-        label: 'Sign out',
-        icon: Icons.logout,
-        variant: GtexButtonVariant.secondary,
-        compact: true,
-        onPressed: () async {
-          await widget.controller.signOut();
-          if (!mounted) {
-            return;
-          }
-          _setRoute(const GteNavigationRoute.home());
-        },
-      ),
-    ]);
-
-    return actions;
-  }
-
-  Widget _buildClubDestination() {
     final String? canonicalClubId = _canonicalClubId()?.trim();
     if (canonicalClubId == null || canonicalClubId.isEmpty) {
-      return _GtexCommandHomeEntry(
+      return GtexCommandHomeEntry(
         isAuthenticated: widget.controller.isAuthenticated,
         userLabel: widget.controller.session?.user.username ?? 'Preview scout',
         onSignIn:
@@ -511,6 +414,14 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       activeClubId: canonicalClubId,
       activeClubName: _canonicalClubName(),
       authedApi: shellApi,
+      onClubsLoaded: (List<GtexOwnedClubOption> loadedClubs) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _ownedClubs = loadedClubs;
+        });
+      },
       child: GtexClubOwnerDashboardScreenV2(
         key: const PageStorageKey<String>('club-owner-dashboard-v2'),
         clubId: canonicalClubId,
@@ -531,41 +442,6 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
 
   Widget _buildHomeDestination() {
     // Home is the personalised command surface for every session state.
-    //
-    // Three personas used to be sent somewhere else from here - club owners
-    // to the club owner dashboard, coin traders to the wallet desk's trader
-    // module, admins to the admin command center - and every one of those
-    // screens is already reachable in its own right: the Club lane, the
-    // Wallet lane's trader dashboard, and for admins both the `/admin` route
-    // and the shell's own admin action. So Home rendered a second copy of a
-    // surface the session could already open, and the whole personalised
-    // Home (your players, what moved, your clubs, your prospects, what needs
-    // your attention) was reachable only by sessions that were none of the
-    // three.
-    //
-    // `HomeScreen` resolves all three personas itself - a club owner gets a
-    // clubs panel, a coin trader gets the trader desk copy, an admin gets the
-    // operations desk copy - each with its own capabilities and quick
-    // actions, and none of it could be reached before. No workspace is lost:
-    // Club for owners, Wallet for traders (its module rail carries the trader
-    // dashboard), and the admin action in the shell bar for admins, which now
-    // shows at every viewport width rather than only the wide one.
-    // Signed-in sessions land on the Owner Console; visitors keep Home.
-    if (widget.controller.isAuthenticated) {
-      final GteAuthedApi authed = _createShellAuthedApi();
-      final user = widget.controller.session?.user;
-      return OwnerConsoleScreen(
-        key: ValueKey<String>(
-          'owner-console-${widget.controller.accessToken ?? ''}',
-        ),
-        reader: OwnerConsoleApi(client: authed),
-        shareMarket: GtexShareMarketApi(client: authed),
-        role: user?.role ?? 'user',
-        signedInAs: user?.displayName ?? user?.username ?? 'Owner',
-        walletBalance: widget.controller.walletSummary?.availableBalance,
-        onNavigate: (String path) => context.go(path),
-      );
-    }
     return const HomeScreen(key: PageStorageKey<String>('home-command'));
   }
 
@@ -634,8 +510,9 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   }
 
   bool get _hasApprovedCreatorAccess {
-    final application = _creatorApplicationController.application;
-    return application?.isApproved == true;
+    // Creator tools belong to the dedicated Creator account lane. A stale
+    // legacy CreatorProfile on a User account is not promotion approval.
+    return _isCreatorSession;
   }
 
   bool get _canHostCompetitions {
@@ -658,42 +535,12 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     }.contains(_sessionRole);
   }
 
-  bool get _isCoinTraderSession {
-    final Set<String> permissions =
-        widget.controller.session?.permissions
-            .map((String value) => value.trim().toLowerCase())
-            .where((String value) => value.isNotEmpty)
-            .toSet() ??
-        const <String>{};
-    return <String>{
-          'coin_trader',
-          'coin-trader',
-          'trader',
-          'liquidity_partner',
-        }.contains(_sessionRole) ||
-        permissions.contains('coin_trader') ||
-        permissions.contains('manage_coin_trades') ||
-        permissions.contains('manage_coin_trader_rates');
-  }
+  String get _accountType =>
+      widget.controller.session?.user.accountType.trim().toLowerCase() ?? 'user';
 
-  bool get _isCreatorSession {
-    final Set<String> permissions =
-        widget.controller.session?.permissions
-            .map((String value) => value.trim().toLowerCase())
-            .where((String value) => value.isNotEmpty)
-            .toSet() ??
-        const <String>{};
-    return _hasApprovedCreatorAccess ||
-        <String>{
-          'creator',
-          'publisher',
-          'content_creator',
-          'creator_operator',
-        }.contains(_sessionRole) ||
-        permissions.contains('creator') ||
-        permissions.contains('publish_content') ||
-        permissions.contains('manage_creator_profile');
-  }
+  bool get _isCoinTraderSession => _accountType == 'coin_trader';
+
+  bool get _isCreatorSession => _accountType == 'creator';
 
   bool get _isStaffSession {
     return <String>{
@@ -752,58 +599,6 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     return 'Browse clubs, transfers, competitions, regens, and GTEX economy news';
   }
 
-  Map<GtePrimaryDestination, String> _destinationBadgesForWorkspace() {
-    if (!widget.controller.isAuthenticated) {
-      return const <GtePrimaryDestination, String>{
-        GtePrimaryDestination.home: 'GUEST',
-        GtePrimaryDestination.club: 'READ',
-        GtePrimaryDestination.market: 'READ',
-        GtePrimaryDestination.competitions: 'LIVE',
-        GtePrimaryDestination.community: 'PUBLIC',
-      };
-    }
-    if (_isAdminSession) {
-      return const <GtePrimaryDestination, String>{
-        GtePrimaryDestination.home: 'ADMIN',
-        GtePrimaryDestination.competitions: 'HOST',
-        GtePrimaryDestination.wallet: 'TREASURY',
-        GtePrimaryDestination.hub: 'OPS',
-      };
-    }
-    if (_isCoinTraderSession) {
-      return const <GtePrimaryDestination, String>{
-        GtePrimaryDestination.home: 'TRADER',
-        GtePrimaryDestination.wallet: 'GTC/FNC',
-        GtePrimaryDestination.market: 'LIVE',
-        GtePrimaryDestination.community: 'ONLINE',
-      };
-    }
-    if (_isCreatorSession) {
-      return const <GtePrimaryDestination, String>{
-        GtePrimaryDestination.home: 'CREATOR',
-        GtePrimaryDestination.hub: 'STUDIO',
-        GtePrimaryDestination.community: 'FEED',
-        GtePrimaryDestination.wallet: 'EARN',
-      };
-    }
-    if (_canonicalClubId()?.trim().isNotEmpty ?? false) {
-      return const <GtePrimaryDestination, String>{
-        GtePrimaryDestination.home: 'CLUB',
-        GtePrimaryDestination.club: 'OWNER',
-        GtePrimaryDestination.market: 'SCOUT',
-        GtePrimaryDestination.competitions: 'ENTER',
-        GtePrimaryDestination.wallet: 'GTC/FNC',
-      };
-    }
-    return const <GtePrimaryDestination, String>{
-      GtePrimaryDestination.home: 'USER',
-      GtePrimaryDestination.club: 'START',
-      GtePrimaryDestination.market: 'SCOUT',
-      GtePrimaryDestination.wallet: 'GTC/FNC',
-      GtePrimaryDestination.competitions: 'JOIN',
-    };
-  }
-
   List<GtePrimaryDestination> _primaryDestinationsForWorkspace() {
     if (!widget.controller.isAuthenticated) {
       return const <GtePrimaryDestination>[
@@ -824,6 +619,16 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         GtePrimaryDestination.club,
         GtePrimaryDestination.wallet,
         GtePrimaryDestination.hub,
+        GtePrimaryDestination.community,
+      ];
+    }
+    if (_isCoinTraderSession && _isCreatorSession) {
+      return const <GtePrimaryDestination>[
+        GtePrimaryDestination.home,
+        GtePrimaryDestination.wallet,
+        GtePrimaryDestination.hub,
+        GtePrimaryDestination.market,
+        GtePrimaryDestination.regens,
         GtePrimaryDestination.community,
       ];
     }
@@ -954,8 +759,11 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       hasApprovedCreatorAccess: _hasApprovedCreatorAccess,
       canHostCompetitions: _canHostCompetitions,
       onOpenLogin: (BuildContext _) => _openLogin(targetRoute: _route),
-      onOpenCreatorAccessRequest:
-          (BuildContext context) => _pushCreatorAccessRequest(context),
+      onOpenCreatorAccessRequest: (BuildContext context) async {
+        if (_accountType == 'user') {
+          await _pushCreatorAccessRequest(context);
+        }
+      },
       currentUserIdProvider: _resolveCompetitionUserId,
       currentUserNameProvider: _resolveCompetitionUserName,
       currentUserRoleProvider: () => widget.controller.session?.user.role,
@@ -1049,8 +857,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     );
   }
 
-  Widget _buildCurrentDestination() {
-    switch (_route.primaryDestination) {
+  Widget _buildCurrentDestinationFor(GtePrimaryDestination destination) {
+    switch (destination) {
       case GtePrimaryDestination.home:
         return _buildHomeDestination();
       case GtePrimaryDestination.competitions:
@@ -1089,8 +897,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       controller: widget.controller,
       initialMode: _route.marketDeskMode,
       onOpenPlayer: _openPlayer,
-      onOpenLogin:
-          () => _openLogin(targetRoute: _route),
+      onOpenLogin: () => _openLogin(targetRoute: _route),
       onModeChanged: (GtexMarketDeskMode mode) {
         _setRoute(GteNavigationRoute.market(mode: mode));
       },
@@ -1417,14 +1224,6 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     }
   }
 
-  void _openCoachMarket() {
-    if (!widget.controller.isAuthenticated) {
-      _openLogin(targetRoute: const GteNavigationRoute.market());
-      return;
-    }
-    _setRoute(const GteNavigationRoute.market());
-  }
-
   void _openAdminCommandCenter() {
     final session = widget.controller.session;
     if (session == null) {
@@ -1530,24 +1329,6 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     return AmbientAudioToggleButton(controller: controller);
   }
 
-  Widget _buildCapitalAction() {
-    final bool isActive =
-        _route.primaryDestination == GtePrimaryDestination.wallet;
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: IconButton(
-        tooltip: 'Club funds',
-        onPressed: () => _openPrimaryDestination(GtePrimaryDestination.wallet),
-        icon: Icon(
-          isActive
-              ? GtePrimaryDestination.wallet.selectedIcon
-              : GtePrimaryDestination.wallet.icon,
-          color: isActive ? GtePrimaryDestination.wallet.accentColor : null,
-        ),
-      ),
-    );
-  }
-
   String _routeContextLine() {
     final String? clubName = _canonicalClubName()?.trim();
     if (clubName != null && clubName.isNotEmpty) {
@@ -1559,120 +1340,264 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     return 'Preview mode';
   }
 
+  List<GtexOwnedClubOption> _effectiveOwnedClubs() {
+    if (_ownedClubs.isNotEmpty) {
+      return _ownedClubs;
+    }
+    final String? clubId = _canonicalClubId()?.trim();
+    if (clubId == null || clubId.isEmpty) {
+      return const <GtexOwnedClubOption>[];
+    }
+    return <GtexOwnedClubOption>[
+      GtexOwnedClubOption(
+        id: clubId,
+        name:
+            _canonicalClubName()?.trim().isNotEmpty == true
+                ? _canonicalClubName()!.trim()
+                : clubId,
+      ),
+    ];
+  }
+
+  ShellNavigationModel _buildShellNavigationModel() {
+    final List<String> ownedIds = _effectiveOwnedClubs()
+        .map((GtexOwnedClubOption club) => club.id)
+        .toList(growable: false);
+    final GtexShellCapabilities capabilities = GtexShellCapabilities(
+      isAuthenticated: widget.controller.isAuthenticated,
+      accountType: _accountType,
+      ownedClubIds: ownedIds,
+      activeClubId: _canonicalClubId(),
+      isOrgScoutOrAgent: _isStaffSession,
+      isCoinTrader: _isCoinTraderSession,
+      isCreator: _isCreatorSession,
+      isAdmin: _isAdminSession,
+      clubLegacyEnabled: true,
+      unreadNotificationCount: widget.attentionBadgeCount,
+    );
+    return ShellNavigationModel(
+      capabilities: capabilities,
+      selectedWorkspace: _selectedWorkspaceOverride,
+    );
+  }
+
+  GtexShellSlotId _selectedSlotIdForRoute(ShellNavigationModel model) {
+    final GtexShellSlotId candidate = switch (_route.primaryDestination) {
+      GtePrimaryDestination.home =>
+        model.activeWorkspace == GtexWorkspaceKind.admin
+            ? GtexShellSlotId.ops
+            : model.activeWorkspace == GtexWorkspaceKind.explore
+            ? GtexShellSlotId.explore
+            : GtexShellSlotId.home,
+      GtePrimaryDestination.club =>
+        model.activeWorkspace == GtexWorkspaceKind.scouting
+            ? GtexShellSlotId.recruitment
+            : GtexShellSlotId.club,
+      GtePrimaryDestination.competitions => GtexShellSlotId.matchday,
+      GtePrimaryDestination.market => GtexShellSlotId.market,
+      GtePrimaryDestination.regens => GtexShellSlotId.world,
+      GtePrimaryDestination.hub => GtexShellSlotId.studio,
+      GtePrimaryDestination.community => GtexShellSlotId.community,
+      GtePrimaryDestination.wallet =>
+        model.activeWorkspace == GtexWorkspaceKind.admin
+            ? GtexShellSlotId.treasury
+            : GtexShellSlotId.wallet,
+    };
+    final bool existsInPrimary = model.primarySlots.any(
+      (GtexShellSlotSpec slot) => slot.id == candidate,
+    );
+    return existsInPrimary ? candidate : GtexShellSlotId.more;
+  }
+
+  void _handleSelectShellSlot(GtexShellSlotSpec slot) {
+    switch (slot.id) {
+      case GtexShellSlotId.home:
+      case GtexShellSlotId.explore:
+      case GtexShellSlotId.ops:
+      case GtexShellSlotId.queues:
+        _openPrimaryDestination(GtePrimaryDestination.home);
+        return;
+      case GtexShellSlotId.club:
+      case GtexShellSlotId.recruitment:
+        _openPrimaryDestination(GtePrimaryDestination.club);
+        return;
+      case GtexShellSlotId.matchday:
+        _openPrimaryDestination(GtePrimaryDestination.competitions);
+        return;
+      case GtexShellSlotId.market:
+        _openPrimaryDestination(GtePrimaryDestination.market);
+        return;
+      case GtexShellSlotId.world:
+        _openPrimaryDestination(GtePrimaryDestination.regens);
+        return;
+      case GtexShellSlotId.studio:
+        _openPrimaryDestination(GtePrimaryDestination.hub);
+        return;
+      case GtexShellSlotId.community:
+        _openPrimaryDestination(GtePrimaryDestination.community);
+        return;
+      case GtexShellSlotId.traderDesk:
+      case GtexShellSlotId.wallet:
+      case GtexShellSlotId.treasury:
+        _openPrimaryDestination(GtePrimaryDestination.wallet);
+        return;
+      case GtexShellSlotId.signIn:
+        unawaited(_openLogin());
+        return;
+      case GtexShellSlotId.more:
+        return;
+    }
+  }
+
+  List<Widget> _buildShellV3ExtraActions(BuildContext context) {
+    final List<Widget> actions = <Widget>[
+      _buildThemePickerAction(context),
+      _buildAmbientAction(),
+    ];
+    if (widget.controller.isAuthenticated && _accountType == 'user') {
+      actions.add(
+        IconButton(
+          tooltip: 'Creator access request',
+          onPressed: () => _pushCreatorAccessRequest(context),
+          icon: const Icon(Icons.how_to_reg_outlined, color: GtexColors.text),
+        ),
+      );
+    }
+    if (widget.controller.isAuthenticated && _isCreatorSession) {
+      actions.add(
+        IconButton(
+          tooltip: 'Creator community',
+          onPressed: () => _openPrimaryDestination(GtePrimaryDestination.hub),
+          icon: const Icon(Icons.campaign_outlined, color: GtexColors.text),
+        ),
+      );
+    }
+    return actions;
+  }
+
+  void _openBoardroom() {
+    if (!widget.controller.isAuthenticated) {
+      _openPrimaryDestination(GtePrimaryDestination.club);
+      return;
+    }
+    final GteAuthedApi authedApi = _createShellAuthedApi();
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder:
+            (BuildContext context) => OwnerConsoleScreen(
+              reader: OwnerConsoleApi(client: authedApi),
+              shareMarket: GtexShareMarketApi(client: authedApi),
+              role: _sessionRole,
+              signedInAs:
+                  widget.controller.session?.user.username ?? 'Club Owner',
+              walletBalance: widget.controller.walletSummary?.availableBalance,
+              onNavigate: _openGlobalSearchRoute,
+            ),
+      ),
+    );
+  }
+
+  void _handleSelectSecondaryDestination(GtexSecondaryDestinationSpec item) {
+    switch (item.id) {
+      case GtexSecondaryDestinationId.world:
+        _openPrimaryDestination(GtePrimaryDestination.regens);
+        return;
+      case GtexSecondaryDestinationId.community:
+        _openPrimaryDestination(GtePrimaryDestination.community);
+        return;
+      case GtexSecondaryDestinationId.wallet:
+        _openPrimaryDestination(GtePrimaryDestination.wallet);
+        return;
+      case GtexSecondaryDestinationId.boardroom:
+        _openBoardroom();
+        return;
+      case GtexSecondaryDestinationId.you:
+      case GtexSecondaryDestinationId.rewards:
+        _openProfileSettings();
+        return;
+      case GtexSecondaryDestinationId.admin:
+        _openAdminCommandCenter();
+        return;
+      case GtexSecondaryDestinationId.newsroom:
+        unawaited(_openFeatureRoute(const NewsDeskRouteData()));
+        return;
+    }
+  }
+
+  Future<void> _handleTopBarClubSwitch(GtexOwnedClubOption club) async {
+    try {
+      await GtexEmpireClubWorkspace.activateClub(
+        api: _createShellAuthedApi(),
+        controller: widget.controller,
+        club: club,
+      );
+    } catch (_) {
+      // Fallback to local binding in fixture/offline test contexts where
+      // `/api/clubs/owned/{id}/activate` is not mounted.
+      widget.controller.bindCurrentClub(
+        clubId: club.id,
+        clubName: club.name,
+        clubSlug: club.slug,
+      );
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _retainedLaneWidgets.remove(GtePrimaryDestination.club);
+    });
+  }
+
+  Widget _buildRetainedLaneStack(BuildContext context) {
+    final List<GtePrimaryDestination> destinations =
+        _primaryDestinationsForWorkspace();
+    final GtePrimaryDestination active = _route.primaryDestination;
+    final List<GtePrimaryDestination> stackOrder =
+        destinations.contains(active)
+            ? destinations
+            : <GtePrimaryDestination>[...destinations, active];
+    _retainedLaneWidgets[active] ??= KeyedSubtree(
+      key: ValueKey<String>('shell-retained-${active.name}'),
+      child: _buildDestinationFor(context, active),
+    );
+    final int activeIndex = stackOrder.indexOf(active);
+    return IndexedStack(
+      index: activeIndex < 0 ? 0 : activeIndex,
+      children: stackOrder
+          .map(
+            (GtePrimaryDestination destination) =>
+                _retainedLaneWidgets[destination] ?? const SizedBox.shrink(),
+          )
+          .toList(growable: false),
+    );
+  }
+
+  Widget _buildDestinationFor(
+    BuildContext context,
+    GtePrimaryDestination destination,
+  ) {
+    final WidgetBuilder? customBuilder =
+        widget.customLaneBuilders?[destination];
+    if (customBuilder != null) {
+      return customBuilder(context);
+    }
+    return _buildCurrentDestinationFor(destination);
+  }
+
   GteSyncStatusCard _buildModeSyncCard(BuildContext context) {
     final Color accent = _routeAccentFor(context, _route.primaryDestination);
-    switch (_route.primaryDestination) {
-      case GtePrimaryDestination.competitions:
-        return GteSyncStatusCard(
-          title: 'Competitions',
-          status:
-              _competitionController.discoveryError == null
-                  ? 'Fixtures, brackets, and competition updates are synced.'
-                  : 'Competition feed degraded. Showing the latest available snapshot.',
-          syncedAt: _competitionController.discoverySyncedAt,
-          accent: accent,
-          isRefreshing: _competitionController.isLoadingDiscovery,
-          onRefresh: _competitionController.loadDiscovery,
-        );
-      case GtePrimaryDestination.market:
-        return GteSyncStatusCard(
-          title: 'Transfer Hub',
-          status:
-              widget.controller.marketError == null
-                  ? 'Listings, prices, clubs, and negotiation context are ready.'
-                  : 'Transfer board degraded. The last confirmed board is still visible.',
-          syncedAt: widget.controller.marketSyncedAt,
-          accent: accent,
-          isRefreshing: widget.controller.isLoadingMarket,
-          onRefresh: () => widget.controller.loadMarket(reset: true),
-        );
-      case GtePrimaryDestination.regens:
-        return GteSyncStatusCard(
-          title: 'Regen World',
-          status:
-              'Regen prospects, lineage, contracts, and Create-a-Son orders '
-              'load from the live regen universe.',
-          syncedAt: null,
-          accent: accent,
-          isRefreshing: false,
-          onRefresh: null,
-        );
-      case GtePrimaryDestination.hub:
-        final bool creatorHealthy = _creatorController.errorMessage == null;
-        return GteSyncStatusCard(
-          title: 'Community',
-          status:
-              creatorHealthy
-                  ? _isReferralRuntimeAvailable
-                      ? 'Creator tools, referral activity, and community signals are synced.'
-                      : 'Creator tools are live. Referral rewards will appear here once that runtime is enabled.'
-                  : 'Community feed degraded. Showing the latest available snapshot.',
-          syncedAt: _creatorController.syncedAt,
-          accent: accent,
-          isRefreshing:
-              _referralController.isLoading || _creatorController.isLoading,
-          onRefresh:
-              widget.controller.isAuthenticated
-                  ? () {
-                    _referralController.load();
-                    _creatorController.load();
-                  }
-                  : null,
-        );
-      case GtePrimaryDestination.community:
-        return GteSyncStatusCard(
-          title: 'Community',
-          status:
-              widget.controller.isAuthenticated
-                  ? 'Watchlists, live threads, direct messages, and creator-club follows are wired to live community endpoints.'
-                  : 'Public live threads are visible. Sign in to manage watchlists, follows, and direct messages.',
-          syncedAt: null,
-          accent: accent,
-          isRefreshing: false,
-          onRefresh: null,
-        );
-      case GtePrimaryDestination.club:
-        return GteSyncStatusCard(
-          title: 'Club operations',
-          status:
-              'Club management opens here once this account owns or is linked to a club.',
-          syncedAt: widget.controller.marketSyncedAt,
-          accent: accent,
-          isRefreshing: false,
-          onRefresh: null,
-        );
-      case GtePrimaryDestination.wallet:
-        return GteSyncStatusCard(
-          title: 'Club funds',
-          status:
-              widget.controller.isAuthenticated
-                  ? 'Balance, player holdings, and activity records are up to date.'
-                  : 'Sign in to view funds, holdings, and account activity.',
-          syncedAt:
-              widget.controller.portfolioSyncedAt ??
-              widget.controller.ordersSyncedAt,
-          accent: accent,
-          isRefreshing:
-              widget.controller.isLoadingPortfolio ||
-              widget.controller.isLoadingOrders,
-          onRefresh:
-              widget.controller.isAuthenticated
-                  ? widget.controller.refreshAccount
-                  : null,
-        );
-      case GtePrimaryDestination.home:
-        return GteSyncStatusCard(
-          title: 'Home sync',
-          status:
-              'Home keeps your club, matchday, scouting, and world routes aligned.',
-          detail:
-              'Runtime ${_runtimeModeLabel()} on ${_apiHostLabel()} - ${_runtimeAudienceLabel()}',
-          syncedAt: widget.controller.marketSyncedAt,
-          accent: accent,
-          isRefreshing: widget.controller.isBootstrapping,
-          onRefresh: widget.controller.bootstrap,
-        );
-    }
+    return GtexShellSyncStatusBuilder.build(
+      destination: _route.primaryDestination,
+      accent: accent,
+      exchangeController: widget.controller,
+      competitionController: _competitionController,
+      creatorController: _creatorController,
+      referralController: _referralController,
+      isReferralRuntimeAvailable: _isReferralRuntimeAvailable,
+      runtimeModeLabel: _runtimeModeLabel(),
+      apiHostLabel: _apiHostLabel(),
+      runtimeAudienceLabel: _runtimeAudienceLabel(),
+    );
   }
 
   GteSessionIdentity _identity() {
@@ -1768,266 +1693,5 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       clubSlug: club.slug,
     );
     _openPrimaryDestination(GtePrimaryDestination.club);
-  }
-}
-
-class _GtexCommandHomeEntry extends StatelessWidget {
-  const _GtexCommandHomeEntry({
-    required this.isAuthenticated,
-    required this.userLabel,
-    required this.onSignIn,
-    required this.onCreateClub,
-    required this.onOpenMarket,
-    required this.onOpenCompetitions,
-    required this.onOpenWorld,
-  });
-
-  final bool isAuthenticated;
-  final String userLabel;
-  final VoidCallback onSignIn;
-  final VoidCallback onCreateClub;
-  final VoidCallback onOpenMarket;
-  final VoidCallback onOpenCompetitions;
-  final VoidCallback onOpenWorld;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final bool compact = constraints.maxWidth < 760;
-        final double metricWidth = compact ? constraints.maxWidth : 210;
-        return SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(
-            compact ? GtexSpacing.md : GtexSpacing.xl,
-            GtexSpacing.lg,
-            compact ? GtexSpacing.md : GtexSpacing.xl,
-            120,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(compact ? GtexSpacing.lg : 30),
-                decoration: BoxDecoration(
-                  gradient: GtexColors.panelGlow(accent: GtexColors.pitch),
-                  borderRadius: BorderRadius.circular(GtexSpacing.radiusLg),
-                  border: Border.all(
-                    color: GtexColors.pitch.withValues(alpha: 0.34),
-                  ),
-                  boxShadow: <BoxShadow>[
-                    GtexColors.glow(GtexColors.pitch, opacity: 0.14),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'THE GLOBAL FOOTBALL TALENT MARKETPLACE',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: GtexColors.pitch,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                    const SizedBox(height: GtexSpacing.sm),
-                    Text(
-                      isAuthenticated
-                          ? 'Build your club command center'
-                          : 'Enter the football operating system',
-                      maxLines: compact ? 3 : 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                        color: GtexColors.text,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: GtexSpacing.sm),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 860),
-                      child: Text(
-                        isAuthenticated
-                            ? '$userLabel, create your club to unlock squad ownership, transfer trading, finances, competitions, news, and regen world activity from one GTEX command surface.'
-                            : 'Create and own clubs, discover real players, browse the transfer universe, rent national-team talent, follow tournaments, and watch the GTEX news world move around the market.',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.titleMedium?.copyWith(
-                          color: GtexColors.textSecondary,
-                          height: 1.42,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: GtexSpacing.lg),
-                    Wrap(
-                      spacing: GtexSpacing.sm,
-                      runSpacing: GtexSpacing.sm,
-                      children: <Widget>[
-                        if (!isAuthenticated)
-                          GtexButton(
-                            label: 'Sign in',
-                            icon: Icons.login,
-                            onPressed: onSignIn,
-                          ),
-                        GtexButton(
-                          label:
-                              isAuthenticated
-                                  ? 'Create club'
-                                  : 'Create or join club',
-                          icon: Icons.shield_outlined,
-                          variant:
-                              isAuthenticated
-                                  ? GtexButtonVariant.primary
-                                  : GtexButtonVariant.secondary,
-                          onPressed: onCreateClub,
-                        ),
-                        GtexButton(
-                          label: 'Transfer Hub',
-                          icon: Icons.storefront_outlined,
-                          variant: GtexButtonVariant.secondary,
-                          onPressed: onOpenMarket,
-                        ),
-                        GtexButton(
-                          label: 'Matchday',
-                          icon: Icons.emoji_events_outlined,
-                          variant: GtexButtonVariant.ghost,
-                          onPressed: onOpenCompetitions,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: GtexSpacing.lg),
-              Wrap(
-                spacing: GtexSpacing.md,
-                runSpacing: GtexSpacing.md,
-                children: <Widget>[
-                  SizedBox(
-                    width: metricWidth,
-                    child: const GtexMetricTile(
-                      label: 'Player universe',
-                      value: '17K+',
-                      helper: 'Tradeable real players',
-                      icon: Icons.groups_2_outlined,
-                      accent: GtexColors.pitch,
-                    ),
-                  ),
-                  SizedBox(
-                    width: metricWidth,
-                    child: const GtexMetricTile(
-                      label: 'Transfer route',
-                      value: 'Live',
-                      helper: 'Country to club browsing',
-                      icon: Icons.account_tree_outlined,
-                      accent: GtexColors.cyan,
-                    ),
-                  ),
-                  SizedBox(
-                    width: metricWidth,
-                    child: const GtexMetricTile(
-                      label: 'Club layer',
-                      value: 'Owner',
-                      helper: 'Squad, wallet, orders',
-                      icon: Icons.shield_outlined,
-                      accent: GtexColors.gold,
-                    ),
-                  ),
-                  SizedBox(
-                    width: metricWidth,
-                    child: const GtexMetricTile(
-                      label: 'World state',
-                      value: 'Active',
-                      helper: 'Regens, news, awards',
-                      icon: Icons.public_outlined,
-                      accent: GtexColors.mint,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: GtexSpacing.lg),
-              Wrap(
-                spacing: GtexSpacing.md,
-                runSpacing: GtexSpacing.md,
-                children: <Widget>[
-                  _HomeLanePanel(
-                    width: compact ? constraints.maxWidth : 360,
-                    title: 'Transfer room',
-                    subtitle:
-                        'Browse country, league, division, club, then shortlist real football assets.',
-                    icon: Icons.compare_arrows_outlined,
-                    accent: GtexColors.pitch,
-                    onTap: onOpenMarket,
-                  ),
-                  _HomeLanePanel(
-                    width: compact ? constraints.maxWidth : 360,
-                    title: 'Club ownership',
-                    subtitle:
-                        'Create a badge, build a squad, manage finances, and enter competitions.',
-                    icon: Icons.stadium_outlined,
-                    accent: GtexColors.gold,
-                    onTap: onCreateClub,
-                  ),
-                  _HomeLanePanel(
-                    width: compact ? constraints.maxWidth : 360,
-                    title: 'GTEX world',
-                    subtitle:
-                        'Follow regens, creator activity, football news, awards, and community signals.',
-                    icon: Icons.auto_awesome_outlined,
-                    accent: GtexColors.mint,
-                    onTap: onOpenWorld,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _HomeLanePanel extends StatelessWidget {
-  const _HomeLanePanel({
-    required this.width,
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.accent,
-    required this.onTap,
-  });
-
-  final double width;
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Color accent;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: width,
-      child: GtexPanel(
-        title: title,
-        subtitle: subtitle,
-        accent: accent,
-        onTap: onTap,
-        trailing: Icon(icon, color: accent),
-        child: Row(
-          children: <Widget>[
-            Text(
-              'Open lane',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: accent,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const Spacer(),
-            Icon(Icons.arrow_forward, color: accent, size: 18),
-          ],
-        ),
-      ),
-    );
   }
 }

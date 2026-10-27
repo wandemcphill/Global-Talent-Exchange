@@ -226,7 +226,15 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-enum _HomePersona { guest, noClub, clubOwner, creator, coinTrader, admin }
+enum _HomePersona {
+  guest,
+  noClub,
+  clubOwner,
+  scouting,
+  creator,
+  coinTrader,
+  admin,
+}
 
 class _PersonaCopy {
   const _PersonaCopy({
@@ -254,17 +262,17 @@ class _GtexCommandColors {
   static const Color surfaceBase = GtexFloodlit.night;
   static const Color surfaceRaised = GtexFloodlit.card;
   static const Color surfaceOverlay = GtexFloodlit.turf;
-  static const Color surfaceInput = Color(0xFF173224);
+  static const Color surfaceInput = GtexNavyColors.bgInset;
   static const Color surfaceBorder = GtexFloodlit.line;
-  static const Color surfaceBorderStrong = Color(0xFF2B5640);
+  static const Color surfaceBorderStrong = GtexNavyColors.lineStrong;
   static const Color textPrimary = GtexFloodlit.chalk;
   static const Color textSecondary = GtexFloodlit.chalkMuted;
-  static const Color textTertiary = Color(0xFF5E7767);
+  static const Color textTertiary = GtexNavyColors.textTertiary;
   static const Color accentPrimary = GtexFloodlit.pitch;
   static const Color accentAmber = GtexFloodlit.gold;
   static const Color accentRed = GtexFloodlit.scoreboard;
-  static const Color accentBlue = Color(0xFF2F80ED);
-  static const Color accentViolet = Color(0xFF9B5FFF);
+  static const Color accentBlue = GtexNavyColors.info;
+  static const Color accentViolet = GtexNavyColors.gold300;
 }
 
 TextStyle _labelStyle(BuildContext context, {Color? color}) {
@@ -1517,7 +1525,8 @@ class _QuickActionsPanel extends StatelessWidget {
               final AppRouteSurface? surface = appRouteSurfaceFor(
                 action.location,
               );
-              if (surface == null) {
+              if (surface == null ||
+                  surface.state == AppRouteSurfaceState.placeholder) {
                 return null;
               }
               return _RouteLaunchButton(
@@ -1570,8 +1579,6 @@ class _RouteLaunchButton extends StatelessWidget {
     final String label = switch (surface.state) {
       AppRouteSurfaceState.partiallyWired =>
         '$baseLabel ${surface.state.disclosureLabel}',
-      AppRouteSurfaceState.placeholder =>
-        '$baseLabel ${surface.state.disclosureLabel}',
       _ => baseLabel,
     };
 
@@ -1586,15 +1593,7 @@ class _RouteLaunchButton extends StatelessWidget {
         icon: Icon(icon),
         label: Text(label),
       ),
-      AppRouteSurfaceState.placeholder => OutlinedButton.icon(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${surface.label} is coming soon.')),
-          );
-        },
-        icon: Icon(icon),
-        label: Text(label),
-      ),
+      AppRouteSurfaceState.placeholder => const SizedBox.shrink(),
       AppRouteSurfaceState.hidden =>
         labelOverride == null
             ? const SizedBox.shrink()
@@ -1662,6 +1661,15 @@ _HomePersona _resolvePersona(ProfileData? profile, bool authenticated) {
   }
   if (_hasIdentitySignal(signals, <String>['creator', 'publisher'])) {
     return _HomePersona.creator;
+  }
+  if (_hasIdentitySignal(signals, <String>[
+    'scout',
+    'scouting',
+    'agent',
+    'staff',
+    'recruitment',
+  ])) {
+    return _HomePersona.scouting;
   }
   if (profile?.club != null) {
     return _HomePersona.clubOwner;
@@ -1792,6 +1800,26 @@ _PersonaCopy _copyForPersona(
           'Club wallet',
         ],
         accent: _GtexCommandColors.accentPrimary,
+      );
+    case _HomePersona.scouting:
+      return _PersonaCopy(
+        title: 'Scouting & recruitment desk',
+        subtitle:
+            'Track regen discovery, scouting feed signals, transfer targets, and prospect movement from one desk.',
+        badge: 'SCOUTING DESK',
+        headline: 'FIND THE NEXT GENERATION BEFORE THE MARKET MOVES',
+        body:
+            '$managerName, this desk prioritizes scouting pipelines, regen rankings, watchlist targets, and recruitment readiness.',
+        primaryAction:
+            'Review scouting reports, inspect rising regens, track transfer listings, and shortlist targets.',
+        capabilities: <String>[
+          'Pipeline',
+          'Regens',
+          'Shortlist',
+          'Assignments',
+          'Transfers',
+        ],
+        accent: _GtexCommandColors.accentBlue,
       );
     case _HomePersona.creator:
       return _PersonaCopy(
@@ -1933,6 +1961,30 @@ List<_QuickActionSpec> _actionsForPersona(_HomePersona persona) {
           location: AppRoutes.profile,
           label: 'Club wallet',
           icon: Icons.account_balance_wallet_rounded,
+        ),
+      ];
+    case _HomePersona.scouting:
+      return const <_QuickActionSpec>[
+        _QuickActionSpec(
+          location: AppRoutes.transferCenter,
+          label: 'Search players',
+          icon: Icons.person_search_rounded,
+        ),
+        _QuickActionSpec(
+          location: AppRoutes.regens,
+          label: 'Search regens',
+          icon: Icons.auto_awesome_rounded,
+        ),
+        _QuickActionSpec(
+          location: AppRoutes.market,
+          label: 'Open market',
+          icon: Icons.storefront_rounded,
+          useGo: true,
+        ),
+        _QuickActionSpec(
+          location: AppRoutes.tasks,
+          label: 'Scout tasks',
+          icon: Icons.flag_rounded,
         ),
       ];
     case _HomePersona.creator:
@@ -2295,8 +2347,11 @@ class HomeYourProspectsPanel extends StatelessWidget {
   }
 }
 
-class _HomeAttentionPanel extends StatelessWidget {
-  const _HomeAttentionPanel({
+typedef _HomeAttentionPanel = HomeAttentionPanel;
+
+class HomeAttentionPanel extends StatelessWidget {
+  const HomeAttentionPanel({
+    super.key,
     required this.digestValue,
     required this.onOpen,
     required this.onGo,
@@ -2308,32 +2363,62 @@ class _HomeAttentionPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final GtexHomeDigest? data = digestValue.asData?.value;
-    if (data != null && data.attentionItems.isEmpty) {
-      return const SizedBox.shrink();
-    }
     return _LiveModule<GtexHomeDigest>(
       value: digestValue,
       title: 'WHAT NEEDS YOUR ATTENTION',
       subtitle: 'A short list of real, actionable next moves.',
       accent: _GtexCommandColors.accentAmber,
       authenticated: true,
-      builder:
-          (BuildContext context, GtexHomeDigest digest) => Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: digest.attentionItems
-                .map(
-                  (GtexHomeAttentionItem item) => OutlinedButton(
-                    onPressed:
-                        item.useGo
-                            ? () => onGo(item.routeLocation)
-                            : () => onOpen(item.routeLocation),
-                    child: Text(item.label),
+      builder: (BuildContext context, GtexHomeDigest digest) {
+        if (digest.attentionItems.isEmpty) {
+          return Row(
+            key: const Key('gtex-home-attention-empty'),
+            children: <Widget>[
+              const Icon(
+                Icons.check_circle_outline_rounded,
+                size: 18,
+                color: _GtexCommandColors.accentPrimary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Nothing needs you right now',
+                  style: _bodyStyle(
+                    context,
+                    color: _GtexCommandColors.textPrimary,
                   ),
-                )
-                .toList(growable: false),
-          ),
+                ),
+              ),
+            ],
+          );
+        }
+        return Column(
+          children: digest.attentionItems
+              .map((GtexHomeAttentionItem item) {
+                void trigger() {
+                  if (item.useGo) {
+                    onGo(item.routeLocation);
+                  } else {
+                    onOpen(item.routeLocation);
+                  }
+                }
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: GtexAttentionCard(
+                    variant: GtexAttentionVariant.decision,
+                    state: GtexAttentionState.unread,
+                    title: item.label,
+                    subtitle: 'Actionable route · ${item.routeLocation}',
+                    primaryActionLabel: 'Open',
+                    onPrimaryAction: trigger,
+                    onTap: trigger,
+                  ),
+                );
+              })
+              .toList(growable: false),
+        );
+      },
     );
   }
 }

@@ -125,13 +125,12 @@ class RegenCareerPolicyService:
         )
 
     def _generation_season_number(self, regen_profile_id: str) -> int:
-        events = list(
-            self.session.scalars(
-                select(RegenGenerationEvent)
-                .where(RegenGenerationEvent.regen_profile_id == regen_profile_id)
-                .order_by(RegenGenerationEvent.created_at.asc(), RegenGenerationEvent.id.asc())
-            )
+        scalars_result = self.session.scalars(
+            select(RegenGenerationEvent)
+            .where(RegenGenerationEvent.regen_profile_id == regen_profile_id)
+            .order_by(RegenGenerationEvent.created_at.asc(), RegenGenerationEvent.id.asc())
         )
+        events = list(scalars_result.all() if hasattr(scalars_result, "all") else scalars_result)
         for event in events:
             raw_values = (
                 event.season_label,
@@ -144,19 +143,13 @@ class RegenCareerPolicyService:
         raise ValueError("Regen generation season is unavailable; retirement age must remain unknown")
 
     def _current_season_number(self, *, reference_on: date | None) -> int:
-        seasons = list(
-            self.session.scalars(select(RegenSeason).order_by(RegenSeason.season_number.desc())).all()
-        )
+        seasons = list(self.session.scalars(select(RegenSeason).order_by(RegenSeason.season_number.desc())).all())
         if not seasons:
             raise ValueError("No GTEX seasons are configured")
         if reference_on is None:
             active = next((season for season in seasons if season.is_active), None)
             return active.season_number if active is not None else seasons[0].season_number
-        eligible = [
-            season
-            for season in seasons
-            if season.start_date <= reference_on <= season.end_date
-        ]
+        eligible = [season for season in seasons if season.start_date <= reference_on <= season.end_date]
         if eligible:
             return max(season.season_number for season in eligible)
         past = [season for season in seasons if season.start_date <= reference_on]
@@ -165,9 +158,7 @@ class RegenCareerPolicyService:
         raise ValueError("Reference date occurs before the configured GTEX season timeline")
 
     def _season_virtual_month_index(self) -> dict[int, int]:
-        seasons = list(
-            self.session.scalars(select(RegenSeason).order_by(RegenSeason.season_number.asc())).all()
-        )
+        seasons = list(self.session.scalars(select(RegenSeason).order_by(RegenSeason.season_number.asc())).all())
         mapping: dict[int, int] = {}
         for season in seasons:
             raw = (season.metadata_json or {}).get("virtual_age_month_index")

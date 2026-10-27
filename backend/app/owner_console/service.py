@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.club_profile import ClubProfile
+from app.models.user import PublicAccountType, User
 from app.owner_console import engine, ledger
 from app.owner_console.ai import inbox_body
 from app.owner_console.models import (
@@ -51,7 +52,17 @@ def aware(dt: datetime | None) -> datetime | None:
 # ---------- ownership + state ----------
 
 
+def _require_normal_user_account(session: Session, user_id: str) -> User:
+    user = session.get(User, user_id)
+    if user is None:
+        raise OwnerError("user_not_found", 404)
+    if user.account_type != PublicAccountType.USER:
+        raise OwnerError("club_owner_account_type_required", 403)
+    return user
+
+
 def owned_profiles(session: Session, user_id: str) -> list[ClubProfile]:
+    _require_normal_user_account(session, user_id)
     return list(
         session.scalars(
             select(ClubProfile).where(ClubProfile.owner_user_id == user_id).order_by(ClubProfile.created_at.asc())
@@ -60,6 +71,7 @@ def owned_profiles(session: Session, user_id: str) -> list[ClubProfile]:
 
 
 def require_profile(session: Session, club_id: str, user_id: str) -> ClubProfile:
+    _require_normal_user_account(session, user_id)
     profile = session.get(ClubProfile, club_id)
     if profile is None:
         raise OwnerError("club_not_found", 404)
@@ -81,6 +93,7 @@ def require_state(session: Session, club_id: str, user_id: str) -> OwnerClubStat
 
 
 def user_states(session: Session, user_id: str) -> list[OwnerClubState]:
+    _require_normal_user_account(session, user_id)
     return list(
         session.scalars(
             select(OwnerClubState)
@@ -152,6 +165,7 @@ def claim_starter_club(
     staff coach, and the free launch league are filled in and the world ticks
     once.
     """
+    _require_normal_user_account(session, user.id)
     existing = user_states(session, user.id)
     if existing:
         return existing[0]
@@ -270,11 +284,14 @@ def squad(session: Session, club_id: str, include_inactive: bool = False) -> lis
     return list(session.scalars(stmt.order_by(OwnerSquadPlayer.rating.desc())).all())
 
 
-def player_dict(p: OwnerSquadPlayer) -> dict[str, Any]:
+def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str, Any]:
+    from app.owner_console import storytelling
+
     return {
         "id": p.id,
         "player_ref": p.player_ref,
         "name": p.name,
+        "portrait_url": storytelling.resolve_player_portrait_url(session, p.id, p.name),
         "position": p.position,
         "age": p.age,
         "rating": p.rating,
@@ -384,6 +401,132 @@ def sign_market_player(session: Session, user_id: str, club_id: str, player_id: 
     return signed
 
 
+def unsign_market_player(session: Session, user_id: str, club_id: str, player_id: str) -> dict[str, Any]:
+    state = require_state(session, club_id, user_id)
+    current = squad(session, club_id)
+    target = next(
+        (p for p in current if p.player_ref == player_id or p.id == player_id or str(p.id) == str(player_id)), None
+    )
+    if target is None:
+        raise OwnerError("player_not_in_squad", 404)
+
+    refund_amount = int(target.value_coin or 0)
+    if refund_amount > 0:
+        ledger.record(
+            session,
+            event_type="transfer_refund",
+            source=ledger.WORLD_MARKET,
+            destination=ledger.club_account(club_id),
+            currency=ledger.GTEX,
+            gross=refund_amount,
+            club_id=club_id,
+            user_id=user_id,
+            related_type="player",
+            related_id=target.player_ref or target.id,
+            memo=f"Released {target.name} (refund)",
+        )
+
+    session.delete(target)
+    session.flush()
+
+    remaining = squad(session, club_id)
+    has_keeper = any(p.position.startswith("goal") for p in remaining)
+    if len(remaining) < MIN_SQUAD or not has_keeper:
+        if state.stage == "manager":
+            state.stage = "squad"
+
+    return {
+        "released_player_id": player_id,
+        "refunded": refund_amount,
+        "refund_amount": refund_amount,
+        "squad_size": len(remaining),
+        "stage": state.stage,
+        "cash": str(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)),
+    }
+
+
+def autopick_squad(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
+    from app.ingestion.models import Player
+    from app.players.read_models import PlayerSummaryReadModel
+
+    state = require_state(session, club_id, user_id)
+    current = squad(session, club_id)
+    non_regens = [p for p in current if not p.is_regen]
+    slots_needed = MIN_SQUAD - len(non_regens)
+    if slots_needed <= 0:
+        return {
+            "signed": [],
+            "signed_count": 0,
+            "squad_size": len(current),
+            "stage": state.stage,
+            "cash": str(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)),
+        }
+
+    club_cash = int(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX))
+    has_keeper = any(p.position.startswith("goal") for p in current)
+    signed_refs = {p.player_ref for p in current if p.player_ref}
+
+    query = (
+        select(Player)
+        .join(PlayerSummaryReadModel, Player.id == PlayerSummaryReadModel.player_id)
+        .order_by(PlayerSummaryReadModel.current_value_credits.asc())
+    )
+    if signed_refs:
+        query = query.where(Player.id.not_in(signed_refs))
+
+    candidates = list(session.scalars(query.limit(300)).all())
+    quotes_map = player_quotes(session, candidates)
+
+    rival_refs = set(
+        session.scalars(
+            select(OwnerSquadPlayer.player_ref).where(
+                OwnerSquadPlayer.player_ref.in_([c.id for c in candidates]),
+                OwnerSquadPlayer.status.in_(("active", "listed")),
+                OwnerSquadPlayer.club_id != club_id,
+            )
+        ).all()
+    )
+
+    eligible = [c for c in candidates if c.id not in rival_refs and quotes_map.get(c.id, (999999, 0))[0] > 0]
+
+    selected_players = []
+    remaining_budget = club_cash
+
+    if not has_keeper:
+        gk_candidate = next(
+            (c for c in eligible if engine.normalize_position(c.normalized_position or c.position).startswith("goal")),
+            None,
+        )
+        if gk_candidate:
+            cost = quotes_map[gk_candidate.id][0]
+            if cost <= remaining_budget:
+                selected_players.append(gk_candidate)
+                remaining_budget -= cost
+                eligible = [c for c in eligible if c.id != gk_candidate.id]
+
+    for c in eligible:
+        if len(selected_players) >= slots_needed:
+            break
+        cost = quotes_map[c.id][0]
+        if cost <= remaining_budget:
+            selected_players.append(c)
+            remaining_budget -= cost
+
+    signed_results = []
+    for player in selected_players:
+        signed = sign_market_player(session, user_id, club_id, player.id)
+        signed_results.append(player_dict(signed))
+
+    final_squad = squad(session, club_id)
+    return {
+        "signed": signed_results,
+        "signed_count": len(signed_results),
+        "squad_size": len(final_squad),
+        "stage": state.stage,
+        "cash": str(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)),
+    }
+
+
 def _advance_stage_after_squad(session: Session, state: OwnerClubState) -> None:
     players = squad(session, state.club_id)
     if state.stage == "squad" and len(players) >= MIN_SQUAD and any(p.position.startswith("goal") for p in players):
@@ -427,6 +570,70 @@ def appoint_manager(session: Session, user_id: str, club_id: str, snapshot: dict
     if state.stage == "manager":
         state.stage = "competition"
     _morale_shift(session, club_id, 3)
+
+    # Bridge to canonical club_growth staff contracts and assignments
+    try:
+        from app.models.club_growth import ClubStaffProfile, ClubStaffContract, ClubStaffAssignment
+        from app.club_growth.staff_role_policy import ROLE_FIRST_TEAM_MANAGER
+
+        mgr_id = str(profile.get("manager_id") or "default")
+        market_key = f"mgr_{mgr_id}"
+        staff_profile = session.scalar(
+            select(ClubStaffProfile).where(ClubStaffProfile.market_key == market_key)
+        )
+        if staff_profile is None:
+            staff_profile = ClubStaffProfile(
+                market_key=market_key,
+                display_name=profile.get("name", "First Team Manager"),
+                staff_type=ROLE_FIRST_TEAM_MANAGER,
+                rarity="standard",
+                rating=int(profile.get("tactical_rating") or profile.get("rating") or 70),
+                salary_minor=int(profile.get("salary") or 0) * 100,
+            )
+            session.add(staff_profile)
+            session.flush()
+
+        now = datetime.now(timezone.utc)
+        contract = session.scalar(
+            select(ClubStaffContract).where(
+                ClubStaffContract.club_id == club_id,
+                ClubStaffContract.staff_profile_id == staff_profile.id,
+                ClubStaffContract.status == "active",
+            )
+        )
+        if contract is None:
+            contract = ClubStaffContract(
+                club_id=club_id,
+                staff_profile_id=staff_profile.id,
+                status="active",
+                role_scope=ROLE_FIRST_TEAM_MANAGER,
+                started_at=now,
+                accepted_at=now,
+                salary_minor=staff_profile.salary_minor,
+            )
+            session.add(contract)
+            session.flush()
+
+        assignment = session.scalar(
+            select(ClubStaffAssignment).where(
+                ClubStaffAssignment.club_id == club_id,
+                ClubStaffAssignment.role_key == ROLE_FIRST_TEAM_MANAGER,
+            )
+        )
+        if assignment is None:
+            assignment = ClubStaffAssignment(
+                club_id=club_id,
+                staff_contract_id=contract.id,
+                role_key=ROLE_FIRST_TEAM_MANAGER,
+                active=True,
+            )
+            session.add(assignment)
+        else:
+            assignment.staff_contract_id = contract.id
+            assignment.active = True
+    except Exception as exc:
+        pass
+
     return state
 
 
@@ -454,6 +661,28 @@ def fire_manager(session: Session, user_id: str, club_id: str) -> dict[str, Any]
         raise OwnerError(str(exc), 402) from exc
     state.manager_json = engine.manager_profile(engine.DEFAULT_MANAGER)
     _morale_shift(session, club_id, -6)
+
+    # Terminate canonical club_growth staff assignment/contract
+    try:
+        from app.models.club_growth import ClubStaffContract, ClubStaffAssignment
+        from app.club_growth.staff_role_policy import ROLE_FIRST_TEAM_MANAGER
+
+        assignment = session.scalar(
+            select(ClubStaffAssignment).where(
+                ClubStaffAssignment.club_id == club_id,
+                ClubStaffAssignment.role_key == ROLE_FIRST_TEAM_MANAGER,
+            )
+        )
+        if assignment is not None:
+            assignment.active = False
+            if assignment.staff_contract_id:
+                contract = session.get(ClubStaffContract, assignment.staff_contract_id)
+                if contract and contract.status == "active":
+                    contract.status = "terminated"
+                    contract.terminated_at = datetime.now(timezone.utc)
+    except Exception as exc:
+        pass
+
     return {
         "compensation": compensation,
         "why": "Dismissal triggers contract compensation and unsettles the dressing room (-6 morale).",
@@ -497,6 +726,19 @@ def upgrade_facility(session: Session, user_id: str, club_id: str, kind: str) ->
         raise OwnerError(str(exc), 402) from exc
     facilities[kind] = level + 1
     state.facilities_json = facilities
+    from app.owner_console import storytelling
+
+    storytelling.record_verified_broadcast_event(
+        session,
+        event_type="facility_upgrade",
+        club_id=club_id,
+        owner_user_id=user_id,
+        item_name=f"{kind.title()} Facility Level {level + 1}",
+        item_image_url=storytelling.resolve_showroom_image_url(kind),
+        verified_price_gtex=cost,
+        idempotency_key=f"facility:{club_id}:{kind}:{level + 1}",
+        payload_json={"facility_kind": kind, "facility_level": level + 1},
+    )
     manager = dict(state.manager_json or {})
     if manager:
         manager["mood"] = int(engine.clamp(manager.get("mood", 70) + 6, 0, 100))
@@ -647,9 +889,27 @@ def _item(
     priority: str = "normal",
     prompt: str | None = None,
 ) -> tuple[OwnerInboxItem, str | None]:
+
+    cat_map = {
+        "manager_meeting": "staff_recommendations",
+        "manager_request": "staff_recommendations",
+        "facility_request": "staff_recommendations",
+        "player_unrest": "player_issues",
+        "regen_breakthrough": "player_issues",
+        "scouting_report": "scouting_reports",
+        "contract_negotiation": "negotiations",
+        "transfer_bid": "negotiations",
+        "competition_invite": "scheduling",
+        "match_schedule": "scheduling",
+        "sponsor_opportunity": "requests",
+        "regen_endorsement": "requests",
+    }
+    resolved_category = cat_map.get(kind, "requests")
     item = OwnerInboxItem(
         user_id=user_id,
         club_id=club_id,
+        save_context_id=f"club:{club_id}" if club_id else None,
+        category=resolved_category,
         kind=kind,
         sender=sender,
         title=title,
@@ -1116,6 +1376,29 @@ def resolve_item(session: Session, user_id: str, item_id: str, action: str) -> O
     return item
 
 
+def mark_inbox_read(session: Session, user_id: str, item_id: str, is_read: bool = True) -> OwnerInboxItem:
+    item = session.get(OwnerInboxItem, item_id)
+    if not item or item.user_id != user_id:
+        raise OwnerError("item_not_found", 404, "Inbox item not found.")
+    item.is_read = is_read
+    item.read_at = datetime.now(timezone.utc) if is_read else None
+    session.flush()
+    return item
+
+
+def archive_inbox_item(session: Session, user_id: str, item_id: str, archive: bool = True) -> OwnerInboxItem:
+    item = session.get(OwnerInboxItem, item_id)
+    if not item or item.user_id != user_id:
+        raise OwnerError("item_not_found", 404, "Inbox item not found.")
+    item.archived_at = datetime.now(timezone.utc) if archive else None
+    if archive and item.status == "open":
+        item.status = "archived"
+    elif not archive and item.status == "archived":
+        item.status = "open"
+    session.flush()
+    return item
+
+
 def inbox_dict(item: OwnerInboxItem) -> dict[str, Any]:
     from app.owner_console.alerts import respond_by
 
@@ -1124,6 +1407,8 @@ def inbox_dict(item: OwnerInboxItem) -> dict[str, Any]:
         "respond_by": due.isoformat() if due else None,
         "id": item.id,
         "club_id": item.club_id,
+        "save_context_id": item.save_context_id or (f"club:{item.club_id}" if item.club_id else None),
+        "category": item.category or "requests",
         "kind": item.kind,
         "priority": item.priority,
         "sender": item.sender,
@@ -1135,6 +1420,10 @@ def inbox_dict(item: OwnerInboxItem) -> dict[str, Any]:
         "actions": item.actions_json,
         "payload": item.payload_json,
         "is_decision": item.is_decision,
+        "is_read": bool(item.is_read),
+        "read_at": item.read_at.isoformat() if item.read_at else None,
+        "archived_at": item.archived_at.isoformat() if item.archived_at else None,
+        "deadline_at": item.deadline_at.isoformat() if item.deadline_at else (due.isoformat() if due else None),
         "status": item.status,
         "resolution": item.resolution,
         "outcome": item.outcome_text,
@@ -1183,6 +1472,7 @@ def club_card(session: Session, state: OwnerClubState) -> dict[str, Any]:
         "primary_color": profile.primary_color if profile else "#10B981",
         "secondary_color": profile.secondary_color if profile else "#0F172A",
         "city": profile.city_name if profile else None,
+        "public_profile_slug": profile.slug if profile and profile.visibility == "public" else None,
         "country_code": profile.country_code if profile else None,
         "continent_code": profile.continent_code if profile else None,
         "stage": state.stage,
@@ -1202,6 +1492,8 @@ def club_card(session: Session, state: OwnerClubState) -> dict[str, Any]:
 
 
 def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
+    from app.owner_console import storytelling
+
     state = require_state(session, club_id, user_id)
     deals = session.scalars(
         select(OwnerSponsorDeal).where(OwnerSponsorDeal.club_id == club_id).order_by(OwnerSponsorDeal.created_at.desc())
@@ -1217,7 +1509,7 @@ def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
             }
             for k in engine.FACILITY_KINDS
         },
-        "squad": [player_dict(p) for p in squad(session, club_id)],
+        "squad": [player_dict(p, session) for p in squad(session, club_id)],
         "health": club_health(session, state),
         "economy": ledger.club_economy(session, club_id),
         "sponsors": [
@@ -1235,6 +1527,7 @@ def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
         ],
         "disclosures": disclosures(session, club_id),
         "ownership_group": group_label(session, user_id),
+        "showroom": storytelling.get_club_showroom(session, user_id, club_id),
     }
 
 
@@ -1243,3 +1536,9 @@ def maybe_auto_tick(session: Session, user_id: str) -> None:
         last = aware(state.last_tick_at)
         if state.stage in ("competition", "active") and (last is None or now() - last > timedelta(hours=6)):
             tick_club(session, state, use_ai=False)
+
+
+def get_owner_newsroom(*args, **kwargs):
+    from app.owner_console import storytelling
+
+    return storytelling.list_newsroom_articles(*args, **kwargs)

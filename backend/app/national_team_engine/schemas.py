@@ -378,6 +378,31 @@ class NationalTeamCompetitionEntryResponse(BaseModel):
     updated_at: datetime
 
 
+class NationalTeamChampionRewardSettleRequest(BaseModel):
+    gross_amount: Decimal | None = Field(default=None, gt=0)
+    note: str | None = Field(default=None, max_length=500)
+
+
+class NationalTeamChampionRewardSettlementResponse(BaseModel):
+    settlement_id: str
+    competition_id: str
+    competition_key: str
+    champion_entry_id: str
+    champion_user_id: str
+    country_code: str
+    country_name: str
+    reward_source: str
+    title: str
+    gross_amount: Decimal
+    platform_fee_amount: Decimal
+    net_amount: Decimal
+    ledger_unit: str
+    ledger_transaction_id: str | None = None
+    note: str | None = None
+    settled_by_user_id: str | None = None
+    created_at: datetime
+
+
 class NationalTeamCompetitionLifecycleResponse(BaseModel):
     competition: NationalTeamCompetitionResponse
     profile: dict[str, Any] = Field(default_factory=dict)
@@ -389,6 +414,8 @@ class NationalTeamCompetitionLifecycleResponse(BaseModel):
     schedule_plan: list[dict[str, Any]] = Field(default_factory=list)
     stage_history: list[dict[str, Any]] = Field(default_factory=list)
     stage_results: dict[str, Any] = Field(default_factory=dict)
+    rental_cleanup: dict[str, Any] | None = None
+    champion_reward_settlement: dict[str, Any] | None = None
 
 
 class NationalTeamCountryRankingResponse(BaseModel):

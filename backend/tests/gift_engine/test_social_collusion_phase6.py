@@ -15,7 +15,7 @@ from app.common.enums.competition_format import CompetitionFormat
 from app.common.enums.competition_status import CompetitionStatus
 from app.common.enums.competition_visibility import CompetitionVisibility
 from app.common.enums.match_status import MatchStatus
-from app.gift_engine.service import GiftEngineService
+from app.gift_engine.canonical_service import GiftEngineService
 from app.models import (
     Base,
     ClubProfile,

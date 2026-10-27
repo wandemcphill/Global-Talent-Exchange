@@ -17,7 +17,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.auth.service import AuthService
 from app.gift_engine.router import admin_refund_gift_event
-from app.gift_engine.service import GiftEngineService
+from app.gift_engine.canonical_service import GiftEngineService
 from app.models import (
     AdminRewardRule,
     Base,

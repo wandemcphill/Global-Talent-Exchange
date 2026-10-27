@@ -7,6 +7,9 @@ class GteNoClubOnboardingView extends StatelessWidget {
     super.key,
     this.isAuthenticated = true,
     this.onCreateClub,
+    this.onOpenNationalTeam,
+    this.onOpenCreatorAccessRequest,
+    this.onOpenTraderAccessRequest,
     this.onBrowseClubMarket,
     this.onExploreArena,
     this.onOpenMatchday,
@@ -15,10 +18,14 @@ class GteNoClubOnboardingView extends StatelessWidget {
     this.onOpenWallet,
     this.onEnterClub,
     this.padding = const EdgeInsets.fromLTRB(20, 12, 20, 120),
+    this.scrollable = true,
   });
 
   final bool isAuthenticated;
   final VoidCallback? onCreateClub;
+  final VoidCallback? onOpenNationalTeam;
+  final VoidCallback? onOpenCreatorAccessRequest;
+  final VoidCallback? onOpenTraderAccessRequest;
   final VoidCallback? onBrowseClubMarket;
   final VoidCallback? onExploreArena;
   final VoidCallback? onOpenMatchday;
@@ -27,25 +34,64 @@ class GteNoClubOnboardingView extends StatelessWidget {
   final VoidCallback? onOpenWallet;
   final VoidCallback? onEnterClub;
   final EdgeInsetsGeometry padding;
+  final bool scrollable;
 
   @override
   Widget build(BuildContext context) {
     final List<_NoClubActionSpec> actions = <_NoClubActionSpec>[
       if (onCreateClub != null)
         _NoClubActionSpec(
-          eyebrow: isAuthenticated ? 'FOUNDATION' : 'START HERE',
-          chipLabel: isAuthenticated ? 'Create your club' : 'Create account',
+          eyebrow: isAuthenticated ? 'OPTIONAL OWNERSHIP' : 'START HERE',
+          chipLabel: isAuthenticated ? 'Optional' : 'Create account',
           title: isAuthenticated
-              ? 'Create your club'
+              ? 'Own a club when you are ready'
               : 'Create your GTEX account',
           detail: isAuthenticated
-              ? 'Launch your club now and shape the badge later. Identity, trophies, scouting, and competitions open as soon as the club exists.'
+              ? 'A club unlocks owner operations, but it is not required to explore GTEX or manage a national team. Start ownership whenever you are ready.'
               : 'Register or sign in first, then create a club when you are ready to own a full football world.',
           icon: Icons.add_circle_outline,
           accent: GteShellTheme.accentClub,
-          actionLabel: isAuthenticated ? 'Create club' : 'Sign in or register',
+          actionLabel: isAuthenticated ? 'Explore club ownership' : 'Sign in or register',
           onTap: onCreateClub!,
+          prominence: isAuthenticated
+              ? _NoClubActionProminence.outlined
+              : _NoClubActionProminence.primary,
+        ),
+      if (onOpenNationalTeam != null)
+        _NoClubActionSpec(
+          eyebrow: 'INTERNATIONAL DUTY',
+          chipLabel: 'No club required',
+          title: 'Manage a national team',
+          detail: 'Enter an eligible national competition and rent players from the national pool using your user account. You do not need to own a club.',
+          icon: Icons.flag_outlined,
+          accent: GteShellTheme.accentClub,
+          actionLabel: 'Explore national teams',
+          onTap: onOpenNationalTeam!,
           prominence: _NoClubActionProminence.primary,
+        ),
+      if (isAuthenticated && onOpenCreatorAccessRequest != null)
+        _NoClubActionSpec(
+          eyebrow: 'CREATOR TOOLS',
+          chipLabel: 'Apply after signup',
+          title: 'Become a GTEX creator',
+          detail: 'Use your existing GTEX account to apply for creator access, publish football stories, and grow a community. No separate creator login is needed.',
+          icon: Icons.campaign_outlined,
+          accent: GteShellTheme.accentCommunity,
+          actionLabel: 'Apply for creator access',
+          onTap: onOpenCreatorAccessRequest!,
+          prominence: _NoClubActionProminence.tonal,
+        ),
+      if (isAuthenticated && onOpenTraderAccessRequest != null)
+        _NoClubActionSpec(
+          eyebrow: 'COIN TRADER TOOLS',
+          chipLabel: 'Approval required',
+          title: 'Apply to become a coin trader',
+          detail: 'Keep your GTEX member account. Apply for trader status after signup; approved traders can configure rates, liquidity, and manage escrow-protected orders.',
+          icon: Icons.candlestick_chart_outlined,
+          accent: GteShellTheme.accentWarm,
+          actionLabel: 'Open trader application',
+          onTap: onOpenTraderAccessRequest!,
+          prominence: _NoClubActionProminence.tonal,
         ),
       if (onExploreArena != null)
         _NoClubActionSpec(
@@ -149,8 +195,7 @@ class GteNoClubOnboardingView extends StatelessWidget {
         )
         .toList(growable: false);
     final bool compactViewport = MediaQuery.sizeOf(context).height < 720;
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
+    final Widget content = Padding(
       padding: padding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -245,6 +290,15 @@ class GteNoClubOnboardingView extends StatelessWidget {
           ),
         ],
       ),
+    );
+
+    if (!scrollable) {
+      return content;
+    }
+
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: content,
     );
   }
 }

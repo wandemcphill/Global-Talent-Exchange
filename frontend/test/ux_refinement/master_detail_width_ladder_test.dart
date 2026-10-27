@@ -174,7 +174,7 @@ void main() {
     const double gap = GtexSpacing.md;
     const double marketLeftPanelWidth = 330;
     const double marketRightPanelWidth = 370;
-    const double navRailWidth = 94;
+    const double navRailWidth = 104;
     const double worldPulseRailWidth = 318;
 
     final Map<double, ({double card, bool left, bool right, bool rail})>

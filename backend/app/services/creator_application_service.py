@@ -6,11 +6,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.base import utcnow
+from app.models.club_profile import ClubProfile
 from app.models.creator_application import CreatorApplication
 from app.models.creator_profile import CreatorProfile
 from app.models.creator_provisioning import CreatorClubProvisioning
-from app.models.user import User
-from app.services.creator_provisioning_service import CreatorProvisioningService
+from app.models.user import PublicAccountType, User
+from app.services.creator_provisioning_service import CreatorProvisioningError, CreatorProvisioningService
 
 CREATOR_APPLICATION_PENDING = "pending"
 CREATOR_APPLICATION_APPROVED = "approved"
@@ -35,18 +36,30 @@ class CreatorApplicationService:
     session: Session
 
     def verify_email(self, *, actor: User) -> User:
-        actor.email_verified_at = actor.email_verified_at or utcnow()
-        self.session.flush()
-        return actor
+        """Do not treat an authenticated request as proof of email ownership.
+
+        GTEX already has a signup-confirmation token flow in AuthService. The
+        Creator endpoint has no verification code/token contract, so callers
+        must use that real confirmation flow instead of toggling the timestamp.
+        """
+        del actor
+        raise CreatorApplicationError("email_verification_must_use_auth_confirmation")
 
     def verify_phone(self, *, actor: User) -> User:
-        if not actor.phone_number or actor.phone_number == "0000000000":
-            raise CreatorApplicationError("phone_number_required_for_creator_verification")
-        actor.phone_verified_at = actor.phone_verified_at or utcnow()
-        self.session.flush()
-        return actor
+        """Fail closed until a real phone challenge/provider is implemented."""
+        del actor
+        raise CreatorApplicationError("secure_phone_verification_unavailable")
 
     def submit_application(self, *, actor: User, payload) -> CreatorApplication:
+        if actor.account_type == PublicAccountType.COIN_TRADER:
+            raise CreatorApplicationConflictError("coin_trader_account_cannot_be_promoted_to_creator")
+        if actor.account_type != PublicAccountType.USER:
+            raise CreatorApplicationConflictError("creator_promotion_requires_normal_account")
+        owned_club_id = self.session.scalar(
+            select(ClubProfile.id).where(ClubProfile.owner_user_id == actor.id).limit(1)
+        )
+        if owned_club_id is not None:
+            raise CreatorApplicationConflictError("club_ownership_prevents_creator_promotion")
         if actor.email_verified_at is None:
             raise CreatorApplicationError("email_verification_required")
         if actor.phone_verified_at is None:
@@ -105,9 +118,7 @@ class CreatorApplicationService:
         application = self.get_my_application(actor=actor)
         if application is not None:
             return self.serialize_application(application)
-        profile = self.session.scalar(
-            select(CreatorProfile).where(CreatorProfile.user_id == actor.id)
-        )
+        profile = self.session.scalar(select(CreatorProfile).where(CreatorProfile.user_id == actor.id))
         if profile is None:
             return None
         verified_at = actor.email_verified_at or profile.created_at or utcnow()
@@ -168,7 +179,19 @@ class CreatorApplicationService:
         application.approved_at = application.reviewed_at
         application.rejected_at = None
         application.verification_requested_at = None
-        CreatorProvisioningService(self.session).provision_application(application=application, reviewer=reviewer)
+        try:
+            CreatorProvisioningService(self.session).provision_application(
+                application=application,
+                reviewer=reviewer,
+            )
+        except CreatorProvisioningError as exc:
+            if str(exc) in {
+                "club_ownership_prevents_creator_promotion",
+                "creator_promotion_requires_normal_account",
+                "creator_applicant_account_not_found",
+            }:
+                raise CreatorApplicationConflictError(str(exc)) from exc
+            raise
         self.session.flush()
         return application
 

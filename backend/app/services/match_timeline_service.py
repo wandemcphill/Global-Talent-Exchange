@@ -36,6 +36,9 @@ from app.schemas.match_viewer import (
     MatchViewerPossessionPhase,
     MatchViewerSide,
     MatchViewerTeamView,
+    MatchViewerPresentationPlayerView,
+    MatchViewerPresentationTeamView,
+    MatchViewerPresentationPackageView,
     MatchViewerTransitionState,
     MatchViewerVector2View,
     MatchViewStateView,
@@ -74,6 +77,11 @@ class _TeamRuntime:
     bench: list[str]
     current_formation: str
     team_stamina_pct: float | None = None
+    defensive_line: float = 50.0
+    press_intensity: float = 50.0
+    tempo: float = 50.0
+    width: float = 50.0
+    mentality: str = "balanced"
 
 
 @dataclass(slots=True)
@@ -165,6 +173,17 @@ class MatchTimelineService:
             away_team=away_team,
             events=[item.view for item in events],
             frames=frames,
+            presentation_package=MatchViewerPresentationPackageView(
+                match_label=f"{home_team.team_name} vs {away_team.team_name}",
+                home=self._presentation_team_view(
+                    replay_payload.visual_identity.home_team,
+                    formation=home_team.formation,
+                ),
+                away=self._presentation_team_view(
+                    replay_payload.visual_identity.away_team,
+                    formation=away_team.formation,
+                ),
+            ),
         )
 
     def build_from_archive_record(self, record: ReplayArchiveRecord) -> MatchViewStateView:
@@ -357,6 +376,36 @@ class MatchTimelineService:
             secondary_color=team.selected_kit.secondary_color,
             accent_color=team.selected_kit.accent_color,
             goalkeeper_color=team.goalkeeper_kit.primary_color,
+        )
+
+    def _presentation_team_view(
+        self,
+        team: MatchTeamVisualIdentityView,
+        *,
+        formation: str,
+    ) -> MatchViewerPresentationTeamView:
+        visual_players = list(team.player_visuals or [])
+
+        def presentation_player(player: MatchPlayerVisualView) -> MatchViewerPresentationPlayerView:
+            role = getattr(player.role, "value", str(player.role))
+            return MatchViewerPresentationPlayerView(
+                player_id=player.player_id,
+                player_name=player.display_name,
+                shirt_number=player.shirt_number,
+                role=str(role),
+            )
+
+        return MatchViewerPresentationTeamView(
+            team_id=team.team_id,
+            team_name=team.team_name,
+            short_name=team.short_club_code,
+            formation=formation,
+            primary_color=team.selected_kit.primary_color,
+            secondary_color=team.selected_kit.secondary_color,
+            accent_color=team.selected_kit.accent_color,
+            goalkeeper_color=team.goalkeeper_kit.primary_color,
+            starters=[presentation_player(player) for player in visual_players[:11]],
+            bench=[presentation_player(player) for player in visual_players[11:]],
         )
 
     def _team_runtime(

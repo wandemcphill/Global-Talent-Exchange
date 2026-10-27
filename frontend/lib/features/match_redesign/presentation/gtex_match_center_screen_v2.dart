@@ -12,21 +12,25 @@ import '../widgets/gtex_match_lineups.dart';
 import '../widgets/gtex_match_scoreboard.dart';
 import '../widgets/gtex_match_stats_panel.dart';
 import '../widgets/gtex_match_timeline.dart';
+import '../widgets/gtex_match_visual_tokens.dart';
+import '../../match/widgets/gtex_matchday_ad_slot.dart';
 import '../widgets/gtex_post_match_panel.dart';
+import '../widgets/gtex_pre_match_package_panel.dart';
+import '../widgets/gtex_tactical_advisor_widget.dart';
 import '../widgets/gtex_tactics_panel.dart';
 import 'gtex_match_center_controller.dart';
 
 class _GtexMatchColors {
-  static const Color shell = Color(0xFF0A0C0F);
-  static const Color panel = Color(0xFF111418);
-  static const Color overlay = Color(0xFF181C22);
-  static const Color border = Color(0xFF252D38);
-  static const Color text = Color(0xFFE8EDF4);
-  static const Color muted = Color(0xFF8A97A8);
-  static const Color primary = Color(0xFF00E87A);
-  static const Color amber = Color(0xFFFFB800);
-  static const Color red = Color(0xFFFF3D3D);
-  static const Color blue = Color(0xFF2F80ED);
+  static const Color shell = GtexMatchVisualTokens.surfaceBase;
+  static const Color panel = GtexMatchVisualTokens.surfaceRaised;
+  static const Color overlay = GtexMatchVisualTokens.surfaceOverlay;
+  static const Color border = GtexMatchVisualTokens.border;
+  static const Color text = GtexMatchVisualTokens.textPrimary;
+  static const Color muted = GtexMatchVisualTokens.textSecondary;
+  static const Color primary = GtexMatchVisualTokens.live;
+  static const Color amber = GtexMatchVisualTokens.amber;
+  static const Color red = GtexMatchVisualTokens.red;
+  static const Color blue = GtexMatchVisualTokens.blue;
 }
 
 class GtexMatchCenterScreenV2 extends StatefulWidget {
@@ -38,11 +42,13 @@ class GtexMatchCenterScreenV2 extends StatefulWidget {
     this.onExit,
     this.onOpenPortfolio,
     this.onOpenMarket,
+    this.onOpenNewsroomReport,
   });
 
   final String matchId;
   final VoidCallback? onOpenPortfolio;
   final VoidCallback? onOpenMarket;
+  final VoidCallback? onOpenNewsroomReport;
   final GtexMatchRepository? repository;
 
   /// Opens the replay archive for this fixture. When null the replay CTA is
@@ -143,8 +149,15 @@ class _GtexMatchCenterScreenV2State extends State<GtexMatchCenterScreenV2> {
                                   match: match,
                                   controller: controller,
                                   onOpenReplay: widget.onOpenReplay,
-                                onOpenPortfolio: widget.onOpenPortfolio ?? () => context.go('/app/portfolio'),
-                                onOpenMarket: widget.onOpenMarket ?? () => context.go('/app/market'),
+                                  onOpenPortfolio:
+                                      widget.onOpenPortfolio ??
+                                      () => context.go('/app/portfolio'),
+                                  onOpenMarket:
+                                      widget.onOpenMarket ??
+                                      () => context.go('/app/market'),
+                                  onOpenNewsroomReport:
+                                      widget.onOpenNewsroomReport ??
+                                      () => context.go('/world'),
                                 ),
                               ),
                               const SizedBox(width: 16),
@@ -187,6 +200,7 @@ class _MainPitchWorkspace extends StatelessWidget {
     this.onOpenReplay,
     this.onOpenPortfolio,
     this.onOpenMarket,
+    this.onOpenNewsroomReport,
   });
 
   final GtexLiveMatchState match;
@@ -194,17 +208,107 @@ class _MainPitchWorkspace extends StatelessWidget {
   final ValueChanged<String>? onOpenReplay;
   final VoidCallback? onOpenPortfolio;
   final VoidCallback? onOpenMarket;
+  final VoidCallback? onOpenNewsroomReport;
 
   @override
   Widget build(BuildContext context) {
+    if (match.phase == GtexMatchPhase.scheduled) {
+      return GtexPreMatchPackagePanel(
+        match: match,
+        onEnterTactics: () => controller.selectTab(3),
+      );
+    }
+    final bool isFullTime = match.phase == GtexMatchPhase.fullTime;
+    if (isFullTime) {
+      return SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            GtexMatchScoreboard(match: match),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 220,
+              child: _BroadcastPanel(
+                title: 'MATCH CAM',
+                trailing: '${match.home.formation} / ${match.away.formation}',
+                child: Center(
+                  child: _PitchViewStack(
+                    match: match,
+                    onPlayerSelected: controller.selectPitchPlayer,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _HorizontalTimelineScrub(match: match),
+            const SizedBox(height: 12),
+            _LineupStrip(home: match.home, away: match.away),
+            _ReplayEntryBar(matchId: match.matchId, onOpenReplay: onOpenReplay),
+            const SizedBox(height: 12),
+            GtexPostMatchPanel(
+              match: match,
+              onOpenPortfolio: onOpenPortfolio,
+              onOpenMarket: onOpenMarket,
+              onOpenNewsroomReport: onOpenNewsroomReport,
+              onReplayGoal: (int minute) => context.push(
+                '/matches/viewer/${Uri.encodeComponent(match.matchId)}?minute=$minute',
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return Column(
       children: [
         GtexMatchScoreboard(match: match),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
+        GtexTacticalAdvisorWidget(
+          match: match,
+          compact: true,
+          onApplyInstruction: (inst) async {
+            await controller.sendInstruction(inst);
+          },
+        ),
+        const SizedBox(height: 8),
         Expanded(
           child: _BroadcastPanel(
             title: 'MATCH CAM',
             trailing: '${match.home.formation} / ${match.away.formation}',
+            trailingWidget: onOpenReplay != null
+                ? Tooltip(
+                    message: 'Open 2D Broadcast Pitch',
+                    child: InkWell(
+                      key: const Key('gtex-open-broadcast-viewer-btn'),
+                      onTap: () => onOpenReplay!(match.matchId),
+                      borderRadius: BorderRadius.circular(4),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.tv,
+                              size: 13,
+                              color: _GtexMatchColors.primary,
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              '2D BROADCAST',
+                              style: TextStyle(
+                                color: _GtexMatchColors.primary,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                : null,
             child: Center(
               child: _PitchViewStack(
                 match: match,
@@ -217,15 +321,117 @@ class _MainPitchWorkspace extends StatelessWidget {
         _HorizontalTimelineScrub(match: match),
         const SizedBox(height: 12),
         _LineupStrip(home: match.home, away: match.away),
-        if (match.phase == GtexMatchPhase.fullTime) ...<Widget>[
-          GtexPostMatchPanel(
-            match: match,
-            onOpenPortfolio: onOpenPortfolio,
-            onOpenMarket: onOpenMarket,
-          ),
-          _ReplayEntryBar(matchId: match.matchId, onOpenReplay: onOpenReplay),
-        ],
       ],
+    );
+  }
+}
+
+
+class _PreMatchTacticalWorkspace extends StatelessWidget {
+  const _PreMatchTacticalWorkspace({required this.match});
+
+  final GtexLiveMatchState match;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(4, 2, 4, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Text(
+              'MATCHDAY · TACTICAL BRIEFING',
+              style: TextStyle(
+                color: _GtexMatchColors.amber,
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.5,
+              ),
+            ),
+          ),
+          GtexMatchScoreboard(match: match),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: <Color>[Color(0xFF172638), Color(0xFF0B131E)],
+              ),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _GtexMatchColors.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const Text(
+                  'YOUR GAME PLAN',
+                  style: TextStyle(
+                    color: _GtexMatchColors.amber,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Review the official team sheets, formations, manager and bench before kickoff.',
+                  style: TextStyle(
+                    color: _GtexMatchColors.text,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Your saved formation and starting XI can be adjusted in Tactical Setup. The match begins only when the match authority advances to kickoff.',
+                  style: TextStyle(
+                    color: _GtexMatchColors.muted,
+                    fontSize: 12,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: <Widget>[
+                    FilledButton.icon(
+                      key: const Key('gtex-prematch-edit-lineup'),
+                      onPressed: () => context.push('/lineup'),
+                      icon: const Icon(Icons.grid_3x3_rounded, size: 17),
+                      label: const Text('Formation & XI'),
+                    ),
+                    OutlinedButton.icon(
+                      key: const Key('gtex-prematch-select-manager'),
+                      onPressed: () => context.push('/coaches'),
+                      icon: const Icon(Icons.manage_accounts_outlined, size: 17),
+                      label: const Text('Managers & Coaches'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 430,
+            child: _BroadcastPanel(
+              title: 'OFFICIAL TEAM SHEETS',
+              trailing: '${match.home.formation} / ${match.away.formation}',
+              child: GtexMatchLineups(home: match.home, away: match.away),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const GtexMatchdayAdSlot(
+            placement: 'Pre-match tactical briefing',
+            compact: true,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -344,10 +550,38 @@ class _RightLivePanel extends StatelessWidget {
       case 3:
         return GtexTacticsPanel(
           isSending: controller.isSendingInstruction,
-          onSubmit: controller.sendInstruction,
+          homeTeam: match.home,
+          awayTeam: match.away,
+          currentMinute: match.minute,
+          onSubmit: (GtexTacticalInstruction instruction) async {
+            await controller.sendInstruction(instruction);
+            if (context.mounted) {
+              final subsCount = instruction.substitutions?.length ?? 0;
+              final subsMsg = subsCount > 0 ? ' · $subsCount subs' : '';
+              final mentalityText = instruction.mentality?.toUpperCase() ?? 'BALANCED';
+              final formationText = instruction.formation ?? '4-3-3';
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Tactical instruction accepted: $formationText · '
+                    '$mentalityText$subsMsg '
+                    '(Press: ${instruction.pressIntensity}%, Line: ${instruction.defensiveLine}%)',
+                  ),
+                  duration: const Duration(seconds: 3),
+                  backgroundColor: const Color(0xFF0F172A),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          },
         );
       case 4:
-        return GtexHighlightsPanel(highlights: match.highlights);
+        return GtexHighlightsPanel(
+          highlights: match.highlights,
+          onReplayGoal: (int minute) => context.push(
+            '/matches/viewer/${Uri.encodeComponent(match.matchId)}?minute=$minute',
+          ),
+        );
       case 0:
       default:
         return GtexMatchTimeline(events: match.timeline);
@@ -384,6 +618,12 @@ class _MobileMatchView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (match.phase == GtexMatchPhase.scheduled) {
+      return GtexPreMatchPackagePanel(
+        match: match,
+        onEnterTactics: () => controller.selectTab(3),
+      );
+    }
     return Column(
       children: [
         Row(
@@ -406,11 +646,45 @@ class _MobileMatchView extends StatelessWidget {
                 fontFamily: 'JetBrains Mono',
               ),
             ),
+            if (onOpenReplay != null) ...[
+              const SizedBox(width: 8),
+              InkWell(
+                key: const Key('gtex-mobile-open-broadcast-btn'),
+                onTap: () => onOpenReplay!(match.matchId),
+                borderRadius: BorderRadius.circular(4),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.tv, size: 14, color: _GtexMatchColors.primary),
+                      SizedBox(width: 4),
+                      Text(
+                        '2D PITCH',
+                        style: TextStyle(
+                          color: _GtexMatchColors.primary,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
         const SizedBox(height: 10),
         GtexMatchScoreboard(match: match),
-        const SizedBox(height: 10),
+        const SizedBox(height: 6),
+        GtexTacticalAdvisorWidget(
+          match: match,
+          compact: true,
+          onApplyInstruction: (inst) async {
+            await controller.sendInstruction(inst);
+          },
+        ),
+        const SizedBox(height: 6),
         Expanded(
           flex: 5,
           child: _BroadcastPanel(
@@ -682,10 +956,12 @@ class _BroadcastPanel extends StatelessWidget {
     required this.title,
     required this.child,
     this.trailing,
+    this.trailingWidget,
   });
 
   final String title;
   final String? trailing;
+  final Widget? trailingWidget;
   final Widget child;
 
   @override
@@ -717,6 +993,10 @@ class _BroadcastPanel extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
+                if (trailingWidget != null) ...[
+                  trailingWidget!,
+                  if (trailing != null) const SizedBox(width: 8),
+                ],
                 if (trailing != null)
                   Text(
                     trailing!,
@@ -1250,14 +1530,14 @@ class _TabButton extends StatelessWidget {
           decoration: BoxDecoration(
             color:
                 selected
-                    ? const Color(0xFF00E87A).withOpacity(.14)
-                    : const Color(0xFF101713),
+                    ? GtexMatchVisualTokens.live.withValues(alpha: 0.14)
+                    : GtexMatchVisualTokens.surfaceOverlay,
             borderRadius: BorderRadius.circular(6),
             border: Border.all(
               color:
                   selected
-                      ? const Color(0xFF00E87A).withOpacity(.48)
-                      : const Color(0xFF2A3A31),
+                      ? GtexMatchVisualTokens.live.withValues(alpha: 0.48)
+                      : GtexMatchVisualTokens.border,
             ),
           ),
           child: Row(
@@ -1267,7 +1547,9 @@ class _TabButton extends StatelessWidget {
                 icon,
                 size: 18,
                 color:
-                    selected ? const Color(0xFF00E87A) : _GtexMatchColors.muted,
+                    selected
+                        ? GtexMatchVisualTokens.live
+                        : _GtexMatchColors.muted,
               ),
               const SizedBox(width: 10),
               Text(

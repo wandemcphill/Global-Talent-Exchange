@@ -1,5 +1,8 @@
 import 'package:gte_frontend/data/gte_authed_api.dart';
+import 'package:gte_frontend/features/owner_console/models/gtex_owner_inbox_models.dart';
 import 'package:gte_frontend/features/owner_console/widgets/club_legacy_desk.dart';
+
+export 'package:gte_frontend/features/owner_console/models/gtex_owner_inbox_models.dart';
 
 class ShowroomExhibit {
   const ShowroomExhibit({
@@ -8,8 +11,14 @@ class ShowroomExhibit {
     required this.category,
     required this.ownershipLabel,
     required this.fallbackLabel,
+    this.sku,
+    this.price,
+    this.supplyCap,
+    this.mintedCount,
     this.modelFile,
     this.previewFile,
+    this.ownerClass,
+    this.status,
     this.owned = false,
   });
 
@@ -19,8 +28,14 @@ class ShowroomExhibit {
     category: '${json['category'] ?? 'watch'}',
     ownershipLabel: '${json['ownership_label'] ?? 'Not owned'}',
     fallbackLabel: '${json['fallback_label'] ?? 'Static card'}',
+    sku: _text(json['sku']),
+    price: _text(json['price']),
+    supplyCap: json['supply_cap'] == null ? null : _int(json['supply_cap']),
+    mintedCount: json['minted_count'] == null ? null : _int(json['minted_count']),
     modelFile: _text(json['model_file']),
     previewFile: _text(json['preview_file']),
+    ownerClass: _text(json['owner_class']),
+    status: _text(json['status']),
     owned: json['owned'] == true,
   );
 
@@ -29,9 +44,56 @@ class ShowroomExhibit {
   final String category;
   final String ownershipLabel;
   final String fallbackLabel;
+  final String? sku;
+  final String? price;
+  final int? supplyCap;
+  final int? mintedCount;
   final String? modelFile;
   final String? previewFile;
+  final String? ownerClass;
+  final String? status;
   final bool owned;
+}
+
+class OwnerGiftRecipient {
+  const OwnerGiftRecipient({
+    required this.id,
+    required this.name,
+    required this.position,
+    required this.rating,
+    required this.morale,
+    this.portraitUrl,
+    this.isRegen = false,
+  });
+
+  factory OwnerGiftRecipient.fromJson(Map<String, dynamic> json) =>
+      OwnerGiftRecipient(
+        id: _text(json['id']) ?? _text(json['player_id']) ?? '',
+        name: _text(json['name']) ?? _text(json['player_name']) ?? 'Squad player',
+        position: _text(json['position']) ?? 'Player',
+        rating: _int(json['rating'] ?? json['overall_rating']),
+        morale: _int(json['morale']),
+        portraitUrl: _text(json['portrait_url']),
+        isRegen: json['is_regen'] == true,
+      );
+
+  final String id;
+  final String name;
+  final String position;
+  final int rating;
+  final int morale;
+  final String? portraitUrl;
+  final bool isRegen;
+}
+
+/// Optional, player-aware showroom actions. Keeping this separate leaves the
+/// general OwnerConsoleReader contract intact for existing callers and tests.
+abstract interface class OwnerLegacyGiftGateway {
+  Future<List<OwnerGiftRecipient>> fetchGiftRecipients();
+  Future<void> giftOwnedAssetToPlayer({
+    required String assetId,
+    required String playerId,
+  });
 }
 
 double _num(Object? v) =>
@@ -52,70 +114,6 @@ List<Map<String, dynamic>> _maps(Object? v) =>
         .whereType<Map<dynamic, dynamic>>()
         .map((Map<dynamic, dynamic> m) => Map<String, dynamic>.from(m))
         .toList(growable: false);
-
-class OwnerDecisionAction {
-  const OwnerDecisionAction({required this.key, required this.label, this.style = 'ghost'});
-
-  factory OwnerDecisionAction.fromJson(Map<String, dynamic> j) => OwnerDecisionAction(
-    key: '${j['key']}',
-    label: _text(j['label']) ?? '${j['key']}',
-    style: _text(j['style']) ?? 'ghost',
-  );
-
-  final String key;
-  final String label;
-  final String style;
-
-  bool get isPrimary => style == 'primary';
-}
-
-class OwnerInboxEntry {
-  const OwnerInboxEntry({
-    required this.id,
-    required this.kind,
-    required this.title,
-    required this.isDecision,
-    this.clubId,
-    this.priority,
-    this.why,
-    this.what,
-    this.sender,
-    this.status,
-    this.outcome,
-    this.respondBy,
-    this.actions = const <OwnerDecisionAction>[],
-  });
-
-  factory OwnerInboxEntry.fromJson(Map<String, dynamic> j) => OwnerInboxEntry(
-    id: '${j['id']}',
-    kind: _text(j['kind']) ?? 'update',
-    title: _text(j['title']) ?? _text(j['what']) ?? 'Update',
-    isDecision: j['is_decision'] == true,
-    clubId: _text(j['club_id']),
-    priority: _text(j['priority']),
-    why: _text(j['why']) ?? _text(j['body']),
-    what: _text(j['what']),
-    sender: _text(j['sender']),
-    status: _text(j['status']),
-    outcome: _text(j['outcome']),
-    respondBy: DateTime.tryParse(_text(j['respond_by']) ?? ''),
-    actions: _maps(j['actions']).map(OwnerDecisionAction.fromJson).toList(),
-  );
-
-  final String id;
-  final String kind;
-  final String title;
-  final bool isDecision;
-  final String? clubId;
-  final String? priority;
-  final String? why;
-  final String? what;
-  final String? sender;
-  final String? status;
-  final String? outcome;
-  final DateTime? respondBy;
-  final List<OwnerDecisionAction> actions;
-}
 
 class PublicTrophy {
   const PublicTrophy({required this.competition, this.tier, this.position, this.year});
@@ -348,6 +346,7 @@ class OwnerControlCenter {
     required this.pendingPayouts,
     required this.earnings,
     required this.integrityScore,
+    this.inboxUnreadCount = 0,
     this.legacy = const <OwnerLegacyRating>[],
   });
 
@@ -364,6 +363,7 @@ class OwnerControlCenter {
       decisions: _maps(j['decisions']).map(OwnerInboxEntry.fromJson).toList(),
       inbox: _maps(j['inbox']).map(OwnerInboxEntry.fromJson).toList(),
       inboxOpenCount: _int(j['inbox_open_count']),
+      inboxUnreadCount: _int(j['inbox_unread_count']),
       health: _maps(j['health']).map(OwnerClubHealth.fromJson).toList(),
       upcoming: _maps(fixtures['upcoming']).map(OwnerFixture.fromJson).toList(),
       recent: _maps(fixtures['recent']).map(OwnerFixture.fromJson).toList(),
@@ -388,6 +388,7 @@ class OwnerControlCenter {
   final List<OwnerInboxEntry> decisions;
   final List<OwnerInboxEntry> inbox;
   final int inboxOpenCount;
+  final int inboxUnreadCount;
   final List<OwnerClubHealth> health;
   final List<OwnerFixture> upcoming;
   final List<OwnerFixture> recent;
@@ -682,29 +683,16 @@ abstract class OwnerConsoleReader {
 
   Future<List<ShowroomExhibit>> fetchShowroom();
 
-  /// Primary-market purchase through Club Legacy phase 4 HTTP.
-  /// [sku] is a catalogue key such as `gtex-jet-harbour`.
-  Future<void> purchaseCatalogueSku(
-    String sku, {
-    String ownerClass = 'club',
-    String? idempotencyKey,
-  });
-
-  /// Offer a owned prestige asset as a gift. Recipient must accept separately.
-  Future<void> offerShowroomGift({
-    required String assetId,
-    required String recipientRef,
-  });
-
   Future<ClubLegacyDeskData> fetchDesk();
 
   Future<void> performDesk(String action, [Map<String, Object?> payload = const <String, Object?>{}]);
 }
 
-class OwnerConsoleApi implements OwnerConsoleReader {
-  const OwnerConsoleApi({required this.client});
+class OwnerConsoleApi implements OwnerConsoleReader, GtexOwnerInboxDataSource, OwnerLegacyGiftGateway {
+  const OwnerConsoleApi({required this.client, this.activeClubId});
 
   final GteAuthedApi client;
+  final String? activeClubId;
 
   @override
   Future<OwnerControlCenter> fetchControlCenter() async =>
@@ -722,10 +710,78 @@ class OwnerConsoleApi implements OwnerConsoleReader {
   }
 
   @override
-  Future<OwnerInboxEntry> decide(String itemId, String action) async =>
-      OwnerInboxEntry.fromJson(
-        _map(await client.post('/owner/inbox/$itemId/decide', body: <String, Object?>{'action': action})),
-      );
+  Future<GtexOwnerInboxFeed> fetchInbox({
+    String? status,
+    String? category,
+    String? clubId,
+    String? saveContextId,
+    bool unreadOnly = false,
+  }) async {
+    final String? resolvedClubId = _text(clubId);
+    final String? resolvedSaveContextId = _text(saveContextId);
+    final Map<String, dynamic> response = await client.getMap(
+      '/owner/inbox',
+      query: <String, Object?>{
+        if (status != null && status.trim().isNotEmpty)
+          'status': status.trim(),
+        if (category != null && category.trim().isNotEmpty)
+          'category': category.trim(),
+        if (resolvedClubId != null) 'club_id': resolvedClubId,
+        if (resolvedSaveContextId != null)
+          'save_context_id': resolvedSaveContextId,
+        if (unreadOnly) 'unread_only': true,
+      },
+    );
+    return GtexOwnerInboxFeed.fromJson(response);
+  }
+
+  @override
+  Future<OwnerInboxEntry> markInboxItemRead(
+    String itemId, {
+    bool isRead = true,
+  }) async => OwnerInboxEntry.fromJson(
+    _map(
+      await client.post(
+        '/owner/inbox/$itemId/read',
+        body: <String, Object?>{'is_read': isRead},
+      ),
+    ),
+  );
+
+  @override
+  Future<OwnerInboxEntry> archiveInboxItem(
+    String itemId, {
+    bool archive = true,
+  }) async => OwnerInboxEntry.fromJson(
+    _map(
+      await client.post(
+        '/owner/inbox/$itemId/archive',
+        body: <String, Object?>{'archive': archive},
+      ),
+    ),
+  );
+
+  @override
+  Future<OwnerInboxEntry> decideInboxItem(
+    String itemId, {
+    required String action,
+    String? idempotencyKey,
+  }) async => OwnerInboxEntry.fromJson(
+    _map(
+      await client.post(
+        '/owner/inbox/$itemId/decide',
+        body: <String, Object?>{
+          'action': action,
+          if (idempotencyKey != null && idempotencyKey.trim().isNotEmpty)
+            'idempotency_key': idempotencyKey.trim(),
+        },
+      ),
+    ),
+  );
+
+  @override
+  Future<OwnerInboxEntry> decide(String itemId, String action) =>
+      decideInboxItem(itemId, action: action);
 
   @override
   Future<OwnerReviewQueue> fetchReviewQueue() async =>
@@ -790,90 +846,170 @@ class OwnerConsoleApi implements OwnerConsoleReader {
   Future<PublicClubCard> fetchPublicShowroom(String code) async =>
       PublicClubCard.fromJson(await client.getMap('/owner/public/showroom/$code', auth: false));
 
-  @override
-  Future<List<ShowroomExhibit>> fetchShowroom() async {
-    final Map<String, dynamic> center = await client.getMap('/owner/control-center');
+  /// Resolves an explicit [clubId] first, then [activeClubId], then the first
+  /// active club from `/owner/control-center`, before falling back to the
+  /// first owned club.
+  Future<String?> resolveClubId({
+    String? clubId,
+    Map<String, dynamic>? controlCenterPayload,
+  }) async {
+    final String? explicitClubId = _text(clubId);
+    final String? fallbackActiveClubId = _text(activeClubId);
+    Map<String, dynamic>? center = controlCenterPayload;
+    if (center == null) {
+      try {
+        center = await client.getMap('/owner/control-center');
+      } catch (_) {
+        if (explicitClubId != null) {
+          return explicitClubId;
+        }
+        if (fallbackActiveClubId != null) {
+          return fallbackActiveClubId;
+        }
+        rethrow;
+      }
+    }
     final List<Map<String, dynamic>> clubs = _maps(center['clubs']);
-    if (clubs.isEmpty) {
+    if (explicitClubId != null) {
+      for (final Map<String, dynamic> club in clubs) {
+        if (_text(club['club_id']) == explicitClubId) {
+          return explicitClubId;
+        }
+      }
+      return explicitClubId;
+    }
+    if (fallbackActiveClubId != null) {
+      for (final Map<String, dynamic> club in clubs) {
+        if (_text(club['club_id']) == fallbackActiveClubId) {
+          return fallbackActiveClubId;
+        }
+      }
+      if (clubs.isEmpty) {
+        return fallbackActiveClubId;
+      }
+    }
+    for (final Map<String, dynamic> club in clubs) {
+      if (club['is_active'] == true ||
+          _text(club['status']) == 'active' ||
+          _text(club['stage']) == 'active') {
+        final String? resolvedActive = _text(club['club_id']);
+        if (resolvedActive != null) {
+          return resolvedActive;
+        }
+      }
+    }
+    if (clubs.isNotEmpty) {
+      return _text(clubs.first['club_id']);
+    }
+    return null;
+  }
+
+  @override
+  Future<List<OwnerGiftRecipient>> fetchGiftRecipients() async {
+    final String? clubId = await resolveClubId();
+    if (clubId == null) return const <OwnerGiftRecipient>[];
+    final Map<String, dynamic> detail = await client.getMap('/owner/clubs/$clubId');
+    return _maps(detail['squad'])
+        .map(OwnerGiftRecipient.fromJson)
+        .where(
+          (OwnerGiftRecipient player) =>
+              player.id.isNotEmpty && player.isRegen,
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> giftOwnedAssetToPlayer({
+    required String assetId,
+    required String playerId,
+  }) async {
+    final String? clubId = await resolveClubId();
+    if (clubId == null) {
+      throw StateError('Select an active club before gifting a luxury item.');
+    }
+
+    // The existing legacy inventory uses an offer/accept ownership transfer.
+    // The club owner is authorized to accept a gift addressed to a player in
+    // their own squad, which invokes the canonical player-gift broadcast path.
+    final Object? offeredPayload = await client.post(
+      '/owner/legacy/$clubId/desk',
+      body: <String, Object?>{
+        'action': 'gift',
+        'payload': <String, Object?>{
+          'asset_id': assetId,
+          'recipient_ref': playerId,
+        },
+      },
+    );
+    final Map<String, dynamic> offered = _map(offeredPayload);
+    final String? giftId = _text(offered['id']) ?? _text(_map(offered['gift'])['id']);
+    if (giftId == null) {
+      throw const FormatException(
+        'GTEX did not return a gift reference. The asset transfer could not be confirmed.',
+      );
+    }
+
+    await client.post(
+      '/owner/legacy/$clubId/desk',
+      body: <String, Object?>{
+        'action': 'accept_gift',
+        'payload': <String, Object?>{'gift_id': giftId},
+      },
+    );
+  }
+
+  @override
+  Future<List<ShowroomExhibit>> fetchShowroom({String? clubId}) async {
+    final String? resolvedClubId = await resolveClubId(clubId: clubId);
+    if (resolvedClubId == null) {
       return const <ShowroomExhibit>[];
     }
-    final String clubId = '${clubs.first['club_id']}';
-    final Map<String, dynamic> room = await client.getMap('/owner/legacy/$clubId/showroom');
+    final Map<String, dynamic> room = await client.getMap(
+      '/owner/legacy/$resolvedClubId/showroom',
+    );
     return _maps(room['exhibits']).map(ShowroomExhibit.fromJson).toList();
   }
 
-  Future<String?> _primaryClubId() async {
-    final Map<String, dynamic> center = await client.getMap('/owner/control-center');
-    final List<Map<String, dynamic>> clubs = _maps(center['clubs']);
-    if (clubs.isEmpty) {
-      return null;
-    }
-    return '${clubs.first['club_id']}';
-  }
-
   @override
-  Future<void> purchaseCatalogueSku(
-    String sku, {
-    String ownerClass = 'club',
-    String? idempotencyKey,
-  }) async {
-    final String? clubId = await _primaryClubId();
-    if (clubId == null) {
-      throw StateError('No club available for prestige purchase.');
-    }
-    final String key =
-        idempotencyKey ??
-        'purchase:$clubId:$sku:$ownerClass:${DateTime.now().microsecondsSinceEpoch}';
-    await client.post(
-      '/owner/legacy/$clubId/market/purchases',
-      body: <String, Object?>{
-        'sku': sku,
-        'owner_class': ownerClass,
-        'idempotency_key': key,
-      },
-    );
-  }
-
-  @override
-  Future<void> offerShowroomGift({
-    required String assetId,
-    required String recipientRef,
-  }) async {
-    final String? clubId = await _primaryClubId();
-    if (clubId == null) {
-      throw StateError('No club available for prestige gift.');
-    }
-    await client.post(
-      '/owner/legacy/$clubId/market/gifts',
-      body: <String, Object?>{
-        'asset_id': assetId,
-        'recipient_ref': recipientRef,
-      },
-    );
-  }
-
-  @override
-  Future<ClubLegacyDeskData> fetchDesk() async {
-    final Map<String, dynamic> center = await client.getMap('/owner/control-center');
-    final List<Map<String, dynamic>> clubs = _maps(center['clubs']);
-    if (clubs.isEmpty) {
+  Future<ClubLegacyDeskData> fetchDesk({String? clubId}) async {
+    final String? resolvedClubId = await resolveClubId(clubId: clubId);
+    if (resolvedClubId == null) {
       return ClubLegacyDeskData.fromJson(const <String, dynamic>{});
     }
-    return ClubLegacyDeskData.fromJson(await client.getMap('/owner/legacy/${clubs.first['club_id']}/desk'));
+    return ClubLegacyDeskData.fromJson(
+      await client.getMap('/owner/legacy/$resolvedClubId/desk'),
+    );
   }
 
   @override
-  Future<void> performDesk(String action, [Map<String, Object?> payload = const <String, Object?>{}]) async {
-    final Map<String, dynamic> center = await client.getMap('/owner/control-center');
-    final List<Map<String, dynamic>> clubs = _maps(center['clubs']);
-    if (clubs.isEmpty) {
+  Future<void> performDesk(
+    String action, [
+    Map<String, Object?> payload = const <String, Object?>{},
+    String? clubId,
+  ]) async {
+    final String? payloadClubId =
+        _text(payload['club_id']) ?? _text(payload['clubId']);
+    final String? resolvedClubId = await resolveClubId(
+      clubId: _text(clubId) ?? payloadClubId,
+    );
+    if (resolvedClubId == null) {
       return;
     }
-    final Map<String, Object?> body = <String, Object?>{..._deskPayload(action), ...payload};
-    await client.post('/owner/legacy/${clubs.first['club_id']}/desk', body: <String, Object?>{'action': action, 'payload': body});
+    final Map<String, Object?> sanitizedPayload = <String, Object?>{
+      for (final MapEntry<String, Object?> entry in payload.entries)
+        if (entry.key != 'club_id' && entry.key != 'clubId')
+          entry.key: entry.value,
+    };
+    final Map<String, Object?> body = <String, Object?>{
+      ..._deskPayload(action),
+      ...sanitizedPayload,
+    };
+    await client.post(
+      '/owner/legacy/$resolvedClubId/desk',
+      body: <String, Object?>{'action': action, 'payload': body},
+    );
   }
 
-  @override
   Map<String, Object?> _deskPayload(String action) {
     return switch (action) {
       'hire' => <String, Object?>{'role': 'gm', 'name': 'Ada Okonkwo', 'personality': 'cautious', 'wage': '4000'},
@@ -883,6 +1019,8 @@ class OwnerConsoleApi implements OwnerConsoleReader {
       'case' => <String, Object?>{'rule_code': 'late_wages', 'allegation': 'Wages slipped', 'evidence': 'Ledger'},
       'list_auction' => <String, Object?>{'price': '1500'},
       'place_bid' => <String, Object?>{'amount': '2000'},
+      'purchase' => <String, Object?>{'owner_class': 'club'},
+      'gift' => <String, Object?>{},
       _ => <String, Object?>{},
     };
   }

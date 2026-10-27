@@ -332,6 +332,36 @@ class GtexCoinTraderRate {
   }
 }
 
+class GtexCoinTradeMessage {
+  const GtexCoinTradeMessage({
+    required this.id,
+    required this.orderId,
+    required this.senderUserId,
+    required this.senderName,
+    required this.message,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String orderId;
+  final String senderUserId;
+  final String senderName;
+  final String message;
+  final DateTime createdAt;
+
+  factory GtexCoinTradeMessage.fromJson(Object? raw) {
+    final Map<String, Object?> json = _map(raw);
+    return GtexCoinTradeMessage(
+      id: _string(json['id']),
+      orderId: _string(json['order_id']),
+      senderUserId: _string(json['sender_user_id']),
+      senderName: _string(json['sender_name'], fallback: 'Participant'),
+      message: _string(json['message']),
+      createdAt: _dateTime(json['created_at']) ?? DateTime.now(),
+    );
+  }
+}
+
 class GtexCoinTradeOrder {
   const GtexCoinTradeOrder({
     required this.id,
@@ -356,6 +386,7 @@ class GtexCoinTradeOrder {
     this.termsSnapshot = const <String, Object?>{},
     this.proof = const <String, Object?>{},
     this.ledgerRefs = const <String, Object?>{},
+    this.messages = const <GtexCoinTradeMessage>[],
     this.metadata = const <String, Object?>{},
   });
 
@@ -381,6 +412,7 @@ class GtexCoinTradeOrder {
   final Map<String, Object?> termsSnapshot;
   final Map<String, Object?> proof;
   final Map<String, Object?> ledgerRefs;
+  final List<GtexCoinTradeMessage> messages;
   final Map<String, Object?> metadata;
 
   factory GtexCoinTradeOrder.fromJson(Object? raw) {
@@ -408,6 +440,9 @@ class GtexCoinTradeOrder {
       termsSnapshot: _map(json['terms_snapshot']),
       proof: _map(json['proof']),
       ledgerRefs: _map(json['ledger_refs']),
+      messages: _mapList(json['messages'])
+          .map(GtexCoinTradeMessage.fromJson)
+          .toList(growable: false),
       metadata: _map(json['metadata_json']),
     );
   }
@@ -433,7 +468,10 @@ class GtexCoinTradeOrder {
 
   bool get canCancel {
     final String normalized = status.toLowerCase();
-    return normalized == 'created' || isActiveEscrow;
+    if (normalized == 'proof_submitted') {
+      return false;
+    }
+    return normalized == 'created' || normalized == 'payment_pending';
   }
 
   bool get canAccept => status.toLowerCase() == 'created';

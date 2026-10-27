@@ -5,7 +5,7 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 
 ## Shared Source of Truth
 
-- Shared Flutter client files with API calls discovered: **129**
+- Shared Flutter client files with API calls discovered: **134**
 - Web and mobile therefore inherit the same endpoint usage and the same stale/legacy risks.
 
 ## Divergence Risks
@@ -23,6 +23,7 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/data/club_api.dart -> /api/clubs/$clubId/honors-timeline`
 - `frontend/lib/data/club_api.dart -> /api/clubs/$clubId/identity`
 - `frontend/lib/data/club_api.dart -> /api/clubs/$clubId/jerseys`
+- `frontend/lib/data/club_api.dart -> /api/clubs/$clubId/public-profile`
 - `frontend/lib/data/club_api.dart -> /api/clubs/$clubId/season-honors`
 - `frontend/lib/data/club_api.dart -> /api/clubs/$clubId/trophy-cabinet`
 - `frontend/lib/data/club_api.dart -> /api/clubs/$clubId/v2-snapshot`
@@ -203,6 +204,7 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/features/club_growth_redesign/club_growth_api.dart -> /api/clubs/$encodedClubId/growth/academy/prospects/$encodedProspectId/offer-contract`
 - `frontend/lib/features/club_growth_redesign/club_growth_api.dart -> /api/clubs/$encodedClubId/growth/academy/prospects/$encodedProspectId/promote`
 - `frontend/lib/features/club_growth_redesign/club_growth_api.dart -> /api/clubs/$encodedClubId/growth/staff-contracts/$encodedContractId/accept`
+- `frontend/lib/features/club_growth_redesign/club_growth_api.dart -> /api/clubs/$encodedClubId/growth/staff-contracts/$encodedContractId/terminate`
 - `frontend/lib/features/club_growth_redesign/club_growth_api.dart -> /api/clubs/$encodedClubId/growth/staff/$encodedStaffId/offer`
 - `frontend/lib/features/club_growth_redesign/club_growth_api.dart -> http://127.0.0.1:8000`
 - `frontend/lib/features/club_hub/presentation/club_hub_screen.dart -> http://127.0.0.1:8000`
@@ -241,6 +243,7 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/admin/coin-traders/$profileId/reject`
 - `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/admin/coin-traders/orders`
 - `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/admin/coin-traders/orders/$orderId/resolve`
+- `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/admin/coin-traders/orders/expire-stale`
 - `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/coin-traders`
 - `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/coin-traders/$profileId`
 - `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/coin-traders/apply`
@@ -251,6 +254,7 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/coin-traders/orders/$orderId/cancel`
 - `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/coin-traders/orders/$orderId/confirm`
 - `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/coin-traders/orders/$orderId/dispute`
+- `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/coin-traders/orders/$orderId/messages`
 - `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/coin-traders/orders/$orderId/proof`
 - `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> http://127.0.0.1:8000`
 - `frontend/lib/features/global_search_redesign/global_search_api.dart -> /api/admin/search`

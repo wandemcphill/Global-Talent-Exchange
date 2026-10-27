@@ -48,3 +48,39 @@ def test_club_profile_and_identity_endpoints_work(client, create_club) -> None:
     assert branding_response.json()["theme"]["name"] == "Spotlight"
     assert len(jerseys_response.json()["jerseys"]) == 1
     assert trophies_response.json()["cabinet"]["total_trophies"] == 0
+
+
+def test_club_sale_market_route_parity(client, create_club) -> None:
+    profile = create_club()
+    club_id = profile["id"]
+
+    # Market listing endpoints parity
+    resp1 = client.get("/api/clubs/sale-market/listings")
+    resp2 = client.get("/api/v2/clubs/sale-market/listings")
+    resp3 = client.get("/clubs/marketplace")
+    resp4 = client.get("/api/clubs/marketplace")
+    resp5 = client.get("/api/v2/clubs/marketplace")
+
+    assert resp1.status_code == 200
+    assert resp2.status_code == 200
+    assert resp3.status_code == 200
+    assert resp4.status_code == 200
+    assert resp5.status_code == 200
+
+    # Club valuation endpoints parity
+    val1 = client.get(f"/api/clubs/{club_id}/valuation")
+    val2 = client.get(f"/api/v2/clubs/{club_id}/valuation")
+    val3 = client.get(f"/clubs/{club_id}/valuation")
+
+    assert val1.status_code == 200
+    assert val2.status_code == 200
+    assert val3.status_code == 200
+
+    # Reputation parity
+    rep1 = client.get(f"/api/clubs/{club_id}/reputation")
+    rep2 = client.get(f"/api/v2/clubs/{club_id}/reputation")
+    rep3 = client.get(f"/clubs/{club_id}/reputation")
+
+    assert rep1.status_code == 200
+    assert rep2.status_code == 200
+    assert rep3.status_code == 200

@@ -8,7 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import FastAPI
-from sqlalchemy import inspect, select, update
+from sqlalchemy import func, inspect, select, update
 from sqlalchemy.orm import Session
 
 from app.access_control.service import AccessControlService
@@ -45,6 +45,7 @@ from app.schemas.player_agency import ContractDecisionRequest, TransferDecisionR
 from app.schemas.player_lifecycle import TransferBidAcceptRequest, TransferBidCreateRequest, TransferBidRejectRequest
 from app.services.player_agency_context_service import PlayerAgencyContextService, clamp, quantize_amount
 from app.services.player_agency_service import PlayerAgencyService
+from app.owner_console import ledger as club_ledger
 from app.services.player_lifecycle_service import (
     PlayerLifecycleError,
     PlayerLifecycleNotFoundError,
@@ -87,6 +88,76 @@ PLAYER_DECISION_DELAY_HOURS = 12
 AGENT_COUNTER_DEADLINE_HOURS = 12
 TRANSFER_MARKET_EXECUTION_ROLES = frozenset({OrganizationRole.ADMIN, OrganizationRole.CLUB})
 TRANSFER_MARKET_WATCHLIST_ROLES = frozenset({OrganizationRole.ADMIN, OrganizationRole.CLUB, OrganizationRole.SCOUT})
+
+# The React Transfer Hub exposes positional groups, while imported player feeds
+# normalize positions using a mixture of provider codes and canonical labels.
+POSITION_GROUP_ALIASES: dict[str, frozenset[str]] = {
+    "GK": frozenset({"gk", "goalkeeper", "keeper", "goalie"}),
+    "DEF": frozenset(
+        {
+            "def",
+            "defender",
+            "defence",
+            "defense",
+            "cb",
+            "centre back",
+            "center back",
+            "centre-back",
+            "center-back",
+            "lb",
+            "rb",
+            "lwb",
+            "rwb",
+            "full-back",
+            "full back",
+            "left back",
+            "right back",
+            "left-back",
+            "right-back",
+        }
+    ),
+    "MID": frozenset(
+        {
+            "mid",
+            "midfield",
+            "midfielder",
+            "cm",
+            "cdm",
+            "dm",
+            "cam",
+            "am",
+            "lm",
+            "rm",
+            "central midfielder",
+            "defensive midfielder",
+            "attacking midfielder",
+            "wing midfielder",
+        }
+    ),
+    "FWD": frozenset(
+        {
+            "fwd",
+            "forward",
+            "striker",
+            "attacker",
+            "st",
+            "cf",
+            "lw",
+            "rw",
+            "ss",
+            "fw",
+            "att",
+            "winger",
+            "left winger",
+            "right winger",
+            "centre forward",
+            "center forward",
+        }
+    ),
+}
+
+# Hub offers that settle as a plain cash transfer; loan and swap terms are not executed yet.
+HUB_CASH_DEAL_TYPES = frozenset({"transfer", "open_offer", "private_negotiation"})
 
 
 class TransferMarketError(Exception):
@@ -352,7 +423,12 @@ class TransferMarketService:
         if any(value is not None for value in (position, country_id, league_id, club_profile_id, real_player_only)):
             statement = statement.join(Player, Player.id == TransferListing.player_id)
             if position is not None:
-                statement = statement.where(Player.normalized_position == position)
+                requested_position = position.strip()
+                group_aliases = POSITION_GROUP_ALIASES.get(requested_position.upper())
+                if group_aliases is not None:
+                    statement = statement.where(func.lower(Player.normalized_position).in_(group_aliases))
+                else:
+                    statement = statement.where(Player.normalized_position == requested_position)
             if country_id is not None:
                 statement = statement.where(Player.country_id == country_id)
             if league_id is not None:
@@ -531,6 +607,7 @@ class TransferMarketService:
         if resolved_bidder_club_id == listing.selling_club_id:
             raise TransferMarketValidationError("Selling club cannot offer on its own listing.")
         self._require_club(resolved_bidder_club_id)
+        self._assert_bidder_can_fund(resolved_bidder_club_id, payload.cash_amount, subject="offer")
         for player_id in payload.offered_player_ids:
             player = self._require_player(player_id)
             current_club_id = self._current_player_club_id(player.id, on_date=effective_at.date())
@@ -594,6 +671,15 @@ class TransferMarketService:
         )
         if offer.status not in {"open", "countered"}:
             raise TransferMarketValidationError("Only open or countered offers can be accepted.")
+        if (
+            offer.offer_type not in HUB_CASH_DEAL_TYPES
+            or listing.listing_type not in HUB_CASH_DEAL_TYPES
+            or offer.offered_player_ids_json
+        ):
+            raise TransferMarketValidationError(
+                "Loan and swap Transfer Hub offers cannot be accepted yet; only cash transfer offers settle."
+            )
+        self._assert_bidder_can_fund(offer.bidder_club_id, offer.cash_amount, subject="offer")
         effective_at = self._coerce_utc(reference_at or utcnow())
         # Claim the offer and the listing with guarded UPDATEs rather than
         # read-then-write. Two accepts racing on sibling offers of the same
@@ -798,6 +884,7 @@ class TransferMarketService:
         current_highest = listing.current_highest_bid or listing.base_price
         if amount <= current_highest:
             raise TransferMarketValidationError("Bid must exceed the current highest bid.")
+        self._assert_bidder_can_fund(resolved_bidder_club_id, amount, subject="bid")
 
         previous_bidder_id = listing.highest_bidder_id
         previous_amount = listing.current_highest_bid
@@ -975,6 +1062,29 @@ class TransferMarketService:
             },
         )
         return snapshot
+
+    def list_negotiations(
+        self,
+        *,
+        actor: User,
+        club_id: str | None = None,
+    ) -> list[TransferNegotiationView]:
+        """List only negotiations belonging to the actor's selected authorized club."""
+        resolved_club_id = self._resolve_actor_club_id(
+            actor,
+            club_id,
+            allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
+            forbidden_detail="transfer_market_negotiation_access_required",
+        )
+        negotiations = self.session.scalars(
+            select(TransferNegotiation)
+            .where(
+                (TransferNegotiation.selling_club_id == resolved_club_id)
+                | (TransferNegotiation.bidder_club_id == resolved_club_id)
+            )
+            .order_by(TransferNegotiation.updated_at.desc(), TransferNegotiation.id.asc())
+        ).all()
+        return [self.to_negotiation_view(item) for item in negotiations]
 
     def get_negotiation(self, listing_id: str, *, actor: User) -> TransferNegotiationView:
         negotiation = self._require_negotiation_by_listing(listing_id)
@@ -1526,14 +1636,19 @@ class TransferMarketService:
         raw_agent = dict(negotiation.metadata_json or {}).get("agent_negotiation")
         if isinstance(raw_agent, dict):
             agent_negotiation = AgentNegotiationView.model_validate(raw_agent)
+        player = self.session.get(Player, negotiation.player_id)
+        listing = self.session.get(TransferListing, negotiation.listing_id)
         return TransferNegotiationView(
             id=negotiation.id,
             listing_id=negotiation.listing_id,
             winning_bid_id=negotiation.winning_bid_id,
             player_id=negotiation.player_id,
+            player_name=(player.canonical_display_name or player.full_name if player is not None else None),
             selling_club_id=negotiation.selling_club_id,
             bidder_club_id=negotiation.bidder_club_id,
             status=negotiation.status,
+            listing_status=listing.status if listing is not None else None,
+            listing_base_price=listing.base_price if listing is not None else None,
             wage_offer_amount=negotiation.wage_offer_amount,
             contract_years=negotiation.contract_years,
             expected_role=negotiation.expected_role,
@@ -1804,7 +1919,7 @@ class TransferMarketService:
                 player_id=listing.player_id,
                 selling_club_id=listing.selling_club_id,
                 buying_club_id=payload.bidder_club_id,
-                bid_amount=listing.current_highest_bid,
+                bid_amount=self._negotiated_fee(listing, negotiation),
                 wage_offer_amount=payload.wage_offer_amount,
                 contract_years=payload.contract_years,
                 sell_on_clause_pct=self._sell_on_clause_pct(payload.clauses_json),
@@ -1842,6 +1957,19 @@ class TransferMarketService:
         if isinstance(getattr(accepted, "structured_terms_json", None), dict):
             contract_id = accepted.structured_terms_json.get("contract_id")
         return accepted, str(contract_id) if contract_id is not None else None
+
+    def _assert_bidder_can_fund(self, club_id: str, amount: Decimal, *, subject: str) -> None:
+        try:
+            club_ledger.assert_club_can_fund(self.session, club_id, amount)
+        except club_ledger.LedgerError as exc:
+            raise TransferMarketValidationError(f"Bidder club treasury cannot cover this {subject}.") from exc
+
+    @staticmethod
+    def _negotiated_fee(listing: TransferListing, negotiation: TransferNegotiation) -> Decimal:
+        hub_terms = dict(negotiation.metadata_json or {})
+        if hub_terms.get("hub_offer_id") and hub_terms.get("cash_amount") is not None:
+            return Decimal(str(hub_terms["cash_amount"]))
+        return listing.current_highest_bid
 
     def _ensure_negotiation(
         self,
@@ -2377,8 +2505,51 @@ class TransferMarketService:
             metadata_json=dict(dynamics.metadata_json or {}),
         )
 
-    @staticmethod
-    def _to_watchlist_entry_view(entry: MarketWatchlistEntry) -> MarketWatchlistEntryView:
+    def list_watchlist_entries(
+        self,
+        *,
+        actor: User,
+        club_id: str | None = None,
+    ) -> list[MarketWatchlistEntryView]:
+        resolved_club_id = self._resolve_actor_club_id(
+            actor,
+            club_id,
+            allowed_roles=TRANSFER_MARKET_WATCHLIST_ROLES,
+            forbidden_detail="transfer_market_club_access_required",
+        )
+        entries = list(
+            self.session.scalars(
+                select(MarketWatchlistEntry)
+                .where(MarketWatchlistEntry.club_id == resolved_club_id)
+                .order_by(MarketWatchlistEntry.updated_at.desc(), MarketWatchlistEntry.id.asc())
+            ).all()
+        )
+        return [self._to_watchlist_entry_view(entry) for entry in entries]
+
+    def _to_watchlist_entry_view(self, entry: MarketWatchlistEntry) -> MarketWatchlistEntryView:
+        player = self.session.get(Player, entry.player_id)
+        if player is None:
+            raise TransferMarketNotFoundError(f"Player {entry.player_id} was not found.")
+
+        current_club = (
+            self.session.get(ClubProfile, player.current_club_profile_id) if player.current_club_profile_id else None
+        )
+        active_listing = self.session.scalar(
+            select(TransferListing)
+            .where(TransferListing.player_id == player.id, TransferListing.status == "open")
+            .order_by(TransferListing.expires_at.desc(), TransferListing.created_at.desc())
+        )
+        player_view = TransferMarketPlayerView(
+            id=player.id,
+            full_name=player.canonical_display_name or player.full_name,
+            normalized_position=player.normalized_position,
+            current_club_id=player.current_club_profile_id,
+            current_club_name=current_club.club_name if current_club is not None else None,
+            current_competition_id=player.current_competition_id,
+            nationality_id=player.country_id,
+            market_value=Decimal(str(player.market_value_eur)) if player.market_value_eur is not None else None,
+            is_real_player=bool(player.is_real_player),
+        )
         return MarketWatchlistEntryView(
             id=entry.id,
             club_id=entry.club_id,
@@ -2386,6 +2557,10 @@ class TransferMarketService:
             source=entry.source,
             discovery_score=entry.discovery_score,
             metadata_json=dict(entry.metadata_json or {}),
+            player=player_view,
+            active_listing=(
+                self.to_listing_view(active_listing, reference_at=utcnow()) if active_listing is not None else None
+            ),
         )
 
     @staticmethod

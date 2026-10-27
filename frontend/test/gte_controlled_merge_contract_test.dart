@@ -7,9 +7,10 @@ import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/features/club_sale_market/presentation/club_sale_market_screen.dart';
 import 'package:gte_frontend/data/gte_models.dart';
+import 'package:gte_frontend/features/navigation/model/gtex_shell_navigation_model.dart';
 import 'package:gte_frontend/features/navigation/presentation/gte_navigation_shell_screen.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
-import 'package:gte_frontend/ui_gtex/layout/gtex_app_shell.dart';
+import 'package:gte_frontend/ui_gtex/layout/gtex_shell_scaffold.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/screens/wallet/gte_wallet_overview_screen.dart';
 import 'package:gte_frontend/theme/gte_theme_controller.dart';
@@ -52,7 +53,7 @@ void main() {
           session: laneCase.session,
         );
         expect(lanes, orderedEquals(laneCase.lanes), reason: laneCase.role);
-        expect(lanes.first, 'Home', reason: laneCase.role);
+        expect(lanes, hasLength(5), reason: laneCase.role);
         expect(lanes.toSet(), hasLength(lanes.length), reason: laneCase.role);
       }
     });
@@ -288,97 +289,41 @@ class _WorkspaceLaneCase {
   final List<String> lanes;
 }
 
-// Regen World is a lane of the shell now, not a hidden top-level URL. It
-// sits beside the Transfer Hub in every workspace that gets one, because
-// both are talent-discovery surfaces.
 final List<_WorkspaceLaneCase> _workspaceLaneCases = <_WorkspaceLaneCase>[
   const _WorkspaceLaneCase(
     role: 'guest',
     session: null,
-    lanes: <String>[
-      'Home',
-      'Club',
-      'Transfer Hub',
-      'Regen World',
-      'Matchday',
-      'Community',
-    ],
+    lanes: <String>['Explore', 'Matchday', 'Market', 'World', 'Sign in'],
   ),
   _WorkspaceLaneCase(
     role: 'admin',
     session: _roleSession(role: 'admin'),
-    lanes: const <String>[
-      'Home',
-      'Transfer Hub',
-      'Regen World',
-      'Matchday',
-      'Club',
-      'Wallet',
-      'Studio',
-      'Community',
-    ],
+    lanes: const <String>['Ops', 'Queues', 'Matchday', 'Treasury', 'More'],
   ),
   _WorkspaceLaneCase(
     role: 'coin trader',
     session: _roleSession(role: 'coin_trader'),
-    lanes: const <String>[
-      'Home',
-      'Wallet',
-      'Transfer Hub',
-      'Regen World',
-      'Community',
-    ],
+    lanes: const <String>['Home', 'Trader Desk', 'Market', 'Wallet', 'More'],
   ),
   _WorkspaceLaneCase(
     role: 'creator',
     session: _roleSession(role: 'creator'),
-    lanes: const <String>[
-      'Home',
-      'Studio',
-      'Community',
-      'Transfer Hub',
-      'Regen World',
-      'Wallet',
-    ],
+    lanes: const <String>['Home', 'Studio', 'Matchday', 'Community', 'More'],
   ),
   _WorkspaceLaneCase(
     role: 'club owner',
     session: _roleSession(role: 'user', clubId: 'royal-lagos-fc'),
-    lanes: const <String>[
-      'Home',
-      'Club',
-      'Transfer Hub',
-      'Regen World',
-      'Matchday',
-      'Wallet',
-      'Studio',
-      'Community',
-    ],
+    lanes: const <String>['Home', 'Club', 'Matchday', 'Market', 'More'],
   ),
   _WorkspaceLaneCase(
     role: 'staff',
     session: _roleSession(role: 'scout'),
-    lanes: const <String>[
-      'Home',
-      'Transfer Hub',
-      'Regen World',
-      'Club',
-      'Wallet',
-      'Community',
-    ],
+    lanes: const <String>['Home', 'Recruitment', 'Matchday', 'Market', 'More'],
   ),
   _WorkspaceLaneCase(
     role: 'authenticated without a club',
     session: _roleSession(role: 'user'),
-    lanes: const <String>[
-      'Home',
-      'Transfer Hub',
-      'Regen World',
-      'Club',
-      'Matchday',
-      'Wallet',
-      'Community',
-    ],
+    lanes: const <String>['Home', 'Matchday', 'Market', 'World', 'More'],
   ),
 ];
 
@@ -410,11 +355,11 @@ Future<List<String>> _renderShellLanes(
   );
   await tester.pumpAndSettle();
 
-  final GtexAppShell shell = tester.widget<GtexAppShell>(
-    find.byType(GtexAppShell),
+  final GtexShellScaffold shell = tester.widget<GtexShellScaffold>(
+    find.byType(GtexShellScaffold),
   );
-  return shell.destinations
-      .map((GtexShellDestination destination) => destination.label)
+  return shell.navigationModel.primarySlots
+      .map((GtexShellSlotSpec slot) => slot.label)
       .toList(growable: false);
 }
 
@@ -430,6 +375,12 @@ GteAuthSession _roleSession({required String role, String? clubId}) {
       'username': 'contract-$role',
       'display_name': 'Contract $role',
       'role': role,
+      'account_type':
+          role == 'coin_trader'
+              ? 'coin_trader'
+              : role == 'creator'
+              ? 'creator'
+              : 'user',
       if (clubId != null) 'current_club_id': clubId,
     },
   });
