@@ -135,11 +135,92 @@ def comp_dict(session: Session, comp: OwnerCompetition, user_id: str | None = No
         data["execution_model"] = "canonical"
         data["canonical_lifecycle_status"] = "active" if mapping is not None else "unmapped"
         if mapping is not None:
+            from decimal import Decimal
+
+            from app.common.enums.competition_status import CompetitionStatus
             from app.models.competition import UserCompetition
+            from app.models.competition_match import CompetitionMatch
+            from app.models.competition_participant import CompetitionParticipant
+            from app.models.competition_reward_pool import CompetitionRewardPool
 
             canonical = session.get(UserCompetition, mapping.canonical_competition_id)
-            data["canonical_competition_id"] = mapping.canonical_competition_id
-            data["canonical_status"] = canonical.status if canonical is not None else "missing"
+            if canonical is None:
+                data["canonical_lifecycle_status"] = "missing"
+                data["canonical_status"] = "missing"
+            else:
+                canonical_status = str(canonical.status)
+                data["canonical_competition_id"] = canonical.id
+                data["canonical_status"] = canonical_status
+                data["canonical_currency"] = canonical.currency
+                data["canonical_format"] = canonical.format
+
+                # Translate lifecycle state only for the existing owner-console UI
+                # contract; all displayed result/standings data remains canonical.
+                if canonical_status in {
+                    CompetitionStatus.DRAFT.value,
+                    CompetitionStatus.OPEN.value,
+                    CompetitionStatus.OPEN_FOR_JOIN.value,
+                    CompetitionStatus.PUBLISHED.value,
+                    CompetitionStatus.SEEDED.value,
+                    CompetitionStatus.FILLED.value,
+                    CompetitionStatus.LOCKED.value,
+                }:
+                    data["status"] = "open"
+                elif canonical_status in {CompetitionStatus.LIVE.value, CompetitionStatus.IN_PROGRESS.value}:
+                    data["status"] = "running"
+                elif canonical_status in {
+                    CompetitionStatus.COMPLETED.value,
+                    CompetitionStatus.SETTLED.value,
+                    CompetitionStatus.CANCELLED.value,
+                    CompetitionStatus.REFUNDED.value,
+                    CompetitionStatus.DISPUTED.value,
+                }:
+                    data["status"] = "finished"
+
+                canonical_participants = list(
+                    session.scalars(
+                        select(CompetitionParticipant).where(
+                            CompetitionParticipant.competition_id == canonical.id
+                        )
+                    ).all()
+                )
+                canonical_club_ids = {participant.club_id for participant in canonical_participants}
+                data["entrants"] = len(canonical_participants)
+                data["my_club_ids"] = [
+                    entry.club_id
+                    for entry in rows
+                    if entry.owner_user_id == user_id and entry.club_id in canonical_club_ids
+                ]
+                canonical_matches = list(
+                    session.scalars(
+                        select(CompetitionMatch).where(CompetitionMatch.competition_id == canonical.id)
+                    ).all()
+                )
+                current_rounds = [
+                    match.round_number
+                    for match in canonical_matches
+                    if match.status in {"scheduled", "in_progress"}
+                ]
+                data["current_round"] = min(current_rounds) if current_rounds else max(
+                    (match.round_number for match in canonical_matches), default=0
+                )
+                data["total_rounds"] = max(
+                    (match.round_number for match in canonical_matches), default=0
+                )
+                data["entry_fee"] = str(Decimal(canonical.entry_fee_minor) / Decimal("10000"))
+                pools = list(
+                    session.scalars(
+                        select(CompetitionRewardPool).where(
+                            CompetitionRewardPool.competition_id == canonical.id
+                        )
+                    ).all()
+                )
+                prize_minor = (
+                    sum(max(int(pool.amount_minor or 0), 0) for pool in pools)
+                    if pools
+                    else max(int(canonical.net_prize_pool_minor or 0), 0)
+                )
+                data["prize_pool"] = str(Decimal(prize_minor) / Decimal("10000"))
     else:
         data["execution_model"] = "user_hosted_legacy"
         data["canonical_lifecycle_status"] = "not_applicable"
