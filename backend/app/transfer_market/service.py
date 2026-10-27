@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from threading import RLock
 from typing import Any
 from uuid import uuid4
@@ -479,7 +479,11 @@ class TransferMarketService:
         if existing is not None:
             raise TransferMarketValidationError("Player already has an open transfer listing.")
         current_club_id = self._current_player_club_id(player.id, on_date=effective_at.date())
-        if current_club_id is not None and current_club_id != seller.id:
+        if current_club_id is None:
+            raise TransferMarketValidationError(
+                "Player has no current club; use the dedicated free-agent or regen offer workflow."
+            )
+        if current_club_id != seller.id:
             raise TransferMarketValidationError("Selling club must match the player's current club.")
         listing = TransferListing(
             window_id=payload.window_id,
@@ -669,8 +673,29 @@ class TransferMarketService:
             allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
             forbidden_detail="transfer_market_club_access_required",
         )
+        effective_at = self._coerce_utc(reference_at or utcnow())
+        if offer.seller_club_id != listing.selling_club_id:
+            raise TransferMarketValidationError("Offer seller does not match the listing's seller.")
+        if offer.status == "accepted":
+            existing_negotiation = self.session.scalar(
+                select(TransferNegotiation).where(TransferNegotiation.listing_id == listing.id)
+            )
+            existing_metadata = dict(existing_negotiation.metadata_json or {}) if existing_negotiation else {}
+            if (
+                existing_negotiation is not None
+                and existing_metadata.get("hub_offer_id") == offer.id
+                and existing_negotiation.bidder_club_id == offer.bidder_club_id
+            ):
+                # A repeated request after a successful acceptance is safe, even if
+                # the negotiation has since completed and the listing is now sold.
+                return self.to_hub_offer_view(offer)
+            raise TransferMarketValidationError("This offer has already been resolved.")
         if offer.status not in {"open", "countered"}:
             raise TransferMarketValidationError("Only open or countered offers can be accepted.")
+        if listing.status != "open":
+            raise TransferMarketValidationError("This listing is no longer open for offers.")
+        if offer.expires_at is not None and effective_at >= self._coerce_utc(offer.expires_at):
+            raise TransferMarketValidationError("This Transfer Hub offer has expired.")
         if (
             offer.offer_type not in HUB_CASH_DEAL_TYPES
             or listing.listing_type not in HUB_CASH_DEAL_TYPES
@@ -679,8 +704,10 @@ class TransferMarketService:
             raise TransferMarketValidationError(
                 "Loan and swap Transfer Hub offers cannot be accepted yet; only cash transfer offers settle."
             )
+        current_club_id = self._current_player_club_id(listing.player_id, on_date=effective_at.date())
+        if current_club_id is None or current_club_id != listing.selling_club_id:
+            raise TransferMarketValidationError("Player is no longer registered to the listing's selling club.")
         self._assert_bidder_can_fund(offer.bidder_club_id, offer.cash_amount, subject="offer")
-        effective_at = self._coerce_utc(reference_at or utcnow())
         # Claim the offer and the listing with guarded UPDATEs rather than
         # read-then-write. Two accepts racing on sibling offers of the same
         # listing would otherwise both observe an open listing and both close
@@ -699,7 +726,7 @@ class TransferMarketService:
             raise TransferMarketValidationError("Only open or countered offers can be accepted.")
         claimed_listing = self.session.execute(
             update(TransferListing)
-            .where(TransferListing.id == listing.id, TransferListing.status != "accepted")
+            .where(TransferListing.id == listing.id, TransferListing.status == "open")
             .values(status="accepted", closed_at=effective_at)
             .execution_options(synchronize_session=False)
         )
@@ -719,6 +746,13 @@ class TransferMarketService:
         ).all():
             sibling.status = "rejected"
             sibling.resolved_at = effective_at
+
+        # Accepting the selling club's cash terms is not the same as completing
+        # the player transfer. Create the canonical negotiation row consumed by
+        # submit_contract_offer(), player/agent decisions and _complete_transfer().
+        # That lifecycle performs the eventual player-contract movement and ledger
+        # settlement using the accepted cash amount, with its existing safeguards.
+        self._ensure_hub_offer_negotiation(listing, offer, effective_at)
         self.session.commit()
         self.session.refresh(offer)
         self._push_listing_event(
@@ -1996,6 +2030,60 @@ class TransferMarketService:
         else:
             negotiation.winning_bid_id = winning_bid.id
             negotiation.bidder_club_id = winning_bid.bidder_club_id
+        return negotiation
+
+    def _ensure_hub_offer_negotiation(
+        self,
+        listing: TransferListing,
+        offer: TransferHubOffer,
+        effective_at: datetime,
+    ) -> TransferNegotiation:
+        negotiation = self.session.scalar(
+            select(TransferNegotiation).where(TransferNegotiation.listing_id == listing.id)
+        )
+        if negotiation is not None:
+            metadata = dict(negotiation.metadata_json or {})
+            if (
+                metadata.get("hub_offer_id") == offer.id
+                and negotiation.bidder_club_id == offer.bidder_club_id
+            ):
+                return negotiation
+            raise TransferMarketValidationError(
+                "A different transfer negotiation already exists for this listing."
+            )
+
+        conditional_terms = dict(offer.conditional_terms_json or {})
+        proposed_wage = None
+        raw_wage = conditional_terms.get("proposed_weekly_wage")
+        if raw_wage is not None:
+            try:
+                parsed_wage = Decimal(str(raw_wage))
+            except (InvalidOperation, TypeError, ValueError):
+                parsed_wage = None
+            if parsed_wage is not None and parsed_wage.is_finite() and parsed_wage >= Decimal("0"):
+                proposed_wage = parsed_wage
+
+        negotiation = TransferNegotiation(
+            listing_id=listing.id,
+            winning_bid_id=None,
+            player_id=listing.player_id,
+            selling_club_id=listing.selling_club_id,
+            bidder_club_id=offer.bidder_club_id,
+            status="awaiting_contract_offer",
+            wage_offer_amount=proposed_wage,
+            contract_years=3,
+            decision_due_at=effective_at + timedelta(hours=PLAYER_DECISION_DELAY_HOURS),
+            metadata_json={
+                "source": "transfer_hub",
+                "hub_offer_id": offer.id,
+                "cash_amount": str(offer.cash_amount),
+                "offer_type": offer.offer_type,
+                "conditional_terms": conditional_terms,
+                "notes": offer.message or "",
+            },
+        )
+        self.session.add(negotiation)
+        self.session.flush()
         return negotiation
 
     def _resolve_window_id(self, *, listing: TransferListing, reference_at: date) -> tuple[str, bool]:
