@@ -104,7 +104,7 @@ function SquadCards({ club }: any) {
           </div>
         ))}
       </div>
-      <PlayerDrawer player={selected} open={Boolean(selected)} onClose={() => setSelected(null)} />
+      <PlayerDrawer playerId={selected?.id ?? null} onClose={() => setSelected(null)} />
     </>
   );
 }
