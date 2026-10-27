@@ -13,6 +13,9 @@ from app.models.user import PublicAccountType, User
 from app.owner_console import engine, ledger
 from app.owner_console.ai import inbox_body
 from app.services.world_clock_service import WorldClockService
+logger = logging.getLogger(__name__)
+
+
 from app.owner_console.models import (
     IntegrityFlag,
     OwnerClubState,
