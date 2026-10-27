@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_admin, get_session
+from app.models.world_clock import WorldClockState
+from app.services.world_clock_service import DEFAULT_CLOCK_ID, WorldClockService
 from app.world_simulation.schemas import (
     ClubWorldContextView,
     ClubWorldProfileUpsertRequest,
@@ -12,11 +15,45 @@ from app.world_simulation.schemas import (
     FootballCultureView,
     WorldNarrativeUpsertRequest,
     WorldNarrativeView,
+    WorldClockView,
 )
 from app.world_simulation.service import FootballWorldError, FootballWorldService
 
 router = APIRouter(prefix="/api/world", tags=["world-simulation"])
 admin_router = APIRouter(prefix="/admin/world", tags=["admin-world-simulation"])
+
+
+@router.get("/clock", response_model=WorldClockView)
+def get_world_clock(session: Session = Depends(get_session)) -> WorldClockView:
+    """Return the shared GTEX clock; never derive this value from the browser's local clock."""
+    clock = WorldClockService(session)
+    try:
+        state = clock.get_or_create_state()
+        # Persist the singleton if the first public read initializes it. The clock
+        # service's flush is intentionally followed by a commit so subsequent API
+        # and worker processes observe the same epoch and virtual start.
+        session.commit()
+    except IntegrityError:
+        # Multiple API/worker processes may race to initialize a fresh database.
+        # If another process won the singleton insert, re-read that canonical row.
+        session.rollback()
+        state = session.get(WorldClockState, DEFAULT_CLOCK_ID)
+        if state is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="world_clock_initialization_unavailable",
+            )
+        clock = WorldClockService(session)
+
+    world_time = clock.now_virtual()
+    return WorldClockView(
+        clock_id=state.id,
+        world_time=world_time,
+        world_date=world_time.date(),
+        is_paused=bool(state.is_paused),
+        progression_rate=float(state.progression_rate or 1.0),
+        virtual_months_per_season=int(state.virtual_months_per_season or 12),
+    )
 
 
 def get_service(session: Session = Depends(get_session)) -> FootballWorldService:
