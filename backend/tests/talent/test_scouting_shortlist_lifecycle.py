@@ -296,6 +296,50 @@ def test_real_player_scouting_does_not_invent_missing_ratings(
     )
 
 
+
+def test_mislinked_scout_cannot_write_reports_to_another_club(lifecycle_client):
+    client, identity, session = lifecycle_client
+    user_a, club_a = _seed_club_and_user(
+        session,
+        user_id="user-scout-mismatch-a",
+        username="scout_mismatch_a",
+        club_id="club-scout-mismatch-a",
+        club_name="Owner A FC",
+    )
+    _, club_b = _seed_club_and_user(
+        session,
+        user_id="user-scout-mismatch-b",
+        username="scout_mismatch_b",
+        club_id="club-scout-mismatch-b",
+        club_name="Owner B FC",
+    )
+    player = _seed_real_player(session, player_id="real-mismatch-target", name="Target Player")
+    session.add(
+        Scout(
+            id="scout-mislinked",
+            club_user_id=user_a.id,
+            club_id=club_b.id,
+            region="Global",
+            skill_rating=90,
+            active=True,
+        )
+    )
+    session.commit()
+    identity.user = user_a
+
+    response = client.post(f"/scout/report/{player.id}")
+
+    assert response.status_code == 404, response.text
+    assert (
+        session.scalar(
+            select(ScoutReport).where(
+                ScoutReport.player_id == player.id,
+                ScoutReport.club_id == club_b.id,
+            )
+        )
+        is None
+    )
+
 def test_scout_regen_player_success_and_persistence(lifecycle_client):
     client, identity, session = lifecycle_client
     user, club = _seed_club_and_user(
