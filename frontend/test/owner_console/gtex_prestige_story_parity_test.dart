@@ -276,11 +276,27 @@ void main() {
       final OwnerConsoleApi api = OwnerConsoleApi(client: fakeApi, activeClubId: 'club-test-1');
 
       await api.giftOwnedAssetToPlayer(assetId: 'asset-45', playerId: 'regen-1');
+      // Simulate retry after a lost response: the same gift intent reuses its
+      // idempotency key, so the server can return the original gift receipt.
+      await api.giftOwnedAssetToPlayer(assetId: 'asset-45', playerId: 'regen-1');
 
+      final List<Map<String, dynamic>> canonicalGiftPosts = fakeApi.recordedPosts
+          .where((Map<String, dynamic> p) =>
+              p['path'] == '/owner/clubs/club-test-1/showroom/gift')
+          .toList(growable: false);
+      expect(canonicalGiftPosts, hasLength(2));
       expect(
-        fakeApi.recordedPosts.any((Map<String, dynamic> p) =>
-            p['path'] == '/owner/clubs/club-test-1/showroom/gift' &&
-            (p['body'] as Map<String, Object?>)['player_id'] == 'regen-1'),
+        canonicalGiftPosts.map(
+          (Map<String, dynamic> p) =>
+              (p['body'] as Map<String, Object?>)['idempotency_key'],
+        ).toSet(),
+        <String>{'owner-gift-club-test-1-asset-45-regen-1'},
+      );
+      expect(
+        canonicalGiftPosts.every(
+          (Map<String, dynamic> p) =>
+              (p['body'] as Map<String, Object?>)['player_id'] == 'regen-1',
+        ),
         isTrue,
       );
     });
