@@ -13,38 +13,46 @@ ROLE_AGENT = "agent"
 ROLE_MEDICAL = "medical"
 ROLE_PERFORMANCE_ANALYST = "performance_analyst"
 
-GENERAL_MANAGER_CAPABILITIES = frozenset({
-    "operations",
-    "financial_acumen",
-    "negotiation",
-    "talent_evaluation",
-    "recruitment_strategy",
-    "budget_management",
-    "transfer_planning",
-})
-HEAD_OF_YOUTH_DEVELOPMENT_CAPABILITIES = frozenset({
-    "talent_identification",
-    "potential_assessment",
-    "recruitment_network",
-    "academy_growth",
-    "regen_development",
-    "youth_development",
-    "academy_recruitment",
-})
-COACH_SPECIALISATIONS = frozenset({
-    "coach",
-    "youth_coach",
-    "goalkeeping_coach",
-    "fitness_coach",
-    "technical_coach",
-    "tactical_coach",
-})
-MEDICAL_SPECIALISATIONS = frozenset({
-    "medical",
-    "physio",
-    "doctor",
-    "sports_scientist",
-})
+GENERAL_MANAGER_CAPABILITIES = frozenset(
+    {
+        "operations",
+        "financial_acumen",
+        "negotiation",
+        "talent_evaluation",
+        "recruitment_strategy",
+        "budget_management",
+        "transfer_planning",
+    }
+)
+HEAD_OF_YOUTH_DEVELOPMENT_CAPABILITIES = frozenset(
+    {
+        "talent_identification",
+        "potential_assessment",
+        "recruitment_network",
+        "academy_growth",
+        "regen_development",
+        "youth_development",
+        "academy_recruitment",
+    }
+)
+COACH_SPECIALISATIONS = frozenset(
+    {
+        "coach",
+        "youth_coach",
+        "goalkeeping_coach",
+        "fitness_coach",
+        "technical_coach",
+        "tactical_coach",
+    }
+)
+MEDICAL_SPECIALISATIONS = frozenset(
+    {
+        "medical",
+        "physio",
+        "doctor",
+        "sports_scientist",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,10 +111,7 @@ def evaluate_staff_role(
         return StaffRoleDecision(role, True, "personal_manager_is_profile_bound", consumes_salary=False)
 
     if role == ROLE_GENERAL_MANAGER:
-        if (
-            staff in {"general_manager", "director_of_football"}
-            or skills & GENERAL_MANAGER_CAPABILITIES
-        ):
+        if staff in {"general_manager", "director_of_football"} or skills & GENERAL_MANAGER_CAPABILITIES:
             return StaffRoleDecision(role, True, "qualified_general_management_role")
         return StaffRoleDecision(role, False, "general_manager_requires_operations_or_transfer_capability")
 
