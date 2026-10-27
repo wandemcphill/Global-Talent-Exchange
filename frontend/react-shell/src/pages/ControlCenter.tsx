@@ -31,6 +31,8 @@ import { api, errMsg } from "@/lib/api";
 import { fmt, label, useActiveClub, useControlCenter, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Coin, Empty, Loading, Panel, Stat } from "@/components/gtex/ui";
 import { InboxItem } from "@/components/gtex/InboxItem";
+import { WorldClockCard } from "@/components/gtex/WorldClockCard";
+import { OwnerBriefingPanel } from "@/components/gtex/OwnerBriefingPanel";
 
 function NoClubDashboard({ onCreateClub }: { onCreateClub: () => void }) {
   return (
@@ -44,6 +46,8 @@ function NoClubDashboard({ onCreateClub }: { onCreateClub: () => void }) {
           You do not need to own a club to use GTEX. Explore the football world, follow talent, buy club shares, and manage a national team in eligible competitions with your user account.
         </p>
       </section>
+
+      <WorldClockCard />
 
       <section className="grid gap-4 md:grid-cols-3" aria-label="Explore GTEX">
         <Link to="/app/national" data-testid="no-club-national-team" className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.06] p-5 transition hover:border-emerald-400/60">
@@ -211,6 +215,12 @@ export function ControlCenter() {
           </div>
         </div>
       </section>
+
+      {/* 2b. AUTHORITATIVE WORLD TIME + PERSISTED-EVENT DAILY BRIEFING */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <WorldClockCard />
+        <OwnerBriefingPanel />
+      </div>
 
       {/* 3. MATCHDAY RAIL & ACTION QUEUE */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

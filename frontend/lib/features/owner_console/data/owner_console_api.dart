@@ -1,6 +1,8 @@
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/features/owner_console/models/gtex_owner_inbox_models.dart';
+import 'package:gte_frontend/features/owner_console/models/gtex_world_clock_models.dart';
 import 'package:gte_frontend/features/owner_console/widgets/club_legacy_desk.dart';
+import 'package:gte_frontend/features/owner_console/widgets/gtex_world_clock_panel.dart' show OwnerWorldClockGateway;
 
 export 'package:gte_frontend/features/owner_console/models/gtex_owner_inbox_models.dart';
 
@@ -688,11 +690,16 @@ abstract class OwnerConsoleReader {
   Future<void> performDesk(String action, [Map<String, Object?> payload = const <String, Object?>{}]);
 }
 
-class OwnerConsoleApi implements OwnerConsoleReader, GtexOwnerInboxDataSource, OwnerLegacyGiftGateway {
+class OwnerConsoleApi implements OwnerConsoleReader, GtexOwnerInboxDataSource, OwnerLegacyGiftGateway, OwnerWorldClockGateway {
   const OwnerConsoleApi({required this.client, this.activeClubId});
 
   final GteAuthedApi client;
   final String? activeClubId;
+
+  /// Reads the authoritative GTEX clock (GET /api/world/clock); never the device clock.
+  @override
+  Future<WorldClock> fetchWorldClock() async =>
+      WorldClock.fromJson(await client.getMap(kWorldClockPath, auth: false));
 
   @override
   Future<OwnerControlCenter> fetchControlCenter() async =>
