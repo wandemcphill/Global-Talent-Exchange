@@ -928,11 +928,13 @@ class OwnerConsoleApi implements OwnerConsoleReader, GtexOwnerInboxDataSource, O
       throw StateError('Select an active club before gifting a luxury item.');
     }
 
-    // The existing legacy inventory uses an offer/accept ownership transfer.
-    // The club owner is authorized to accept a gift addressed to a player in
-    // their own squad, which invokes the canonical player-gift broadcast path.
+    // Attempt the legacy offer first. Only a failure before a gift reference is
+    // returned may fall back to the canonical route. Once an offer exists, an
+    // acceptance error must propagate: creating a second gift could duplicate
+    // the transfer if the first acceptance succeeded server-side but timed out.
+    Object? offeredPayload;
     try {
-      final Object? offeredPayload = await client.post(
+      offeredPayload = await client.post(
         '/owner/legacy/$clubId/desk',
         body: <String, Object?>{
           'action': 'gift',
@@ -942,20 +944,21 @@ class OwnerConsoleApi implements OwnerConsoleReader, GtexOwnerInboxDataSource, O
           },
         },
       );
-      final Map<String, dynamic> offered = _map(offeredPayload);
-      final String? giftId = _text(offered['id']) ?? _text(_map(offered['gift'])['id']);
-      if (giftId != null) {
-        await client.post(
-          '/owner/legacy/$clubId/desk',
-          body: <String, Object?>{
-            'action': 'accept_gift',
-            'payload': <String, Object?>{'gift_id': giftId},
-          },
-        );
-        return;
-      }
     } catch (_) {
-      // Legacy desk gift failed or unavailable; fallback to canonical showroom gift below
+      offeredPayload = null;
+    }
+
+    final Map<String, dynamic> offered = _map(offeredPayload);
+    final String? giftId = _text(offered['id']) ?? _text(_map(offered['gift'])['id']);
+    if (giftId != null) {
+      await client.post(
+        '/owner/legacy/$clubId/desk',
+        body: <String, Object?>{
+          'action': 'accept_gift',
+          'payload': <String, Object?>{'gift_id': giftId},
+        },
+      );
+      return;
     }
 
     await client.post(
@@ -963,6 +966,7 @@ class OwnerConsoleApi implements OwnerConsoleReader, GtexOwnerInboxDataSource, O
       body: <String, Object?>{
         'player_id': playerId,
         'asset_id': assetId,
+        'idempotency_key': 'owner-gift-$clubId-$assetId-$playerId',
       },
     );
   }
