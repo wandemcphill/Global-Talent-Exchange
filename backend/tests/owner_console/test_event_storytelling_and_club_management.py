@@ -786,9 +786,7 @@ def _lifecycle_mapping_test_id() -> str:
     return str(uuid4())
 
 
-def _lifecycle_mapping_test_canonical_competition(
-    session, name: str, source_type: str = "gtex"
-):
+def _lifecycle_mapping_test_canonical_competition(session, name: str, source_type: str = "gtex"):
     from app.models.competition import UserCompetition
 
     competition = UserCompetition(
@@ -846,11 +844,14 @@ def test_global_competition_mapping_is_idempotent_and_one_to_one(app):
             service.bind_competition(unlinked_legacy.id, user_hosted_canonical.id)
         assert exc_info.value.code == "canonical_competition_not_global"
 
-        assert session.scalar(
-            select(OwnerCompetitionLifecycleMapping).where(
-                OwnerCompetitionLifecycleMapping.legacy_competition_id == legacy.id
-            )
-        ).id == first.id
+        assert (
+            session.scalar(
+                select(OwnerCompetitionLifecycleMapping).where(
+                    OwnerCompetitionLifecycleMapping.legacy_competition_id == legacy.id
+                )
+            ).id
+            == first.id
+        )
 
 
 def test_user_hosted_competition_stays_on_separate_lifecycle(app):
@@ -967,11 +968,12 @@ def test_scheduled_fixture_mapping_checks_identity_and_preserves_results(app):
         assert canonical_match.home_score == 0
         assert canonical_match.away_score == 0
         assert canonical_match.completed_at is None
-        assert session.scalar(
-            select(OwnerMatchLifecycleMapping).where(
-                OwnerMatchLifecycleMapping.legacy_match_id == legacy_match.id
-            )
-        ).canonical_match_id == canonical_match.id
+        assert (
+            session.scalar(
+                select(OwnerMatchLifecycleMapping).where(OwnerMatchLifecycleMapping.legacy_match_id == legacy_match.id)
+            ).canonical_match_id
+            == canonical_match.id
+        )
 
 
 def test_pre_match_tactics_are_saved_on_canonical_fixture_and_kickoff_is_enforced(app):
