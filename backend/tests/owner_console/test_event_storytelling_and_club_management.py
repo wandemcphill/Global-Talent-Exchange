@@ -747,12 +747,27 @@ def test_player_portrait_manifest_resolution_assets_key_and_media_mount(client, 
     assert test_media_res.status_code in (200, 404)
 
 
-def test_global_competitions_cannot_use_owner_console_simulator():
+def test_global_competitions_cannot_use_owner_console_simulator(monkeypatch):
     """Global GTEX competitions must not create a second result on the legacy rail."""
     global_competition = OwnerCompetition(id="global-comp-1", name="Global Cup", host_type="gtex")
 
+    class SessionStub:
+        def get(self, model, identifier):
+            assert model is OwnerCompetition
+            assert identifier == global_competition.id
+            return global_competition
+
+    monkeypatch.setattr(comps, "require_state", lambda *args, **kwargs: object())
+
     with pytest.raises(OwnerError) as exc_info:
-        comps.ensure_owner_console_execution_allowed(global_competition)
+        comps.play_next(
+            SessionStub(),
+            user_id="owner-1",
+            competition_id=global_competition.id,
+            club_id="club-1",
+            mentality="balanced",
+            lineup_mode="strongest",
+        )
 
     assert exc_info.value.code == "global_competition_uses_canonical_lifecycle"
     assert exc_info.value.status == 409
