@@ -24,7 +24,6 @@ def session_factory(tmp_path_factory):
     engine.dispose()
 
 
-
 def test_new_clock_defaults_to_current_utc_instead_of_an_unrelated_fixed_date(monkeypatch) -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
@@ -51,7 +50,6 @@ def test_new_clock_defaults_to_current_utc_instead_of_an_unrelated_fixed_date(mo
 
     assert before <= virtual_start <= after
     assert abs((virtual_start - real_epoch).total_seconds()) < 1
-
 
 
 def test_clock_persistence_and_deterministic_progression(session_factory) -> None:
