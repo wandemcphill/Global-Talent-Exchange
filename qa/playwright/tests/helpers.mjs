@@ -56,12 +56,19 @@ export async function signIn(page) {
   if (!credentialsConfigured) return;
 
   const currentUrl = page.url();
-  if (signedInPages.has(page) || currentUrl.includes("/app/")) {
+  if (signedInPages.has(page)) return;
+
+  const profileButton = page.getByRole("button", { name: /Profile and settings/i });
+  const isHashRouting = Boolean(process.env.GTEX_E2E_HASH_ROUTING);
+  const looksLikeAppRoute = isHashRouting
+    ? currentUrl.includes("#/app/")
+    : new URL(currentUrl || "http://localhost").pathname.startsWith("/app/");
+  if (looksLikeAppRoute && await profileButton.isVisible().catch(() => false)) {
     signedInPages.add(page);
     return;
   }
 
-  const loginUrl = process.env.GTEX_E2E_HASH_ROUTING ? "/#/auth/login" : "/auth/login";
+  const loginUrl = isHashRouting ? "/#/auth/login" : "/auth/login";
   await page.goto(loginUrl, { waitUntil: "domcontentloaded", timeout: 120_000 });
 
   const surface = page.locator("flt-glass-pane, flutter-view, canvas").first();
@@ -80,6 +87,12 @@ export async function signIn(page) {
     await expect(enterBtn).toBeVisible({ timeout: 30_000 });
     await enterBtn.click({ force: true });
   } else {
+    // A valid persisted session may redirect away from the login form. Detect
+    // the authenticated shell before attempting coordinate-based form entry.
+    if (await profileButton.isVisible().catch(() => false)) {
+      signedInPages.add(page);
+      return;
+    }
     const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
     const isNarrow = viewport.width < 820;
     const x = isNarrow ? Math.round(viewport.width * 0.5) : Math.round(viewport.width * 0.72);
@@ -99,9 +112,9 @@ export async function signIn(page) {
     }
   }
 
-  await expect(page)
-    .toHaveURL(/\/app\//, { timeout: 30_000 })
-    .catch(() => {});
+  const authenticatedRoute = isHashRouting ? /#\/app(?:\/|$)/ : /\/app\//;
+  await expect(page).toHaveURL(authenticatedRoute, { timeout: 30_000 });
+  await expect(profileButton).toBeVisible({ timeout: 30_000 });
   signedInPages.add(page);
   await page.waitForTimeout(1500);
 }
