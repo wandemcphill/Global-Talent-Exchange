@@ -63,10 +63,10 @@ The first pass ran with no environment — all static evidence. This pass ran th
 | --- | --- |
 | `pytest` — all CI backend slices (`tests/app`, auth, wallets, payments, referrals, highlights, migration integrity, live playback, contract) | Green on `45e29ef6` (504+21+11+7+7+5+5+5 pass). |
 | `flutter analyze` | 12 issues, 0 errors. |
-| `flutter test --exclude-tags golden` | **1259 pass / 20 fail** — real rot (routing, admin capability, portfolio flows). CI runs this same command in `frontend-unit-tests`, so `main` fails that job today. |
+| `flutter test --exclude-tags golden` | **1259 pass / 20 fail on the 2026-10-18 snapshot at `45e29ef6`** — historical result, not a current-main result. The current-main certification run is linked in the 2026-10-27 checkpoint above. |
 | Route enumeration from `create_app()` | ~4500 HTTP routes mounted. |
 | `dev.py rebuild-demo-market --seed 20260311` + uvicorn + live HTTP | `POST /api/v2/auth/login` works; unmounted-router and mount claims below checked over HTTP. |
-| Domain test suites (competitions, staff, transfers, national, rewards) | ~34 failures + 6 errors on `main` — mostly stale tests/fixture drift, not product defects. Suites excluded from CI. |
+| Domain test suites (competitions, staff, transfers, national, rewards) | ~34 failures + 6 errors were reported on the 2026-10-18 `45e29ef6` snapshot. Historical finding only; suites were excluded from CI at that time and need a current run before drawing conclusions. |
 
 ### First-pass corrections
 
