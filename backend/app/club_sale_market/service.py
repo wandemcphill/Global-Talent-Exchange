@@ -1894,6 +1894,12 @@ class ClubSaleMarketService:
         except ClubOwnershipCapError as exc:
             raise ClubSaleMarketError(str(exc), reason=exc.reason) from exc
         executed_sale_price = self._normalize_amount(executed_sale_price)
+        accepted_offer_price = self._normalize_amount(offer.offered_price)
+        if executed_sale_price != accepted_offer_price:
+            raise ClubSaleMarketError(
+                "Executed sale price must match the accepted offer price.",
+                reason="club_sale_transfer_price_mismatch",
+            )
         if executed_sale_price <= Decimal("0.0000"):
             raise ClubSaleMarketError(
                 "Executed sale price must be greater than zero.",

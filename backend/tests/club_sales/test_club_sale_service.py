@@ -142,7 +142,7 @@ def _prepare_market_sale(session):
     }
 
 
-def test_canonical_sale_flow_exposes_public_values_and_settles_on_executed_price(session) -> None:
+def test_canonical_sale_flow_settles_only_at_accepted_offer_price(session) -> None:
     prepared = _prepare_market_sale(session)
     seller = prepared["seller"]
     buyer = prepared["buyer"]
@@ -201,12 +201,25 @@ def test_canonical_sale_flow_exposes_public_values_and_settles_on_executed_price
     buyer_before = wallet.get_balance(session, buyer_account)
     platform_before = wallet.get_balance(session, platform_account)
 
+    with pytest.raises(ClubSaleMarketError, match="must match the accepted offer price"):
+        service.execute_transfer(
+            actor=seller,
+            club_id=club.id,
+            offer_id=offer["offer_id"],
+            executed_sale_price=Decimal("80.0000"),
+            metadata_json={"settlement": "tampered-execution-price"},
+        )
+    # A rejected caller-supplied price must not debit or credit any account.
+    assert wallet.get_balance(session, seller_account) == seller_before
+    assert wallet.get_balance(session, buyer_account) == buyer_before
+    assert wallet.get_balance(session, platform_account) == platform_before
+
     transfer = service.execute_transfer(
         actor=seller,
         club_id=club.id,
         offer_id=offer["offer_id"],
-        executed_sale_price=Decimal("80.0000"),
-        metadata_json={"settlement": "manual-execution"},
+        executed_sale_price=Decimal("95.0000"),
+        metadata_json={"settlement": "accepted-offer-price"},
     )
     history = service.history_for_club(actor=buyer, club_id=club.id)
     session.flush()
@@ -262,9 +275,9 @@ def test_canonical_sale_flow_exposes_public_values_and_settles_on_executed_price
     assert inquiry_response["status"] == ClubSaleInquiryStatus.RESPONDED
     assert accepted_offer["status"] == ClubSaleOfferStatus.ACCEPTED
 
-    assert transfer["executed_sale_price"] == Decimal("80.0000")
-    assert transfer["platform_fee_amount"] == Decimal("8.0000")
-    assert transfer["seller_net_amount"] == Decimal("72.0000")
+    assert transfer["executed_sale_price"] == Decimal("95.0000")
+    assert transfer["platform_fee_amount"] == Decimal("9.5000")
+    assert transfer["seller_net_amount"] == Decimal("85.5000")
     assert transfer["platform_fee_bps"] == 1000
     assert transfer["status"] == ClubSaleTransferStatus.SETTLED
     assert transfer["story_feed_item_id"]
@@ -283,9 +296,9 @@ def test_canonical_sale_flow_exposes_public_values_and_settles_on_executed_price
     assert inquiry_row.status == ClubSaleInquiryStatus.CLOSED_ON_TRANSFER
     assert offer_row.status == ClubSaleOfferStatus.EXECUTED
     assert transfer_row.status == ClubSaleTransferStatus.SETTLED
-    assert transfer_row.executed_sale_price == Decimal("80.0000")
-    assert transfer_row.platform_fee_amount == Decimal("8.0000")
-    assert transfer_row.seller_net_amount == Decimal("72.0000")
+    assert transfer_row.executed_sale_price == Decimal("95.0000")
+    assert transfer_row.platform_fee_amount == Decimal("9.5000")
+    assert transfer_row.seller_net_amount == Decimal("85.5000")
     assert transfer_row.platform_fee_bps == 1000
     assert transfer_row.metadata_json["story_feed_item_id"] == transfer["story_feed_item_id"]
     assert transfer_row.metadata_json["calendar_event_id"] == transfer["calendar_event_id"]
@@ -309,9 +322,9 @@ def test_canonical_sale_flow_exposes_public_values_and_settles_on_executed_price
     assert history["dynasty_snapshot"]["shareholder_continuity_transfers"] == 1
     assert history["transfers"][0]["ownership_transition"]["ownership_lineage_index"] == 1
 
-    assert wallet.get_balance(session, seller_account) - seller_before == Decimal("72.0000")
-    assert wallet.get_balance(session, buyer_account) - buyer_before == Decimal("-80.0000")
-    assert wallet.get_balance(session, platform_account) - platform_before == Decimal("8.0000")
+    assert wallet.get_balance(session, seller_account) - seller_before == Decimal("85.5000")
+    assert wallet.get_balance(session, buyer_account) - buyer_before == Decimal("-95.0000")
+    assert wallet.get_balance(session, platform_account) - platform_before == Decimal("9.5000")
 
     assert len(ledger_entries) == 3
     assert {entry.reason for entry in ledger_entries} == {LedgerEntryReason.TRADE_SETTLEMENT}

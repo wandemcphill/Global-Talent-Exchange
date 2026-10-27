@@ -62,6 +62,7 @@ def _raise_http(exc: ClubSaleMarketError) -> None:
         "club_sale_offer_already_open",
         "club_sale_offer_not_actionable",
         "club_sale_transfer_path_invalid",
+        "club_sale_transfer_price_mismatch",
         "club_sale_transfer_already_settled",
         "club_sale_listing_update_blocked",
         "club_sale_listing_cancel_blocked",
