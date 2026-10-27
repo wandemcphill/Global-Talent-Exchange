@@ -167,6 +167,47 @@ Source: [world-clock operational checks](https://github.com/wandemcphill/Global-
 4. **Real-world identity is a launch phase, not a second permanent universe.** Support current real players and regens at launch, with provenance and distinct contract/ownership rules. Make any later regen-focused transition non-destructive and explicit; prevent duplicate legendary entities or accidental player re-minting.
 5. **Operational truth for a persistent game.** Show world time, current season, live/due fixtures, last successful simulation cycle, missed/failed fixture counts and latest settled competition state to trusted operators. Expose suitable read-only health in owner/admin surfaces, but not internal operational controls to ordinary owners.
 
+
+### F-11 — Transfer Hub can accept a cash offer without completing the transfer
+**Priority: P0 — must be resolved before real player transactions are trusted.**
+
+Current source inspection of [TransferMarketService.accept_hub_offer](https://github.com/wandemcphill/Global-Talent-Exchange/blob/main/backend/app/transfer_market/service.py) found that the endpoint checks authorization and whether the buyer appears able to fund the offer, marks the offer accepted, closes the listing, rejects sibling offers, commits those status changes, and publishes notifications. In that method, the accepted cash offer is not followed by a call to PlayerLifecycleService, a PlayerContract/club reassignment, or a ledger debit/credit posting. The React [TransferHub](https://github.com/wandemcphill/Global-Talent-Exchange/blob/main/frontend/react-shell/src/pages/TransferHub.tsx) then tells the owner the offer was accepted. This risks displaying a completed deal where only the offer/listing status changed.
+
+**Required outcome:** do not label a cash deal “completed” until one authoritative transfer command has atomically (or through a durable, idempotent saga) revalidated the accepted price, secured available funds under the approved policy, moved player/contract ownership, posted buyer and seller ledger entries in the approved currency, recorded a transfer lifecycle event, resolved competing offers, and updated both shells' read models. If acceptance only begins a negotiation that requires further steps, use an explicit intermediate status such as “accepted — awaiting contract” and route the owner into the actual lifecycle instead. Add tests proving cash conservation, no duplicate player sale, repeat/concurrent-acceptance safety, rollback on insufficient funds, and consistency after refresh.
+
+This finding concerns the Transfer Hub cash-offer acceptance endpoint; do not conflate it with separate player-lifecycle bid/contract routes that may already execute transfers.
+
+### F-12 — Transfer listings can pass seller validation when the player has no current club
+**Priority: P1 market integrity — close the unauthorized listing path.**
+
+In [TransferMarketService.create_listing](https://github.com/wandemcphill/Global-Talent-Exchange/blob/main/backend/app/transfer_market/service.py), the seller is authorized as a club, the player is resolved, and the current club is checked. The validation only rejects when the current club is non-null and different from the selected seller. If the current club is null, the method continues creating a listing under the selected club. The current listing-type enum does not have a distinct “free agent” type.
+
+**Required outcome:** explicitly separate a club sale from a free-agent recruitment/contract offer. For a club-sale listing, require canonical player registration and a current player contract/club relationship that matches the seller. For a free agent, route only through the designated free-agent/regen offer lifecycle and do not make a club appear to own an uncontracted player. Add tests for players with no club, expired contracts, national-pool/regens, a caller selecting another seller's club, and an authorized actual seller.
+
+### F-13 — Club creation is not yet global: React hardcodes Nigeria and Lagos
+**Priority: P1 for a worldwide launch.**
+
+Both [React Onboarding.tsx](https://github.com/wandemcphill/Global-Talent-Exchange/blob/main/frontend/react-shell/src/pages/Onboarding.tsx) and [React MyClubs.tsx](https://github.com/wandemcphill/Global-Talent-Exchange/blob/main/frontend/react-shell/src/pages/MyClubs.tsx) currently send \`country_code: "NG"\` and \`city_name: "Lagos"\` when creating a club. A user outside Nigeria cannot accurately establish the club's origin through the visible creation flow.
+
+**Required outcome:** add country and city/region selection to first-club and add-club flows, with normalized validated values and optional suggested defaults. Define the canonical geography source and avoid arbitrary free-text country codes. Flutter must expose the same capability and send the same authoritative fields. Test multiple countries/cities, validation failures and persistence.
+
+### F-14 — The legacy Flutter \`/inbox\` URL does not open the owner decision inbox
+**Priority: P1 parity/discoverability.**
+
+In [frontend/lib/router/app_router.dart](https://github.com/wandemcphill/Global-Talent-Exchange/blob/main/frontend/lib/router/app_router.dart), the direct \`/inbox\` route redirects to Community. The canonical owner inbox route is \`/app/inbox\` in the Flutter navigation model; React's owner inbox also represents private actionable owner items. Flutter does have owner-inbox content inside the shell, so this is a route-semantic parity gap, not proof that the UI is absent.
+
+**Required outcome:** make advertised inbox entry points resolve to the same authorized owner-decision list, while preserving a separately named community inbox/chat if needed. Verify that React and Flutter show the same persisted item IDs, unread/read states, supported action keys and authorization failures.
+
+## Historical audit findings rechecked against current source
+
+The audit deliberately does not carry forward every old finding as open. Two examples were rechecked:
+
+- **Fast Cup result-summary settlement:** current \`backend/app/fast_cups/api/router.py\` implements \`GET /{cup_id}/result-summary\` via \`preview_result_summary\`, which is read/preview behavior. Settlement is a separate \`POST /{cup_id}/settle\` handler requiring \`get_current_admin\`. This disproves the old claim that the current GET directly settles payouts. Keep a regression test that a read/preview never changes balances and only the authorized settlement path can settle.
+- **Save-scoped newsroom feed:** current \`backend/app/owner_console/router.py\` passes \`save_context_id\` (or resolves one from the supplied club) into \`storytelling.list_newsroom_articles\`. The old audit finding that the route omitted the scope is not a confirmed current-main gap based on the inspected source. Retain authorization tests so private/save-scoped articles cannot cross contexts.
+
+These examples demonstrate why remediation must start with current code and tests, rather than just reopening old audit labels.
+
+
 ## Required product decisions — do not guess these in code
 
 | Decision | Why it blocks coherent implementation |
