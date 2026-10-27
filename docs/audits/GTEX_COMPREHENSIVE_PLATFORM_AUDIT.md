@@ -23,14 +23,35 @@ Flutter web is the Render production shell. `render.yaml` builds `ops/render/bui
 
 The backend is a large modular FastAPI app (`backend/app/main.py`, `backend/app/modules.py`). Ledger posting, FanCoin versus GTEX Coin, hosted-competition funding modes, and agent-wallet non-authority match the economic constitution closely enough to say issue [#2](https://github.com/wandemcphill/Global-Talent-Exchange/issues/2) is largely implemented in code. That is not a production settlement certificate. Deposits, withdrawals, webhooks, jackpots, and prize payouts were not executed.
 
-The highest-confidence defects from static evidence:
+## Current-main re-verification (2026-10-27, commit `bb6d82a9b8b5867318f9a0baf19789cef5b25637`)
 
-1. Flutter user signup always sends Turnstile token `dev-bypass` (`frontend/lib/screens/auth/gtex_account_signup_screens.dart`). Production services set `GTE_APP_ENV=production`. If a Turnstile secret is configured, that token is rejected. If it is not configured, the security check is a no-op while the screen says it runs automatically. **FND-001, P1.**
-2. Prestige catalogue items (Harbour Jet, Lagoon Coach, Icon Watch) can be purchased and gifted in `purchase_asset` / `offer_gift`, but `perform_desk_action` has no purchase or gift action and neither shell exposes one. **FND-002, P1.**
-3. Flutter calls the club-sale market and several club-identity routes. **FND-003 was corrected in the second pass** — those routers are mounted via `backend/app/routes/clubs.py`; the real gap is 61 mounted routes undeclared in `shared/api_contract.json` (CONTRACT-001).
-4. Registration still asks the user to be a user, creator, or trader. Trader signup collects country and preferred currency. React signup hardcodes Nigeria and can create a club during signup. That contradicts the account model on issue [#228](https://github.com/wandemcphill/Global-Talent-Exchange/issues/228). **FND-005, P1.**
-5. The club desk could auction “the first owned asset” and bid on “the first other auction” when the client omits ids. **FND-016, P1 — resolved: PR #272 merged.**
-6. Staff, transfers, competitions, and news each have more than one engine. Issues [#169](https://github.com/wandemcphill/Global-Talent-Exchange/issues/169) and [#176](https://github.com/wandemcphill/Global-Talent-Exchange/issues/176) remain the lifecycle track. This audit did not re-run those suites.
+This is the current review checkpoint. It supersedes the first-pass status bullets below; results captured at `45e29ef6` on 2026-10-18 remain historical evidence and must not be presented as a test run of today's `main`.
+
+### Current CI evidence
+
+| Check | Result at review time | Evidence |
+| --- | --- | --- |
+| Quality Gates | **Passed** on current `main` SHA `bb6d82a9` | [Run 40487301859](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/40487301859) |
+| Phase A Economic Regressions | **Passed** on current `main` SHA `bb6d82a9` | [Run 40487301834](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/40487301834) |
+| Flutter Android debug build | **Passed** on current `main` SHA `bb6d82a9` | [CI and Staging Deploy run 40487301881](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/40487301881) |
+| Final Platform Certification | **In progress**. Read-only truth audit, backend security/contract smoke tests, exact user-journey acceptance, dependency graph, and analyzer hard-error gate passed; Flutter unit/widget tests had not finished. | [Run 40487301758](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/40487301758) |
+| Remaining CI and staging jobs | **In progress/queued**; no overall conclusion yet. | [Run 40487301881](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/40487301881) |
+| Playwright viewport matrix | **No pass/fail result available at snapshot time**. The browser-matrix step was still executing on the #337 branch head `991824d5`. | [Run 40487279956](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/40487279956) |
+
+The Playwright config defines three projects: mobile (Pixel 5), tablet (768×1024), and desktop (1440×900). The combined `qa/playwright/tests/p7_fe_extended.spec.mjs` on current `main` contains both the squad test at `/app/club` and the Club HQ authoritative/no-club test at `/app`. Each asserts a truthful state and checks horizontal overflow; the squad test also exercises the compact “Club sections” route. The run cited above is for the #337 branch revision: its test spec matches the combined main spec, but its helper file is older than the canonical helper currently on main. It is not a final certification of the exact current-main helper until a matrix run against current main completes.
+
+### Corrected current-main status
+
+- **FND-001 / Turnstile client:** current Flutter signup no longer sends `dev-bypass`; it renders `TurnstileChallenge` and submits the returned token for user, creator, and trader flows. This is a client-code correction, not proof that provider configuration or all server-side signup enforcement is certified.
+- **FND-002 / prestige showroom:** current Flutter owner console includes purchase confirmation/idempotency and a wired purchase/gift path; gifting is routed to eligible regen players. PR [#299](https://github.com/wandemcphill/Global-Talent-Exchange/pull/299) merged on 2026-10-19. Treat the UI/backend wiring as present; keep end-to-end economic certification separate from code presence.
+- **FND-003 / route mounting:** the alleged unmounted-router defect was corrected in the 2026-10-18 second pass. The generated API-contract reconciliation finding remains separate.
+- **FND-004 / React at `/console`:** PR [#265](https://github.com/wandemcphill/Global-Talent-Exchange/pull/265) merged; production deep-refresh verification remains outstanding.
+- **FND-005 / signup and club geography:** current React signup supports the explicit `user`, `creator`, and `coin_trader` lanes and uses a Turnstile challenge; do not replace this with a single generic form based on the old audit. A concrete residual remains: React's post-login first-club and add-club flows still default `country_code` to `NG` and `city_name` to `Lagos` instead of collecting them.
+- **FND-016 / explicit desk targets:** PR [#272](https://github.com/wandemcphill/Global-Talent-Exchange/pull/272) merged on 2026-10-18.
+- **Lifecycle tracking:** PRs [#337](https://github.com/wandemcphill/Global-Talent-Exchange/pull/337), [#338](https://github.com/wandemcphill/Global-Talent-Exchange/pull/338), and [#339](https://github.com/wandemcphill/Global-Talent-Exchange/pull/339) are merged into current main; issues #169 and #176 are closed. Their merge is not, by itself, proof that all current CI and browser checks passed.
+- **#334:** closed as superseded, not merged separately; its `enableAccessibility` import and call site are already present in the shared Playwright spec on current main.
+
+Historical first-pass claims and the 2026-10-18 second-pass evidence below are retained for traceability; where they conflict with this section, the current-main status above takes precedence.
 
 ## Second-pass re-verification (2026-10-18, commit `45e29ef6`)
 
