@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.models.base import Base
 import app.models  # noqa: F401
 from app.models.club_profile import ClubProfile
-from app.models.club_growth import ClubStaffContract, ClubStaffAssignment, ClubStaffProfile
+from app.models.club_growth import ClubStaffContract, ClubStaffAssignment
 from app.models.hosted_competition import CompetitionTemplate
 from app.models.user import User
 from app.club_growth.staff_role_policy import (
