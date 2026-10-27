@@ -51,14 +51,14 @@ def _resolve_owned_club_ids(session: Session, user_id: str) -> list[str]:
     )
 
 
-def _resolve_active_scout(session: Session, *, current_user: User, owned_club_ids: list[str]) -> Scout | None:
-    conditions = [Scout.club_user_id == current_user.id]
-    if owned_club_ids:
-        conditions.append(Scout.club_id.in_(owned_club_ids))
+def _resolve_active_scout(session: Session, *, owned_club_ids: list[str]) -> Scout | None:
+    """Resolve an active scout strictly through clubs owned by the caller."""
+    if not owned_club_ids:
+        return None
     return session.scalar(
         select(Scout)
         .where(
-            or_(*conditions),
+            Scout.club_id.in_(owned_club_ids),
             Scout.active.is_(True),
         )
         .order_by(Scout.created_at.asc(), Scout.id.asc())
@@ -80,7 +80,7 @@ def scout_player(
         )
 
     owned_club_ids = _resolve_owned_club_ids(service.session, current_user.id)
-    scout = _resolve_active_scout(service.session, current_user=current_user, owned_club_ids=owned_club_ids)
+    scout = _resolve_active_scout(service.session, owned_club_ids=owned_club_ids)
     if scout is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -102,7 +102,7 @@ def scout_player(
         try:
             result = service.get_scout_report(regen.id, scout_id=scout.id)
             if not result.club_id:
-                result.club_id = scout.club_id or (owned_club_ids[0] if owned_club_ids else None)
+                result.club_id = scout.club_id
         except RegenEcosystemError as exc:
             _raise(exc)
         service.session.commit()
@@ -203,7 +203,7 @@ def scout_player(
     )
 
     # Persist report for real player
-    club_id = scout.club_id or (owned_club_ids[0] if owned_club_ids else None)
+    club_id = scout.club_id
     if club_id:
         network = service.session.scalar(
             select(ScoutingNetwork).where(ScoutingNetwork.club_id == club_id).order_by(ScoutingNetwork.created_at.asc())
@@ -302,10 +302,11 @@ def get_player_scout_report(
         )
 
     owned_club_ids = _resolve_owned_club_ids(service.session, current_user.id)
-    scout_conditions = [Scout.club_user_id == current_user.id]
-    if owned_club_ids:
-        scout_conditions.append(Scout.club_id.in_(owned_club_ids))
-    scout_ids = list(service.session.scalars(select(Scout.id).where(or_(*scout_conditions))).all())
+    scout_ids = (
+        list(service.session.scalars(select(Scout.id).where(Scout.club_id.in_(owned_club_ids))).all())
+        if owned_club_ids
+        else []
+    )
 
     # 1. Check regen scout report
     regen = service.session.scalar(
@@ -412,10 +413,11 @@ def list_club_scout_reports(
 ) -> list[ScoutReportView]:
     """List all persisted scout reports for the authenticated caller's club."""
     owned_club_ids = _resolve_owned_club_ids(service.session, current_user.id)
-    scout_conditions = [Scout.club_user_id == current_user.id]
-    if owned_club_ids:
-        scout_conditions.append(Scout.club_id.in_(owned_club_ids))
-    scout_ids = list(service.session.scalars(select(Scout.id).where(or_(*scout_conditions))).all())
+    scout_ids = (
+        list(service.session.scalars(select(Scout.id).where(Scout.club_id.in_(owned_club_ids))).all())
+        if owned_club_ids
+        else []
+    )
 
     reports: list[ScoutReportView] = []
 
