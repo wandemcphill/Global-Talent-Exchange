@@ -339,6 +339,7 @@ def test_mislinked_scout_cannot_write_reports_to_another_club(lifecycle_client):
         is None
     )
 
+
 def test_scout_regen_player_success_and_persistence(lifecycle_client):
     client, identity, session = lifecycle_client
     user, club = _seed_club_and_user(
