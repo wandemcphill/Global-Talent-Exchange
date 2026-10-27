@@ -23,9 +23,10 @@ test.afterEach(async ({ page: _page }, testInfo) => {
 });
 
 test("Club squad route loads the roster or explicit no-club state", async ({ page }, testInfo) => {
-  // This workflow launches Flutter Web, not the separately hosted React shell
-  // at /console. Use the Flutter Club HQ route and its semantic UI.
-  await visitAuthedRoute(page, process.env.GTEX_E2E_SQUAD_ROUTE ?? "/app/club");
+  // The Club HQ is the /app tab in the Flutter shell. /app/club is not
+  // the canonical entry route and can land on the owner workspace without
+  // resolving the no-club state first.
+  await visitAuthedRoute(page, process.env.GTEX_E2E_SQUAD_ROUTE ?? "/app");
 
   const noClubEntry = page.getByText("Build your club command center", {
     exact: true,
