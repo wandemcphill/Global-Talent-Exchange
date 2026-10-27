@@ -154,9 +154,12 @@ function SquadRegistrationPanel({ club }: any) {
     }
   };
   const submit = async () => {
+    if (!registration) {
+      toast.error("Sync the squad first, then submit registration.");
+      return;
+    }
     setBusy("submit");
     try {
-      await api.post(endpoint, { season_label: "launch", player_ids: rosterIds });
       await api.post(endpoint + "/submit", undefined, { params: { season_label: "launch" } });
       await registrationQuery.refetch();
       toast.success("Squad registration submitted.");
@@ -180,9 +183,9 @@ function SquadRegistrationPanel({ club }: any) {
     }
   };
   const tone = status === "locked" ? "emerald" : status === "submitted" ? "cyan" : status === "draft" ? "gold" : "slate";
-  const canSync = status !== "submitted" && status !== "locked";
-  const canSubmit = status !== "submitted" && status !== "locked";
-  const canLock = status === "submitted";
+  const canSync = status !== "locked";
+  const canSubmit = Boolean(registration) && status !== "locked";
+  const canLock = Boolean(registration) && status !== "locked";
 
   return (
     <Panel
