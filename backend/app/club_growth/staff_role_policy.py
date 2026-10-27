@@ -110,13 +110,13 @@ def evaluate_staff_role(
         return StaffRoleDecision(role, True, "personal_manager_is_profile_bound", consumes_salary=False)
 
     if role == ROLE_GENERAL_MANAGER:
-        if staff in {"general_manager", "director_of_football"} or skills & GENERAL_MANAGER_CAPABILITIES:
+        if staff in {"gm", "general_manager", "director_of_football"} or skills & GENERAL_MANAGER_CAPABILITIES:
             return StaffRoleDecision(role, True, "qualified_general_management_role")
         return StaffRoleDecision(role, False, "general_manager_requires_operations_or_transfer_capability")
 
     if role == ROLE_HEAD_OF_YOUTH_DEVELOPMENT:
         if (
-            staff in {"head_of_youth_development", "youth_development_manager", "academy_director"}
+            staff in {"hoyd", "head_of_youth_development", "youth_development_manager", "academy_director"}
             or skills & HEAD_OF_YOUTH_DEVELOPMENT_CAPABILITIES
         ):
             return StaffRoleDecision(role, True, "qualified_youth_development_leadership")
