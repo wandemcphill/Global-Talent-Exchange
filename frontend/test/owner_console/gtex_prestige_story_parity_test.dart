@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
+import 'package:gte_frontend/data/gte_api_repository.dart' show GteApiErrorType, GteApiException;
 import 'package:gte_frontend/features/owner_console/data/owner_console_api.dart';
 import 'package:gte_frontend/features/owner_console/widgets/club_legacy_showroom.dart';
 
@@ -260,7 +261,11 @@ void main() {
       final _FakeAuthedApi fakeApi = _FakeAuthedApi(
         postHandler: (String path, Object? body) async {
           if (path.contains('/owner/legacy/')) {
-            throw StateError('Legacy desk not supported');
+            throw const GteApiException(
+              type: GteApiErrorType.notFound,
+              message: 'Legacy desk not supported',
+              statusCode: 404,
+            );
           }
           return <String, dynamic>{
             'status': 'confirmed',
