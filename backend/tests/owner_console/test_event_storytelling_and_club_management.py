@@ -769,7 +769,7 @@ def test_global_competitions_cannot_use_owner_console_simulator(monkeypatch):
             lineup_mode="strongest",
         )
 
-    assert exc_info.value.code == "global_competition_uses_canonical_lifecycle"
+    assert exc_info.value.code == "canonical_fixture_mapping_required"
     assert exc_info.value.status == 409
 
 
