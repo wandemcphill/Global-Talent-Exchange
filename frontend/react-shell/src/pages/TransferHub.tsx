@@ -56,6 +56,64 @@ export function TransferHub() {
     enabled: !!activeClub?.club_id && lane === "offers",
   });
 
+  // Read watchlist entries for the verified active club; the backend returns the
+  // canonical player record and an active market listing only when one exists.
+  const {
+    data: shortlistData,
+    isLoading: loadingShortlist,
+    error: shortlistError,
+    refetch: refetchShortlist,
+  } = useQuery({
+    queryKey: ["transfer-market-watchlist", activeClub?.club_id],
+    queryFn: async () => {
+      if (!activeClub?.club_id) return [];
+      const { data } = await api.get("/transfer-market/watchlist", {
+        params: { club_id: activeClub.club_id },
+      });
+      return data || [];
+    },
+    enabled: !!activeClub?.club_id && lane === "shortlist",
+  });
+
+  const bidListings = (listingsData || []).filter(
+    (listing: any) => listing.status === "open" && Number(listing.bid_count || 0) > 0,
+  );
+
+  const negotiationListings = (listingsData || []).filter(
+    (listing: any) => Boolean(listing.negotiation_id),
+  );
+  const {
+    data: negotiationsData,
+    isLoading: loadingNegotiations,
+  } = useQuery({
+    queryKey: [
+      "transfer-market-negotiations",
+      activeClub?.club_id,
+      negotiationListings.map((listing: any) => listing.id).sort().join(","),
+    ],
+    queryFn: async () => {
+      const records = await Promise.all(
+        negotiationListings.map(async (listing: any) => {
+          try {
+            const { data } = await api.get(
+              `/transfer-market/listings/${listing.id}/negotiation`,
+            );
+            return { ...data, listing };
+          } catch {
+            // The listing feed can contain negotiations for other clubs. The
+            // endpoint enforces ownership; inaccessible records are not shown.
+            return null;
+          }
+        }),
+      );
+      return records.filter(Boolean);
+    },
+    enabled: !!activeClub?.club_id && lane === "negotiations" && negotiationListings.length > 0,
+  });
+
+  const [bidAmounts, setBidAmounts] = useState<Record<string, string>>({});
+  const [placingBidId, setPlacingBidId] = useState<string | null>(null);
+
   // Actions on Offers
   const handleAcceptOffer = async (offerId: string) => {
     try {
