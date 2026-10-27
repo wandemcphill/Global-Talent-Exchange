@@ -6,6 +6,55 @@ import 'gte_http_transport.dart';
 import 'gte_models.dart';
 import '../models/regen_universe_models.dart';
 
+class NationalRegenSeedPage {
+  const NationalRegenSeedPage({
+    required this.items,
+    required this.page,
+    required this.perPage,
+    required this.total,
+    required this.totalPages,
+    required this.hasNext,
+  });
+
+  final List<NationalRegenSeed> items;
+  final int page;
+  final int perPage;
+  final int total;
+  final int totalPages;
+  final bool hasNext;
+
+  factory NationalRegenSeedPage.fromJson(Map<String, dynamic> payload) {
+    final Map<String, Object?> pagination = GteJson.map(
+      payload['pagination'],
+      label: 'national regen pagination',
+      fallback: const <String, Object?>{},
+    );
+    final List<Object?> rawItems = GteJson.list(
+      payload['items'] ?? const <Object?>[],
+    );
+    return NationalRegenSeedPage(
+      items: rawItems.map(NationalRegenSeed.fromJson).toList(growable: false),
+      page: GteJson.integer(pagination, <String>['page'], fallback: 1),
+      perPage: GteJson.integer(
+        pagination,
+        <String>['per_page', 'perPage'],
+        fallback: 48,
+      ),
+      total: GteJson.integer(
+        pagination,
+        <String>['total'],
+        fallback: rawItems.length,
+      ),
+      totalPages: GteJson.integer(
+        pagination,
+        <String>['total_pages', 'totalPages'],
+        fallback: 0,
+      ),
+      hasNext: GteJson.boolean(pagination, <String>['has_next', 'hasNext']),
+    );
+  }
+}
+
 class RegenUniverseApi {
   RegenUniverseApi({required this.client, required this.fixtures});
 
@@ -84,21 +133,55 @@ class RegenUniverseApi {
     }, () async => _requireFixtures().scoutingFeed(limit: limit));
   }
 
+  Future<NationalRegenSeedPage> listNationalRegensPage({
+    int page = 1,
+    int perPage = 48,
+    int ageMax = 99,
+  }) {
+    final int safePage = page < 1 ? 1 : page;
+    final int safePerPage = perPage.clamp(1, 100).toInt();
+    return client.withFallback<NationalRegenSeedPage>(() async {
+      final Map<String, dynamic> payload = await client.getMap(
+        _publicUnversionedUrl('/regen-universe/national-regens'),
+        query: <String, Object?>{
+          'page': safePage,
+          'per_page': safePerPage,
+          'age_max': ageMax,
+        },
+        auth: false,
+      );
+      return NationalRegenSeedPage.fromJson(payload);
+    }, () async {
+      final List<NationalRegenSeed> fixtureItems =
+          _requireFixtures().nationalRegens(limit: 100);
+      final int start = (safePage - 1) * safePerPage;
+      final List<NationalRegenSeed> pageItems = fixtureItems
+          .skip(start)
+          .take(safePerPage)
+          .toList(growable: false);
+      final int totalPages = fixtureItems.isEmpty
+          ? 0
+          : (fixtureItems.length + safePerPage - 1) ~/ safePerPage;
+      return NationalRegenSeedPage(
+        items: pageItems,
+        page: safePage,
+        perPage: safePerPage,
+        total: fixtureItems.length,
+        totalPages: totalPages,
+        hasNext: safePage < totalPages,
+      );
+    });
+  }
+
   Future<List<NationalRegenSeed>> listNationalRegens({
     int limit = 8,
     int ageMax = 17,
-  }) {
-    return client.withFallback<List<NationalRegenSeed>>(() async {
-      final Map<String, dynamic> payload = await client.getMap(
-        _publicUnversionedUrl('/regen-universe/national-regens'),
-        query: <String, Object?>{'limit': limit, 'age_max': ageMax},
-        auth: false,
-      );
-      final List<Object?> items = GteJson.list(
-        payload['items'] ?? const <Object?>[],
-      );
-      return items.map(NationalRegenSeed.fromJson).toList(growable: false);
-    }, () async => _requireFixtures().nationalRegens(limit: limit));
+  }) async {
+    final NationalRegenSeedPage result = await listNationalRegensPage(
+      perPage: limit,
+      ageMax: ageMax,
+    );
+    return result.items;
   }
 
   Future<List<RegenAwardResult>> listAwards({int limit = 8}) {

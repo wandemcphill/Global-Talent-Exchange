@@ -12,6 +12,7 @@ import 'gtex_regen_world_api.dart';
 
 abstract class GtexRegenRepository {
   Future<GtexRegenWorldData> loadWorld();
+  Future<GtexRegenProspectPage> loadMoreNationalRegens({required int page});
   Future<GtexCreateSonOrder> createSon(GtexCreateSonDraft draft);
   /// Live Create-a-Son operational queue for the signed-in account.
   Future<List<RegenCreationOrder>> listCreationOrders({int limit = 40});
@@ -57,14 +58,18 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
   Future<GtexRegenWorldData> loadWorld() async {
     final List<Object?> criticalPayload =
         await Future.wait<Object?>(<Future<Object?>>[
-          _safe<List<NationalRegenSeed>>(
-            universeApi.listNationalRegens(limit: 48, ageMax: 99),
+          _safe<NationalRegenSeedPage>(
+            universeApi.listNationalRegensPage(
+              page: 1,
+              perPage: 48,
+              ageMax: 99,
+            ),
           ),
           _safe<RegenGenerationTracking>(universeApi.fetchTracking()),
         ]);
 
-    final _LiveLoadResult<List<NationalRegenSeed>> nationalRegens =
-        criticalPayload[0] as _LiveLoadResult<List<NationalRegenSeed>>;
+    final _LiveLoadResult<NationalRegenSeedPage> nationalRegens =
+        criticalPayload[0] as _LiveLoadResult<NationalRegenSeedPage>;
     final _LiveLoadResult<RegenGenerationTracking> tracking =
         criticalPayload[1] as _LiveLoadResult<RegenGenerationTracking>;
 
@@ -128,18 +133,18 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
 
     final List<RegenRisingStar> liveStars =
         risingStars.value ?? const <RegenRisingStar>[];
+    final NationalRegenSeedPage? nationalRegenPage = nationalRegens.value;
     final List<NationalRegenSeed> parsedNationalRegens =
-        nationalRegens.value ?? const <NationalRegenSeed>[];
+        nationalRegenPage?.items ?? const <NationalRegenSeed>[];
     final List<RegenAwardResult> liveAwards =
         awards.value ?? const <RegenAwardResult>[];
     final List<RegenScoutingFeedItem> liveFeed =
         feed.value ?? const <RegenScoutingFeedItem>[];
     final RegenGenerationTracking liveTracking =
         tracking.value ?? _emptyTracking;
-    final List<NationalRegenSeed> liveNationalRegens =
-        parsedNationalRegens.isNotEmpty
-            ? parsedNationalRegens
-            : _nationalSeedsFromTracking(liveTracking);
+    // Aggregate country-level counters are not player records. Only API seed rows
+    // create individual national-pool player cards.
+    final List<NationalRegenSeed> liveNationalRegens = parsedNationalRegens;
     final List<RegenCreationOrder> liveOrders =
         orders.value?.items ?? const <RegenCreationOrder>[];
     final RequestSonOptions? liveOptions = options.value;
@@ -168,7 +173,7 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
             liveTracking.totalSeededPlayers == 0
                 ? prospects.length
                 : liveTracking.totalSeededPlayers,
-        nationalPoolCount: liveNationalRegens.length,
+        nationalPoolCount: nationalRegenPage?.total ?? liveNationalRegens.length,
         createSonOrders: liveOrders.length,
         awardsThisSeason: liveAwards.length,
       ),
@@ -184,11 +189,31 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
                 hasParents: liveParents.isNotEmpty,
               ),
       prospects: prospects,
+      nationalRegensPage: nationalRegenPage?.page ?? 1,
+      hasMoreNationalRegens: nationalRegenPage?.hasNext ?? false,
       awards: liveAwards.map(_awardFromResult).toList(growable: false),
       achievementFeed: liveFeed
           .map(_achievementFromFeed)
           .toList(growable: false),
       contracts: contracts,
+    );
+  }
+
+  @override
+  Future<GtexRegenProspectPage> loadMoreNationalRegens({required int page}) async {
+    final NationalRegenSeedPage result =
+        await universeApi.listNationalRegensPage(
+      page: page,
+      perPage: 48,
+      ageMax: 99,
+    );
+    return GtexRegenProspectPage(
+      prospects: result.items
+          .map(_prospectFromNationalSeed)
+          .toList(growable: false),
+      page: result.page,
+      total: result.total,
+      hasNext: result.hasNext,
     );
   }
 
@@ -563,66 +588,6 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
     );
   }
 
-  static List<NationalRegenSeed> _nationalSeedsFromTracking(
-    RegenGenerationTracking tracking,
-  ) {
-    if (tracking.countryDistribution.isEmpty) {
-      return const <NationalRegenSeed>[];
-    }
-    return tracking.countryDistribution
-        .take(48)
-        .toList(growable: false)
-        .asMap()
-        .entries
-        .map((MapEntry<int, RegenGenerationTrackingEntry> entry) {
-          final RegenGenerationTrackingEntry item = entry.value;
-          final String countryName =
-              item.bucket.trim().isEmpty ? 'GTEX' : item.bucket.trim();
-          final int codeLength =
-              countryName.length < 3 ? countryName.length : 3;
-          final String countryCode =
-              item.metadata['country_code']?.toString().trim().toUpperCase() ??
-              countryName.substring(0, codeLength).toUpperCase();
-          final int potential = item.peakRating.clamp(70, 99).toInt();
-          final int current = (potential - 18).clamp(55, 82).toInt();
-          return NationalRegenSeed(
-            id: 'tracking-seed-${entry.key}-$countryCode',
-            seedKey: 'tracking:$countryCode:${entry.key}',
-            displayName: '$countryName Regen ${entry.key + 1}',
-            age: 18,
-            ageBand: 'u21',
-            countryCode: countryCode,
-            countryName: countryName,
-            seedType: 'preseeded_national_pool',
-            primaryPosition: _positionForIndex(entry.key),
-            currentRating: current,
-            potentialRating: potential,
-            growthCurve: 0.7,
-            rarityTier: potential >= 92 ? 'elite' : 'rare',
-            status: 'active',
-            preseedBatch: 'live_tracking_fallback',
-            metadata: item.metadata,
-          );
-        })
-        .toList(growable: false);
-  }
-
-  static String _positionForIndex(int index) {
-    const List<String> positions = <String>[
-      'GK',
-      'CB',
-      'LB',
-      'RB',
-      'DM',
-      'CM',
-      'AM',
-      'LW',
-      'RW',
-      'ST',
-    ];
-    return positions[index % positions.length];
-  }
-
   static GtexRegenOrigin _originFromPlayer(RegenUniversePlayer player) {
     if (player.isPreseededNationalRegen || player.isNationalPoolOnly) {
       return GtexRegenOrigin.nationalPool;
@@ -771,6 +736,28 @@ class DemoGtexRegenRepository implements GtexRegenRepository {
   Future<GtexRegenWorldData> loadWorld() async {
     await Future<void>.delayed(const Duration(milliseconds: 80));
     return demoWorldData;
+  }
+
+  @override
+  Future<GtexRegenProspectPage> loadMoreNationalRegens({required int page}) async {
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    final List<GtexRegenProspect> nationalPool = demoWorldData.prospects
+        .where((GtexRegenProspect item) => item.origin == GtexRegenOrigin.nationalPool)
+        .toList(growable: false);
+    const int pageSize = 48;
+    final int start = (page - 1) * pageSize;
+    final List<GtexRegenProspect> items = nationalPool
+        .skip(start)
+        .take(pageSize)
+        .toList(growable: false);
+    final int totalPages =
+        nationalPool.isEmpty ? 0 : (nationalPool.length + pageSize - 1) ~/ pageSize;
+    return GtexRegenProspectPage(
+      prospects: items,
+      page: page,
+      total: nationalPool.length,
+      hasNext: page < totalPages,
+    );
   }
 
   @override
