@@ -18,6 +18,7 @@ import Competitions from "@/pages/Competitions";
 import CompetitionDetail from "@/pages/CompetitionDetail";
 import MatchCenter from "@/pages/MatchCenter";
 import Squad from "@/pages/Squad";
+import Lineup from "@/pages/Lineup";
 import Academy from "@/pages/Academy";
 import Finance from "@/pages/Finance";
 import InboxPage from "@/pages/Inbox";
@@ -54,6 +55,7 @@ export default function App() {
             <Route path="competitions/:id" element={<CompetitionDetail />} />
             <Route path="match/:id" element={<MatchCenter />} />
             <Route path="squad" element={<Squad />} />
+            <Route path="lineup" element={<Lineup />} />
             <Route path="academy" element={<Academy />} />
             <Route path="national" element={<NationalTeam />} />
             <Route path="finance" element={<Finance />} />
