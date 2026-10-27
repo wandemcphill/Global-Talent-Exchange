@@ -63,6 +63,7 @@ def normalise_staff_role(role_key: str | None) -> str:
         "first_team_manager": ROLE_FIRST_TEAM_MANAGER,
         "gm": ROLE_GENERAL_MANAGER,
         "general_manager": ROLE_GENERAL_MANAGER,
+        "director_of_football": ROLE_GENERAL_MANAGER,
         "hoyd": ROLE_HEAD_OF_YOUTH_DEVELOPMENT,
         "head_of_youth_development": ROLE_HEAD_OF_YOUTH_DEVELOPMENT,
         "youth_development_manager": ROLE_HEAD_OF_YOUTH_DEVELOPMENT,
