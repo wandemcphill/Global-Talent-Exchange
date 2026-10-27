@@ -33,11 +33,7 @@ SUPPORTED_MATCH_MOMENTS = (
     "injuries",
     "penalties",
 )
-DEFAULT_MATCH_MOMENTS = tuple(
-    moment
-    for moment in SUPPORTED_MATCH_MOMENTS
-    if moment != "penalties"
-)
+DEFAULT_MATCH_MOMENTS = tuple(moment for moment in SUPPORTED_MATCH_MOMENTS if moment != "penalties")
 
 
 class MatchSimulationJob(CommonSchema):
@@ -106,9 +102,7 @@ class MatchSimulationJob(CommonSchema):
         if self.away_club_name is None and self.away_club_id is not None:
             self.away_club_name = self.away_club_id
         if self.idempotency_key is None:
-            self.idempotency_key = (
-                f"match-simulation:{self.fixture_id}:{self.match_date.isoformat()}:{self.window.value}:{self.slot_sequence}"
-            )
+            self.idempotency_key = f"match-simulation:{self.fixture_id}:{self.match_date.isoformat()}:{self.window.value}:{self.slot_sequence}"
         return self
 
 
@@ -177,12 +171,7 @@ class NotificationJob(CommonSchema):
         return self
 
 
-CompetitionQueueJob = (
-    MatchSimulationJob
-    | BracketAdvancementJob
-    | PayoutSettlementJob
-    | NotificationJob
-)
+CompetitionQueueJob = MatchSimulationJob | BracketAdvancementJob | PayoutSettlementJob | NotificationJob
 
 
 class QueuedJobRecord(CommonSchema):
@@ -194,11 +183,9 @@ class QueuedJobRecord(CommonSchema):
 
 
 class QueuePublisher(Protocol):
-    def publish(self, job: CompetitionQueueJob) -> QueuedJobRecord:
-        ...
+    def publish(self, job: CompetitionQueueJob) -> QueuedJobRecord: ...
 
-    def list_published(self, queue_name: str | None = None) -> tuple[QueuedJobRecord, ...]:
-        ...
+    def list_published(self, queue_name: str | None = None) -> tuple[QueuedJobRecord, ...]: ...
 
 
 @dataclass(slots=True)
