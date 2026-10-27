@@ -12,7 +12,6 @@ from app.admin_engine.service import AdminEngineService
 from app.club_legacy.operations import seed_catalogue
 from app.models.admin_rules import AdminFeatureFlag
 from app.models.user import User
-from app.models.world_clock import WorldClockState
 from app.owner_console import alerts, competitions as comps, ledger, service, storytelling
 from app.owner_console.models import (
     LedgerEvent,
@@ -23,7 +22,7 @@ from app.owner_console.models import (
     OwnerSquadPlayer,
 )
 from app.owner_console.service import OwnerError
-from app.services.world_clock_service import DEFAULT_CLOCK_ID, WorldClockService
+from app.services.world_clock_service import WorldClockService
 
 
 def _enable_legacy(app) -> None:
