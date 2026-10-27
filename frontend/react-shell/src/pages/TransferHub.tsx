@@ -402,7 +402,13 @@ export function TransferHub() {
           ) : (
             <div className="space-y-3">
               {(offersData || []).map((offer: any) => {
-                const isIncoming = offer.selling_club_id === activeClub?.club_id;
+                const isIncoming = offer.seller_club_id === activeClub?.club_id;
+                const offerListing = (listingsData || []).find(
+                  (listing: any) => listing.id === offer.listing_id,
+                );
+                const offerPlayerName =
+                  offerListing?.player?.full_name || `Listing ${String(offer.listing_id).slice(0, 8)}`;
+                const offerIsActionable = ["open", "countered"].includes(String(offer.status));
                 return (
                   <div
                     key={offer.id}
@@ -418,7 +424,7 @@ export function TransferHub() {
                         <span className="gx-mono text-xs text-slate-400">ID: {offer.id.slice(0, 8)}</span>
                       </div>
                       <h4 className="gx-display text-lg font-bold uppercase text-white">
-                        {offer.player_name || `Target Player #${offer.player_id?.slice(0, 6)}`}
+                        {offerPlayerName}
                       </h4>
                       <p className="text-xs text-slate-300">
                         Offered: <b className="text-amber-300 font-mono">{fmt(offer.cash_amount)} GTX</b> · Proposed Wage: <b className="text-white font-mono">{offer.conditional_terms?.proposed_weekly_wage != null ? `${fmt(offer.conditional_terms.proposed_weekly_wage)} GTX/w` : "Not specified"}</b>
@@ -426,7 +432,7 @@ export function TransferHub() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {isIncoming && offer.status === "pending" && (
+                      {isIncoming && offerIsActionable && (
                         <>
                           <button
                             type="button"
