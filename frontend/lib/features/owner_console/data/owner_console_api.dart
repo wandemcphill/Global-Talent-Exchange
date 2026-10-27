@@ -1,4 +1,5 @@
 import 'package:gte_frontend/data/gte_authed_api.dart';
+import 'package:gte_frontend/data/gte_api_repository.dart' show GteApiException;
 import 'package:gte_frontend/features/owner_console/models/gtex_owner_inbox_models.dart';
 import 'package:gte_frontend/features/owner_console/widgets/club_legacy_desk.dart';
 
@@ -928,10 +929,9 @@ class OwnerConsoleApi implements OwnerConsoleReader, GtexOwnerInboxDataSource, O
       throw StateError('Select an active club before gifting a luxury item.');
     }
 
-    // Attempt the legacy offer first. Only a failure before a gift reference is
-    // returned may fall back to the canonical route. Once an offer exists, an
-    // acceptance error must propagate: creating a second gift could duplicate
-    // the transfer if the first acceptance succeeded server-side but timed out.
+    // The legacy route can create a durable offer. Fall back only when the
+    // server definitively reports that route as unavailable; network and 5xx
+    // failures are ambiguous and must not issue a second gift.
     Object? offeredPayload;
     try {
       offeredPayload = await client.post(
@@ -944,29 +944,37 @@ class OwnerConsoleApi implements OwnerConsoleReader, GtexOwnerInboxDataSource, O
           },
         },
       );
-    } catch (_) {
-      offeredPayload = null;
-    }
-
-    final Map<String, dynamic> offered = _map(offeredPayload);
-    final String? giftId = _text(offered['id']) ?? _text(_map(offered['gift'])['id']);
-    if (giftId != null) {
+    } on GteApiException catch (error) {
+      if (error.statusCode != 404 && error.statusCode != 405) {
+        rethrow;
+      }
       await client.post(
-        '/owner/legacy/$clubId/desk',
+        '/owner/clubs/$clubId/showroom/gift',
         body: <String, Object?>{
-          'action': 'accept_gift',
-          'payload': <String, Object?>{'gift_id': giftId},
+          'player_id': playerId,
+          'asset_id': assetId,
+          'idempotency_key': 'owner-gift-$clubId-$assetId-$playerId',
         },
       );
       return;
     }
 
+    final Map<String, dynamic> offered = _map(offeredPayload);
+    final String? giftId =
+        _text(offered['id']) ?? _text(_map(offered['gift'])['id']);
+    if (giftId == null) {
+      throw StateError(
+        'Legacy gift response did not include a gift ID; refusing a second gift fallback.',
+      );
+    }
+
+    // The offer already exists. If acceptance times out, propagate the error
+    // instead of issuing a second canonical gift.
     await client.post(
-      '/owner/clubs/$clubId/showroom/gift',
+      '/owner/legacy/$clubId/desk',
       body: <String, Object?>{
-        'player_id': playerId,
-        'asset_id': assetId,
-        'idempotency_key': 'owner-gift-$clubId-$assetId-$playerId',
+        'action': 'accept_gift',
+        'payload': <String, Object?>{'gift_id': giftId},
       },
     );
   }
