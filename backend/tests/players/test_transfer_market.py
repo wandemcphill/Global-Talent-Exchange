@@ -498,7 +498,7 @@ def test_transfer_hub_cash_offer_settles_at_the_agreed_amount(
     assert negotiation is not None
     negotiation_metadata = dict(negotiation.metadata_json or {})
     assert negotiation_metadata["hub_offer_id"] == offer_response.json()["id"]
-    assert negotiation_metadata["cash_amount"] == "1800000.00"
+    assert Decimal(negotiation_metadata["cash_amount"]) == Decimal("1800000.00")
 
     # A repeated acceptance is idempotent and does not create a duplicate negotiation.
     repeated_accept = transfer_market_api.post(
