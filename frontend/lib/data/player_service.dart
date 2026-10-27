@@ -213,6 +213,102 @@ class PlayerService {
     );
   }
 
+  /// Retrieves the authorized scout report for a player (regen or real).
+  Future<Map<String, dynamic>> getScoutReport(String id) async {
+    final String playerId = id.trim();
+    if (playerId.isEmpty) {
+      throw GteApiException(
+        type: GteApiErrorType.validation,
+        message: 'Player id is required to fetch scout report.',
+      );
+    }
+    return await _client.getMap('/scout/reports/$playerId', auth: true);
+  }
+
+  /// Lists the caller's authorized shortlists with optional full entries.
+  Future<List<Map<String, dynamic>>> listShortlists({
+    bool includeEntries = false,
+  }) async {
+    final Map<String, dynamic> payload = await _client.getMap(
+      '/talent/shortlists',
+      query: <String, Object?>{'include_entries': includeEntries},
+      auth: true,
+    );
+    final List<Object?> shortlists = GteJson.list(
+      GteJson.value(payload, <String>['shortlists']),
+      label: 'shortlists',
+    );
+    return shortlists
+        .map((Object? item) => GteJson.map(item, label: 'shortlist'))
+        .toList(growable: false);
+  }
+
+  /// Removes a player from any active shortlist owned by the caller.
+  Future<void> removeFromShortlist(String id) async {
+    final String playerId = id.trim();
+    if (playerId.isEmpty) {
+      throw GteApiException(
+        type: GteApiErrorType.validation,
+        message: 'Player id is required to remove from shortlist.',
+      );
+    }
+
+    final Map<String, dynamic> payload = await _client.getMap(
+      '/talent/shortlists',
+      query: <String, Object?>{'include_entries': true},
+      auth: true,
+    );
+    final List<Object?> shortlists = GteJson.list(
+      GteJson.value(payload, <String>['shortlists']),
+      label: 'shortlists',
+    );
+
+    for (final Object? raw in shortlists) {
+      final Map<String, Object?> item = GteJson.map(raw, label: 'shortlist');
+      final String? shortlistId = GteJson.stringOrNull(item, <String>['id']);
+      if (shortlistId == null || shortlistId.trim().isEmpty) {
+        continue;
+      }
+      final List<Object?> entries = GteJson.list(
+        GteJson.value(item, <String>['entries']),
+        label: 'shortlist entries',
+      );
+      for (final Object? rawEntry in entries) {
+        final Map<String, Object?> entry =
+            GteJson.map(rawEntry, label: 'shortlist entry');
+        if (GteJson.stringOrNull(entry, <String>['player_id']) == playerId) {
+          final String? entryId = GteJson.stringOrNull(entry, <String>['id']);
+          if (entryId != null && entryId.trim().isNotEmpty) {
+            await _client.delete(
+              '/talent/shortlists/${shortlistId.trim()}/entries/${entryId.trim()}',
+              auth: true,
+            );
+          }
+        }
+      }
+    }
+  }
+
+  /// Hands off a scouting discovery into the canonical transfer market watchlist.
+  Future<Map<String, dynamic>> handoffToTransferRoom(String id, {String? clubId}) async {
+    final String playerId = id.trim();
+    if (playerId.isEmpty) {
+      throw GteApiException(
+        type: GteApiErrorType.validation,
+        message: 'Player id is required to hand off to transfer room.',
+      );
+    }
+    final Object? result = await _client.post(
+      '/api/transfer-market/watchlist',
+      body: <String, Object?>{
+        'player_id': playerId,
+        'source': 'scouting_discovery',
+        if (clubId != null && clubId.trim().isNotEmpty) 'club_id': clubId.trim(),
+      },
+    );
+    return GteJson.map(result, label: 'transfer room handoff');
+  }
+
   Future<void> contact(String id) async {
     _throwBlockedPlayerAction('contact', id);
   }

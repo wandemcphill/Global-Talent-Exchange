@@ -370,6 +370,26 @@ def remove_shortlist_entry(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.post(
+    "/shortlists/{shortlist_id}/entries/{entry_id}/transfer-room",
+    response_model=dict[str, Any],
+)
+def handoff_shortlist_entry_to_transfer(
+    shortlist_id: str,
+    entry_id: str,
+    session: Session = Depends(get_session),
+    viewer: User = Depends(get_current_user),
+    service: TalentExchangeService = Depends(get_service),
+) -> dict[str, Any]:
+    try:
+        result = service.handoff_to_transfer(shortlist_id, entry_id, owner=viewer)
+        session.commit()
+    except TalentExchangeError as exc:
+        session.rollback()
+        _raise_talent_error(exc)
+    return result
+
+
 # ----------------------------------------------------------------------
 # Individual talent
 # ----------------------------------------------------------------------

@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1854,
+  "route_count": 1877,
   "routes": [
     {
       "method": "POST",
@@ -2651,6 +2651,33 @@
     },
     {
       "method": "POST",
+      "path": "/api/admin/coin-traders/orders/expire-stale",
+      "effective_paths": [
+        "/api/admin/coin-traders/orders/expire-stale"
+      ],
+      "file": "backend/app/coin_traders/router.py",
+      "handler": "admin_expire_stale_coin_trade_orders",
+      "router_variable": "admin_router",
+      "module_path": "app.coin_traders.router",
+      "module_mounts": [
+        "admin_coin_traders"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "service",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[CoinTradeOrderView]",
+        "returns": "list[CoinTradeOrderView]"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "POST",
       "path": "/api/admin/coin-traders/orders/{order_id}/resolve",
       "effective_paths": [
         "/api/admin/coin-traders/orders/{order_id}/resolve"
@@ -4477,6 +4504,7 @@
       "request_shape": {
         "parameters": [
           "tournament_id",
+          "request",
           "_current_user",
           "service"
         ]
@@ -4774,6 +4802,7 @@
       "request_shape": {
         "parameters": [
           "tournament_id",
+          "request",
           "current_user",
           "service"
         ]
@@ -4830,6 +4859,7 @@
         "parameters": [
           "tournament_id",
           "payload",
+          "request",
           "current_user",
           "service"
         ]
@@ -7093,6 +7123,50 @@
       "response_shape": {
         "response_model": "ChallengePageView",
         "returns": "ChallengePageView"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "GET",
+      "path": "/api/clubs/marketplace",
+      "effective_paths": [
+        "/api/clubs/marketplace"
+      ],
+      "file": "backend/app/club_sale_market/router.py",
+      "handler": "list_public_club_sale_market_listings",
+      "router_variable": "router",
+      "module_path": "app.club_sale_market.router",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "limit",
+          "ge",
+          "le",
+          "offset",
+          "ge",
+          "min_price",
+          "ge",
+          "max_price",
+          "ge",
+          "league_tier",
+          "ge",
+          "min_squad_strength",
+          "ge",
+          "le",
+          "max_squad_strength",
+          "ge",
+          "le",
+          "min_fanbase_size",
+          "ge",
+          "max_fanbase_size",
+          "ge",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ClubSaleListingCollectionView",
+        "returns": "ClubSaleListingCollectionView"
       },
       "version": "canonical",
       "domain": "club"
@@ -9991,6 +10065,33 @@
     },
     {
       "method": "GET",
+      "path": "/api/coin-traders/orders/{order_id}/messages",
+      "effective_paths": [
+        "/api/coin-traders/orders/{order_id}/messages"
+      ],
+      "file": "backend/app/coin_traders/router.py",
+      "handler": "list_coin_trade_order_messages",
+      "router_variable": "router",
+      "module_path": "app.coin_traders.router",
+      "module_mounts": [
+        "coin_traders"
+      ],
+      "request_shape": {
+        "parameters": [
+          "order_id",
+          "service",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[CoinTradeMessageView]",
+        "returns": "list[CoinTradeMessageView]"
+      },
+      "version": "canonical",
+      "domain": "coin"
+    },
+    {
+      "method": "GET",
       "path": "/api/coin-traders/{profile_id}",
       "effective_paths": [
         "/api/coin-traders/{profile_id}"
@@ -10174,6 +10275,34 @@
       "response_shape": {
         "response_model": "CoinTradeOrderView",
         "returns": "CoinTradeOrderView"
+      },
+      "version": "canonical",
+      "domain": "coin"
+    },
+    {
+      "method": "POST",
+      "path": "/api/coin-traders/orders/{order_id}/messages",
+      "effective_paths": [
+        "/api/coin-traders/orders/{order_id}/messages"
+      ],
+      "file": "backend/app/coin_traders/router.py",
+      "handler": "post_coin_trade_order_message",
+      "router_variable": "router",
+      "module_path": "app.coin_traders.router",
+      "module_mounts": [
+        "coin_traders"
+      ],
+      "request_shape": {
+        "parameters": [
+          "order_id",
+          "payload",
+          "service",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CoinTradeMessageView",
+        "returns": "CoinTradeMessageView"
       },
       "version": "canonical",
       "domain": "coin"
@@ -21985,6 +22114,84 @@
     },
     {
       "method": "GET",
+      "path": "/api/matches/{match_id}/post-match",
+      "effective_paths": [
+        "/api/matches/{match_id}/post-match"
+      ],
+      "file": "backend/app/live_matches/router.py",
+      "handler": "read_match_v2_post_match",
+      "router_variable": "api_router",
+      "module_path": "app.live_matches.router",
+      "module_mounts": [
+        "live_matches"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
+      },
+      "version": "canonical",
+      "domain": "live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/matches/{match_id}/pre-match",
+      "effective_paths": [
+        "/api/matches/{match_id}/pre-match"
+      ],
+      "file": "backend/app/live_matches/router.py",
+      "handler": "read_match_v2_pre_match",
+      "router_variable": "api_router",
+      "module_path": "app.live_matches.router",
+      "module_mounts": [
+        "live_matches"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
+      },
+      "version": "canonical",
+      "domain": "live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/matches/{match_id}/predictions",
+      "effective_paths": [
+        "/api/matches/{match_id}/predictions"
+      ],
+      "file": "backend/app/live_matches/router.py",
+      "handler": "read_match_fan_predictions",
+      "router_variable": "api_router",
+      "module_path": "app.live_matches.router",
+      "module_mounts": [
+        "live_matches"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
+      },
+      "version": "canonical",
+      "domain": "live"
+    },
+    {
+      "method": "GET",
       "path": "/api/matches/{match_id}/state",
       "effective_paths": [
         "/api/matches/{match_id}/state"
@@ -22336,6 +22543,58 @@
     },
     {
       "method": "GET",
+      "path": "/matches/{match_id}/predictions",
+      "effective_paths": [
+        "/matches/{match_id}/predictions"
+      ],
+      "file": "backend/app/live_matches/router.py",
+      "handler": "read_match_fan_predictions",
+      "router_variable": "legacy_router",
+      "module_path": "app.live_matches.router",
+      "module_mounts": [
+        "live_matches"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
+      },
+      "version": "canonical",
+      "domain": "live"
+    },
+    {
+      "method": "GET",
+      "path": "/matches/{match_id}/tactics",
+      "effective_paths": [
+        "/matches/{match_id}/tactics"
+      ],
+      "file": "backend/app/live_matches/router.py",
+      "handler": "read_match_v2_tactics",
+      "router_variable": "legacy_router",
+      "module_path": "app.live_matches.router",
+      "module_mounts": [
+        "live_matches"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
+      },
+      "version": "canonical",
+      "domain": "live"
+    },
+    {
+      "method": "GET",
       "path": "/season-pass",
       "effective_paths": [
         "/api/season-pass",
@@ -22418,6 +22677,61 @@
     },
     {
       "method": "POST",
+      "path": "/api/matches/{match_id}/predictions",
+      "effective_paths": [
+        "/api/matches/{match_id}/predictions"
+      ],
+      "file": "backend/app/live_matches/router.py",
+      "handler": "submit_match_fan_prediction",
+      "router_variable": "api_router",
+      "module_path": "app.live_matches.router",
+      "module_mounts": [
+        "live_matches"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "request",
+          "payload",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
+      },
+      "version": "canonical",
+      "domain": "live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/matches/{match_id}/rewards/claim",
+      "effective_paths": [
+        "/api/matches/{match_id}/rewards/claim"
+      ],
+      "file": "backend/app/live_matches/router.py",
+      "handler": "claim_match_rewards",
+      "router_variable": "api_router",
+      "module_path": "app.live_matches.router",
+      "module_mounts": [
+        "live_matches"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "request",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
+      },
+      "version": "canonical",
+      "domain": "live"
+    },
+    {
+      "method": "POST",
       "path": "/api/matches/{match_id}/spectate",
       "effective_paths": [
         "/api/matches/{match_id}/spectate"
@@ -22460,7 +22774,9 @@
       "request_shape": {
         "parameters": [
           "match_id",
-          "request"
+          "request",
+          "payload",
+          "current_user"
         ]
       },
       "response_shape": {
@@ -22696,6 +23012,61 @@
     },
     {
       "method": "POST",
+      "path": "/matches/{match_id}/predictions",
+      "effective_paths": [
+        "/matches/{match_id}/predictions"
+      ],
+      "file": "backend/app/live_matches/router.py",
+      "handler": "submit_match_fan_prediction",
+      "router_variable": "legacy_router",
+      "module_path": "app.live_matches.router",
+      "module_mounts": [
+        "live_matches"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "request",
+          "payload",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
+      },
+      "version": "canonical",
+      "domain": "live"
+    },
+    {
+      "method": "POST",
+      "path": "/matches/{match_id}/rewards/claim",
+      "effective_paths": [
+        "/matches/{match_id}/rewards/claim"
+      ],
+      "file": "backend/app/live_matches/router.py",
+      "handler": "claim_match_rewards",
+      "router_variable": "legacy_router",
+      "module_path": "app.live_matches.router",
+      "module_mounts": [
+        "live_matches"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "request",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
+      },
+      "version": "canonical",
+      "domain": "live"
+    },
+    {
+      "method": "POST",
       "path": "/matches/{match_id}/spectate",
       "effective_paths": [
         "/matches/{match_id}/spectate"
@@ -22718,6 +23089,34 @@
       "response_shape": {
         "response_model": "SpectatorSessionView",
         "returns": "SpectatorSessionView"
+      },
+      "version": "canonical",
+      "domain": "live"
+    },
+    {
+      "method": "POST",
+      "path": "/matches/{match_id}/tactics",
+      "effective_paths": [
+        "/matches/{match_id}/tactics"
+      ],
+      "file": "backend/app/live_matches/router.py",
+      "handler": "update_match_v2_tactics",
+      "router_variable": "legacy_router",
+      "module_path": "app.live_matches.router",
+      "module_mounts": [
+        "live_matches"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "request",
+          "payload",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
       },
       "version": "canonical",
       "domain": "live"
@@ -29564,8 +29963,11 @@
       "request_shape": {
         "parameters": [
           "club_id",
+          "save_context_id",
           "category",
           "limit",
+          "ge",
+          "le",
           "user",
           "session"
         ]
@@ -29673,6 +30075,8 @@
           "club_id",
           "save_context_id",
           "limit",
+          "ge",
+          "le",
           "user",
           "session"
         ]
@@ -30038,6 +30442,33 @@
     },
     {
       "method": "POST",
+      "path": "/owner/clubs/{club_id}/autopick",
+      "effective_paths": [
+        "/api/owner/clubs/{club_id}/autopick"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "autopick",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
       "path": "/owner/clubs/{club_id}/facilities/{kind}/upgrade",
       "effective_paths": [
         "/api/owner/clubs/{club_id}/facilities/{kind}/upgrade"
@@ -30210,6 +30641,34 @@
       ],
       "file": "backend/app/owner_console/router.py",
       "handler": "sign",
+      "router_variable": "router",
+      "module_path": "app.owner_console.router",
+      "module_mounts": [
+        "owner_console"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "body",
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "owner"
+    },
+    {
+      "method": "POST",
+      "path": "/owner/clubs/{club_id}/unsign",
+      "effective_paths": [
+        "/api/owner/clubs/{club_id}/unsign"
+      ],
+      "file": "backend/app/owner_console/router.py",
+      "handler": "unsign",
       "router_variable": "router",
       "module_path": "app.owner_console.router",
       "module_mounts": [
@@ -30464,6 +30923,7 @@
       "request_shape": {
         "parameters": [
           "body",
+          "request",
           "user",
           "session"
         ]
@@ -38962,6 +39422,80 @@
       "domain": "runtime"
     },
     {
+      "method": "GET",
+      "path": "/scout/report/{player_id}",
+      "effective_paths": [
+        "/scout/report/{player_id}"
+      ],
+      "file": "backend/app/segments/player_lifecycle/scouting_action.py",
+      "handler": "get_player_scout_report",
+      "router_variable": "router",
+      "module_path": "app.segments.player_lifecycle.scouting_action",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "current_user",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ScoutReportView",
+        "returns": "ScoutReportView"
+      },
+      "version": "canonical",
+      "domain": "scouting"
+    },
+    {
+      "method": "GET",
+      "path": "/scout/reports",
+      "effective_paths": [
+        "/scout/reports"
+      ],
+      "file": "backend/app/segments/player_lifecycle/scouting_action.py",
+      "handler": "list_club_scout_reports",
+      "router_variable": "router",
+      "module_path": "app.segments.player_lifecycle.scouting_action",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "current_user",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[ScoutReportView]",
+        "returns": "list[ScoutReportView]"
+      },
+      "version": "canonical",
+      "domain": "scouting"
+    },
+    {
+      "method": "GET",
+      "path": "/scout/reports/{player_id}",
+      "effective_paths": [
+        "/scout/reports/{player_id}"
+      ],
+      "file": "backend/app/segments/player_lifecycle/scouting_action.py",
+      "handler": "get_player_scout_report",
+      "router_variable": "router",
+      "module_path": "app.segments.player_lifecycle.scouting_action",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "current_user",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ScoutReportView",
+        "returns": "ScoutReportView"
+      },
+      "version": "canonical",
+      "domain": "scouting"
+    },
+    {
       "method": "POST",
       "path": "/scout/report/{player_id}",
       "effective_paths": [
@@ -38982,6 +39516,31 @@
       "response_shape": {
         "response_model": "ScoutReportView",
         "returns": "ScoutReportView"
+      },
+      "version": "canonical",
+      "domain": "scouting"
+    },
+    {
+      "method": "POST",
+      "path": "/scout/reports/{player_id}/transfer-room",
+      "effective_paths": [
+        "/scout/reports/{player_id}/transfer-room"
+      ],
+      "file": "backend/app/segments/player_lifecycle/scouting_action.py",
+      "handler": "handoff_scout_report_to_transfer_room",
+      "router_variable": "router",
+      "module_path": "app.segments.player_lifecycle.scouting_action",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "current_user",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, Any]"
       },
       "version": "canonical",
       "domain": "scouting"
@@ -45729,6 +46288,36 @@
       "domain": "talent"
     },
     {
+      "method": "POST",
+      "path": "/talent/shortlists/{shortlist_id}/entries/{entry_id}/transfer-room",
+      "effective_paths": [
+        "/api/talent/shortlists/{shortlist_id}/entries/{entry_id}/transfer-room",
+        "/talent/shortlists/{shortlist_id}/entries/{entry_id}/transfer-room"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "handoff_shortlist_entry_to_transfer",
+      "router_variable": "router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange"
+      ],
+      "request_shape": {
+        "parameters": [
+          "shortlist_id",
+          "entry_id",
+          "session",
+          "viewer",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "dict[str",
+        "returns": "dict[str, Any]"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
       "method": "GET",
       "path": "/tickets/event/{match_id}",
       "effective_paths": [
@@ -45902,6 +46491,33 @@
     },
     {
       "method": "GET",
+      "path": "/api/tournaments/admin/retirement/refunds/dry-run",
+      "effective_paths": [
+        "/api/tournaments/admin/retirement/refunds/dry-run"
+      ],
+      "file": "backend/app/tournaments/router.py",
+      "handler": "dry_run_legacy_tournament_refunds",
+      "router_variable": "router",
+      "module_path": "app.tournaments.router",
+      "module_mounts": [
+        "tournaments"
+      ],
+      "request_shape": {
+        "parameters": [
+          "tournament_id",
+          "current_user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
+      },
+      "version": "canonical",
+      "domain": "tournaments"
+    },
+    {
+      "method": "GET",
       "path": "/api/tournaments/{tournament_id}",
       "effective_paths": [
         "/api/tournaments/{tournament_id}"
@@ -45943,14 +46559,39 @@
       "request_shape": {
         "parameters": [
           "payload",
-          "current_user",
-          "session",
-          "service"
+          "current_user"
         ]
       },
       "response_shape": {
-        "response_model": "TournamentView",
-        "returns": "TournamentView"
+        "response_model": null,
+        "returns": "None"
+      },
+      "version": "canonical",
+      "domain": "tournaments"
+    },
+    {
+      "method": "POST",
+      "path": "/api/tournaments/admin/retirement/refunds/execute",
+      "effective_paths": [
+        "/api/tournaments/admin/retirement/refunds/execute"
+      ],
+      "file": "backend/app/tournaments/router.py",
+      "handler": "execute_legacy_tournament_refund_batch",
+      "router_variable": "router",
+      "module_path": "app.tournaments.router",
+      "module_mounts": [
+        "tournaments"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "current_user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict"
       },
       "version": "canonical",
       "domain": "tournaments"
@@ -45971,14 +46612,12 @@
       "request_shape": {
         "parameters": [
           "tournament_id",
-          "current_user",
-          "session",
-          "service"
+          "current_user"
         ]
       },
       "response_shape": {
-        "response_model": "TournamentView",
-        "returns": "TournamentView"
+        "response_model": null,
+        "returns": "None"
       },
       "version": "canonical",
       "domain": "tournaments"
@@ -45999,14 +46638,12 @@
       "request_shape": {
         "parameters": [
           "tournament_id",
-          "current_user",
-          "session",
-          "service"
+          "current_user"
         ]
       },
       "response_shape": {
-        "response_model": "TournamentView",
-        "returns": "TournamentView"
+        "response_model": null,
+        "returns": "None"
       },
       "version": "canonical",
       "domain": "tournaments"
@@ -46028,14 +46665,12 @@
         "parameters": [
           "tournament_id",
           "payload",
-          "current_user",
-          "session",
-          "service"
+          "current_user"
         ]
       },
       "response_shape": {
-        "response_model": "TournamentView",
-        "returns": "TournamentView"
+        "response_model": null,
+        "returns": "None"
       },
       "version": "canonical",
       "domain": "tournaments"
@@ -46058,14 +46693,12 @@
           "tournament_id",
           "match_id",
           "payload",
-          "current_user",
-          "session",
-          "service"
+          "current_user"
         ]
       },
       "response_shape": {
-        "response_model": "TournamentView",
-        "returns": "TournamentView"
+        "response_model": null,
+        "returns": "None"
       },
       "version": "canonical",
       "domain": "tournaments"

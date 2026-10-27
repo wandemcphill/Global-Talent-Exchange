@@ -43,6 +43,12 @@ LAZY_HYDRATION_BYPASS_PREFIXES = (
     "/matches",
     "/streamer-tournaments",
     "/admin/streamer-tournaments",
+    "/scout",
+    "/api/scout",
+    "/api/v2/scout",
+    "/talent",
+    "/api/talent",
+    "/api/v2/talent",
 )
 EAGER_MODULE_NAMES = frozenset(
     {
@@ -60,6 +66,8 @@ EAGER_MODULE_NAMES = frozenset(
         "hosted_competition_engine_admin",
         "streamer_tournament_engine",
         "world_simulation",
+        "talent_exchange",
+        "player_lifecycle",
     }
 )
 
@@ -781,7 +789,7 @@ DOMAIN_MODULES = (
         ),
     ),
     _module("regen_universe_admin", router_path="app.regen_universe.router:admin_router"),
-    _module("player_lifecycle", router_path="app.routes.player_lifecycle:router"),
+    _module("player_lifecycle", router_path="app.routes.player_lifecycle:router", with_api_alias=True),
     _module("player_agency", router_path="app.routes.player_agency:router"),
     _module("regen_living_star", router_path="app.routes.regen_living_star:router"),
     _module("transfer_market", router_path="app.transfer_market.router:router"),

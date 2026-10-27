@@ -1,11 +1,9 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeftRight, Clock, DollarSign, Filter, Handshake, MessageSquare, Plus, Search, ShieldAlert, Sparkles, UserPlus, Users } from "lucide-react";
+import { ArrowLeftRight, Clock, Filter, Handshake, MessageSquare, Search, Sparkles } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmt, useActiveClub } from "@/lib/owner";
-import { Btn, Chip, Loading, TraitBar } from "@/components/gtex/ui";
-import { PlayerCard } from "@/components/gtex/PlayerCard";
-import { RegenCard } from "@/components/gtex/RegenCard";
+import { Loading } from "@/components/gtex/ui";
 import { PlayerDossier } from "@/components/gtex/PlayerDossier";
 import { toast } from "sonner";
 
@@ -25,42 +23,96 @@ export function TransferHub() {
   const [offerWage, setOfferWage] = useState<string>("");
   const [submittingOffer, setSubmittingOffer] = useState(false);
 
+  // Persisted negotiation contract-offer modal state
+  const [contractOfferNegotiation, setContractOfferNegotiation] = useState<any | null>(null);
+  const [contractWageOffer, setContractWageOffer] = useState<string>("");
+  const [contractYears, setContractYears] = useState<string>("3");
+  const [contractExpectedRole, setContractExpectedRole] = useState<string>("");
+  const [submittingContractOffer, setSubmittingContractOffer] = useState(false);
+
   // Lane 1: Listings Query
-  const { data: listingsData, isLoading: loadingListings } = useQuery({
+  const {
+    data: listingsData,
+    isLoading: loadingListings,
+    error: listingsError,
+    refetch: refetchListings,
+  } = useQuery({
     queryKey: ["transfer-listings", selectedPosition],
     queryFn: async () => {
-      try {
-        const params: any = { status: "active" };
-        if (selectedPosition !== "ALL") params.position = selectedPosition;
-        const { data } = await api.get("/transfer-hub/listings", { params });
-        return data || [];
-      } catch {
-        return [];
-      }
+      const params: any = { status: "open" };
+      if (selectedPosition !== "ALL") params.position = selectedPosition;
+      const { data } = await api.get("/transfer-hub/listings", { params });
+      return data || [];
     },
   });
 
   // Lane 2: Offers Query (Incoming & Outgoing for active club)
-  const { data: offersData, isLoading: loadingOffers, refetch: refetchOffers } = useQuery({
+  const {
+    data: offersData,
+    isLoading: loadingOffers,
+    error: offersError,
+    refetch: refetchOffers,
+  } = useQuery({
     queryKey: ["transfer-offers", activeClub?.club_id],
     queryFn: async () => {
-      try {
-        const params: any = {};
-        if (activeClub?.club_id) params.club_id = activeClub.club_id;
-        const { data } = await api.get("/transfer-hub/offers", { params });
-        return data || [];
-      } catch {
-        return [];
-      }
+      const params: any = {};
+      if (activeClub?.club_id) params.club_id = activeClub.club_id;
+      const { data } = await api.get("/transfer-hub/offers", { params });
+      return data || [];
     },
     enabled: !!activeClub?.club_id && lane === "offers",
   });
 
+  // Read watchlist entries for the verified active club; the backend returns the
+  // canonical player record and an active market listing only when one exists.
+  const {
+    data: shortlistData,
+    isLoading: loadingShortlist,
+    error: shortlistError,
+    refetch: refetchShortlist,
+  } = useQuery({
+    queryKey: ["transfer-market-watchlist", activeClub?.club_id],
+    queryFn: async () => {
+      if (!activeClub?.club_id) return [];
+      const { data } = await api.get("/transfer-market/watchlist", {
+        params: { club_id: activeClub.club_id },
+      });
+      return data || [];
+    },
+    enabled: !!activeClub?.club_id && lane === "shortlist",
+  });
+
+  // A club must be able to place the opening bid as well as raise an existing bid.
+  const bidListings = (listingsData || []).filter(
+    (listing: any) => listing.status === "open",
+  );
+
+  const {
+    data: negotiationsData,
+    isLoading: loadingNegotiations,
+    error: negotiationsError,
+    refetch: refetchNegotiations,
+  } = useQuery({
+    queryKey: ["transfer-market-negotiations", activeClub?.club_id],
+    queryFn: async () => {
+      if (!activeClub?.club_id) return [];
+      const { data } = await api.get("/transfer-market/negotiations", {
+        params: { club_id: activeClub.club_id },
+      });
+      return data || [];
+    },
+    enabled: !!activeClub?.club_id && lane === "negotiations",
+  });
+
+  const [bidAmounts, setBidAmounts] = useState<Record<string, string>>({});
+  const [placingBidId, setPlacingBidId] = useState<string | null>(null);
+
   // Actions on Offers
   const handleAcceptOffer = async (offerId: string) => {
     try {
-      await api.post(`/transfer-hub/offers/${offerId}/accept`);
-      toast.success("Transfer offer accepted! Deal submitted for league registration.");
+      const { data } = await api.post(`/transfer-hub/offers/${offerId}/accept`);
+      const resolvedStatus = String(data?.status || "updated").replace(/_/g, " ");
+      toast.success(`Transfer offer ${resolvedStatus}.`);
       refetchOffers();
     } catch (e) {
       toast.error(errMsg(e));
@@ -77,6 +129,39 @@ export function TransferHub() {
     }
   };
 
+  const handlePlaceBid = async (listing: any) => {
+    const rawAmount = bidAmounts[listing.id];
+    const amount = Number(rawAmount);
+    if (!activeClub?.club_id) {
+      toast.error("Select an active club before placing a bid.");
+      return;
+    }
+    const bidThreshold =
+      Number(listing.current_highest_bid || 0) > 0
+        ? Number(listing.current_highest_bid)
+        : Number(listing.base_price || 0);
+    if (!rawAmount || !Number.isFinite(amount) || amount <= bidThreshold) {
+      toast.error(`Enter a valid bid greater than ${fmt(bidThreshold)} GTX.`);
+      return;
+    }
+
+    setPlacingBidId(listing.id);
+    try {
+      await api.post(`/transfer-market/listings/${listing.id}/bids`, {
+        bidder_club_id: activeClub.club_id,
+        amount,
+        activity_context: "react_transfer_hub_bid_lane",
+      });
+      toast.success("Bid submitted to the transfer market.");
+      setBidAmounts((previous) => ({ ...previous, [listing.id]: "" }));
+      await qc.invalidateQueries({ queryKey: ["transfer-listings"] });
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setPlacingBidId(null);
+    }
+  };
+
   // Submit new offer
   const handleSubmitOffer = async () => {
     if (!offerListing || !offerAmount || !activeClub?.club_id) return;
@@ -84,8 +169,10 @@ export function TransferHub() {
     try {
       await api.post(`/transfer-hub/listings/${offerListing.id}/offers`, {
         bidder_club_id: activeClub.club_id,
-        amount: Number(offerAmount),
-        proposed_wage: offerWage ? Number(offerWage) : undefined,
+        offer_type: "transfer",
+        cash_amount: Number(offerAmount),
+        conditional_terms: offerWage ? { proposed_weekly_wage: Number(offerWage) } : {},
+        message: offerWage ? `Proposed weekly wage: ${Number(offerWage)} GTX/w` : undefined,
       });
       toast.success(`Formal offer of ${fmt(offerAmount)} GTX submitted to selling club!`);
       setOfferListing(null);
@@ -99,10 +186,44 @@ export function TransferHub() {
     }
   };
 
+  const handleSubmitContractOffer = async () => {
+    if (!contractOfferNegotiation || !activeClub?.club_id) return;
+    const wage = Number(contractWageOffer);
+    const years = Number(contractYears);
+    if (!contractWageOffer.trim() || !Number.isFinite(wage) || wage < 0 || !Number.isInteger(years) || years < 1 || years > 5) {
+      toast.error("Enter a valid weekly wage and contract length (1–5 years).");
+      return;
+    }
+
+    setSubmittingContractOffer(true);
+    try {
+      await api.post(
+        `/transfer-market/listings/${contractOfferNegotiation.listing_id}/contract-offer`,
+        {
+          bidder_club_id: activeClub.club_id,
+          wage_offer_amount: wage,
+          contract_years: years,
+          expected_role: contractExpectedRole.trim() || undefined,
+        },
+      );
+      toast.success("Contract offer submitted to the transfer workflow.");
+      setContractOfferNegotiation(null);
+      setContractWageOffer("");
+      setContractYears("3");
+      setContractExpectedRole("");
+      await qc.invalidateQueries({ queryKey: ["transfer-market-negotiations", activeClub.club_id] });
+      await qc.invalidateQueries({ queryKey: ["transfer-offers", activeClub.club_id] });
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setSubmittingContractOffer(false);
+    }
+  };
+
   // Filter listings
   const filteredListings = (listingsData || []).filter((l: any) => {
     const p = l.player || {};
-    const name = (p.name || p.player_name || l.player_id || "").toLowerCase();
+    const name = (p.full_name || p.name || p.player_name || l.player_id || "").toLowerCase();
     if (search && !name.includes(search.toLowerCase())) return false;
     return true;
   });
@@ -128,13 +249,13 @@ export function TransferHub() {
             <div className="rounded-lg border border-white/10 bg-black/40 px-3.5 py-2">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Transfer Budget</p>
               <p className="gx-mono text-lg font-black text-emerald-300">
-                {fmt(activeClub?.transfer_budget ?? 450000)} <span className="text-[10px] text-emerald-400/80">GTX</span>
+                {activeClub?.transfer_budget != null ? fmt(activeClub.transfer_budget) : "—"} <span className="text-[10px] text-emerald-400/80">GTX</span>
               </p>
             </div>
             <div className="rounded-lg border border-white/10 bg-black/40 px-3.5 py-2">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Wage Room</p>
               <p className="gx-mono text-lg font-black text-amber-300">
-                {fmt(activeClub?.wage_budget ?? 35000)} <span className="text-[10px] text-amber-400/80">GTX/w</span>
+                {activeClub?.wage_budget != null ? fmt(activeClub.wage_budget) : "—"} <span className="text-[10px] text-amber-400/80">GTX/w</span>
               </p>
             </div>
           </div>
@@ -146,9 +267,9 @@ export function TransferHub() {
         {[
           { id: "listings", label: "Market Listings", count: listingsData?.length, icon: ArrowLeftRight },
           { id: "offers", label: "Active Offers", count: offersData?.length, icon: Handshake },
-          { id: "negotiations", label: "Negotiations", count: 2, icon: MessageSquare },
-          { id: "bids", label: "Window Bids", count: 3, icon: Clock },
-          { id: "shortlist", label: "Shortlist", count: 5, icon: Sparkles },
+          { id: "negotiations", label: "Negotiations", count: negotiationsData?.length, icon: MessageSquare },
+          { id: "bids", label: "Window Bids", count: bidListings.length, icon: Clock },
+          { id: "shortlist", label: "Shortlist", count: shortlistData?.length, icon: Sparkles },
         ].map((item) => {
           const Icon = item.icon;
           const active = lane === item.id;
@@ -212,6 +333,12 @@ export function TransferHub() {
 
           {loadingListings ? (
             <Loading label="Querying transfer market listings..." />
+          ) : listingsError ? (
+            <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 p-6 text-center">
+              <p className="gx-display text-lg font-bold uppercase text-white">Market listings unavailable</p>
+              <p className="text-sm text-slate-300 mt-1">{errMsg(listingsError)}</p>
+              <button type="button" onClick={() => refetchListings()} className="gx-btn gx-btn-secondary mt-3 text-xs">Retry</button>
+            </div>
           ) : filteredListings.length === 0 ? (
             <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
               <ArrowLeftRight className="mx-auto size-10 text-emerald-400/50 mb-3" />
@@ -220,39 +347,53 @@ export function TransferHub() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 place-items-center">
-              {filteredListings.map((listing: any, i: number) => {
+              {filteredListings.map((listing: any) => {
                 const p = listing.player || {};
-                const id = listing.player_id || p.id || `listing-${i}`;
-                const isRegen = listing.asset_type === "regen" || p.is_regen;
+                const playerId = listing.player_id || p.id;
                 return (
-                  <div key={listing.id || id} className="flex flex-col w-full max-w-[310px]">
-                    {isRegen ? (
-                      <RegenCard
-                        name={p.name || p.player_name || "Listed Regen"}
-                        rating={p.current_rating || p.rating || 72}
-                        position={p.position || "MID"}
-                        price={listing.asking_price}
-                        variant="full"
-                        onClick={() => setSelectedPlayerId(id)}
-                      />
-                    ) : (
-                      <PlayerCard
-                        name={p.name || p.player_name || "Listed Player"}
-                        rating={p.rating || 76}
-                        position={p.position || "FWD"}
-                        price={listing.asking_price}
-                        variant="full"
-                        onClick={() => setSelectedPlayerId(id)}
-                      />
-                    )}
+                  <div key={listing.id} className="flex flex-col w-full max-w-[310px]">
+                    <div className="flex-1 rounded-xl border border-white/10 bg-slate-900/70 p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="gx-display text-lg font-bold uppercase text-white">
+                            {p.full_name || playerId}
+                          </h3>
+                          <p className="text-xs text-slate-400 mt-1">
+                            {p.normalized_position || "Position not recorded"}
+                          </p>
+                        </div>
+                        <span className="shrink-0 gx-mono text-xs font-black text-amber-300">
+                          {fmt(listing.base_price)} GTX
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400">
+                        {p.current_club_name ? `Current club: ${p.current_club_name}` : "Current club not recorded"}
+                      </p>
+                      {p.market_value != null && (
+                        <p className="text-xs text-slate-400">
+                          Imported market reference: €{new Intl.NumberFormat("en-IE", { maximumFractionDigits: 0 }).format(Number(p.market_value))}
+                        </p>
+                      )}
+                      <p className="text-xs text-slate-500">
+                        Listing status: {listing.status} · {Math.ceil(Number(listing.time_remaining || 0) / 60)} minutes remaining
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPlayerId(playerId)}
+                        className="gx-btn gx-btn-secondary w-full text-xs"
+                      >
+                        Open player dossier
+                      </button>
+                    </div>
                     <button
                       type="button"
+                      disabled={!activeClub?.club_id || listing.status !== "open"}
                       onClick={() => {
                         setOfferListing(listing);
-                        setOfferAmount(String(listing.asking_price || 50000));
+                        setOfferAmount(String(listing.base_price ?? ""));
                       }}
-                      className="gx-btn gx-btn-primary mt-2.5 w-full text-xs font-black shadow-md"
-                      data-testid={`make-offer-btn-${listing.id || id}`}
+                      className="gx-btn gx-btn-primary mt-2.5 w-full text-xs font-black shadow-md disabled:cursor-not-allowed disabled:opacity-50"
+                      data-testid={`make-offer-btn-${listing.id}`}
                     >
                       <Handshake size={14} /> Submit Club Offer
                     </button>
@@ -269,6 +410,18 @@ export function TransferHub() {
         <div className="space-y-4" data-testid="lane-offers-view">
           {loadingOffers ? (
             <Loading label="Gathering offer transactions..." />
+          ) : !activeClub?.club_id ? (
+            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+              <Handshake className="mx-auto size-10 text-emerald-400/50 mb-3" />
+              <p className="gx-display text-xl font-bold uppercase text-white">Choose an active club</p>
+              <p className="text-sm text-slate-400 mt-1">Offers are scoped to a club you are authorized to manage.</p>
+            </div>
+          ) : offersError ? (
+            <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 p-6 text-center">
+              <p className="gx-display text-lg font-bold uppercase text-white">Transfer offers unavailable</p>
+              <p className="text-sm text-slate-300 mt-1">{errMsg(offersError)}</p>
+              <button type="button" onClick={() => refetchOffers()} className="gx-btn gx-btn-secondary mt-3 text-xs">Retry</button>
+            </div>
           ) : (offersData || []).length === 0 ? (
             <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
               <Handshake className="mx-auto size-10 text-emerald-400/50 mb-3" />
@@ -280,7 +433,13 @@ export function TransferHub() {
           ) : (
             <div className="space-y-3">
               {(offersData || []).map((offer: any) => {
-                const isIncoming = offer.selling_club_id === activeClub?.club_id;
+                const isIncoming = offer.seller_club_id === activeClub?.club_id;
+                const offerListing = (listingsData || []).find(
+                  (listing: any) => listing.id === offer.listing_id,
+                );
+                const offerPlayerName =
+                  offerListing?.player?.full_name || `Listing ${String(offer.listing_id).slice(0, 8)}`;
+                const offerIsActionable = ["open", "countered"].includes(String(offer.status));
                 return (
                   <div
                     key={offer.id}
@@ -296,15 +455,15 @@ export function TransferHub() {
                         <span className="gx-mono text-xs text-slate-400">ID: {offer.id.slice(0, 8)}</span>
                       </div>
                       <h4 className="gx-display text-lg font-bold uppercase text-white">
-                        {offer.player_name || `Target Player #${offer.player_id?.slice(0, 6)}`}
+                        {offerPlayerName}
                       </h4>
                       <p className="text-xs text-slate-300">
-                        Offered: <b className="text-amber-300 font-mono">{fmt(offer.amount)} GTX</b> · Proposed Wage: <b className="text-white font-mono">{fmt(offer.proposed_wage || 2000)} GTX/w</b>
+                        Offered: <b className="text-amber-300 font-mono">{fmt(offer.cash_amount)} GTX</b> · Proposed Wage: <b className="text-white font-mono">{offer.conditional_terms?.proposed_weekly_wage != null ? `${fmt(offer.conditional_terms.proposed_weekly_wage)} GTX/w` : "Not specified"}</b>
                       </p>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {isIncoming && offer.status === "pending" && (
+                      {isIncoming && offerIsActionable && (
                         <>
                           <button
                             type="button"
@@ -336,136 +495,271 @@ export function TransferHub() {
         </div>
       )}
 
-      {/* Lane 3: Negotiations */}
+      {/* Lane 3: Persisted negotiations only */}
       {lane === "negotiations" && (
         <div className="space-y-4" data-testid="lane-negotiations-view">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="rounded-xl border border-white/10 bg-slate-900/60 p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="rounded bg-amber-500/20 text-amber-300 px-2 py-0.5 text-[9px] font-black uppercase">
-                  Contract Talks In Progress
-                </span>
-                <span className="gx-mono text-xs text-slate-400">Stage: Agent Terms</span>
-              </div>
-              <h4 className="gx-display text-xl font-bold uppercase text-white">Tariq Mansoor · Playmaker</h4>
-              <p className="text-xs text-slate-300">
-                Player demanding Starting XI assurance and a 15% promotion wage bonus clause.
-              </p>
-              <div className="pt-2 border-t border-white/10 flex items-center justify-between">
-                <span className="gx-mono text-xs text-slate-400">Asking Wage: <b>4,500 GTX/w</b></span>
-                <button
-                  type="button"
-                  onClick={() => toast.success("Counter-terms dispatched to agent.")}
-                  className="gx-btn gx-btn-secondary text-xs"
-                >
-                  Adjust Terms
-                </button>
-              </div>
+          {loadingNegotiations ? (
+            <Loading label="Loading persisted transfer negotiations..." />
+          ) : !activeClub?.club_id ? (
+            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+              <MessageSquare className="mx-auto size-10 text-emerald-400/50 mb-3" />
+              <p className="gx-display text-xl font-bold uppercase text-white">Choose an active club</p>
+              <p className="text-sm text-slate-400 mt-1">Negotiations are scoped to a club you are authorized to manage.</p>
             </div>
-
-            <div className="rounded-xl border border-white/10 bg-slate-900/60 p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="rounded bg-emerald-500/20 text-emerald-300 px-2 py-0.5 text-[9px] font-black uppercase">
-                  Agreed in Principle
-                </span>
-                <span className="gx-mono text-xs text-slate-400">Stage: Medical Pending</span>
-              </div>
-              <h4 className="gx-display text-xl font-bold uppercase text-white">Moussa Sene · Centre-Back</h4>
-              <p className="text-xs text-slate-300">
-                Personal terms finalized on a 3-year deal. Medical assessment scheduled before window close.
-              </p>
-              <div className="pt-2 border-t border-white/10 flex items-center justify-between">
-                <span className="gx-mono text-xs text-slate-400">Agreed Wage: <b>3,200 GTX/w</b></span>
-                <button
-                  type="button"
-                  onClick={() => toast.success("Medical cleared. Deal finalized!")}
-                  className="gx-btn gx-btn-primary text-xs"
-                >
-                  Confirm Registration
-                </button>
-              </div>
+          ) : negotiationsError ? (
+            <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 p-6 text-center">
+              <p className="gx-display text-lg font-bold uppercase text-white">Negotiations unavailable</p>
+              <p className="text-sm text-slate-300 mt-1">{errMsg(negotiationsError)}</p>
+              <button
+                type="button"
+                onClick={() => refetchNegotiations()}
+                className="gx-btn gx-btn-secondary mt-3 text-xs"
+              >
+                Retry
+              </button>
             </div>
-          </div>
+          ) : (negotiationsData || []).length === 0 ? (
+            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+              <MessageSquare className="mx-auto size-10 text-emerald-400/50 mb-3" />
+              <p className="gx-display text-xl font-bold uppercase text-white">No accessible active negotiations</p>
+              <p className="text-sm text-slate-400 mt-1">
+                This view only shows negotiations returned by the authenticated API. Browse market listings or active offers to start a real transfer workflow.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {(negotiationsData || []).map((negotiation: any) => (
+                <div key={negotiation.id} className="rounded-xl border border-white/10 bg-slate-900/60 p-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="rounded bg-amber-500/20 text-amber-300 px-2 py-0.5 text-[9px] font-black uppercase">
+                      {String(negotiation.status || "unknown").replaceAll("_", " ")}
+                    </span>
+                    <span className="gx-mono text-xs text-slate-400">Negotiation {String(negotiation.id).slice(0, 8)}</span>
+                  </div>
+                  <h4 className="gx-display text-xl font-bold uppercase text-white">
+                    {negotiation.player_name || `Player ${negotiation.player_id}`}
+                  </h4>
+                  <p className="text-xs text-slate-300">
+                    Listing {String(negotiation.listing_id).slice(0, 8)}
+                    {" · "}Listing status: {negotiation.listing_status || "Not recorded"}
+                    {" · "}Expected role: {negotiation.expected_role || "Not recorded"}
+                  </p>
+                  {negotiation.listing_base_price != null && (
+                    <p className="text-xs text-slate-400">
+                      Listing price: {fmt(negotiation.listing_base_price)} GTX
+                    </p>
+                  )}
+                  <p className="text-xs text-slate-400">
+                    {negotiation.wage_offer_amount != null
+                      ? `Recorded wage offer: ${fmt(negotiation.wage_offer_amount)} GTX/w`
+                      : "No wage offer is recorded for this negotiation."}
+                  </p>
+                  <div className="pt-2 border-t border-white/10">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPlayerId(negotiation.player_id)}
+                        className="gx-btn gx-btn-secondary text-xs"
+                      >
+                        View player dossier
+                      </button>
+                      {negotiation.bidder_club_id === activeClub?.club_id &&
+                        ["awaiting_contract_offer", "player_delayed", "counter_offer"].includes(String(negotiation.status)) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setContractOfferNegotiation(negotiation);
+                              setContractWageOffer(
+                                negotiation.wage_offer_amount == null ? "" : String(negotiation.wage_offer_amount),
+                              );
+                              setContractYears(String(negotiation.contract_years || 3));
+                              setContractExpectedRole(negotiation.expected_role || "");
+                            }}
+                            className="gx-btn gx-btn-primary text-xs"
+                            data-testid={`contract-offer-${negotiation.id}`}
+                          >
+                            Submit contract terms
+                          </button>
+                        )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Lane 4: Window Bids */}
+      {/* Lane 4: Persisted market bids */}
       {lane === "bids" && (
         <div className="space-y-4" data-testid="lane-bids-view">
           <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-4 text-xs text-amber-200 flex items-center gap-2">
-            <Clock size={16} /> Window Closes in 48h 12m · Active bids receive auto-extension if matched within 5 minutes.
+            <Clock size={16} /> Bids below or equal to the current highest bid are rejected by the market.
           </div>
-          <div className="space-y-3">
-            {[
-              { id: "bid-1", player: "Adeola Alabi", leader: "Lagos FC", topBid: 120000, deadline: "04:12:00" },
-              { id: "bid-2", player: "Kofi Boateng", leader: "Accra United", topBid: 95000, deadline: "12:45:00" },
-            ].map((b) => (
-              <div key={b.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-xl border border-white/10 bg-slate-900/60 p-4">
-                <div>
-                  <h4 className="gx-display text-lg font-bold uppercase text-white">{b.player}</h4>
-                  <p className="text-xs text-slate-400">Current Leader: <b className="text-slate-200">{b.leader}</b></p>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <p className="text-[10px] uppercase font-bold text-slate-400">Top Bid</p>
-                    <p className="gx-mono text-lg font-black text-amber-300">{fmt(b.topBid)} GTX</p>
+          {!activeClub?.club_id ? (
+            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+              <Clock className="mx-auto size-10 text-emerald-400/50 mb-3" />
+              <p className="gx-display text-xl font-bold uppercase text-white">Choose an active club</p>
+              <p className="text-sm text-slate-400 mt-1">Bids can only be submitted for a club you are authorized to manage.</p>
+            </div>
+          ) : bidListings.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+              <Clock className="mx-auto size-10 text-emerald-400/50 mb-3" />
+              <p className="gx-display text-xl font-bold uppercase text-white">No open transfer listings</p>
+              <p className="text-sm text-slate-400 mt-1">Open transfer listings will appear here when the market has eligible players available to bid on.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {bidListings.map((listing: any) => {
+                const currentHighest = Number(listing.current_highest_bid || 0);
+                const bidThreshold = currentHighest > 0 ? currentHighest : Number(listing.base_price || 0);
+                const enteredAmount = bidAmounts[listing.id] || "";
+                const amountIsValid = enteredAmount.trim() !== ""
+                  && Number.isFinite(Number(enteredAmount))
+                  && Number(enteredAmount) > bidThreshold;
+                return (
+                  <div key={listing.id} className="flex flex-col gap-4 rounded-xl border border-white/10 bg-slate-900/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <h4 className="gx-display text-lg font-bold uppercase text-white">
+                        {listing.player?.full_name || listing.player_id}
+                      </h4>
+                      <p className="text-xs text-slate-400">
+                        Highest bidder: {listing.current_bid?.club_name || "Name unavailable"}
+                        {" · "}Time remaining: {Math.ceil(Number(listing.time_remaining || 0) / 60)} min
+                      </p>
+                      <p className="gx-mono mt-1 text-sm font-black text-amber-300">
+                        {currentHighest > 0
+                          ? `Current highest bid: ${fmt(currentHighest)} GTX`
+                          : `No bids yet · Opening bid must exceed ${fmt(listing.base_price)} GTX`}
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-2 sm:w-64">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Your bid (GTX)
+                      </label>
+                      <input
+                        type="number"
+                        min={bidThreshold + 0.01}
+                        value={enteredAmount}
+                        onChange={(event) => setBidAmounts((previous) => ({
+                          ...previous,
+                          [listing.id]: event.target.value,
+                        }))}
+                        placeholder={`Greater than ${String(bidThreshold)}`}
+                        className="gx-input"
+                        data-testid={`bid-amount-${listing.id}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handlePlaceBid(listing)}
+                        disabled={!amountIsValid || placingBidId === listing.id}
+                        className="gx-btn gx-btn-primary text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                        data-testid={`place-bid-${listing.id}`}
+                      >
+                        {placingBidId === listing.id ? "Submitting..." : "Submit bid"}
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => toast.success(`Bid of ${fmt(b.topBid + 5000)} GTX placed!`)}
-                    className="gx-btn gx-btn-primary text-xs"
-                  >
-                    Raise Bid (+5k)
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Lane 5: Shortlist */}
+      {/* Lane 5: Persisted club shortlist */}
       {lane === "shortlist" && (
         <div className="space-y-4" data-testid="lane-shortlist-view">
-          <div className="flex items-center justify-between">
-            <p className="gx-eyebrow text-emerald-400">Target Scouting Shortlist</p>
-            <span className="text-xs text-slate-400">Monitored for price dips & availability</span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="gx-eyebrow text-emerald-400">Club Scouting Shortlist</p>
+              <p className="text-xs text-slate-400 mt-1">Players saved by scouting actions for the active club.</p>
+            </div>
+            <span className="text-xs text-slate-400">
+              {(shortlistData || []).length} saved target{(shortlistData || []).length === 1 ? "" : "s"}
+            </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[
-              { id: "sl-1", name: "David Okoye", pos: "GK", rating: 76, val: 45000, reason: "First-choice target if current GK sold" },
-              { id: "sl-2", name: "Ibrahim Conteh", pos: "MID", rating: 74, val: 32000, reason: "Breakthrough dribbling metrics" },
-              { id: "sl-3", name: "Lars Lindstrom", pos: "DEF", rating: 75, val: 40000, reason: "Aerial coverage target" },
-            ].map((p) => (
-              <div key={p.id} className="rounded-xl border border-white/10 bg-slate-900/60 p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="gx-mono text-xs font-bold text-emerald-400">{p.pos} · OVR {p.rating}</span>
-                  <span className="gx-mono text-xs font-bold text-amber-300">{fmt(p.val)} GTX</span>
-                </div>
-                <h4 className="gx-display text-lg font-bold uppercase text-white">{p.name}</h4>
-                <p className="text-xs text-slate-400 italic">"{p.reason}"</p>
-                <div className="pt-2 border-t border-white/10 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedPlayerId(p.id)}
-                    className="gx-btn gx-btn-secondary text-xs flex-1"
-                  >
-                    Dossier
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOfferListing({ id: p.id, asking_price: p.val });
-                      setOfferAmount(String(p.val));
-                    }}
-                    className="gx-btn gx-btn-primary text-xs flex-1"
-                  >
-                    Offer
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+          {loadingShortlist ? (
+            <Loading label="Loading the club's persisted scouting shortlist..." />
+          ) : !activeClub?.club_id ? (
+            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+              <Sparkles className="mx-auto size-10 text-emerald-400/50 mb-3" />
+              <p className="gx-display text-xl font-bold uppercase text-white">Choose an active club</p>
+              <p className="text-sm text-slate-400 mt-1">Shortlist entries are private to the authenticated club context.</p>
+            </div>
+          ) : shortlistError ? (
+            <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 p-6 text-center">
+              <p className="gx-display text-lg font-bold uppercase text-white">Could not load shortlist</p>
+              <p className="text-sm text-slate-300 mt-1">{errMsg(shortlistError)}</p>
+              <button type="button" onClick={() => refetchShortlist()} className="gx-btn gx-btn-secondary mt-3 text-xs">Retry</button>
+            </div>
+          ) : (shortlistData || []).length === 0 ? (
+            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+              <Sparkles className="mx-auto size-10 text-emerald-400/50 mb-3" />
+              <p className="gx-display text-xl font-bold uppercase text-white">No saved scouting targets</p>
+              <p className="text-sm text-slate-400 mt-1">
+                Open a real player's dossier and use Add to Watchlist. Saved targets will appear here after the backend confirms the write.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {(shortlistData || []).map((entry: any) => {
+                const player = entry.player || {};
+                const listing = entry.active_listing;
+                const hasListing = Boolean(listing?.id);
+                return (
+                  <div key={entry.id} className="rounded-xl border border-white/10 bg-slate-900/60 p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="gx-mono text-xs font-bold text-emerald-400">
+                        {player.normalized_position || "Position not recorded"}
+                      </span>
+                      {listing ? (
+                        <span className="gx-mono text-xs font-bold text-amber-300">
+                          {fmt(listing.base_price)} GTX
+                        </span>
+                      ) : (
+                        <span className="gx-mono text-xs text-slate-400">Not listed</span>
+                      )}
+                    </div>
+                    <h4 className="gx-display text-lg font-bold uppercase text-white">
+                      {player.full_name || entry.player_id}
+                    </h4>
+                    <p className="text-xs text-slate-400">
+                      {player.current_club_name ? `Current club: ${player.current_club_name}` : "No current club is recorded."}
+                    </p>
+                    {player.market_value != null && (
+                      <p className="text-xs text-slate-400">
+                        Imported market value: €{new Intl.NumberFormat("en-IE", { maximumFractionDigits: 0 }).format(Number(player.market_value))}
+                      </p>
+                    )}
+                    <p className="text-xs text-slate-500">Saved via {entry.source || "scouting"}.</p>
+                    <div className="pt-2 border-t border-white/10 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPlayerId(entry.player_id)}
+                        className="gx-btn gx-btn-secondary text-xs flex-1"
+                      >
+                        Dossier
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!hasListing || !activeClub?.club_id}
+                        onClick={() => {
+                          if (!listing) return;
+                          setOfferListing(listing);
+                          setOfferAmount(String(listing.base_price));
+                        }}
+                        className="gx-btn gx-btn-primary text-xs flex-1 disabled:cursor-not-allowed disabled:opacity-50"
+                        title={hasListing ? "Prepare a formal offer for this market listing" : "This player has no active transfer listing"}
+                      >
+                        Offer
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -527,15 +821,114 @@ export function TransferHub() {
         </div>
       )}
 
+      {/* Contract negotiation modal */}
+      {contractOfferNegotiation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-emerald-500/40 bg-[#07130e] p-6 shadow-2xl space-y-4">
+            <h3 className="gx-display text-2xl font-black uppercase text-white">
+              Submit Contract Terms
+            </h3>
+            <p className="text-xs text-slate-300">
+              {contractOfferNegotiation.player_name || `Player ${contractOfferNegotiation.player_id}`}
+              {" · "}Listing {String(contractOfferNegotiation.listing_id).slice(0, 8)}
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="gx-label">Weekly Wage Offer (GTX)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={contractWageOffer}
+                  onChange={(event) => setContractWageOffer(event.target.value)}
+                  className="gx-input"
+                  placeholder="Enter weekly wage"
+                  data-testid="contract-wage-input"
+                />
+              </div>
+              <div>
+                <label className="gx-label">Contract Length</label>
+                <select
+                  value={contractYears}
+                  onChange={(event) => setContractYears(event.target.value)}
+                  className="gx-input"
+                  data-testid="contract-years-select"
+                >
+                  <option value="1">1 year</option>
+                  <option value="2">2 years</option>
+                  <option value="3">3 years</option>
+                  <option value="4">4 years</option>
+                  <option value="5">5 years</option>
+                </select>
+              </div>
+              <div>
+                <label className="gx-label">Expected Squad Role</label>
+                <input
+                  type="text"
+                  maxLength={40}
+                  value={contractExpectedRole}
+                  onChange={(event) => setContractExpectedRole(event.target.value)}
+                  className="gx-input"
+                  placeholder="e.g. starter, rotation"
+                  data-testid="contract-role-input"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 pt-3">
+              <button
+                type="button"
+                onClick={() => setContractOfferNegotiation(null)}
+                className="gx-btn gx-btn-secondary flex-1"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitContractOffer}
+                disabled={submittingContractOffer || !contractWageOffer.trim()}
+                className="gx-btn gx-btn-primary flex-1 disabled:cursor-not-allowed disabled:opacity-50"
+                data-testid="submit-contract-offer"
+              >
+                {submittingContractOffer ? "Submitting..." : "Submit terms"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Deep Dossier Modal */}
       {selectedPlayerId && (
         <PlayerDossier
           playerId={selectedPlayerId}
           onClose={() => setSelectedPlayerId(null)}
-          onMakeOffer={(id) => {
+          onMakeOffer={(playerId) => {
             setSelectedPlayerId(null);
-            setOfferListing({ id, asking_price: 50000 });
-            setOfferAmount("50000");
+            const listing = (listingsData || []).find(
+              (item: any) => item.player_id === playerId && item.status === "open",
+            );
+            if (!listing) {
+              toast.error("A formal offer requires an active transfer-market listing for this player.");
+              return;
+            }
+            setOfferListing(listing);
+            setOfferAmount(String(listing.base_price));
+          }}
+          onAddToWatchlist={async (id) => {
+            if (!activeClub?.club_id) {
+              toast.error("Select an active club before saving a scouting target.");
+              return;
+            }
+            try {
+              await api.post("/transfer-market/watchlist", {
+                player_id: id,
+                club_id: activeClub.club_id,
+                source: "scouting_dossier",
+              });
+              toast.success("Player added to transfer market watchlist.");
+              await qc.invalidateQueries({ queryKey: ["transfer-market-watchlist", activeClub.club_id] });
+            } catch (e) {
+              toast.error(errMsg(e));
+            }
           }}
         />
       )}

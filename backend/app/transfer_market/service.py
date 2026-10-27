@@ -8,7 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import FastAPI
-from sqlalchemy import inspect, select, update
+from sqlalchemy import func, inspect, select, update
 from sqlalchemy.orm import Session
 
 from app.access_control.service import AccessControlService
@@ -88,6 +88,73 @@ PLAYER_DECISION_DELAY_HOURS = 12
 AGENT_COUNTER_DEADLINE_HOURS = 12
 TRANSFER_MARKET_EXECUTION_ROLES = frozenset({OrganizationRole.ADMIN, OrganizationRole.CLUB})
 TRANSFER_MARKET_WATCHLIST_ROLES = frozenset({OrganizationRole.ADMIN, OrganizationRole.CLUB, OrganizationRole.SCOUT})
+
+# The React Transfer Hub exposes positional groups, while imported player feeds
+# normalize positions using a mixture of provider codes and canonical labels.
+POSITION_GROUP_ALIASES: dict[str, frozenset[str]] = {
+    "GK": frozenset({"gk", "goalkeeper", "keeper", "goalie"}),
+    "DEF": frozenset(
+        {
+            "def",
+            "defender",
+            "defence",
+            "defense",
+            "cb",
+            "centre back",
+            "center back",
+            "centre-back",
+            "center-back",
+            "lb",
+            "rb",
+            "lwb",
+            "rwb",
+            "full-back",
+            "full back",
+            "left back",
+            "right back",
+            "left-back",
+            "right-back",
+        }
+    ),
+    "MID": frozenset(
+        {
+            "mid",
+            "midfield",
+            "midfielder",
+            "cm",
+            "cdm",
+            "dm",
+            "cam",
+            "am",
+            "lm",
+            "rm",
+            "central midfielder",
+            "defensive midfielder",
+            "attacking midfielder",
+            "wing midfielder",
+        }
+    ),
+    "FWD": frozenset(
+        {
+            "fwd",
+            "forward",
+            "striker",
+            "attacker",
+            "st",
+            "cf",
+            "lw",
+            "rw",
+            "ss",
+            "fw",
+            "att",
+            "winger",
+            "left winger",
+            "right winger",
+            "centre forward",
+            "center forward",
+        }
+    ),
+}
 
 # Hub offers that settle as a plain cash transfer; loan and swap terms are not executed yet.
 HUB_CASH_DEAL_TYPES = frozenset({"transfer", "open_offer", "private_negotiation"})
@@ -356,7 +423,12 @@ class TransferMarketService:
         if any(value is not None for value in (position, country_id, league_id, club_profile_id, real_player_only)):
             statement = statement.join(Player, Player.id == TransferListing.player_id)
             if position is not None:
-                statement = statement.where(Player.normalized_position == position)
+                requested_position = position.strip()
+                group_aliases = POSITION_GROUP_ALIASES.get(requested_position.upper())
+                if group_aliases is not None:
+                    statement = statement.where(func.lower(Player.normalized_position).in_(group_aliases))
+                else:
+                    statement = statement.where(Player.normalized_position == requested_position)
             if country_id is not None:
                 statement = statement.where(Player.country_id == country_id)
             if league_id is not None:
@@ -991,6 +1063,29 @@ class TransferMarketService:
         )
         return snapshot
 
+    def list_negotiations(
+        self,
+        *,
+        actor: User,
+        club_id: str | None = None,
+    ) -> list[TransferNegotiationView]:
+        """List only negotiations belonging to the actor's selected authorized club."""
+        resolved_club_id = self._resolve_actor_club_id(
+            actor,
+            club_id,
+            allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
+            forbidden_detail="transfer_market_negotiation_access_required",
+        )
+        negotiations = self.session.scalars(
+            select(TransferNegotiation)
+            .where(
+                (TransferNegotiation.selling_club_id == resolved_club_id)
+                | (TransferNegotiation.bidder_club_id == resolved_club_id)
+            )
+            .order_by(TransferNegotiation.updated_at.desc(), TransferNegotiation.id.asc())
+        ).all()
+        return [self.to_negotiation_view(item) for item in negotiations]
+
     def get_negotiation(self, listing_id: str, *, actor: User) -> TransferNegotiationView:
         negotiation = self._require_negotiation_by_listing(listing_id)
         self._require_actor_any_club_access(
@@ -1541,14 +1636,19 @@ class TransferMarketService:
         raw_agent = dict(negotiation.metadata_json or {}).get("agent_negotiation")
         if isinstance(raw_agent, dict):
             agent_negotiation = AgentNegotiationView.model_validate(raw_agent)
+        player = self.session.get(Player, negotiation.player_id)
+        listing = self.session.get(TransferListing, negotiation.listing_id)
         return TransferNegotiationView(
             id=negotiation.id,
             listing_id=negotiation.listing_id,
             winning_bid_id=negotiation.winning_bid_id,
             player_id=negotiation.player_id,
+            player_name=(player.canonical_display_name or player.full_name if player is not None else None),
             selling_club_id=negotiation.selling_club_id,
             bidder_club_id=negotiation.bidder_club_id,
             status=negotiation.status,
+            listing_status=listing.status if listing is not None else None,
+            listing_base_price=listing.base_price if listing is not None else None,
             wage_offer_amount=negotiation.wage_offer_amount,
             contract_years=negotiation.contract_years,
             expected_role=negotiation.expected_role,
@@ -2405,8 +2505,51 @@ class TransferMarketService:
             metadata_json=dict(dynamics.metadata_json or {}),
         )
 
-    @staticmethod
-    def _to_watchlist_entry_view(entry: MarketWatchlistEntry) -> MarketWatchlistEntryView:
+    def list_watchlist_entries(
+        self,
+        *,
+        actor: User,
+        club_id: str | None = None,
+    ) -> list[MarketWatchlistEntryView]:
+        resolved_club_id = self._resolve_actor_club_id(
+            actor,
+            club_id,
+            allowed_roles=TRANSFER_MARKET_WATCHLIST_ROLES,
+            forbidden_detail="transfer_market_club_access_required",
+        )
+        entries = list(
+            self.session.scalars(
+                select(MarketWatchlistEntry)
+                .where(MarketWatchlistEntry.club_id == resolved_club_id)
+                .order_by(MarketWatchlistEntry.updated_at.desc(), MarketWatchlistEntry.id.asc())
+            ).all()
+        )
+        return [self._to_watchlist_entry_view(entry) for entry in entries]
+
+    def _to_watchlist_entry_view(self, entry: MarketWatchlistEntry) -> MarketWatchlistEntryView:
+        player = self.session.get(Player, entry.player_id)
+        if player is None:
+            raise TransferMarketNotFoundError(f"Player {entry.player_id} was not found.")
+
+        current_club = (
+            self.session.get(ClubProfile, player.current_club_profile_id) if player.current_club_profile_id else None
+        )
+        active_listing = self.session.scalar(
+            select(TransferListing)
+            .where(TransferListing.player_id == player.id, TransferListing.status == "open")
+            .order_by(TransferListing.expires_at.desc(), TransferListing.created_at.desc())
+        )
+        player_view = TransferMarketPlayerView(
+            id=player.id,
+            full_name=player.canonical_display_name or player.full_name,
+            normalized_position=player.normalized_position,
+            current_club_id=player.current_club_profile_id,
+            current_club_name=current_club.club_name if current_club is not None else None,
+            current_competition_id=player.current_competition_id,
+            nationality_id=player.country_id,
+            market_value=Decimal(str(player.market_value_eur)) if player.market_value_eur is not None else None,
+            is_real_player=bool(player.is_real_player),
+        )
         return MarketWatchlistEntryView(
             id=entry.id,
             club_id=entry.club_id,
@@ -2414,6 +2557,10 @@ class TransferMarketService:
             source=entry.source,
             discovery_score=entry.discovery_score,
             metadata_json=dict(entry.metadata_json or {}),
+            player=player_view,
+            active_listing=(
+                self.to_listing_view(active_listing, reference_at=utcnow()) if active_listing is not None else None
+            ),
         )
 
     @staticmethod

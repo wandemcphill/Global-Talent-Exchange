@@ -793,6 +793,12 @@
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {
+      "consumer": "frontend/lib/data/player_service.dart",
+      "from": "/api/v2/transfer-market/watchlist",
+      "to": "/api/transfer-market/watchlist",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
       "consumer": "frontend/lib/data/public_pulse_api.dart",
       "from": "/api/v2/public/live-stats",
       "to": "/api/public/live-stats",
@@ -1051,6 +1057,12 @@
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {
+      "consumer": "frontend/lib/features/coin_trader_redesign/coin_trader_api.dart",
+      "from": "/api/v2/admin/coin-traders/orders/expire-stale",
+      "to": "/api/admin/coin-traders/orders/expire-stale",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
       "consumer": "frontend/lib/features/federations/live_federations_provider.dart",
       "from": "/api/v2/federations",
       "to": "/api/federations",
@@ -1162,6 +1174,12 @@
       "consumer": "frontend/lib/features/transfer_center/live_transfer_center_provider.dart",
       "from": "/api/v2/transfer-market/listings",
       "to": "/api/transfer-market/listings",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/transfer_center/live_transfer_center_provider.dart",
+      "from": "/api/v2/transfer-hub/offers",
+      "to": "/api/transfer-hub/offers",
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {

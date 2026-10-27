@@ -96,9 +96,12 @@ class TransferNegotiationView(CommonSchema):
     listing_id: str
     winning_bid_id: str | None = None
     player_id: str
+    player_name: str | None = None
     selling_club_id: str
     bidder_club_id: str
     status: TransferNegotiationStatus
+    listing_status: str | None = None
+    listing_base_price: Decimal | None = None
     wage_offer_amount: Decimal | None = None
     contract_years: int = Field(ge=1, le=5)
     expected_role: str | None = None
@@ -209,6 +212,8 @@ class MarketWatchlistEntryView(CommonSchema):
     source: str
     discovery_score: float = Field(ge=0, le=100)
     metadata_json: dict[str, Any] = Field(default_factory=dict)
+    player: TransferMarketPlayerView | None = None
+    active_listing: TransferListingView | None = None
 
 
 class TransferMarketJobRunView(CommonSchema):

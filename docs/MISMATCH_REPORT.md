@@ -1,6 +1,6 @@
 # Mismatch Report
 
-- Total mismatches detected: **1130**
+- Total mismatches detected: **1155**
 
 ## HIGH
 
@@ -9,6 +9,7 @@
 - `frontend/lib/data/admin_command_center_api.dart` INFERRED `/api/admin/treasury/deposits/$depositId/confirm` -> `/api/v2/admin/treasury/deposits/$depositId/confirm`: No exact backend route match found in static route inventory.
 - `frontend/lib/data/admin_command_center_api.dart` INFERRED `/api/admin/treasury/deposits/$depositId/reject` -> `/api/v2/admin/treasury/deposits/$depositId/reject`: No exact backend route match found in static route inventory.
 - `frontend/lib/data/admin_command_center_api.dart` INFERRED `/api/admin/wallets/market-topups/$topupId/status` -> `/api/v2/admin/wallets/market-topups/$topupId/status`: No exact backend route match found in static route inventory.
+- `frontend/lib/data/club_api.dart` INFERRED `/api/clubs/$clubId/public-profile` -> `/api/v2/clubs/$clubId/public-profile`: No exact backend route match found in static route inventory.
 - `frontend/lib/data/club_api.dart` GET `/api/clubs/$clubId/v2-snapshot` -> `/api/v2/clubs/$clubId/v2-snapshot`: No exact backend route match found in static route inventory.
 - `frontend/lib/data/club_api.dart` GET `/api/clubs/$clubId/badge` -> `/api/v2/clubs/$clubId/badge`: No exact backend route match found in static route inventory.
 - `frontend/lib/data/club_api.dart` GET `/api/clubs/$clubId/identity` -> `/api/v2/clubs/$clubId/identity`: No exact backend route match found in static route inventory.
@@ -146,6 +147,7 @@
 - `frontend/lib/features/club_growth_redesign/club_growth_api.dart` INFERRED `/api/clubs/$encodedClubId/growth` -> `/api/v2/clubs/$encodedClubId/growth`: No exact backend route match found in static route inventory.
 - `frontend/lib/features/club_growth_redesign/club_growth_api.dart` INFERRED `/api/clubs/$encodedClubId/growth/staff/$encodedStaffId/offer` -> `/api/v2/clubs/$encodedClubId/growth/staff/$encodedStaffId/offer`: No exact backend route match found in static route inventory.
 - `frontend/lib/features/club_growth_redesign/club_growth_api.dart` INFERRED `/api/clubs/$encodedClubId/growth/staff-contracts/$encodedContractId/accept` -> `/api/v2/clubs/$encodedClubId/growth/staff-contracts/$encodedContractId/accept`: No exact backend route match found in static route inventory.
+- `frontend/lib/features/club_growth_redesign/club_growth_api.dart` INFERRED `/api/clubs/$encodedClubId/growth/staff-contracts/$encodedContractId/terminate` -> `/api/v2/clubs/$encodedClubId/growth/staff-contracts/$encodedContractId/terminate`: No exact backend route match found in static route inventory.
 - `frontend/lib/features/club_growth_redesign/club_growth_api.dart` INFERRED `/api/clubs/$encodedClubId/growth/academy/generate-prospects` -> `/api/v2/clubs/$encodedClubId/growth/academy/generate-prospects`: No exact backend route match found in static route inventory.
 - `frontend/lib/features/club_growth_redesign/club_growth_api.dart` INFERRED `/api/clubs/$encodedClubId/growth/academy/prospects/$encodedProspectId/offer-contract` -> `/api/v2/clubs/$encodedClubId/growth/academy/prospects/$encodedProspectId/offer-contract`: No exact backend route match found in static route inventory.
 - `frontend/lib/features/club_growth_redesign/club_growth_api.dart` INFERRED `/api/clubs/$encodedClubId/growth/academy/contracts/$encodedOfferId/respond` -> `/api/v2/clubs/$encodedClubId/growth/academy/contracts/$encodedOfferId/respond`: No exact backend route match found in static route inventory.
@@ -165,6 +167,7 @@
 - `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart` INFERRED `/api/admin/coin-traders/$profileId/reject` -> `/api/v2/admin/coin-traders/$profileId/reject`: No exact backend route match found in static route inventory.
 - `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart` INFERRED `/api/admin/coin-traders/$profileId/freeze` -> `/api/v2/admin/coin-traders/$profileId/freeze`: No exact backend route match found in static route inventory.
 - `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart` INFERRED `/api/admin/coin-traders/orders/$orderId/resolve` -> `/api/v2/admin/coin-traders/orders/$orderId/resolve`: No exact backend route match found in static route inventory.
+- `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart` INFERRED `/api/coin-traders/orders/$orderId/messages` -> `/api/v2/coin-traders/orders/$orderId/messages`: No exact backend route match found in static route inventory.
 - `frontend/lib/features/competitions/live_competitions_provider.dart` INFERRED `/api/competitions/$competitionId/standings` -> `/api/v2/competitions/$competitionId/standings`: No exact backend route match found in static route inventory.
 - `frontend/lib/features/competitions/live_competitions_provider.dart` INFERRED `/api/competitions/$competitionId/fixtures` -> `/api/v2/competitions/$competitionId/fixtures`: No exact backend route match found in static route inventory.
 - `frontend/lib/features/federations/live_federations_provider.dart` INFERRED `/api/federations/national-associations/${countryCode.trim().toUpperCase()}` -> `/api/v2/federations/national-associations/${countryCode.trim().toUpperCase()}`: No exact backend route match found in static route inventory.
@@ -199,12 +202,9 @@
 - `frontend/lib/features/tasks/live_tasks_provider.dart` INFERRED `/api/daily-challenges/$challengeKey/claim` -> `/api/v2/daily-challenges/$challengeKey/claim`: No exact backend route match found in static route inventory.
 - `frontend/lib/features/transfer_center/live_transfer_center_provider.dart` INFERRED `/api/transfer-market/listings/$listingId` -> `/api/v2/transfer-market/listings/$listingId`: No exact backend route match found in static route inventory.
 - `frontend/lib/features/transfer_center/live_transfer_center_provider.dart` INFERRED `/api/transfer-market/listings/$listingId/negotiation` -> `/api/v2/transfer-market/listings/$listingId/negotiation`: No exact backend route match found in static route inventory.
-- `frontend/lib/features/transfer_center/live_transfer_center_provider.dart` INFERRED `/api/transfer-market/listings/$listingId/bids` -> `/api/v2/transfer-market/listings/$listingId/bids`: No exact backend route match found in static route inventory.
-- `frontend/lib/features/transfer_center/live_transfer_center_provider.dart` INFERRED `/api/transfer-market/listings/$listingId/contract-offer` -> `/api/v2/transfer-market/listings/$listingId/contract-offer`: No exact backend route match found in static route inventory.
-- `frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart` INFERRED `/api/admin/treasury/kyc/$profileId/review` -> `/api/v2/admin/treasury/kyc/$profileId/review`: No exact backend route match found in static route inventory.
-- `frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart` INFERRED `/api/admin/treasury/disputes/$disputeId/messages` -> `/api/v2/admin/treasury/disputes/$disputeId/messages`: No exact backend route match found in static route inventory.
-- `frontend/lib/features/trust_ops_redesign/data/gtex_trust_ops_api_repository.dart` INFERRED `/api/admin/treasury/withdrawals/$orderId/status` -> `/api/v2/admin/treasury/withdrawals/$orderId/status`: No exact backend route match found in static route inventory.
-- ... and 93 more
+- `frontend/lib/features/transfer_center/live_transfer_center_provider.dart` POST `/api/transfer-hub/listings/$listingId/offers` -> `/api/v2/transfer-hub/listings/$listingId/offers`: No exact backend route match found in static route inventory.
+- `frontend/lib/features/transfer_center/live_transfer_center_provider.dart` POST `/api/transfer-hub/offers/$offerId/accept` -> `/api/v2/transfer-hub/offers/$offerId/accept`: No exact backend route match found in static route inventory.
+- ... and 101 more
 
 ## MEDIUM
 
@@ -230,6 +230,8 @@
 - `frontend/lib/data/admin_finance_api.dart` INFERRED `/api/admin/finance/control-tower` -> `/api/v2/admin/finance/control-tower`: Hardcoded localhost fallback bypasses the shared runtime base-url contract.
 - `frontend/lib/data/admin_finance_api.dart` INFERRED `/api/admin/finance/simulate` -> `/api/v2/admin/finance/simulate`: Frontend call is version-upgraded into legacy api_v1 space at runtime.
 - `frontend/lib/data/admin_finance_api.dart` INFERRED `/api/admin/finance/simulate` -> `/api/v2/admin/finance/simulate`: Hardcoded localhost fallback bypasses the shared runtime base-url contract.
+- `frontend/lib/data/club_api.dart` INFERRED `/api/clubs/$clubId/public-profile` -> `/api/v2/clubs/$clubId/public-profile`: Frontend call is version-upgraded into legacy api_v1 space at runtime.
+- `frontend/lib/data/club_api.dart` INFERRED `/api/clubs/$clubId/public-profile` -> `/api/v2/clubs/$clubId/public-profile`: Hardcoded localhost fallback bypasses the shared runtime base-url contract.
 - `frontend/lib/data/club_api.dart` GET `/api/clubs/$clubId/v2-snapshot` -> `/api/v2/clubs/$clubId/v2-snapshot`: Frontend call is version-upgraded into legacy api_v1 space at runtime.
 - `frontend/lib/data/club_api.dart` GET `/api/clubs/$clubId/v2-snapshot` -> `/api/v2/clubs/$clubId/v2-snapshot`: Hardcoded localhost fallback bypasses the shared runtime base-url contract.
 - `frontend/lib/data/club_api.dart` GET `/api/clubs/$clubId/badge` -> `/api/v2/clubs/$clubId/badge`: Frontend call is version-upgraded into legacy api_v1 space at runtime.
@@ -406,9 +408,7 @@
 - `frontend/lib/data/discovery_api.dart` INFERRED `/api/admin/discovery/featured-rails` -> `/api/v2/admin/discovery/featured-rails`: Hardcoded localhost fallback bypasses the shared runtime base-url contract.
 - `frontend/lib/data/discovery_api.dart` POST `/api/admin/discovery/featured-rails` -> `/api/v2/admin/discovery/featured-rails`: Frontend call is version-upgraded into legacy api_v1 space at runtime.
 - `frontend/lib/data/discovery_api.dart` POST `/api/admin/discovery/featured-rails` -> `/api/v2/admin/discovery/featured-rails`: Hardcoded localhost fallback bypasses the shared runtime base-url contract.
-- `frontend/lib/data/governance_api.dart` INFERRED `/api/governance/proposals` -> `/api/v2/governance/proposals`: Frontend call is version-upgraded into legacy api_v1 space at runtime.
-- `frontend/lib/data/governance_api.dart` INFERRED `/api/governance/proposals` -> `/api/v2/governance/proposals`: Hardcoded localhost fallback bypasses the shared runtime base-url contract.
-- ... and 637 more
+- ... and 654 more
 
 ## LOW
 
