@@ -28,6 +28,7 @@ class OwnerClubState(UUIDPrimaryKeyMixin, Base):
     # Last GTEX world-calendar date simulated by the autonomous owner tick. Null
     # means this state has not yet been anchored to the shared clock calendar.
     last_world_tick_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    academy_intake_sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow, server_default=func.now()
     )
