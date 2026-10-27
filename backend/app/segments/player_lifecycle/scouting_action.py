@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from datetime import date
 from typing import Any
 
@@ -128,7 +129,11 @@ def scout_player(
 
     def authoritative_rating(value: Any) -> int | None:
         """Accept an explicitly supplied canonical rating; never invent one."""
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(float(value))
+        ):
             return None
         rounded = int(round(value))
         return rounded if 1 <= rounded <= 99 else None
