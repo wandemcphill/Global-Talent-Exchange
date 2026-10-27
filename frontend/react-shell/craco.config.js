@@ -14,7 +14,14 @@ module.exports = {
   jest: {
     configure: (jestConfig) => {
       // Normalize Windows slashes for glob matching in directories containing dots like .gemini
-      jestConfig.testMatch = ["**/src/**/__tests__/**/*.{js,jsx,ts,tsx}", "**/src/**/*.{spec,test}.{js,jsx,ts,tsx}"];
+      jestConfig.testMatch = [
+        "**/src/**/__tests__/**/*.{js,jsx,ts,tsx}",
+        "**/src/**/*.{spec,test}.{js,jsx,ts,tsx}",
+      ];
+      jestConfig.moduleNameMapper = {
+        ...(jestConfig.moduleNameMapper || {}),
+        "^@/(.*)$": "<rootDir>/src/$1",
+      };
       return jestConfig;
     },
   },
