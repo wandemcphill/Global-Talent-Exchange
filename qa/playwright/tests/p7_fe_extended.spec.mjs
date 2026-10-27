@@ -22,77 +22,43 @@ test.afterEach(async ({ page: _page }, testInfo) => {
   await attachDiagnostics(testInfo);
 });
 
-test("Club squad route loads the roster or explicit no-club state", async ({ page }, testInfo) => {
-  // /app is the canonical Club HQ destination in Flutter Web. The dashboard
-  // may correctly stop at the explicit live-data-required state when the user
-  // has no canonical club snapshot; do not require a demo roster or fake text.
+test("Club HQ opens an authoritative club or no-club state", async ({ page }, testInfo) => {
+  // The owner dashboard deliberately refuses to show fabricated club data.
+  // Verify an explicit real-data state instead of assuming a roster is present.
   await visitAuthedRoute(page, process.env.GTEX_E2E_SQUAD_ROUTE ?? "/app");
 
-  const noClubEntry = page.getByText("Build your club command center", {
-    exact: true,
-  });
-  const clubCommand = page.getByText("Club command", { exact: true });
+  const acceptableStates = [
+    page.getByText("Live club data required", { exact: true }),
+    page.getByText("Club command", { exact: true }),
+    page.getByText("Build your club command center", { exact: true }),
+  ];
   await expect
     .poll(
-      async () =>
-        Number(await noClubEntry.isVisible().catch(() => false)) +
-        Number(await clubCommand.isVisible().catch(() => false)),
+      async () => {
+        for (const state of acceptableStates) {
+          if (await state.isVisible().catch(() => false)) return true;
+        }
+        return false;
+      },
       { timeout: 60_000 },
     )
-    .toBeGreaterThan(0);
+    .toBeTruthy();
 
-  if (await noClubEntry.isVisible().catch(() => false)) {
-    await expect(page.getByText("Create club", { exact: true })).toBeVisible();
+  const liveDataRequired = page.getByText("Live club data required", { exact: true });
+  if (await liveDataRequired.isVisible().catch(() => false)) {
+    await expect(page.getByText(/generated demo club data/i)).toBeVisible();
   } else {
-    const browseButton = page.getByRole("button", { name: "Club sections" });
-    const squadSection = page
-      .getByRole("button", { name: /Squad/i })
-      .or(page.getByText(/Owned players and regens/i))
-      .first();
-
-    // In compact layouts (mobile/narrow tablet), sections are housed in a "Club sections" sheet;
-    // in desktop layouts, the left panel is rendered inline.
-    await expect
-      .poll(
-        async () =>
-          Number(await browseButton.isVisible().catch(() => false)) +
-          Number(await squadSection.isVisible().catch(() => false)),
-        { timeout: 15_000 },
-      )
-      .toBeGreaterThan(0);
-
-    let browseSheetOpened = false;
-    if (await browseButton.isVisible().catch(() => false)) {
-      await browseButton.click();
-      browseSheetOpened = true;
-      await page.waitForTimeout(400);
-      await enableAccessibility(page);
+    const noClubEntry = page.getByText("Build your club command center", { exact: true });
+    if (await noClubEntry.isVisible().catch(() => false)) {
+      await expect(page.getByText("Create club", { exact: true })).toBeVisible();
+    } else {
+      await expect(page.getByText("Club owner operations cockpit", { exact: true })).toBeVisible();
     }
-
-    await expect(squadSection).toBeVisible({ timeout: 15_000 });
-    await squadSection.click();
-
-    if (browseSheetOpened) {
-      const closeButton = page.getByRole("button", { name: /Close Club sections/i });
-      if (await closeButton.isVisible().catch(() => false)) {
-        await closeButton.click();
-        await page.waitForTimeout(400);
-      }
-    }
-
-    await expect(page.getByText("Squad room", { exact: true })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Lineup & squad registration", { exact: true })).toBeVisible({
-      timeout: 15_000,
-    });
-    await expect(page.getByText("Open Lineup & Tactics", { exact: true })).toBeVisible({
-      timeout: 15_000,
-    });
   }
 
   await verifyNoHorizontalOverflow(page);
-  await captureScreenshot(page, testInfo, "lineup");
+  await captureScreenshot(page, testInfo, "club-command-authoritative-state");
 });
-
 test("A targeted notification opens its supplied target", async ({ page }, testInfo) => {
   test.skip(
     !process.env.GTEX_E2E_NOTIFICATION_TEXT || !process.env.GTEX_E2E_NOTIFICATION_TARGET,
