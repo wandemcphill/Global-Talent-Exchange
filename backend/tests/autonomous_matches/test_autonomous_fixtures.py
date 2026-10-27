@@ -650,9 +650,7 @@ def test_stale_worker_retry_cannot_reexecute_a_completed_fixture(session_factory
         assert completed.status == MatchStatus.COMPLETED.value
         original_score = (completed.home_score, completed.away_score)
         original_events = len(
-            session.scalars(
-                select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == completed.id)
-            ).all()
+            session.scalars(select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == completed.id)).all()
         )
         assert original_events > 0
 
@@ -664,11 +662,14 @@ def test_stale_worker_retry_cannot_reexecute_a_completed_fixture(session_factory
 
         assert retried.status == MatchStatus.COMPLETED.value
         assert (retried.home_score, retried.away_score) == original_score
-        assert len(
-            session.scalars(
-                select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == completed.id)
-            ).all()
-        ) == original_events
+        assert (
+            len(
+                session.scalars(
+                    select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == completed.id)
+                ).all()
+            )
+            == original_events
+        )
         participants = session.scalars(
             select(CompetitionParticipant).where(CompetitionParticipant.competition_id == competition.id)
         ).all()
