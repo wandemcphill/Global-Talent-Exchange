@@ -454,6 +454,36 @@ def test_atomic_retry_rolls_back_partial_writes(session_factory, monkeypatch) ->
 
 def test_health_telemetry_reporting(session_factory) -> None:
     with session_factory() as session:
+        comp = _create_test_competition(session, "Telemetry retries")
+        round_1 = CompetitionRound(
+            id=str(uuid4()),
+            competition_id=comp.id,
+            round_number=1,
+            stage="league",
+            status="active",
+        )
+        session.add(round_1)
+        _, club_a = _create_user_and_club(session, "Telemetry A", seed_squad=False)
+        _, club_b = _create_user_and_club(session, "Telemetry B", seed_squad=False)
+        retry_match = CompetitionMatch(
+            id=str(uuid4()),
+            competition_id=comp.id,
+            round_id=round_1.id,
+            round_number=1,
+            stage="league",
+            home_club_id=club_a.id,
+            away_club_id=club_b.id,
+            match_date=date(2026, 6, 1),
+            scheduled_at=datetime(2026, 6, 1, 10, 0, tzinfo=timezone.utc),
+            status=MatchStatus.SCHEDULED.value,
+            metadata_json={
+                "execution_attempts": 2,
+                "last_execution_error": "transient simulation error",
+            },
+        )
+        session.add(retry_match)
+        session.flush()
+
         service = AutonomousMatchExecutionService(session)
         telemetry = service.get_health_telemetry()
 
@@ -462,6 +492,8 @@ def test_health_telemetry_reporting(session_factory) -> None:
         assert telemetry["clock"]["is_paused"] is False
         assert telemetry["clock"]["progression_rate"] == 1.0
         assert "overdue_count" in telemetry["fixtures"]
+        assert telemetry["fixtures"]["retry_pending_count"] >= 1
+        assert telemetry["fixtures"]["worker_mode"] == "database_polling"
 
 
 @pytest.mark.parametrize(
