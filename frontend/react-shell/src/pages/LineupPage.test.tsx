@@ -7,10 +7,21 @@ declare const jest: any;
 
 import React, { act } from "react";
 import { createRoot, Root } from "react-dom/client";
-import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import Lineup from "./Lineup";
+
+jest.mock("react-router-dom", () => {
+  const ReactModule = require("react");
+  return {
+    Link: ({ to, children, ...props }: any) =>
+      ReactModule.createElement("a", {
+        href: typeof to === "string" ? to : "#",
+        ...props,
+      }, children),
+    useSearchParams: () => [new URLSearchParams("club_id=club-1")],
+  };
+});
 
 jest.mock("@/lib/owner", () => ({
   useActiveClub: () => ({
@@ -79,9 +90,7 @@ describe("React lineup page", () => {
     await act(async () => {
       root.render(
         <QueryClientProvider client={queryClient}>
-          <MemoryRouter initialEntries={["/app/lineup?club_id=club-1"]}>
-            <Lineup />
-          </MemoryRouter>
+          <Lineup />
         </QueryClientProvider>,
       );
     });
