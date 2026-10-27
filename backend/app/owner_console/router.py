@@ -827,9 +827,12 @@ def play(
 @router.get("/matches/{match_id}")
 def match(match_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
     m = session.get(OwnerMatch, match_id)
-    if m is None:
+    if m is not None:
+        return comps.mapped_match_dict(session, m, full=True)
+    canonical_view = comps.canonical_match_detail(session, match_id, full=True)
+    if canonical_view is None:
         raise HTTPException(404, detail={"code": "match_not_found"})
-    return comps.match_dict(m, full=True)
+    return canonical_view
 
 
 @router.post("/matches/{match_id}/forfeit")
