@@ -110,11 +110,7 @@ class ClubSaleMarketService:
         minimum_price: Decimal | float | int | str | None,
     ) -> None:
         metadata = dict(listing.metadata_json or {})
-        normalized_minimum = (
-            self._normalize_amount(minimum_price)
-            if minimum_price is not None
-            else None
-        )
+        normalized_minimum = self._normalize_amount(minimum_price) if minimum_price is not None else None
         metadata[INSTANT_SELL_METADATA_KEY] = {
             "enabled": bool(enabled),
             "minimum_price": self._display_amount(normalized_minimum) if normalized_minimum is not None else None,
