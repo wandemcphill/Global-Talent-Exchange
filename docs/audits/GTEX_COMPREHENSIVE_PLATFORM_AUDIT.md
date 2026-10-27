@@ -13,23 +13,110 @@
 | Umbrella issue | [#267](https://github.com/wandemcphill/Global-Talent-Exchange/issues/267) |
 | Inventories | `docs/audits/GTEX_SCREEN_INVENTORY.csv` (152 rows), `docs/audits/GTEX_ROLE_FEATURE_MATRIX.csv` (30 rows) |
 | Roadmap | `docs/audits/GTEX_REMEDIATION_ROADMAP.md` |
+| Re-verification | Second pass on `main` `45e29ef6` (2026-10-18), working environment: pytest, Flutter 3.35.7, Node 20, seeded local API + live HTTP calls. See "Second-pass re-verification" below. |
 
 ## Executive summary
 
 GTEX is one backend with two frontends that do not cover the same product.
 
-Flutter web is the Render production shell. `render.yaml` builds `ops/render/build-frontend.sh` into `frontend/build/web` and publishes that directory. There is no `/console` rewrite on this commit. React lives at `frontend/react-shell/` and is a narrower owner console (control center, clubs, market signings, competitions, text match center, squad, academy, national rentals, finance, inbox, admin). Serving it beside Flutter is open work: issue [#263](https://github.com/wandemcphill/Global-Talent-Exchange/issues/263) and pull request [#265](https://github.com/wandemcphill/Global-Talent-Exchange/pull/265). Do not treat React as deployed.
+Flutter web is the Render production shell. `render.yaml` builds `ops/render/build-frontend.sh` into `frontend/build/web` and publishes that directory. On the audited `3e2e94b` there was no `/console` rewrite; **PR #265 has since merged** — React is published at `/console` via `render.yaml` rewrites and `ops/render/publish-react-shell.sh`, closing FND-004. React lives at `frontend/react-shell/` and is a narrower owner console (control center, clubs, market signings, competitions, text match center, squad, academy, national rentals, finance, inbox, admin). Issue [#263](https://github.com/wandemcphill/Global-Talent-Exchange/issues/263) can close once a deployed `/console` refresh is confirmed.
 
 The backend is a large modular FastAPI app (`backend/app/main.py`, `backend/app/modules.py`). Ledger posting, FanCoin versus GTEX Coin, hosted-competition funding modes, and agent-wallet non-authority match the economic constitution closely enough to say issue [#2](https://github.com/wandemcphill/Global-Talent-Exchange/issues/2) is largely implemented in code. That is not a production settlement certificate. Deposits, withdrawals, webhooks, jackpots, and prize payouts were not executed.
 
-The highest-confidence defects from static evidence:
+## Current-main re-verification (2026-10-27, commit `bb6d82a9b8b5867318f9a0baf19789cef5b25637`)
 
-1. Flutter user signup always sends Turnstile token `dev-bypass` (`frontend/lib/screens/auth/gtex_account_signup_screens.dart`). Production services set `GTE_APP_ENV=production`. If a Turnstile secret is configured, that token is rejected. If it is not configured, the security check is a no-op while the screen says it runs automatically. **FND-001, P1.**
-2. Prestige catalogue items (Harbour Jet, Lagoon Coach, Icon Watch) can be purchased and gifted in `purchase_asset` / `offer_gift`, but `perform_desk_action` has no purchase or gift action and neither shell exposes one. **FND-002, P1.**
-3. Flutter calls the club-sale market and several club-identity routes whose routers are not mounted in `DOMAIN_MODULES`. **FND-003, P1.**
-4. Registration still asks the user to be a user, creator, or trader. Trader signup collects country and preferred currency. React signup hardcodes Nigeria and can create a club during signup. That contradicts the account model on issue [#228](https://github.com/wandemcphill/Global-Talent-Exchange/issues/228). **FND-005, P1.**
-5. The club desk can auction “the first owned asset” and bid on “the first other auction” when the client omits ids. The Flutter client omits them. **FND-016, P1.** Repair is draft PR [#272](https://github.com/wandemcphill/Global-Talent-Exchange/pull/272). The desk regression passed; it is not merged.
-6. Staff, transfers, competitions, and news each have more than one engine. Issues [#169](https://github.com/wandemcphill/Global-Talent-Exchange/issues/169) and [#176](https://github.com/wandemcphill/Global-Talent-Exchange/issues/176) remain the lifecycle track. This audit did not re-run those suites.
+This is the current review checkpoint. It supersedes the first-pass status bullets below; results captured at `45e29ef6` on 2026-10-18 remain historical evidence and must not be presented as a test run of today's `main`.
+
+### Current CI evidence
+
+| Check | Result at review time | Evidence |
+| --- | --- | --- |
+| Quality Gates | **Passed** on current `main` SHA `bb6d82a9` | [Run 40487301859](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/40487301859) |
+| Phase A Economic Regressions | **Passed** on current `main` SHA `bb6d82a9` | [Run 40487301834](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/40487301834) |
+| Flutter Android debug build | **Passed** on current `main` SHA `bb6d82a9` | [CI and Staging Deploy run 40487301881](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/40487301881) |
+| Final Platform Certification | **In progress**. Read-only truth audit, backend security/contract smoke tests, exact user-journey acceptance, dependency graph, and analyzer hard-error gate passed; Flutter unit/widget tests had not finished. | [Run 40487301758](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/40487301758) |
+| Remaining CI and staging jobs | **In progress/queued**; no overall conclusion yet. | [Run 40487301881](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/40487301881) |
+| Playwright viewport matrix | **No pass/fail result available at snapshot time**. The browser-matrix step was still executing on the #337 branch head `991824d5`. | [Run 40487279956](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/40487279956) |
+
+The Playwright config defines three projects: mobile (Pixel 5), tablet (768×1024), and desktop (1440×900). The combined `qa/playwright/tests/p7_fe_extended.spec.mjs` on current `main` contains both the squad test at `/app/club` and the Club HQ authoritative/no-club test at `/app`. Each asserts a truthful state and checks horizontal overflow; the squad test also exercises the compact “Club sections” route. The run cited above is for the #337 branch revision: its test spec matches the combined main spec, but its helper file is older than the canonical helper currently on main. It is not a final certification of the exact current-main helper until a matrix run against current main completes.
+
+### Corrected current-main status
+
+- **FND-001 / Turnstile client:** current Flutter signup no longer sends `dev-bypass`; it renders `TurnstileChallenge` and submits the returned token for user, creator, and trader flows. This is a client-code correction, not proof that provider configuration or all server-side signup enforcement is certified.
+- **FND-002 / prestige showroom:** current Flutter owner console includes purchase confirmation/idempotency and a wired purchase/gift path; gifting is routed to eligible regen players. PR [#299](https://github.com/wandemcphill/Global-Talent-Exchange/pull/299) merged on 2026-10-19. Treat the UI/backend wiring as present; keep end-to-end economic certification separate from code presence.
+- **FND-003 / route mounting:** the alleged unmounted-router defect was corrected in the 2026-10-18 second pass. The generated API-contract reconciliation finding remains separate.
+- **FND-004 / React at `/console`:** PR [#265](https://github.com/wandemcphill/Global-Talent-Exchange/pull/265) merged; production deep-refresh verification remains outstanding.
+- **FND-005 / signup and club geography:** current React signup supports the explicit `user`, `creator`, and `coin_trader` lanes and uses a Turnstile challenge; do not replace this with a single generic form based on the old audit. A concrete residual remains: React's post-login first-club and add-club flows still default `country_code` to `NG` and `city_name` to `Lagos` instead of collecting them.
+- **FND-016 / explicit desk targets:** PR [#272](https://github.com/wandemcphill/Global-Talent-Exchange/pull/272) merged on 2026-10-18.
+- **Lifecycle tracking:** PRs [#337](https://github.com/wandemcphill/Global-Talent-Exchange/pull/337), [#338](https://github.com/wandemcphill/Global-Talent-Exchange/pull/338), and [#339](https://github.com/wandemcphill/Global-Talent-Exchange/pull/339) are merged into current main; issues #169 and #176 are closed. Their merge is not, by itself, proof that all current CI and browser checks passed.
+- **#334:** closed as superseded, not merged separately; its `enableAccessibility` import and call site are already present in the shared Playwright spec on current main.
+
+Historical first-pass claims and the 2026-10-18 second-pass evidence below are retained for traceability; where they conflict with this section, the current-main status above takes precedence.
+
+## Second-pass re-verification (2026-10-18, commit `45e29ef6`)
+
+The first pass ran with no environment — all static evidence. This pass ran the platform for real on a fresh Linux VM and corrected several first-pass claims.
+
+### Verified build/test evidence
+
+| Command | Result |
+| --- | --- |
+| `pytest` — all CI backend slices (`tests/app`, auth, wallets, payments, referrals, highlights, migration integrity, live playback, contract) | Green on `45e29ef6` (504+21+11+7+7+5+5+5 pass). |
+| `flutter analyze` | 12 issues, 0 errors. |
+| `flutter test --exclude-tags golden` | **1259 pass / 20 fail on the 2026-10-18 snapshot at `45e29ef6`** — historical result, not a current-main result. The current-main certification run is linked in the 2026-10-27 checkpoint above. |
+| Route enumeration from `create_app()` | ~4500 HTTP routes mounted. |
+| `dev.py rebuild-demo-market --seed 20260311` + uvicorn + live HTTP | `POST /api/v2/auth/login` works; unmounted-router and mount claims below checked over HTTP. |
+| Domain test suites (competitions, staff, transfers, national, rewards) | ~34 failures + 6 errors were reported on the 2026-10-18 `45e29ef6` snapshot. Historical finding only; suites were excluded from CI at that time and need a current run before drawing conclusions. |
+
+### First-pass corrections
+
+- **FND-003 was wrong.** `club_sale_market`, `club_identity` dynasty/reputation/trophy routers **are mounted** — via `backend/app/routes/clubs.py` (lines 5-17), not `modules.py`. Verified HTTP 200. The "unmounted router" claim and issue #275's premise are incorrect; what remains true is the generated-contract gap (61 mounted routes undeclared in `shared/api_contract.json`).
+- **FND-004 resolved.** PR #265 merged: React shell is served at `/console` via `render.yaml` rewrites + `ops/render/publish-react-shell.sh`. Verification of a refresh of `/console/login` on a real deploy remains open.
+- **FND-016 resolved.** PR #272 merged: desk auction/bid actions require explicit ids.
+- **FND-008 path correction.** The v1 rent route is `POST /api/v2/tournaments/{tournament_id}/rent` — `app.api_v1.router` mounts natively at `/api/v2`; there are **zero** `/api/v1/` routes. It still fails closed (503) with demo fixtures off — correct.
+- **FND-011 partially resolved.** Regen naming integrity restored and the `/player-cards` redirect shipped per the second-pass staff-academy check.
+
+### New findings from runtime pass
+
+| ID | Sev | Status | Evidence |
+| --- | --- | --- | --- |
+| CMP-NEW-01 | P0 | **Fixed in [PR #280](https://github.com/wandemcphill/Global-Talent-Exchange/pull/280)** | `record_match_event` and `complete_match` in `segment_competitions.py` accepted writes from any authenticated user; `complete_match` feeds `ranking_integrity_service.record_match_result` — arbitrary users could corrupt standings and settlement input. |
+| CMP-NEW-04 | P1 | Open | `GET /api/fast-cups/{cup_id}/result-summary` has no `get_current_user` and calls `FastCupFinanceService.settle_result_summary` + `session.commit()` — an **unauthenticated GET settles payouts**; winner selection is deterministic/overridable. |
+| CMP-NEW-03 | P1 | Open | `/api/tournaments` collects entry fees but never pays winners — prize pool locked. |
+| CMP-NEW-02 | P1 | Open | FanCoin-pool hosted finalize: no row lock, no idempotency key — double-settle race. |
+| CMP-NEW-05..09 | P2 | Open | No cancel/refund path (entry fees trapped); settlement consumes admin-supplied placements not match results; dead engines (FastCupCompetitionEngineService); parallel competition products; domain test suite red. |
+| NEW-001 | P0 | Open | Transfer market accepts unbacked bids — no financial settlement path moves coins when a bid is accepted. |
+| NEW-002 | P1 | Open | Club-sale transfer settles at the caller-supplied price, not the accepted offer price. |
+| NEW-003 | P1 | Open | Free-agent transfer listings can be created by any club (seller hijack). |
+| NAT-NEW-1 | high | Open | National lifecycle squad submit accepts fabricated players; rental provenance unenforced. |
+| NAT-NEW-2 | medium | Open | `GET /api/v2/national/entries/{entry_id}` always 500s. |
+| NAT-NEW-3 | medium | Open | Anonymous read of `entries/{id}/rental-status` leaks entry data. |
+| NEW-STF-001 | high | Open | Club ops API (academy/scouting/youth-pipeline/finances/sponsorships) served from an in-memory `ClubOpsStore` singleton — resets on restart, shared across deployments. |
+| NEW-STF-002/003/004 | medium | Open | GM/HYD exist only in club-legacy; 3+ parallel academy engines; staff role policy bypassed on accept path. |
+| NEW-PRESTIGE-1 | P1 | Open | Desk Sponsor/Manager/Governance buttons permanently 404 — Flutter action names don't match `perform_desk_action` verbs. |
+| NEW-PRESTIGE-2 | P1 | Open | Gift accept/decline has no authorization — any authenticated user can resolve anyone's gift. |
+| NEW-PRESTIGE-4/5 | P2 | Open | Insufficient-funds purchase returns 500; duplicate gift engine in owner_console moves FanCoin→FanCoin. |
+| NEW-JRW-001 | high | Open | Reward settlements can double-credit: no DB unique constraint, no ledger idempotency key. |
+| NEW-JRW-002 | medium | Open | Jackpot winner odds manipulable via unbounded `eligibility_score`. |
+| NEW-JRW-003 | medium | Open | Cross-unit funding leak: FanCoin ticket revenue mints withdrawable GTEX Coin jackpot pool. |
+| NEW-JRW-005/006 | medium | Open | Second Paystack rail in owner_console writes a parallel ledger; scheduled job code unreachable (dead `OpsJobRunner` methods, undeployed worker). |
+| NEW-AUTH-1 | P1 | Open | Turnstile enforced only on `/signup/user`; `signup_creator`/`signup_trader` skip `verify_turnstile_token`. |
+| WAL-NEW-01 | high | Open | Admin coin-trader liquidity issue broken on migrated DBs (migration `20260914_0122` non-negative pool constraint). |
+| WAL-NEW-03 | medium | Open | `confirm_deposit` double-credit race: no idempotency key, no row lock. |
+| WAL-NEW-04 | medium | Open | Late failure-type webhook can downgrade a SETTLED purchase order without reversing credit. |
+| NEWS-001 | medium | Open | `/news/daily`, `/news/personalized`, `/news/breaking` shadowed by legend_layer `/news/{article_id}` → 404. |
+| JNY-001 | medium | Open | Ownership split (`OwnerClubState` vs `ClubProfile`) bounces real owners to onboarding. |
+| MSG-001 | medium | Open | `/conversations` API live but every chat screen is orphaned — no route reaches it. |
+| CONTRACT-001 | medium | Open | 61 mounted routes undeclared in `shared/api_contract.json`. |
+| FND-007 | P1 | Confirmed | Still no jackpot cron in `render.yaml`; additionally, the entire `gtex` worker service (`worker_main`) is not deployed. |
+
+### What is now verified working (runtime)
+
+- All CI backend test slices green on `45e29ef6` — ledger, payments, wallets, referrals, migrations, app contract.
+- `verify_turnstile_token` fails closed correctly: `dev-bypass`/`test-bypass` rejected when `GTE_APP_ENV=production`.
+- `app.api_v1.router` mounts at `/api/v2`; demo rent route fails closed 503 with flag off.
+- `club_sale_market` and club-identity dynasty/reputation/trophy routers respond over HTTP.
+- Paystack/Kora webhook verification and deposit dedupe present in code (sandbox run still NOT VERIFIED — no secrets).
 
 ## Commands run
 
@@ -87,10 +174,10 @@ Role matrix (`GTEX_ROLE_FEATURE_MATRIX.csv`): 30 roles or role-like actors. None
 | Inbox | `GET /owner/inbox` | Flutter `/inbox` redirects to community | React `/app/inbox` is the owner inbox. Flutter `/inbox` is not. |
 | Auth roles | `UserRole`: user, admin, super_admin, scout, agent, club, coin_trader | `PublicAccountType`: user, creator, coin_trader | No player, moderator, or general-manager login role. |
 | Admin capabilities | `get_current_admin` plus `require_admin_capability` | Per-screen string checks | `finance_admin`, `market_ops_admin`, `competition_ops_admin`, `god_mode`, `scoped_admin` live in godmode state, not `UserRole`. |
-| Club sale | Service and router file `backend/app/club_sale_market/router.py` | Not mounted | Flutter repository calls `/api/clubs/sale-market/...`. |
-| Identity | Jersey router is mounted (`club_identity.jerseys`) | Dynasty, reputation, and trophy routers are not in `modules.py` | Flutter still has those routes. |
+| Club sale | `backend/app/club_sale_market/router.py` — **mounted** via `backend/app/routes/clubs.py` (lines 5-17), verified HTTP 200 | — | Second-pass correction of FND-003. |
+| Identity | Jersey, dynasty, reputation, and trophy routers — all mounted via `routes/clubs.py` | — | Second-pass correction of FND-003. |
 
-Routers present on disk and not referenced by `router_path` in `modules.py`: `club_sale_market/router.py`, `portfolio/router.py` (legacy; `portfolios` is mounted), `orders/router.py`, `club_identity/dynasty/api/router.py`, `club_identity/reputation/router.py`, `club_identity/trophies/router.py`.
+Routers present on disk and not referenced by `router_path` in `modules.py`: `portfolio/router.py` (legacy; `portfolios` is mounted), `orders/router.py`. **Second-pass correction:** `club_sale_market/router.py` and the dynasty/reputation/trophy routers are mounted through `backend/app/routes/clubs.py`, which `modules.py` wires in — the earlier "not mounted" list was wrong. The remaining gap is contractual: 61 mounted routes are undeclared in `shared/api_contract.json` (CONTRACT-001).
 
 ## Domain traces
 
@@ -256,20 +343,20 @@ Do not copy a licensed card game layout. Regen names and nationalities must come
 | --- | --- | --- | --- | --- | --- |
 | FND-001 | P1 | Open as [#274](https://github.com/wandemcphill/Global-Talent-Exchange/issues/274) | `gtex_account_signup_screens.dart` line 373 sends `dev-bypass`. `turnstile.py` accepts that token only when `GTE_APP_ENV` is development, test, or local. `render.yaml` sets `GTE_APP_ENV=production` on services. Turnstile secret is not declared in `render.yaml`. | Sign up on Flutter against an API that has `GTE_TURNSTILE_SECRET_KEY` set and `GTE_APP_ENV=production`. Expect “Security check failed”. With no secret, signup succeeds and the caption “Security check runs automatically” is false. | Real Turnstile widget, or stop claiming a check. Do not keep a hardcoded bypass. |
 | FND-002 | P1 | Open as [#273](https://github.com/wandemcphill/Global-Talent-Exchange/issues/273) | `purchase_asset` and `offer_gift` exist. `perform_desk_action` ends at `unknown_action` for anything else. Showroom widget has no buy or gift control. | As a club owner with `club_legacy` enabled, open the showroom. No control calls `purchase_asset`. | Expose the existing functions with sku, owner class, idempotency key, and recipient. Do not add SKUs. |
-| FND-003 | P1 | Open as [#275](https://github.com/wandemcphill/Global-Talent-Exchange/issues/275) | `club_sale_market/router.py` and dynasty, reputation, and trophy routers are absent from `modules.py`. Flutter calls `/api/clubs/sale-market/listings` and identity paths. | Open `/clubs/sale-market` or `/clubs/{id}/identity/dynasty` against this API. Expect 404. | Mount only after settlement review, or remove the Flutter routes. Do not mount `instant-sell` and `transfer` casually. |
-| FND-004 | P1 | Open, owned by #263 / #265 | `render.yaml` `gtex-web` build is Flutter only. React `BrowserRouter` has no basename. | Fetch `/console/` on a deploy of this commit. React is not there. | Review and merge #265, then verify `/`, `/console/`, and refresh of `/console/login`. |
+| FND-003 | P1 | **Corrected in second pass — close #275** | The routers ARE mounted via `backend/app/routes/clubs.py` (lines 5-17); verified HTTP 200 on a live API. The real residual gap is CONTRACT-001 (61 routes undeclared in `shared/api_contract.json`). | `GET /api/clubs/sale-market/listings` returns 200, not 404. | Keep mounted; reconcile the API contract. Still do not mount `instant-sell` casually — NEW-002 shows club-sale settles at caller-supplied price. |
+| FND-004 | P1 | **Resolved — PR #265 merged** | `/console` rewrites live in `render.yaml` (lines ~104-116); `ops/render/publish-react-shell.sh` ships the React build beside Flutter. | Fetch `/console/` on a current deploy — React is there. Verify a refresh of `/console/login` serves the React document. | Confirm on the next deploy, then close #263. |
 | FND-005 | P1 | Open as [#274](https://github.com/wandemcphill/Global-Talent-Exchange/issues/274), also #228 | Account selector and three signup screens. Trader country and preferred currency. React Nigeria hardcode and inline club. | Walk `/account/select` and React `/signup`. | One normal-account signup. Club, creator, and trader capabilities after login. |
 | FND-006 | P2 | Open, tracked by #2 | Gift and wallet code match the constitution. No user-to-user GTEX send route in Flutter. Fee default seed is 3000 bps. | Read `currency_policy.py`, `canonical_service.py`, `competition_funding_policy.py`, agent `payout_eligible`. | Keep #2 open until a ledger test run is green on current main. Do not add a send-coins feature in this audit. |
 | FND-007 | P1 | NOT VERIFIED | Jackpot routes exist. No jackpot cron in `render.yaml`. | Read `render.yaml` cron names and `gtex/router.py`. | Decide whether funding is admin-triggered or scheduled. Do not trigger it from this audit. |
-| FND-008 | P1 | Open, tracked by #176 | `api_v1/router.py` `POST /tournaments/{id}/rent` calls demo fixtures. National engine is separate. | Call the v1 route with the demo flag off. Expect unavailable. With the flag on, expect in-memory rent. | Remove or permanently 410 the v1 rent route after confirming no client uses it. |
+| FND-008 | P1 | Open, tracked by #176 — **path corrected** | `app.api_v1.router` mounts natively at `/api/v2` — the route is `POST /api/v2/tournaments/{tournament_id}/rent`; there are zero `/api/v1/` routes. It calls demo fixtures and fails closed 503 with the flag off (verified over HTTP). | Same as before; note the `/api/v2` path. | Remove or permanently 410 the v1 rent route after confirming no client uses it. |
 | FND-009 | P1 | Open as [#276](https://github.com/wandemcphill/Global-Talent-Exchange/issues/276), also #169/#176 | Four staff surfaces. No GM or HYD in `evaluate_staff_role`. | Hire GM on the desk. Read `club_staff` tables. The executive row is the legacy table. | Pick club-growth contracts as canonical. Map or retire legacy executives. Do not invent a GM role. |
 | FND-010 | P1 | Open | Transfer, share, card, and owner-sign modules. Several competition runtimes. | Compare route prefixes in `modules.py`. | Document the lane in the UI. Do not merge the ledgers. |
-| FND-011 | P1 | Open, tracked by #228 | Two Flutter card widgets. `/player-cards` redirect. Regen cap and naming not re-tested. | Open `/player-cards`. Land on the transfer hub. | Shared card header. Point `/player-cards` at the marketplace. Re-test regen seeds. |
+| FND-011 | P1 | Open, tracked by #228 — **partially resolved** | Two Flutter card widgets remain; `/player-cards` redirect shipped; regen naming integrity restored per second-pass check. | Open `/player-cards`. Land on the transfer hub. | Shared card header across `GtexPlayerCard`/`GtexRegenCard`/React `PlayerCard`. |
 | FND-012 | P2 | Open | News agency uses story-feed. `/inbox` redirects to community. React inbox is owner inbox. | Compare `app_router.dart` `/inbox` redirect with `GET /owner/inbox`. | One inbox route per shell bound to owner inbox. |
 | FND-013 | P2 | Open | Admin checks differ by screen. No moderator `UserRole`. | Compare `gtexIsAdminRole` with `GiftEconomyAdminScreen` role set. | One admin dependency for admin screens. |
 | FND-014 | P1 | NOT VERIFIED | Payment provider secrets are dashboard-managed. No sandbox run. | `render.yaml` Paystack and Kora keys `sync: false`. | Sandbox verification outside this agent. No live money. |
 | FND-015 | P2 | Open | Signed-in home is owner console. Club lane is another dashboard. Public club is `/world/clubs/:clubId`. `/profile` is account settings. | Read shell home branch in `gte_navigation_shell_screen.dart`. | Adopt the Club HQ and owner profile structures above. |
-| FND-016 | P1 | Repair open in [#272](https://github.com/wandemcphill/Global-Talent-Exchange/pull/272), not merged | `perform_desk_action` selects the first owned asset or the first other auction when ids are missing. Flutter `owner_console_api.dart` sends only price or amount. | Tap “Auction an asset” or “Place bid” on the desk. | Require `asset_id` and `listing_id`. Desk test passed; Flutter test not run here. |
+| FND-016 | P1 | **Resolved — PR #272 merged** | `perform_desk_action` required explicit `asset_id`/`listing_id` after #272. | Re-verify on the desk UI. | Done; keep the regression test. |
 
 P3 notes, not separate repairs: design-lab routes are unlinked fixtures; many Flutter paths are aliases; `gteShellHomeRouteName` is unused; React ships an unused shadcn kit.
 

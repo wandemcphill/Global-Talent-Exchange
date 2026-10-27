@@ -1,31 +1,75 @@
 # GTEX remediation roadmap
 
-Baseline: `main` `3e2e94b661c060dbd67512756923d0b4eecc0b8a`, audit date 2026-10-18. Findings are defined in `docs/audits/GTEX_COMPREHENSIVE_PLATFORM_AUDIT.md`. Screen and role rows cite those ids.
+Current review baseline: `main` `bb6d82a9b8b5867318f9a0baf19789cef5b25637` (2026-10-27). The 2026-10-18 evidence at `45e29ef6` is retained as historical, not current-main certification. Findings are defined in `docs/audits/GTEX_COMPREHENSIVE_PLATFORM_AUDIT.md`; this roadmap records the current deltas below.
+
+**Historical second pass (2026-10-18, `45e29ef6`)**: on that snapshot, backend CI slices were green, `flutter analyze` had 0 errors, `flutter test` reported 1259 pass/20 fail, and seeded API + HTTP checks ran. These totals are historical; current-main outcomes are tracked in the checkpoint below. Corrected FND-003 (routers mounted), FND-004 (#265 merged), FND-016 (#272 merged), FND-008 (route lives at `/api/v2`).
 
 Nothing here is permission to merge. Each repair is a reviewable pull request. Do not start a shell rewrite. Do not run live deposits, withdrawals, jackpot funding, or payouts to close a row.
 
-## Dependency order
+
+## Current-main checkpoint (2026-10-27, `bb6d82a9`)
+
+- Current `main` Quality Gates and Phase A Economic Regressions passed; the Android debug build passed. Final Platform Certification and the wider CI/staging workflow were still running when checked. See the linked current-run table in `GTEX_COMPREHENSIVE_PLATFORM_AUDIT.md`; do not carry forward the 2026-10-18 test totals as current results.
+- The Club HQ/squad spec is consolidated in `qa/playwright/tests/p7_fe_extended.spec.mjs`: squad at `/app/club`, Club HQ at `/app`, truthful live/no-club states and horizontal-overflow assertions. CI config covers mobile, tablet (768×1024) and desktop (1440×900). The matrix was still running on #337's branch and that branch used an older helper copy, so a green result must be confirmed against the current-main revision before calling this complete.
+- Flutter signup no longer sends `dev-bypass`; it uses the Turnstile widget. Keep server-side challenge enforcement/configuration under review rather than marking the entire auth finding production-certified.
+- Showroom purchase and gift interactions are now wired in the main Flutter owner console; PR #299 merged. Continue to require current tests and economic/ledger certification before certifying the path end-to-end.
+- React `/console` and explicit desk auction/bid target changes landed via #265 and #272. Remaining concrete signup/onboarding defect: React add-club and first-club creation still hardcode NG/Lagos rather than collecting geography.
+- Lifecycle implementation PRs #337, #338 and #339 are merged, and issues #169/#176 are closed. That is a code/issue status, not a blanket test sign-off.
+- PR #334 is closed as redundant because its one-line `enableAccessibility` import is already on current main.
+
+## Dependency order (revised, second pass)
 
 ```text
-1. Stop unsafe implicit money actions (FND-016)
-2. Stop advertising unmounted financial routes (FND-003) without mounting them blindly
-3. Signup honesty (FND-001, FND-005) — product rules already written on #228
-4. One staff authority (FND-009) — continues #169 / #176
-5. Prestige purchase and gift on the existing catalogue (FND-002)
-6. Market and card lanes (FND-010, FND-011)
-7. Inbox and newsroom route honesty (FND-012, FND-015)
-8. Publish React only at /console (FND-004, existing PR #265)
-9. Provider and jackpot certification in sandbox (FND-006, FND-007, FND-014)
-10. Admin capability alignment (FND-013)
+0. Authorization on money/competition writes — CMP-NEW-01 fixed in PR #280; remaining: CMP-NEW-04, NEW-PRESTIGE-2, NAT-NEW-1, NEW-003
+1. Settlement correctness — NEW-001 (unbacked bids), CMP-NEW-03 (fees never paid), NEW-002 (caller-supplied price), CMP-NEW-02 (double-settle race), NEW-JRW-001 (double-credit), NEW-JRW-003 (FanCoin→COIN mint)
+2. Re-check server-side signup enforcement/configuration (NEW-AUTH-1) and remove React first-club/add-club NG/Lagos defaults; Flutter client no longer sends `dev-bypass`
+3. One staff/club-ops authority (FND-009, NEW-STF-001, NEW-STF-002/003/004) — continues #169 / #176
+4. Prestige purchase/gift on the existing catalogue (FND-002, NEW-PRESTIGE-1, NEW-PRESTIGE-4/5)
+5. Market and card lanes (FND-010, FND-011)
+6. Inbox, newsroom, chat route honesty (FND-012, FND-015, NEWS-001, MSG-001, JNY-001)
+7. React /console deploy verification (FND-004 → #263 close-out)
+8. Provider and jackpot certification in sandbox (FND-006, FND-007, FND-014, NEW-JRW-002, WAL-NEW-01/03/04)
+9. Admin capability alignment (FND-013, NEW-004)
+10. API contract reconciliation (CONTRACT-001)
+11. Re-run the historical test-rot suites against current main; 20 Flutter failures and ~34 domain failures were recorded only on the `45e29ef6` snapshot
 ```
 
-Steps 1–2 are safe without new economics. Steps 3 and 4 need the product rules already written on #228 and #176; they do not need new prices. Step 5 uses prices and caps already in `CATALOGUE`. Steps 9–10 need credentials or an admin policy decision.
+The listed settlement/authentication findings are historical candidates and must be individually revalidated on the current code before creating a repair PR. Do not infer a current defect only because it appears in the 2026-10-18 snapshot. Changes involving provider rails, payouts, or policy still require sandbox credentials or an explicit product/admin decision.
+
+## Second-pass repair PRs
+
+### PR-280 — Authorization on competition match writes (CMP-NEW-01) — **merged 2026-10-19**
+
+**Severity:** P0. PR [#280](https://github.com/wandemcphill/Global-Talent-Exchange/pull/280) is merged. Keep the regression test and re-run it on current main; do not track it as an open repair.
+
+**Change:** `record_match_event` and `complete_match` in `backend/app/segments/competitions/segment_competitions.py` now load the `Competition` and call `_require_manage_competitions_or_creator(request, actor, competition)` — the same guard `cancel_competition`/`settle_competition_payouts` already use. Previously any authenticated user could write events/results to any competition, feeding `ranking_integrity_service.record_match_result` and corrupting standings/settlement input.
+
+**Regression test:** `test_match_writes_require_host_or_admin` in `backend/tests/competitions/test_competition_lifecycle.py` — outsider gets 403 on both endpoints; host succeeds (201/200).
+
+### Remaining P0/P1 candidates from the 2026-10-18 snapshot (revalidate before opening a repair PR)
+
+| Finding | Sev | Historical shape (not yet reconfirmed on current main) |
+| --- | --- | --- |
+| CMP-NEW-04 (#282) | P1 | `GET /api/fast-cups/{cup_id}/result-summary` has no `get_current_user` and settles payouts via `FastCupFinanceService.settle_result_summary` + `session.commit()`. Add auth + move settlement to POST/admin path. |
+| NEW-001 (#281) | P0 | Transfer market accepts unbacked bids — no settlement moves coins on acceptance. Needs a settlement path or bid locking; product-owner decision on which. |
+| NEW-PRESTIGE-2 (#283) | P1 | Gift accept/decline has no authorization — any authenticated user can resolve anyone's gift. Same pattern as CMP-NEW-01. |
+| NAT-NEW-1 (#284) | high | National lifecycle squad submit accepts fabricated players; rental provenance unenforced. |
+| CMP-NEW-03 (#285) | P1 | `/api/tournaments` collects entry fees but never pays winners — prize pool locked. |
+| CMP-NEW-02 (#285) | P1 | FanCoin-pool hosted finalize has no row lock/idempotency — double-settle race. |
+| NEW-JRW-001 (#286) | high | Reward settlements double-credit: no DB unique constraint, no ledger idempotency. |
+| NEW-JRW-003 (#286) | medium-high | FanCoin ticket revenue mints withdrawable GTEX Coin jackpot pool — cross-unit leak. |
+| NEW-002 | P1 | Club-sale transfer settles at caller-supplied price, not accepted offer price. |
+| NEW-003 | P1 | Free-agent transfer listings creatable by any club (seller hijack). |
+| NEW-STF-001 (#288) | high | Club ops API served from in-memory `ClubOpsStore` singleton — data resets on restart. |
+| NEW-PRESTIGE-1 | P1 | Desk Sponsor/Manager/Governance buttons 404 — Flutter action names don't match `perform_desk_action` verbs. |
+| NEW-AUTH-1 (#287) | P1 | Turnstile enforced only on `/signup/user`; creator/trader signups skip `verify_turnstile_token`. |
+| WAL-NEW-01 | high | Admin coin-trader liquidity issue broken on migrated DBs (migration `20260914_0122`). |
 
 ## PR groups
 
 ### PR-A — Club desk must name its target (FND-016)
 
-**Severity:** P1. **Depends on:** nothing. **Do not merge from the audit branch.**
+**Status:** Resolved by merged PR [#272](https://github.com/wandemcphill/Global-Talent-Exchange/pull/272) on 2026-10-18. Do not reintroduce implicit first-asset/first-listing selection from the older audit branch.
 
 **Change:** `perform_desk_action` rejects `list_auction` without `asset_id` and `place_bid` without `listing_id`. Remove the query that picks the first owned asset or the first other auction. Flutter sends the id from the desk snapshot. Add `auctionable_assets` (owned, unlisted) and `can_bid` on market rows so the client has a real target.
 
@@ -159,7 +203,7 @@ These are not duplicates of #2, #169, #176, #228, #263, or #136.
 | [#274](https://github.com/wandemcphill/Global-Talent-Exchange/issues/274) Normal-account signup and Turnstile bypass | FND-001, FND-005 | PR-C acceptance |
 | [#275](https://github.com/wandemcphill/Global-Talent-Exchange/issues/275) Unmounted club-sale and identity routes | FND-003 | PR-B acceptance |
 | [#276](https://github.com/wandemcphill/Global-Talent-Exchange/issues/276) One staff hire path; GM and HYD decision | FND-009 | PR-D acceptance, decision recorded in the PR |
-| [#272](https://github.com/wandemcphill/Global-Talent-Exchange/pull/272) Explicit desk auction and bid targets | FND-016 | PR-A acceptance. Draft PR open, not merged |
+| [#272](https://github.com/wandemcphill/Global-Talent-Exchange/pull/272) Explicit desk auction and bid targets | FND-016 | Resolved — PR #272 merged |
 
 #228 already covers browser certification, regen seeds, and the card rebuild. #263 already covers `/console`. #176 already covers lifecycle bridges. Link those instead of filing them again.
 
