@@ -229,3 +229,60 @@ def test_new_active_owner_state_gets_one_initial_tick(monkeypatch) -> None:
 
     session.close()
     engine.dispose()
+
+
+
+def test_academy_intake_uses_a_separate_sequence_not_world_day(monkeypatch) -> None:
+    session, engine = _session()
+    state = _state(
+        session,
+        state_id="intake-sequence",
+        world_day=42,
+        tick_date=WORLD_DATE,
+    )
+    ledger_refs: list[str] = []
+    generation_keys: list[int | str] = []
+
+    monkeypatch.setattr(owner_service, "require_state", lambda _session, _club, _user: state)
+
+    def fake_record(_session: Session, **kwargs) -> None:
+        ledger_refs.append(str(kwargs["related_id"]))
+
+    def fake_generate(
+        club_id: str, generation_key: int | str, academy_level: int, youth_skill: int, count: int
+    ) -> list[dict]:
+        generation_keys.append(generation_key)
+        return [
+            {
+                "name": f"Prospect {generation_key}-{index}",
+                "position": "midfielder",
+                "age": 17,
+                "rating": 50,
+                "potential": 80,
+                "personality": {},
+            }
+            for index in range(count)
+        ]
+
+    monkeypatch.setattr(owner_service.ledger, "record", fake_record)
+    monkeypatch.setattr(owner_service.engine, "generate_regens", fake_generate)
+    monkeypatch.setattr(owner_service, "_add_regen", lambda _session, _club, regen: regen)
+
+    first = owner_service.academy_intake(session, state.owner_user_id, state.club_id)
+    session.flush()
+    second = owner_service.academy_intake(session, state.owner_user_id, state.club_id)
+    session.commit()
+
+    assert len(first) == len(second) == 1
+    assert state.world_day == 42
+    assert state.last_world_tick_date == WORLD_DATE
+    assert state.academy_intake_sequence == 2
+    assert generation_keys == [
+        "world-day:42:intake:1",
+        "world-day:42:intake:2",
+    ]
+    assert ledger_refs == ["intake:1", "intake:2"]
+    assert first[0]["name"] != second[0]["name"]
+
+    session.close()
+    engine.dispose()
