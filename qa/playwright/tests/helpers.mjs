@@ -79,13 +79,24 @@ export async function signIn(page) {
 
   await enableAccessibility(page);
 
-  const emailInput = page.locator('input[aria-label="Email"]').first();
+  // Flutter Web semantics/DOM labels vary between the canvas login form and
+  // the accessible HTML overlay. Prefer semantic inputs, but accept the common
+  // HTML input attributes before resorting to brittle viewport coordinates.
+  const emailInput = page
+    .locator(
+      'input[aria-label="Email"], input[aria-label*="email" i], input[type="email"], input[autocomplete="username"], input[placeholder*="email" i]',
+    )
+    .first();
   if (await emailInput.isVisible().catch(() => false)) {
     await emailInput.fill(process.env.GTEX_E2E_EMAIL);
-    const passwordInput = page.locator('input[aria-label="Password"]').first();
+    const passwordInput = page
+      .locator(
+        'input[aria-label="Password"], input[aria-label*="password" i], input[type="password"], input[autocomplete="current-password"], input[placeholder*="password" i]',
+      )
+      .first();
     await expect(passwordInput).toBeVisible({ timeout: 30_000 });
     await passwordInput.fill(process.env.GTEX_E2E_PASSWORD);
-    const enterBtn = page.getByRole("button", { name: "ENTER GTEX" });
+    const enterBtn = page.getByRole("button", { name: /ENTER GTEX/i });
     await expect(enterBtn).toBeVisible({ timeout: 30_000 });
     await enterBtn.click({ force: true });
   } else {
