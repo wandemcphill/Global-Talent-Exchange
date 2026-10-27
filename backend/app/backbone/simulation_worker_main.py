@@ -114,7 +114,9 @@ def main() -> None:
                     with context.database.session_factory() as session:
                         scanner = AutonomousMatchExecutionService(session)
                         results = scanner.scan_and_execute_due_fixtures()
-                        if results.get("executed", 0) > 0 or results.get("settled_competitions"):
+                        if results.get("failed", 0) > 0:
+                            logger.error("simulation_worker.fixture_execution_failures results=%s", results)
+                        elif results.get("executed", 0) > 0 or results.get("settled_competitions"):
                             logger.info("simulation_worker.executed_due_fixtures results=%s", results)
                         session.commit()
                 except Exception as exc:
