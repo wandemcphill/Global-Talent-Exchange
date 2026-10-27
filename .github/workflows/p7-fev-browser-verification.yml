@@ -79,6 +79,7 @@ jobs:
           GTEX_E2E_API_BASE_URL: "http://127.0.0.1:8000"
           GTEX_E2E_EMAIL: "seed.scout@gte.local"
           GTEX_E2E_PASSWORD: "DemoPass123" # pragma: allowlist secret
+          GTEX_E2E_HASH_ROUTING: "1"
           GTEX_E2E_DESIGN_LAB: "1"
         run: >-
           npx playwright test

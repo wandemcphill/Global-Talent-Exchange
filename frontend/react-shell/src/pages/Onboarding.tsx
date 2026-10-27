@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AlertTriangle, Check, ShoppingCart, Sparkles, Trash2 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
+import { validateClubLocation } from "./clubCreationLocation";
 import { useAuth } from "@/lib/auth";
 import { fmt, useClub } from "@/lib/owner";
 import { Btn, Chip, Coin, Loading, Panel } from "@/components/gtex/ui";
@@ -419,20 +420,33 @@ function CompetitionStep({ clubId, onDone }: any) {
 
 function CreateFirstClub({ onDone, onCancel }: any) {
   const [name, setName] = useState("");
+  const [countryCode, setCountryCode] = useState("");
+  const [cityName, setCityName] = useState("");
   const [busy, setBusy] = useState(false);
+  const location = validateClubLocation(countryCode, cityName);
+  const clubName = name.trim();
   const create = async () => {
+    if (clubName.length < 3) {
+      toast.error("Enter a club name with at least 3 characters.");
+      return;
+    }
+    const validatedLocation = validateClubLocation(countryCode, cityName);
+    if ("error" in validatedLocation) {
+      toast.error(validatedLocation.error);
+      return;
+    }
     setBusy(true);
     try {
-      const slug = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString(36).slice(-4)}`;
+      const slug = `${clubName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString(36).slice(-4)}`;
       await api.post("/clubs", {
-        club_name: name,
+        club_name: clubName,
         slug,
-        short_name: name.slice(0, 12),
+        short_name: clubName.slice(0, 12),
         primary_color: "#0F766E",
         secondary_color: "#F8FAFC",
         accent_color: "#F59E0B",
-        country_code: "NG",
-        city_name: "Lagos",
+        country_code: validatedLocation.countryCode,
+        city_name: validatedLocation.cityName,
         club_type: "community",
       });
       onDone();
@@ -450,14 +464,36 @@ function CreateFirstClub({ onDone, onCancel }: any) {
       <Panel eyebrow="First-club activation" title="Name your club" className="w-full max-w-lg">
         <input
           data-testid="first-club-name-input"
+          aria-label="Club name"
           className="gx-input"
-          placeholder="Lagos Lions FC"
+          placeholder="Club name"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <input
+            data-testid="first-club-country-input"
+            aria-label="Country code"
+            className="gx-input"
+            placeholder="Country code (NG)"
+            autoComplete="country"
+            maxLength={2}
+            value={countryCode}
+            onChange={(e) => setCountryCode(e.target.value)}
+          />
+          <input
+            data-testid="first-club-city-input"
+            aria-label="City"
+            className="gx-input"
+            placeholder="City"
+            autoComplete="address-level2"
+            value={cityName}
+            onChange={(e) => setCityName(e.target.value)}
+          />
+        </div>
         <Btn
           className="mt-4 w-full"
-          disabled={name.length < 3 || busy}
+          disabled={clubName.length < 3 || !location.valid || busy}
           onClick={create}
           data-testid="first-club-create-button"
         >

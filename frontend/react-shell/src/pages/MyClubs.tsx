@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
+import { validateClubLocation } from "./clubCreationLocation";
 import { fmt, label, useActiveClub, useClub, useClubShowroom, useControlCenter, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, Stat } from "@/components/gtex/ui";
 import { Building, Gift, Sparkles, BookOpen, ExternalLink, CheckCircle, Coins, LockKeyhole, X, PackageCheck } from "lucide-react";
@@ -650,21 +651,35 @@ function Commercial({ club }: any) {
 function NewClub({ count, max }: any) {
   const navigate = useNavigate();
   const [name, setName] = useState("");
+  const [countryCode, setCountryCode] = useState("");
+  const [cityName, setCityName] = useState("");
   const [busy, setBusy] = useState(false);
   if (count >= max) return null;
+  const location = validateClubLocation(countryCode, cityName);
+  const clubName = name.trim();
   const create = async () => {
+    if (clubName.length < 3) {
+      toast.error("Enter a club name with at least 3 characters.");
+      return;
+    }
+    const validatedLocation = validateClubLocation(countryCode, cityName);
+    if ("error" in validatedLocation) {
+      toast.error(validatedLocation.error);
+      return;
+    }
     setBusy(true);
     try {
-      const slug = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString(36).slice(-4)}`;
+      const slug = `${clubName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString(36).slice(-4)}`;
       await api.post("/clubs", {
-        club_name: name,
+        club_name: clubName,
         slug,
-        short_name: name.slice(0, 12),
+        short_name: clubName.slice(0, 12),
         primary_color: "#0F766E",
         secondary_color: "#F8FAFC",
         accent_color: "#F59E0B",
-        country_code: "NG",
-        city_name: "Lagos",
+        country_code: validatedLocation.countryCode,
+        city_name: validatedLocation.cityName,
+        club_type: "community",
       });
       navigate("/onboarding");
     } catch (e) {
@@ -679,15 +694,37 @@ function NewClub({ count, max }: any) {
         Owning several clubs makes you a labelled multi-club ownership group. Sister clubs can't share a prize bracket,
         and transfers between them must sit inside a fair-value band.
       </p>
-      <div className="flex gap-2">
+      <div className="space-y-2">
         <input
           data-testid="new-club-name-input"
+          aria-label="Club name"
           className="gx-input"
-          placeholder="Abuja Eagles FC"
+          placeholder="Club name"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
-        <Btn disabled={name.length < 3 || busy} onClick={create} data-testid="create-club-button">
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            data-testid="new-club-country-input"
+            aria-label="Country code"
+            className="gx-input"
+            placeholder="Country code (NG)"
+            autoComplete="country"
+            maxLength={2}
+            value={countryCode}
+            onChange={(e) => setCountryCode(e.target.value)}
+          />
+          <input
+            data-testid="new-club-city-input"
+            aria-label="City"
+            className="gx-input"
+            placeholder="City"
+            autoComplete="address-level2"
+            value={cityName}
+            onChange={(e) => setCityName(e.target.value)}
+          />
+        </div>
+        <Btn disabled={clubName.length < 3 || !location.valid || busy} onClick={create} data-testid="create-club-button">
           Create
         </Btn>
       </div>
