@@ -34,6 +34,9 @@ from app.transfer_market.router import router as transfer_market_router
 
 EXTRA_TRUNCATE_TABLES = (
     "market_watchlist_entries",
+    "transfer_negotiations",
+    "transfer_listing_bids",
+    "transfer_hub_offers",
     "transfer_listings",
     "scout_reports",
     "regen_scout_reports",
