@@ -755,9 +755,11 @@ def _save_global_competition_tactics(
         "execution": "canonical_fixture",
         "tactics_saved": True,
         "match": {
-            "id": canonical_match.id,
+            "id": my_match.id,
             "legacy_match_id": my_match.id,
-            "competition_id": canonical_match.competition_id,
+            "canonical_match_id": canonical_match.id,
+            "competition_id": comp.id,
+            "canonical_competition_id": canonical_match.competition_id,
             "round": canonical_match.round_number,
             "home_club_id": canonical_match.home_club_id,
             "away_club_id": canonical_match.away_club_id,
