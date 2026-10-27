@@ -26,7 +26,6 @@ from app.models.user import KycStatus, User, UserRole
 from app.owner_console.engine import simulate_match as owner_simulate_match
 from app.services.autonomous_match_service import AutonomousMatchExecutionService
 from app.services.competition_lifecycle_service import CompetitionLifecycleService
-from app.services.world_clock_service import WorldClockService
 
 
 @pytest.fixture(scope="module")
