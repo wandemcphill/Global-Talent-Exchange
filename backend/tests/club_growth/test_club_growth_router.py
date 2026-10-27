@@ -317,6 +317,89 @@ def test_general_manager_and_hoyd_are_distinct_qualified_staff_roles(
     assert effects["head_of_youth_development_quality"] == 70
 
 
+def test_general_manager_and_hoyd_are_distinct_qualified_staff_roles(
+    client: TestClient, session: Session
+) -> None:
+    club = _club(session)
+
+    unqualified_manager = ClubStaffProfile(
+        market_key="test-unqualified-gm",
+        display_name="Tactical Manager",
+        staff_type="manager",
+        rarity="standard",
+        skills_json=["tactics", "morale"],
+        salary_minor=60000,
+        commission_bps=0,
+        rating=72,
+    )
+    session.add(unqualified_manager)
+    session.commit()
+
+    rejected = client.post(
+        f"/api/clubs/{club.id}/growth/staff/{unqualified_manager.id}/offer",
+        json={"role_scope": "general_manager", "duration_days": 180},
+    )
+    assert rejected.status_code == 409, rejected.text
+    assert rejected.json()["detail"] == "general_manager_requires_operations_or_transfer_capability"
+
+    # The same profile is eligible only after it carries capabilities for the
+    # distinct General Manager remit; it must not be normalized into manager.
+    unqualified_manager.skills_json = ["financial_acumen", "negotiation"]
+    session.commit()
+    gm_offer = client.post(
+        f"/api/clubs/{club.id}/growth/staff/{unqualified_manager.id}/offer",
+        json={"role_scope": "gm", "duration_days": 180},
+    )
+    assert gm_offer.status_code == 200, gm_offer.text
+    assert gm_offer.json()["role_scope"] == "general_manager"
+    gm_contract = client.post(
+        f"/api/clubs/{club.id}/growth/staff-contracts/{gm_offer.json()['id']}/accept"
+    )
+    assert gm_contract.status_code == 200, gm_contract.text
+    assert gm_contract.json()["role_scope"] == "general_manager"
+
+    hoyd = ClubStaffProfile(
+        market_key="test-hoyd",
+        display_name="Academy Development Lead",
+        staff_type="academy_director",
+        rarity="pro",
+        skills_json=["talent_identification", "regen_development"],
+        salary_minor=42000,
+        commission_bps=0,
+        rating=70,
+    )
+    session.add(hoyd)
+    session.commit()
+    hoyd_offer = client.post(
+        f"/api/clubs/{club.id}/growth/staff/{hoyd.id}/offer",
+        json={"role_scope": "head_of_youth_development", "duration_days": 180},
+    )
+    assert hoyd_offer.status_code == 200, hoyd_offer.text
+    assert hoyd_offer.json()["role_scope"] == "head_of_youth_development"
+    hoyd_contract = client.post(
+        f"/api/clubs/{club.id}/growth/staff-contracts/{hoyd_offer.json()['id']}/accept"
+    )
+    assert hoyd_contract.status_code == 200, hoyd_contract.text
+
+    generated = client.post(
+        f"/api/clubs/{club.id}/growth/academy/generate-prospects",
+        json={"count": 1, "seed": "hoyd-quality-test"},
+    )
+    assert generated.status_code == 200, generated.text
+    metadata = generated.json()[0]["metadata"]
+    assert metadata["head_of_youth_development_quality"] == 70
+    assert metadata["head_of_youth_development_bonus"] == 7
+    assert metadata["academy_quality_score"] == min(
+        100, metadata["academy_facility_quality_score"] + 7
+    )
+
+    dashboard = client.get(f"/api/clubs/{club.id}/growth")
+    assert dashboard.status_code == 200, dashboard.text
+    effects = dashboard.json()["staff_effects"]
+    assert effects["general_manager_quality"] == 72
+    assert effects["head_of_youth_development_quality"] == 70
+
+
 def test_academy_prospect_contract_and_promotion_flow(client: TestClient, session: Session) -> None:
     club = _club(session)
 
