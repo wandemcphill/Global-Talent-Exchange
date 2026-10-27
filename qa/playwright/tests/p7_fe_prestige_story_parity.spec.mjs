@@ -370,185 +370,190 @@ test.describe("Prestige, Story, and Showroom Parity (Agent B5)", () => {
   test(
     "Showroom navigation, verified catalogue, purchase flow and idempotency",
     async ({ page }) => {
-    await setupOwnerParityRoutes(page);
-    await page.goto("/app/showroom");
+      await setupOwnerParityRoutes(page);
+      await page.goto("/app/showroom");
 
-    // Verify Showroom Screen loads with GTEX Styling & Header
-    await expect(page.locator('[data-testid="showroom-screen"]')).toBeVisible();
-    await expect(page.getByText("Owner Showroom & Luxury Fleet")).toBeVisible();
-    await expect(page.getByText("Club Treasury")).toBeVisible();
+      // Verify Showroom Screen loads with GTEX Styling & Header
+      await expect(page.locator('[data-testid="showroom-screen"]')).toBeVisible();
+      await expect(page.getByText("Owner Showroom & Luxury Fleet")).toBeVisible();
+      await expect(page.getByText("Club Treasury")).toBeVisible();
 
-    // Verify Demarcation Banner: Owner Luxury Gifting vs Community Gifting
-    await expect(page.getByText("Owner Luxury Gifting (Club GTEX Coin)")).toBeVisible();
-    await expect(page.getByText("Community Gifting (FanCoin)")).toBeVisible();
+      // Verify Demarcation Banner: Owner Luxury Gifting vs Community Gifting
+      await expect(page.getByText("Owner Luxury Gifting (Club GTEX Coin)")).toBeVisible();
+      await expect(page.getByText("Community Gifting (FanCoin)")).toBeVisible();
 
-    // Verify Catalogue Items Render Verified GTX Prices and Wire Badges
-    const jetItem = page.locator(
-      '[data-testid="showroom-item-falcon_7x_private_jet"]',
-    );
-    await expect(jetItem).toBeVisible();
-    await expect(jetItem.getByText("Global Wire Notice")).toBeVisible();
-    await expect(jetItem.getByText("4,800 GTX")).toBeVisible();
+      // Verify Catalogue Items Render Verified GTX Prices and Wire Badges
+      const jetItem = page.locator(
+        '[data-testid="showroom-item-falcon_7x_private_jet"]',
+      );
+      await expect(jetItem).toBeVisible();
+      await expect(jetItem.getByText("Global Wire Notice")).toBeVisible();
+      await expect(jetItem.getByText("4,800 GTX")).toBeVisible();
 
-    const watchItem = page.locator(
-      '[data-testid="showroom-item-chronos_tourbillon_watch"]',
-    );
-    await expect(watchItem).toBeVisible();
-    await expect(watchItem.getByText("Private Collection")).toBeVisible();
-    await expect(watchItem.getByText("250 GTX")).toBeVisible();
+      const watchItem = page.locator(
+        '[data-testid="showroom-item-chronos_tourbillon_watch"]',
+      );
+      await expect(watchItem).toBeVisible();
+      await expect(watchItem.getByText("Private Collection")).toBeVisible();
+      await expect(watchItem.getByText("250 GTX")).toBeVisible();
 
-    // Click Acquire on watch item -> verify purchase confirm modal
-    await watchItem
-      .locator('[data-testid="acquire-btn-chronos_tourbillon_watch"]')
-      .click();
-    const purchaseModal = page.locator('[data-testid="showroom-purchase-confirm"]');
-    await expect(purchaseModal).toBeVisible();
-    await expect(purchaseModal.getByText("Treasury Authorization")).toBeVisible();
-    await expect(purchaseModal.getByText("250 GTX")).toBeVisible();
+      // Click Acquire on watch item -> verify purchase confirm modal
+      await watchItem
+        .locator('[data-testid="acquire-btn-chronos_tourbillon_watch"]')
+        .click();
+      const purchaseModal = page.locator('[data-testid="showroom-purchase-confirm"]');
+      await expect(purchaseModal).toBeVisible();
+      await expect(purchaseModal.getByText("Treasury Authorization")).toBeVisible();
+      await expect(purchaseModal.getByText("250 GTX")).toBeVisible();
 
-    // Confirm purchase -> verify confirmed receipt modal
-    await purchaseModal.locator('[data-testid="confirm-purchase-button"]').click();
-    const receiptModal = page.locator('[data-testid="showroom-purchase-receipt"]');
-    await expect(receiptModal).toBeVisible();
-    await expect(receiptModal.getByText("Acquisition Confirmed")).toBeVisible();
-    await receiptModal.locator('[data-testid="close-purchase-receipt"]').click();
-    await expect(receiptModal).toBeHidden();
-  });
+      // Confirm purchase -> verify confirmed receipt modal
+      await purchaseModal.locator('[data-testid="confirm-purchase-button"]').click();
+      const receiptModal = page.locator('[data-testid="showroom-purchase-receipt"]');
+      await expect(receiptModal).toBeVisible();
+      await expect(receiptModal.getByText("Acquisition Confirmed")).toBeVisible();
+      await receiptModal.locator('[data-testid="close-purchase-receipt"]').click();
+      await expect(receiptModal).toBeHidden();
+    },
+  );
 
   test(
     "Owner-to-Player luxury gifting strictly targets academy regens with verified receipt",
     async ({ page }) => {
-    await setupOwnerParityRoutes(page);
-    await page.goto("/app/showroom");
+      await setupOwnerParityRoutes(page);
+      await page.goto("/app/showroom");
 
-    const watchItem = page.locator('[data-testid="showroom-item-chronos_tourbillon_watch"]');
-    await expect(watchItem).toBeVisible();
+      const watchItem = page.locator('[data-testid="showroom-item-chronos_tourbillon_watch"]');
+      await expect(watchItem).toBeVisible();
 
-    // Click Gift Regen button -> open gift confirm modal
-    await watchItem.locator('[data-testid="gift-btn-chronos_tourbillon_watch"]').click();
-    const giftModal = page.locator('[data-testid="showroom-gift-confirm"]');
-    await expect(giftModal).toBeVisible();
-    await expect(giftModal.getByText("Owner Luxury Gifting")).toBeVisible();
+      // Click Gift Regen button -> open gift confirm modal
+      await watchItem.locator('[data-testid="gift-btn-chronos_tourbillon_watch"]').click();
+      const giftModal = page.locator('[data-testid="showroom-gift-confirm"]');
+      await expect(giftModal).toBeVisible();
+      await expect(giftModal.getByText("Owner Luxury Gifting")).toBeVisible();
 
-    // Verify academy regen player is listed (Chidi Nnamdi)
-    const regenBtn = giftModal.locator('[data-testid="select-regen-regen-101"]');
-    await expect(regenBtn).toBeVisible();
-    await regenBtn.click();
+      // Verify academy regen player is listed (Chidi Nnamdi)
+      const regenBtn = giftModal.locator('[data-testid="select-regen-regen-101"]');
+      await expect(regenBtn).toBeVisible();
+      await regenBtn.click();
 
-    // Fill personal dedication note
-    const noteInput = giftModal.locator('[data-testid="gift-note-input"]');
-    await noteInput.fill("Exemplary performance in the continental cup.");
+      // Fill personal dedication note
+      const noteInput = giftModal.locator('[data-testid="gift-note-input"]');
+      await noteInput.fill("Exemplary performance in the continental cup.");
 
-    // Submit gift -> verify gift receipt displays confirmed morale delta
-    await giftModal.locator('[data-testid="confirm-gift-button"]').click();
-    const giftReceipt = page.locator('[data-testid="showroom-gift-receipt"]');
-    await expect(giftReceipt).toBeVisible();
-    await expect(giftReceipt.getByText("Luxury Gift Delivered")).toBeVisible();
-    await expect(giftReceipt.getByText("Morale +15 · Confirmed")).toBeVisible();
-    await expect(
-      giftReceipt.getByText("Exemplary performance in the continental cup."),
-    ).toBeVisible();
+      // Submit gift -> verify gift receipt displays confirmed morale delta
+      await giftModal.locator('[data-testid="confirm-gift-button"]').click();
+      const giftReceipt = page.locator('[data-testid="showroom-gift-receipt"]');
+      await expect(giftReceipt).toBeVisible();
+      await expect(giftReceipt.getByText("Luxury Gift Delivered")).toBeVisible();
+      await expect(giftReceipt.getByText("Morale +15 · Confirmed")).toBeVisible();
+      await expect(
+        giftReceipt.getByText("Exemplary performance in the continental cup."),
+      ).toBeVisible();
 
-    await giftReceipt.locator('[data-testid="close-gift-receipt"]').click();
-    await expect(giftReceipt).toBeHidden();
-  });
+      await giftReceipt.locator('[data-testid="close-gift-receipt"]').click();
+      await expect(giftReceipt).toBeHidden();
+    },
+  );
 
   test(
     "Club Story chronicle displays verified lore, schedule, manager, and dispatches",
     async ({ page }) => {
-    await setupOwnerParityRoutes(page);
-    await page.goto("/app/story");
+      await setupOwnerParityRoutes(page);
+      await page.goto("/app/story");
 
-    // Verify screen title and club identity
-    await expect(page.locator('[data-testid="club-story-screen"]')).toBeVisible();
-    await expect(page.locator('[data-testid="club-story-title"]')).toHaveText("Lagos Atlantic SC");
-    await expect(page.getByText("World Day 14")).toBeVisible();
+      // Verify screen title and club identity
+      await expect(page.locator('[data-testid="club-story-screen"]')).toBeVisible();
+      await expect(page.locator('[data-testid="club-story-title"]')).toHaveText("Lagos Atlantic SC");
+      await expect(page.getByText("World Day 14")).toBeVisible();
 
-    // Verify Surface Directory navigation buttons exist
-    await expect(page.locator('[data-testid="link-to-showroom"]')).toBeVisible();
-    await expect(page.locator('[data-testid="link-to-newsroom"]')).toBeVisible();
-    await expect(page.locator('[data-testid="link-to-inbox"]')).toBeVisible();
+      // Verify Surface Directory navigation buttons exist
+      await expect(page.locator('[data-testid="link-to-showroom"]')).toBeVisible();
+      await expect(page.locator('[data-testid="link-to-newsroom"]')).toBeVisible();
+      await expect(page.locator('[data-testid="link-to-inbox"]')).toBeVisible();
 
-    // Verify Timeline Tab
-    await expect(page.locator('[data-testid="timeline-tab-content"]')).toBeVisible();
-    await expect(page.getByText("Atlantic Wings One Commissioned")).toBeVisible();
-    await expect(page.getByText("Dominant Derby Victory (3 - 1)")).toBeVisible();
+      // Verify Timeline Tab
+      await expect(page.locator('[data-testid="timeline-tab-content"]')).toBeVisible();
+      await expect(page.getByText("Atlantic Wings One Commissioned")).toBeVisible();
+      await expect(page.getByText("Dominant Derby Victory (3 - 1)")).toBeVisible();
 
-    // Switch to Club Dispatches tab
-    await page.locator('[data-testid="tab-dispatches"]').click();
-    await expect(page.locator('[data-testid="dispatches-tab-content"]')).toBeVisible();
-    await expect(
-      page.getByText("Lagos Atlantic SC Commissions Executive Fleet Aviation"),
-    ).toBeVisible();
+      // Switch to Club Dispatches tab
+      await page.locator('[data-testid="tab-dispatches"]').click();
+      await expect(page.locator('[data-testid="dispatches-tab-content"]')).toBeVisible();
+      await expect(
+        page.getByText("Lagos Atlantic SC Commissions Executive Fleet Aviation"),
+      ).toBeVisible();
 
-    // Switch to Staff & Squad tab
-    await page.locator('[data-testid="tab-relationships"]').click();
-    await expect(page.locator('[data-testid="relationships-tab-content"]')).toBeVisible();
-    await expect(page.getByText("Tunde Bakare")).toBeVisible();
-    await expect(page.getByText("Chidi Nnamdi")).toBeVisible();
-    await expect(page.getByText("Academy Regen")).toBeVisible();
+      // Switch to Staff & Squad tab
+      await page.locator('[data-testid="tab-relationships"]').click();
+      await expect(page.locator('[data-testid="relationships-tab-content"]')).toBeVisible();
+      await expect(page.getByText("Tunde Bakare")).toBeVisible();
+      await expect(page.getByText("Chidi Nnamdi")).toBeVisible();
+      await expect(page.getByText("Academy Regen")).toBeVisible();
 
-    // Switch to Save Fixtures tab
-    await page.locator('[data-testid="tab-schedule"]').click();
-    await expect(page.locator('[data-testid="schedule-tab-content"]')).toBeVisible();
-    await expect(page.getByText("Lagos Atlantic SC vs Kano Pillars")).toBeVisible();
-    await expect(page.getByText("Lagos Atlantic SC 3 - 1 Enyimba FC")).toBeVisible();
-  });
+      // Switch to Save Fixtures tab
+      await page.locator('[data-testid="tab-schedule"]').click();
+      await expect(page.locator('[data-testid="schedule-tab-content"]')).toBeVisible();
+      await expect(page.getByText("Lagos Atlantic SC vs Kano Pillars")).toBeVisible();
+      await expect(page.getByText("Lagos Atlantic SC 3 - 1 Enyimba FC")).toBeVisible();
+    },
+  );
 
   test(
     "AI Newsroom dispatches verified grounded stories and category filters",
     async ({ page }) => {
-    await setupOwnerParityRoutes(page);
-    await page.goto("/app/newsroom");
+      await setupOwnerParityRoutes(page);
+      await page.goto("/app/newsroom");
 
-    await expect(page.locator('[data-testid="newsroom-screen"]')).toBeVisible();
-    await expect(page.getByText("The Boardroom Chronicle")).toBeVisible();
-    await expect(page.getByText("Grounding & Privacy Certified")).toBeVisible();
+      await expect(page.locator('[data-testid="newsroom-screen"]')).toBeVisible();
+      await expect(page.getByText("The Boardroom Chronicle")).toBeVisible();
+      await expect(page.getByText("Grounding & Privacy Certified")).toBeVisible();
 
-    // Verify categories
-    await expect(page.locator('[data-testid="cat-private_jet_purchase"]')).toBeVisible();
-    await expect(page.locator('[data-testid="cat-player_gift"]')).toBeVisible();
+      // Verify categories
+      await expect(page.locator('[data-testid="cat-private_jet_purchase"]')).toBeVisible();
+      await expect(page.locator('[data-testid="cat-player_gift"]')).toBeVisible();
 
-    // Lead story
-    await expect(page.locator('[data-testid="lead-story-card"]')).toBeVisible();
-    await expect(
-      page.getByText("Lagos Atlantic SC Commissions Executive Fleet Aviation").first(),
-    ).toBeVisible();
-  });
+      // Lead story
+      await expect(page.locator('[data-testid="lead-story-card"]')).toBeVisible();
+      await expect(
+        page.getByText("Lagos Atlantic SC Commissions Executive Fleet Aviation").first(),
+      ).toBeVisible();
+    },
+  );
 
   test(
     "Multi-viewport responsiveness without horizontal overflow",
     async ({ page }) => {
-    await setupOwnerParityRoutes(page);
+      await setupOwnerParityRoutes(page);
 
-    const viewports = [
-      { name: "mobile-compact", width: 360, height: 740 },
-      { name: "mobile-modern", width: 393, height: 852 },
-      { name: "tablet", width: 768, height: 1024 },
-      { name: "desktop-standard", width: 1280, height: 800 },
-      { name: "desktop-wide", width: 1440, height: 900 },
-    ];
+      const viewports = [
+        { name: "mobile-compact", width: 360, height: 740 },
+        { name: "mobile-modern", width: 393, height: 852 },
+        { name: "tablet", width: 768, height: 1024 },
+        { name: "desktop-standard", width: 1280, height: 800 },
+        { name: "desktop-wide", width: 1440, height: 900 },
+      ];
 
-    for (const vp of viewports) {
-      await page.setViewportSize({ width: vp.width, height: vp.height });
+      for (const vp of viewports) {
+        await page.setViewportSize({ width: vp.width, height: vp.height });
 
-      for (const route of ["/app/showroom", "/app/story", "/app/newsroom"]) {
-        await page.goto(route);
-        await page.waitForLoadState("domcontentloaded");
+        for (const route of ["/app/showroom", "/app/story", "/app/newsroom"]) {
+          await page.goto(route);
+          await page.waitForLoadState("domcontentloaded");
 
-        // Verify no horizontal overflow
-        const hasOverflow = await page.evaluate(() => {
-          return (
-            document.documentElement.scrollWidth >
-            document.documentElement.clientWidth
-          );
-        });
+          // Verify no horizontal overflow
+          const hasOverflow = await page.evaluate(() => {
+            return (
+              document.documentElement.scrollWidth >
+              document.documentElement.clientWidth
+            );
+          });
 
-        expect(
-          hasOverflow,
-          `Horizontal overflow detected on ${route} at ${vp.name} (${vp.width}x${vp.height})`
-        ).toBe(false);
+          expect(
+            hasOverflow,
+            `Horizontal overflow detected on ${route} at ${vp.name} (${vp.width}x${vp.height})`
+          ).toBe(false);
+        }
       }
-    }
-  });
+    },
+  );
 });
