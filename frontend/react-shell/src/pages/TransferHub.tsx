@@ -80,36 +80,21 @@ export function TransferHub() {
     (listing: any) => listing.status === "open",
   );
 
-  const negotiationListings = (listingsData || []).filter(
-    (listing: any) => Boolean(listing.negotiation_id),
-  );
   const {
     data: negotiationsData,
     isLoading: loadingNegotiations,
+    error: negotiationsError,
+    refetch: refetchNegotiations,
   } = useQuery({
-    queryKey: [
-      "transfer-market-negotiations",
-      activeClub?.club_id,
-      negotiationListings.map((listing: any) => listing.id).sort().join(","),
-    ],
+    queryKey: ["transfer-market-negotiations", activeClub?.club_id],
     queryFn: async () => {
-      const records = await Promise.all(
-        negotiationListings.map(async (listing: any) => {
-          try {
-            const { data } = await api.get(
-              `/transfer-market/listings/${listing.id}/negotiation`,
-            );
-            return { ...data, listing };
-          } catch {
-            // The listing feed can contain negotiations for other clubs. The
-            // endpoint enforces ownership; inaccessible records are not shown.
-            return null;
-          }
-        }),
-      );
-      return records.filter((record): record is Record<string, any> => record !== null);
+      if (!activeClub?.club_id) return [];
+      const { data } = await api.get("/transfer-market/negotiations", {
+        params: { club_id: activeClub.club_id },
+      });
+      return data || [];
     },
-    enabled: !!activeClub?.club_id && lane === "negotiations" && negotiationListings.length > 0,
+    enabled: !!activeClub?.club_id && lane === "negotiations",
   });
 
   const [bidAmounts, setBidAmounts] = useState<Record<string, string>>({});
@@ -476,6 +461,18 @@ export function TransferHub() {
               <p className="gx-display text-xl font-bold uppercase text-white">Choose an active club</p>
               <p className="text-sm text-slate-400 mt-1">Negotiations are scoped to a club you are authorized to manage.</p>
             </div>
+          ) : negotiationsError ? (
+            <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 p-6 text-center">
+              <p className="gx-display text-lg font-bold uppercase text-white">Negotiations unavailable</p>
+              <p className="text-sm text-slate-300 mt-1">{errMsg(negotiationsError)}</p>
+              <button
+                type="button"
+                onClick={() => refetchNegotiations()}
+                className="gx-btn gx-btn-secondary mt-3 text-xs"
+              >
+                Retry
+              </button>
+            </div>
           ) : (negotiationsData || []).length === 0 ? (
             <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
               <MessageSquare className="mx-auto size-10 text-emerald-400/50 mb-3" />
@@ -495,11 +492,18 @@ export function TransferHub() {
                     <span className="gx-mono text-xs text-slate-400">Negotiation {String(negotiation.id).slice(0, 8)}</span>
                   </div>
                   <h4 className="gx-display text-xl font-bold uppercase text-white">
-                    {negotiation.listing?.player?.full_name || `Player ${negotiation.player_id}`}
+                    {negotiation.player_name || `Player ${negotiation.player_id}`}
                   </h4>
                   <p className="text-xs text-slate-300">
-                    Listing {String(negotiation.listing_id).slice(0, 8)} · Expected role: {negotiation.expected_role || "Not recorded"}
+                    Listing {String(negotiation.listing_id).slice(0, 8)}
+                    {" · "}Listing status: {negotiation.listing_status || "Not recorded"}
+                    {" · "}Expected role: {negotiation.expected_role || "Not recorded"}
                   </p>
+                  {negotiation.listing_base_price != null && (
+                    <p className="text-xs text-slate-400">
+                      Listing price: {fmt(negotiation.listing_base_price)} GTX
+                    </p>
+                  )}
                   <p className="text-xs text-slate-400">
                     {negotiation.wage_offer_amount != null
                       ? `Recorded wage offer: ${fmt(negotiation.wage_offer_amount)} GTX/w`
