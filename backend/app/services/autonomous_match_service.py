@@ -216,6 +216,15 @@ class AutonomousMatchExecutionService:
         """Return operational telemetry on clock, overdue fixtures, and worker state."""
         eval_time = self.world_clock.now_virtual()
         clock_state = self.world_clock.get_or_create_state()
+        settings = self.world_clock._get_settings()
+        if settings is None:
+            worker_mode = "unknown"
+        elif settings.kafka_brokers and settings.kafka_simulation_consumer_enabled:
+            worker_mode = "kafka_consumer"
+        elif getattr(settings, "autonomous_fixture_execution_enabled", False):
+            worker_mode = "database_polling"
+        else:
+            worker_mode = "disabled"
 
         overdue_count = (
             self.session.scalar(
@@ -276,7 +285,7 @@ class AutonomousMatchExecutionService:
                 "oldest_overdue_kickoff": oldest_overdue.isoformat() if oldest_overdue else None,
                 "in_progress_count": in_progress_count,
                 "retry_pending_count": retry_pending_count,
-                "worker_mode": "database_polling",
+                "worker_mode": worker_mode,
             },
         }
 
