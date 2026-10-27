@@ -493,6 +493,12 @@ def enter_competition(session: Session, user_id: str, competition_id: str, club_
     comp = session.get(OwnerCompetition, competition_id)
     if comp is None:
         raise OwnerError("competition_not_found", 404)
+    if comp.host_type == "gtex":
+        raise OwnerError(
+            "canonical_competition_mapping_required",
+            409,
+            "Global GTEX entry must be processed by the canonical competition system; the legacy owner-console entry and fee path is disabled.",
+        )
     if comp.status != "open":
         raise OwnerError("competition_closed", 409)
     rows = entries(session, comp.id)
