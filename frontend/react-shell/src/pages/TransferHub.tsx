@@ -32,7 +32,7 @@ export function TransferHub() {
   } = useQuery({
     queryKey: ["transfer-listings", selectedPosition],
     queryFn: async () => {
-      const params: any = { status: "active" };
+      const params: any = { status: "open" };
       if (selectedPosition !== "ALL") params.position = selectedPosition;
       const { data } = await api.get("/transfer-hub/listings", { params });
       return data || [];
