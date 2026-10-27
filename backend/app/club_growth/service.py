@@ -1064,8 +1064,7 @@ class ClubGrowthService:
 
     def _assign_staff_role(self, *, club_id: str, contract: ClubStaffContract) -> None:
         role_key = normalise_staff_role(
-            contract.role_scope
-            or (contract.staff_profile.staff_type if contract.staff_profile is not None else "club")
+            contract.role_scope or (contract.staff_profile.staff_type if contract.staff_profile is not None else "club")
         )
         assignment = self.session.scalar(
             select(ClubStaffAssignment).where(
@@ -1088,18 +1087,12 @@ class ClubGrowthService:
 
     def _staff_effects(self, contracts: list[ClubStaffContract]) -> dict[str, int]:
         active = [item for item in contracts if item.status == "active" and item.staff_profile is not None]
-        role_keys = {
-            item.id: normalise_staff_role(item.role_scope)
-            for item in active
-        }
+        role_keys = {item.id: normalise_staff_role(item.role_scope) for item in active}
         scout_quality = sum(
             item.staff_profile.rating
             for item in active
             if role_keys[item.id] == ROLE_SCOUT
-            or (
-                role_keys[item.id] == "club"
-                and item.staff_profile.staff_type in {"scout", "academy_director"}
-            )
+            or (role_keys[item.id] == "club" and item.staff_profile.staff_type in {"scout", "academy_director"})
         )
         training_bonus = sum(
             item.staff_profile.rating
