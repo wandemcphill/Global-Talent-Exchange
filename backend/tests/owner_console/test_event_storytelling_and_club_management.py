@@ -775,8 +775,6 @@ def test_global_competitions_cannot_use_owner_console_simulator(monkeypatch):
 
 def test_user_hosted_competitions_keep_their_separate_execution_rail():
     """User-hosted tournaments remain supported while global lifecycle is reconciled."""
-    user_competition = OwnerCompetition(
-        id="user-comp-1", name="Friends Cup", host_type="user", host_user_id="owner-1"
-    )
+    user_competition = OwnerCompetition(id="user-comp-1", name="Friends Cup", host_type="user", host_user_id="owner-1")
 
     comps.ensure_owner_console_execution_allowed(user_competition)
