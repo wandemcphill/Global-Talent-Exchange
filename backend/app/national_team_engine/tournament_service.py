@@ -3301,6 +3301,7 @@ class NationalTeamTournamentService:
             select(RentalContract)
             .where(RentalContract.status == RentalContractStatus.ACTIVE)
             .order_by(RentalContract.created_at.asc(), RentalContract.id.asc())
+            .with_for_update(skip_locked=True)
         )
         if competition_id is not None:
             stmt = stmt.where(RentalContract.tournament_id == competition_id)

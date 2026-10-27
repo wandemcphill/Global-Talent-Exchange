@@ -94,10 +94,9 @@ services:
         value: https://res.cloudinary.com/dvxiniqew/image/upload
       - key: GTE_MARKET_RECORDS_CACHE_TTL_SECONDS
         value: "300"
+      # National rental lifecycle is owned by the dedicated gtex-national-team-worker.
       - key: GTE_NATIONAL_TEAM_WORKER_ENABLED
-        value: "true"
-      - key: GTE_NATIONAL_TEAM_WORKER_INTERVAL_SECONDS
-        value: "300"
+        value: "false"
       - key: GTE_KAFKA_BROKERS
         value: ""
       - key: GTE_WORLD_CLOCK_PROGRESSION_RATE
@@ -137,6 +136,46 @@ services:
       # Pins the static-site build image so the React shell matches CI (Node 20).
       - key: NODE_VERSION
         value: "20"
+
+  - name: gtex-national-team-worker
+    type: worker
+    runtime: python
+    region: frankfurt
+    plan: starter
+    buildCommand: "pip install -r backend/requirements.lock"
+    startCommand: "cd backend && python -m app.national_team_engine.worker_main"
+    envVars:
+      # Configure these secrets in Render with the same write-enabled production
+      # database and security values used by gtex-api.
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_ENABLED
+        value: "true"
+      - key: GTE_REDIS_URL
+        fromService:
+          type: keyvalue
+          name: gtex-cache
+          property: connectionString
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_FIELD_ENCRYPTION_KEY
+        sync: false
+      - key: GTE_MEDIA_SIGNING_SECRET
+        sync: false
+      - key: GTE_RUN_MIGRATION_CHECK
+        value: "true"
+      - key: GTE_INGESTION_PROVIDER
+        value: sportmonks
+      - key: GTE_OUTBOX_RELAY_ENABLED
+        value: "false"
+      - key: GTE_TASK_QUEUE_ENABLED
+        value: "true"
+      - key: GTE_NATIONAL_TEAM_WORKER_ENABLED
+        value: "true"
+      - key: GTE_NATIONAL_TEAM_WORKER_INTERVAL_SECONDS
+        value: "300"
 
   - name: gtex-rq-worker
     type: worker
