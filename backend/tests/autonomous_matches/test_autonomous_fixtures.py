@@ -681,6 +681,7 @@ def test_stale_worker_retry_cannot_reexecute_a_completed_fixture(session_factory
 
 def test_global_owner_fixture_reconciles_and_executes_only_on_canonical_runner(
     session_factory,
+    monkeypatch,
 ) -> None:
     from types import SimpleNamespace
 
@@ -766,6 +767,19 @@ def test_global_owner_fixture_reconciles_and_executes_only_on_canonical_runner(
         assert fixture_mapping.canonical_match_id == canonical_match.id
         session.commit()
 
+        settlement_attempts: list[tuple[str, int]] = []
+        original_settle = CompetitionLifecycleService._settle_platform_rewards
+
+        def count_settlement(service, comp, rewards):
+            settlement_attempts.append((comp.id, len(rewards)))
+            return original_settle(service, comp, rewards)
+
+        monkeypatch.setattr(
+            CompetitionLifecycleService,
+            "_settle_platform_rewards",
+            count_settlement,
+        )
+
         runner = CompetitionAutoRunner(session)
         runner.run_until_idle(
             competition,
@@ -843,6 +857,12 @@ def test_global_owner_fixture_reconciles_and_executes_only_on_canonical_runner(
             ).all()
         )
         settled_at_before = competition.settled_at
+        settlement_attempt_count_before_retry = sum(
+            1 for competition_id, _ in settlement_attempts
+            if competition_id == competition.id
+        )
+        assert settlement_attempt_count_before_retry >= 1
+
         repeated_pools = CompetitionLifecycleService(session).finalize_competition(
             competition
         )
@@ -863,4 +883,8 @@ def test_global_owner_fixture_reconciles_and_executes_only_on_canonical_runner(
             ).all()
         ) == reward_snapshot
         assert competition.settled_at == settled_at_before
+        assert sum(
+            1 for competition_id, _ in settlement_attempts
+            if competition_id == competition.id
+        ) == settlement_attempt_count_before_retry
 
