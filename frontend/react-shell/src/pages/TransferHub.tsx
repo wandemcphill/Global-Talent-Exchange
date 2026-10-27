@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeftRight, Clock, DollarSign, Filter, Handshake, MessageSquare, Plus, Search, ShieldAlert, Sparkles, UserPlus, Users } from "lucide-react";
+import { ArrowLeftRight, Clock, Filter, Handshake, MessageSquare, Search, Sparkles } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmt, useActiveClub } from "@/lib/owner";
-import { Btn, Chip, Loading, TraitBar } from "@/components/gtex/ui";
+import { Loading } from "@/components/gtex/ui";
 import { PlayerDossier } from "@/components/gtex/PlayerDossier";
 import { toast } from "sonner";
 
@@ -739,14 +739,18 @@ export function TransferHub() {
             setOfferAmount(String(listing.base_price));
           }}
           onAddToWatchlist={async (id) => {
+            if (!activeClub?.club_id) {
+              toast.error("Select an active club before saving a scouting target.");
+              return;
+            }
             try {
               await api.post("/transfer-market/watchlist", {
                 player_id: id,
-                club_id: activeClub?.club_id,
+                club_id: activeClub.club_id,
                 source: "scouting_dossier",
               });
               toast.success("Player added to transfer market watchlist.");
-              await qc.invalidateQueries({ queryKey: ["transfer-market-watchlist", activeClub?.club_id] });
+              await qc.invalidateQueries({ queryKey: ["transfer-market-watchlist", activeClub.club_id] });
             } catch (e) {
               toast.error(errMsg(e));
             }
