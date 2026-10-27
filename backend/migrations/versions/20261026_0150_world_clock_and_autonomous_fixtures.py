@@ -75,9 +75,7 @@ def upgrade() -> None:
             if "virtual_age_month_index" not in meta:
                 meta["virtual_age_month_index"] = max(0, (season_num - 1) * 12)
                 connection.execute(
-                    sa.text(
-                        "UPDATE regen_universe_seasons SET metadata_json = :meta WHERE id = :id"
-                    ),
+                    sa.text("UPDATE regen_universe_seasons SET metadata_json = :meta WHERE id = :id"),
                     {"meta": json.dumps(meta), "id": row_id},
                 )
 
