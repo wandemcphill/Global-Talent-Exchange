@@ -714,10 +714,17 @@ export function TransferHub() {
         <PlayerDossier
           playerId={selectedPlayerId}
           onClose={() => setSelectedPlayerId(null)}
-          onMakeOffer={(id) => {
+          onMakeOffer={(playerId) => {
             setSelectedPlayerId(null);
-            setOfferListing({ id, asking_price: 50000 });
-            setOfferAmount("50000");
+            const listing = (listingsData || []).find(
+              (item: any) => item.player_id === playerId && item.status === "open",
+            );
+            if (!listing) {
+              toast.error("A formal offer requires an active transfer-market listing for this player.");
+              return;
+            }
+            setOfferListing(listing);
+            setOfferAmount(String(listing.base_price));
           }}
           onAddToWatchlist={async (id) => {
             try {
