@@ -179,9 +179,7 @@ def comp_dict(session: Session, comp: OwnerCompetition, user_id: str | None = No
 
                 canonical_participants = list(
                     session.scalars(
-                        select(CompetitionParticipant).where(
-                            CompetitionParticipant.competition_id == canonical.id
-                        )
+                        select(CompetitionParticipant).where(CompetitionParticipant.competition_id == canonical.id)
                     ).all()
                 )
                 canonical_club_ids = {participant.club_id for participant in canonical_participants}
@@ -197,22 +195,18 @@ def comp_dict(session: Session, comp: OwnerCompetition, user_id: str | None = No
                     ).all()
                 )
                 current_rounds = [
-                    match.round_number
-                    for match in canonical_matches
-                    if match.status in {"scheduled", "in_progress"}
+                    match.round_number for match in canonical_matches if match.status in {"scheduled", "in_progress"}
                 ]
-                data["current_round"] = min(current_rounds) if current_rounds else max(
-                    (match.round_number for match in canonical_matches), default=0
+                data["current_round"] = (
+                    min(current_rounds)
+                    if current_rounds
+                    else max((match.round_number for match in canonical_matches), default=0)
                 )
-                data["total_rounds"] = max(
-                    (match.round_number for match in canonical_matches), default=0
-                )
+                data["total_rounds"] = max((match.round_number for match in canonical_matches), default=0)
                 data["entry_fee"] = str(Decimal(canonical.entry_fee_minor) / Decimal("10000"))
                 pools = list(
                     session.scalars(
-                        select(CompetitionRewardPool).where(
-                            CompetitionRewardPool.competition_id == canonical.id
-                        )
+                        select(CompetitionRewardPool).where(CompetitionRewardPool.competition_id == canonical.id)
                     ).all()
                 )
                 prize_minor = (
@@ -350,9 +344,7 @@ def mapped_match_dict(session: Session, legacy_match: OwnerMatch, *, full: bool 
         OwnerCompetitionLifecycleMappingService,
     )
 
-    canonical_match = OwnerCompetitionLifecycleMappingService(session).canonical_match_for_legacy_match(
-        legacy_match.id
-    )
+    canonical_match = OwnerCompetitionLifecycleMappingService(session).canonical_match_for_legacy_match(legacy_match.id)
     if canonical_match is None:
         return match_dict(legacy_match, full=full)
     return _canonical_match_dict(session, canonical_match, legacy_match=legacy_match, full=full)
@@ -383,9 +375,7 @@ def canonical_match_detail(session: Session, canonical_match_id: str, *, full: b
             OwnerMatchLifecycleMapping.mapping_status == "active",
         )
     )
-    legacy_match = (
-        session.get(OwnerMatch, match_mapping.legacy_match_id) if match_mapping is not None else None
-    )
+    legacy_match = session.get(OwnerMatch, match_mapping.legacy_match_id) if match_mapping is not None else None
     return _canonical_match_dict(session, canonical_match, legacy_match=legacy_match, full=full)
 
 
@@ -412,7 +402,11 @@ def _canonical_competition_standings(session: Session, legacy_competition_id: st
         rows.append(
             {
                 "club_id": participant.club_id,
-                "club_name": legacy_entry.club_name if legacy_entry is not None else _canonical_club_name(session, participant.club_id, None),
+                "club_name": (
+                    legacy_entry.club_name
+                    if legacy_entry is not None
+                    else _canonical_club_name(session, participant.club_id, None)
+                ),
                 "is_ai": bool(legacy_entry.is_ai) if legacy_entry is not None else False,
                 "owner_user_id": legacy_entry.owner_user_id if legacy_entry is not None else None,
                 "played": participant.played,
