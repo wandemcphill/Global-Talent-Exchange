@@ -240,7 +240,6 @@ def test_scout_real_player_success_and_persistence(lifecycle_client):
     assert db_report.future_potential_estimate == 89
 
 
-
 @pytest.mark.parametrize(
     ("dna_profile", "expected_detail"),
     [
