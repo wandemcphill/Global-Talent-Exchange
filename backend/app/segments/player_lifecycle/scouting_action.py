@@ -123,22 +123,53 @@ def scout_player(
         talent_profile = talent_service.sync_profile_from_player(player.id)
 
     accuracy = max(0, min(100, scout.skill_rating))
-    current_ability = max(1, min(99, int(round(talent_profile.composite_score or 75.0))))
-    future_potential = max(current_ability, min(99, int(player.potential or (current_ability + 5))))
+    dna_profile = player.dna_profile if isinstance(player.dna_profile, dict) else {}
 
-    visible_stats: dict[str, int] = {
-        "rating": current_ability,
-        "form": max(1, min(99, int(round(talent_profile.form_score or current_ability)))),
-        "experience": max(0, min(30, int(round(talent_profile.experience_years or 0)))),
-    }
-    if isinstance(player.dna_profile, dict) and player.dna_profile:
-        for k, v in player.dna_profile.items():
-            if isinstance(v, (int, float)):
-                visible_stats[str(k)] = int(v)
+    def authoritative_rating(value: Any) -> int | None:
+        """Accept an explicitly supplied canonical rating; never invent one."""
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        rounded = int(round(value))
+        return rounded if 1 <= rounded <= 99 else None
 
+    # A talent ranking is a sporting-discovery score, not a player's overall
+    # ability rating. Use the canonical imported rating field for this report.
+    current_ability = authoritative_rating(dna_profile.get("overall_rating"))
+    if current_ability is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A trusted overall_rating is unavailable; this player cannot receive an ability estimate yet.",
+        )
+
+    potential_source = player.potential
+    if potential_source is None:
+        potential_source = dna_profile.get("potential_rating")
+    future_potential = authoritative_rating(potential_source)
+    if future_potential is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A trusted potential rating is unavailable; this player cannot receive a potential estimate yet.",
+        )
+
+    visible_stats: dict[str, int] = {"rating": current_ability}
+    if float(talent_profile.ranking_confidence or 0.0) > 0:
+        form_score = authoritative_rating(talent_profile.form_score)
+        if form_score is not None:
+            visible_stats["form"] = form_score
+    if float(talent_profile.experience_years or 0.0) > 0:
+        visible_stats["experience"] = min(30, int(round(talent_profile.experience_years)))
+    for key, value in dna_profile.items():
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            visible_stats[str(key)] = int(value)
+
+    consistency_score = (
+        authoritative_rating(talent_profile.consistency_score)
+        if float(talent_profile.ranking_confidence or 0.0) > 0
+        else None
+    )
     hidden_stats: dict[str, int | None] = {
         "potential_ceiling": future_potential,
-        "consistency": max(1, min(99, int(round(talent_profile.consistency_score or 75.0)))),
+        "consistency": consistency_score,
     }
 
     error_span = max(1, round((100 - accuracy) / 10))
@@ -148,9 +179,9 @@ def scout_player(
     }
 
     summary_text = (
-        f"Scout {scout.id} genuine report for {player.canonical_display_name or player.full_name}: "
-        f"{player.normalized_position or player.position or 'Player'}, estimated ability {current_ability}, "
-        f"potential ceiling {future_potential}."
+        f"Scout {scout.id} report for {player.canonical_display_name or player.full_name}: "
+        f"{player.normalized_position or player.position or 'Player'}, source ability rating {current_ability}, "
+        f"source potential rating {future_potential}. No missing values were substituted."
     )
 
     # Persist report for real player
