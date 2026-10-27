@@ -36,6 +36,10 @@ def test_general_manager_is_distinct_and_requires_operations_or_transfer_capabil
         staff_type="general_manager",
     ).allowed
     assert evaluate_staff_role(
+        role_key=ROLE_GENERAL_MANAGER,
+        staff_type="gm",
+    ).allowed
+    assert evaluate_staff_role(
         role_key="gm",
         staff_type="manager",
         specialisations={"financial_acumen", "negotiation"},
@@ -55,6 +59,10 @@ def test_head_of_youth_development_is_distinct_and_requires_academy_capability()
     assert evaluate_staff_role(
         role_key=ROLE_HEAD_OF_YOUTH_DEVELOPMENT,
         staff_type="academy_director",
+    ).allowed
+    assert evaluate_staff_role(
+        role_key=ROLE_HEAD_OF_YOUTH_DEVELOPMENT,
+        staff_type="hoyd",
     ).allowed
     assert evaluate_staff_role(
         role_key="hoyd",
