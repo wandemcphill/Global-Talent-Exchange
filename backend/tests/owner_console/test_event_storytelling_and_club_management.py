@@ -1058,3 +1058,26 @@ def test_pre_match_tactics_are_saved_on_canonical_fixture_and_kickoff_is_enforce
                 lineup_mode="strongest",
             )
         assert exc_info.value.code == "kickoff_already_due"
+
+
+def test_global_competition_entry_does_not_charge_legacy_ledger(monkeypatch):
+    global_competition = OwnerCompetition(id="global-entry-guard", name="Global Cup", host_type="gtex")
+
+    class SessionStub:
+        def get(self, model, identifier):
+            assert model is OwnerCompetition
+            assert identifier == global_competition.id
+            return global_competition
+
+    monkeypatch.setattr(comps, "require_state", lambda *args, **kwargs: object())
+
+    with pytest.raises(OwnerError) as exc_info:
+        comps.enter_competition(
+            SessionStub(),
+            user_id="owner-1",
+            competition_id=global_competition.id,
+            club_id="club-1",
+        )
+
+    assert exc_info.value.code == "canonical_competition_mapping_required"
+    assert exc_info.value.status == 409
