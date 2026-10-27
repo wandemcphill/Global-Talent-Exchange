@@ -37,10 +37,12 @@ def main() -> None:
         service_name=service_name,
         environment=settings.app_env,
     )
-    if not settings.kafka_brokers and not getattr(settings, "autonomous_fixture_execution_enabled", False):
+    use_kafka_consumer = bool(settings.kafka_brokers and settings.kafka_simulation_consumer_enabled)
+    use_autonomous_scanner = bool(getattr(settings, "autonomous_fixture_execution_enabled", False))
+    if not use_kafka_consumer and not use_autonomous_scanner:
         raise RuntimeError(
-            "Simulation worker misconfigured: neither GTE_KAFKA_BROKERS nor "
-            "GTE_AUTONOMOUS_FIXTURE_EXECUTION_ENABLED is configured. Worker cannot start."
+            "Simulation worker misconfigured: no active Kafka simulation consumer and "
+            "GTE_AUTONOMOUS_FIXTURE_EXECUTION_ENABLED is false. Worker cannot start."
         )
     try:
         context = build_application_context(settings=settings)
@@ -83,7 +85,7 @@ def main() -> None:
             repository=DatabaseReplayArchiveRepository(session_factory=context.database.session_factory),
         )
         context.event_publisher.subscribe(replay_archive.handle_event)
-        if settings.kafka_brokers and settings.kafka_simulation_consumer_enabled:
+        if use_kafka_consumer:
             consumer = KafkaJsonConsumer(
                 brokers=settings.kafka_brokers,
                 group_id=f"{settings.kafka_queue_consumer_group}-simulation",
