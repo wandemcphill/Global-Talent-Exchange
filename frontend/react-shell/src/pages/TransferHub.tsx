@@ -104,7 +104,7 @@ export function TransferHub() {
           }
         }),
       );
-      return records.filter(Boolean);
+      return records.filter((record): record is Record<string, any> => record !== null);
     },
     enabled: !!activeClub?.club_id && lane === "negotiations" && negotiationListings.length > 0,
   });
