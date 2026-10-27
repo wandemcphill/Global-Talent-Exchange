@@ -2,7 +2,7 @@
 
 Current review baseline: `main` `bb6d82a9b8b5867318f9a0baf19789cef5b25637` (2026-10-27). The 2026-10-18 evidence at `45e29ef6` is retained as historical, not current-main certification. Findings are defined in `docs/audits/GTEX_COMPREHENSIVE_PLATFORM_AUDIT.md`; this roadmap records the current deltas below.
 
-**Second pass (2026-10-18, `45e29ef6`)**: re-verified on a working environment — all CI backend slices green, `flutter analyze` clean, `flutter test` 1259 pass/20 fail (CI-failing rot), live seeded API + HTTP checks. Corrected FND-003 (routers mounted), FND-004 (#265 merged), FND-016 (#272 merged), FND-008 (route lives at `/api/v2`). New runtime findings added below.
+**Historical second pass (2026-10-18, `45e29ef6`)**: on that snapshot, backend CI slices were green, `flutter analyze` had 0 errors, `flutter test` reported 1259 pass/20 fail, and seeded API + HTTP checks ran. These totals are historical; current-main outcomes are tracked in the checkpoint below. Corrected FND-003 (routers mounted), FND-004 (#265 merged), FND-016 (#272 merged), FND-008 (route lives at `/api/v2`).
 
 Nothing here is permission to merge. Each repair is a reviewable pull request. Do not start a shell rewrite. Do not run live deposits, withdrawals, jackpot funding, or payouts to close a row.
 
@@ -22,7 +22,7 @@ Nothing here is permission to merge. Each repair is a reviewable pull request. D
 ```text
 0. Authorization on money/competition writes — CMP-NEW-01 fixed in PR #280; remaining: CMP-NEW-04, NEW-PRESTIGE-2, NAT-NEW-1, NEW-003
 1. Settlement correctness — NEW-001 (unbacked bids), CMP-NEW-03 (fees never paid), NEW-002 (caller-supplied price), CMP-NEW-02 (double-settle race), NEW-JRW-001 (double-credit), NEW-JRW-003 (FanCoin→COIN mint)
-2. Signup honesty (FND-001, FND-005, NEW-AUTH-1) — product rules already written on #228
+2. Re-check server-side signup enforcement/configuration (NEW-AUTH-1) and remove React first-club/add-club NG/Lagos defaults; Flutter client no longer sends `dev-bypass`
 3. One staff/club-ops authority (FND-009, NEW-STF-001, NEW-STF-002/003/004) — continues #169 / #176
 4. Prestige purchase/gift on the existing catalogue (FND-002, NEW-PRESTIGE-1, NEW-PRESTIGE-4/5)
 5. Market and card lanes (FND-010, FND-011)
@@ -31,10 +31,10 @@ Nothing here is permission to merge. Each repair is a reviewable pull request. D
 8. Provider and jackpot certification in sandbox (FND-006, FND-007, FND-014, NEW-JRW-002, WAL-NEW-01/03/04)
 9. Admin capability alignment (FND-013, NEW-004)
 10. API contract reconciliation (CONTRACT-001)
-11. Test rot: 20 flutter failures on CI path, ~34 domain backend failures excluded from CI
+11. Re-run the historical test-rot suites against current main; 20 Flutter failures and ~34 domain failures were recorded only on the `45e29ef6` snapshot
 ```
 
-Steps 0–1 are the highest-risk items: arbitrary writes into competition settlement and value that moves (or never moves) without backing. They are safe to fix without new economics — they remove unauthorized or unbacked paths. Step 2 needs the product rules already written on #228; it does not need new prices. Steps 8–9 need credentials or an admin policy decision.
+The listed settlement/authentication findings are historical candidates and must be individually revalidated on the current code before creating a repair PR. Do not infer a current defect only because it appears in the 2026-10-18 snapshot. Changes involving provider rails, payouts, or policy still require sandbox credentials or an explicit product/admin decision.
 
 ## Second-pass repair PRs
 
@@ -46,9 +46,9 @@ Steps 0–1 are the highest-risk items: arbitrary writes into competition settle
 
 **Regression test:** `test_match_writes_require_host_or_admin` in `backend/tests/competitions/test_competition_lifecycle.py` — outsider gets 403 on both endpoints; host succeeds (201/200).
 
-### Remaining P0/P1 candidates (needs own focused PR each)
+### Remaining P0/P1 candidates from the 2026-10-18 snapshot (revalidate before opening a repair PR)
 
-| Finding | Sev | Shape |
+| Finding | Sev | Historical shape (not yet reconfirmed on current main) |
 | --- | --- | --- |
 | CMP-NEW-04 (#282) | P1 | `GET /api/fast-cups/{cup_id}/result-summary` has no `get_current_user` and settles payouts via `FastCupFinanceService.settle_result_summary` + `session.commit()`. Add auth + move settlement to POST/admin path. |
 | NEW-001 (#281) | P0 | Transfer market accepts unbacked bids — no settlement moves coins on acceptance. Needs a settlement path or bid locking; product-owner decision on which. |
