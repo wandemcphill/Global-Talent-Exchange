@@ -375,6 +375,43 @@ def test_transfer_hub_supports_loan_swap_offer_lifecycle(
     assert listing.status == "open"
 
 
+def test_transfer_market_rejects_listing_player_without_a_current_club(
+    transfer_market_api: TestClient, transfer_market_session: Session
+) -> None:
+    context = seed_transfer_market_context(transfer_market_session)
+    seller_headers = _auth_headers(transfer_market_session, user_id=context["seller_user_id"])
+    free_agent = Player(
+        id="player-no-current-club",
+        source_provider="test",
+        provider_external_id="player-no-current-club",
+        current_club_id=None,
+        current_club_profile_id=None,
+        current_competition_id=None,
+        full_name="Free Agent Example",
+        normalized_position="midfielder",
+    )
+    transfer_market_session.add(free_agent)
+    transfer_market_session.commit()
+
+    response = transfer_market_api.post(
+        "/api/transfer-market/listings",
+        json={
+            "player_id": free_agent.id,
+            "selling_club_id": context["seller_club_id"],
+            "base_price": "100000.00",
+            "expires_at": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+            "window_id": context["window_id"],
+        },
+        headers=seller_headers,
+    )
+
+    assert response.status_code == 400, response.text
+    assert "free-agent" in response.json()["detail"].lower()
+    assert transfer_market_session.scalar(
+        select(TransferListing).where(TransferListing.player_id == free_agent.id)
+    ) is None
+
+
 def _prime_player_and_coach_to_accept(api: TestClient, context: dict[str, str], seller_headers, buyer_headers) -> None:
     responses = [
         api.put(
@@ -454,6 +491,25 @@ def test_transfer_hub_cash_offer_settles_at_the_agreed_amount(
     )
     assert negotiation_response.status_code == 200, negotiation_response.text
     assert negotiation_response.json()["status"] == "awaiting_contract_offer"
+    negotiation = transfer_market_session.scalar(
+        select(TransferNegotiation).where(TransferNegotiation.listing_id == listing_id)
+    )
+    assert negotiation is not None
+    negotiation_metadata = dict(negotiation.metadata_json or {})
+    assert negotiation_metadata["hub_offer_id"] == offer_response.json()["id"]
+    assert negotiation_metadata["cash_amount"] == "1800000.00"
+
+    # A repeated acceptance is idempotent and does not create a duplicate negotiation.
+    repeated_accept = transfer_market_api.post(
+        f"/api/transfer-hub/offers/{offer_response.json()['id']}/accept",
+        headers=seller_headers,
+    )
+    assert repeated_accept.status_code == 200, repeated_accept.text
+    assert repeated_accept.json()["id"] == offer_response.json()["id"]
+    negotiation_count = transfer_market_session.scalar(
+        select(TransferNegotiation).where(TransferNegotiation.listing_id == listing_id)
+    )
+    assert negotiation_count is not None
 
     _prime_player_and_coach_to_accept(transfer_market_api, context, seller_headers, buyer_headers)
     contract_offer_response = transfer_market_api.post(
