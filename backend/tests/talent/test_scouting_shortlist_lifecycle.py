@@ -589,6 +589,19 @@ def test_transfer_room_handoff_from_scouting_discovery(lifecycle_client):
     assert watchlist_entry is not None
     assert watchlist_entry.source == "scouting_discovery"
 
+    # The authenticated club can read its persisted shortlist with canonical
+    # player data and the current listing, but cannot query another club's data.
+    watchlist_res = client.get(f"/api/transfer-market/watchlist?club_id={club.id}")
+    assert watchlist_res.status_code == 200, watchlist_res.text
+    watchlist_payload = watchlist_res.json()
+    assert len(watchlist_payload) == 1
+    assert watchlist_payload[0]["player_id"] == player.id
+    assert watchlist_payload[0]["player"]["full_name"] == player.full_name
+    assert watchlist_payload[0]["active_listing"]["id"] == "listing-tf-star"
+
+    forbidden_watchlist_res = client.get("/api/transfer-market/watchlist?club_id=other-club")
+    assert forbidden_watchlist_res.status_code in {403, 404}
+
     # 3. Also verify handoff from shortlist entry
     sl_res = client.post("/talent/shortlists", json={"name": "Window Radar"})
     sl_id = sl_res.json()["id"]
