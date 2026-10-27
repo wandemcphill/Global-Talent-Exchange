@@ -328,9 +328,7 @@ class SyntheticSquadFactory:
 
         exact = self._starters_from_plan(plan, eligible_by_id)
         if exact is not None:
-            if lineup_mode == "rotate":
-                return self._rotate_saved_lineup(exact)
-            return exact
+            return self._apply_lineup_mode(exact, lineup_mode)
 
         candidates: list[str] = []
         plan_formation = self._plan_formation(plan)
@@ -343,10 +341,19 @@ class SyntheticSquadFactory:
         for formation in candidates:
             try:
                 starters, bench = self._select_managed_squad(eligible, formation)
-                return starters, bench, formation
+                return self._apply_lineup_mode((starters, bench, formation), lineup_mode)
             except PlayerLifecycleValidationError:
                 continue
-        return self._ai_coach_auto_draft(eligible, candidates[0])
+        return self._apply_lineup_mode(self._ai_coach_auto_draft(eligible, candidates[0]), lineup_mode)
+
+    def _apply_lineup_mode(
+        self,
+        lineup: tuple[list[tuple[Player, PlayerRole]], list[tuple[Player, PlayerRole]], str],
+        lineup_mode: str,
+    ) -> tuple[list[tuple[Player, PlayerRole]], list[tuple[Player, PlayerRole]], str]:
+        if lineup_mode == "rotate":
+            return self._rotate_saved_lineup(lineup)
+        return lineup
 
     def _rotate_saved_lineup(
         self,
