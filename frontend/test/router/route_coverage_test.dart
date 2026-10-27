@@ -130,8 +130,6 @@ void main() {
         '/football/transfer-center',
         '/streamer-tournaments',
         '/viral-feed',
-        // Dedicated authenticated screen registered in the app route catalog.
-        '/app/inbox',
       };
       final Set<String> directCatalogCollisions =
           seenDirectPaths.where(catalogPaths.contains).toSet();

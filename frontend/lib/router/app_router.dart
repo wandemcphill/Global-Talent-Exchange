@@ -132,10 +132,15 @@ GoRouter buildGtexAppRouter({
         path: '/showroom/:code',
         pageBuilder: (BuildContext context, GoRouterState state) {
           final String code = state.pathParameters['code']?.trim() ?? '';
-          final OwnerConsoleApi api = OwnerConsoleApi(client: dependenciesBuilder(context).createAuthedApi());
+          final OwnerConsoleApi api = OwnerConsoleApi(
+            client: dependenciesBuilder(context).createAuthedApi(),
+          );
           return NoTransitionPage<void>(
             key: state.pageKey,
-            child: PublicShowroomScreen(code: code, load: () => api.fetchPublicShowroom(code)),
+            child: PublicShowroomScreen(
+              code: code,
+              load: () => api.fetchPublicShowroom(code),
+            ),
           );
         },
       ),
@@ -329,7 +334,8 @@ GoRouter buildGtexAppRouter({
           final GteNavigationDependencies dependencies = dependenciesBuilder(
             context,
           );
-          final String? clubId = state.uri.queryParameters['club_id']?.trim() ??
+          final String? clubId =
+              state.uri.queryParameters['club_id']?.trim() ??
               dependencies.currentClubId;
           final String initialStatus =
               state.uri.queryParameters['status']?.trim() ?? 'open';
@@ -337,7 +343,7 @@ GoRouter buildGtexAppRouter({
               state.uri.queryParameters['category']?.trim() ?? 'all';
           final bool initialUnreadOnly =
               state.uri.queryParameters['unread_only']?.trim().toLowerCase() ==
-                  'true';
+              'true';
           return NoTransitionPage<void>(
             key: state.pageKey,
             child: GtexOwnerInboxScreen(
@@ -585,19 +591,15 @@ List<RouteBase> _buildLegacyAliasRoutes({
           context,
         );
         final String? tabSlug = state.uri.queryParameters['tab'];
-        final GteTransferCenterTab tab = GteTransferCenterTab.values
-            .firstWhere(
-              (GteTransferCenterTab item) => item.slug == tabSlug,
-              orElse: () => GteTransferCenterTab.windows,
-            );
+        final GteTransferCenterTab tab = GteTransferCenterTab.values.firstWhere(
+          (GteTransferCenterTab item) => item.slug == tabSlug,
+          orElse: () => GteTransferCenterTab.windows,
+        );
         return NoTransitionPage<void>(
           key: state.pageKey,
           child: GteAppRouteRegistry(
             dependencies: dependencies,
-          ).buildScreen(
-            context,
-            FootballTransferCenterRouteData(tab: tab),
-          ),
+          ).buildScreen(context, FootballTransferCenterRouteData(tab: tab)),
         );
       },
     ),
@@ -788,7 +790,11 @@ List<RouteBase> _buildLegacyAliasRoutes({
         final GteNavigationDependencies dependencies = dependenciesBuilder(
           context,
         );
-        final String clubId = (dependencies.currentClubId ?? state.uri.queryParameters['club_id'] ?? '').trim();
+        final String clubId =
+            (dependencies.currentClubId ??
+                    state.uri.queryParameters['club_id'] ??
+                    '')
+                .trim();
         return NoTransitionPage<void>(
           key: state.pageKey,
           child:
@@ -1001,11 +1007,12 @@ List<RouteBase> _buildLegacyAliasRoutes({
     GoRoute(
       path: '/inbox',
       redirect: (BuildContext context, GoRouterState state) {
+        const String inboxRoutePath = '/app/inbox';
         final Map<String, String> qp = state.uri.queryParameters;
         if (qp.isEmpty) {
-          return '/app/inbox';
+          return inboxRoutePath;
         }
-        return Uri(path: '/app/inbox', queryParameters: qp).toString();
+        return Uri(path: inboxRoutePath, queryParameters: qp).toString();
       },
     ),
     GoRoute(
