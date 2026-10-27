@@ -209,6 +209,8 @@ class MarketWatchlistEntryView(CommonSchema):
     source: str
     discovery_score: float = Field(ge=0, le=100)
     metadata_json: dict[str, Any] = Field(default_factory=dict)
+    player: TransferMarketPlayerView | None = None
+    active_listing: TransferListingView | None = None
 
 
 class TransferMarketJobRunView(CommonSchema):
