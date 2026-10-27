@@ -24,7 +24,7 @@ test.afterEach(async ({ page: _page }, testInfo) => {
 
 test("Club squad route loads the roster or explicit no-club state", async ({ page }, testInfo) => {
   // Club HQ is the explicit Club lane, not the Home tab.
-  await visitAuthedRoute(page, process.env.GTEX_E2E_SQUAD_ROUTE ?? "/app/club");
+  await visitAuthedRoute(page, "/app/club");
 
   const noClubEntry = page.getByText("Build your club command center", {
     exact: true,
