@@ -24,7 +24,7 @@
 
 ### Provider hooks
 - **Supported top-up keys:** `("korapay", "paystack")` in `backend/app/wallets/constants.py`.
-- **KoraPay readiness:** `provider_live_deposit_ready("korapay")` requires provider credentials and a webhook-signing credential. Render environment population was not verified from this environment.
+- **KoraPay status:** `provider_live_deposit_ready("korapay")` controls whether live deposit support is enabled; production environment setup was not verified from this environment.
 - **Paystack readiness:** `GTE_ENABLE_PAYSTACK` **and** secret **and** webhook secret (`paystack_enabled()`).
 - **`render.yaml`:** `GTE_ENABLE_PAYSTACK=true`; KoraPay + Paystack secrets `sync: false`; notification URL points at `https://gtex-api-opea.onrender.com/integrations/payments/korapay/webhook`. Secret population in Render was **not** verified from this environment.
 - Webhook routes: `/integrations/payments/{paystack,korapay}/webhook` and alias `/api/webhooks/korapay`.
