@@ -459,7 +459,9 @@ test.describe("Prestige, Story, and Showroom Parity (Agent B5)", () => {
       await expect(giftModal.getByText("Owner Luxury Gifting")).toBeVisible();
 
       // Verify academy regen player is listed (Chidi Nnamdi)
-      const regenBtn = giftModal.locator('[data-testid="select-regen-regen-101"]');
+      const regenBtn = giftModal.locator(
+        '[data-testid="select-regen-regen-101"]',
+      );
       await expect(regenBtn).toBeVisible();
       await regenBtn.click();
 
@@ -496,7 +498,9 @@ test.describe("Prestige, Story, and Showroom Parity (Agent B5)", () => {
       await expect(
         page.locator('[data-testid="club-story-screen"]'),
       ).toBeVisible();
-      await expect(page.locator('[data-testid="club-story-title"]')).toHaveText("Lagos Atlantic SC");
+      await expect(
+        page.locator('[data-testid="club-story-title"]'),
+      ).toHaveText("Lagos Atlantic SC");
       await expect(page.getByText("World Day 14")).toBeVisible();
 
       // Verify Surface Directory navigation buttons exist
@@ -578,7 +582,9 @@ test.describe("Prestige, Story, and Showroom Parity (Agent B5)", () => {
         page.locator('[data-testid="lead-story-card"]'),
       ).toBeVisible();
       await expect(
-        page.getByText("Lagos Atlantic SC Commissions Executive Fleet Aviation").first(),
+        page
+          .getByText("Lagos Atlantic SC Commissions Executive Fleet Aviation")
+          .first(),
       ).toBeVisible();
     },
   );
