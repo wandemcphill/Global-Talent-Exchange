@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
 import logging
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -12,10 +12,6 @@ from app.models.club_profile import ClubProfile
 from app.models.user import PublicAccountType, User
 from app.owner_console import engine, ledger
 from app.owner_console.ai import inbox_body
-from app.services.world_clock_service import WorldClockService
-logger = logging.getLogger(__name__)
-
-
 from app.owner_console.models import (
     IntegrityFlag,
     OwnerClubState,
@@ -26,6 +22,9 @@ from app.owner_console.models import (
     OwnerSquadPlayer,
     RelatedPartyTransfer,
 )
+from app.services.world_clock_service import WorldClockService
+
+logger = logging.getLogger(__name__)
 
 MAX_CLUBS = 3
 LAUNCH_GRANT_GTEX = 100_000
