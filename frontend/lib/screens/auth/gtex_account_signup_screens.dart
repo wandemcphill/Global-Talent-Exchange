@@ -38,25 +38,11 @@ class GtexAccountSelectorScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final roles = <_AccountRole>[
       const _AccountRole(
-        'USER ACCOUNT',
-        'Create a normal GTEX member account. You can create a club any time after signing in. Creator promotion is available only when you no longer own any clubs; sell or transfer every club you still own first.',
+        'STANDARD GTEX ACCOUNT',
+        'Create one normal GTEX ID. After signing in, you can create a club, request creator access, or use supported coin and market features.',
         Icons.person_outline_rounded,
         Color(0xFFB9FF3D),
         '/auth/signup/user',
-      ),
-      const _AccountRole(
-        'CREATOR ACCOUNT',
-        'Register directly into a dedicated Creator account for publishing and creator tools. Creator accounts cannot switch back to User or Club Owner.',
-        Icons.campaign_outlined,
-        Color(0xFFFF7BC5),
-        '/auth/signup/creator',
-      ),
-      const _AccountRole(
-        'COIN TRADER ACCOUNT',
-        'A dedicated lane for Coin Trader desk activity using this account. It cannot switch to User, Club Owner, or Creator.',
-        Icons.candlestick_chart_rounded,
-        Color(0xFFFFD166),
-        '/auth/signup/trader',
       ),
     ];
     return Scaffold(
@@ -104,7 +90,7 @@ class GtexAccountSelectorScreen extends StatelessWidget {
                   const SizedBox(
                     width: 690,
                     child: Text(
-                      'Choose one dedicated account type: User, Creator, or Coin Trader. User accounts may create clubs after signing in. Creator promotion from an existing User account is only allowed when no club remains under that account\'s ownership.',
+                      'Register once with a normal GTEX account. Club creation and additional creator, market, or coin capabilities are separate workflows available after sign-in.',
                       style: TextStyle(
                         color: Color(0xFF93A0AA),
                         fontSize: 16,
@@ -115,12 +101,7 @@ class GtexAccountSelectorScreen extends StatelessWidget {
                   const SizedBox(height: 32),
                   LayoutBuilder(
                     builder: (_, c) {
-                      final columns =
-                          c.maxWidth > 920
-                              ? 3
-                              : c.maxWidth > 580
-                              ? 2
-                              : 1;
+                      const columns = 1;
                       return GridView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
@@ -129,10 +110,8 @@ class GtexAccountSelectorScreen extends StatelessWidget {
                           crossAxisCount: columns,
                           crossAxisSpacing: 14,
                           mainAxisSpacing: 14,
-                          // Keep all role copy visible at phone and desktop
-                          // widths; these cards contain the account restrictions
-                          // users need to read before choosing a dedicated lane.
-                          mainAxisExtent: columns == 1 ? 340 : 330,
+                          // A single canonical account-registration path.
+                          mainAxisExtent: 270,
                         ),
                         itemBuilder: (_, i) => _AccountRoleCard(role: roles[i]),
                       );

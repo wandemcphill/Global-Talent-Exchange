@@ -234,37 +234,17 @@ GoRouter buildGtexAppRouter({
       ),
       GoRoute(
         path: gtexCreatorSignupRoute,
-        redirect:
-            (BuildContext context, GoRouterState state) =>
-                controller.isAuthenticated
-                    ? const GteNavigationRoute.home().path
-                    : null,
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                NoTransitionPage<void>(
-                  key: state.pageKey,
-                  child: GtexCreatorSignupScreen(
-                    controller: controller,
-                    config: config,
-                  ),
-                ),
+        redirect: (BuildContext context, GoRouterState state) =>
+            controller.isAuthenticated
+                ? const GteNavigationRoute.home().path
+                : gtexUserSignupRoute,
       ),
       GoRoute(
         path: gtexTraderSignupRoute,
-        redirect:
-            (BuildContext context, GoRouterState state) =>
-                controller.isAuthenticated
-                    ? const GteNavigationRoute.home().path
-                    : null,
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                NoTransitionPage<void>(
-                  key: state.pageKey,
-                  child: GtexTraderSignupScreen(
-                    controller: controller,
-                    config: config,
-                  ),
-                ),
+        redirect: (BuildContext context, GoRouterState state) =>
+            controller.isAuthenticated
+                ? const GteNavigationRoute.home().path
+                : gtexUserSignupRoute,
       ),
       GoRoute(
         path: '/trader',
