@@ -264,7 +264,7 @@ def test_e2e_academy_lifecycle_intake_to_selection_and_registration(client: Test
     assert len(contracts) == 1
     contract = contracts[0]
     assert contract.status == "active"
-    assert contract.wage_amount == Decimal("1500.00")
+    assert contract.wage_amount == Decimal("15.00")
     assert contract.signed_on == utcnow().date()
     assert contract.starts_on == utcnow().date()
     assert contract.ends_on == utcnow().date() + timedelta(days=24 * 30)
@@ -390,7 +390,7 @@ def test_academy_contract_rejection_and_reoffer_lifecycle(client: TestClient, se
         )
     )
     assert active_contract is not None
-    assert active_contract.wage_amount == Decimal("2500.00")
+    assert active_contract.wage_amount == Decimal("25.00")
 
 
 def test_academy_promotion_eligibility_enforced(client: TestClient, session: Session) -> None:
@@ -494,6 +494,11 @@ def test_academy_repeated_promotion_is_idempotent(client: TestClient, session: S
     assert contract_count_1 == 1
     assert squad_count_1 == 1
     assert history_count_1 == 1
+
+    # Verify authoritative contract wage unit (1800 minor units -> Decimal("18.00"))
+    contract_1 = session.scalar(select(PlayerContract).where(PlayerContract.player_id == senior_player_id))
+    assert contract_1 is not None
+    assert contract_1.wage_amount == Decimal("18.00")
 
     # Second promotion (exact repeated call)
     second_resp = client.post(f"/api/clubs/{club.id}/growth/academy/prospects/{prospect_id}/promote")

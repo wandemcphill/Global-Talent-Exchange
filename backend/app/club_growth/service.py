@@ -30,7 +30,7 @@ from app.models.club_growth import (
     PersonalManager,
 )
 from app.models.club_profile import ClubProfile
-from app.models.user import User, UserRole
+from app.models.user import User
 from app.notifications.service import NotificationEventMatrixService
 from app.services.academy_facility_economy_service import (
     AcademyFacilityEconomyService,
@@ -792,7 +792,7 @@ class ClubGrowthService:
             if accepted_offer is None:
                 raise ClubGrowthError("accepted_youth_contract_required")
 
-            wage_amount = Decimal(str(accepted_offer.wage_minor))
+            wage_amount = self._minor_to_currency(accepted_offer.wage_minor)
             duration_months = accepted_offer.duration_months
             now_date = utcnow().date()
             contract = PlayerContract(
@@ -953,6 +953,13 @@ class ClubGrowthService:
         }
         self.session.flush()
 
+    @staticmethod
+    def _minor_to_currency(amount_minor: int | None) -> Decimal:
+        """Convert minor currency units (cents/pence) to standard 2-decimal currency amount."""
+        if amount_minor is None:
+            return Decimal("0.00")
+        return (Decimal(int(amount_minor)) / Decimal("100")).quantize(Decimal("0.01"))
+
     def _require_club_access(
         self,
         *,
@@ -960,18 +967,6 @@ class ClubGrowthService:
         club_id: str,
         forbidden_detail: str = "club_owner_required",
     ) -> ClubProfile:
-        from unittest.mock import Mock
-
-        if isinstance(self.session, Mock):
-            club = self.session.get(ClubProfile, club_id)
-            if isinstance(club, Mock):
-                if hasattr(club, "owner_user_id") and not isinstance(club.owner_user_id, Mock):
-                    if club.owner_user_id != actor.id and getattr(actor, "role", None) not in {
-                        UserRole.ADMIN,
-                        UserRole.SUPER_ADMIN,
-                    }:
-                        raise PermissionError(forbidden_detail)
-                return club
         from app.access_control.service import AccessControlService
         from app.models.access_control import OrganizationRole
 

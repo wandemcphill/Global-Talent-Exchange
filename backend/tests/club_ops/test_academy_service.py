@@ -91,15 +91,65 @@ def test_academy_underage_player_held_at_standout_until_sixteen(club_ops_service
 
 
 def test_club_growth_promote_prospect_underage_blocked_and_governance_recorded(monkeypatch) -> None:
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+    from app.access_control.service import AccessControlService
     from app.club_growth.service import ClubGrowthService, ClubGrowthError
-    from app.models.club_growth import AcademyProspect, AcademyPromotionHistory
-    from app.models.user import User, UserRole
-    from unittest.mock import MagicMock
+    from app.models.access_control import AccessAuditLog, Organization, OrganizationMembership
+    from app.models.base import Base
+    from app.models.club_growth import AcademyProspect, AcademyPromotionHistory, AcademyRegenContractOffer
+    from app.models.club_profile import ClubProfile
+    from app.ingestion.models import Player
+    from app.models.user import KycStatus, User, UserRole
     import pytest
 
-    session = MagicMock()
-    service = ClubGrowthService(session)
-    actor = User(id="user-1", email="owner@gtex.club", role=UserRole.CLUB)
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(
+        engine,
+        tables=[
+            User.__table__,
+            ClubProfile.__table__,
+            Organization.__table__,
+            OrganizationMembership.__table__,
+            AccessAuditLog.__table__,
+            AcademyProspect.__table__,
+            AcademyPromotionHistory.__table__,
+            AcademyRegenContractOffer.__table__,
+            Player.__table__,
+        ],
+    )
+    session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    session = session_factory()
+
+    actor = User(
+        id="user-1",
+        email="owner@gtex.club",
+        username="owner",
+        display_name="Owner",
+        password_hash="x",
+        role=UserRole.USER,
+        kyc_status=KycStatus.FULLY_VERIFIED,
+    )
+    club = ClubProfile(
+        id="club-1",
+        owner_user_id=actor.id,
+        club_name="Academy FC",
+        short_name="AFC",
+        slug="academy-fc",
+        primary_color="#000000",
+        secondary_color="#FFFFFF",
+        accent_color="#FF0000",
+        home_venue_name="Academy Park",
+        country_code="GB",
+    )
+    session.add_all([actor, club])
+    session.flush()
+    AccessControlService(session).ensure_club_organization(club, owner_user_id=actor.id)
 
     underage_prospect = AcademyProspect(
         id="pros-underage",
@@ -111,6 +161,14 @@ def test_club_growth_promote_prospect_underage_blocked_and_governance_recorded(m
         status="youth_signed",
         current_ability=55,
         potential=88,
+    )
+    offer_underage = AcademyRegenContractOffer(
+        id="offer-underage",
+        club_id="club-1",
+        prospect_id="pros-underage",
+        status="accepted",
+        wage_minor=1000,
+        duration_months=24,
     )
     eligible_prospect = AcademyProspect(
         id="pros-eligible",
@@ -124,17 +182,28 @@ def test_club_growth_promote_prospect_underage_blocked_and_governance_recorded(m
         potential=85,
         portrait_asset_ref="asset://portrait/1",
     )
+    offer_eligible = AcademyRegenContractOffer(
+        id="offer-eligible",
+        club_id="club-1",
+        prospect_id="pros-eligible",
+        status="accepted",
+        wage_minor=1000,
+        duration_months=24,
+    )
+    session.add_all([underage_prospect, offer_underage, eligible_prospect, offer_eligible])
+    session.commit()
 
-    current_target = [underage_prospect]
-    monkeypatch.setattr(ClubGrowthService, "_get_prospect", lambda self, club_id, prospect_id: current_target[0])
-    monkeypatch.setattr(ClubGrowthService, "_promotion_history", lambda self, prospect_id: None)
+    service = ClubGrowthService(session)
 
-    with pytest.raises(ClubGrowthError) as exc_info:
-        service.promote_prospect(actor=actor, club_id="club-1", prospect_id="pros-underage")
-    assert "academy_player_too_young_to_promote" in str(exc_info.value)
-
-    current_target[0] = eligible_prospect
-    fake_player = MagicMock(id="player-senior-1")
+    fake_player = Player(
+        id="player-senior-1",
+        first_name="Senior",
+        last_name="Ready",
+        full_name="Senior Ready",
+        position="ST",
+        source_provider="gtex_academy_regen",
+        provider_external_id="academy:pros-eligible",
+    )
     monkeypatch.setattr(
         ClubGrowthService, "_ensure_senior_player_for_prospect", lambda self, club_id, prospect: fake_player
     )
@@ -144,15 +213,21 @@ def test_club_growth_promote_prospect_underage_blocked_and_governance_recorded(m
         lambda self, club_id, prospect, player: None,
     )
     monkeypatch.setattr(ClubGrowthService, "_audit", lambda *args, **kwargs: None)
-    monkeypatch.setattr(
-        ClubGrowthService, "_academy_prospect_view", lambda self, p: {"id": p.id, "status": "promoted_to_senior"}
-    )
 
-    service.promote_prospect(actor=actor, club_id="club-1", prospect_id="pros-eligible")
+    # 1. Underage check fails:
+    with pytest.raises(ClubGrowthError) as exc_info:
+        service.promote_prospect(actor=actor, club_id="club-1", prospect_id="pros-underage")
+    assert "academy_player_too_young_to_promote" in str(exc_info.value)
+
+    # 2. Eligible promotion succeeds with governance recorded:
+    result = service.promote_prospect(actor=actor, club_id="club-1", prospect_id="pros-eligible")
     assert eligible_prospect.status == "promoted_to_senior"
-    added_history = [arg[0][0] for arg in session.add.call_args_list if isinstance(arg[0][0], AcademyPromotionHistory)][
-        0
-    ]
-    assert added_history.metadata_json["hoyd_pathway_verified"] is True
-    assert added_history.metadata_json["manager_sporting_readiness_approved"] is True
-    assert added_history.metadata_json["governance_signoff"] == "hoyd_and_football_manager"
+    assert result.status == "promoted_to_senior"
+
+    history = session.scalar(
+        select(AcademyPromotionHistory).where(AcademyPromotionHistory.prospect_id == "pros-eligible")
+    )
+    assert history is not None
+    assert history.metadata_json["hoyd_pathway_verified"] is True
+    assert history.metadata_json["manager_sporting_readiness_approved"] is True
+    assert history.metadata_json["governance_signoff"] == "hoyd_and_football_manager"
