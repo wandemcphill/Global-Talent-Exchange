@@ -75,8 +75,9 @@ export function TransferHub() {
     enabled: !!activeClub?.club_id && lane === "shortlist",
   });
 
+  // A club must be able to place the opening bid as well as raise an existing bid.
   const bidListings = (listingsData || []).filter(
-    (listing: any) => listing.status === "open" && Number(listing.bid_count || 0) > 0,
+    (listing: any) => listing.status === "open",
   );
 
   const negotiationListings = (listingsData || []).filter(
@@ -535,8 +536,8 @@ export function TransferHub() {
           ) : bidListings.length === 0 ? (
             <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
               <Clock className="mx-auto size-10 text-emerald-400/50 mb-3" />
-              <p className="gx-display text-xl font-bold uppercase text-white">No active listings with bids</p>
-              <p className="text-sm text-slate-400 mt-1">This lane only shows live bid state returned by the transfer-market API.</p>
+              <p className="gx-display text-xl font-bold uppercase text-white">No open transfer listings</p>
+              <p className="text-sm text-slate-400 mt-1">Open transfer listings will appear here when the market has eligible players available to bid on.</p>
             </div>
           ) : (
             <div className="space-y-3">
