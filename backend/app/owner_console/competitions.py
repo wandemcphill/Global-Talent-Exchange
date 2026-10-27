@@ -474,6 +474,14 @@ def play_next(
     comp = session.get(OwnerCompetition, competition_id)
     if comp is None:
         raise OwnerError("competition_not_found", 404)
+    if comp.host_type == "gtex":
+        raise OwnerError(
+            "global_competition_uses_canonical_lifecycle",
+            409,
+            "Global GTEX fixtures must be executed by the canonical CompetitionMatch lifecycle. "
+            "The owner-console simulator is retained for historical reads and user-hosted tournaments "
+            "until the explicit fixture mapping is available.",
+        )
     if mentality not in engine.MENTALITY:
         raise OwnerError("invalid_mentality")
     by_id = {e.club_id: e for e in entries(session, comp.id)}
