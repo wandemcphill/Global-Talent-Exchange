@@ -153,9 +153,7 @@ class OwnerCompetitionLifecycleMappingService:
         # Lock the canonical row when the DB supports row locks so the mapping
         # cannot silently target an already-claimed fixture.
         canonical_match = self.session.scalar(
-            select(CompetitionMatch)
-            .where(CompetitionMatch.id == canonical_match_id)
-            .with_for_update()
+            select(CompetitionMatch).where(CompetitionMatch.id == canonical_match_id).with_for_update()
         )
         if canonical_match is None:
             raise OwnerCompetitionLifecycleMappingError(
@@ -191,9 +189,7 @@ class OwnerCompetitionLifecycleMappingService:
             )
 
         by_legacy = self.session.scalar(
-            select(OwnerMatchLifecycleMapping).where(
-                OwnerMatchLifecycleMapping.legacy_match_id == legacy_match_id
-            )
+            select(OwnerMatchLifecycleMapping).where(OwnerMatchLifecycleMapping.legacy_match_id == legacy_match_id)
         )
         if by_legacy is not None:
             if (
@@ -232,9 +228,7 @@ class OwnerCompetitionLifecycleMappingService:
             return mapping
         except IntegrityError as exc:
             existing = self.session.scalar(
-                select(OwnerMatchLifecycleMapping).where(
-                    OwnerMatchLifecycleMapping.legacy_match_id == legacy_match_id
-                )
+                select(OwnerMatchLifecycleMapping).where(OwnerMatchLifecycleMapping.legacy_match_id == legacy_match_id)
             )
             if (
                 existing is not None
@@ -311,9 +305,7 @@ class OwnerCompetitionLifecycleMappingService:
             )
 
         canonical_match = self.session.scalar(
-            select(CompetitionMatch)
-            .where(CompetitionMatch.id == fixture_mapping.canonical_match_id)
-            .with_for_update()
+            select(CompetitionMatch).where(CompetitionMatch.id == fixture_mapping.canonical_match_id).with_for_update()
         )
         if canonical_match is None:
             raise OwnerCompetitionLifecycleMappingError(
@@ -360,9 +352,7 @@ class OwnerCompetitionLifecycleMappingService:
                 )
             format_enum = CompetitionFormat(canonical_competition.format)
             default_window = (
-                FixtureWindow.SENIOR_1
-                if format_enum is CompetitionFormat.LEAGUE
-                else FixtureWindow.FAST_CUP_OPEN
+                FixtureWindow.SENIOR_1 if format_enum is CompetitionFormat.LEAGUE else FixtureWindow.FAST_CUP_OPEN
             )
             window = FixtureWindow(canonical_match.window) if canonical_match.window else default_window
             kickoff_at = window.kickoff_at(match_date)
