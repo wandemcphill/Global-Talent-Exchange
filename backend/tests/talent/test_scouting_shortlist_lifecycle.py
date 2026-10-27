@@ -244,6 +244,47 @@ def test_scout_real_player_success_and_persistence(lifecycle_client):
     assert db_report.future_potential_estimate == 89
 
 
+def test_real_player_scouting_ignores_non_finite_supplemental_attributes(lifecycle_client):
+    client, identity, session = lifecycle_client
+    user, club = _seed_club_and_user(
+        session,
+        user_id="user-scout-nonfinite",
+        username="scout_nonfinite",
+        club_id="club-scout-nonfinite",
+        club_name="Finite Ratings FC",
+    )
+    player = _seed_real_player(
+        session,
+        player_id="real-nonfinite-attributes",
+        name="Finite Ratings Player",
+    )
+    player.dna_profile = {
+        "overall_rating": 84,
+        "potential_rating": 89,
+        "pace": float("nan"),
+        "strength": float("inf"),
+    }
+    scout = Scout(
+        id="scout-nonfinite",
+        club_user_id=user.id,
+        club_id=club.id,
+        region="Global",
+        skill_rating=85,
+        specialty="General",
+        active=True,
+    )
+    session.add(scout)
+    session.commit()
+    identity.user = user
+
+    response = client.post(f"/scout/report/{player.id}")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["visible_stats"]["rating"] == 84
+    assert "pace" not in response.json()["visible_stats"]
+    assert "strength" not in response.json()["visible_stats"]
+
+
 @pytest.mark.parametrize(
     ("dna_profile", "expected_detail"),
     [
