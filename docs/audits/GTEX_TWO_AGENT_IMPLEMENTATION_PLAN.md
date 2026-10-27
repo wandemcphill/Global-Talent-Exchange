@@ -81,7 +81,7 @@ These affect durable game rules and must not be invented independently by either
 | D3 | Transfer Hub accepted-offer semantics and funds reservation/escrow | Make statuses honest. Do not mark a transfer complete unless player/contract movement and approved financial postings succeed. Require explicit policy for reservation timing if not already defined. |
 | D4 | Club competition entry fees, prize pools and broadcast/TV money | Reuse the Economic Constitution and currently approved settlement path. No invented TV payout formula or currency. |
 | D5 | General Manager vs first-team manager vs HOYD role definition, authority, salary and effect curves | Preserve existing data; do not coerce role identities. Add/modify role keys only with a documented game rule and migration. |
-| D6 | Relationship between legacy asset SKUs and owner-console showroom products | Do not delete/mint/rename historical inventory until SKU mapping, currency and scarcity are reconciled. |
+| D6 | Relationship between legacy asset SKUs and owner-console showroom products ([#353](https://github.com/wandemcphill/Global-Talent-Exchange/issues/353)) | Do not delete/mint/rename historical inventory until SKU mapping, currency and scarcity are reconciled. |
 | D7 | Daily owner-briefing cadence | Implement through the canonical clock/event scheduler after the cadence is confirmed; never gate generation on page visits. |
 
 ## Definition of done for every work packet
