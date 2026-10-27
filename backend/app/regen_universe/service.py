@@ -415,10 +415,7 @@ class RegenUniverseService:
                 subject_type="player",
                 subject_id=player_id[:64],
                 country_code=country_code or None,
-                featured=any(
-                    token in momentum.lower()
-                    for token in ("breakout", "wonderkid", "legacy", "elite")
-                ),
+                featured=any(token in momentum.lower() for token in ("breakout", "wonderkid", "legacy", "elite")),
                 metadata_json={
                     "momentum_label": momentum,
                     "player_name": name,
