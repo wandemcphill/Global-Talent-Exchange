@@ -12,7 +12,12 @@ from app.models.club_profile import ClubProfile
 from app.models.club_growth import ClubStaffContract, ClubStaffAssignment, ClubStaffProfile
 from app.models.hosted_competition import CompetitionTemplate
 from app.models.user import User
-from app.club_growth.staff_role_policy import ROLE_FIRST_TEAM_MANAGER, ROLE_GENERAL_MANAGER, ROLE_HEAD_OF_YOUTH_DEVELOPMENT, normalise_staff_role
+from app.club_growth.staff_role_policy import (
+    ROLE_FIRST_TEAM_MANAGER,
+    ROLE_GENERAL_MANAGER,
+    ROLE_HEAD_OF_YOUTH_DEVELOPMENT,
+    normalise_staff_role,
+)
 from app.owner_console.service import appoint_manager, fire_manager
 from app.owner_console.models import OwnerClubState
 from app.hosted_competition_engine.service import HostedCompetitionService
