@@ -440,10 +440,8 @@ def test_atomic_retry_rolls_back_partial_writes(session_factory, monkeypatch) ->
         monkeypatch.undo()
 
         res2 = service.scan_and_execute_due_fixtures(reference_at=eval_time)
-        assert res2["executed"] == 0
-        session.commit()
-
         assert res2["executed"] == 1
+        session.commit()
         session.refresh(match)
         assert match.status == MatchStatus.COMPLETED.value
         assert match.completed_at is not None
