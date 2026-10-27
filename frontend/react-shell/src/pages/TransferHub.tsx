@@ -23,6 +23,13 @@ export function TransferHub() {
   const [offerWage, setOfferWage] = useState<string>("");
   const [submittingOffer, setSubmittingOffer] = useState(false);
 
+  // Persisted negotiation contract-offer modal state
+  const [contractOfferNegotiation, setContractOfferNegotiation] = useState<any | null>(null);
+  const [contractWageOffer, setContractWageOffer] = useState<string>("");
+  const [contractYears, setContractYears] = useState<string>("3");
+  const [contractExpectedRole, setContractExpectedRole] = useState<string>("");
+  const [submittingContractOffer, setSubmittingContractOffer] = useState(false);
+
   // Lane 1: Listings Query
   const {
     data: listingsData,
@@ -172,6 +179,40 @@ export function TransferHub() {
       toast.error(errMsg(e));
     } finally {
       setSubmittingOffer(false);
+    }
+  };
+
+  const handleSubmitContractOffer = async () => {
+    if (!contractOfferNegotiation || !activeClub?.club_id) return;
+    const wage = Number(contractWageOffer);
+    const years = Number(contractYears);
+    if (!contractWageOffer.trim() || !Number.isFinite(wage) || wage < 0 || !Number.isInteger(years) || years < 1 || years > 5) {
+      toast.error("Enter a valid weekly wage and contract length (1–5 years).");
+      return;
+    }
+
+    setSubmittingContractOffer(true);
+    try {
+      await api.post(
+        `/transfer-market/listings/${contractOfferNegotiation.listing_id}/contract-offer`,
+        {
+          bidder_club_id: activeClub.club_id,
+          wage_offer_amount: wage,
+          contract_years: years,
+          expected_role: contractExpectedRole.trim() || undefined,
+        },
+      );
+      toast.success("Contract offer submitted to the transfer workflow.");
+      setContractOfferNegotiation(null);
+      setContractWageOffer("");
+      setContractYears("3");
+      setContractExpectedRole("");
+      await qc.invalidateQueries({ queryKey: ["transfer-market-negotiations", activeClub.club_id] });
+      await qc.invalidateQueries({ queryKey: ["transfer-offers", activeClub.club_id] });
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setSubmittingContractOffer(false);
     }
   };
 
