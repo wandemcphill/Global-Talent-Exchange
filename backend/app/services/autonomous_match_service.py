@@ -213,12 +213,15 @@ class AutonomousMatchExecutionService:
         eval_time = self.world_clock.now_virtual()
         clock_state = self.world_clock.get_or_create_state()
 
-        overdue_count = self.session.scalar(
-            select(func.count(CompetitionMatch.id)).where(
-                CompetitionMatch.status == MatchStatus.SCHEDULED.value,
-                CompetitionMatch.scheduled_at <= eval_time,
+        overdue_count = (
+            self.session.scalar(
+                select(func.count(CompetitionMatch.id)).where(
+                    CompetitionMatch.status == MatchStatus.SCHEDULED.value,
+                    CompetitionMatch.scheduled_at <= eval_time,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         oldest_overdue = self.session.scalar(
             select(func.min(CompetitionMatch.scheduled_at)).where(
@@ -227,11 +230,14 @@ class AutonomousMatchExecutionService:
             )
         )
 
-        in_progress_count = self.session.scalar(
-            select(func.count(CompetitionMatch.id)).where(
-                CompetitionMatch.status == MatchStatus.IN_PROGRESS.value,
+        in_progress_count = (
+            self.session.scalar(
+                select(func.count(CompetitionMatch.id)).where(
+                    CompetitionMatch.status == MatchStatus.IN_PROGRESS.value,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         return {
             "clock": {
