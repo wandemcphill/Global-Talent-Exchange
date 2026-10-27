@@ -16,6 +16,7 @@ from app.owner_console import alerts, competitions as comps, ledger, service, st
 from app.owner_console.models import (
     LedgerEvent,
     OwnerBroadcastEvent,
+    OwnerCompetition,
     OwnerInboxItem,
     OwnerNewsroomArticle,
     OwnerShowroomAsset,
@@ -744,3 +745,23 @@ def test_player_portrait_manifest_resolution_assets_key_and_media_mount(client, 
     # 2. Test static mount /api/media/regen-faces/* exists on FastAPI app
     test_media_res = client.get("/api/media/regen-faces/manifest.json")
     assert test_media_res.status_code in (200, 404)
+
+
+def test_global_competitions_cannot_use_owner_console_simulator():
+    """Global GTEX competitions must not create a second result on the legacy rail."""
+    global_competition = OwnerCompetition(id="global-comp-1", name="Global Cup", host_type="gtex")
+
+    with pytest.raises(OwnerError) as exc_info:
+        comps.ensure_owner_console_execution_allowed(global_competition)
+
+    assert exc_info.value.code == "global_competition_uses_canonical_lifecycle"
+    assert exc_info.value.status == 409
+
+
+def test_user_hosted_competitions_keep_their_separate_execution_rail():
+    """User-hosted tournaments remain supported while global lifecycle is reconciled."""
+    user_competition = OwnerCompetition(
+        id="user-comp-1", name="Friends Cup", host_type="user", host_user_id="owner-1"
+    )
+
+    comps.ensure_owner_console_execution_allowed(user_competition)
