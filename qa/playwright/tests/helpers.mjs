@@ -39,7 +39,11 @@ export async function attachDiagnostics(testInfo) {
 export async function enableAccessibility(page) {
   try {
     // Do not toggle accessibility if the labelled form is already exposed.
-    const emailInput = page.locator('input[aria-label="Email"]').first();
+    const emailInput = page
+      .locator(
+        'input[aria-label="Email"], input[aria-label*="email" i], input[type="email"], input[autocomplete="username"], input[placeholder*="email" i]',
+      )
+      .first();
     if (await emailInput.isVisible().catch(() => false)) return;
 
     // Flutter's accessibility toggle is stateful. Dispatching both element.click()
@@ -82,13 +86,21 @@ export async function signIn(page) {
 
   await enableAccessibility(page);
 
-  const emailInput = page.locator('input[aria-label="Email"]').first();
+  const emailInput = page
+    .locator(
+      'input[aria-label="Email"], input[aria-label*="email" i], input[type="email"], input[autocomplete="username"], input[placeholder*="email" i]',
+    )
+    .first();
   if (await emailInput.isVisible().catch(() => false)) {
     await emailInput.fill(process.env.GTEX_E2E_EMAIL);
-    const passwordInput = page.locator('input[aria-label="Password"]').first();
+    const passwordInput = page
+      .locator(
+        'input[aria-label="Password"], input[aria-label*="password" i], input[type="password"], input[autocomplete="current-password"], input[placeholder*="password" i]',
+      )
+      .first();
     await expect(passwordInput).toBeVisible({ timeout: 30_000 });
     await passwordInput.fill(process.env.GTEX_E2E_PASSWORD);
-    const enterBtn = page.getByRole("button", { name: "ENTER GTEX" });
+    const enterBtn = page.getByRole("button", { name: /ENTER GTEX/i });
     await expect(enterBtn).toBeVisible({ timeout: 30_000 });
     await enterBtn.click({ force: true });
   } else {
