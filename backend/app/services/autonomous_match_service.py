@@ -196,8 +196,12 @@ class AutonomousMatchExecutionService:
                 except Exception as exc:
                     logger.warning("Failed to auto-launch pending competition %s: %s", comp.id, exc)
 
+        execution_status = "success"
+        if failed:
+            execution_status = "partial_failure" if executed else "failure"
+
         return {
-            "status": "success",
+            "status": execution_status,
             "eval_time": eval_time.isoformat(),
             "discovered_due": len(executable_matches),
             "executed": executed,
