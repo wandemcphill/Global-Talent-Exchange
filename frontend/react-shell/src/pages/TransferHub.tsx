@@ -551,13 +551,33 @@ export function TransferHub() {
                       : "No wage offer is recorded for this negotiation."}
                   </p>
                   <div className="pt-2 border-t border-white/10">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedPlayerId(negotiation.player_id)}
-                      className="gx-btn gx-btn-secondary text-xs"
-                    >
-                      View player dossier
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPlayerId(negotiation.player_id)}
+                        className="gx-btn gx-btn-secondary text-xs"
+                      >
+                        View player dossier
+                      </button>
+                      {negotiation.bidder_club_id === activeClub?.club_id &&
+                        ["awaiting_contract_offer", "player_delayed", "counter_offer"].includes(String(negotiation.status)) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setContractOfferNegotiation(negotiation);
+                              setContractWageOffer(
+                                negotiation.wage_offer_amount == null ? "" : String(negotiation.wage_offer_amount),
+                              );
+                              setContractYears(String(negotiation.contract_years || 3));
+                              setContractExpectedRole(negotiation.expected_role || "");
+                            }}
+                            className="gx-btn gx-btn-primary text-xs"
+                            data-testid={`contract-offer-${negotiation.id}`}
+                          >
+                            Submit contract terms
+                          </button>
+                        )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -788,6 +808,81 @@ export function TransferHub() {
                 data-testid="submit-offer-confirm-btn"
               >
                 {submittingOffer ? "Submitting..." : "Send Formal Offer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Contract negotiation modal */}
+      {contractOfferNegotiation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-emerald-500/40 bg-[#07130e] p-6 shadow-2xl space-y-4">
+            <h3 className="gx-display text-2xl font-black uppercase text-white">
+              Submit Contract Terms
+            </h3>
+            <p className="text-xs text-slate-300">
+              {contractOfferNegotiation.player_name || `Player ${contractOfferNegotiation.player_id}`}
+              {" · "}Listing {String(contractOfferNegotiation.listing_id).slice(0, 8)}
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="gx-label">Weekly Wage Offer (GTX)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={contractWageOffer}
+                  onChange={(event) => setContractWageOffer(event.target.value)}
+                  className="gx-input"
+                  placeholder="Enter weekly wage"
+                  data-testid="contract-wage-input"
+                />
+              </div>
+              <div>
+                <label className="gx-label">Contract Length</label>
+                <select
+                  value={contractYears}
+                  onChange={(event) => setContractYears(event.target.value)}
+                  className="gx-input"
+                  data-testid="contract-years-select"
+                >
+                  <option value="1">1 year</option>
+                  <option value="2">2 years</option>
+                  <option value="3">3 years</option>
+                  <option value="4">4 years</option>
+                  <option value="5">5 years</option>
+                </select>
+              </div>
+              <div>
+                <label className="gx-label">Expected Squad Role</label>
+                <input
+                  type="text"
+                  maxLength={40}
+                  value={contractExpectedRole}
+                  onChange={(event) => setContractExpectedRole(event.target.value)}
+                  className="gx-input"
+                  placeholder="e.g. starter, rotation"
+                  data-testid="contract-role-input"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 pt-3">
+              <button
+                type="button"
+                onClick={() => setContractOfferNegotiation(null)}
+                className="gx-btn gx-btn-secondary flex-1"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitContractOffer}
+                disabled={submittingContractOffer || !contractWageOffer.trim()}
+                className="gx-btn gx-btn-primary flex-1 disabled:cursor-not-allowed disabled:opacity-50"
+                data-testid="submit-contract-offer"
+              >
+                {submittingContractOffer ? "Submitting..." : "Submit terms"}
               </button>
             </div>
           </div>
