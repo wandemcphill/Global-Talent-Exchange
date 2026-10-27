@@ -166,7 +166,7 @@ describe("React Owner Decision Inbox", () => {
   });
 
   test("honors deep link query parameters (?status=resolved&category=deadlines&club_id=c2)", async () => {
-    mockSearchParams = new URLSearchParams("status=resolved&category=deadlines&club_id=c2");
+    mockSearchParams = new URLSearchParams("status=resolved&category=deadlines&club_id=c2&unread_only=true");
 
     let capturedParams: any = null;
     jest.spyOn(api, "get").mockImplementation(((url: string, config: any) => {
@@ -188,6 +188,7 @@ describe("React Owner Decision Inbox", () => {
     expect(capturedParams.status).toBe("resolved");
     expect(capturedParams.category).toBe("deadlines");
     expect(capturedParams.club_id).toBe("c2");
+    expect(capturedParams.unread_only).toBe(true);
   });
 
   test("renders honest empty state when server returns no items", async () => {
