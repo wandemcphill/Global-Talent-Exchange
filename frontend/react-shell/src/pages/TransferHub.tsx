@@ -136,8 +136,12 @@ export function TransferHub() {
       toast.error("Select an active club before placing a bid.");
       return;
     }
-    if (!rawAmount || !Number.isFinite(amount) || amount <= Number(listing.current_highest_bid || 0)) {
-      toast.error("Enter a valid bid greater than the current highest bid.");
+    const bidThreshold =
+      Number(listing.current_highest_bid || 0) > 0
+        ? Number(listing.current_highest_bid)
+        : Number(listing.base_price || 0);
+    if (!rawAmount || !Number.isFinite(amount) || amount <= bidThreshold) {
+      toast.error(`Enter a valid bid greater than ${fmt(bidThreshold)} GTX.`);
       return;
     }
 
@@ -608,10 +612,11 @@ export function TransferHub() {
             <div className="space-y-3">
               {bidListings.map((listing: any) => {
                 const currentHighest = Number(listing.current_highest_bid || 0);
+                const bidThreshold = currentHighest > 0 ? currentHighest : Number(listing.base_price || 0);
                 const enteredAmount = bidAmounts[listing.id] || "";
                 const amountIsValid = enteredAmount.trim() !== ""
                   && Number.isFinite(Number(enteredAmount))
-                  && Number(enteredAmount) > currentHighest;
+                  && Number(enteredAmount) > bidThreshold;
                 return (
                   <div key={listing.id} className="flex flex-col gap-4 rounded-xl border border-white/10 bg-slate-900/60 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
@@ -623,7 +628,9 @@ export function TransferHub() {
                         {" · "}Time remaining: {Math.ceil(Number(listing.time_remaining || 0) / 60)} min
                       </p>
                       <p className="gx-mono mt-1 text-sm font-black text-amber-300">
-                        Current highest: {fmt(listing.current_highest_bid)} GTX
+                        {currentHighest > 0
+                          ? `Current highest bid: ${fmt(currentHighest)} GTX`
+                          : `No bids yet · Opening bid must exceed ${fmt(listing.base_price)} GTX`}
                       </p>
                     </div>
                     <div className="flex flex-col gap-2 sm:w-64">
@@ -632,13 +639,13 @@ export function TransferHub() {
                       </label>
                       <input
                         type="number"
-                        min={currentHighest + 0.01}
+                        min={bidThreshold + 0.01}
                         value={enteredAmount}
                         onChange={(event) => setBidAmounts((previous) => ({
                           ...previous,
                           [listing.id]: event.target.value,
                         }))}
-                        placeholder={`Greater than ${String(listing.current_highest_bid)}`}
+                        placeholder={`Greater than ${String(bidThreshold)}`}
                         className="gx-input"
                         data-testid={`bid-amount-${listing.id}`}
                       />
