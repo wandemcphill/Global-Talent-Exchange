@@ -65,8 +65,7 @@ describe("React lineup page", () => {
       return Promise.reject(new Error("Unexpected GET " + url));
     }) as any);
     jest.spyOn(api, "put").mockImplementation(((_url: string, payload: any) =>
-      Promise.resolve({ data: { club_id: "club-1", ...payload } }),
-    ) as any);
+      Promise.resolve({ data: { club_id: "club-1", ...payload } })) as any);
   });
 
   afterEach(async () => {
