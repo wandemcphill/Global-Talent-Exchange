@@ -434,14 +434,20 @@ def advance(club_id: str, user=Depends(get_current_user), session: Session = Dep
         # Preserve this legacy endpoint as an owner-triggered catch-up request;
         # the persisted global clock decides whether any simulation day is due.
         state = service.require_state(session, club_id, user.id)
-        result = service.process_due_owner_world_ticks(session, user_id=user.id)
+        result = service.process_due_owner_world_ticks(
+            session,
+            user_id=user.id,
+            include_details=True,
+        )
         session.refresh(state)
+        club_ticks = [row for row in result.get("tick_results", []) if row.get("club_id") == club_id]
+        latest_tick = club_ticks[-1] if club_ticks else None
         return {
             "club_id": club_id,
             "world_day": state.world_day,
-            "new_items": 0,
-            "growth": [],
-            "advanced": result.get("ticks_executed", 0) > 0,
+            "new_items": int(latest_tick.get("new_items", 0)) if latest_tick else 0,
+            "growth": list(latest_tick.get("growth", [])) if latest_tick else [],
+            "advanced": bool(club_ticks),
             "world_tick": result,
         }
 
