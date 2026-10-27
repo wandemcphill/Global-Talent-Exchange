@@ -8,7 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import FastAPI
-from sqlalchemy import inspect, select, update
+from sqlalchemy import func, inspect, select, update
 from sqlalchemy.orm import Session
 
 from app.access_control.service import AccessControlService
@@ -88,6 +88,73 @@ PLAYER_DECISION_DELAY_HOURS = 12
 AGENT_COUNTER_DEADLINE_HOURS = 12
 TRANSFER_MARKET_EXECUTION_ROLES = frozenset({OrganizationRole.ADMIN, OrganizationRole.CLUB})
 TRANSFER_MARKET_WATCHLIST_ROLES = frozenset({OrganizationRole.ADMIN, OrganizationRole.CLUB, OrganizationRole.SCOUT})
+
+# The React Transfer Hub exposes positional groups, while imported player feeds
+# normalize positions using a mixture of provider codes and canonical labels.
+POSITION_GROUP_ALIASES: dict[str, frozenset[str]] = {
+    "GK": frozenset({"gk", "goalkeeper", "keeper", "goalie"}),
+    "DEF": frozenset(
+        {
+            "def",
+            "defender",
+            "defence",
+            "defense",
+            "cb",
+            "centre back",
+            "center back",
+            "centre-back",
+            "center-back",
+            "lb",
+            "rb",
+            "lwb",
+            "rwb",
+            "full-back",
+            "full back",
+            "left back",
+            "right back",
+            "left-back",
+            "right-back",
+        }
+    ),
+    "MID": frozenset(
+        {
+            "mid",
+            "midfield",
+            "midfielder",
+            "cm",
+            "cdm",
+            "dm",
+            "cam",
+            "am",
+            "lm",
+            "rm",
+            "central midfielder",
+            "defensive midfielder",
+            "attacking midfielder",
+            "wing midfielder",
+        }
+    ),
+    "FWD": frozenset(
+        {
+            "fwd",
+            "forward",
+            "striker",
+            "attacker",
+            "st",
+            "cf",
+            "lw",
+            "rw",
+            "ss",
+            "fw",
+            "att",
+            "winger",
+            "left winger",
+            "right winger",
+            "centre forward",
+            "center forward",
+        }
+    ),
+}
 
 # Hub offers that settle as a plain cash transfer; loan and swap terms are not executed yet.
 HUB_CASH_DEAL_TYPES = frozenset({"transfer", "open_offer", "private_negotiation"})
@@ -356,7 +423,14 @@ class TransferMarketService:
         if any(value is not None for value in (position, country_id, league_id, club_profile_id, real_player_only)):
             statement = statement.join(Player, Player.id == TransferListing.player_id)
             if position is not None:
-                statement = statement.where(Player.normalized_position == position)
+                requested_position = position.strip()
+                group_aliases = POSITION_GROUP_ALIASES.get(requested_position.upper())
+                if group_aliases is not None:
+                    statement = statement.where(
+                        func.lower(Player.normalized_position).in_(group_aliases)
+                    )
+                else:
+                    statement = statement.where(Player.normalized_position == requested_position)
             if country_id is not None:
                 statement = statement.where(Player.country_id == country_id)
             if league_id is not None:
