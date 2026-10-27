@@ -432,8 +432,20 @@ def intake(club_id: str, user=Depends(get_current_user), session: Session = Depe
 @router.post("/clubs/{club_id}/advance")
 def advance(club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
     def go():
+        # Advancing one club independently would violate the shared-world rule.
+        # Preserve this legacy endpoint as an owner-triggered catch-up request;
+        # the persisted global clock decides whether any simulation day is due.
         state = service.require_state(session, club_id, user.id)
-        return service.tick_club(session, state)
+        result = service.process_due_owner_world_ticks(session, user_id=user.id)
+        session.refresh(state)
+        return {
+            "club_id": club_id,
+            "world_day": state.world_day,
+            "new_items": 0,
+            "growth": [],
+            "advanced": result.get("ticks_executed", 0) > 0,
+            "world_tick": result,
+        }
 
     return _run(session, go)
 
