@@ -234,9 +234,7 @@ def test_staff_contract_flow_creates_assignment_and_audit(client: TestClient, se
     assert "staff_contract_accepted" in audit_actions
 
 
-def test_general_manager_and_hoyd_are_distinct_qualified_staff_roles(
-    client: TestClient, session: Session
-) -> None:
+def test_general_manager_and_hoyd_are_distinct_qualified_staff_roles(client: TestClient, session: Session) -> None:
     club = _club(session)
 
     unqualified_manager = ClubStaffProfile(
@@ -269,9 +267,7 @@ def test_general_manager_and_hoyd_are_distinct_qualified_staff_roles(
     )
     assert gm_offer.status_code == 200, gm_offer.text
     assert gm_offer.json()["role_scope"] == "general_manager"
-    gm_contract = client.post(
-        f"/api/clubs/{club.id}/growth/staff-contracts/{gm_offer.json()['id']}/accept"
-    )
+    gm_contract = client.post(f"/api/clubs/{club.id}/growth/staff-contracts/{gm_offer.json()['id']}/accept")
     assert gm_contract.status_code == 200, gm_contract.text
     assert gm_contract.json()["role_scope"] == "general_manager"
 
@@ -293,9 +289,7 @@ def test_general_manager_and_hoyd_are_distinct_qualified_staff_roles(
     )
     assert hoyd_offer.status_code == 200, hoyd_offer.text
     assert hoyd_offer.json()["role_scope"] == "head_of_youth_development"
-    hoyd_contract = client.post(
-        f"/api/clubs/{club.id}/growth/staff-contracts/{hoyd_offer.json()['id']}/accept"
-    )
+    hoyd_contract = client.post(f"/api/clubs/{club.id}/growth/staff-contracts/{hoyd_offer.json()['id']}/accept")
     assert hoyd_contract.status_code == 200, hoyd_contract.text
 
     generated = client.post(
@@ -306,9 +300,7 @@ def test_general_manager_and_hoyd_are_distinct_qualified_staff_roles(
     metadata = generated.json()[0]["metadata"]
     assert metadata["head_of_youth_development_quality"] == 70
     assert metadata["head_of_youth_development_bonus"] == 7
-    assert metadata["academy_quality_score"] == min(
-        100, metadata["academy_facility_quality_score"] + 7
-    )
+    assert metadata["academy_quality_score"] == min(100, metadata["academy_facility_quality_score"] + 7)
 
     dashboard = client.get(f"/api/clubs/{club.id}/growth")
     assert dashboard.status_code == 200, dashboard.text
