@@ -243,6 +243,23 @@ class AutonomousMatchExecutionService:
             or 0
         )
 
+        scheduled_metadata = list(
+            self.session.scalars(
+                select(CompetitionMatch.metadata_json).where(
+                    CompetitionMatch.status == MatchStatus.SCHEDULED.value,
+                )
+            ).all()
+        )
+        retry_pending_count = 0
+        for metadata in scheduled_metadata:
+            if not isinstance(metadata, dict):
+                continue
+            try:
+                retry_pending_count += int(metadata.get("execution_attempts") or 0) > 0
+            except (TypeError, ValueError):
+                # Malformed retry metadata is not evidence of a valid retry count.
+                continue
+
         return {
             "clock": {
                 "id": clock_state.id,
@@ -258,6 +275,8 @@ class AutonomousMatchExecutionService:
                 "overdue_count": overdue_count,
                 "oldest_overdue_kickoff": oldest_overdue.isoformat() if oldest_overdue else None,
                 "in_progress_count": in_progress_count,
+                "retry_pending_count": retry_pending_count,
+                "worker_mode": "database_polling",
             },
         }
 
