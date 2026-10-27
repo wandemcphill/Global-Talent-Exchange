@@ -38,17 +38,16 @@ export async function attachDiagnostics(testInfo) {
 
 export async function enableAccessibility(page) {
   try {
-    await page.evaluate(() => {
-      const element = document.querySelector('[aria-label="Enable accessibility"]');
-      if (element) {
-        element.focus?.();
-        element.click?.();
-        element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-      }
-    });
-    await page.waitForTimeout(300);
+    // Flutter's accessibility toggle is stateful. Dispatching both element.click()
+    // and a synthetic click can toggle semantics on and immediately back off,
+    // leaving signIn() with no labelled inputs and forcing brittle coordinate entry.
+    const toggle = page.locator('[aria-label="Enable accessibility"]').first();
+    if (await toggle.isVisible().catch(() => false)) {
+      await toggle.click({ force: true });
+      await page.waitForTimeout(300);
+    }
   } catch {
-    // Accessibility button may already have been consumed or not present
+    // Accessibility may already be enabled or the toggle may not be present.
   }
 }
 
