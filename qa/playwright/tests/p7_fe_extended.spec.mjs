@@ -5,6 +5,7 @@ import {
   collectBrowserDiagnostics,
   configured,
   credentialsConfigured,
+  enableAccessibility,
   verifyNoHorizontalOverflow,
   visitAuthedRoute,
 } from "./helpers.mjs";
@@ -21,9 +22,78 @@ test.afterEach(async ({ page: _page }, testInfo) => {
   await attachDiagnostics(testInfo);
 });
 
+test("Club squad route loads the roster or explicit no-club state", async ({ page }, testInfo) => {
+  // Club HQ is the explicit Club lane, not the Home tab.
+  await visitAuthedRoute(page, "/app/club");
+
+  const noClubEntry = page.getByText("Build your club command center", {
+    exact: true,
+  });
+  const clubCommand = page.getByText("Club command", { exact: true });
+  await expect
+    .poll(
+      async () =>
+        Number(await noClubEntry.isVisible().catch(() => false)) +
+        Number(await clubCommand.isVisible().catch(() => false)),
+      { timeout: 60_000 },
+    )
+    .toBeGreaterThan(0);
+
+  if (await noClubEntry.isVisible().catch(() => false)) {
+    await expect(page.getByText("Create club", { exact: true })).toBeVisible();
+  } else {
+    const browseButton = page.getByRole("button", { name: "Club sections" });
+    const squadSection = page
+      .getByRole("button", { name: /Squad/i })
+      .or(page.getByText(/Owned players and regens/i))
+      .first();
+
+    // In compact layouts (mobile/narrow tablet), sections are housed in a "Club sections" sheet;
+    // in desktop layouts, the left panel is rendered inline.
+    await expect
+      .poll(
+        async () =>
+          Number(await browseButton.isVisible().catch(() => false)) +
+          Number(await squadSection.isVisible().catch(() => false)),
+        { timeout: 15_000 },
+      )
+      .toBeGreaterThan(0);
+
+    let browseSheetOpened = false;
+    if (await browseButton.isVisible().catch(() => false)) {
+      await browseButton.click();
+      browseSheetOpened = true;
+      await page.waitForTimeout(400);
+      await enableAccessibility(page);
+    }
+
+    await expect(squadSection).toBeVisible({ timeout: 15_000 });
+    await squadSection.click();
+
+    if (browseSheetOpened) {
+      const closeButton = page.getByRole("button", { name: /Close Club sections/i });
+      if (await closeButton.isVisible().catch(() => false)) {
+        await closeButton.click();
+        await page.waitForTimeout(400);
+      }
+    }
+
+    await expect(page.getByText("Squad room", { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Lineup & squad registration", { exact: true })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText("Open Lineup & Tactics", { exact: true })).toBeVisible({
+      timeout: 15_000,
+    });
+  }
+
+  await verifyNoHorizontalOverflow(page);
+  await captureScreenshot(page, testInfo, "lineup");
+});
+
 test("Club HQ opens an authoritative club or no-club state", async ({ page }, testInfo) => {
-  // The owner dashboard deliberately refuses to show fabricated club data.
-  // Verify an explicit real-data state instead of assuming a roster is present.
+  // Owner operations must show real club context or a truthful unavailable state,
+  // never fabricated demo-club data.
   await visitAuthedRoute(page, "/app");
 
   const ownerCockpit = page.getByText("Club owner operations cockpit", { exact: true });
@@ -53,13 +123,14 @@ test("Club HQ opens an authoritative club or no-club state", async ({ page }, te
     if (await noClubEntry.isVisible().catch(() => false)) {
       await expect(page.getByText("Create club", { exact: true })).toBeVisible();
     } else {
-      await expect(page.getByText("Club owner operations cockpit", { exact: true })).toBeVisible();
+      await expect(ownerCockpit).toBeVisible();
     }
   }
 
   await verifyNoHorizontalOverflow(page);
   await captureScreenshot(page, testInfo, "club-command-authoritative-state");
 });
+
 test("A targeted notification opens its supplied target", async ({ page }, testInfo) => {
   test.skip(
     !process.env.GTEX_E2E_NOTIFICATION_TEXT || !process.env.GTEX_E2E_NOTIFICATION_TARGET,
