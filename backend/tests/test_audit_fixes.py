@@ -59,7 +59,9 @@ def test_fix_4_owner_appoint_and_fire_manager_syncs_club_growth(db_session):
         accent_color="#ff0000",
     )
     db_session.add(club)
-    state = OwnerClubState(club_id="club_test_mgr", owner_user_id="user_test_mgr", club_name="Test Manager FC", stage="competition")
+    state = OwnerClubState(
+        club_id="club_test_mgr", owner_user_id="user_test_mgr", club_name="Test Manager FC", stage="competition"
+    )
     db_session.add(state)
     db_session.commit()
 
@@ -93,8 +95,20 @@ def test_fix_4_owner_appoint_and_fire_manager_syncs_club_growth(db_session):
     # Fire manager
     try:
         from app.models.wallet import LedgerAccount, LedgerAccountKind, LedgerUnit
-        acc = LedgerAccount(id="acc_club", owner_id="club_test_mgr", kind=LedgerAccountKind.CLUB_TREASURY, unit=LedgerUnit.GTEX_COIN, balance_minor=10000000)
-        world_acc = LedgerAccount(id="world_clubs", owner_id="world_clubs", kind=LedgerAccountKind.WORLD_POOL, unit=LedgerUnit.GTEX_COIN, balance_minor=0)
+        acc = LedgerAccount(
+            id="acc_club",
+            owner_id="club_test_mgr",
+            kind=LedgerAccountKind.CLUB_TREASURY,
+            unit=LedgerUnit.GTEX_COIN,
+            balance_minor=10000000,
+        )
+        world_acc = LedgerAccount(
+            id="world_clubs",
+            owner_id="world_clubs",
+            kind=LedgerAccountKind.WORLD_POOL,
+            unit=LedgerUnit.GTEX_COIN,
+            balance_minor=0,
+        )
         db_session.add(acc)
         db_session.add(world_acc)
         db_session.commit()
