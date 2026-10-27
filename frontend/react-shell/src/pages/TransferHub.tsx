@@ -4,8 +4,6 @@ import { ArrowLeftRight, Clock, DollarSign, Filter, Handshake, MessageSquare, Pl
 import { api, errMsg } from "@/lib/api";
 import { fmt, useActiveClub } from "@/lib/owner";
 import { Btn, Chip, Loading, TraitBar } from "@/components/gtex/ui";
-import { PlayerCard } from "@/components/gtex/PlayerCard";
-import { RegenCard } from "@/components/gtex/RegenCard";
 import { PlayerDossier } from "@/components/gtex/PlayerDossier";
 import { toast } from "sonner";
 
@@ -309,39 +307,53 @@ export function TransferHub() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 place-items-center">
-              {filteredListings.map((listing: any, i: number) => {
+              {filteredListings.map((listing: any) => {
                 const p = listing.player || {};
-                const id = listing.player_id || p.id || `listing-${i}`;
-                const isRegen = listing.asset_type === "regen" || p.is_regen;
+                const playerId = listing.player_id || p.id;
                 return (
-                  <div key={listing.id || id} className="flex flex-col w-full max-w-[310px]">
-                    {isRegen ? (
-                      <RegenCard
-                        name={p.name || p.player_name || "Listed Regen"}
-                        rating={p.current_rating || p.rating || 72}
-                        position={p.position || "MID"}
-                        price={listing.asking_price}
-                        variant="full"
-                        onClick={() => setSelectedPlayerId(id)}
-                      />
-                    ) : (
-                      <PlayerCard
-                        name={p.name || p.player_name || "Listed Player"}
-                        rating={p.rating || 76}
-                        position={p.position || "FWD"}
-                        price={listing.asking_price}
-                        variant="full"
-                        onClick={() => setSelectedPlayerId(id)}
-                      />
-                    )}
+                  <div key={listing.id} className="flex flex-col w-full max-w-[310px]">
+                    <div className="flex-1 rounded-xl border border-white/10 bg-slate-900/70 p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="gx-display text-lg font-bold uppercase text-white">
+                            {p.full_name || playerId}
+                          </h3>
+                          <p className="text-xs text-slate-400 mt-1">
+                            {p.normalized_position || "Position not recorded"}
+                          </p>
+                        </div>
+                        <span className="shrink-0 gx-mono text-xs font-black text-amber-300">
+                          {fmt(listing.base_price)} GTX
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400">
+                        {p.current_club_name ? `Current club: ${p.current_club_name}` : "Current club not recorded"}
+                      </p>
+                      {p.market_value != null && (
+                        <p className="text-xs text-slate-400">
+                          Imported market reference: €{new Intl.NumberFormat("en-IE", { maximumFractionDigits: 0 }).format(Number(p.market_value))}
+                        </p>
+                      )}
+                      <p className="text-xs text-slate-500">
+                        Listing status: {listing.status} · {Math.ceil(Number(listing.time_remaining || 0) / 60)} minutes remaining
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPlayerId(playerId)}
+                        className="gx-btn gx-btn-secondary w-full text-xs"
+                      >
+                        Open player dossier
+                      </button>
+                    </div>
                     <button
                       type="button"
+                      disabled={!activeClub?.club_id || listing.status !== "open"}
                       onClick={() => {
                         setOfferListing(listing);
-                        setOfferAmount(String(listing.asking_price || 50000));
+                        setOfferAmount(String(listing.base_price ?? ""));
                       }}
-                      className="gx-btn gx-btn-primary mt-2.5 w-full text-xs font-black shadow-md"
-                      data-testid={`make-offer-btn-${listing.id || id}`}
+                      className="gx-btn gx-btn-primary mt-2.5 w-full text-xs font-black shadow-md disabled:cursor-not-allowed disabled:opacity-50"
+                      data-testid={`make-offer-btn-${listing.id}`}
                     >
                       <Handshake size={14} /> Submit Club Offer
                     </button>
