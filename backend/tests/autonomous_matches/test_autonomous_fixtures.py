@@ -464,14 +464,22 @@ def test_health_telemetry_reporting(session_factory) -> None:
         assert "overdue_count" in telemetry["fixtures"]
 
 
-def test_worker_misconfiguration_loud_crash(monkeypatch) -> None:
+@pytest.mark.parametrize(
+    ("kafka_brokers", "consumer_enabled"),
+    [
+        ((), True),
+        (("localhost:9092",), False),
+    ],
+)
+def test_worker_misconfiguration_loud_crash(monkeypatch, kafka_brokers, consumer_enabled) -> None:
     from dataclasses import replace
     from app.backbone.simulation_worker_main import main
     from app.core.config import get_settings
 
     dummy_settings = replace(
         get_settings(),
-        kafka_brokers=(),
+        kafka_brokers=kafka_brokers,
+        kafka_simulation_consumer_enabled=consumer_enabled,
         autonomous_fixture_execution_enabled=False,
     )
     monkeypatch.setattr("app.backbone.simulation_worker_main.get_settings", lambda: dummy_settings)
