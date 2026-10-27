@@ -586,9 +586,7 @@ def appoint_manager(session: Session, user_id: str, club_id: str, snapshot: dict
 
         mgr_id = str(profile.get("manager_id") or "default")
         market_key = f"mgr_{mgr_id}"
-        staff_profile = session.scalar(
-            select(ClubStaffProfile).where(ClubStaffProfile.market_key == market_key)
-        )
+        staff_profile = session.scalar(select(ClubStaffProfile).where(ClubStaffProfile.market_key == market_key))
         if staff_profile is None:
             staff_profile = ClubStaffProfile(
                 market_key=market_key,
