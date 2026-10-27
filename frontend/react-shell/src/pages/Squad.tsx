@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -123,6 +124,122 @@ function SquadTable({ club }: any) {
   );
 }
 
+
+function SquadRegistrationPanel({ club }: any) {
+  const [busy, setBusy] = useState("");
+  const registrationQuery = useQuery({
+    queryKey: ["squad-registration", club.club_id],
+    queryFn: async () =>
+      (await api.get("/clubs/" + encodeURIComponent(club.club_id) + "/squad-registration", {
+        params: { season_label: "launch" },
+      })).data,
+    enabled: Boolean(club?.club_id),
+  });
+  const registration = registrationQuery.data || null;
+  const status = String(registration?.status || "not synced").toLowerCase();
+  const rosterIds = Array.from(
+    new Set((club.squad || []).map((player: any) => String(player.id || "")).filter(Boolean)),
+  );
+  const endpoint = "/clubs/" + encodeURIComponent(club.club_id) + "/squad-registration";
+  const sync = async () => {
+    setBusy("sync");
+    try {
+      await api.post(endpoint, { season_label: "launch", player_ids: rosterIds });
+      await registrationQuery.refetch();
+      toast.success("Club squad synced for registration.");
+    } catch (error) {
+      toast.error(errMsg(error));
+    } finally {
+      setBusy("");
+    }
+  };
+  const submit = async () => {
+    setBusy("submit");
+    try {
+      await api.post(endpoint, { season_label: "launch", player_ids: rosterIds });
+      await api.post(endpoint + "/submit", undefined, { params: { season_label: "launch" } });
+      await registrationQuery.refetch();
+      toast.success("Squad registration submitted.");
+    } catch (error) {
+      toast.error(errMsg(error));
+    } finally {
+      setBusy("");
+    }
+  };
+  const lock = async () => {
+    if (!window.confirm("Locking the squad finalizes this competition roster for the current registration window. Continue?")) return;
+    setBusy("lock");
+    try {
+      await api.post(endpoint + "/lock", undefined, { params: { season_label: "launch" } });
+      await registrationQuery.refetch();
+      toast.success("Squad registration locked.");
+    } catch (error) {
+      toast.error(errMsg(error));
+    } finally {
+      setBusy("");
+    }
+  };
+  const tone = status === "locked" ? "emerald" : status === "submitted" ? "cyan" : status === "draft" ? "gold" : "slate";
+  const canSync = status !== "submitted" && status !== "locked";
+  const canSubmit = status !== "submitted" && status !== "locked";
+  const canLock = status === "submitted";
+
+  return (
+    <Panel
+      eyebrow="Competition readiness"
+      title="Lineup & squad registration"
+      testid="squad-registration-panel"
+      className="mb-6"
+    >
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <Chip tone={tone}>{status === "not synced" ? "Not synced" : status}</Chip>
+          <span className="text-xs text-slate-400">
+            {registration ? String((registration.players || []).length) + " registered players" : "No roster registered yet"}
+          </span>
+          <span className="text-xs text-slate-500">Season: {registration?.season_label || "launch"}</span>
+        </div>
+        <p className="max-w-3xl text-sm leading-6 text-slate-400">
+          Sync the current club roster, submit it for eligibility checks, then lock it when ready. Registration is persisted separately from the tactical starting XI.
+        </p>
+        {registrationQuery.isError && (
+          <p role="alert" className="text-sm text-amber-300">
+            Registration status could not be loaded. Sync can retry the registration request.
+          </p>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <Btn
+            variant="secondary"
+            onClick={sync}
+            disabled={Boolean(busy) || registrationQuery.isLoading || !canSync}
+            data-testid="squad-sync-registration-button"
+          >
+            {busy === "sync" ? "Syncing…" : "Sync squad"}
+          </Btn>
+          <Btn
+            onClick={submit}
+            disabled={Boolean(busy) || registrationQuery.isLoading || !canSubmit}
+            data-testid="squad-submit-registration-button"
+          >
+            {busy === "submit" ? "Submitting…" : "Submit registration"}
+          </Btn>
+          <Btn
+            variant="secondary"
+            onClick={lock}
+            disabled={Boolean(busy) || registrationQuery.isLoading || !canLock}
+            data-testid="squad-lock-registration-button"
+          >
+            {busy === "lock" ? "Locking…" : "Lock registration"}
+          </Btn>
+        </div>
+        {status === "locked" && (
+          <p className="text-xs text-emerald-300">This registration is locked. The squad must be reopened through an authorized lifecycle flow before it can be changed.</p>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
 export default function Squad() {
   const { active } = useActiveClub();
   const {
@@ -190,10 +307,20 @@ export default function Squad() {
   return (
     <div data-testid="squad-page">
       <PageHeader
-        eyebrow="Tactics & roster"
-        title={club.club_name}
-        sub={`${club.squad.length} registered players · Wage bill ${fmt(club.wage_bill)} GTX / match`}
+        eyebrow="Manager & squad"
+        title="Squad room"
+        sub={club.club_name + " · " + club.squad.length + " registered players · Wage bill " + fmt(club.wage_bill) + " GTX / match"}
+        action={
+          <Link
+            to={"/app/lineup?club_id=" + encodeURIComponent(club.club_id)}
+            data-testid="open-lineup-tactics-button"
+            className="gx-btn gx-btn-primary inline-flex items-center"
+          >
+            Open Lineup & Tactics <ArrowRight className="ml-2 h-4 w-4" />
+          </Link>
+        }
       />
+      <SquadRegistrationPanel club={club} />
       <div className="grid gap-6 lg:grid-cols-12">
         <ManagerSheet club={club} />
         <SquadTable club={club} />
