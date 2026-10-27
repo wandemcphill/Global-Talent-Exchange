@@ -64,6 +64,12 @@ class OwnerCompetitionLifecycleMappingService:
                 "canonical_competition_not_global",
                 "Only explicitly platform-hosted canonical competitions can be linked to global GTEX tournaments.",
             )
+        expected_format = {"league": "league", "knockout": "cup"}.get(legacy.format)
+        if expected_format is None or canonical.format != expected_format:
+            raise OwnerCompetitionLifecycleMappingError(
+                "competition_format_mismatch",
+                "Legacy and canonical competitions must use compatible league/cup formats before they can be linked.",
+            )
 
         by_legacy = self.session.scalar(
             select(OwnerCompetitionLifecycleMapping).where(
@@ -169,6 +175,11 @@ class OwnerCompetitionLifecycleMappingService:
             raise OwnerCompetitionLifecycleMappingError(
                 "fixture_is_not_unplayed",
                 "Only fixtures that are still scheduled and have no recorded result can be linked.",
+            )
+        if legacy_match.round_number != canonical_match.round_number:
+            raise OwnerCompetitionLifecycleMappingError(
+                "fixture_round_mismatch",
+                "Legacy and canonical fixtures must belong to the same round before they can be linked.",
             )
         if (
             legacy_match.home_club_id != canonical_match.home_club_id
