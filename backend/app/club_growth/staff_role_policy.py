@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 ROLE_FIRST_TEAM_MANAGER = "first_team_manager"
 ROLE_GENERAL_MANAGER = "general_manager"
 ROLE_HEAD_OF_YOUTH_DEVELOPMENT = "head_of_youth_development"
