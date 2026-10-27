@@ -60,10 +60,12 @@ class MatchSimulationJob(CommonSchema):
     home_club_name: str | None = None
     home_strength_rating: int | None = Field(default=None, ge=1, le=100)
     home_user_id: str | None = None
+    home_lineup_mode: Literal["strongest", "rotate"] = "strongest"
     away_club_id: str | None = None
     away_club_name: str | None = None
     away_strength_rating: int | None = Field(default=None, ge=1, le=100)
     away_user_id: str | None = None
+    away_lineup_mode: Literal["strongest", "rotate"] = "strongest"
     replay_visibility: ReplayVisibility = ReplayVisibility.COMPETITION
     match_status: MatchStatus = MatchStatus.QUEUED
     is_cup_match: bool = False
