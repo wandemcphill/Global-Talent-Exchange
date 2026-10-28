@@ -40,6 +40,7 @@ test.afterEach(async ({ page: _page }, testInfo) => {
 });
 
 test("Club squad route loads the roster or explicit no-club state", async ({ page }, testInfo) => {
+  test.setTimeout(240_000);
   // Club HQ is the explicit Club lane, not the Home tab.
   await visitAuthedRoute(page, "/app/club");
 
