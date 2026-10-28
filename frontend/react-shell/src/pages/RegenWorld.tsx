@@ -1,18 +1,62 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Award, Compass, Dna, Filter, Flame, Globe2, Search, ShieldAlert, Sparkles, Trophy, Users } from "lucide-react";
 import { api } from "@/lib/api";
+import { useActiveClub } from "@/lib/owner";
+import { journeyLinks, readJourneyParams } from "@/lib/playerJourney";
 import { RegenCard } from "@/components/gtex/RegenCard";
 import { PlayerDossier } from "@/components/gtex/PlayerDossier";
 import { Loading } from "@/components/gtex/ui";
 import { toast } from "sonner";
 
 export function RegenWorld() {
-  const [tab, setTab] = useState<"feed" | "rising" | "bloodlines" | "rankings" | "hall">("feed");
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { active: activeClub } = useActiveClub();
+
+  const journeyParams = useMemo(() => readJourneyParams(location.search), [location.search]);
+
+  const [tab, setTab] = useState<"feed" | "rising" | "bloodlines" | "rankings" | "hall">(() => {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get("tab");
+    if (t === "rising" || t === "bloodlines" || t === "rankings" || t === "hall") return t;
+    return "feed";
+  });
   const [search, setSearch] = useState("");
   const [positionFilter, setPositionFilter] = useState("ALL");
   const [originFilter, setOriginFilter] = useState("ALL");
-  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(journeyParams.player);
+
+  useEffect(() => {
+    if (journeyParams.player && journeyParams.player !== selectedPlayerId) {
+      setSelectedPlayerId(journeyParams.player);
+    }
+  }, [journeyParams.player]);
+
+  const updateSelectedPlayer = (id: string | null) => {
+    setSelectedPlayerId(id);
+    const searchParams = new URLSearchParams(location.search);
+    if (id) {
+      searchParams.set("player", id);
+    } else {
+      searchParams.delete("player");
+    }
+    const nextSearch = searchParams.toString();
+    navigate({ search: nextSearch ? `?${nextSearch}` : "" }, { replace: true });
+  };
+
+  const handleTabChange = (nextTab: "feed" | "rising" | "bloodlines" | "rankings" | "hall") => {
+    setTab(nextTab);
+    const searchParams = new URLSearchParams(location.search);
+    if (nextTab !== "feed") {
+      searchParams.set("tab", nextTab);
+    } else {
+      searchParams.delete("tab");
+    }
+    const nextSearch = searchParams.toString();
+    navigate({ search: nextSearch ? `?${nextSearch}` : "" }, { replace: true });
+  };
 
   // Canonical Query 1: Scouting Feed
   const { data: scoutingData, isLoading: loadingScouting } = useQuery({
@@ -117,7 +161,11 @@ export function RegenWorld() {
 
   const handleAddToWatchlist = async (id: string) => {
     try {
-      await api.post("/transfer-hub/watchlist", { player_id: id });
+      await api.post("/transfer-market/watchlist", {
+        player_id: id,
+        club_id: activeClub?.club_id,
+        source: "scouting_feed",
+      });
       toast.success("Player added to transfer shortlist.");
     } catch {
       toast.info("Scouted player added to notes.");
@@ -181,7 +229,7 @@ export function RegenWorld() {
             return (
               <button
                 key={item.id}
-                onClick={() => setTab(item.id as any)}
+                onClick={() => handleTabChange(item.id as any)}
                 data-testid={`tab-${item.id}`}
                 className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-all ${
                   active
@@ -283,7 +331,7 @@ export function RegenWorld() {
                     serial={p.serial_number}
                     price={p.market_value_coin || 12000}
                     variant="full"
-                    onClick={() => setSelectedPlayerId(id)}
+                    onClick={() => updateSelectedPlayer(id)}
                   />
                 );
               })}
@@ -341,7 +389,7 @@ export function RegenWorld() {
                   ]).map((entry: any) => (
                     <tr
                       key={entry.id}
-                      onClick={() => entry.player_id && setSelectedPlayerId(entry.player_id)}
+                      onClick={() => entry.player_id && updateSelectedPlayer(entry.player_id)}
                       className="cursor-pointer hover:bg-emerald-500/10 transition-colors"
                     >
                       <td className="gx-mono font-black text-amber-300">#{entry.rank}</td>
@@ -398,11 +446,11 @@ export function RegenWorld() {
       {selectedPlayerId && (
         <PlayerDossier
           playerId={selectedPlayerId}
-          onClose={() => setSelectedPlayerId(null)}
+          onClose={() => updateSelectedPlayer(null)}
           onAddToWatchlist={handleAddToWatchlist}
           onMakeOffer={(id) => {
-            setSelectedPlayerId(null);
-            toast.info(`Ready to submit offer for prospect ${id} in Transfer Hub.`);
+            updateSelectedPlayer(null);
+            navigate(journeyLinks.transferHub("listings", id));
           }}
         />
       )}
