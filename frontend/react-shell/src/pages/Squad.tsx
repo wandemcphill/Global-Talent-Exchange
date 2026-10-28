@@ -31,6 +31,7 @@ import { Btn, Chip, Coin, Loading, PageHeader, Panel, TraitBar } from "@/compone
 import { PlayerCard } from "@/components/gtex/PlayerCard";
 import { PlayerDrawer } from "@/components/gtex/PlayerDrawer";
 import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
+import { HolographicPlayerCard, TacticalPitch25D } from "@/components/gtex/ApexWidgets";
 import { journeyLinks, readJourneyParams, SQUAD_SEASON_LABEL } from "@/lib/playerJourney";
 
 function ManagerSheet({ club }: any) {
@@ -1145,6 +1146,30 @@ export default function Squad() {
 
       {/* 2. Executive & Staff Boardroom */}
       <BoardroomSection club={club} />
+
+      <div className="grid gap-6 lg:grid-cols-12 mt-6">
+        <div className="lg:col-span-8">
+          <TacticalPitch25D
+            formation={club.formation || "4-3-3"}
+            players={club.squad || []}
+            onSelectPlayer={setSelectedPlayer}
+          />
+        </div>
+        <div className="lg:col-span-4">
+          <HolographicPlayerCard
+            name={club.squad?.[0]?.name || "Marquee Talisman"}
+            position={club.squad?.[0]?.position || "ST"}
+            overall={Number(club.squad?.[0]?.rating || 88)}
+            potential={Number(club.squad?.[0]?.potential || 93)}
+            clubName={club.club_name}
+            priceGtx={Number(club.squad?.[0]?.value_coin || 14500)}
+            jerseyNumber={9}
+            badgeLabel="★ SQUAD CAPTAIN FOIL"
+            actionLabel="Open Dossier →"
+            onAction={() => club.squad?.[0] && setSelectedPlayer(club.squad[0])}
+          />
+        </div>
+      </div>
 
       {/* 3. Pitch Operations & Squad Roster */}
       <div className="grid gap-6 lg:grid-cols-12 mt-6">

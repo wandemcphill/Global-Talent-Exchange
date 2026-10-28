@@ -1,13 +1,13 @@
-@import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --gx-bg: #070b11;
-  --gx-card: #0f172a;
-  --gx-line: rgba(255, 255, 255, 0.08);
+  --gx-bg: #050811;
+  --gx-card: #0b1220;
+  --gx-line: rgba(255, 255, 255, 0.11);
   --gx-emerald: #10b981;
   --gx-gold: #f59e0b;
   --gx-cyan: #06b6d4;
@@ -16,53 +16,200 @@
   --gx-fan: #f59e0b;
 }
 
-html, body, #root { background: var(--gx-bg); }
+html, body, #root {
+  background: var(--gx-bg);
+}
+
 body {
   margin: 0;
-  color: #e2e8f0;
+  color: #f1f5f9;
   font-family: "Inter", "DM Sans", sans-serif;
   -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
-::selection { background: rgba(16, 185, 129, 0.35); color: #fff; }
+
+::selection {
+  background: rgba(16, 185, 129, 0.35);
+  color: #fff;
+}
 
 @layer components {
-  .gx-display { font-family: "Barlow Condensed", "Outfit", sans-serif; }
-  .gx-mono { font-family: "JetBrains Mono", monospace; }
-  .gx-eyebrow { @apply text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-400; font-family: "JetBrains Mono", monospace; }
-  .gx-h1 { @apply text-4xl sm:text-5xl lg:text-6xl font-black uppercase leading-[0.92] tracking-tight text-white; font-family: "Barlow Condensed", sans-serif; }
-  .gx-h2 { @apply text-2xl sm:text-3xl font-extrabold uppercase tracking-tight text-white; font-family: "Barlow Condensed", sans-serif; }
-  .gx-h3 { @apply text-xl font-bold uppercase tracking-wide text-white; font-family: "Barlow Condensed", sans-serif; }
-  .gx-panel { @apply relative rounded-md border border-white/[0.08] bg-slate-900/60 p-5 sm:p-6; }
-  .gx-panel-live { @apply border-emerald-500/40; box-shadow: inset 0 1px 0 rgba(16, 185, 129, 0.35); }
-  .gx-btn { @apply inline-flex items-center justify-center gap-2 rounded-sm px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] transition-[background-color,color,transform,border-color] duration-200 disabled:cursor-not-allowed disabled:opacity-40 active:scale-[0.98]; }
-  .gx-btn-primary { @apply bg-emerald-500 text-slate-950 hover:bg-emerald-400 hover:text-slate-950; }
-  .gx-btn-secondary { @apply border border-white/15 bg-white/[0.03] text-slate-100 hover:border-emerald-400/60 hover:bg-emerald-500/10 hover:text-white; }
-  .gx-btn-ghost { @apply text-slate-400 hover:bg-white/5 hover:text-white; }
-  .gx-btn-danger { @apply border border-red-500/40 text-red-300 hover:bg-red-500/15 hover:text-red-200; }
-  .gx-btn-gold { @apply bg-amber-500 text-slate-950 hover:bg-amber-400 hover:text-slate-950; }
-  .gx-input { @apply w-full rounded-sm border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition-colors focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30; }
-  .gx-label { @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400; }
-  .gx-chip { @apply inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em]; font-family: "JetBrains Mono", monospace; }
-  .gx-table th { @apply border-b border-white/10 px-3 py-2 text-left text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500; }
-  .gx-table td { @apply border-b border-white/[0.05] px-3 py-2.5 text-sm text-slate-200; }
-  .gx-table tr { @apply transition-colors hover:bg-white/[0.02]; }
+  .gx-display {
+    font-family: "Barlow Condensed", "Outfit", sans-serif;
+  }
+  .gx-mono {
+    font-family: "JetBrains Mono", monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .gx-eyebrow {
+    @apply text-[11px] font-extrabold uppercase tracking-[0.22em] text-emerald-400;
+    font-family: "JetBrains Mono", monospace;
+    text-shadow: 0 0 18px rgba(16, 185, 129, 0.35);
+  }
+  .gx-h1 {
+    @apply text-4xl sm:text-5xl lg:text-6xl font-black uppercase leading-[0.92] tracking-tight text-white;
+    font-family: "Barlow Condensed", sans-serif;
+    text-shadow: 0 4px 24px rgba(0, 0, 0, 0.65);
+  }
+  .gx-h2 {
+    @apply text-2xl sm:text-3xl font-extrabold uppercase tracking-tight text-white;
+    font-family: "Barlow Condensed", sans-serif;
+    text-shadow: 0 2px 14px rgba(0, 0, 0, 0.55);
+  }
+  .gx-h3 {
+    @apply text-xl font-bold uppercase tracking-wide text-white;
+    font-family: "Barlow Condensed", sans-serif;
+  }
+
+  /* Obsidian Broadcast Glass Panel */
+  .gx-panel {
+    @apply relative rounded-2xl border border-white/[0.11] p-5 sm:p-6 transition-all duration-300;
+    background: linear-gradient(155deg, rgba(17, 27, 48, 0.86) 0%, rgba(9, 15, 28, 0.94) 65%, rgba(6, 10, 20, 0.98) 100%);
+    box-shadow:
+      0 18px 42px -10px rgba(0, 0, 0, 0.68),
+      inset 0 1px 0 rgba(255, 255, 255, 0.14),
+      inset 0 0 24px rgba(16, 185, 129, 0.02);
+    backdrop-filter: blur(16px);
+  }
+  .gx-panel:hover {
+    border-color: rgba(255, 255, 255, 0.18);
+    box-shadow:
+      0 22px 48px -10px rgba(0, 0, 0, 0.78),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2),
+      0 0 28px rgba(16, 185, 129, 0.06);
+  }
+  .gx-panel-live {
+    border-color: rgba(16, 185, 129, 0.48);
+    background: linear-gradient(155deg, rgba(16, 185, 129, 0.11) 0%, rgba(13, 22, 40, 0.94) 48%, rgba(6, 10, 20, 0.98) 100%);
+    box-shadow:
+      0 20px 46px -10px rgba(0, 0, 0, 0.75),
+      inset 0 1px 0 rgba(52, 211, 153, 0.42),
+      0 0 32px rgba(16, 185, 129, 0.12);
+  }
+
+  /* Tactile Metallic Shimmer Buttons */
+  .gx-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.14em] transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40 active:scale-[0.97];
+  }
+  .gx-btn-primary {
+    @apply text-slate-950 hover:-translate-y-0.5;
+    background: linear-gradient(135deg, #34d399 0%, #10b981 55%, #059669 100%);
+    box-shadow:
+      0 8px 22px -4px rgba(16, 185, 129, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  }
+  .gx-btn-primary:hover {
+    background: linear-gradient(135deg, #6ee7b7 0%, #10b981 55%, #047857 100%);
+    box-shadow:
+      0 12px 28px -4px rgba(16, 185, 129, 0.68),
+      inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  }
+  .gx-btn-secondary {
+    @apply border border-white/15 bg-white/[0.04] text-slate-100 hover:border-emerald-400/60 hover:bg-emerald-500/15 hover:text-white hover:-translate-y-0.5;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+  .gx-btn-ghost {
+    @apply text-slate-300 hover:bg-white/10 hover:text-white rounded-xl;
+  }
+  .gx-btn-danger {
+    @apply border border-red-500/45 bg-red-500/10 text-red-200 hover:bg-red-500/20 hover:text-white;
+  }
+  .gx-btn-gold {
+    @apply text-slate-950 hover:-translate-y-0.5;
+    background: linear-gradient(135deg, #fde047 0%, #f59e0b 58%, #d97706 100%);
+    box-shadow:
+      0 8px 22px -4px rgba(245, 158, 11, 0.48),
+      inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  }
+  .gx-btn-gold:hover {
+    background: linear-gradient(135deg, #fef08a 0%, #fbbf24 58%, #b45309 100%);
+    box-shadow:
+      0 12px 28px -4px rgba(245, 158, 11, 0.65),
+      inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  }
+
+  /* High-Contrast Glass Inputs & Chips */
+  .gx-input {
+    @apply w-full rounded-xl border border-white/15 bg-slate-950/80 px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition-all focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30;
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55);
+  }
+  .gx-label {
+    @apply mb-1.5 block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-300;
+  }
+  .gx-chip {
+    @apply inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em];
+    font-family: "JetBrains Mono", monospace;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+
+  /* Broadcast Data Tables */
+  .gx-table th {
+    @apply border-b border-white/15 bg-white/[0.02] px-3.5 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400;
+  }
+  .gx-table td {
+    @apply border-b border-white/[0.06] px-3.5 py-3 text-sm text-slate-100;
+  }
+  .gx-table tr {
+    @apply transition-colors hover:bg-emerald-500/[0.05];
+  }
 }
 
 .gx-pitch-grid {
   background-image:
-    linear-gradient(rgba(16, 185, 129, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(16, 185, 129, 0.05) 1px, transparent 1px);
-  background-size: 48px 48px;
+    linear-gradient(rgba(16, 185, 129, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 185, 129, 0.06) 1px, transparent 1px);
+  background-size: 44px 44px;
 }
+
 .gx-noise::after {
   content: "";
-  position: absolute; inset: 0; pointer-events: none; opacity: 0.05;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.04;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
 }
-@keyframes gx-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-.gx-rise { animation: gx-rise 0.5s ease both; }
-@keyframes gx-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
-.gx-live-dot { animation: gx-pulse 1.4s ease-in-out infinite; }
-@media (prefers-reduced-motion: reduce) { .gx-rise, .gx-live-dot { animation: none; } }
-.gx-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
-.gx-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+
+@keyframes gx-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.gx-rise {
+  animation: gx-rise 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes gx-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.92);
+  }
+}
+.gx-live-dot {
+  animation: gx-pulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gx-rise,
+  .gx-live-dot {
+    animation: none;
+  }
+}
+
+.gx-scroll::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.gx-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+}

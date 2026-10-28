@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Award,
@@ -14,6 +14,7 @@ import {
   Inbox,
   LogOut,
   Newspaper,
+  Search,
   Shield,
   Shirt,
   ShoppingBag,
@@ -27,27 +28,31 @@ import { useAuth } from "@/lib/auth";
 import { fmt, useActiveClub, useControlCenter } from "@/lib/owner";
 import { Loading } from "@/components/gtex/ui";
 import { GlobalLiveTicker } from "@/components/gtex/GlobalLiveTicker";
+import { CommandPaletteModal } from "@/components/gtex/ApexWidgets";
 import { formatWorldDate, formatWorldTime, useWorldClock } from "@/lib/worldClock";
 
 const NAV = [
-  { to: "/app", label: "Control Center", icon: Gauge, end: true, id: "home" },
-  { to: "/app/clubs", label: "My Clubs", icon: Building2, id: "clubs" },
-  { to: "/app/showroom", label: "Showroom", icon: Sparkles, id: "showroom" },
-  { to: "/app/jackpot", label: "Global Jackpot", icon: Flame, id: "jackpot" },
-  { to: "/app/story", label: "Club Story", icon: BookOpen, id: "story" },
-  { to: "/app/newsroom", label: "AI Newsroom", icon: Newspaper, id: "newsroom" },
-  { to: "/app/transfer-hub", label: "Transfer Hub", icon: Compass, id: "transfers" },
-  { to: "/app/regen-world", label: "Regen World", icon: Globe, id: "regen-world" },
-  { to: "/app/awards", label: "Regen Awards", icon: Award, id: "awards" },
-  { to: "/app/market", label: "Player Shares", icon: ShoppingBag, id: "market" },
-  { to: "/app/competitions", label: "Competitions", icon: Trophy, id: "competitions" },
-  { to: "/app/squad", label: "Manager & Squad", icon: Shirt, id: "squad" },
-  { to: "/app/academy", label: "Academy", icon: Sprout, id: "academy" },
-  { to: "/app/national", label: "National Team", icon: Flag, id: "national" },
-  { to: "/app/finance", label: "Finance & Ledger", icon: Wallet, id: "finance" },
-  { to: "/app/creator-access", label: "Creator Access", icon: Video, id: "creator-access" },
-  { to: "/app/coin-traders", label: "Coin Traders", icon: CandlestickChart, id: "coin-traders" },
-  { to: "/app/inbox", label: "Inbox", icon: Inbox, id: "inbox" },
+  { to: "/app", label: "Control Center", icon: Gauge, end: true, id: "home", category: "CLUB HQ & DYNASTY" },
+  { to: "/app/clubs", label: "My Clubs", icon: Building2, id: "clubs", category: "CLUB HQ & DYNASTY" },
+  { to: "/app/showroom", label: "Showroom", icon: Sparkles, id: "showroom", category: "CLUB HQ & DYNASTY" },
+  { to: "/app/story", label: "Club Story", icon: BookOpen, id: "story", category: "CLUB HQ & DYNASTY" },
+  { to: "/app/inbox", label: "Inbox", icon: Inbox, id: "inbox", category: "CLUB HQ & DYNASTY" },
+
+  { to: "/app/squad", label: "Manager & Squad", icon: Shirt, id: "squad", category: "FOOTBALL & TRANSFERS" },
+  { to: "/app/transfer-hub", label: "Transfer Hub", icon: Compass, id: "transfers", category: "FOOTBALL & TRANSFERS" },
+  { to: "/app/academy", label: "Academy", icon: Sprout, id: "academy", category: "FOOTBALL & TRANSFERS" },
+  { to: "/app/competitions", label: "Competitions", icon: Trophy, id: "competitions", category: "FOOTBALL & TRANSFERS" },
+  { to: "/app/national", label: "National Team", icon: Flag, id: "national", category: "FOOTBALL & TRANSFERS" },
+
+  { to: "/app/newsroom", label: "AI Newsroom", icon: Newspaper, id: "newsroom", category: "WORLD & MEDIA" },
+  { to: "/app/regen-world", label: "Regen World", icon: Globe, id: "regen-world", category: "WORLD & MEDIA" },
+  { to: "/app/awards", label: "Regen Awards", icon: Award, id: "awards", category: "WORLD & MEDIA" },
+  { to: "/app/creator-access", label: "Creator Access", icon: Video, id: "creator-access", category: "WORLD & MEDIA" },
+
+  { to: "/app/finance", label: "Finance & Ledger", icon: Wallet, id: "finance", category: "ECONOMY & VAULT" },
+  { to: "/app/market", label: "Player Shares", icon: ShoppingBag, id: "market", category: "ECONOMY & VAULT" },
+  { to: "/app/jackpot", label: "Global Jackpot", icon: Flame, id: "jackpot", category: "ECONOMY & VAULT" },
+  { to: "/app/coin-traders", label: "Coin Traders", icon: CandlestickChart, id: "coin-traders", category: "ECONOMY & VAULT" },
 ];
 
 function NavItem({ item, badge }: any) {
@@ -58,17 +63,17 @@ function NavItem({ item, badge }: any) {
       end={item.end}
       data-testid={`nav-${item.id}`}
       className={({ isActive }) =>
-        `group flex items-center gap-3 rounded-md px-3 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
+        `group flex items-center gap-3 rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
           isActive
-            ? "bg-emerald-500/15 text-white shadow-[inset_3px_0_0_#10B981] border-r border-emerald-500/30"
-            : "text-slate-400 hover:bg-white/[0.04] hover:text-white"
+            ? "bg-gradient-to-r from-emerald-500/20 to-emerald-500/5 text-white shadow-[inset_3px_0_0_#10B981,0_4px_14px_rgba(0,0,0,0.4)] border border-emerald-500/35"
+            : "text-slate-400 hover:bg-white/[0.05] hover:text-white border border-transparent"
         }`
       }
     >
-      <Icon size={15} className="shrink-0" />
+      <Icon size={15} className="shrink-0 text-emerald-400/85 group-hover:text-emerald-300" />
       <span className="truncate">{item.label}</span>
       {badge > 0 && (
-        <span className="gx-mono ml-auto rounded bg-amber-500 px-1.5 py-0.2 text-[10px] font-black text-slate-950">
+        <span className="gx-mono ml-auto rounded-md bg-amber-400 px-1.5 py-0.2 text-[10px] font-black text-slate-950 shadow">
           {badge}
         </span>
       )}
@@ -83,15 +88,18 @@ function ClubSwitcher() {
     <div className="flex items-center gap-2">
       {active && (
         <span
-          className="gx-display hidden sm:flex size-6 shrink-0 items-center justify-center rounded text-[10px] font-black shadow-sm"
-          style={{ background: active.primary_color || "#10b981", color: active.secondary_color || "#070b11" }}
+          className="gx-display hidden sm:flex size-7 shrink-0 items-center justify-center rounded-lg text-[10px] font-black shadow-md border border-white/20"
+          style={{
+            background: active.primary_color || "#10b981",
+            color: active.secondary_color || "#070b11",
+          }}
         >
           {(active.short_name || active.club_name).slice(0, 3).toUpperCase()}
         </span>
       )}
       <select
         data-testid="club-switcher"
-        className="gx-input max-w-[220px] py-1 text-xs border-white/15 bg-black/60 font-semibold"
+        className="gx-input max-w-[220px] py-1.5 text-xs border-white/15 bg-slate-950/90 font-bold rounded-xl"
         value={active?.club_id}
         onChange={(e) => select(e.target.value)}
       >
@@ -111,7 +119,7 @@ function GlobalWorldClockPill() {
   return (
     <div
       data-testid="global-world-clock-pill"
-      className="hidden md:flex items-center gap-2 rounded-full border border-sky-400/30 bg-sky-950/40 px-3 py-1 text-[11px] font-medium text-sky-200"
+      className="hidden md:flex items-center gap-2 rounded-full border border-sky-400/35 bg-sky-950/50 px-3 py-1 text-[11px] font-medium text-sky-200 shadow-inner"
       title={`Authoritative GTEX World Clock · ${clock.isPaused ? "Paused" : "Running"}`}
     >
       <Clock size={13} className="text-amber-300 shrink-0" />
@@ -131,6 +139,22 @@ export default function AppShell() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { data, isLoading } = useControlCenter();
+  const { active } = useActiveClub();
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // Global Ctrl+K / Cmd+K shortcut for Executive Command Spotlight
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((prev) => !prev);
+      } else if (e.key === "Escape") {
+        setPaletteOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   if (loading) return <Loading label="Opening the boardroom..." />;
   if (!user) return <Navigate to="/login" replace />;
@@ -148,8 +172,6 @@ export default function AppShell() {
     !isDedicatedAccount &&
     clubs.some((c: any) => ["competition", "active"].includes(c.stage));
 
-  // Account type is a lane boundary, not a workspace preference. Trader and
-  // Creator accounts cannot navigate into club-owner actions or switch personas.
   const traderAllowed = ["/app/coin-traders", "/app/finance"];
   const creatorAllowed = [
     "/app/creator-access",
@@ -178,8 +200,6 @@ export default function AppShell() {
     return <Navigate to="/app/creator-access" replace />;
   }
 
-  // Only normal member accounts enter club activation. Dedicated Creator and
-  // Coin Trader accounts never inherit club onboarding from old ownership data.
   if (!isAdmin && !isDedicatedAccount && hasClubProfile && !hasActiveClub) {
     return <Navigate to="/onboarding" replace />;
   }
@@ -187,56 +207,122 @@ export default function AppShell() {
   const normalNav = hasActiveClub
     ? NAV
     : NAV.filter((item) =>
-        ["home", "clubs", "showroom", "jackpot", "regen-world", "awards", "market", "competitions", "national", "finance", "creator-access", "coin-traders"].includes(item.id),
+        [
+          "home",
+          "clubs",
+          "showroom",
+          "jackpot",
+          "regen-world",
+          "awards",
+          "market",
+          "competitions",
+          "national",
+          "finance",
+          "creator-access",
+          "coin-traders",
+        ].includes(item.id)
       );
   const visibleNav = isTraderAccount
     ? NAV.filter((item) => ["coin-traders", "finance"].includes(item.id))
     : isCreatorAccount
-      ? NAV.filter((item) =>
-          ["creator-access", "newsroom", "transfers", "regen-world", "awards", "market", "competitions", "national", "finance"].includes(item.id),
-        ).map((item) => item.id === "creator-access" ? { ...item, label: "Creator Studio" } : item)
-      : normalNav;
+    ? NAV.filter((item) =>
+        [
+          "creator-access",
+          "newsroom",
+          "transfers",
+          "regen-world",
+          "awards",
+          "market",
+          "competitions",
+          "national",
+          "finance",
+        ].includes(item.id)
+      ).map((item) => (item.id === "creator-access" ? { ...item, label: "Creator Studio" } : item))
+    : normalNav;
+
   const wallet = data?.economy?.wallet || {};
+  const clubPrimary = active?.primary_color || "#10b981";
+  const clubSecondary = active?.secondary_color || "#f59e0b";
+
+  // Group visible navigation items by category for zero-clutter scanning
+  const categories = Array.from(new Set(visibleNav.map((n) => n.category || "COMMAND")));
 
   return (
-    <div className="min-h-screen bg-[#070B11] text-slate-200">
+    <div className="min-h-screen bg-[#050811] text-slate-100">
+      {/* Global Ctrl+K Command Spotlight Modal */}
+      <CommandPaletteModal
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        items={visibleNav}
+        onNavigate={(to) => navigate(to)}
+      />
+
       {/* Desktop Fixed Sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-white/[0.08] bg-[#05090f] lg:flex">
-        <div className="px-5 pb-5 pt-6 border-b border-white/[0.06]">
-          <div className="flex items-center gap-2">
-            <span className="flex size-7 items-center justify-center rounded bg-emerald-500 font-display text-sm font-black text-slate-950">
-              GX
-            </span>
-            <p className="gx-display text-2xl font-black tracking-tight text-white leading-none">
-              GTEX
+      <aside
+        className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-white/[0.09] lg:flex"
+        style={{
+          background: "linear-gradient(180deg, #060a14 0%, #04070f 100%)",
+          boxShadow: "10px 0 36px rgba(0,0,0,0.65)",
+        }}
+      >
+        <div className="px-5 pb-4 pt-5 border-b border-white/[0.08] flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <span
+                className="flex size-8 items-center justify-center rounded-xl font-display text-sm font-black text-slate-950 shadow-lg"
+                style={{
+                  background: "linear-gradient(135deg, #34d399, #10b981)",
+                  boxShadow: "0 0 18px rgba(16,185,129,0.5)",
+                }}
+              >
+                GX
+              </span>
+              <p className="gx-display text-2xl font-black tracking-tight text-white leading-none">
+                GTEX
+              </p>
+            </div>
+            <p className="gx-eyebrow mt-1.5 !text-[9px] text-emerald-400">
+              Football Management Universe
             </p>
           </div>
-          <p className="gx-eyebrow mt-1.5 text-[9px] text-emerald-400">
-            Football Management Universe
-          </p>
         </div>
 
-        <nav className="gx-scroll flex-1 space-y-0.5 overflow-y-auto px-3 py-4" data-testid="primary-nav">
-          {visibleNav.map((n) => (
-            <NavItem key={n.to} item={n} badge={n.id === "inbox" ? data?.inbox_open_count : 0} />
+        <nav className="gx-scroll flex-1 space-y-4 overflow-y-auto px-3 py-4" data-testid="primary-nav">
+          {categories.map((cat) => (
+            <div key={cat} className="space-y-1">
+              <p className="px-3 text-[9px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
+                {cat}
+              </p>
+              {visibleNav
+                .filter((n) => (n.category || "COMMAND") === cat)
+                .map((n) => (
+                  <NavItem
+                    key={n.to}
+                    item={n}
+                    badge={n.id === "inbox" ? data?.inbox_open_count : 0}
+                  />
+                ))}
+            </div>
           ))}
           {isAdmin && (
-            <div className="pt-3 border-t border-white/[0.06]">
+            <div className="pt-3 border-t border-white/[0.08]">
               <NavItem item={{ to: "/app/admin", label: "Admin Godmode", icon: Shield, id: "admin" }} />
             </div>
           )}
         </nav>
 
-        <div className="border-t border-white/[0.08] bg-black/40 p-4">
-          <p className="truncate text-xs font-bold text-white">{user.display_name || user.username}</p>
-          <p className="gx-mono text-[10px] text-slate-400">
+        <div className="border-t border-white/[0.09] bg-black/50 p-4">
+          <p className="truncate text-xs font-extrabold text-white">
+            {user.display_name || user.username}
+          </p>
+          <p className="gx-mono text-[10px] text-slate-400 mt-0.5">
             {isTraderAccount
               ? "Coin trader account · dedicated lane"
               : isCreatorAccount
-                ? "Creator account · dedicated lane"
-                : hasActiveClub
-                  ? `Owner integrity ${data?.integrity?.score ?? 100}/100`
-                  : "User account · club ownership optional"}
+              ? "Creator account · dedicated lane"
+              : hasActiveClub
+              ? `Owner integrity ${data?.integrity?.score ?? 100}/100`
+              : "User account · club ownership optional"}
           </p>
           <button
             data-testid="logout-button"
@@ -244,7 +330,7 @@ export default function AppShell() {
               logout();
               navigate("/");
             }}
-            className="mt-3 flex items-center gap-2 text-xs text-slate-500 transition-colors hover:text-white"
+            className="mt-3 flex items-center gap-2 text-xs font-semibold text-slate-400 transition-colors hover:text-white"
           >
             <LogOut size={13} /> Sign out
           </button>
@@ -253,41 +339,68 @@ export default function AppShell() {
 
       {/* Main App Content Viewport */}
       <div className="lg:pl-64">
-        {/* Sticky Top Bar */}
-        <header className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-white/[0.08] bg-slate-950/85 px-4 py-3 backdrop-blur-xl sm:px-8">
+        {/* Sticky Broadcast Top Bar */}
+        <header className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-white/[0.1] bg-slate-950/85 px-4 py-2.5 backdrop-blur-xl sm:px-8">
           <p className="gx-display text-xl font-black text-white lg:hidden">GTEX</p>
           {!isDedicatedAccount && <ClubSwitcher />}
           <GlobalWorldClockPill />
 
-          <div className="ml-auto flex items-center gap-4 text-xs">
+          {/* Quick Command Palette Trigger (Ctrl+K) */}
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            className="hidden xl:inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-emerald-400/50 hover:text-white"
+          >
+            <Search size={13} className="text-emerald-400" />
+            <span>Quick Jump...</span>
+            <kbd className="rounded bg-white/10 px-1.5 py-0.2 text-[10px] font-bold text-slate-300">
+              Ctrl K
+            </kbd>
+          </button>
+
+          {/* Glowing Vault Balance Pills */}
+          <div className="ml-auto flex items-center gap-2.5 text-xs">
             {hasActiveClub ? (
-              <span data-testid="topbar-gtex-balance" className="gx-mono text-slate-300">
-                Treasury <b className="text-white font-mono">{fmt(wallet.gtex_total)}</b> <span className="text-blue-400 font-bold">GTX</span>
+              <span
+                data-testid="topbar-gtex-balance"
+                className="gx-mono inline-flex items-center gap-1.5 rounded-xl border border-sky-400/35 bg-slate-950/90 px-3 py-1 text-slate-200 shadow-inner"
+              >
+                <span className="h-2 w-2 rounded-full bg-sky-400 shadow-[0_0_8px_#38bdf8]" />
+                <span>Treasury</span>
+                <b className="text-white font-mono">{fmt(wallet.gtex_total)}</b>
+                <span className="text-sky-400 font-extrabold">GTX</span>
               </span>
             ) : (
-              <span data-testid="topbar-user-account" className="gx-mono text-slate-400">
+              <span data-testid="topbar-user-account" className="gx-mono text-slate-300">
                 {isTraderAccount
                   ? "Coin Trader account · dedicated lane"
                   : isCreatorAccount
-                    ? "Creator account · dedicated lane"
-                    : "GTEX member account · no club required"}
+                  ? "Creator account · dedicated lane"
+                  : "GTEX member account · no club required"}
               </span>
             )}
-            <span data-testid="topbar-fan-balance" className="gx-mono hidden text-slate-300 sm:inline">
-              <b className="text-white font-mono">{fmt(wallet.fan_total)}</b> <span className="text-amber-400 font-bold">FAN</span>
+            <span
+              data-testid="topbar-fan-balance"
+              className="gx-mono hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-amber-400/35 bg-slate-950/90 px-3 py-1 text-slate-200 shadow-inner"
+            >
+              <span className="h-2 w-2 rounded-full bg-amber-400 shadow-[0_0_8px_#f59e0b]" />
+              <b className="text-white font-mono">{fmt(wallet.fan_total)}</b>
+              <span className="text-amber-400 font-extrabold">FAN</span>
             </span>
           </div>
 
           {/* Responsive Mobile Navigation Rail */}
-          <nav className="gx-scroll -mx-1 flex w-full gap-1 overflow-x-auto lg:hidden pt-2 border-t border-white/[0.06]">
+          <nav className="gx-scroll -mx-1 flex w-full gap-1.5 overflow-x-auto lg:hidden pt-2 border-t border-white/[0.08]">
             {visibleNav.map((n) => (
               <NavLink
                 key={n.to}
                 to={n.to}
                 end={n.end}
                 className={({ isActive }) =>
-                  `whitespace-nowrap rounded px-3 py-1.5 text-xs font-bold uppercase ${
-                    isActive ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40" : "text-slate-400"
+                  `whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-bold uppercase ${
+                    isActive
+                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                      : "text-slate-400"
                   }`
                 }
               >
@@ -300,8 +413,13 @@ export default function AppShell() {
         {/* Global Live Ticker */}
         <GlobalLiveTicker />
 
-        {/* Screen Outlet */}
-        <main className="min-h-[calc(100vh-64px)]">
+        {/* Screen Outlet with Dynamic Club-Color Ambient Stadium Spotlight */}
+        <main
+          className="relative min-h-[calc(100vh-64px)]"
+          style={{
+            background: `radial-gradient(ellipse at 25% 0%, ${clubPrimary}1f 0%, ${clubSecondary}0d 38%, transparent 70%)`,
+          }}
+        >
           <Outlet />
         </main>
       </div>

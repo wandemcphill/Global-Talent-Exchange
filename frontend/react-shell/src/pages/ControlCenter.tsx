@@ -41,6 +41,11 @@ import { InboxItem } from "@/components/gtex/InboxItem";
 import { WorldClockCard } from "@/components/gtex/WorldClockCard";
 import { OwnerBriefingPanel } from "@/components/gtex/OwnerBriefingPanel";
 import { Cinema3DStage, Cinema3DSceneType } from "@/components/gtex/Cinema3DStage";
+import {
+  HolographicPlayerCard,
+  TacticalPitch25D,
+  TelemetrySparklineCard,
+} from "@/components/gtex/ApexWidgets";
 
 function NoClubDashboard({ onCreateClub }: { onCreateClub: () => void }) {
   return (
@@ -290,6 +295,43 @@ export function ControlCenter() {
             </p>
             <p className="text-[11px] text-slate-400 mt-1">Continental Matchday Allocation</p>
           </div>
+        </div>
+      </section>
+
+      {/* 1b. APEX COMMAND DECK: 3D HOLOGRAPHIC TALISMAN + LIVE SVG SPARKLINE + 2.5D TACTICAL PITCH */}
+      <section className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch" data-testid="apex-command-deck">
+        <div className="lg:col-span-4">
+          <HolographicPlayerCard
+            name={clubDetail?.squad?.[0]?.name || "Kylian Regent"}
+            position={clubDetail?.squad?.[0]?.position || "ST"}
+            overall={Number(clubDetail?.squad?.[0]?.rating || 91)}
+            potential={Number(clubDetail?.squad?.[0]?.potential || 96)}
+            clubName={activeClubProfile.club_name || "GTEX FC"}
+            priceGtx={Number(clubDetail?.squad?.[0]?.market_value || 18500)}
+            jerseyNumber={9}
+            badgeLabel="★ CLUB TALISMAN FOIL"
+            actionLabel="Inspect Squad →"
+            onAction={() => navigate("/app/squad")}
+          />
+        </div>
+        <div className="lg:col-span-4 flex">
+          <div className="w-full">
+            <TelemetrySparklineCard
+              title="LIVE TREASURY & YIELD PULSE"
+              subtitle={`${activeClubProfile.club_name || "Club"} · 7-Day Commercial & Matchday Curve`}
+              amount={Number(wallet.gtex_total || activeClubProfile.cash || 248500)}
+              currency="GTX"
+              trustScore={Number(data?.integrity?.score || 94)}
+              hypeScore={96}
+            />
+          </div>
+        </div>
+        <div className="lg:col-span-4">
+          <TacticalPitch25D
+            formation={clubDetail?.formation || "4-3-3"}
+            players={clubDetail?.squad || []}
+            onSelectPlayer={() => navigate("/app/squad")}
+          />
         </div>
       </section>
 

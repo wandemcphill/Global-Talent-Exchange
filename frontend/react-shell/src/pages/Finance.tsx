@@ -9,6 +9,7 @@ import { fmt, label, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, Stat } from "@/components/gtex/ui";
 import { CoinTraderDesk } from "@/components/gtex/CoinTraderDesk";
 import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
+import { TelemetrySparklineCard } from "@/components/gtex/ApexWidgets";
 
 function Balances({ w }: any) {
   const rows = [
@@ -17,7 +18,16 @@ function Balances({ w }: any) {
   ];
   return (
     <Panel eyebrow="Owner wallet · labelled balances" title="Balances" testid="balances-panel" className="lg:col-span-12">
-      <div className="grid grid-cols-2 gap-6 md:grid-cols-4 lg:grid-cols-8">
+      <div className="mb-5">
+        <TelemetrySparklineCard
+          title="REAL-TIME TREASURY VELOCITY"
+          subtitle="Unified GTEX Coin & Commercial Liquidity Curve"
+          amount={Number(w.gtex_total || 0)}
+          currency="GTX"
+          deltaLabel="▲ LIVE LIQUIDITY PULSE"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-8">
         <Stat label="GTEX Coin total" value={<Coin amount={w.gtex_total} />} testid="balance-gtex-total" />
         <Stat label="Fan Coin" value={<Coin amount={w.fan_total} currency="FAN" />} testid="balance-fan-total" />
         {rows.map(([k, l, tone]) => <Stat key={k} label={l} value={fmt(w[k])} tone={tone} testid={`balance-${k}`} />)}
