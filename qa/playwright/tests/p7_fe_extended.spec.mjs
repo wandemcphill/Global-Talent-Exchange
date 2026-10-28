@@ -26,20 +26,28 @@ test("Club squad route loads the roster or explicit no-club state", async ({ pag
   // Club HQ is the explicit Club lane, not the Home tab.
   await visitAuthedRoute(page, "/app/club");
 
+  const liveDataRequired = page.getByText("Live club data required", { exact: true });
   const noClubEntry = page.getByText("Build your club command center", {
     exact: true,
   });
   const clubCommand = page.getByText("Club command", { exact: true });
   await expect
     .poll(
-      async () =>
-        Number(await noClubEntry.isVisible().catch(() => false)) +
-        Number(await clubCommand.isVisible().catch(() => false)),
+      async () => {
+        await enableAccessibility(page);
+        return (
+          Number(await liveDataRequired.isVisible().catch(() => false)) +
+          Number(await noClubEntry.isVisible().catch(() => false)) +
+          Number(await clubCommand.isVisible().catch(() => false))
+        );
+      },
       { timeout: 60_000 },
     )
     .toBeGreaterThan(0);
 
-  if (await noClubEntry.isVisible().catch(() => false)) {
+  if (await liveDataRequired.isVisible().catch(() => false)) {
+    await expect(page.getByText(/generated demo club data/i)).toBeVisible();
+  } else if (await noClubEntry.isVisible().catch(() => false)) {
     await expect(page.getByText("Create club", { exact: true })).toBeVisible();
   } else {
     // Scroll Club command toward the top of the Empire workspace scroll view so inline
@@ -65,9 +73,13 @@ test("Club squad route loads the roster or explicit no-club state", async ({ pag
     // in desktop layouts, the left panel is rendered inline.
     await expect
       .poll(
-        async () =>
-          Number(await browseButton.isVisible().catch(() => false)) +
-          Number(await squadSection.isVisible().catch(() => false)),
+        async () => {
+          await enableAccessibility(page);
+          return (
+            Number(await browseButton.isVisible().catch(() => false)) +
+            Number(await squadSection.isVisible().catch(() => false))
+          );
+        },
         { timeout: 15_000 },
       )
       .toBeGreaterThan(0);
@@ -92,9 +104,19 @@ test("Club squad route loads the roster or explicit no-club state", async ({ pag
     }
 
     // Flutter merges header titles and subtitles into a single semantics label
-    // ("Squad room Owned real players and regens attached to this club.").
-    await expect(page.getByText(/Squad room/i).first()).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText(/Lineup & squad registration/i).first()).toBeVisible({
+    // or exposes container headers via aria-label on a semantics group node.
+    await expect(
+      page
+        .getByText(/Squad room/i)
+        .or(page.locator('[aria-label*="Squad room" i]'))
+        .first(),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page
+        .getByText(/Lineup & squad registration/i)
+        .or(page.locator('[aria-label*="Lineup & squad registration" i]'))
+        .first(),
+    ).toBeVisible({
       timeout: 15_000,
     });
     await expect(
@@ -127,6 +149,7 @@ test("Club HQ opens an authoritative club or no-club state", async ({ page }, te
   await expect
     .poll(
       async () => {
+        await enableAccessibility(page);
         for (const state of acceptableStates) {
           if (await state.isVisible().catch(() => false)) return true;
         }

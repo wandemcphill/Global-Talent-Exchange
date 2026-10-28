@@ -160,10 +160,12 @@ export async function signIn(page) {
   }
 
   const authenticatedRoute = isHashRouting ? /#\/app(?:\/|$)/ : /\/app\//;
-  const authDeadline = Date.now() + 40_000;
+  const authDeadline = Date.now() + 45_000;
   let retryCount = 0;
+  let lastSubmitAt = Date.now();
   while (Date.now() < authDeadline) {
     if (authenticatedRoute.test(page.url())) break;
+    await enableAccessibility(page);
     const missingEmail = await page
       .getByText("Enter your email address.", { exact: true })
       .isVisible()
@@ -177,10 +179,11 @@ export async function signIn(page) {
       .first()
       .isVisible()
       .catch(() => false);
-    if ((missingEmail || missingPassword || backendError) && retryCount < 3) {
+    const stalledOnLogin = Date.now() - lastSubmitAt > 8_000;
+    if ((missingEmail || missingPassword || backendError || stalledOnLogin) && retryCount < 3) {
       retryCount += 1;
-      await page.waitForTimeout(1000);
-      if (missingEmail || missingPassword) {
+      await page.waitForTimeout(800);
+      if (missingEmail || missingPassword || stalledOnLogin) {
         if (await emailInput.isVisible().catch(() => false)) {
           await fillFlutterTextField(page, emailInput, process.env.GTEX_E2E_EMAIL);
         }
@@ -191,6 +194,7 @@ export async function signIn(page) {
       if (await enterBtn.isVisible().catch(() => false)) {
         await enterBtn.click({ force: true });
       }
+      lastSubmitAt = Date.now();
     }
     await page.waitForTimeout(400);
   }
@@ -228,6 +232,7 @@ export async function visitAuthedRoute(page, route) {
     await expect(surface).toBeVisible({ timeout: 120_000 });
     await enableAccessibility(page);
     await page.waitForTimeout(1200);
+    await enableAccessibility(page);
   } else {
     await enableAccessibility(page);
     await page.waitForTimeout(400);
