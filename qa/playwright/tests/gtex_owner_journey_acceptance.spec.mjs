@@ -15,13 +15,11 @@
  */
 import { expect, test } from "@playwright/test";
 import {
-  API_BASE_URL,
   assertNoHorizontalOverflow,
   clearSession,
   consoleRoute,
   reloadAndVerify,
   signInReact,
-  TEST_CREDENTIALS,
   VIEWPORTS,
   visitConsoleRoute,
 } from "./owner_journey_helpers.mjs";
@@ -47,7 +45,9 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
         .locator('input[name="name"], input[placeholder*="club name" i]')
         .first();
       const countryInput = page
-        .locator('select[name="country_code"], input[name="country_code"], [data-testid="country-select"]')
+        .locator(
+          'select[name="country_code"], input[name="country_code"], [data-testid="country-select"]',
+        )
         .first();
       const cityInput = page
         .locator('input[name="city_name"], input[placeholder*="city" i]')
@@ -81,7 +81,9 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
 
       // Truthful boundary: briefing cards render persisted events or honest empty state
       const briefingSection = page
-        .locator('[data-testid="owner-briefing"], text=/Owner Briefing|Daily Briefing|No pending briefing/i')
+        .locator(
+          '[data-testid="owner-briefing"], text=/Owner Briefing|Daily Briefing|No pending briefing/i',
+        )
         .first();
 
       await expect(
@@ -96,12 +98,14 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
 
       // Staff hierarchy differentiates General Manager, Head Coach, and Youth Director
       const staffSection = page
-        .locator('[data-testid="staff-management"], text=/Staff|Manager|Head Coach|General Manager/i')
+        .locator(
+          '[data-testid="staff-management"], text=/Staff|Manager|Head Coach|General Manager/i',
+        )
         .first();
 
-      await expect(
-        staffSection.or(page.getByText(/Squad|Lineup|Tactics/i)),
-      ).toBeVisible({ timeout: 15_000 });
+      await expect(staffSection.or(page.getByText(/Squad|Lineup|Tactics/i))).toBeVisible({
+        timeout: 15_000,
+      });
       await assertNoHorizontalOverflow(page);
     });
 
@@ -158,7 +162,9 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
 
       // Displays honest negotiation intermediate states (draft/open/countered/accepted)
       const lifecycleCard = page
-        .locator('[data-testid="negotiation-card"], text=/Pending Decision|Under Negotiation|Awaiting/i')
+        .locator(
+          '[data-testid="negotiation-card"], text=/Pending Decision|Under Negotiation|Awaiting/i',
+        )
         .first();
       if (await lifecycleCard.isVisible().catch(() => false)) {
         await expect(lifecycleCard).toBeVisible();
@@ -186,9 +192,7 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
       await assertNoHorizontalOverflow(page);
     });
 
-    test("Stage 8 — Autonomous fixture executes under world clock schedule", async ({
-      page,
-    }) => {
+    test("Stage 8 — Autonomous fixture executes under world clock schedule", async ({ page }) => {
       await signInReact(page);
       await visitConsoleRoute(page, "/app/competitions");
 
@@ -215,7 +219,9 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
       // Surface 1: Competition Standings
       await visitConsoleRoute(page, "/app/competitions");
       const standingsCard = page.getByText(/Standings|Table|Points|GD/i).first();
-      await expect(standingsCard.or(page.getByText(/Competitions/i))).toBeVisible({ timeout: 15_000 });
+      await expect(standingsCard.or(page.getByText(/Competitions/i))).toBeVisible({
+        timeout: 15_000,
+      });
 
       // Surface 2: Club Story Chronicle
       await visitConsoleRoute(page, "/app/story");
@@ -262,9 +268,9 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
       const briefingOverview = page
         .locator('[data-testid="briefing-summary"], text=/Briefing|Overview|Next Match|Recent/i')
         .first();
-      await expect(
-        briefingOverview.or(page.getByText(/Control Center|Titan/i)),
-      ).toBeVisible({ timeout: 15_000 });
+      await expect(briefingOverview.or(page.getByText(/Control Center|Titan/i))).toBeVisible({
+        timeout: 15_000,
+      });
 
       await assertNoHorizontalOverflow(page);
     });
@@ -345,9 +351,7 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
       expect(page.url()).toContain("status=pending");
     });
 
-    test("Deep link to /console/app/story preserves club narrative context", async ({
-      page,
-    }) => {
+    test("Deep link to /console/app/story preserves club narrative context", async ({ page }) => {
       await signInReact(page);
       await visitConsoleRoute(page, "/app/story");
       await reloadAndVerify(page, "/app/story");
@@ -380,7 +384,9 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
       await visitConsoleRoute(page, "/app/admin");
 
       // Non-admin receives honest access denied or redirect
-      const accessNotice = page.getByText(/Access Denied|Unauthorized|Admin Only|Restricted/i).first();
+      const accessNotice = page
+        .getByText(/Access Denied|Unauthorized|Admin Only|Restricted/i)
+        .first();
       const redirected = !page.url().includes("/admin");
 
       if (!redirected) {
@@ -389,9 +395,7 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
       await assertNoHorizontalOverflow(page);
     });
 
-    test("Empty state: empty transfer hub renders actionable discovery CTA", async ({
-      page,
-    }) => {
+    test("Empty state: empty transfer hub renders actionable discovery CTA", async ({ page }) => {
       await signInReact(page);
       await visitConsoleRoute(page, "/app/transfer-hub");
 
@@ -414,9 +418,9 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
       const errorIndicator = page
         .getByText(/Competition unavailable|Not found|Error loading|Go back/i)
         .first();
-      await expect(
-        errorIndicator.or(page.getByText(/Competitions/i)),
-      ).toBeVisible({ timeout: 15_000 });
+      await expect(errorIndicator.or(page.getByText(/Competitions/i))).toBeVisible({
+        timeout: 15_000,
+      });
 
       await assertNoHorizontalOverflow(page);
     });
