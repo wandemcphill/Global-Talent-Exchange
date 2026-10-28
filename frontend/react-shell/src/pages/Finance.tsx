@@ -289,21 +289,38 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
       </div>
 
       {sponsorData?.offers?.length > 0 && (
-        <div className="my-4">
+        <div className="my-4 grid gap-4 lg:grid-cols-2">
           <Cinema3DStage
-            scene="stadium_sponsor"
+            scene="new_ad_deal"
             compact
-            title={`3D Kit & Stadium LED Sponsor Mockup · ${sponsorData.offers[0]?.sponsor_name || "Global Partner"}`}
-            subtitle={`Negotiated by ${sponsorData.gm_name || "General Manager"} · Prestige Tier: ${sponsorData.prestige_tier || "Contender"}`}
-            badgeText="3D COMMERCIAL KIT PREVIEW"
+            title={`3D New Sponsor Deal Unveil · ${sponsorData.offers[0]?.sponsor_name || "Global Partner"}`}
+            subtitle={`Executive Handshake & #10 Shirt Launch · Negotiated by ${sponsorData.gm_name || "General Manager"}`}
+            badgeText="3D NEW AD DEAL"
             clubName={clubs?.find((c: any) => c.club_id === activeClubId)?.club_name || "GTEX FC"}
             subjectName={sponsorData.offers[0]?.sponsor_name || "FRONT-OF-SHIRT PARTNER"}
+            subjectRole={`Upfront Signing Check: +${fmt(sponsorData.offers[0]?.upfront_signing_bonus_gtex || 0)} GTX`}
             sponsorName={sponsorData.offers[0]?.sponsor_name || "GTEX GLOBAL AIRWAYS"}
             jerseyNumber={10}
             overallRating={90}
             stats={[
               { label: "Upfront Bonus", value: `+${fmt(sponsorData.offers[0]?.upfront_signing_bonus_gtex || 0)} GTX`, accent: "#F5B83D" },
               { label: "Win Clause", value: `+${fmt(sponsorData.offers[0]?.win_bonus_gtex || 0)} GTX`, accent: "#00E676" },
+            ]}
+          />
+          <Cinema3DStage
+            scene="stadium_ad_display"
+            compact
+            title="3D In-Stadium Ad Surfaces & LED Perimeter Bowl"
+            subtitle="4 Active Zones: Roof Naming Halo · Pitchside 360° LED · Jumbotron · Center-Circle Carpet"
+            badgeText="3D AD DISPLAYS"
+            clubName={clubs?.find((c: any) => c.club_id === activeClubId)?.club_name || "GTEX FC"}
+            subjectName="360° Pitchside LED & Roof Naming Halo"
+            adSurfaceZone="Pitchside LED + Jumbotron + Roof Halo"
+            sponsorName={sponsorData.offers[0]?.sponsor_name || "GTEX GLOBAL AIRWAYS"}
+            facilityLevel={4}
+            stats={[
+              { label: "Ad Surfaces", value: "4 LIVE ZONES", accent: "#38BDF8" },
+              { label: "Per Match Ad", value: `+${fmt(sponsorData.offers[0]?.per_match_gross_gtex || 0)} GTX`, accent: "#00E676" },
             ]}
           />
         </div>

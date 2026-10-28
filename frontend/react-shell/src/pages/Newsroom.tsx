@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { Loading } from "@/components/gtex/ui";
+import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
 
 export function Newsroom() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -93,6 +94,38 @@ export function Newsroom() {
           })}
         </nav>
       </header>
+
+      {/* 3D Global Flex Wire (Private Jet Purchases for All Users) & 3D Official Club Announcement Studio */}
+      <div className="grid gap-6 lg:grid-cols-2" data-testid="newsroom-3d-broadcast-row">
+        <Cinema3DStage
+          scene="private_jet_flex"
+          compact
+          enableSocialSalute
+          title="3D Global Aviation Flex · G650 Executive Jet Commissioned"
+          subtitle="Public 3D Runway Showcase for All GTEX App Users · Custom Club Tail-Fin Livery"
+          badgeText="GLOBAL FLEX ALERT"
+          clubName={leadStory?.club_name || "GTEX Superclub"}
+          ownerName={leadStory?.owner_name || "Executive Owner"}
+          subjectName="Gulfstream G650 Bespoke Club Edition"
+          quote="Commissioned from the club treasury — inspect the 3D fuselage and salute this owner's flex."
+          stats={[
+            { label: "Club Prestige", value: "+12 PTS", accent: "#00E676" },
+            { label: "Edition", value: "1 OF 10 MINTED", accent: "#F5B83D" },
+          ]}
+        />
+        <Cinema3DStage
+          scene="club_announcement"
+          compact
+          enableSocialSalute
+          title={leadStory?.headline || "3D Official Club Communiqué & Breaking News Desk"}
+          subtitle="Sky-Studio 3D Curved LED Broadcast Wall · Verified Club Statement"
+          badgeText="3D CLUB ANNOUNCEMENT"
+          clubName={leadStory?.club_name || "GTEX Broadcast Network"}
+          subjectName={leadStory?.headline || "Official Boardroom Statement on Season Ambitions"}
+          subjectRole={leadStory?.category ? `Wire Category: ${leadStory.category.replace(/_/g, " ").toUpperCase()}` : "Official Club Communiqué"}
+          quote={leadStory?.summary || "The board of directors has ratified our continental roadmap and stadium expansion."}
+        />
+      </div>
 
       {isLoading ? (
         <Loading label="Transmitting verified dispatches from the news wire..." />

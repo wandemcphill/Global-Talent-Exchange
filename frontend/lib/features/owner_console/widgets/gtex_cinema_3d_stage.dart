@@ -11,6 +11,15 @@ enum GtexCinema3DScene {
   managerArrival,
   stadiumSponsor,
   boardroomClash,
+  clubTakeover,
+  facilityUpgrade,
+  academyUpgrade,
+  wonderkidEmergence,
+  competitionFinal,
+  stadiumAdDisplay,
+  newAdDeal,
+  clubAnnouncement,
+  privateJetFlex,
 }
 
 enum GtexCinema3DMode {
@@ -18,7 +27,7 @@ enum GtexCinema3DMode {
   fmDiorama,
 }
 
-/// GTEX 3D Presentation & Diorama Stage (Flutter)
+/// GTEX 3D Presentation, Broadcast & Diorama Stage (Flutter — Full 17-Scene Suite)
 /// Combines FIFA/eFootball-style 60fps 3D Motion Cinema with Football Manager-style
 /// 3D Diorama Stills and interactive 360-degree Matrix4 perspective rotation.
 class GtexCinema3DStage extends StatefulWidget {
@@ -29,15 +38,18 @@ class GtexCinema3DStage extends StatefulWidget {
     this.subtitle,
     this.badgeText,
     this.clubName = 'GTEX FC',
+    this.ownerName = 'Club Owner',
     this.subjectName = 'MARQUEE STAR',
     this.subjectRole = 'First-Team Signing',
     this.jerseyNumber = 9,
     this.overallRating = 88,
     this.potentialRating,
     this.sponsorName = 'GTEX GLOBAL AIRWAYS',
+    this.facilityLevel = 3,
     this.quote,
     this.defaultMode = GtexCinema3DMode.motion3d,
     this.compact = false,
+    this.enableSocialSalute = false,
   });
 
   final GtexCinema3DScene scene;
@@ -45,15 +57,18 @@ class GtexCinema3DStage extends StatefulWidget {
   final String? subtitle;
   final String? badgeText;
   final String clubName;
+  final String ownerName;
   final String subjectName;
   final String subjectRole;
   final int jerseyNumber;
   final int overallRating;
   final int? potentialRating;
   final String sponsorName;
+  final int facilityLevel;
   final String? quote;
   final GtexCinema3DMode defaultMode;
   final bool compact;
+  final bool enableSocialSalute;
 
   @override
   State<GtexCinema3DStage> createState() => _GtexCinema3DStageState();
@@ -66,6 +81,8 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
   double _rotY = 0.0;
   double _rotX = 0.08;
   bool _dragging = false;
+  int _salutes = 48;
+  bool _saluted = false;
 
   @override
   void initState() {
@@ -85,7 +102,11 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
 
   @override
   Widget build(BuildContext context) {
-    final bool isGala = widget.scene == GtexCinema3DScene.worldGala;
+    final bool isGala = widget.scene == GtexCinema3DScene.worldGala ||
+        widget.scene == GtexCinema3DScene.competitionFinal ||
+        widget.scene == GtexCinema3DScene.privateJetFlex ||
+        widget.scene == GtexCinema3DScene.clubTakeover ||
+        widget.scene == GtexCinema3DScene.wonderkidEmergence;
     final Color accentColor = isGala ? GtexColors.gold : GtexColors.pitch;
 
     return Container(
@@ -235,7 +256,6 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
                   return Stack(
                     alignment: Alignment.center,
                     children: <Widget>[
-                      // 1. Volumetric Floodlights, Perspective Grid & Flashbulbs
                       Positioned.fill(
                         child: CustomPaint(
                           painter: _Cinema3DBackdropPainter(
@@ -244,15 +264,11 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
                           ),
                         ),
                       ),
-
-                      // 2. 3D Centerpiece Object with Matrix4 Perspective
                       Transform(
                         alignment: Alignment.center,
                         transform: matrix,
                         child: _build3DCenterpiece(),
                       ),
-
-                      // 3. 360-degree Drag Hint
                       Positioned(
                         top: 8,
                         left: 10,
@@ -294,36 +310,58 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
                 top: BorderSide(color: GtexColors.gold.withValues(alpha: 0.3)),
               ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: <Widget>[
-                Text(
-                  widget.title,
-                  style: const TextStyle(
-                    color: GtexColors.text,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 13,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        widget.title,
+                        style: const TextStyle(
+                          color: GtexColors.text,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 13,
+                        ),
+                      ),
+                      if (widget.subtitle != null)
+                        Text(
+                          widget.subtitle!,
+                          style: const TextStyle(
+                            color: GtexColors.textSecondary,
+                            fontSize: 11,
+                          ),
+                        ),
+                      if (widget.quote != null) ...<Widget>[
+                        const SizedBox(height: 3),
+                        Text(
+                          '"${widget.quote!}"',
+                          style: const TextStyle(
+                            color: GtexColors.gold,
+                            fontSize: 11,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-                if (widget.subtitle != null)
-                  Text(
-                    widget.subtitle!,
-                    style: const TextStyle(
-                      color: GtexColors.textSecondary,
-                      fontSize: 11,
-                    ),
+                if (widget.enableSocialSalute ||
+                    widget.scene == GtexCinema3DScene.privateJetFlex ||
+                    widget.scene == GtexCinema3DScene.clubAnnouncement)
+                  GtexActionButton(
+                    key: const Key('cinema-3d-social-salute-btn'),
+                    label: '${_saluted ? "Saluted" : "Salute Flex"} ($_salutes)',
+                    icon: Icons.thumb_up_alt_rounded,
+                    compact: true,
+                    secondary: !_saluted,
+                    onPressed: _saluted
+                        ? null
+                        : () => setState(() {
+                              _saluted = true;
+                              _salutes += 1;
+                            }),
                   ),
-                if (widget.quote != null) ...<Widget>[
-                  const SizedBox(height: 3),
-                  Text(
-                    '"${widget.quote!}"',
-                    style: const TextStyle(
-                      color: GtexColors.gold,
-                      fontSize: 11,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
@@ -335,6 +373,7 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
   Widget _build3DCenterpiece() {
     switch (widget.scene) {
       case GtexCinema3DScene.worldGala:
+      case GtexCinema3DScene.competitionFinal:
         return Container(
           width: 145,
           height: 155,
@@ -360,9 +399,11 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
               const Icon(Icons.emoji_events_rounded, size: 40, color: Color(0xFF451A03)),
-              const Text(
-                "GTEX D'OR",
-                style: TextStyle(
+              Text(
+                widget.scene == GtexCinema3DScene.competitionFinal
+                    ? 'FINAL PLINTH'
+                    : "GTEX D'OR",
+                style: const TextStyle(
                   color: Color(0xFF451A03),
                   fontSize: 10,
                   fontWeight: FontWeight.w900,
@@ -384,9 +425,11 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
         );
 
       case GtexCinema3DScene.luxuryTurntable:
+      case GtexCinema3DScene.privateJetFlex:
+      case GtexCinema3DScene.clubTakeover:
         return Container(
-          width: 165,
-          height: 155,
+          width: 175,
+          height: 160,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: const Color(0xFF141126),
@@ -402,7 +445,15 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              const Icon(Icons.diamond_rounded, size: 36, color: GtexColors.gold),
+              Icon(
+                widget.scene == GtexCinema3DScene.privateJetFlex
+                    ? Icons.flight_takeoff_rounded
+                    : widget.scene == GtexCinema3DScene.clubTakeover
+                        ? Icons.workspace_premium_rounded
+                        : Icons.diamond_rounded,
+                size: 38,
+                color: GtexColors.gold,
+              ),
               const SizedBox(height: 6),
               Text(
                 widget.subjectName,
@@ -416,7 +467,9 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
               ),
               const SizedBox(height: 4),
               Text(
-                widget.subjectRole,
+                '${widget.clubName} · ${widget.ownerName}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: GtexColors.pitch,
                   fontSize: 10,
@@ -427,12 +480,59 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
           ),
         );
 
+      case GtexCinema3DScene.facilityUpgrade:
+      case GtexCinema3DScene.academyUpgrade:
+      case GtexCinema3DScene.stadiumAdDisplay:
+        return Container(
+          width: 185,
+          height: 160,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF082F49),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: GtexColors.cyan, width: 2),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: GtexColors.cyan.withValues(alpha: 0.35),
+                blurRadius: 24,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: <Widget>[
+              Text(
+                '3D STADIUM & CAMPUS LVL ${widget.facilityLevel}/5',
+                style: const TextStyle(
+                  color: GtexColors.cyan,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const Icon(Icons.stadium_rounded, size: 42, color: GtexColors.gold),
+              Text(
+                widget.subjectName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: GtexColors.text,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        );
+
       case GtexCinema3DScene.signingWalkout:
       case GtexCinema3DScene.buildASon:
+      case GtexCinema3DScene.wonderkidEmergence:
       case GtexCinema3DScene.stadiumSponsor:
       case GtexCinema3DScene.negotiationTable:
       case GtexCinema3DScene.managerArrival:
       case GtexCinema3DScene.boardroomClash:
+      case GtexCinema3DScene.newAdDeal:
+      case GtexCinema3DScene.clubAnnouncement:
         return Container(
           width: 155,
           height: 170,
@@ -547,7 +647,6 @@ class _Cinema3DBackdropPainter extends CustomPainter {
     final double h = size.height;
     final double horizonY = h * 0.65;
 
-    // Perspective Grid
     final Paint gridPaint = Paint()
       ..color = (isGala ? GtexColors.gold : GtexColors.pitch).withValues(alpha: 0.16)
       ..strokeWidth = 1.0;
@@ -565,7 +664,6 @@ class _Cinema3DBackdropPainter extends CustomPainter {
       canvas.drawLine(Offset(0, py), Offset(w, py), gridPaint);
     }
 
-    // Floodlight Cones
     for (int b = 0; b < 3; b++) {
       final double bx = (w / 4.0) * (b + 1);
       final double sway = math.sin(phase + b * 1.3) * 28.0;

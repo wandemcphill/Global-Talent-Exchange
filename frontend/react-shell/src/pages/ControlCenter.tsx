@@ -345,6 +345,10 @@ export function ControlCenter() {
               { id: "world_gala" as Cinema3DSceneType, label: "3D World Player Gala" },
               { id: "luxury_turntable" as Cinema3DSceneType, label: "3D Luxury Vault" },
               { id: "boardroom_clash" as Cinema3DSceneType, label: "3D Boardroom Clash" },
+              { id: "club_takeover" as Cinema3DSceneType, label: "3D Takeover Keys" },
+              { id: "facility_upgrade" as Cinema3DSceneType, label: "3D Stadium Upgrade" },
+              { id: "competition_final" as Cinema3DSceneType, label: "3D Finals Plinth" },
+              { id: "private_jet_flex" as Cinema3DSceneType, label: "3D Jet Flex" },
             ].map((tab) => (
               <button
                 key={tab.id}

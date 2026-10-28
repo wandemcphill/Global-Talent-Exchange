@@ -612,6 +612,40 @@ export default function Academy() {
         </div>
       </section>
 
+      {/* 1A. 3D Generational Wonderkid Emergence & Youth Campus Diorama */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Cinema3DStage
+          scene="wonderkid_emergence"
+          compact
+          title={`3D Generational Wonderkid Walkout · ${regens[0]?.name || "Crown Jewel #10"}`}
+          subtitle={`HOYD Report: "Cancel all transfer plans — a generational talent has emerged on Pitch 3."`}
+          badgeText="3D GOLDEN FLARE WALKOUT"
+          clubName={club.club_name}
+          subjectName={regens[0]?.name || "Academy Prodigy"}
+          jerseyNumber={10}
+          overallRating={regens[0]?.rating || 76}
+          potentialRating={regens[0]?.potential?.max || 95}
+          stats={[
+            { label: "Ceiling", value: `${regens[0]?.potential?.max || 95} POT`, accent: "#F5B83D" },
+            { label: "HOYD Rating", value: `${hoydRating}/100`, accent: "#00E676" },
+          ]}
+        />
+        <Cinema3DStage
+          scene="academy_upgrade"
+          compact
+          title={`3D Youth Academy Campus · Level ${facilityLevel}/5`}
+          subtitle={`${club.club_name} Biomechanics, 3G Domes & DNA Scouting Complex`}
+          badgeText="3D ACADEMY CAMPUS"
+          clubName={club.club_name}
+          subjectName={`${club.club_name} Youth Complex L${facilityLevel}`}
+          facilityLevel={facilityLevel}
+          stats={[
+            { label: "Growth Speed", value: `+${facilityLevel * 4}%`, accent: "#00E676" },
+            { label: "Prestige Ceiling", value: `Tier ${prestigeTier}`, accent: "#38BDF8" },
+          ]}
+        />
+      </div>
+
       {/* 1B. Canonical Build-A-Son Legacy Program */}
       <BuildASonDesk club={club} onOrderUpdated={refresh} />
 

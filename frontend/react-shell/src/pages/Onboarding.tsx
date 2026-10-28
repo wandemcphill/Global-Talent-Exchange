@@ -11,6 +11,7 @@ import { fmt, useClub } from "@/lib/owner";
 import { Btn, Chip, Coin, Loading, Panel } from "@/components/gtex/ui";
 import { MarketTable } from "@/components/gtex/MarketTable";
 import { posShort } from "@/components/gtex/PlayerCard";
+import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
 
 const STEPS = [
   { key: "identity", label: "Club identity" },
@@ -59,6 +60,22 @@ function IdentityStep({ club, onDone }: any) {
   };
   return (
     <Panel eyebrow="Step 1" title={`Confirm ${club.club_name}`} testid="onboarding-identity-step">
+      <div className="mb-5">
+        <Cinema3DStage
+          scene="club_takeover"
+          compact
+          title={`3D Keys to the Club · ${club.club_name}`}
+          subtitle="Official Founding Charter & Stadium Center-Circle Walkout"
+          badgeText="3D OWNER TAKEOVER"
+          clubName={club.club_name}
+          subjectName={club.club_name}
+          quote="A new era begins under your executive stewardship."
+          stats={[
+            { label: "Launch Grant", value: "100,000 GTX", accent: "#00E676" },
+            { label: "Fan Reserve", value: "1,000 FAN", accent: "#F5B83D" },
+          ]}
+        />
+      </div>
       <p className="max-w-xl text-sm text-slate-300">
         Your club identity is registered. Activating it unlocks a{" "}
         <b className="text-white">100,000 GTEX Coin launch grant</b> in the club treasury (promotional: usable for signings and facilities, not withdrawable) plus 1,000 Fan Coin for gifting.

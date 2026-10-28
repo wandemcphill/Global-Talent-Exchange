@@ -2,17 +2,22 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   Camera,
   Film,
-  Maximize2,
   RotateCcw,
   Sparkles,
   Volume2,
   VolumeX,
-  Eye,
   Play,
   Pause,
   Shield,
   Award,
   Layers,
+  Plane,
+  Building2,
+  Trophy,
+  Radio,
+  Tv,
+  Crown,
+  ThumbsUp,
 } from "lucide-react";
 
 export type Cinema3DSceneType =
@@ -23,7 +28,16 @@ export type Cinema3DSceneType =
   | "build_a_son"
   | "manager_arrival"
   | "stadium_sponsor"
-  | "boardroom_clash";
+  | "boardroom_clash"
+  | "club_takeover"
+  | "facility_upgrade"
+  | "academy_upgrade"
+  | "wonderkid_emergence"
+  | "competition_final"
+  | "stadium_ad_display"
+  | "new_ad_deal"
+  | "club_announcement"
+  | "private_jet_flex";
 
 export type Cinema3DMode = "motion_3d" | "fm_diorama";
 
@@ -33,6 +47,7 @@ export interface Cinema3DStageProps {
   subtitle?: string;
   badgeText?: string;
   clubName?: string;
+  ownerName?: string;
   primaryColor?: string;
   secondaryColor?: string;
   subjectName?: string;
@@ -41,6 +56,8 @@ export interface Cinema3DStageProps {
   overallRating?: number | string;
   potentialRating?: number | string;
   sponsorName?: string;
+  facilityLevel?: number;
+  adSurfaceZone?: string;
   spectacleTier?: "standard_press" | "floodlight_walkout" | "galactico_helicopter";
   assetCategory?: "watch" | "jet" | "car" | "facility" | "trophy" | string;
   quote?: string;
@@ -49,17 +66,19 @@ export interface Cinema3DStageProps {
   defaultMode?: Cinema3DMode;
   compact?: boolean;
   agentMood?: "calm" | "tense" | "eager" | "hostile";
+  enableSocialSalute?: boolean;
+  initialSalutes?: number;
   onActionClick?: () => void;
   actionLabel?: string;
 }
 
 /**
- * GTEX 3D Presentation & Diorama Engine
+ * GTEX 3D Presentation, Broadcast & Diorama Engine (Full 17-Scene Suite)
  * Combines:
  *  1. FIFA / eFootball-style 3D Motion Cinema (60fps Canvas 3D volumetric lights, flashbulbs,
- *     confetti, and interactive 360-degree 3D centerpiece rotation).
+ *     confetti, runway strobes, and interactive 360-degree 3D centerpiece rotation).
  *  2. Football Manager-style 3D Static Diorama Stills (multi-plane architectural depth parallax
- *     with broadcast lower-thirds and press/boardroom framing).
+ *     with broadcast lower-thirds and press/boardroom/hangar framing).
  */
 export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
   scene,
@@ -67,6 +86,7 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
   subtitle,
   badgeText,
   clubName = "GTEX FC",
+  ownerName = "Club Owner",
   primaryColor = "#00E676",
   secondaryColor = "#F5B83D",
   subjectName = "MARQUEE STAR",
@@ -75,6 +95,8 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
   overallRating = 88,
   potentialRating,
   sponsorName = "GTEX GLOBAL AIRWAYS",
+  facilityLevel = 3,
+  adSurfaceZone = "360° Pitchside LED & Roof Naming Halo",
   spectacleTier = "floodlight_walkout",
   assetCategory = "watch",
   quote,
@@ -83,6 +105,8 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
   defaultMode = "motion_3d",
   compact = false,
   agentMood = "eager",
+  enableSocialSalute = false,
+  initialSalutes = 42,
   onActionClick,
   actionLabel,
 }) => {
@@ -93,6 +117,9 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
   const [rotX, setRotX] = useState<number>(6);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [cameraAngle, setCameraAngle] = useState<"wide" | "hero" | "closeup">("hero");
+  const [saluteCount, setSaluteCount] = useState<number>(initialSalutes);
+  const [hasSaluted, setHasSaluted] = useState<boolean>(false);
+
   const dragStartRef = useRef<{ x: number; y: number; rotY: number; rotX: number }>({
     x: 0,
     y: 0,
@@ -109,14 +136,14 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
     const animate = (now: number) => {
       const dt = (now - lastTime) / 1000;
       lastTime = now;
-      setRotY((prev) => (prev + dt * 28) % 360);
+      setRotY((prev) => (prev + dt * 26) % 360);
       rafId = requestAnimationFrame(animate);
     };
     rafId = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(rafId);
   }, [mode, isPlaying, isDragging]);
 
-  // 60fps Volumetric Stadium Lighting, Paparazzi Flashbulbs & Gold Confetti Canvas
+  // 60fps Volumetric Stadium Lighting, Paparazzi Flashbulbs, Runway Strobes & Gold Confetti Canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -126,12 +153,19 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
     let animationFrameId: number;
     let tick = 0;
 
-    const particles = Array.from({ length: compact ? 28 : 55 }, (_, i) => ({
+    const isGoldHeavy =
+      scene === "world_gala" ||
+      scene === "competition_final" ||
+      scene === "wonderkid_emergence" ||
+      scene === "club_takeover" ||
+      scene === "private_jet_flex";
+
+    const particles = Array.from({ length: compact ? 30 : 58 }, (_, i) => ({
       x: (i * 73) % 800,
       y: (i * 47) % 420,
       z: 0.25 + ((i * 19) % 75) / 100,
       vx: (((i * 13) % 10) - 5) * 0.25,
-      vy: scene === "world_gala" || scene === "signing_walkout" ? 0.55 + ((i % 5) * 0.2) : -0.35,
+      vy: isGoldHeavy || scene === "signing_walkout" ? 0.6 + ((i % 5) * 0.2) : -0.35,
       size: 2 + (i % 4),
       gold: i % 2 === 0,
     }));
@@ -150,20 +184,24 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
       const h = canvas.height;
       ctx.clearRect(0, 0, w, h);
 
-      // 1. Deep 3D Studio / Stadium Horizon Gradient
+      // 1. Deep 3D Studio / Stadium / Hangar Horizon Gradient
       const bgGrad = ctx.createRadialGradient(w * 0.5, h * 0.32, 10, w * 0.5, h * 0.5, w * 0.75);
-      if (scene === "world_gala") {
+      if (isGoldHeavy) {
         bgGrad.addColorStop(0, "rgba(65, 45, 10, 0.92)");
         bgGrad.addColorStop(0.55, "rgba(16, 14, 24, 0.96)");
         bgGrad.addColorStop(1, "rgba(5, 6, 12, 1)");
-      } else if (scene === "luxury_turntable") {
-        bgGrad.addColorStop(0, "rgba(38, 28, 52, 0.92)");
-        bgGrad.addColorStop(0.6, "rgba(12, 14, 22, 0.97)");
-        bgGrad.addColorStop(1, "rgba(4, 6, 10, 1)");
-      } else if (scene === "negotiation_table" || scene === "boardroom_clash") {
-        bgGrad.addColorStop(0, "rgba(20, 38, 55, 0.92)");
-        bgGrad.addColorStop(0.6, "rgba(10, 16, 28, 0.97)");
-        bgGrad.addColorStop(1, "rgba(4, 8, 16, 1)");
+      } else if (
+        scene === "facility_upgrade" ||
+        scene === "academy_upgrade" ||
+        scene === "stadium_ad_display"
+      ) {
+        bgGrad.addColorStop(0, "rgba(10, 48, 70, 0.92)");
+        bgGrad.addColorStop(0.6, "rgba(8, 18, 32, 0.97)");
+        bgGrad.addColorStop(1, "rgba(3, 7, 14, 1)");
+      } else if (scene === "club_announcement" || scene === "new_ad_deal") {
+        bgGrad.addColorStop(0, "rgba(55, 18, 38, 0.92)");
+        bgGrad.addColorStop(0.6, "rgba(12, 14, 26, 0.97)");
+        bgGrad.addColorStop(1, "rgba(4, 6, 12, 1)");
       } else {
         bgGrad.addColorStop(0, "rgba(12, 52, 38, 0.9)");
         bgGrad.addColorStop(0.55, "rgba(9, 19, 32, 0.96)");
@@ -172,16 +210,16 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
       ctx.fillStyle = bgGrad;
       ctx.fillRect(0, 0, w, h);
 
-      // 2. 3D Perspective Floor Grid (FM / FIFA Studio Floor)
+      // 2. 3D Perspective Floor Grid (Blueprint / Runway / Stadium Floor)
       const horizonY = h * 0.64;
       ctx.save();
-      ctx.strokeStyle =
-        scene === "world_gala"
-          ? "rgba(245, 184, 61, 0.16)"
-          : "rgba(0, 230, 118, 0.14)";
+      ctx.strokeStyle = isGoldHeavy
+        ? "rgba(245, 184, 61, 0.18)"
+        : scene === "facility_upgrade" || scene === "academy_upgrade"
+        ? "rgba(56, 189, 248, 0.22)"
+        : "rgba(0, 230, 118, 0.14)";
       ctx.lineWidth = 1;
 
-      // Perspective radial lines from vanishing point
       const vpX = w * 0.5 + Math.sin(tick * 0.6) * (mode === "motion_3d" ? 18 : 0);
       for (let i = -8; i <= 8; i++) {
         ctx.beginPath();
@@ -189,7 +227,6 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
         ctx.lineTo(vpX + i * 95, h);
         ctx.stroke();
       }
-      // Horizontal depth planes
       for (let r = 1; r <= 6; r++) {
         const py = horizonY + Math.pow(r / 6, 1.7) * (h - horizonY);
         ctx.beginPath();
@@ -200,7 +237,7 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
       ctx.restore();
 
       // 3. Volumetric 3D Floodlight Cones
-      const beamCount = spectacleTier === "galactico_helicopter" ? 4 : 3;
+      const beamCount = isGoldHeavy || spectacleTier === "galactico_helicopter" ? 4 : 3;
       for (let b = 0; b < beamCount; b++) {
         const bx = (w / (beamCount + 1)) * (b + 1);
         const sway = mode === "motion_3d" ? Math.sin(tick * 1.1 + b * 1.4) * 45 : 0;
@@ -224,28 +261,21 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
         ctx.restore();
       }
 
-      // 4. Paparazzi Camera Flashbulbs (for Signings, Gala, Manager Arrival)
-      if (
-        scene === "signing_walkout" ||
-        scene === "world_gala" ||
-        scene === "manager_arrival" ||
-        scene === "build_a_son"
-      ) {
-        flashes.forEach((f) => {
-          const pulse = Math.max(0, Math.sin(tick * 3.8 + f.phase));
-          if (pulse > 0.82) {
-            const radius = (pulse - 0.82) * 190;
-            const fg = ctx.createRadialGradient(f.x, f.y, 1, f.x, f.y, radius);
-            fg.addColorStop(0, "rgba(255, 255, 255, 0.9)");
-            fg.addColorStop(0.3, "rgba(245, 184, 61, 0.35)");
-            fg.addColorStop(1, "rgba(255, 255, 255, 0)");
-            ctx.fillStyle = fg;
-            ctx.beginPath();
-            ctx.arc(f.x, f.y, radius, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        });
-      }
+      // 4. Paparazzi Camera Flashbulbs & Runway Strobes
+      flashes.forEach((f) => {
+        const pulse = Math.max(0, Math.sin(tick * 3.8 + f.phase));
+        if (pulse > 0.82) {
+          const radius = (pulse - 0.82) * 190;
+          const fg = ctx.createRadialGradient(f.x, f.y, 1, f.x, f.y, radius);
+          fg.addColorStop(0, "rgba(255, 255, 255, 0.9)");
+          fg.addColorStop(0.3, "rgba(245, 184, 61, 0.35)");
+          fg.addColorStop(1, "rgba(255, 255, 255, 0)");
+          ctx.fillStyle = fg;
+          ctx.beginPath();
+          ctx.arc(f.x, f.y, radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
 
       // 5. Floating 3D Depth Particles / Gold Gala Confetti
       particles.forEach((p) => {
@@ -303,8 +333,11 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
       className="relative overflow-hidden rounded-xl border transition-all select-none"
       style={{
         borderColor:
-          scene === "world_gala" || spectacleTier === "galactico_helicopter"
-            ? "rgba(245, 184, 61, 0.55)"
+          scene === "world_gala" ||
+          scene === "competition_final" ||
+          scene === "private_jet_flex" ||
+          scene === "wonderkid_emergence"
+            ? "rgba(245, 184, 61, 0.6)"
             : "rgba(0, 230, 118, 0.35)",
         background: "#050811",
         boxShadow: "0 20px 50px rgba(0, 0, 0, 0.65)",
@@ -461,7 +494,7 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
           />
         )}
 
-        {/* FM-Style Architectural Press / Stadium Backdrop Wall */}
+        {/* FM-Style Architectural Press / Stadium / Hangar Backdrop Wall */}
         <div
           className="absolute inset-x-10 top-6 bottom-16 rounded-2xl pointer-events-none transition-transform duration-300"
           style={{
@@ -471,11 +504,10 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
               "radial-gradient(circle at 50% 25%, rgba(255,255,255,0.05), rgba(0,0,0,0.45))",
           }}
         >
-          {/* Step-and-Repeat Sponsor Wall Pattern */}
           <div className="grid grid-cols-4 gap-3 p-4 opacity-25 text-[10px] font-black tracking-widest uppercase text-center text-white">
             {Array.from({ length: 12 }).map((_, idx) => (
               <div key={idx} className="border border-white/15 rounded py-1 px-2 truncate">
-                { idx % 2 === 0 ? clubName : sponsorName }
+                {idx % 2 === 0 ? clubName : sponsorName}
               </div>
             ))}
           </div>
@@ -501,21 +533,23 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
             transform: `scale(${cameraScale}) rotateX(${rotX}deg) rotateY(${rotY}deg)`,
           }}
         >
-          {/* SCENE A: 3D KIT / SIGNING WALKOUT / BUILD-A-SON / STADIUM SPONSOR */}
+          {/* 1. KIT / SIGNING WALKOUT / BUILD-A-SON / WONDERKID EMERGENCE */}
           {(scene === "signing_walkout" ||
             scene === "build_a_son" ||
-            scene === "stadium_sponsor") && (
+            scene === "stadium_sponsor" ||
+            scene === "wonderkid_emergence") && (
             <div className="relative flex flex-col items-center">
-              {/* 3D Sculpted Club Jersey Card */}
               <div
                 className="relative w-44 h-52 rounded-2xl flex flex-col items-center justify-between p-4 border-2"
                 style={{
-                  background: `linear-gradient(145deg, ${primaryColor}, #0b1322 75%, ${secondaryColor})`,
-                  borderColor: "rgba(245, 184, 61, 0.75)",
+                  background:
+                    scene === "wonderkid_emergence"
+                      ? "linear-gradient(145deg, #F59E0B, #0b1322 65%, #10B981)"
+                      : `linear-gradient(145deg, ${primaryColor}, #0b1322 75%, ${secondaryColor})`,
+                  borderColor: "rgba(245, 184, 61, 0.85)",
                   boxShadow: `0 18px 40px -10px ${primaryColor}66, inset 0 0 24px rgba(255,255,255,0.22)`,
                 }}
               >
-                {/* Jersey Shoulders & Collar */}
                 <div className="w-full flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-white/90">
                   <span className="px-1.5 py-0.5 rounded bg-black/40 border border-white/15">
                     {clubName.slice(0, 12)}
@@ -525,7 +559,6 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
                   </span>
                 </div>
 
-                {/* Big 3D Metallic Squad Number & Player Back Print */}
                 <div className="text-center my-1">
                   <div className="text-[11px] font-black tracking-[0.2em] uppercase text-white drop-shadow">
                     {subjectName.split(" ").slice(-1)[0]}
@@ -541,69 +574,96 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
                   </div>
                 </div>
 
-                {/* Front/Chest Sponsor Strip */}
                 <div className="w-full py-1 px-2 rounded bg-black/55 border border-white/15 text-center">
                   <div className="text-[8px] uppercase tracking-widest text-amber-300 font-bold truncate">
-                    {sponsorName}
+                    {scene === "wonderkid_emergence" ? "GOLDEN FLARE WALKOUT" : sponsorName}
                   </div>
                 </div>
               </div>
 
-              {/* Potential / Bloodline Floating Halo */}
-              {potentialRating && (
+              {(potentialRating || scene === "wonderkid_emergence") && (
                 <div
                   className="mt-2 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider"
                   style={{
-                    background: "rgba(0, 230, 118, 0.2)",
-                    color: "#00E676",
-                    border: "1px solid rgba(0, 230, 118, 0.5)",
+                    background: "rgba(245, 184, 61, 0.25)",
+                    color: "#FDE047",
+                    border: "1px solid rgba(245, 184, 61, 0.6)",
                   }}
                 >
-                  3D DNA Ceiling: {potentialRating} POT
+                  Generational Ceiling: {potentialRating || 95} POT
                 </div>
               )}
             </div>
           )}
 
-          {/* SCENE B: 3D LUXURY SHOWROOM TURNTABLE & UNBOXING VAULT */}
-          {scene === "luxury_turntable" && (
-            <div className="relative flex flex-col items-center">
-              <div
-                className="w-48 h-48 rounded-2xl flex flex-col items-center justify-center p-5 border-2 relative"
-                style={{
-                  background:
-                    "radial-gradient(circle at 30% 25%, rgba(245,184,61,0.32), rgba(20,16,34,0.95) 70%)",
-                  borderColor: "rgba(245, 184, 61, 0.8)",
-                  boxShadow: "0 20px 45px rgba(245, 184, 61, 0.28), inset 0 0 30px rgba(245, 184, 61, 0.18)",
-                }}
-              >
-                <div className="text-[10px] font-black uppercase tracking-widest text-amber-300 mb-2">
-                  3D BESPOKE VAULT
-                </div>
-                <div
-                  className="w-20 h-20 rounded-full flex items-center justify-center border-2 mb-2"
-                  style={{
-                    borderColor: "#F5B83D",
-                    background: "linear-gradient(135deg, rgba(245,184,61,0.35), rgba(0,0,0,0.7))",
-                    boxShadow: "0 0 25px rgba(245,184,61,0.45)",
-                  }}
-                >
-                  <Sparkles size={36} className="text-amber-300" />
-                </div>
-                <div className="text-sm font-black text-white text-center leading-tight">
-                  {subjectName}
-                </div>
-                <div className="text-[10px] text-emerald-400 font-bold uppercase mt-1">
-                  {assetCategory.toUpperCase()} · 360° 3D SPECIMEN
+          {/* 2. NEW CLUB OWNER ("KEYS TO THE CLUB" 3D TAKEOVER CEREMONY) */}
+          {scene === "club_takeover" && (
+            <div className="w-64 h-48 rounded-2xl p-4 border-2 flex flex-col items-center justify-between text-center"
+              style={{
+                background: "radial-gradient(circle at 50% 20%, rgba(245,184,61,0.35), rgba(8,14,28,0.96) 75%)",
+                borderColor: "#F5B83D",
+                boxShadow: "0 20px 50px rgba(245, 184, 61, 0.35)",
+              }}
+            >
+              <div className="text-[10px] font-black uppercase tracking-widest text-amber-300">
+                OFFICIAL 3D CLUB CHARTER & DEEDS
+              </div>
+              <div className="w-20 h-20 rounded-2xl border-2 border-amber-400 bg-amber-400/15 flex items-center justify-center shadow-lg">
+                <Crown size={40} className="text-amber-300" />
+              </div>
+              <div>
+                <div className="text-base font-black uppercase text-white">{clubName}</div>
+                <div className="text-[10px] font-bold text-emerald-400 uppercase">
+                  Keys Presented to {ownerName}
                 </div>
               </div>
             </div>
           )}
 
-          {/* SCENE C: 3D GTEX WORLD PLAYER OF THE YEAR GALA (BALLON D'OR TROPHY) */}
-          {scene === "world_gala" && (
+          {/* 3. FACILITY / STADIUM & ACADEMY 3D ARCHITECTURAL BLUEPRINT-TO-CATHEDRAL */}
+          {(scene === "facility_upgrade" ||
+            scene === "academy_upgrade" ||
+            scene === "stadium_ad_display") && (
+            <div
+              className="w-68 h-48 rounded-2xl p-4 border-2 flex flex-col items-center justify-between text-center"
+              style={{
+                background:
+                  "linear-gradient(155deg, rgba(8, 47, 73, 0.92), rgba(6, 16, 32, 0.98))",
+                borderColor: scene === "stadium_ad_display" ? "#F5B83D" : "#38BDF8",
+                boxShadow: "0 20px 45px rgba(56, 189, 248, 0.28)",
+              }}
+            >
+              <div className="w-full flex items-center justify-between text-[10px] font-black uppercase text-cyan-300">
+                <span>
+                  {scene === "academy_upgrade"
+                    ? "3D LA MASIA YOUTH CAMPUS"
+                    : scene === "stadium_ad_display"
+                    ? "3D STADIUM AD BOWL CUTAWAY"
+                    : "3D STADIUM CATHEDRAL CUTAWAY"}
+                </span>
+                <span className="px-2 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/40 text-amber-300">
+                  LVL {facilityLevel}/5
+                </span>
+              </div>
+
+              {/* 3D Tiered Stadium Bowl Rings */}
+              <div className="relative w-44 h-24 rounded-full border-4 border-cyan-400/70 bg-emerald-950/80 flex items-center justify-center shadow-inner">
+                <div className="w-32 h-14 rounded-full border-2 border-amber-400/80 bg-emerald-500/30 flex items-center justify-center">
+                  <Building2 size={24} className="text-white" />
+                </div>
+              </div>
+
+              <div className="w-full py-1 px-2 rounded bg-black/60 border border-cyan-400/30 text-[10px] font-bold text-amber-300 truncate">
+                {scene === "stadium_ad_display"
+                  ? `${adSurfaceZone} · ${sponsorName}`
+                  : subjectName}
+              </div>
+            </div>
+          )}
+
+          {/* 4. BIG COMPETITION FINALS & WORLD GALA 3D TROPHY PLINTH */}
+          {(scene === "world_gala" || scene === "competition_final") && (
             <div className="relative flex flex-col items-center">
-              {/* 3D Golden Globe Trophy */}
               <div
                 className="w-36 h-36 rounded-full flex flex-col items-center justify-center border-4 relative"
                 style={{
@@ -613,39 +673,92 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
                   boxShadow: "0 0 50px rgba(245, 184, 61, 0.75), inset 0 -10px 25px rgba(0,0,0,0.45)",
                 }}
               >
-                <Award size={48} className="text-amber-950 drop-shadow" />
+                {scene === "competition_final" ? (
+                  <Trophy size={48} className="text-amber-950 drop-shadow" />
+                ) : (
+                  <Award size={48} className="text-amber-950 drop-shadow" />
+                )}
                 <span className="text-[9px] font-black uppercase tracking-widest text-amber-950 mt-0.5">
-                  GTEX D&apos;OR
+                  {scene === "competition_final" ? "FINAL PLINTH" : "GTEX D'OR"}
                 </span>
               </div>
-              {/* Onyx Pedestal Base */}
               <div
-                className="w-28 h-12 -mt-2 rounded-b-xl border-2 flex flex-col items-center justify-center"
+                className="w-36 h-12 -mt-2 rounded-b-xl border-2 flex flex-col items-center justify-center px-2"
                 style={{
                   background: "linear-gradient(180deg, #1E293B, #020617)",
                   borderColor: "#F5B83D",
                 }}
               >
-                <span className="text-[10px] font-black text-amber-300 truncate max-w-[96px]">
+                <span className="text-[10px] font-black text-amber-300 truncate max-w-[125px]">
                   {subjectName}
                 </span>
-                <span className="text-[8px] uppercase text-white/70">{clubName}</span>
+                <span className="text-[8px] uppercase text-white/70 truncate max-w-[125px]">
+                  {clubName}
+                </span>
               </div>
             </div>
           )}
 
-          {/* SCENE D: 3D TRANSFER / CONTRACT NEGOTIATION TABLE & BOARDROOM CLASH */}
-          {(scene === "negotiation_table" ||
+          {/* 5. PRIVATE JET PURCHASE NEWS & VISITOR HANGAR SHOWCASE (FOR OTHER USERS) */}
+          {(scene === "private_jet_flex" || scene === "luxury_turntable") && (
+            <div className="relative flex flex-col items-center">
+              <div
+                className="w-60 h-48 rounded-2xl flex flex-col items-center justify-between p-4 border-2 relative"
+                style={{
+                  background:
+                    "radial-gradient(circle at 30% 25%, rgba(245,184,61,0.34), rgba(18,14,32,0.96) 72%)",
+                  borderColor: "rgba(245, 184, 61, 0.85)",
+                  boxShadow: "0 20px 45px rgba(245, 184, 61, 0.32), inset 0 0 30px rgba(245, 184, 61, 0.18)",
+                }}
+              >
+                <div className="w-full flex items-center justify-between text-[9px] font-black uppercase tracking-wider text-amber-300">
+                  <span>{scene === "private_jet_flex" ? "3D VIP NIGHT RUNWAY" : "3D BESPOKE VAULT"}</span>
+                  <span className="px-1.5 py-0.5 rounded bg-amber-400/20 border border-amber-400/40">
+                    1 OF 10 MINTED
+                  </span>
+                </div>
+
+                <div
+                  className="w-20 h-20 rounded-full flex items-center justify-center border-2"
+                  style={{
+                    borderColor: "#F5B83D",
+                    background: "linear-gradient(135deg, rgba(245,184,61,0.35), rgba(0,0,0,0.75))",
+                    boxShadow: "0 0 28px rgba(245,184,61,0.5)",
+                  }}
+                >
+                  {scene === "private_jet_flex" || assetCategory === "jet" ? (
+                    <Plane size={38} className="text-amber-300 -rotate-12" />
+                  ) : (
+                    <Sparkles size={36} className="text-amber-300" />
+                  )}
+                </div>
+
+                <div className="text-center">
+                  <div className="text-sm font-black text-white leading-tight">{subjectName}</div>
+                  <div className="text-[10px] text-emerald-400 font-bold uppercase mt-0.5">
+                    Tail-Fin Livery: {clubName} ({ownerName})
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 6. BREAKING CLUB ANNOUNCEMENT STUDIO & NEW AD DEAL HANDSHAKE */}
+          {(scene === "club_announcement" ||
+            scene === "new_ad_deal" ||
+            scene === "negotiation_table" ||
             scene === "manager_arrival" ||
             scene === "boardroom_clash") && (
             <div className="relative flex flex-col items-center">
               <div
-                className="w-64 h-44 rounded-2xl p-4 border-2 flex flex-col justify-between"
+                className="w-68 h-46 rounded-2xl p-4 border-2 flex flex-col justify-between"
                 style={{
                   background:
                     "linear-gradient(160deg, rgba(16, 28, 48, 0.96), rgba(7, 12, 24, 0.98))",
                   borderColor:
-                    agentMood === "hostile"
+                    scene === "club_announcement" || scene === "new_ad_deal"
+                      ? "#F5B83D"
+                      : agentMood === "hostile"
                       ? "rgba(239, 68, 68, 0.75)"
                       : agentMood === "tense"
                       ? "rgba(245, 184, 61, 0.75)"
@@ -655,43 +768,37 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
               >
                 <div className="flex items-center justify-between border-b border-white/10 pb-2">
                   <div className="flex items-center gap-1.5">
-                    <Shield size={14} className="text-amber-400" />
+                    {scene === "club_announcement" ? (
+                      <Radio size={14} className="text-rose-400 animate-pulse" />
+                    ) : scene === "new_ad_deal" ? (
+                      <Tv size={14} className="text-amber-400" />
+                    ) : (
+                      <Shield size={14} className="text-amber-400" />
+                    )}
                     <span className="text-[10px] font-black uppercase tracking-wider text-white">
-                      {clubName} 3D SUITE
+                      {scene === "club_announcement"
+                        ? "3D SKY-STUDIO COMMUNIQUÉ"
+                        : scene === "new_ad_deal"
+                        ? "3D COMMERCIAL DEAL UNVEIL"
+                        : `${clubName} 3D SUITE`}
                     </span>
                   </div>
-                  <span
-                    className="px-2 py-0.5 rounded text-[9px] font-bold uppercase"
-                    style={{
-                      background:
-                        agentMood === "hostile"
-                          ? "rgba(239,68,68,0.2)"
-                          : agentMood === "tense"
-                          ? "rgba(245,184,61,0.2)"
-                          : "rgba(0,230,118,0.2)",
-                      color:
-                        agentMood === "hostile"
-                          ? "#F87171"
-                          : agentMood === "tense"
-                          ? "#FBBF24"
-                          : "#34D399",
-                    }}
-                  >
-                    {scene === "manager_arrival"
+                  <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[9px] font-bold uppercase">
+                    {scene === "club_announcement"
+                      ? "LIVE WIRE"
+                      : scene === "new_ad_deal"
+                      ? sponsorName.slice(0, 14)
+                      : scene === "manager_arrival"
                       ? "DAY 1 MANDATE"
-                      : scene === "boardroom_clash"
-                      ? "WAR ROOM"
                       : `AGENT: ${agentMood.toUpperCase()}`}
                   </span>
                 </div>
 
-                {/* 3D Holo-Dossier / Executive Silhouette */}
-                <div className="my-auto text-center">
-                  <div className="text-sm font-black text-white">{subjectName}</div>
-                  <div className="text-[11px] text-cyan-300 font-semibold">{subjectRole}</div>
+                <div className="my-auto text-center py-2">
+                  <div className="text-sm font-black text-white uppercase">{subjectName}</div>
+                  <div className="text-[11px] text-cyan-300 font-semibold mt-0.5">{subjectRole}</div>
                 </div>
 
-                {/* Mahogany Desk Reflection Bar */}
                 <div
                   className="w-full py-1.5 px-2.5 rounded-lg text-[10px] font-bold text-center"
                   style={{
@@ -700,7 +807,11 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
                     color: "var(--gtex-gold)",
                   }}
                 >
-                  {scene === "manager_arrival"
+                  {scene === "club_announcement"
+                    ? `Official Boardroom Statement · ${clubName}`
+                    : scene === "new_ad_deal"
+                    ? `Signed Commercial Partnership · ${sponsorName}`
+                    : scene === "manager_arrival"
                     ? "Official Press & Training Ground Presentation"
                     : "Interactive 3D Contract & Release-Clause Table"}
                 </div>
@@ -716,7 +827,7 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
         </div>
       </div>
 
-      {/* Broadcast Lower-Third Banner (FM / Sky Sports / UEFA Gala Style) */}
+      {/* Broadcast Lower-Third Banner */}
       <div
         className="relative z-20 px-4 py-3 border-t flex flex-col md:flex-row md:items-center md:justify-between gap-3"
         style={{
@@ -762,6 +873,28 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
               </div>
             ))}
           </div>
+        )}
+
+        {/* Social Flex Salute Button for Other Users on the App */}
+        {(enableSocialSalute || scene === "private_jet_flex" || scene === "club_announcement") && (
+          <button
+            type="button"
+            onClick={() => {
+              if (!hasSaluted) {
+                setSaluteCount((c) => c + 1);
+                setHasSaluted(true);
+              }
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shrink-0 border ${
+              hasSaluted
+                ? "bg-amber-400/20 border-amber-400 text-amber-300"
+                : "bg-white/5 border-white/15 text-white hover:border-amber-400/50"
+            }`}
+            data-testid="social-salute-flex-btn"
+          >
+            <ThumbsUp size={13} className="text-amber-400" />
+            <span>{hasSaluted ? "Saluted" : "Salute Flex"} ({saluteCount})</span>
+          </button>
         )}
 
         {onActionClick && actionLabel && (

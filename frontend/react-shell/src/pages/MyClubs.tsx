@@ -7,6 +7,7 @@ import { clubCreateErrorMessage } from "./clubLocationCatalog";
 import { ClubLocationFields, clubLocationPayload, useClubLocation } from "@/components/gtex/ClubLocationFields";
 import { fmt, label, useActiveClub, useClub, useClubShowroom, useControlCenter, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, Stat } from "@/components/gtex/ui";
+import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
 import { Building, Gift, Sparkles, BookOpen, ExternalLink, CheckCircle, Coins, LockKeyhole, X, PackageCheck } from "lucide-react";
 
 function Facilities({ club }: any) {
@@ -26,6 +27,22 @@ function Facilities({ club }: any) {
   };
   return (
     <Panel eyebrow="Club building" title="Facilities & Static Imagery" testid="facilities-panel" className="lg:col-span-7">
+      <div className="mb-5">
+        <Cinema3DStage
+          scene="facility_upgrade"
+          compact
+          title={`3D Stadium Cathedral & Campus Cutaway · ${club.club_name}`}
+          subtitle="Interactive 3D Architectural Blueprint-to-Cathedral Morph · Stadium, Academy & Medical"
+          badgeText="3D INFRASTRUCTURE"
+          clubName={club.club_name}
+          subjectName={`${club.club_name} Arena & Youth Campus`}
+          facilityLevel={Number(club.facilities?.stadium?.level ?? club.facilities?.academy?.level ?? 3)}
+          stats={[
+            { label: "Stadium Tier", value: `L${club.facilities?.stadium?.level ?? 2}/5`, accent: "#38BDF8" },
+            { label: "Academy Campus", value: `L${club.facilities?.academy?.level ?? 2}/5`, accent: "#00E676" },
+          ]}
+        />
+      </div>
       <div className="grid gap-4 sm:grid-cols-2">
         {Object.entries(club.facilities).map(([k, f]: any) => (
           <div key={k} className="rounded-xl border border-white/10 bg-slate-950/40 p-4 space-y-3">

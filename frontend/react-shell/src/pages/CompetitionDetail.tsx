@@ -6,6 +6,7 @@ import { CheckCircle2, Coins, Crown, Flame, Medal, Sparkles, Tv, Trophy } from "
 import { api, errMsg } from "@/lib/api";
 import { fmt, label, useControlCenter, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Coin, Loading, PageHeader, Panel } from "@/components/gtex/ui";
+import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
 
 function Standings({ rows, myIds }: any) {
   return (
@@ -134,6 +135,21 @@ export default function CompetitionDetail() {
     <div data-testid="competition-detail-page" className="space-y-6">
       <PageHeader eyebrow={`${comp.host_type === "gtex" ? "GTEX-hosted" : "User-hosted"} · ${comp.format}`} title={comp.name} sub={comp.description}
         action={<div className="flex gap-4"><div><p className="text-[10px] uppercase text-slate-500">Prize pool</p><Coin amount={comp.prize_pool} /></div><div><p className="text-[10px] uppercase text-slate-500">Round</p><span className="gx-mono text-white">{comp.current_round}/{comp.total_rounds || "-"}</span></div></div>} />
+      <Cinema3DStage
+        scene="competition_final"
+        compact
+        title={`3D Competition Finals Plinth & Trophy Lift · ${comp.name}`}
+        subtitle={`Current Podium Leader: ${leaderClub} vs ${runnerUpClub} · Round ${comp.current_round}/${comp.total_rounds || "-"}`}
+        badgeText="3D FINALS TROPHY PLINTH"
+        clubName={leaderClub}
+        subjectName={comp.name}
+        quote="Under the stadium pyrotechnics, one club will lift the 3D Championship Trophy and claim 55% of the prize pool."
+        stats={[
+          { label: "1st Place (55%)", value: `${fmt(firstPrize)} GTX`, accent: "#F5B83D" },
+          { label: "2nd Place (28%)", value: `${fmt(runnerUpPrize)} GTX`, accent: "#38BDF8" },
+          { label: "3rd Place (17%)", value: `${fmt(thirdPrize)} GTX`, accent: "#00E676" },
+        ]}
+      />
       <div className="grid gap-6 lg:grid-cols-12">
         <Panel eyebrow="Table" title="Standings" className="lg:col-span-7" testid="standings-panel"><Standings rows={comp.standings} myIds={myIds} /></Panel>
         <Panel eyebrow="Pre-match" title="Owner decisions" className="lg:col-span-5" live testid="owner-match-panel">

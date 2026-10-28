@@ -11,6 +11,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { API, api } from "@/lib/api";
+import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
 
 type TrophyRecord = {
   competition: string;
@@ -194,6 +195,25 @@ export default function PublicClubProfile() {
 
       <section className="mx-auto grid max-w-[1380px] gap-10 px-5 py-12 sm:px-8 lg:grid-cols-[minmax(0,1fr)_300px] lg:px-12 lg:py-16">
         <div>
+          <div className="mb-8">
+            <Cinema3DStage
+              scene="private_jet_flex"
+              compact
+              enableSocialSalute
+              title={`3D Visitor Hangar & Trophy Vault · ${data.club_name}`}
+              subtitle={`Public 360° 3D Inspection for Visiting GTEX Users · ${location || "Global"}`}
+              badgeText="PUBLIC 3D SHOWCASE"
+              clubName={data.club_name}
+              primaryColor={primary}
+              secondaryColor={secondary}
+              subjectName={`${data.club_name} G650 Executive Jet & Honours Vault`}
+              quote="Inspect this club's 3D fleet, custom tail-fin livery, and recorded honours."
+              stats={[
+                { label: "Recorded Honours", value: `${trophies.length}`, accent: "#F5B83D" },
+                { label: "3D Fleet Status", value: "VERIFIED", accent: "#00E676" },
+              ]}
+            />
+          </div>
           <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-5">
             <div>
               <p className="gx-eyebrow text-amber-400">Club archive</p>
