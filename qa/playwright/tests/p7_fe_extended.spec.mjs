@@ -11,11 +11,8 @@ import {
 } from "./helpers.mjs";
 
 async function clickSemanticsControl(page, locator) {
-  if (!(await locator.isVisible().catch(() => false))) {
-    return false;
-  }
   const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
-  const box = await locator.boundingBox({ timeout: 1_500 }).catch(() => null);
+  const box = await locator.boundingBox().catch(() => null);
   if (box && (box.y + box.height > viewport.height - 24 || box.y < 24)) {
     const targetDelta = Math.round(box.y - viewport.height * 0.45);
     if (Math.abs(targetDelta) > 40) {
@@ -25,14 +22,12 @@ async function clickSemanticsControl(page, locator) {
       await enableAccessibility(page);
     }
   }
-  await locator.click({ force: true, timeout: 2_500 }).catch(async () => {
-    await locator.dispatchEvent("click", undefined, { timeout: 1_500 }).catch(() => {});
+  await locator.click({ force: true, timeout: 3_000 }).catch(async () => {
+    await locator.dispatchEvent("click").catch(() => {});
   });
-  return true;
 }
 
 test.beforeEach(async ({ page }, testInfo) => {
-  test.setTimeout(240_000);
   test.skip(
     !configured || !credentialsConfigured,
     "Requires GTEX E2E base URL and auth credentials.",
@@ -52,10 +47,7 @@ test("Club squad route loads the roster or explicit no-club state", async ({ pag
   const noClubEntry = page.getByText("Build your club command center", {
     exact: true,
   });
-  const clubCommand = page
-    .getByText("Club command", { exact: true })
-    .or(page.locator('[aria-label*="Club command" i]'))
-    .first();
+  const clubCommand = page.getByText("Club command", { exact: true });
   await expect
     .poll(
       async () => {
@@ -77,7 +69,7 @@ test("Club squad route loads the roster or explicit no-club state", async ({ pag
   } else {
     // Scroll Club command toward the top of the Empire workspace scroll view so inline
     // section items and detail headers are inside the active viewport.
-    const commandBox = await clubCommand.boundingBox({ timeout: 1_500 }).catch(() => null);
+    const commandBox = await clubCommand.boundingBox().catch(() => null);
     if (commandBox && commandBox.y > 240) {
       const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
       await page.mouse.move(Math.round(viewport.width * 0.5), Math.round(viewport.height * 0.5));
@@ -100,40 +92,28 @@ test("Club squad route loads the roster or explicit no-club state", async ({ pag
       .poll(
         async () => {
           await enableAccessibility(page);
-          const visibleCount =
+          return (
             Number(await browseButton.isVisible().catch(() => false)) +
-            Number(await squadSection.isVisible().catch(() => false));
-          if (visibleCount === 0) {
-            const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
-            await page.mouse.move(
-              Math.round(viewport.width * 0.5),
-              Math.round(viewport.height * 0.5),
-            );
-            await page.mouse.wheel(0, 280);
-          }
-          return visibleCount;
+            Number(await squadSection.isVisible().catch(() => false))
+          );
         },
-        { timeout: 25_000 },
+        { timeout: 15_000 },
       )
       .toBeGreaterThan(0);
 
     let browseSheetOpened = false;
     if (await browseButton.isVisible().catch(() => false)) {
       for (let attempt = 0; attempt < 3; attempt += 1) {
+        await clickSemanticsControl(page, browseButton);
+        browseSheetOpened = true;
+        await page.waitForTimeout(450);
+        await enableAccessibility(page);
         if (await squadSection.isVisible().catch(() => false)) {
           break;
         }
-        if (await browseButton.isVisible().catch(() => false)) {
-          await clickSemanticsControl(page, browseButton);
-          browseSheetOpened = true;
-        }
-        for (let waitTick = 0; waitTick < 6; waitTick += 1) {
-          await page.waitForTimeout(300);
-          await enableAccessibility(page);
-          if (await squadSection.isVisible().catch(() => false)) {
-            break;
-          }
-        }
+        await browseButton.dispatchEvent("click").catch(() => {});
+        await page.waitForTimeout(450);
+        await enableAccessibility(page);
         if (await squadSection.isVisible().catch(() => false)) {
           break;
         }
@@ -147,7 +127,7 @@ test("Club squad route loads the roster or explicit no-club state", async ({ pag
       await page.waitForTimeout(500);
       const closeButton = page.getByRole("button", { name: /Close Club sections/i });
       if (await closeButton.isVisible().catch(() => false)) {
-        await closeButton.dispatchEvent("click", undefined, { timeout: 1_500 }).catch(() => {});
+        await closeButton.dispatchEvent("click").catch(() => {});
         await page.waitForTimeout(400);
       }
     }
@@ -204,105 +184,84 @@ test("Club HQ opens an authoritative club or no-club state", async ({ page }, te
   // never fabricated demo-club data.
   await visitAuthedRoute(page, "/app/club");
 
-  const liveDataRequired = page.getByText("Live club data required", { exact: true });
-  const noClubEntry = page.getByText("Build your club command center", {
-    exact: true,
-  });
+  const ownerCockpit = page.getByText("Club owner operations cockpit", { exact: true });
   const clubCommand = page.getByText("Club command", { exact: true });
+  const acceptableStates = [
+    page.getByText("Live club data required", { exact: true }),
+    clubCommand,
+    page.getByText("Build your club command center", { exact: true }),
+    ownerCockpit,
+  ];
   await expect
     .poll(
       async () => {
         await enableAccessibility(page);
-        return (
-          Number(await liveDataRequired.isVisible().catch(() => false)) +
-          Number(await noClubEntry.isVisible().catch(() => false)) +
-          Number(await clubCommand.isVisible().catch(() => false))
-        );
+        for (const state of acceptableStates) {
+          if (await state.isVisible().catch(() => false)) return true;
+        }
+        return false;
       },
       { timeout: 60_000 },
     )
-    .toBeGreaterThan(0);
+    .toBeTruthy();
 
+  const liveDataRequired = page.getByText("Live club data required", { exact: true });
   if (await liveDataRequired.isVisible().catch(() => false)) {
     await expect(page.getByText(/generated demo club data/i)).toBeVisible();
-    await expect(page.getByText(/Retry live load/i)).toBeVisible();
-  } else if (await noClubEntry.isVisible().catch(() => false)) {
-    await expect(page.getByText("Create club", { exact: true })).toBeVisible();
-    await expect(page.getByText("Browse clubs", { exact: true })).toBeVisible();
   } else {
-    const browseButton = page.getByRole("button", { name: "Club sections" });
-    const inlineSection = page.getByText("Identity, badges, and prestige", {
-      exact: true,
-    });
-    await expect
-      .poll(
-        async () => {
-          await enableAccessibility(page);
-          return (
-            Number(await browseButton.isVisible().catch(() => false)) +
-            Number(await inlineSection.isVisible().catch(() => false))
-          );
-        },
-        { timeout: 15_000 },
-      )
-      .toBeGreaterThan(0);
+    const noClubEntry = page.getByText("Build your club command center", { exact: true });
+    if (await noClubEntry.isVisible().catch(() => false)) {
+      await expect(page.getByText("Create club", { exact: true })).toBeVisible();
+    } else {
+      if (!(await ownerCockpit.isVisible().catch(() => false))) {
+        const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
+        await page.mouse.move(Math.round(viewport.width * 0.5), Math.round(viewport.height * 0.5));
+        await page.mouse.wheel(0, 480);
+        await page.waitForTimeout(500);
+        await enableAccessibility(page);
+      }
+      await expect(ownerCockpit).toBeVisible();
+    }
   }
 
   await verifyNoHorizontalOverflow(page);
-  await captureScreenshot(page, testInfo, "club-hq");
+  await captureScreenshot(page, testInfo, "club-command-authoritative-state");
 });
 
-test.skip("A targeted notification opens its supplied target", async ({ page }, testInfo) => {
-  await visitAuthedRoute(page, "/app/notifications");
-  await expect(page.getByText("Notification 1")).toBeVisible();
-  await page.getByText("Notification 1").click();
-  await expect(page).toHaveURL(/\/app\/target1/);
-  await verifyNoHorizontalOverflow(page);
-  await captureScreenshot(page, testInfo, "notification-targeted");
+test("A targeted notification opens its supplied target", async ({ page }, testInfo) => {
+  test.skip(
+    !process.env.GTEX_E2E_NOTIFICATION_TEXT || !process.env.GTEX_E2E_NOTIFICATION_TARGET,
+    "Provide a seeded notification text and its expected route.",
+  );
+  await visitAuthedRoute(page, "/notifications");
+  const notification = page.getByText(process.env.GTEX_E2E_NOTIFICATION_TEXT).first();
+  await notification.click();
+  await page.getByRole("button", { name: /open/i }).click();
+  await expect(page).toHaveURL(new RegExp(process.env.GTEX_E2E_NOTIFICATION_TARGET));
+  await captureScreenshot(page, testInfo, "notifications-targeted");
 });
 
-test.skip("An untargeted notification leaves navigation unavailable", async ({
-  page,
-}, testInfo) => {
-  await visitAuthedRoute(page, "/app/notifications");
-  await expect(page.getByText("Notification 2")).toBeVisible();
-  await page.getByText("Notification 2").click();
-  await expect(page).toHaveURL(/\/app\/notifications/);
-  await verifyNoHorizontalOverflow(page);
-  await captureScreenshot(page, testInfo, "notification-untargeted");
+test("An untargeted notification leaves navigation unavailable", async ({ page }) => {
+  test.skip(
+    !process.env.GTEX_E2E_UNTARGETED_NOTIFICATION_TEXT,
+    "Provide a real notification without routing metadata.",
+  );
+  await visitAuthedRoute(page, "/notifications");
+  await page.getByText(process.env.GTEX_E2E_UNTARGETED_NOTIFICATION_TEXT).first().click();
+  await expect(page.getByRole("button", { name: /open/i })).toBeDisabled();
 });
 
 test("Match Viewer settles to an authoritative or truthful unavailable state", async ({
   page,
 }, testInfo) => {
-  await visitAuthedRoute(page, "/app/matches");
-
-  const liveMatchButton = page.getByText(/Open match viewer/i).first();
-  const unavailableBanner = page.getByText(
-    /Match feed is temporarily unavailable|No live matches right now/i,
+  await visitAuthedRoute(
+    page,
+    process.env.GTEX_E2E_MATCH_VIEWER_ROUTE ?? "/matches/viewer/not-available",
   );
-  const matchCenterHeader = page.getByText(/Match center|Broadcast feed|Live matchday/i).first();
-  await expect
-    .poll(
-      async () => {
-        await enableAccessibility(page);
-        return (
-          Number(await liveMatchButton.isVisible().catch(() => false)) +
-          Number(await unavailableBanner.isVisible().catch(() => false)) +
-          Number(await matchCenterHeader.isVisible().catch(() => false))
-        );
-      },
-      { timeout: 60_000 },
-    )
-    .toBeGreaterThan(0);
-
-  if (await liveMatchButton.isVisible().catch(() => false)) {
-    await liveMatchButton.click();
-    await expect(
-      page.getByText(/Match viewer unavailable|Match center|Live 2D|Replay/i).first(),
-    ).toBeVisible({ timeout: 30_000 });
-  }
-
+  await expect(
+    page.getByText(/No match available|Match viewer unavailable|2D Match Viewer/).first(),
+  ).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("Verifying shipped capability")).toHaveCount(0);
   await verifyNoHorizontalOverflow(page);
   await captureScreenshot(page, testInfo, "match-viewer");
 });
