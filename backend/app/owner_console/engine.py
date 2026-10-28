@@ -152,9 +152,9 @@ def regen_personality(rng: random.Random) -> dict[str, Any]:
 
 
 def generate_regens(
-    club_id: str, world_day: int, academy_level: int, youth_skill: int, count: int
+    club_id: str, generation_key: int | str, academy_level: int, youth_skill: int, count: int
 ) -> list[dict[str, Any]]:
-    rng = seeded("intake", club_id, world_day)
+    rng = seeded("intake", club_id, generation_key)
     out = []
     for index in range(count):
         potential = int(clamp(58 + academy_level * 4 + youth_skill // 2 + rng.randint(-6, 10), 55, 94))

@@ -123,6 +123,26 @@ def main() -> None:
                         session.commit()
                 except Exception as exc:
                     logger.exception("simulation_worker.autonomous_cycle_error error=%s", exc)
+
+                # Owner-console regen growth, injuries and owner decisions must
+                # advance from the same persisted GTEX virtual calendar even if
+                # no owner opens the control centre. Use a separate transaction
+                # so a failed owner tick cannot roll back a successfully executed
+                # canonical competition fixture, and vice versa.
+                try:
+                    from app.owner_console.service import process_due_owner_world_ticks
+
+                    with context.database.session_factory() as owner_session:
+                        owner_results = process_due_owner_world_ticks(owner_session)
+                        owner_session.commit()
+                    if (
+                        owner_results.get("ticks_executed", 0) > 0
+                        or owner_results.get("clubs_backlogged", 0) > 0
+                        or owner_results.get("ticks_failed", 0) > 0
+                    ):
+                        logger.info("simulation_worker.owner_world_ticks results=%s", owner_results)
+                except Exception as exc:
+                    logger.exception("simulation_worker.owner_world_tick_cycle_error error=%s", exc)
                 stop_event.wait(interval)
     finally:
         if runtime is not None:
