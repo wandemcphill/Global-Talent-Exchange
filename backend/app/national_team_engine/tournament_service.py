@@ -78,13 +78,85 @@ AUTO_BUILD_FORMATIONS: dict[str, tuple[str, ...]] = {
     "4-5-1": ("GK", "RB", "CB", "CB", "LB", "RM", "CM", "CM", "CM", "LM", "ST"),
     "4-2-3-1": ("GK", "RB", "CB", "CB", "LB", "DM", "CM", "RW", "AM", "LW", "ST"),
     "5-4-1": ("GK", "RWB", "CB", "CB", "CB", "LWB", "CM", "CM", "RW", "LW", "ST"),
+    "3-5-2": ("GK", "CB", "CB", "CB", "RWB", "DM", "CM", "AM", "LWB", "ST", "ST"),
+    "3-4-3": ("GK", "CB", "CB", "CB", "RM", "CM", "CM", "LM", "RW", "ST", "LW"),
+    "5-3-2": ("GK", "RWB", "CB", "CB", "CB", "LWB", "DM", "CM", "CM", "ST", "ST"),
 }
 TACTIC_TO_FORMATION = {
     "possession": "4-3-3",
+    "tiki_taka": "4-3-3",
+    "tiki-taka": "4-3-3",
+    "high_press": "4-3-3",
+    "gegenpress": "4-2-3-1",
     "direct": "4-4-2",
     "counter": "4-2-3-1",
     "balanced": "4-2-3-1",
+    "low_block": "5-4-1",
+    "wing_play": "3-4-3",
 }
+
+NATIONAL_TEAM_MANAGER_CATALOG: tuple[dict[str, Any], ...] = (
+    {
+        "manager_id": "nt_mgr_tiki_taka",
+        "display_name": "Vicente Del Bosque Prime",
+        "tactical_style": "tiki_taka",
+        "preferred_formation": "4-3-3",
+        "mentality": "possession",
+        "tactical_rating": 92,
+        "fee_fan_coin": "350.0000",
+        "specialty": "High-retention Tiki-Taka triangles & tournament composure",
+    },
+    {
+        "manager_id": "nt_mgr_gegenpress",
+        "display_name": "Hansi Flick International",
+        "tactical_style": "gegenpress",
+        "preferred_formation": "4-2-3-1",
+        "mentality": "attacking",
+        "tactical_rating": 90,
+        "fee_fan_coin": "320.0000",
+        "specialty": "Relentless high line & rapid vertical counter-pressing",
+    },
+    {
+        "manager_id": "nt_mgr_pragmatic_cup",
+        "display_name": "Didier Deschamps Tournament",
+        "tactical_style": "counter",
+        "preferred_formation": "4-2-3-1",
+        "mentality": "balanced",
+        "tactical_rating": 91,
+        "fee_fan_coin": "340.0000",
+        "specialty": "Knockout tournament pragmatism & lethal transition speed",
+    },
+    {
+        "manager_id": "nt_mgr_albiceleste",
+        "display_name": "Lionel Scaloni Fluid",
+        "tactical_style": "possession",
+        "preferred_formation": "4-3-3",
+        "mentality": "balanced",
+        "tactical_rating": 93,
+        "fee_fan_coin": "380.0000",
+        "specialty": "Adaptive midfield overloads & penalty shootout mastery",
+    },
+    {
+        "manager_id": "nt_mgr_direct_power",
+        "display_name": "Otto Rehhagel Miracle",
+        "tactical_style": "direct",
+        "preferred_formation": "4-4-2",
+        "mentality": "defensive",
+        "tactical_rating": 86,
+        "fee_fan_coin": "180.0000",
+        "specialty": "Set-piece dominance, aerial duels & compact two-bank block",
+    },
+    {
+        "manager_id": "nt_mgr_low_block",
+        "display_name": "Walid Regragui Atlas",
+        "tactical_style": "low_block",
+        "preferred_formation": "5-4-1",
+        "mentality": "counter",
+        "tactical_rating": 88,
+        "fee_fan_coin": "220.0000",
+        "specialty": "Ultra-disciplined defensive fortress & wingback breaks",
+    },
+)
 
 
 def _player_age(player: Player, *, today: date | None = None) -> int | None:
@@ -3511,3 +3583,187 @@ class NationalTeamTournamentService:
             self.session.flush()
             seeded.append(self._competition_payload(competition))
         return seeded
+
+    def list_available_national_managers(self) -> list[dict[str, Any]]:
+        return [
+            {
+                **dict(mgr),
+                "currency": "FAN_COIN",
+                "upfront_contract_deduction": True,
+                "staff_roles_required": ["manager"],
+                "excluded_club_staff_roles": ["general_manager", "head_of_youth_development", "chief_scout"],
+            }
+            for mgr in NATIONAL_TEAM_MANAGER_CATALOG
+        ]
+
+    def hire_national_team_manager(
+        self,
+        *,
+        entry_id: str,
+        actor: User,
+        manager_id: str,
+    ) -> dict[str, Any]:
+        entry = self._require_managed_entry(entry_id, actor)
+        competition = entry.competition
+        assert competition is not None
+        self._validate_entry_window(competition)
+
+        candidate = next(
+            (dict(m) for m in NATIONAL_TEAM_MANAGER_CATALOG if m["manager_id"] == manager_id),
+            None,
+        )
+        if candidate is None:
+            raise NationalTeamTournamentError(
+                f"National team manager '{manager_id}' was not found in the catalog.",
+                reason="manager_not_found",
+            )
+
+        fee_fan_coin = self._normalize_amount(candidate["fee_fan_coin"])
+        if fee_fan_coin > Decimal("0.0000"):
+            user_fan_account = self.wallet_service.get_user_account(self.session, actor, LedgerUnit.CREDIT)
+            platform_fan_account = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.CREDIT)
+            try:
+                self.wallet_service.append_transaction(
+                    self.session,
+                    postings=[
+                        LedgerPosting(
+                            account=user_fan_account,
+                            amount=-fee_fan_coin,
+                            source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND,
+                        ),
+                        LedgerPosting(
+                            account=platform_fan_account,
+                            amount=fee_fan_coin,
+                            source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND,
+                        ),
+                    ],
+                    reason=LedgerEntryReason.COMPETITION_ENTRY,
+                    source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND,
+                    reference=f"national-manager-hire:{entry.id}:{manager_id}",
+                    description=f"Upfront Fan Coin salary for National Team Manager {candidate['display_name']} ({entry.country_name})",
+                    external_reference=f"national-manager-hire:{entry.id}:{manager_id}",
+                    actor=actor,
+                    metadata={
+                        "entry_id": entry.id,
+                        "competition_id": competition.id,
+                        "country_code": entry.country_code,
+                        "manager_id": manager_id,
+                        "currency_label": "Fan Coin",
+                        "upfront_contract_deduction": True,
+                    },
+                )
+            except InsufficientBalanceError as exc:
+                raise NationalTeamTournamentError(
+                    str(exc),
+                    reason="insufficient_fan_coin_balance",
+                ) from exc
+
+        hired_payload = {
+            **candidate,
+            "fee_fan_coin": str(fee_fan_coin),
+            "currency": "FAN_COIN",
+            "upfront_paid": True,
+            "hired_at": utcnow().isoformat(),
+            "staff_roles_required": ["manager"],
+        }
+        entry.metadata_json = {
+            **dict(entry.metadata_json or {}),
+            "hired_manager": hired_payload,
+            "preferred_formation": candidate["preferred_formation"],
+            "tactical_style": candidate["tactical_style"],
+        }
+        self.session.flush()
+        return {
+            "entry": self._entry_detail_payload(entry),
+            "hired_manager": hired_payload,
+        }
+
+    def checkout_rental_basket(
+        self,
+        *,
+        entry_id: str,
+        actor: User,
+        player_ids: list[str],
+        tactic: str | None = None,
+    ) -> dict[str, Any]:
+        entry = self._require_managed_entry(entry_id, actor)
+        if not player_ids:
+            raise NationalTeamTournamentError(
+                "At least one player is required in the rental basket to checkout.",
+                reason="empty_rental_basket",
+            )
+        deduped_ids = list(dict.fromkeys(str(pid).strip() for pid in player_ids if str(pid).strip()))
+        rented_ids: list[str] = []
+        for pid in deduped_ids:
+            self.rent_player(entry_id=entry.id, actor=actor, player_id=pid)
+            rented_ids.append(pid)
+        if tactic:
+            tactic_label, formation = self._resolve_auto_build_formation(tactic)
+            entry.metadata_json = {
+                **dict(entry.metadata_json or {}),
+                "tactical_style": tactic_label,
+                "preferred_formation": formation,
+            }
+        self.session.flush()
+        detail = self._entry_detail_payload(entry)
+        return {
+            "entry": detail,
+            "checked_out_player_ids": rented_ids,
+            "checked_out_count": len(rented_ids),
+        }
+
+    def host_user_competition(
+        self,
+        *,
+        actor: User,
+        title: str,
+        season_label: str,
+        region_type: str = "global",
+        age_band: str = "senior",
+        format_type: str = "cup",
+        competition_family: str = "world_cup",
+        minimum_squad_size: int = DEFAULT_MINIMUM_SQUAD_SIZE,
+        maximum_squad_size: int = DEFAULT_MAXIMUM_SQUAD_SIZE,
+        notes: str | None = None,
+    ) -> dict[str, Any]:
+        from app.national_team_engine.competition_profiles import default_reward_structure_for, profile_for
+
+        slug = "-".join(
+            part for part in "".join(ch.lower() if ch.isalnum() else "-" for ch in title).split("-") if part
+        ) or "national-cup"
+        unique_suffix = hashlib.sha1(f"{actor.id}:{title}:{season_label}:{utcnow().isoformat()}".encode("utf-8")).hexdigest()[:6]
+        key = f"user-{slug}-{unique_suffix}"
+        family = competition_family if competition_family in {"world_cup", "afcon", "copa", "euros", "asian_cup"} else "world_cup"
+        band = age_band if age_band in {"senior", "u20", "u17"} else "senior"
+        profile = profile_for(family=family, age_band=band, metadata_json={})
+        competition = NationalTeamCompetition(
+            key=key,
+            title=title.strip(),
+            season_label=season_label.strip(),
+            region_type=region_type.strip().lower(),
+            age_band=band,
+            format_type=format_type.strip().lower(),
+            status="open",
+            notes=notes,
+            metadata_json={
+                "competition_family": family,
+                "host_type": "user",
+                "host_user_id": actor.id,
+                "entry_fee_coin": "0.0000",
+                "entry_mode": "rental_only",
+                "minimum_squad_size": max(11, min(int(minimum_squad_size), 30)),
+                "maximum_squad_size": max(18, min(int(maximum_squad_size), 30)),
+                "free_player_quota": DEFAULT_FREE_PLAYER_QUOTA,
+                "free_player_distribution": dict(DEFAULT_FREE_PLAYER_DISTRIBUTION),
+                "reward_structure": default_reward_structure_for(family, band),
+                "competition_engine": profile,
+                "schedule_profile": {
+                    "preferred_cycle_week": profile["preferred_cycle_week"],
+                    "label": profile["schedule_label"],
+                },
+            },
+            created_by_user_id=actor.id,
+        )
+        self.session.add(competition)
+        self.session.flush()
+        return self._competition_payload(competition)

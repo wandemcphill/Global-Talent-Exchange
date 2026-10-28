@@ -302,9 +302,33 @@ def unsign(
     return _run(session, service.unsign_market_player, session, user.id, club_id, body.player_id)
 
 
+class AutopickSquadRequest(BaseModel):
+    budget_gtex: int | None = None
+    tactic: str | None = None
+    formation: str | None = None
+    target_squad_size: int | None = None
+
+
 @router.post("/clubs/{club_id}/autopick")
-def autopick(club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
-    return _run(session, service.autopick_squad, session, user.id, club_id)
+def autopick(
+    club_id: str,
+    body: AutopickSquadRequest | None = None,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    req = body or AutopickSquadRequest()
+    return _run(
+        session,
+        lambda: service.autopick_squad(
+            session,
+            user.id,
+            club_id,
+            budget_gtex=req.budget_gtex,
+            tactic=req.tactic,
+            formation=req.formation,
+            target_squad_size=req.target_squad_size,
+        ),
+    )
 
 
 @router.get("/market/quote")

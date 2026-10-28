@@ -91,6 +91,16 @@ function SquadStep({ clubId, onDone }: any) {
   const { data: club, refetch } = useClub(clubId);
   const [unsigningId, setUnsigningId] = useState<string | null>(null);
   const [autopicking, setAutopicking] = useState(false);
+  const [tactic, setTactic] = useState("tiki_taka");
+  const [formation, setFormation] = useState("4-3-3");
+  const [budgetCap, setBudgetCap] = useState("85000");
+  const [targetSquadSize, setTargetSquadSize] = useState("11");
+  const [appointingMgr, setAppointingMgr] = useState<string | null>(null);
+
+  const { data: mgrCatalog } = useQuery({
+    queryKey: ["mgr-catalog-onboarding"],
+    queryFn: async () => (await api.get("/managers/catalog", { params: { limit: 3 } })).data.items,
+  });
 
   const squad = club?.squad?.filter((p: any) => !p.is_regen) || [];
   const hasGk = squad.some(
@@ -102,6 +112,44 @@ function SquadStep({ clubId, onDone }: any) {
   useEffect(() => {
     if (club?.stage && club.stage !== "squad") onDone();
   }, [club?.stage, onDone]);
+
+  const handleTacticChange = (nextTactic: string) => {
+    setTactic(nextTactic);
+    const map: Record<string, string> = {
+      tiki_taka: "4-3-3",
+      possession: "4-3-3",
+      gegenpress: "4-2-3-1",
+      counter: "4-2-3-1",
+      direct: "4-4-2",
+      low_block: "5-4-1",
+    };
+    if (map[nextTactic]) setFormation(map[nextTactic]);
+  };
+
+  const handlePreAppointManager = async (m: any) => {
+    setAppointingMgr(m.manager_id);
+    try {
+      await api.post(`/owner/clubs/${clubId}/manager`, {
+        manager: {
+          manager_id: m.manager_id,
+          display_name: m.display_name,
+          rarity: m.rarity,
+          mentality: m.mentality,
+          tactics: m.tactics,
+          traits: m.traits,
+          philosophy_summary: m.philosophy_summary,
+        },
+      });
+      const firstTactic = (m.tactics || [])[0] || "tiki_taka";
+      handleTacticChange(firstTactic);
+      toast.success(`Appointed ${m.display_name}! Staff will now recruit for ${firstTactic.replace(/_/g, " ")}.`);
+      refetch();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setAppointingMgr(null);
+    }
+  };
 
   const handleUnsign = async (p: any) => {
     setUnsigningId(p.id);
@@ -120,12 +168,17 @@ function SquadStep({ clubId, onDone }: any) {
   const handleAutopick = async () => {
     setAutopicking(true);
     try {
-      const { data } = await api.post(`/owner/clubs/${clubId}/autopick`);
+      const { data } = await api.post(`/owner/clubs/${clubId}/autopick`, {
+        budget_gtex: Number(budgetCap) > 0 ? Number(budgetCap) : undefined,
+        tactic,
+        formation,
+        target_squad_size: Number(targetSquadSize) || 11,
+      });
       const count = data?.signed?.length ?? data?.signed_count ?? 0;
       toast.success(
         data?.message ||
           (count > 0
-            ? `Auto-picked ${count} player(s) within budget! Remaining cash: ${fmt(data.cash)} GTX`
+            ? `Staff auto-picked ${count} player(s) for ${data.formation || formation} (${(data.tactic || tactic).replace(/_/g, " ")})! Remaining cash: ${fmt(data.cash)} GTX`
             : "No affordable players found within current budget.")
       );
       refetch();
@@ -148,6 +201,107 @@ function SquadStep({ clubId, onDone }: any) {
         </div>
       }
     >
+      {/* Club Legacy: Manager / GM / Chief Scout & Tactical Auto-Pick Controls */}
+      <div
+        className="mb-4 rounded-sm border border-emerald-500/20 bg-slate-950/80 p-4"
+        data-testid="onboarding-tactical-recruitment-panel"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/10">
+          <div>
+            <p className="gx-eyebrow text-emerald-400">Club Legacy & Recruitment Committee</p>
+            <p className="text-xs text-slate-300">
+              Sign your Manager first or set your playing style (e.g. Tiki-Taka 4-3-3) & budget—your Manager, GM, and Chief Scout will auto-pick matching players.
+            </p>
+          </div>
+          <Chip tone="cyan">
+            Active Coach: {club?.manager?.name || "Interim Staff Committee"} · Fan Coin Upfront Staff Policy
+          </Chip>
+        </div>
+
+        {(mgrCatalog || []).length > 0 && (
+          <div className="mt-3 grid gap-2 md:grid-cols-3">
+            {(mgrCatalog || []).map((m: any) => (
+              <div
+                key={m.manager_id}
+                className="flex items-center justify-between rounded border border-white/10 bg-slate-900/60 px-3 py-2 text-xs"
+              >
+                <div>
+                  <p className="font-semibold text-white">{m.display_name}</p>
+                  <p className="text-[11px] text-slate-400">
+                    {m.mentality} · {(m.tactics || []).slice(0, 2).join(", ").replace(/_/g, " ")}
+                  </p>
+                </div>
+                <Btn
+                  variant="ghost"
+                  disabled={!!appointingMgr}
+                  onClick={() => handlePreAppointManager(m)}
+                  data-testid={`pre-appoint-manager-${m.manager_id}`}
+                >
+                  {appointingMgr === m.manager_id ? "…" : "Hire First"}
+                </Btn>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-3 grid gap-3 sm:grid-cols-4">
+          <label className="text-xs text-slate-400">
+            Playing Style / Mentality
+            <select
+              value={tactic}
+              onChange={(e) => handleTacticChange(e.target.value)}
+              data-testid="onboarding-autopick-tactic"
+              className="mt-1 w-full rounded border border-white/15 bg-slate-900 px-2.5 py-1.5 text-xs text-white"
+            >
+              <option value="tiki_taka">Tiki-Taka (4-3-3 Possession)</option>
+              <option value="gegenpress">Gegenpress (4-2-3-1 High Press)</option>
+              <option value="possession">Control Possession (4-3-3)</option>
+              <option value="counter">Fast Counter-Attack (4-2-3-1)</option>
+              <option value="direct">Direct Vertical (4-4-2)</option>
+              <option value="low_block">Low-Block Fortress (5-4-1)</option>
+            </select>
+          </label>
+          <label className="text-xs text-slate-400">
+            Preferred Formation
+            <select
+              value={formation}
+              onChange={(e) => setFormation(e.target.value)}
+              data-testid="onboarding-autopick-formation"
+              className="mt-1 w-full rounded border border-white/15 bg-slate-900 px-2.5 py-1.5 text-xs text-white"
+            >
+              <option value="4-3-3">4-3-3</option>
+              <option value="4-2-3-1">4-2-3-1</option>
+              <option value="4-4-2">4-4-2</option>
+              <option value="3-5-2">3-5-2</option>
+              <option value="3-4-3">3-4-3</option>
+              <option value="5-4-1">5-4-1</option>
+            </select>
+          </label>
+          <label className="text-xs text-slate-400">
+            Recruitment Budget Cap (GTX)
+            <input
+              type="number"
+              value={budgetCap}
+              onChange={(e) => setBudgetCap(e.target.value)}
+              data-testid="onboarding-autopick-budget"
+              className="mt-1 w-full rounded border border-white/15 bg-slate-900 px-2.5 py-1.5 text-xs text-white"
+            />
+          </label>
+          <label className="text-xs text-slate-400">
+            Target Squad Size
+            <input
+              type="number"
+              min={11}
+              max={22}
+              value={targetSquadSize}
+              onChange={(e) => setTargetSquadSize(e.target.value)}
+              data-testid="onboarding-autopick-size"
+              className="mt-1 w-full rounded border border-white/15 bg-slate-900 px-2.5 py-1.5 text-xs text-white"
+            />
+          </label>
+        </div>
+      </div>
+
       {/* Top Status & Auto-pick Toolbar */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-sm border border-white/10 bg-slate-950/60 p-4">
         <div className="flex flex-wrap items-center gap-3">

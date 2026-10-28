@@ -28,7 +28,7 @@ from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.reward_settlement import RewardSettlement
 from app.models.user import User, UserRole
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
-from app.national_team_engine.competition_profiles import infer_competition_family, profile_for
+from app.national_team_engine.competition_profiles import default_reward_structure_for, infer_competition_family, profile_for
 from app.national_team_engine.tournament_service import NationalTeamTournamentService
 from app.reward_engine.service import RewardEngineError, RewardEngineService
 from app.wallets.service import LedgerPosting, WalletService
@@ -71,6 +71,26 @@ class NationalCompetitionLifecycleService:
 
         country_code = payload.country_code.strip().upper()
         country_name = payload.country_name.strip()
+        lifecycle_state = self._lifecycle_state(competition)
+        locked_rep_ids = set(
+            lifecycle_state.get("qualified_entry_ids")
+            or lifecycle_state.get("representative_entry_ids")
+            or []
+        )
+        if locked_rep_ids:
+            country_rep = next(
+                (
+                    item
+                    for item in competition.submitted_entries
+                    if item.id in locked_rep_ids and item.country_code.strip().upper() == country_code
+                ),
+                None,
+            )
+            if country_rep is not None and country_rep.user_id != actor.id:
+                raise NationalCompetitionLifecycleError(
+                    f"{country_name} ({country_code}) already has a qualified representative for this tournament.",
+                    reason="country_representative_locked",
+                )
         profile = self._competition_profile(competition)
         confederation_code = self._country_confederation(country_code)
         self._validate_confederation(
@@ -105,6 +125,58 @@ class NationalCompetitionLifecycleService:
             "strength_rating": round(self._squad_strength(squad)),
         }
         self._clear_lifecycle_state(competition)
+        self.session.flush()
+        return self._entry_payload(entry)
+
+    def update_qualified_finals_squad(self, *, competition_id: str, actor: User, payload) -> dict[str, Any]:
+        competition = self._require_competition(competition_id)
+        lifecycle_state = self._lifecycle_state(competition)
+        current_stage = str(lifecycle_state.get("current_stage") or "registration")
+        if current_stage == "completed":
+            raise NationalCompetitionLifecycleError(
+                "Tournament finals have already completed; squad is locked.",
+                reason="tournament_already_completed",
+            )
+        if current_stage != "tournament":
+            raise NationalCompetitionLifecycleError(
+                "Finals squad update window is only open for qualified representatives before the tournament stage runs.",
+                reason="finals_window_not_open",
+            )
+
+        country_code = payload.country_code.strip().upper()
+        eligible_ids = set(
+            lifecycle_state.get("qualified_entry_ids")
+            or lifecycle_state.get("representative_entry_ids")
+            or []
+        )
+        entry = self.session.scalar(
+            select(NationalTeamCompetitionEntry).where(
+                NationalTeamCompetitionEntry.competition_id == competition_id,
+                NationalTeamCompetitionEntry.user_id == actor.id,
+            )
+        )
+        if (
+            entry is None
+            or entry.country_code.strip().upper() != country_code
+            or (eligible_ids and entry.id not in eligible_ids)
+        ):
+            raise NationalCompetitionLifecycleError(
+                "Only the qualified country representative may update this national team squad for the finals.",
+                reason="country_representative_locked",
+            )
+
+        squad = self._normalize_squad(
+            payload.squad,
+            competition=competition,
+            country_code=country_code,
+            actor=actor,
+        )
+        entry.squad_json = squad
+        entry.metadata_json = {
+            **dict(entry.metadata_json or {}),
+            "finals_squad_updated_at": utcnow().isoformat(),
+            "strength_rating": round(self._squad_strength(squad)),
+        }
         self.session.flush()
         return self._entry_payload(entry)
 
@@ -268,6 +340,7 @@ class NationalCompetitionLifecycleService:
                     entry.qualified = True
                 else:
                     entry.status = "eliminated"
+            self.session.flush()
             rental_cleanup = self._cleanup_completed_competition_rentals(competition)
             if rental_cleanup is not None:
                 lifecycle_state["rental_cleanup"] = rental_cleanup
@@ -465,6 +538,283 @@ class NationalCompetitionLifecycleService:
             "stage_results": dict(lifecycle_state.get("stage_results") or {}),
             "rental_cleanup": lifecycle_state.get("rental_cleanup"),
             "champion_reward_settlement": lifecycle_state.get("champion_reward_settlement"),
+            "reward_breakdown": self.calculate_tournament_reward_breakdown(competition_id=competition_id),
+            "tournament_reward_settlements": lifecycle_state.get("tournament_reward_settlements", []),
+        }
+
+    def calculate_tournament_reward_breakdown(self, *, competition_id: str) -> dict[str, Any]:
+        competition = self._require_competition(competition_id)
+        profile = self._competition_profile(competition)
+        metadata = dict(competition.metadata_json or {})
+        reward_structure = dict(
+            metadata.get("reward_structure")
+            or default_reward_structure_for(profile["family"], profile["age_band"])
+        )
+        qual_guaranteed = self._normalize_amount(reward_structure.get("qualification_guaranteed_coin", "250.0000"))
+        per_match = dict(reward_structure.get("per_match_coin") or {})
+        win_coin = self._normalize_amount(per_match.get("win", "120.0000"))
+        draw_coin = self._normalize_amount(per_match.get("draw", "60.0000"))
+        loss_coin = self._normalize_amount(per_match.get("loss", "30.0000"))
+        stage_prog = {
+            k: self._normalize_amount(v)
+            for k, v in dict(reward_structure.get("stage_progression_coin") or {}).items()
+        }
+
+        lifecycle_state = self._lifecycle_state(competition)
+        entries = self._ordered_entries(competition)
+        entry_map = {e.id: e for e in entries}
+        finals_ids = list(
+            lifecycle_state.get("qualified_entry_ids")
+            or lifecycle_state.get("representative_entry_ids")
+            or []
+        )
+        tournament_result = dict((lifecycle_state.get("stage_results") or {}).get("tournament") or {})
+        if not finals_ids and tournament_result:
+            seen_ids: set[str] = set()
+            for grp in tournament_result.get("groups", []):
+                for t in grp.get("teams", []):
+                    if t.get("entry_id"):
+                        seen_ids.add(str(t["entry_id"]))
+            for rnd in tournament_result.get("knockout_rounds", []):
+                for m in rnd.get("matches", []):
+                    if m.get("home_entry_id"):
+                        seen_ids.add(str(m["home_entry_id"]))
+                    if m.get("away_entry_id"):
+                        seen_ids.add(str(m["away_entry_id"]))
+            finals_ids = [e.id for e in entries if e.id in seen_ids]
+
+        payouts_by_entry: dict[str, dict[str, Any]] = {}
+        for eid in finals_ids:
+            entry = entry_map.get(eid)
+            if entry is None:
+                continue
+            payouts_by_entry[eid] = {
+                "entry_id": entry.id,
+                "user_id": entry.user_id,
+                "country_code": entry.country_code,
+                "country_name": entry.country_name,
+                "qualification_guaranteed_coin": qual_guaranteed,
+                "matches_played": 0,
+                "match_wins": 0,
+                "match_draws": 0,
+                "match_losses": 0,
+                "match_earnings_coin": Decimal("0.0000"),
+                "stages_reached": [],
+                "stage_progression_coin": Decimal("0.0000"),
+                "total_gross_coin": qual_guaranteed,
+            }
+
+        for grp in tournament_result.get("groups", []):
+            for t in grp.get("teams", []):
+                eid = str(t.get("entry_id") or "")
+                if eid in payouts_by_entry and "group_stage" not in payouts_by_entry[eid]["stages_reached"]:
+                    payouts_by_entry[eid]["stages_reached"].append("group_stage")
+                    bonus = stage_prog.get("group_stage", Decimal("0.0000"))
+                    payouts_by_entry[eid]["stage_progression_coin"] += bonus
+                    payouts_by_entry[eid]["total_gross_coin"] += bonus
+            for match in grp.get("matches", []):
+                self._accumulate_match_payout(
+                    payouts_by_entry,
+                    match=match,
+                    win_coin=win_coin,
+                    draw_coin=draw_coin,
+                    loss_coin=loss_coin,
+                )
+
+        for rnd in tournament_result.get("knockout_rounds", []):
+            stage_name = str(rnd.get("stage") or "")
+            for match in rnd.get("matches", []):
+                if str(match.get("resolution") or "").endswith("_bye"):
+                    continue
+                for side_key in ("home_entry_id", "away_entry_id"):
+                    eid = str(match.get(side_key) or "")
+                    if eid in payouts_by_entry and stage_name and stage_name != "final":
+                        if stage_name not in payouts_by_entry[eid]["stages_reached"]:
+                            payouts_by_entry[eid]["stages_reached"].append(stage_name)
+                            bonus = stage_prog.get(stage_name, Decimal("0.0000"))
+                            payouts_by_entry[eid]["stage_progression_coin"] += bonus
+                            payouts_by_entry[eid]["total_gross_coin"] += bonus
+                self._accumulate_match_payout(
+                    payouts_by_entry,
+                    match=match,
+                    win_coin=win_coin,
+                    draw_coin=draw_coin,
+                    loss_coin=loss_coin,
+                )
+                if stage_name == "final":
+                    winner_id = str(match.get("winner_entry_id") or "")
+                    home_id = str(match.get("home_entry_id") or "")
+                    away_id = str(match.get("away_entry_id") or "")
+                    runner_up_id = away_id if winner_id == home_id else home_id
+                    if winner_id in payouts_by_entry and "champion" not in payouts_by_entry[winner_id]["stages_reached"]:
+                        payouts_by_entry[winner_id]["stages_reached"].append("champion")
+                        champ_bonus = stage_prog.get("champion", Decimal("0.0000"))
+                        payouts_by_entry[winner_id]["stage_progression_coin"] += champ_bonus
+                        payouts_by_entry[winner_id]["total_gross_coin"] += champ_bonus
+                    if runner_up_id in payouts_by_entry and "runner_up" not in payouts_by_entry[runner_up_id]["stages_reached"]:
+                        payouts_by_entry[runner_up_id]["stages_reached"].append("runner_up")
+                        ru_bonus = stage_prog.get("runner_up", Decimal("0.0000"))
+                        payouts_by_entry[runner_up_id]["stage_progression_coin"] += ru_bonus
+                        payouts_by_entry[runner_up_id]["total_gross_coin"] += ru_bonus
+
+        serialized_entries = []
+        total_pool_coin = Decimal("0.0000")
+        for row in sorted(
+            payouts_by_entry.values(),
+            key=lambda item: (-item["total_gross_coin"], item["country_name"].lower()),
+        ):
+            total_pool_coin += row["total_gross_coin"]
+            serialized_entries.append(
+                {
+                    **row,
+                    "qualification_guaranteed_coin": str(self._normalize_amount(row["qualification_guaranteed_coin"])),
+                    "match_earnings_coin": str(self._normalize_amount(row["match_earnings_coin"])),
+                    "stage_progression_coin": str(self._normalize_amount(row["stage_progression_coin"])),
+                    "total_gross_coin": str(self._normalize_amount(row["total_gross_coin"])),
+                }
+            )
+        return {
+            "competition_id": competition.id,
+            "competition_family": profile["family"],
+            "reward_structure": reward_structure,
+            "total_distributed_coin": str(self._normalize_amount(total_pool_coin)),
+            "entry_rewards": serialized_entries,
+        }
+
+    def _accumulate_match_payout(
+        self,
+        payouts_by_entry: dict[str, dict[str, Any]],
+        *,
+        match: dict[str, Any],
+        win_coin: Decimal,
+        draw_coin: Decimal,
+        loss_coin: Decimal,
+    ) -> None:
+        if str(match.get("resolution") or "").endswith("_bye"):
+            return
+        home_id = str(match.get("home_entry_id") or "")
+        away_id = str(match.get("away_entry_id") or "")
+        winner_id = match.get("winner_entry_id")
+        if home_id in payouts_by_entry:
+            payouts_by_entry[home_id]["matches_played"] += 1
+            if winner_id == home_id:
+                payouts_by_entry[home_id]["match_wins"] += 1
+                payouts_by_entry[home_id]["match_earnings_coin"] += win_coin
+                payouts_by_entry[home_id]["total_gross_coin"] += win_coin
+            elif winner_id is None:
+                payouts_by_entry[home_id]["match_draws"] += 1
+                payouts_by_entry[home_id]["match_earnings_coin"] += draw_coin
+                payouts_by_entry[home_id]["total_gross_coin"] += draw_coin
+            else:
+                payouts_by_entry[home_id]["match_losses"] += 1
+                payouts_by_entry[home_id]["match_earnings_coin"] += loss_coin
+                payouts_by_entry[home_id]["total_gross_coin"] += loss_coin
+        if away_id in payouts_by_entry:
+            payouts_by_entry[away_id]["matches_played"] += 1
+            if winner_id == away_id:
+                payouts_by_entry[away_id]["match_wins"] += 1
+                payouts_by_entry[away_id]["match_earnings_coin"] += win_coin
+                payouts_by_entry[away_id]["total_gross_coin"] += win_coin
+            elif winner_id is None:
+                payouts_by_entry[away_id]["match_draws"] += 1
+                payouts_by_entry[away_id]["match_earnings_coin"] += draw_coin
+                payouts_by_entry[away_id]["total_gross_coin"] += draw_coin
+            else:
+                payouts_by_entry[away_id]["match_losses"] += 1
+                payouts_by_entry[away_id]["match_earnings_coin"] += loss_coin
+                payouts_by_entry[away_id]["total_gross_coin"] += loss_coin
+
+    def settle_tournament_rewards(
+        self,
+        *,
+        competition_id: str,
+        actor: User | None,
+    ) -> dict[str, Any]:
+        if not self._is_authorized_settlement_actor(actor):
+            raise NationalCompetitionLifecycleError(
+                "Administrator privileges are required to settle national tournament rewards.",
+                reason="settlement_forbidden",
+            )
+        assert actor is not None
+        competition = self._require_competition(competition_id, for_update=True)
+        lifecycle_state = self._lifecycle_state(competition)
+        if str(lifecycle_state.get("current_stage") or "") != "completed":
+            raise NationalCompetitionLifecycleError(
+                "Competition lifecycle must be completed before settling tournament rewards.",
+                reason="lifecycle_not_completed",
+            )
+        breakdown = self.calculate_tournament_reward_breakdown(competition_id=competition_id)
+        entry_map = {e.id: e for e in competition.submitted_entries}
+        self._ensure_reward_rule_seeded()
+        reward_service = RewardEngineService(
+            self.session,
+            wallet_service=self.wallet_service,
+            event_publisher=self.event_publisher,
+        )
+        settlements: list[dict[str, Any]] = []
+        for row in breakdown["entry_rewards"]:
+            entry = entry_map.get(row["entry_id"])
+            if entry is None:
+                continue
+            gross = self._normalize_amount(row["total_gross_coin"])
+            if gross <= Decimal("0.0000"):
+                continue
+            comp_key = f"national-competition:{competition.id}:entry:{entry.id}"
+            existing = self.session.scalar(
+                select(RewardSettlement).where(
+                    RewardSettlement.competition_key == comp_key,
+                    RewardSettlement.reward_source == "national_competition_stage_and_match_reward",
+                )
+            )
+            if existing is None:
+                self._ensure_promo_pool_funded_for_champion(
+                    competition=competition,
+                    champion_entry=entry,
+                    actor=actor,
+                    gross_amount=gross,
+                )
+                existing = reward_service.settle_reward(
+                    actor=actor,
+                    user_id=entry.user_id,
+                    competition_key=comp_key,
+                    title=f"{competition.title} ({competition.season_label}) Finals Payout - {entry.country_name}",
+                    gross_amount=gross,
+                    reward_source="national_competition_stage_and_match_reward",
+                    note=(
+                        f"Qualification ({row['qualification_guaranteed_coin']}) + "
+                        f"Matches ({row['match_wins']}W/{row['match_draws']}D/{row['match_losses']}L = {row['match_earnings_coin']}) + "
+                        f"Stages ({', '.join(row['stages_reached'])} = {row['stage_progression_coin']})"
+                    ),
+                    ledger_unit=LedgerUnit.COIN,
+                )
+            settlements.append(
+                {
+                    "settlement_id": existing.id,
+                    "entry_id": entry.id,
+                    "user_id": entry.user_id,
+                    "country_code": entry.country_code,
+                    "country_name": entry.country_name,
+                    "gross_amount": str(existing.gross_amount),
+                    "net_amount": str(existing.net_amount),
+                    "stages_reached": row["stages_reached"],
+                    "matches_played": row["matches_played"],
+                    "match_wins": row["match_wins"],
+                    "match_draws": row["match_draws"],
+                    "match_losses": row["match_losses"],
+                }
+            )
+        lifecycle_state["tournament_reward_settlements"] = settlements
+        competition.metadata_json = {
+            **dict(competition.metadata_json or {}),
+            "lifecycle_state": lifecycle_state,
+        }
+        self.session.flush()
+        return {
+            "competition_id": competition.id,
+            "settlement_count": len(settlements),
+            "total_distributed_coin": breakdown["total_distributed_coin"],
+            "settlements": settlements,
+            "breakdown": breakdown,
         }
 
     def list_country_rankings(self, *, limit: int = 50) -> list[dict[str, Any]]:
@@ -535,10 +885,8 @@ class NationalCompetitionLifecycleService:
         return bind is not None and bind.dialect.name != "sqlite"
 
     def _has_tables(self, *table_names: str) -> bool:
-        bind = self.session.get_bind()
-        if bind is None:
-            return False
-        inspector = inspect(bind)
+        conn = self.session.connection()
+        inspector = inspect(conn)
         return all(inspector.has_table(table_name) for table_name in table_names)
 
     def _cleanup_completed_competition_rentals(

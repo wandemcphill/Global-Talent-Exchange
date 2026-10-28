@@ -786,3 +786,131 @@ def rotate_competition_ads(
     payload = service.rotate_ads(competition_id=competition_id)
     session.commit()
     return payload
+
+
+@router.get("/managers/catalog", response_model=list[dict])
+def list_national_team_managers(
+    service: NationalTeamTournamentService = Depends(_tournament_service),
+):
+    return service.list_available_national_managers()
+
+
+@router.post("/entries/{entry_id}/manager/hire", response_model=dict)
+def hire_national_team_entry_manager(
+    entry_id: str,
+    payload: NationalTeamManagerHireRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    service: NationalTeamTournamentService = Depends(_tournament_service),
+):
+    try:
+        body = service.hire_national_team_manager(
+            entry_id=entry_id,
+            actor=current_user,
+            manager_id=payload.manager_id,
+        )
+        session.commit()
+    except NationalTeamTournamentError as exc:
+        session.rollback()
+        _raise_tournament_http(exc)
+    return body
+
+
+@router.post("/entries/{entry_id}/rentals/checkout", response_model=dict)
+def checkout_national_team_rental_basket(
+    entry_id: str,
+    payload: NationalTeamRentalBasketCheckoutRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    service: NationalTeamTournamentService = Depends(_tournament_service),
+):
+    try:
+        body = service.checkout_rental_basket(
+            entry_id=entry_id,
+            actor=current_user,
+            player_ids=payload.player_ids,
+            tactic=payload.tactic,
+        )
+        session.commit()
+    except NationalTeamTournamentError as exc:
+        session.rollback()
+        _raise_tournament_http(exc)
+    return body
+
+
+@router.post("/competitions/host", response_model=NationalTeamCompetitionResponse, status_code=status.HTTP_201_CREATED)
+def host_user_national_team_competition(
+    payload: NationalTeamUserHostCompetitionRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    service: NationalTeamTournamentService = Depends(_tournament_service),
+):
+    try:
+        body = service.host_user_competition(
+            actor=current_user,
+            title=payload.title,
+            season_label=payload.season_label,
+            region_type=payload.region_type,
+            age_band=payload.age_band,
+            format_type=payload.format_type,
+            competition_family=payload.competition_family,
+            minimum_squad_size=payload.minimum_squad_size,
+            maximum_squad_size=payload.maximum_squad_size,
+            notes=payload.notes,
+        )
+        session.commit()
+    except NationalTeamTournamentError as exc:
+        session.rollback()
+        _raise_tournament_http(exc)
+    return NationalTeamCompetitionResponse.model_validate(body)
+
+
+@router.post("/competitions/{competition_id}/finals-squad", response_model=NationalTeamCompetitionEntryResponse)
+def update_qualified_finals_squad_route(
+    competition_id: str,
+    payload: NationalTeamCompetitionEntrySubmitRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    lifecycle: NationalCompetitionLifecycleService = Depends(_lifecycle_service),
+):
+    try:
+        body = lifecycle.update_qualified_finals_squad(
+            competition_id=competition_id,
+            actor=current_user,
+            payload=payload,
+        )
+        session.commit()
+    except NationalCompetitionLifecycleError as exc:
+        session.rollback()
+        _raise_lifecycle_http(exc)
+    return NationalTeamCompetitionEntryResponse.model_validate(body)
+
+
+@router.get("/competitions/{competition_id}/rewards/breakdown", response_model=dict)
+def get_competition_reward_breakdown_route(
+    competition_id: str,
+    lifecycle: NationalCompetitionLifecycleService = Depends(_lifecycle_service),
+):
+    try:
+        return lifecycle.calculate_tournament_reward_breakdown(competition_id=competition_id)
+    except NationalCompetitionLifecycleError as exc:
+        _raise_lifecycle_http(exc)
+
+
+@admin_router.post("/competitions/{competition_id}/rewards/settle-all", response_model=dict)
+def settle_all_tournament_rewards_route(
+    competition_id: str,
+    session: Session = Depends(get_session),
+    current_admin: User = Depends(get_current_admin),
+    lifecycle: NationalCompetitionLifecycleService = Depends(_lifecycle_service),
+):
+    try:
+        body = lifecycle.settle_tournament_rewards(
+            competition_id=competition_id,
+            actor=current_admin,
+        )
+        session.commit()
+    except NationalCompetitionLifecycleError as exc:
+        session.rollback()
+        _raise_lifecycle_http(exc)
+    return body

@@ -416,6 +416,29 @@ class NationalTeamCompetitionLifecycleResponse(BaseModel):
     stage_results: dict[str, Any] = Field(default_factory=dict)
     rental_cleanup: dict[str, Any] | None = None
     champion_reward_settlement: dict[str, Any] | None = None
+    reward_breakdown: dict[str, Any] | None = None
+    tournament_reward_settlements: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class NationalTeamManagerHireRequest(BaseModel):
+    manager_id: str = Field(min_length=2, max_length=80)
+
+
+class NationalTeamRentalBasketCheckoutRequest(BaseModel):
+    player_ids: list[str] = Field(min_length=1, max_length=30)
+    tactic: str | None = Field(default=None, max_length=32)
+
+
+class NationalTeamUserHostCompetitionRequest(BaseModel):
+    title: str = Field(min_length=3, max_length=160)
+    season_label: str = Field(default="2026", min_length=2, max_length=32)
+    region_type: str = Field(default="global", min_length=2, max_length=32)
+    age_band: str = Field(default="senior", min_length=2, max_length=16)
+    format_type: str = Field(default="cup", min_length=2, max_length=32)
+    competition_family: str = Field(default="world_cup", min_length=2, max_length=32)
+    minimum_squad_size: int = Field(default=18, ge=11, le=30)
+    maximum_squad_size: int = Field(default=30, ge=18, le=30)
+    notes: str | None = Field(default=None, max_length=500)
 
 
 class NationalTeamCountryRankingResponse(BaseModel):

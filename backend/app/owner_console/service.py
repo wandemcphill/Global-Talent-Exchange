@@ -559,14 +559,76 @@ def unsign_market_player(session: Session, user_id: str, club_id: str, player_id
     }
 
 
-def autopick_squad(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
+TACTIC_FORMATION_MAP: dict[str, str] = {
+    "tiki_taka": "4-3-3",
+    "tiki-taka": "4-3-3",
+    "possession": "4-3-3",
+    "high_press": "4-3-3",
+    "gegenpress": "4-2-3-1",
+    "counter": "4-2-3-1",
+    "balanced": "4-2-3-1",
+    "direct": "4-4-2",
+    "low_block": "5-4-1",
+    "wing_play": "3-4-3",
+}
+
+FORMATION_LINE_COUNTS: dict[str, tuple[int, int, int]] = {
+    "4-3-3": (4, 3, 3),
+    "4-2-3-1": (4, 5, 1),
+    "4-4-2": (4, 4, 2),
+    "3-5-2": (3, 5, 2),
+    "3-4-3": (3, 4, 3),
+    "5-4-1": (5, 4, 1),
+    "5-3-2": (5, 3, 2),
+}
+
+
+def autopick_squad(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    *,
+    budget_gtex: int | None = None,
+    tactic: str | None = None,
+    formation: str | None = None,
+    target_squad_size: int | None = None,
+) -> dict[str, Any]:
     from app.ingestion.models import Player
     from app.players.read_models import PlayerSummaryReadModel
 
     state = require_state(session, club_id, user_id)
+    facs = dict(state.facilities_json or {})
+    exec_staff = dict(facs.get("_executive_staff") or {})
+    mgr = dict(state.manager_json or exec_staff.get("first_team_manager") or {})
+    gm = dict(exec_staff.get("general_manager") or {})
+    scout = dict(exec_staff.get("chief_scout") or {})
+
+    resolved_tactic = str(
+        tactic
+        or mgr.get("tactical_style")
+        or mgr.get("style")
+        or "tiki_taka"
+    ).strip().lower()
+    resolved_formation = str(
+        formation
+        or mgr.get("preferred_formation")
+        or TACTIC_FORMATION_MAP.get(resolved_tactic, "4-3-3")
+    ).strip()
+    if resolved_formation not in FORMATION_LINE_COUNTS:
+        resolved_formation = TACTIC_FORMATION_MAP.get(resolved_tactic, "4-3-3")
+
+    staff_committee = {
+        "first_team_manager": mgr.get("name") or "Interim Head Coach",
+        "general_manager": gm.get("name") or "Club General Manager",
+        "chief_scout": scout.get("name") or "Chief Recruitment Scout",
+        "tactic": resolved_tactic,
+        "formation": resolved_formation,
+    }
+
     current = squad(session, club_id)
     non_regens = [p for p in current if not p.is_regen]
-    slots_needed = MIN_SQUAD - len(non_regens)
+    desired_total = max(MIN_SQUAD, min(int(target_squad_size or MIN_SQUAD), 25))
+    slots_needed = desired_total - len(non_regens)
     if slots_needed <= 0:
         return {
             "signed": [],
@@ -574,9 +636,15 @@ def autopick_squad(session: Session, user_id: str, club_id: str) -> dict[str, An
             "squad_size": len(current),
             "stage": state.stage,
             "cash": str(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)),
+            "tactic": resolved_tactic,
+            "formation": resolved_formation,
+            "budget_cap_gtex": budget_gtex or 0,
+            "total_spent_gtex": 0,
+            "staff_committee": staff_committee,
         }
 
     club_cash = int(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX))
+    effective_budget = min(club_cash, int(budget_gtex)) if budget_gtex and int(budget_gtex) > 0 else club_cash
     has_keeper = any(p.position.startswith("goal") for p in current)
     signed_refs = {p.player_ref for p in current if p.player_ref}
 
@@ -588,7 +656,7 @@ def autopick_squad(session: Session, user_id: str, club_id: str) -> dict[str, An
     if signed_refs:
         query = query.where(Player.id.not_in(signed_refs))
 
-    candidates = list(session.scalars(query.limit(300)).all())
+    candidates = list(session.scalars(query.limit(450)).all())
     quotes_map = player_quotes(session, candidates)
 
     rival_refs = set(
@@ -603,34 +671,76 @@ def autopick_squad(session: Session, user_id: str, club_id: str) -> dict[str, An
 
     eligible = [c for c in candidates if c.id not in rival_refs and quotes_map.get(c.id, (999999, 0))[0] > 0]
 
-    selected_players = []
-    remaining_budget = club_cash
+    # Sort eligible players by tactical + scout efficiency when budget allows
+    avg_slot_budget = max(1, effective_budget // max(1, slots_needed))
+
+    def _tactical_score(cand: Player) -> tuple[int, int]:
+        price, rating = quotes_map.get(cand.id, (999999, 60))
+        if price <= avg_slot_budget:
+            # Prefer highest rating that fits comfortably inside the per-slot budget
+            return (1, rating, -price)
+        return (0, -price, rating)
+
+    eligible_sorted = sorted(eligible, key=_tactical_score, reverse=True)
+
+    selected_players: list[Player] = []
+    selected_ids: set[str] = set()
+    remaining_budget = effective_budget
+    total_spent = 0
+
+    def _try_pick(pos_prefix: str, count_needed: int) -> None:
+        nonlocal remaining_budget, total_spent
+        picked = 0
+        for cand in eligible_sorted:
+            if picked >= count_needed or len(selected_players) >= slots_needed:
+                break
+            if cand.id in selected_ids:
+                continue
+            norm_pos = engine.normalize_position(cand.normalized_position or cand.position)
+            if not norm_pos.startswith(pos_prefix):
+                continue
+            cost = quotes_map[cand.id][0]
+            if cost <= remaining_budget:
+                selected_players.append(cand)
+                selected_ids.add(cand.id)
+                remaining_budget -= cost
+                total_spent += cost
+                picked += 1
 
     if not has_keeper:
-        gk_candidate = next(
-            (c for c in eligible if engine.normalize_position(c.normalized_position or c.position).startswith("goal")),
-            None,
-        )
-        if gk_candidate:
-            cost = quotes_map[gk_candidate.id][0]
-            if cost <= remaining_budget:
-                selected_players.append(gk_candidate)
-                remaining_budget -= cost
-                eligible = [c for c in eligible if c.id != gk_candidate.id]
+        _try_pick("goal", 1)
 
-    for c in eligible:
+    def_count, mid_count, fwd_count = FORMATION_LINE_COUNTS.get(resolved_formation, (4, 3, 3))
+    scale = max(1.0, slots_needed / 10.0)
+    _try_pick("def", int(round(def_count * scale)))
+    _try_pick("mid", int(round(mid_count * scale)))
+    _try_pick("for", int(round(fwd_count * scale)))
+
+    # Fill any remaining slots with best affordable players
+    for cand in eligible:
         if len(selected_players) >= slots_needed:
             break
-        cost = quotes_map[c.id][0]
+        if cand.id in selected_ids:
+            continue
+        cost = quotes_map[cand.id][0]
         if cost <= remaining_budget:
-            selected_players.append(c)
+            selected_players.append(cand)
+            selected_ids.add(cand.id)
             remaining_budget -= cost
+            total_spent += cost
 
     signed_results = []
     for player in selected_players:
         signed = sign_market_player(session, user_id, club_id, player.id)
         signed_results.append(player_dict(signed))
 
+    facs["_tactical_identity"] = {
+        "tactic": resolved_tactic,
+        "formation": resolved_formation,
+        "budget_cap_gtex": effective_budget,
+        "staff_committee": staff_committee,
+    }
+    state.facilities_json = facs
     final_squad = squad(session, club_id)
     return {
         "signed": signed_results,
@@ -638,13 +748,19 @@ def autopick_squad(session: Session, user_id: str, club_id: str) -> dict[str, An
         "squad_size": len(final_squad),
         "stage": state.stage,
         "cash": str(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)),
+        "tactic": resolved_tactic,
+        "formation": resolved_formation,
+        "budget_cap_gtex": effective_budget,
+        "total_spent_gtex": total_spent,
+        "staff_committee": staff_committee,
     }
 
 
 def _advance_stage_after_squad(session: Session, state: OwnerClubState) -> None:
     players = squad(session, state.club_id)
     if state.stage == "squad" and len(players) >= MIN_SQUAD and any(p.position.startswith("goal") for p in players):
-        state.stage = "manager"
+        has_custom_manager = bool(state.manager_json and not state.manager_json.get("is_default"))
+        state.stage = "competition" if has_custom_manager else "manager"
         regens = engine.generate_regens(state.club_id, state.world_day, 1, 10, 3)
         for regen in regens:
             _add_regen(session, state.club_id, regen)
@@ -671,8 +787,6 @@ def _add_regen(session: Session, club_id: str, regen: dict[str, Any]) -> OwnerSq
 
 def appoint_manager(session: Session, user_id: str, club_id: str, snapshot: dict[str, Any] | None) -> OwnerClubState:
     state = require_state(session, club_id, user_id)
-    if state.stage == "squad":
-        raise OwnerError("sign_starting_squad_first", 409)
     profile = engine.manager_profile(snapshot or engine.DEFAULT_MANAGER)
     if (
         state.manager_json
@@ -683,6 +797,10 @@ def appoint_manager(session: Session, user_id: str, club_id: str, snapshot: dict
     state.manager_json = profile
     if state.stage == "manager":
         state.stage = "competition"
+    elif state.stage == "squad":
+        players = squad(session, club_id)
+        if len(players) >= MIN_SQUAD and any(p.position.startswith("goal") for p in players):
+            state.stage = "competition"
     _morale_shift(session, club_id, 3)
 
     # Bridge to canonical club_growth staff contracts and assignments
@@ -1096,7 +1214,11 @@ def tick_club(
     hoyd = exec_staff.get("head_of_youth_development") or {}
     med = exec_staff.get("medical_director") or {}
 
-    total_staff_salary = sum(int(s.get("salary_gtex", s.get("salary", 300))) for s in exec_staff.values())
+    total_staff_salary = sum(
+        int(s.get("salary_gtex", s.get("salary", 300)))
+        for s in exec_staff.values()
+        if not s.get("upfront_paid", True)
+    )
     daily_upkeep = max(10, total_staff_salary // 30) if exec_staff else 0
     club_cash = ledger.balance(session, ledger.club_account(state.club_id), ledger.GTEX)
     if daily_upkeep > 0 and club_cash >= daily_upkeep:
@@ -1953,6 +2075,8 @@ def hire_executive_staff(
     staff_id: str,
     role: str | None = None,
     marquee_wage_premium: bool = False,
+    contract_years: int = 3,
+    pay_with_fan_coin: bool = True,
 ) -> dict[str, Any]:
     state = require_state(session, club_id, user_id)
     candidate = next((c for c in engine.EXECUTIVE_STAFF_CATALOG if c.get("id") == staff_id or c.get("staff_id") == staff_id), None)
@@ -1969,28 +2093,50 @@ def hire_executive_staff(
             f"{candidate['name']} requires at least {min_p} club prestige (current: {state.prestige}), or a 50% marquee wage premium.",
         )
 
-    signing_fee = int(candidate.get("signing_fee_gtex") or candidate.get("salary") or 2000)
+    years = max(1, min(int(contract_years or 3), 5))
+    base_fee = int(candidate.get("signing_fee_gtex") or candidate.get("salary") or 2000)
+    annual_salary = int(candidate.get("salary_fan_coin") or candidate.get("salary") or max(400, base_fee // 3))
+    signing_fee = annual_salary * years if years != 3 else base_fee
     if marquee_wage_premium:
         signing_fee = int(signing_fee * 1.5)
 
-    club_acct = ledger.club_account(club_id)
-    bal = ledger.balance(session, club_acct, ledger.GTEX)
-    if bal < signing_fee:
-        raise OwnerError("insufficient_club_cash", 400, f"Club balance {bal} GTX is insufficient for {signing_fee} GTX signing fee.")
+    user_fan_acct = ledger.user_account(user_id)
+    club_fan_acct = ledger.club_account(club_id)
+    club_gtex_acct = ledger.club_account(club_id)
+
+    user_fan_bal = ledger.balance(session, user_fan_acct, ledger.FAN)
+    club_fan_bal = ledger.balance(session, club_fan_acct, ledger.FAN)
+    club_gtex_bal = ledger.balance(session, club_gtex_acct, ledger.GTEX)
+
+    if pay_with_fan_coin and user_fan_bal >= signing_fee:
+        pay_source = user_fan_acct
+        pay_currency = ledger.FAN
+    elif pay_with_fan_coin and club_fan_bal >= signing_fee:
+        pay_source = club_fan_acct
+        pay_currency = ledger.FAN
+    else:
+        if club_gtex_bal < signing_fee:
+            raise OwnerError(
+                "insufficient_club_cash",
+                400,
+                f"Insufficient Fan Coin ({max(user_fan_bal, club_fan_bal)}) or Club GTX ({club_gtex_bal}) for {signing_fee} upfront {years}-year contract.",
+            )
+        pay_source = club_gtex_acct
+        pay_currency = ledger.GTEX
 
     try:
         ledger.record(
             session,
             event_type="staff_hire",
-            source=club_acct,
+            source=pay_source,
             destination=ledger.WORLD_CLUBS,
-            currency=ledger.GTEX,
+            currency=pay_currency,
             gross=signing_fee,
             club_id=club_id,
             user_id=user_id,
             related_type="staff",
             related_id=staff_id,
-            memo=f"Hired {candidate['name']} as {candidate.get('role_label', target_role)}",
+            memo=f"Upfront {years}-year contract salary for {candidate['name']} ({candidate.get('role_label', target_role)})",
         )
     except ledger.LedgerError as exc:
         raise OwnerError(str(exc), 402) from exc
@@ -2005,6 +2151,10 @@ def hire_executive_staff(
         "mood": 80,
         "loyalty": int(candidate.get("loyalty", 12)),
         "marquee_wage_premium": marquee_wage_premium,
+        "contract_years": years,
+        "upfront_salary_paid": signing_fee,
+        "salary_currency": pay_currency,
+        "upfront_paid": True,
     }
     exec_staff[target_role] = appointed_record
     facs["_executive_staff"] = exec_staff

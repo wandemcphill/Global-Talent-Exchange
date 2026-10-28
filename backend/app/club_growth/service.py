@@ -451,10 +451,40 @@ class ClubGrowthService:
             raise ClubGrowthError("staff_contract_not_offered")
         now = utcnow()
         previous = self._staff_contract_snapshot(contract)
+
+        # Upfront one-time Fan Coin (LedgerUnit.CREDIT) salary deduction for the full contract duration
+        years_factor = max(Decimal("1.0"), (Decimal(max(int(contract.duration_days or 365), 30)) / Decimal("365")))
+        annual_fan_coin = (Decimal(int(contract.salary_minor or 0)) / Decimal("100")).quantize(Decimal("0.0001"))
+        upfront_fan_coin = (annual_fan_coin * years_factor).quantize(Decimal("0.0001"))
+        upfront_paid = False
+        if upfront_fan_coin > Decimal("0.0000"):
+            wallet_service = WalletService()
+            summary = wallet_service.get_wallet_summary(self.session, actor, currency=LedgerUnit.CREDIT)
+            if summary.available_balance >= upfront_fan_coin:
+                wallet_service.settle_available_funds(
+                    self.session,
+                    user=actor,
+                    amount=upfront_fan_coin,
+                    reference=f"club-staff-contract-upfront:{contract.id}",
+                    description=f"Upfront Fan Coin staff contract salary ({contract.role_scope})",
+                    external_reference=contract.id,
+                    unit=LedgerUnit.CREDIT,
+                    source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+                )
+                upfront_paid = True
+            elif bool((contract.metadata_json or {}).get("require_fan_coin_upfront")):
+                raise ClubGrowthError("insufficient_fan_coin_balance")
+
         contract.status = "active"
         contract.started_at = now
         contract.accepted_at = now
         contract.ends_at = now + timedelta(days=contract.duration_days)
+        contract.metadata_json = {
+            **dict(contract.metadata_json or {}),
+            "upfront_fan_coin_salary": str(upfront_fan_coin),
+            "currency": "FAN_COIN",
+            "upfront_paid": upfront_paid,
+        }
         self._assign_staff_role(club_id=club_id, contract=contract)
         self._audit(
             actor=actor,

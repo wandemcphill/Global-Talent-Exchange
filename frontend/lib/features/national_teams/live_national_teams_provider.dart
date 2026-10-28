@@ -452,6 +452,86 @@ class NationalTeamsApi {
     }
     return jsonMap(payload, label: 'previous national roster');
   }
+
+  Future<List<JsonMap>> listNationalManagers() async {
+    final List<dynamic> payload = await client.getList(
+      '/api/national-team-engine/managers/catalog',
+      auth: false,
+    );
+    return payload
+        .map((dynamic item) => jsonMap(item, label: 'national manager'))
+        .toList(growable: false);
+  }
+
+  Future<JsonMap> hireNationalTeamManager({
+    required String entryId,
+    required String managerId,
+  }) async {
+    final Object? payload = await client.post(
+      '/api/national-team-engine/entries//manager/hire',
+      body: <String, Object?>{'manager_id': managerId},
+    );
+    return jsonMap(payload, label: 'hire national manager');
+  }
+
+  Future<JsonMap> checkoutRentalBasket({
+    required String entryId,
+    required List<String> playerIds,
+    String? tactic,
+  }) async {
+    final Object? payload = await client.post(
+      '/api/national-team-engine/entries//rentals/checkout',
+      body: <String, Object?>{
+        'player_ids': playerIds,
+        if (tactic != null) 'tactic': tactic,
+      },
+    );
+    return jsonMap(payload, label: 'checkout national rental basket');
+  }
+
+  Future<NationalTeamCompetition> hostUserNationalCompetition({
+    required String title,
+    String seasonLabel = '2026',
+    String competitionFamily = 'world_cup',
+    String regionType = 'global',
+    String ageBand = 'senior',
+  }) async {
+    final Object? payload = await client.post(
+      '/api/national-team-engine/competitions/host',
+      body: <String, Object?>{
+        'title': title,
+        'season_label': seasonLabel,
+        'competition_family': competitionFamily,
+        'region_type': regionType,
+        'age_band': ageBand,
+      },
+    );
+    return NationalTeamCompetition.fromJson(payload);
+  }
+
+  Future<JsonMap> updateQualifiedFinalsSquad({
+    required String competitionId,
+    required String countryCode,
+    required String countryName,
+    required List<JsonMap> players,
+  }) async {
+    final Object? payload = await client.post(
+      '/api/national-team-engine/competitions//finals-squad',
+      body: <String, Object?>{
+        'country_code': countryCode,
+        'country_name': countryName,
+        'squad': players,
+      },
+    );
+    return jsonMap(payload, label: 'update qualified finals squad');
+  }
+
+  Future<JsonMap> fetchRewardBreakdown(String competitionId) {
+    return client.getMap(
+      '/api/national-team-engine/competitions//rewards/breakdown',
+      auth: false,
+    );
+  }
 }
 
 final Provider<NationalTeamsApi> nationalTeamsApiProvider =
