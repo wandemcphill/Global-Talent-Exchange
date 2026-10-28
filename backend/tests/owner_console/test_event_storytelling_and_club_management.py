@@ -18,6 +18,7 @@ from app.owner_console.models import (
     OwnerBroadcastEvent,
     OwnerCompetition,
     OwnerInboxItem,
+    OwnerMatch,
     OwnerNewsroomArticle,
     OwnerShowroomAsset,
     OwnerSquadPlayer,
@@ -1042,6 +1043,8 @@ def test_pre_match_tactics_are_saved_on_canonical_fixture_and_kickoff_is_enforce
         virtual_now = WorldClockService(session).now_virtual()
         kickoff_at = virtual_now + timedelta(days=2)
         canonical_competition.scheduled_start_at = kickoff_at
+        session.add(legacy_competition)
+        session.flush()
         legacy_match = OwnerMatch(
             competition_id=legacy_competition.id,
             round_number=1,
@@ -1058,7 +1061,7 @@ def test_pre_match_tactics_are_saved_on_canonical_fixture_and_kickoff_is_enforce
             group_key="A",
             status="scheduled",
         )
-        session.add_all([legacy_competition, legacy_match, round_row])
+        session.add_all([legacy_match, round_row])
         session.flush()
         canonical_match = CompetitionMatch(
             competition_id=canonical_competition.id,

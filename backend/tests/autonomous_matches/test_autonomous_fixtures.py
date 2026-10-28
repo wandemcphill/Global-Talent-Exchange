@@ -687,15 +687,18 @@ def test_global_owner_fixture_reconciles_and_executes_only_on_canonical_runner(
 ) -> None:
     from types import SimpleNamespace
 
+    from app.admin_engine.service import AdminEngineService
     from app.models.owner_competition_lifecycle_mapping import (
         OwnerCompetitionLifecycleMapping,
         OwnerMatchLifecycleMapping,
     )
+    from app.reward_engine.service import RewardEngineService
     from app.services.owner_competition_lifecycle_mapping_service import (
         OwnerCompetitionLifecycleMappingService,
     )
 
     with session_factory() as session:
+        AdminEngineService(session).seed_defaults()
         eval_time = datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
         competition = _create_test_competition(session, "Reconciled Global League")
         competition.source_type = "gtex"
@@ -716,8 +719,13 @@ def test_global_owner_fixture_reconciles_and_executes_only_on_canonical_runner(
             status="active",
         )
         session.add(round_row)
-        _, home_club = _create_user_and_club(session, "Reconciled Home")
+        home_user, home_club = _create_user_and_club(session, "Reconciled Home")
         _, away_club = _create_user_and_club(session, "Reconciled Away")
+        RewardEngineService(session).credit_promo_pool(
+            actor=home_user,
+            amount=Decimal("100000.0000"),
+            reference=f"reconciled-promo-pool:{competition.id}",
+        )
         session.add_all(
             [
                 CompetitionParticipant(

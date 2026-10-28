@@ -390,7 +390,6 @@ def canonical_match_detail(session: Session, canonical_match_id: str, *, full: b
 
 
 def _canonical_competition_standings(session: Session, legacy_competition_id: str, canonical_competition_id: str):
-    from app.models.competition_participant import CompetitionParticipant
     from app.models.competition_rule_set import CompetitionRuleSet
     from app.services.competition_match_service import CompetitionMatchService
 
@@ -492,7 +491,7 @@ def detail(session: Session, competition_id: str, user_id: str) -> dict[str, Any
 
 def enter_competition(session: Session, user_id: str, competition_id: str, club_id: str) -> OwnerCompetitionEntry:
     state = require_state(session, club_id, user_id)
-    if state.stage == "squad":
+    if getattr(state, "stage", None) == "squad":
         raise OwnerError("sign_starting_squad_first", 409)
     comp = session.get(OwnerCompetition, competition_id)
     if comp is None:
