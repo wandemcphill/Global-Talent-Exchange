@@ -105,18 +105,24 @@ test("Club squad route loads the roster or explicit no-club state", async ({ pag
 
     // Flutter merges header titles and subtitles into a single semantics label
     // or exposes container headers via aria-label on a semantics group node.
-    await expect(
-      page
-        .getByText(/Squad room/i)
-        .or(page.locator('[aria-label*="Squad room" i]'))
-        .first(),
-    ).toBeVisible({ timeout: 15_000 });
-    await expect(
-      page
-        .getByText(/Lineup & squad registration/i)
-        .or(page.locator('[aria-label*="Lineup & squad registration" i]'))
-        .first(),
-    ).toBeVisible({
+    const squadRoom = page
+      .getByText(/Squad room/i)
+      .or(page.locator('[aria-label*="Squad room" i]'))
+      .first();
+    await expect(squadRoom).toBeVisible({ timeout: 15_000 });
+
+    const lineupRegistration = page
+      .getByText(/Lineup & squad registration/i)
+      .or(page.locator('[aria-label*="Lineup & squad registration" i]'))
+      .first();
+    if (!(await lineupRegistration.isVisible().catch(() => false))) {
+      const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
+      await page.mouse.move(Math.round(viewport.width * 0.5), Math.round(viewport.height * 0.5));
+      await page.mouse.wheel(0, 260);
+      await page.waitForTimeout(400);
+      await enableAccessibility(page);
+    }
+    await expect(lineupRegistration).toBeVisible({
       timeout: 15_000,
     });
     await expect(

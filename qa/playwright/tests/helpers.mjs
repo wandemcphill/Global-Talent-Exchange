@@ -103,7 +103,14 @@ export async function signIn(page) {
   await page.goto(loginUrl, { waitUntil: "domcontentloaded", timeout: 120_000 });
 
   const surface = page.locator("flt-glass-pane, flutter-view, canvas").first();
-  await expect(surface).toBeVisible({ timeout: 120_000 });
+  const surfaceLoaded = await surface
+    .waitFor({ state: "visible", timeout: 75_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!surfaceLoaded) {
+    await page.goto(loginUrl, { waitUntil: "domcontentloaded", timeout: 120_000 });
+  }
+  await expect(surface).toBeVisible({ timeout: 90_000 });
   await page.waitForTimeout(1000);
 
   const emailInput = page
@@ -160,9 +167,8 @@ export async function signIn(page) {
   }
 
   const authenticatedRoute = isHashRouting ? /#\/app(?:\/|$)/ : /\/app\//;
-  const authDeadline = Date.now() + 45_000;
+  const authDeadline = Date.now() + 40_000;
   let retryCount = 0;
-  let lastSubmitAt = Date.now();
   while (Date.now() < authDeadline) {
     if (authenticatedRoute.test(page.url())) break;
     await enableAccessibility(page);
@@ -179,11 +185,10 @@ export async function signIn(page) {
       .first()
       .isVisible()
       .catch(() => false);
-    const stalledOnLogin = Date.now() - lastSubmitAt > 8_000;
-    if ((missingEmail || missingPassword || backendError || stalledOnLogin) && retryCount < 3) {
+    if ((missingEmail || missingPassword || backendError) && retryCount < 3) {
       retryCount += 1;
-      await page.waitForTimeout(800);
-      if (missingEmail || missingPassword || stalledOnLogin) {
+      await page.waitForTimeout(1000);
+      if (missingEmail || missingPassword) {
         if (await emailInput.isVisible().catch(() => false)) {
           await fillFlutterTextField(page, emailInput, process.env.GTEX_E2E_EMAIL);
         }
@@ -194,7 +199,6 @@ export async function signIn(page) {
       if (await enterBtn.isVisible().catch(() => false)) {
         await enterBtn.click({ force: true });
       }
-      lastSubmitAt = Date.now();
     }
     await page.waitForTimeout(400);
   }
