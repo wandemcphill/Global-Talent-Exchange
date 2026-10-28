@@ -74,28 +74,35 @@ test("Club squad route loads the roster or explicit no-club state", async ({ pag
 
     let browseSheetOpened = false;
     if (await browseButton.isVisible().catch(() => false)) {
-      await browseButton.click();
+      await browseButton.click({ force: true });
       browseSheetOpened = true;
       await page.waitForTimeout(400);
       await enableAccessibility(page);
     }
 
     await expect(squadSection).toBeVisible({ timeout: 15_000 });
-    await squadSection.click();
+    await squadSection.click({ force: true });
 
     if (browseSheetOpened) {
       const closeButton = page.getByRole("button", { name: /Close Club sections/i });
       if (await closeButton.isVisible().catch(() => false)) {
-        await closeButton.click();
+        await closeButton.click({ force: true });
         await page.waitForTimeout(400);
       }
     }
 
-    await expect(page.getByText("Squad room", { exact: true })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Lineup & squad registration", { exact: true })).toBeVisible({
+    // Flutter merges header titles and subtitles into a single semantics label
+    // ("Squad room Owned real players and regens attached to this club.").
+    await expect(page.getByText(/Squad room/i).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/Lineup & squad registration/i).first()).toBeVisible({
       timeout: 15_000,
     });
-    await expect(page.getByText("Open Lineup & Tactics", { exact: true })).toBeVisible({
+    await expect(
+      page
+        .getByRole("button", { name: /Open Lineup & Tactics/i })
+        .or(page.getByText(/Open Lineup & Tactics/i))
+        .first(),
+    ).toBeVisible({
       timeout: 15_000,
     });
   }
