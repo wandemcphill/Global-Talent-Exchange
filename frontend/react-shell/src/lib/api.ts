@@ -3,6 +3,7 @@ import axios from "axios";
 function backendOrigin(): string {
   const configured = (process.env.REACT_APP_BACKEND_URL || "").trim().replace(/\/+$/, "");
   if (!configured) {
+    if (process.env.NODE_ENV === "test") return "http://localhost:8000";
     throw new Error(
       "REACT_APP_BACKEND_URL is required. Set it to the canonical GTEX API origin, without a /api suffix.",
     );

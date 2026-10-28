@@ -195,4 +195,11 @@ void main() {
       '/api/v2/owner/public/profile/owner-123',
     );
   });
+  test('world clock path resolves through the generated API contract', () {
+    expect(
+      gteCanonicalApiPath('/api/world/clock'),
+      '/api/v2/world/clock',
+    );
+  });
+
 }
