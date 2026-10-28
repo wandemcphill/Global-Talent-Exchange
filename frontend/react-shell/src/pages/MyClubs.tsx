@@ -3,7 +3,8 @@ import { useNavigate, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
-import { validateClubLocation } from "./clubCreationLocation";
+import { clubCreateErrorMessage } from "./clubLocationCatalog";
+import { ClubLocationFields, clubLocationPayload, useClubLocation } from "@/components/gtex/ClubLocationFields";
 import { fmt, label, useActiveClub, useClub, useClubShowroom, useControlCenter, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, Stat } from "@/components/gtex/ui";
 import { Building, Gift, Sparkles, BookOpen, ExternalLink, CheckCircle, Coins, LockKeyhole, X, PackageCheck } from "lucide-react";
@@ -651,18 +652,17 @@ function Commercial({ club }: any) {
 function NewClub({ count, max }: any) {
   const navigate = useNavigate();
   const [name, setName] = useState("");
-  const [countryCode, setCountryCode] = useState("");
-  const [cityName, setCityName] = useState("");
+  const loc = useClubLocation();
   const [busy, setBusy] = useState(false);
   if (count >= max) return null;
-  const location = validateClubLocation(countryCode, cityName);
+  const location = loc.validation;
   const clubName = name.trim();
   const create = async () => {
     if (clubName.length < 3) {
       toast.error("Enter a club name with at least 3 characters.");
       return;
     }
-    const validatedLocation = validateClubLocation(countryCode, cityName);
+    const validatedLocation = loc.validation;
     if ("error" in validatedLocation) {
       toast.error(validatedLocation.error);
       return;
@@ -677,13 +677,12 @@ function NewClub({ count, max }: any) {
         primary_color: "#0F766E",
         secondary_color: "#F8FAFC",
         accent_color: "#F59E0B",
-        country_code: validatedLocation.countryCode,
-        city_name: validatedLocation.cityName,
+        ...clubLocationPayload(validatedLocation),
         club_type: "community",
       });
       navigate("/onboarding");
     } catch (e) {
-      toast.error(errMsg(e));
+      toast.error(clubCreateErrorMessage(e, errMsg));
     } finally {
       setBusy(false);
     }
@@ -703,26 +702,8 @@ function NewClub({ count, max }: any) {
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
-        <div className="grid grid-cols-2 gap-2">
-          <input
-            data-testid="new-club-country-input"
-            aria-label="Country code"
-            className="gx-input"
-            placeholder="Country code (NG)"
-            autoComplete="country"
-            maxLength={2}
-            value={countryCode}
-            onChange={(e) => setCountryCode(e.target.value)}
-          />
-          <input
-            data-testid="new-club-city-input"
-            aria-label="City"
-            className="gx-input"
-            placeholder="City"
-            autoComplete="address-level2"
-            value={cityName}
-            onChange={(e) => setCityName(e.target.value)}
-          />
+        <div>
+          <ClubLocationFields state={loc} testIdPrefix="new-club" disabled={busy} />
         </div>
         <Btn disabled={clubName.length < 3 || !location.valid || busy} onClick={create} data-testid="create-club-button">
           Create
