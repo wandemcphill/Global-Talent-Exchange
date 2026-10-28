@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { InboxItem } from "@/components/gtex/InboxItem";
 import { Empty, Loading, PageHeader } from "@/components/gtex/ui";
@@ -30,23 +31,35 @@ const CATEGORIES = [
 ];
 
 export default function InboxPage() {
-  const [status, setStatus] = useState("open");
-  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [searchParams] = useSearchParams();
+  const initialStatus = searchParams.get("status") || "open";
+  const initialCategory = searchParams.get("category") || "all";
+  const queryClubId = searchParams.get("club_id");
+  const initialUnreadOnly = searchParams.get("unread_only") === "true";
+
+  const [status, setStatus] = useState(initialStatus);
+  const [selectedCategory, setSelectedCategory] = useState(initialCategory);
+  const [unreadOnly, setUnreadOnly] = useState(initialUnreadOnly);
   const { clubs, active, select } = useActiveClub();
-  const [selectedClubId, setSelectedClubId] = useState<string>("all");
+  const [selectedClubId, setSelectedClubId] = useState<string>(
+    queryClubId || (active?.club_id ? active.club_id : "all")
+  );
   const refresh = useRefreshOwner();
 
   const isArchiveCategory = selectedCategory === "archive";
   const effectiveStatus = isArchiveCategory ? "archived" : status;
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["inbox", effectiveStatus, selectedCategory, selectedClubId],
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ["inbox", effectiveStatus, selectedCategory, selectedClubId, unreadOnly],
     queryFn: async () => {
       const params: any = {
         status: effectiveStatus,
       };
       if (selectedClubId !== "all") {
         params.club_id = selectedClubId;
+      }
+      if (unreadOnly) {
+        params.unread_only = true;
       }
       if (selectedCategory !== "all" && selectedCategory !== "archive") {
         params.category = selectedCategory;
@@ -82,6 +95,21 @@ export default function InboxPage() {
                 ))}
               </select>
             )}
+
+            <button
+              type="button"
+              data-testid="inbox-filter-unread"
+              aria-pressed={unreadOnly}
+              onClick={() => setUnreadOnly((current) => !current)}
+              className={`flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-semibold border transition-colors ${
+                unreadOnly
+                  ? "bg-amber-500 text-slate-950 border-amber-400"
+                  : "bg-slate-900 text-slate-400 border-slate-800 hover:text-white"
+              }`}
+            >
+              <CheckCheck className="w-3.5 h-3.5" />
+              Unread only
+            </button>
 
             {/* Status Toggles (hidden in archive view) */}
             {!isArchiveCategory && (
@@ -136,6 +164,17 @@ export default function InboxPage() {
       {/* Inbox Items Feed */}
       {isLoading ? (
         <Loading />
+      ) : error ? (
+        <div data-testid="inbox-error-state" className="p-6 rounded-xl bg-red-950/20 border border-red-500/30 text-red-300">
+          <p className="font-semibold">Unable to load owner inbox</p>
+          <p className="text-xs text-red-400 mt-1">{(error as any)?.message || "Failed to reach GTEX owner services."}</p>
+          <button
+            onClick={() => refetch()}
+            className="mt-3 px-3 py-1 bg-red-900/40 hover:bg-red-900/60 border border-red-700/50 rounded text-xs text-white"
+          >
+            Retry
+          </button>
+        </div>
       ) : items.length === 0 ? (
         <Empty
           title="No Messages"

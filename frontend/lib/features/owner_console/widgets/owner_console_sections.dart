@@ -545,6 +545,13 @@ class ControlCenterSection extends StatelessWidget {
             title: 'Owner Inbox',
             subtitle: '${d.inboxOpenCount} unread',
             accent: GtexColors.purple,
+            onTap: () => onNavigate('/app/inbox'),
+            trailing: TextButton.icon(
+              key: const Key('owner-inbox-open-queue-btn'),
+              onPressed: () => onNavigate('/app/inbox'),
+              icon: const Icon(Icons.arrow_forward_rounded, size: 14),
+              label: const Text('Open Queue'),
+            ),
             child: Column(
               children: <Widget>[
                 if (inbox.isEmpty) const _Quiet('Inbox clear'),
