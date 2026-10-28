@@ -19,6 +19,10 @@ import {
   ExternalLink,
   ChevronRight,
   Sparkles,
+  Newspaper,
+  Inbox,
+  Gauge,
+  ShoppingBag,
 } from "lucide-react";
 
 export function ClubStory() {
@@ -30,7 +34,7 @@ export function ClubStory() {
   const { data, isLoading } = useClubStory(clubId);
   const { data: clubProfile } = useClub(clubId);
   const [activeTab, setActiveTab] = useState<
-    "timeline" | "issues" | "relationships" | "watchlist" | "schedule" | "legacy"
+    "timeline" | "issues" | "relationships" | "watchlist" | "schedule" | "dispatches" | "legacy"
   >("timeline");
 
   // Watchlist modal state
@@ -87,36 +91,100 @@ export function ClubStory() {
 
   if (isLoading || !data) {
     return (
-      <div className="py-24 text-center text-slate-500">
+      <div className="py-24 text-center text-slate-500" data-testid="club-story-loading">
         <div className="inline-block w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mb-3"></div>
-        <p className="text-sm">Compiling Club Chronicle & World History...</p>
+        <p className="text-sm font-semibold">Compiling Club Chronicle & World History...</p>
       </div>
     );
   }
 
-  const {
-    club_name,
-    is_owner,
-    privacy_redacted,
-    crest_url,
-    prestige,
-    world_day,
-    timeline = [],
-    unresolved_issues = [],
-    relationships = {},
-    scouting_watchlist = [],
-    schedule = {},
-    achievements = [],
-    owner_legacy = {},
-  } = data;
+  // Normalize contract fields safely from both root-level and nested backend structures
+  const club = data.club || {};
+  const club_name = club.club_name || data.club_name || active?.club_name || "Club Chronicle";
+  const crest_url = club.crest_url || data.crest_url || active?.crest_url;
+  const world_day = club.world_day ?? data.world_day ?? active?.world_day ?? 1;
+  const is_owner = data.is_owner ?? true;
+  const privacy_redacted = data.privacy_redacted ?? false;
+  const timeline = data.timeline || [];
+  const unresolved_issues = data.unresolved_issues || [];
+  const relationships = data.relationships || {};
+  const scouting_watchlist = data.scouting_watchlist || [];
+  const upcomingMatches = data.upcoming_schedule || data.schedule?.upcoming || [];
+  const recentMatches = data.recent_results || data.schedule?.recent || [];
+  const club_news = data.club_news || [];
+  const achievements = data.achievements || [];
+  const owner_legacy = data.owner_legacy || {};
+  const prestige = owner_legacy.prestige ?? club.prestige ?? data.prestige ?? 50;
 
-  const staff = relationships.staff || [];
+  const manager = relationships.manager;
+  const staff = relationships.staff || (manager ? [{
+    name: manager.name || "Head Coach",
+    role: manager.role || "Head Coach",
+    rating: manager.rating ?? 75,
+    mentality: manager.mentality || "Tactical",
+    reputation: manager.reputation ?? "Regional",
+    portrait_url: manager.portrait_url,
+  }] : []);
   const players = relationships.players || [];
-  const recentMatches = schedule.recent || [];
-  const upcomingMatches = schedule.upcoming || [];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
+    <div className="max-w-7xl mx-auto px-4 py-8 space-y-8" data-testid="club-story-screen">
+      {/* Surface Demarcation & Navigation Bridge */}
+      <nav aria-label="Club Surface Directory" className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+        <div className="flex items-center gap-2 rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-amber-200 shadow-sm">
+          <BookOpen className="h-4 w-4 shrink-0 text-amber-300" />
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase font-black tracking-wider text-amber-400">Current Surface</div>
+            <div className="truncate font-bold text-white">Club Chronicle</div>
+          </div>
+        </div>
+        <Link
+          to="/app/showroom"
+          className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 text-slate-300 hover:border-amber-400/40 hover:text-white transition-colors"
+          data-testid="link-to-showroom"
+        >
+          <Sparkles className="h-4 w-4 shrink-0 text-amber-300" />
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Luxury Fleet</div>
+            <div className="truncate font-bold">Owner Showroom</div>
+          </div>
+        </Link>
+        <Link
+          to="/app/newsroom"
+          className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 text-slate-300 hover:border-blue-400/40 hover:text-white transition-colors"
+          data-testid="link-to-newsroom"
+        >
+          <Newspaper className="h-4 w-4 shrink-0 text-blue-400" />
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase font-bold tracking-wider text-slate-500">World Editorial</div>
+            <div className="truncate font-bold">AI Newsroom</div>
+          </div>
+        </Link>
+        <Link
+          to="/app/inbox"
+          className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 text-slate-300 hover:border-purple-400/40 hover:text-white transition-colors"
+          data-testid="link-to-inbox"
+        >
+          <Inbox className="h-4 w-4 shrink-0 text-purple-400" />
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Private Desk</div>
+            <div className="truncate font-bold">Owner Decisions</div>
+          </div>
+        </Link>
+        <Link
+          to="/app"
+          className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 text-slate-300 hover:border-emerald-400/40 hover:text-white transition-colors"
+          data-testid="link-to-control-center"
+        >
+          <Gauge className="h-4 w-4 shrink-0 text-emerald-400" />
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Daily Health</div>
+            <div className="truncate font-bold">Control Center</div>
+          </div>
+        </Link>
+      </nav>
+
+      {/* Public profile button if available */}
       {clubProfile?.public_profile_slug && (
         <div className="flex justify-end">
           <Link
@@ -128,6 +196,7 @@ export function ClubStory() {
           </Link>
         </div>
       )}
+
       {/* Privacy Isolation Alert for Shared Save Participants */}
       {privacy_redacted && (
         <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex items-start space-x-3 text-amber-200">
@@ -148,14 +217,20 @@ export function ClubStory() {
         <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-6 text-center md:text-left">
           {/* Crest */}
           <div className="w-24 h-24 rounded-2xl bg-slate-950 border-2 border-amber-500/30 overflow-hidden flex items-center justify-center shrink-0 shadow-lg p-2">
-            <img
-              src={crest_url}
-              alt={club_name}
-              className="w-full h-full object-contain"
-              onError={(e) => {
-                (e.target as HTMLElement).style.display = "none";
-              }}
-            />
+            {crest_url ? (
+              <img
+                src={crest_url}
+                alt={club_name}
+                className="w-full h-full object-contain"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = "none";
+                }}
+              />
+            ) : (
+              <span className="text-2xl font-black text-amber-400 font-display">
+                {(club_name || "GTX").slice(0, 3).toUpperCase()}
+              </span>
+            )}
           </div>
 
           <div className="space-y-1">
@@ -164,10 +239,11 @@ export function ClubStory() {
                 {is_owner ? "Your Club" : "Opponent Club"}
               </span>
               <span className="text-xs text-slate-400">World Day {world_day}</span>
+              {club.city && <span className="text-xs text-slate-500">· {club.city}{club.country_code ? `, ${club.country_code}` : ""}</span>}
             </div>
-            <h1 className="text-3xl font-extrabold text-white">{club_name}</h1>
+            <h1 className="text-3xl font-extrabold text-white" data-testid="club-story-title">{club_name}</h1>
             <p className="text-xs text-slate-400">
-              {owner_legacy.era_title || "Modern Football Era"} · Prestige Level {prestige}/100
+              {owner_legacy.tier || owner_legacy.era_label || "Modern Football Era"} · Prestige Level {prestige}/100
             </p>
           </div>
         </div>
@@ -179,8 +255,8 @@ export function ClubStory() {
             <div className="text-xl font-bold text-amber-400 mt-0.5">{achievements.length}</div>
           </div>
           <div className="bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-3">
-            <div className="text-[10px] uppercase font-bold text-slate-400">Prestige</div>
-            <div className="text-xl font-bold text-emerald-400 mt-0.5">{prestige}</div>
+            <div className="text-[10px] uppercase font-bold text-slate-400">Win Rate</div>
+            <div className="text-xl font-bold text-emerald-400 mt-0.5">{owner_legacy.win_rate_pct ?? 0}%</div>
           </div>
           <div className="bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-3">
             <div className="text-[10px] uppercase font-bold text-slate-400">Squad</div>
@@ -190,13 +266,14 @@ export function ClubStory() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center space-x-2 border-b border-slate-800 pb-3 overflow-x-auto no-scrollbar">
+      <div className="flex items-center space-x-2 border-b border-slate-800 pb-3 overflow-x-auto no-scrollbar" data-testid="club-story-tabs">
         {[
           { key: "timeline", label: "Timeline & Lore", icon: Clock },
+          { key: "dispatches", label: `Club Dispatches (${club_news.length})`, icon: Newspaper },
           { key: "issues", label: `Unresolved Issues (${unresolved_issues.length})`, icon: Shield, hidden: privacy_redacted },
           { key: "relationships", label: "Staff & Squad", icon: Users },
           { key: "watchlist", label: `Scouting Dossier (${scouting_watchlist.length})`, icon: Search, hidden: privacy_redacted },
-          { key: "schedule", label: "Save Fixtures", icon: Calendar },
+          { key: "schedule", label: `Save Fixtures (${upcomingMatches.length + recentMatches.length})`, icon: Calendar },
           { key: "legacy", label: "Owner Legacy", icon: Award },
         ]
           .filter((t) => !t.hidden)
@@ -207,9 +284,10 @@ export function ClubStory() {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key as any)}
+                data-testid={`tab-${tab.key}`}
                 className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
                   active
-                    ? "bg-amber-500 text-slate-950 shadow"
+                    ? "bg-amber-500 text-slate-950 shadow font-bold"
                     : "text-slate-400 hover:text-white hover:bg-slate-900 border border-transparent"
                 }`}
               >
@@ -222,7 +300,7 @@ export function ClubStory() {
 
       {/* TAB CONTENT: TIMELINE */}
       {activeTab === "timeline" && (
-        <div className="space-y-4">
+        <div className="space-y-4" data-testid="timeline-tab-content">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-white">Chronological Club Events</h2>
             <span className="text-xs text-slate-400">Verified transactions & pitch outcomes</span>
@@ -230,12 +308,11 @@ export function ClubStory() {
 
           {timeline.length === 0 ? (
             <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-12 text-center text-slate-500 text-xs">
-              No milestone events recorded yet. Complete private jet acquisitions, facility upgrades, or match days to populate the timeline.
+              No milestone events recorded yet. Complete showroom acquisitions, facility upgrades, or match days to populate the chronicle.
             </div>
           ) : (
             <div className="relative pl-6 border-l-2 border-slate-800 space-y-6">
               {timeline.map((item: any, i: number) => {
-                const isBroadcast = item.type === "broadcast";
                 return (
                   <div key={item.id || i} className="relative group">
                     {/* Bullet */}
@@ -284,9 +361,73 @@ export function ClubStory() {
         </div>
       )}
 
+      {/* TAB CONTENT: CLUB DISPATCHES */}
+      {activeTab === "dispatches" && (
+        <div className="space-y-4" data-testid="dispatches-tab-content">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-white">Verified Club Dispatches</h2>
+              <p className="text-xs text-slate-400">Public announcements and editorial reports grounded in club milestones</p>
+            </div>
+            <Link
+              to="/app/newsroom"
+              className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 font-semibold"
+            >
+              <span>Explore All World News</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          {club_news.length === 0 ? (
+            <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-12 text-center text-slate-500 text-xs">
+              <Newspaper className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+              No public news dispatches recorded for this club yet. Match outcomes and major acquisitions will publish dispatches here.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {club_news.map((art: any) => (
+                <article
+                  key={art.id}
+                  className="bg-slate-900/80 border border-slate-800 rounded-xl overflow-hidden hover:border-amber-400/40 transition-colors flex flex-col justify-between"
+                >
+                  <div className="p-4 space-y-2">
+                    <div className="flex items-center justify-between text-[11px] text-slate-400">
+                      <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-blue-500/10 text-blue-300 border border-blue-500/20">
+                        {art.category?.replace(/_/g, " ")}
+                      </span>
+                      {art.created_at && <span>{new Date(art.created_at).toLocaleDateString()}</span>}
+                    </div>
+
+                    <h3 className="text-sm font-bold text-white leading-snug">{art.headline}</h3>
+                    {art.subheadline && <p className="text-xs text-slate-400">{art.subheadline}</p>}
+                    {art.editorial_narration && (
+                      <p className="text-xs text-slate-300 line-clamp-3 bg-slate-950/40 p-2.5 rounded border border-slate-800/60 italic">
+                        "{art.editorial_narration}"
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="px-4 py-3 border-t border-slate-800/80 flex items-center justify-between text-xs bg-slate-950/30">
+                    <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" /> Grounded dispatch
+                    </span>
+                    <Link
+                      to="/app/newsroom"
+                      className="text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1"
+                    >
+                      Read full story <ChevronRight className="w-3 h-3" />
+                    </Link>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* TAB CONTENT: UNRESOLVED ISSUES */}
       {activeTab === "issues" && !privacy_redacted && (
-        <div className="space-y-4">
+        <div className="space-y-4" data-testid="issues-tab-content">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-white">Pending Boardroom Decisions & Deadlines</h2>
             <Link to="/app/inbox" className="text-xs text-amber-400 hover:text-amber-300 flex items-center space-x-1">
@@ -341,7 +482,7 @@ export function ClubStory() {
 
       {/* TAB CONTENT: RELATIONSHIPS */}
       {activeTab === "relationships" && (
-        <div className="space-y-8">
+        <div className="space-y-8" data-testid="relationships-tab-content">
           {/* Executive & Staff */}
           <div className="space-y-3">
             <h2 className="text-base font-bold text-white">Club Leadership & Technical Staff</h2>
@@ -349,11 +490,11 @@ export function ClubStory() {
               {staff.map((s: any, idx: number) => (
                 <div key={idx} className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-2">
                   <div className="flex items-center justify-between text-[11px] text-slate-400">
-                    <span className="font-semibold text-amber-400 uppercase text-[10px]">{s.role}</span>
-                    <span>Rating: {s.rating}/99</span>
+                    <span className="font-semibold text-amber-400 uppercase text-[10px]">{s.role || "Technical Staff"}</span>
+                    <span>Rating: {s.rating ?? 75}/99</span>
                   </div>
                   <h3 className="text-sm font-bold text-white">{s.name}</h3>
-                  <p className="text-xs text-slate-400">Mentality: {s.mentality}</p>
+                  <p className="text-xs text-slate-400">Mentality: {s.mentality || "Tactical"} · {s.reputation || "Professional"}</p>
                 </div>
               ))}
             </div>
@@ -372,37 +513,48 @@ export function ClubStory() {
                   key={p.id}
                   className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 flex items-center space-x-4 hover:border-slate-700 transition-colors"
                 >
-                  <img
-                    src={p.portrait_url}
-                    alt={p.name}
-                    className="w-14 h-14 rounded-xl object-cover bg-slate-950 border border-white/10 shrink-0"
-                    onError={(e) => {
-                      (e.target as HTMLElement).style.display = "none";
-                    }}
-                  />
+                  {p.portrait_url ? (
+                    <img
+                      src={p.portrait_url}
+                      alt={p.name}
+                      className="w-14 h-14 rounded-xl object-cover bg-slate-950 border border-white/10 shrink-0"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = "none";
+                      }}
+                    />
+                  ) : (
+                    <div className="w-14 h-14 rounded-xl bg-slate-800 flex items-center justify-center text-sm font-bold text-amber-400 shrink-0">
+                      {(p.name || "?").slice(0, 2).toUpperCase()}
+                    </div>
+                  )}
 
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-center justify-between">
                       <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-slate-800 text-slate-300">
-                        {p.position}
+                        {p.position || "Player"}
                       </span>
-                      <span className="text-xs font-mono text-emerald-400 font-bold">{p.rating} OVR</span>
+                      <span className="text-xs font-mono text-emerald-400 font-bold">{p.rating ?? p.overall_rating ?? "—"} OVR</span>
                     </div>
 
                     <h4 className="text-sm font-bold text-white truncate">{p.name}</h4>
+                    {p.is_regen && (
+                      <span className="inline-block px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                        Academy Regen
+                      </span>
+                    )}
 
                     {/* Morale Bar */}
                     <div className="space-y-0.5">
                       <div className="flex justify-between text-[10px] text-slate-400">
                         <span>Morale</span>
-                        <span>{p.morale}%</span>
+                        <span>{p.morale ?? 75}%</span>
                       </div>
                       <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
                         <div
                           className={`h-full rounded-full ${
-                            p.morale > 75 ? "bg-emerald-400" : p.morale > 50 ? "bg-amber-400" : "bg-red-400"
+                            (p.morale ?? 75) > 75 ? "bg-emerald-400" : (p.morale ?? 75) > 50 ? "bg-amber-400" : "bg-red-400"
                           }`}
-                          style={{ width: `${Math.min(100, p.morale)}%` }}
+                          style={{ width: `${Math.min(100, p.morale ?? 75)}%` }}
                         ></div>
                       </div>
                     </div>
@@ -416,7 +568,7 @@ export function ClubStory() {
 
       {/* TAB CONTENT: WATCHLIST */}
       {activeTab === "watchlist" && !privacy_redacted && (
-        <div className="space-y-4">
+        <div className="space-y-4" data-testid="watchlist-tab-content">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-bold text-white">Confidential Scouting Dossier</h2>
@@ -426,6 +578,7 @@ export function ClubStory() {
               <button
                 onClick={() => setIsAddWatchlistOpen(true)}
                 className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-colors"
+                data-testid="add-scouting-target-button"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add Target</span>
@@ -491,13 +644,13 @@ export function ClubStory() {
 
       {/* TAB CONTENT: SCHEDULE */}
       {activeTab === "schedule" && (
-        <div className="space-y-6">
+        <div className="space-y-6" data-testid="schedule-tab-content">
           <h2 className="text-lg font-bold text-white">Save Match History & Fixtures</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Upcoming */}
             <div className="space-y-3">
-              <h3 className="text-sm font-bold text-amber-400 uppercase tracking-wider">Upcoming Fixtures</h3>
+              <h3 className="text-sm font-bold text-amber-400 uppercase tracking-wider">Upcoming Fixtures ({upcomingMatches.length})</h3>
               {upcomingMatches.length === 0 ? (
                 <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-8 text-center text-slate-500 text-xs">
                   No scheduled fixtures.
@@ -514,7 +667,7 @@ export function ClubStory() {
 
             {/* Recent */}
             <div className="space-y-3">
-              <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">Recent Results</h3>
+              <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">Recent Results ({recentMatches.length})</h3>
               {recentMatches.length === 0 ? (
                 <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-8 text-center text-slate-500 text-xs">
                   No completed fixtures recorded.
@@ -534,7 +687,7 @@ export function ClubStory() {
 
       {/* TAB CONTENT: LEGACY */}
       {activeTab === "legacy" && (
-        <div className="space-y-6">
+        <div className="space-y-6" data-testid="legacy-tab-content">
           <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4">
             <h2 className="text-lg font-bold text-white">Boardroom Honors & Legacy</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -591,7 +744,8 @@ export function ClubStory() {
                     value={targetAge}
                     onChange={(e) => setTargetAge(Number(e.target.value))}
                     className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400"
-                  />
+                  >
+                  </input>
                 </div>
               </div>
 

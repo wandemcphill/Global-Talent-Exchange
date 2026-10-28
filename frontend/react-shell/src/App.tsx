@@ -28,6 +28,7 @@ import NationalTeam from "@/pages/NationalTeam";
 import { ClubStory } from "@/pages/ClubStory";
 import PublicClubProfile from "@/pages/PublicClubProfile";
 import { Newsroom } from "@/pages/Newsroom";
+import { Showroom } from "@/pages/Showroom";
 import { ROUTER_BASENAME } from "@/lib/publicPath";
 
 export default function App() {
@@ -45,6 +46,8 @@ export default function App() {
           <Route path="/app" element={<AppShell />}>
             <Route index element={<ControlCenter />} />
             <Route path="clubs" element={<MyClubs />} />
+            <Route path="showroom" element={<Showroom />} />
+            <Route path="clubs/:clubId/showroom" element={<Showroom />} />
             <Route path="story" element={<ClubStory />} />
             <Route path="clubs/:clubId/story" element={<ClubStory />} />
             <Route path="newsroom" element={<Newsroom />} />

@@ -29,6 +29,7 @@ import { GlobalLiveTicker } from "@/components/gtex/GlobalLiveTicker";
 const NAV = [
   { to: "/app", label: "Control Center", icon: Gauge, end: true, id: "home" },
   { to: "/app/clubs", label: "My Clubs", icon: Building2, id: "clubs" },
+  { to: "/app/showroom", label: "Showroom", icon: Sparkles, id: "showroom" },
   { to: "/app/story", label: "Club Story", icon: BookOpen, id: "story" },
   { to: "/app/newsroom", label: "AI Newsroom", icon: Newspaper, id: "newsroom" },
   { to: "/app/transfer-hub", label: "Transfer Hub", icon: Compass, id: "transfers" },
@@ -161,7 +162,7 @@ export default function AppShell() {
   const normalNav = hasActiveClub
     ? NAV
     : NAV.filter((item) =>
-        ["home", "clubs", "regen-world", "awards", "market", "competitions", "national", "finance", "creator-access", "coin-traders"].includes(item.id),
+        ["home", "clubs", "showroom", "regen-world", "awards", "market", "competitions", "national", "finance", "creator-access", "coin-traders"].includes(item.id),
       );
   const visibleNav = isTraderAccount
     ? NAV.filter((item) => ["coin-traders", "finance"].includes(item.id))
