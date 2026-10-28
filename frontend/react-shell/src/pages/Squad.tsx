@@ -30,6 +30,7 @@ import { fmt, useActiveClub, useClub, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Coin, Loading, PageHeader, Panel, TraitBar } from "@/components/gtex/ui";
 import { PlayerCard } from "@/components/gtex/PlayerCard";
 import { PlayerDrawer } from "@/components/gtex/PlayerDrawer";
+import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
 import { journeyLinks, readJourneyParams, SQUAD_SEASON_LABEL } from "@/lib/playerJourney";
 
 function ManagerSheet({ club }: any) {
@@ -48,6 +49,19 @@ function ManagerSheet({ club }: any) {
   return (
     <Panel eyebrow="Manager realism engine" title={m.name} testid="manager-sheet" className="lg:col-span-5"
       action={<Btn variant="danger" onClick={fire} data-testid="fire-manager-button">Dismiss</Btn>}>
+      <div className="mb-4">
+        <Cinema3DStage
+          scene="manager_arrival"
+          compact
+          title={`3D First-Day Training Ground & Press Suite · ${m.name || "Head Coach"}`}
+          subtitle={`${club.club_name} · ${m.tactical_preference || "Balanced"} · Temperament: ${m.temperament || "Composed"}`}
+          badgeText="3D MANAGER DAY 1"
+          clubName={club.club_name}
+          subjectName={m.name || "First-Team Manager"}
+          subjectRole={`${m.tactical_preference || "Tactical"} · ${m.rarity || "Elite"}`}
+          quote={m.philosophy_summary}
+        />
+      </div>
       <div className="mb-5 flex flex-wrap gap-2">
         <Chip tone="cyan">{m.tactical_preference}</Chip>
         <Chip tone="gold">Temperament: {m.temperament}</Chip>

@@ -27,7 +27,7 @@ enum GtexCinema3DMode {
   fmDiorama,
 }
 
-/// GTEX 3D Presentation, Broadcast & Diorama Stage (Flutter — Full 17-Scene Suite)
+/// GTEX Volumetric 3D Presentation, Broadcast & Diorama Stage (Flutter — Full 17-Scene Suite)
 /// Combines FIFA/eFootball-style 60fps 3D Motion Cinema with Football Manager-style
 /// 3D Diorama Stills and interactive 360-degree Matrix4 perspective rotation.
 class GtexCinema3DStage extends StatefulWidget {
@@ -45,7 +45,7 @@ class GtexCinema3DStage extends StatefulWidget {
     this.overallRating = 88,
     this.potentialRating,
     this.sponsorName = 'GTEX GLOBAL AIRWAYS',
-    this.facilityLevel = 3,
+    this.facilityLevel = 4,
     this.quote,
     this.defaultMode = GtexCinema3DMode.motion3d,
     this.compact = false,
@@ -78,10 +78,10 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
     with SingleTickerProviderStateMixin {
   late GtexCinema3DMode _mode;
   late final AnimationController _controller;
-  double _rotY = 0.0;
-  double _rotX = 0.08;
+  double _rotY = -0.22;
+  double _rotX = 0.1;
   bool _dragging = false;
-  int _salutes = 48;
+  int _salutes = 54;
   bool _saluted = false;
 
   @override
@@ -111,12 +111,19 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF050811),
-        borderRadius: BorderRadius.circular(12),
+        color: const Color(0xFF04070F),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: accentColor.withValues(alpha: 0.55),
+          color: accentColor.withValues(alpha: 0.6),
           width: 1.5,
         ),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.7),
+            blurRadius: 28,
+            offset: const Offset(0, 12),
+          ),
+        ],
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -128,7 +135,7 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
               horizontal: GtexSpacing.sm,
               vertical: 8,
             ),
-            color: const Color(0xFF0B1120),
+            color: const Color(0xFF090E1C),
             child: Wrap(
               alignment: WrapAlignment.spaceBetween,
               crossAxisAlignment: WrapCrossAlignment.center,
@@ -176,7 +183,7 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: _mode == GtexCinema3DMode.motion3d
-                              ? GtexColors.pitch.withValues(alpha: 0.2)
+                              ? GtexColors.pitch.withValues(alpha: 0.22)
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(6),
                         ),
@@ -196,14 +203,14 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
                     InkWell(
                       onTap: () => setState(() {
                         _mode = GtexCinema3DMode.fmDiorama;
-                        _rotY = -0.24;
-                        _rotX = 0.08;
+                        _rotY = -0.26;
+                        _rotX = 0.1;
                       }),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: _mode == GtexCinema3DMode.fmDiorama
-                              ? GtexColors.cyan.withValues(alpha: 0.2)
+                              ? GtexColors.cyan.withValues(alpha: 0.22)
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(6),
                         ),
@@ -236,7 +243,7 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
             },
             onPanEnd: (_) => setState(() => _dragging = false),
             child: SizedBox(
-              height: widget.compact ? 210 : 260,
+              height: widget.compact ? 220 : 270,
               child: AnimatedBuilder(
                 animation: _controller,
                 builder: (BuildContext context, _) {
@@ -245,11 +252,17 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
                       : 0.0;
                   final double effectiveRotY =
                       _mode == GtexCinema3DMode.motion3d && !_dragging
-                          ? _rotY + math.sin(t) * 0.42
+                          ? _rotY + math.sin(t) * 0.45
                           : _rotY;
 
-                  final Matrix4 matrix = Matrix4.identity()
-                    ..setEntry(3, 2, 0.0014)
+                  final Matrix4 backShadowMatrix = Matrix4.identity()
+                    ..setEntry(3, 2, 0.0015)
+                    ..translateByDouble(8.0, 10.0, -18.0, 1.0)
+                    ..rotateX(_rotX)
+                    ..rotateY(effectiveRotY);
+
+                  final Matrix4 mainMatrix = Matrix4.identity()
+                    ..setEntry(3, 2, 0.0015)
                     ..rotateX(_rotX)
                     ..rotateY(effectiveRotY);
 
@@ -264,9 +277,19 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
                           ),
                         ),
                       ),
+                      // Back Extruded Depth Shadow Plane
+                      Opacity(
+                        opacity: 0.45,
+                        child: Transform(
+                          alignment: Alignment.center,
+                          transform: backShadowMatrix,
+                          child: _build3DCenterpiece(),
+                        ),
+                      ),
+                      // Foreground Volumetric 3D Object
                       Transform(
                         alignment: Alignment.center,
-                        transform: matrix,
+                        transform: mainMatrix,
                         child: _build3DCenterpiece(),
                       ),
                       Positioned(
@@ -278,14 +301,14 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
                             vertical: 3,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.55),
+                            color: Colors.black.withValues(alpha: 0.65),
                             borderRadius: BorderRadius.circular(999),
                             border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.12),
+                              color: Colors.white.withValues(alpha: 0.14),
                             ),
                           ),
                           child: const Text(
-                            'Drag 360° 3D Camera',
+                            'Drag 360° Volumetric 3D Camera',
                             style: TextStyle(
                               color: GtexColors.textSecondary,
                               fontSize: 10,
@@ -307,7 +330,7 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
             decoration: BoxDecoration(
               color: const Color(0xFF0A101E),
               border: Border(
-                top: BorderSide(color: GtexColors.gold.withValues(alpha: 0.3)),
+                top: BorderSide(color: GtexColors.gold.withValues(alpha: 0.35)),
               ),
             ),
             child: Row(
@@ -375,30 +398,32 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
       case GtexCinema3DScene.worldGala:
       case GtexCinema3DScene.competitionFinal:
         return Container(
-          width: 145,
-          height: 155,
+          width: 150,
+          height: 160,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             gradient: const RadialGradient(
+              center: Alignment(-0.3, -0.35),
               colors: <Color>[
+                Color(0xFFFFFFFF),
                 Color(0xFFFEF08A),
                 Color(0xFFF59E0B),
                 Color(0xFF78350F),
               ],
             ),
-            border: Border.all(color: GtexColors.gold, width: 3),
+            border: Border.all(color: GtexColors.gold, width: 3.5),
             boxShadow: <BoxShadow>[
               BoxShadow(
-                color: GtexColors.gold.withValues(alpha: 0.55),
-                blurRadius: 28,
+                color: GtexColors.gold.withValues(alpha: 0.65),
+                blurRadius: 32,
               ),
             ],
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              const Icon(Icons.emoji_events_rounded, size: 40, color: Color(0xFF451A03)),
+              const Icon(Icons.emoji_events_rounded, size: 42, color: Color(0xFF451A03)),
               Text(
                 widget.scene == GtexCinema3DScene.competitionFinal
                     ? 'FINAL PLINTH'
@@ -428,17 +453,24 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
       case GtexCinema3DScene.privateJetFlex:
       case GtexCinema3DScene.clubTakeover:
         return Container(
-          width: 175,
-          height: 160,
+          width: 185,
+          height: 165,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: const Color(0xFF141126),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: GtexColors.gold, width: 2),
+            gradient: const RadialGradient(
+              center: Alignment(-0.25, -0.3),
+              colors: <Color>[
+                Color(0xFF3B2A14),
+                Color(0xFF141126),
+                Color(0xFF070610),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: GtexColors.gold, width: 2.5),
             boxShadow: <BoxShadow>[
               BoxShadow(
-                color: GtexColors.gold.withValues(alpha: 0.35),
-                blurRadius: 24,
+                color: GtexColors.gold.withValues(alpha: 0.45),
+                blurRadius: 28,
               ),
             ],
           ),
@@ -451,7 +483,7 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
                     : widget.scene == GtexCinema3DScene.clubTakeover
                         ? Icons.workspace_premium_rounded
                         : Icons.diamond_rounded,
-                size: 38,
+                size: 40,
                 color: GtexColors.gold,
               ),
               const SizedBox(height: 6),
@@ -484,17 +516,25 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
       case GtexCinema3DScene.academyUpgrade:
       case GtexCinema3DScene.stadiumAdDisplay:
         return Container(
-          width: 185,
-          height: 160,
+          width: 195,
+          height: 165,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: const Color(0xFF082F49),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: GtexColors.cyan, width: 2),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[
+                Color(0xFF0C4A6E),
+                Color(0xFF082F49),
+                Color(0xFF041322),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: GtexColors.cyan, width: 2.5),
             boxShadow: <BoxShadow>[
               BoxShadow(
-                color: GtexColors.cyan.withValues(alpha: 0.35),
-                blurRadius: 24,
+                color: GtexColors.cyan.withValues(alpha: 0.4),
+                blurRadius: 28,
               ),
             ],
           ),
@@ -502,21 +542,42 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: <Widget>[
               Text(
-                '3D STADIUM & CAMPUS LVL ${widget.facilityLevel}/5',
+                '3D CATHEDRAL BOWL LVL ${widget.facilityLevel}/5',
                 style: const TextStyle(
                   color: GtexColors.cyan,
                   fontSize: 9,
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              const Icon(Icons.stadium_rounded, size: 42, color: GtexColors.gold),
+              // Stacked 3D Stadium Rings
+              Container(
+                width: 135,
+                height: 68,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: GtexColors.gold, width: 3),
+                  color: const Color(0xFF064E3B),
+                ),
+                alignment: Alignment.center,
+                child: Container(
+                  width: 92,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: Colors.white70, width: 1.5),
+                    color: const Color(0xFF10B981),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.stadium_rounded, size: 20, color: Colors.white),
+                ),
+              ),
               Text(
                 widget.subjectName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  color: GtexColors.text,
-                  fontSize: 11,
+                  color: GtexColors.gold,
+                  fontSize: 10,
                   fontWeight: FontWeight.w900,
                 ),
               ),
@@ -534,25 +595,25 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
       case GtexCinema3DScene.newAdDeal:
       case GtexCinema3DScene.clubAnnouncement:
         return Container(
-          width: 155,
-          height: 170,
+          width: 165,
+          height: 175,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: <Color>[
-                Color(0xFF064E3B),
+                Color(0xFF059669),
                 Color(0xFF0F172A),
-                Color(0xFF78350F),
+                Color(0xFFB45309),
               ],
             ),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: GtexColors.gold, width: 2),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: GtexColors.gold, width: 2.5),
             boxShadow: <BoxShadow>[
               BoxShadow(
-                color: GtexColors.pitch.withValues(alpha: 0.35),
-                blurRadius: 24,
+                color: GtexColors.pitch.withValues(alpha: 0.45),
+                blurRadius: 28,
               ),
             ],
           ),
@@ -599,7 +660,7 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
                     '#${widget.jerseyNumber}',
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 34,
+                      fontSize: 36,
                       fontWeight: FontWeight.w900,
                       height: 1.05,
                     ),
@@ -610,8 +671,9 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 6),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.55),
-                  borderRadius: BorderRadius.circular(4),
+                  color: Colors.black.withValues(alpha: 0.65),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: GtexColors.gold.withValues(alpha: 0.5)),
                 ),
                 child: Text(
                   widget.sponsorName,
@@ -621,7 +683,7 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
                   style: const TextStyle(
                     color: GtexColors.gold,
                     fontSize: 8,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
               ),
@@ -645,40 +707,40 @@ class _Cinema3DBackdropPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final double w = size.width;
     final double h = size.height;
-    final double horizonY = h * 0.65;
+    final double horizonY = h * 0.64;
 
     final Paint gridPaint = Paint()
-      ..color = (isGala ? GtexColors.gold : GtexColors.pitch).withValues(alpha: 0.16)
+      ..color = (isGala ? GtexColors.gold : GtexColors.pitch).withValues(alpha: 0.18)
       ..strokeWidth = 1.0;
 
-    final double vpX = w * 0.5 + math.sin(phase) * 14.0;
-    for (int i = -6; i <= 6; i++) {
+    final double vpX = w * 0.5 + math.sin(phase) * 16.0;
+    for (int i = -7; i <= 7; i++) {
       canvas.drawLine(
         Offset(vpX, horizonY),
         Offset(vpX + i * 65.0, h),
         gridPaint,
       );
     }
-    for (int r = 1; r <= 5; r++) {
-      final double py = horizonY + math.pow(r / 5.0, 1.6) * (h - horizonY);
+    for (int r = 1; r <= 6; r++) {
+      final double py = horizonY + math.pow(r / 6.0, 1.65) * (h - horizonY);
       canvas.drawLine(Offset(0, py), Offset(w, py), gridPaint);
     }
 
-    for (int b = 0; b < 3; b++) {
-      final double bx = (w / 4.0) * (b + 1);
-      final double sway = math.sin(phase + b * 1.3) * 28.0;
+    for (int b = 0; b < 4; b++) {
+      final double bx = (w / 5.0) * (b + 1);
+      final double sway = math.sin(phase + b * 1.3) * 32.0;
       final Path cone = Path()
-        ..moveTo(bx - 10, 0)
-        ..lineTo(bx + 10, 0)
-        ..lineTo(bx + sway + 85, h * 0.9)
-        ..lineTo(bx + sway - 85, h * 0.9)
+        ..moveTo(bx - 12, 0)
+        ..lineTo(bx + 12, 0)
+        ..lineTo(bx + sway + 92, h * 0.92)
+        ..lineTo(bx + sway - 92, h * 0.92)
         ..close();
       final Paint beamPaint = Paint()
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: <Color>[
-            (b.isEven ? GtexColors.gold : GtexColors.pitch).withValues(alpha: 0.18),
+            (b.isEven ? GtexColors.gold : GtexColors.pitch).withValues(alpha: 0.2),
             Colors.transparent,
           ],
         ).createShader(Rect.fromLTWH(0, 0, w, h));

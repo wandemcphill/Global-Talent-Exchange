@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { RegenCard } from "@/components/gtex/RegenCard";
 import { PlayerDossier } from "@/components/gtex/PlayerDossier";
 import { Loading } from "@/components/gtex/ui";
+import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
 import { toast } from "sonner";
 
 export function RegenAwards() {
@@ -83,6 +84,22 @@ export function RegenAwards() {
           </div>
         </div>
       </section>
+
+      {/* 3D World Player of the Year & Ballon d'Or Stage */}
+      <Cinema3DStage
+        scene="world_gala"
+        title={`3D GTEX Ballon d'Or de Demain · ${featuredWinner?.player_name || "World #1 Laureate"}`}
+        subtitle="Monaco Theatre · Volumetric 3D Golden Globe Pedestal & Spotlight Sweep"
+        badgeText="3D BALLON D'OR GALA"
+        clubName={featuredWinner?.club_name || "GTEX World XI"}
+        subjectName={featuredWinner?.player_name || "Golden Boy Laureate"}
+        overallRating={featuredWinner?.rating || 94}
+        quote="Crowned on the 3D Monaco stage as the most dominant prodigy of the GTEX season."
+        stats={[
+          { label: "Gala Rank", value: "#1 WORLDWIDE", accent: "#FDE047" },
+          { label: "Award Score", value: `${featuredWinner?.ranking_score ?? "98.6"} PTS`, accent: "#00E676" },
+        ]}
+      />
 
       {/* Featured Ceremony Spotlight Winner */}
       {featuredWinner ? (
