@@ -8,6 +8,102 @@ abstract interface class OwnerWorldClockGateway {
   Future<WorldClock> fetchWorldClock();
 }
 
+/// Compact header pill displaying the live synchronized GTEX World Clock.
+class GtexWorldClockHeaderPill extends StatefulWidget {
+  const GtexWorldClockHeaderPill({
+    super.key,
+    this.clock,
+    this.load,
+    this.onTap,
+  });
+
+  final WorldClock? clock;
+  final Future<WorldClock> Function()? load;
+  final VoidCallback? onTap;
+
+  @override
+  State<GtexWorldClockHeaderPill> createState() => _GtexWorldClockHeaderPillState();
+}
+
+class _GtexWorldClockHeaderPillState extends State<GtexWorldClockHeaderPill> {
+  WorldClock? _clock;
+
+  @override
+  void initState() {
+    super.initState();
+    _clock = widget.clock;
+    if (_clock == null && widget.load != null) {
+      widget.load!().then((WorldClock c) {
+        if (mounted) setState(() => _clock = c);
+      }).catchError((_) {});
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant GtexWorldClockHeaderPill oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.clock != null && widget.clock != _clock) {
+      _clock = widget.clock;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final WorldClock? c = widget.clock ?? _clock;
+    final String label = c != null
+        ? '${c.currentSeasonLabel} · ${c.displayTime}'
+        : 'GTEX World Clock';
+    final bool isPaused = c?.isPaused ?? false;
+
+    return Semantics(
+      button: true,
+      label: 'GTEX World Clock: $label',
+      child: InkWell(
+        key: const Key('gtex-world-clock-header-pill'),
+        onTap: widget.onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: GtexColors.panelStrong,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isPaused
+                  ? GtexColors.gold.withValues(alpha: 0.5)
+                  : GtexColors.cyan.withValues(alpha: 0.5),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Container(
+                width: 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isPaused ? GtexColors.gold : GtexColors.pitch,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(Icons.public_rounded, size: 13, color: GtexColors.cyan),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: GtexColors.text,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Shows the server's world clock. No timers: the value is a snapshot, refreshed on demand.
 class GtexWorldClockPanel extends StatefulWidget {
   const GtexWorldClockPanel({super.key, required this.load});
@@ -122,6 +218,12 @@ class _GtexWorldClockPanelState extends State<GtexWorldClockPanel> {
                   key: const Key('world-clock-season-length'),
                   label: 'Season: ${c.virtualMonthsPerSeason} virtual months',
                   color: GtexColors.gold,
+                ),
+                GtexStatusChip(
+                  key: const Key('world-clock-season-badge'),
+                  label: c.currentSeasonLabel,
+                  color: GtexColors.purple,
+                  icon: Icons.calendar_today_rounded,
                 ),
               ],
             ),

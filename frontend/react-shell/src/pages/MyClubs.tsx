@@ -71,6 +71,8 @@ function ShowroomPanel({ club }: any) {
   const [busyItem, setBusyItem] = useState<string | null>(null);
   const [acquiringItem, setAcquiringItem] = useState<any | null>(null);
   const [giftingItem, setGiftingItem] = useState<any | null>(null);
+  const [recipientType, setRecipientType] = useState<"player" | "staff">("player");
+  const [selectedStaffRole, setSelectedStaffRole] = useState<string>("first_team_manager");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
   const [giftNote, setGiftNote] = useState<string>("");
   const [giftReceipt, setGiftReceipt] = useState<any | null>(null);
@@ -134,35 +136,53 @@ function ShowroomPanel({ club }: any) {
     }
   };
 
+  const clubPrestige = data?.club_prestige ?? clubDetail?.health?.prestige ?? club?.health?.prestige ?? 60;
+  const prestigeTierNum = data?.prestige_tier ?? (clubPrestige >= 90 ? 1 : clubPrestige >= 75 ? 2 : clubPrestige >= 55 ? 3 : clubPrestige >= 35 ? 4 : 5);
+  const prestigeTierLabel = prestigeTierNum === 1 ? "Tier 1: Global Superclub" : prestigeTierNum === 2 ? "Tier 2: Continental Challenger" : prestigeTierNum === 3 ? "Tier 3: National Contender" : prestigeTierNum === 4 ? "Tier 4: Regional Pioneer" : "Tier 5: Grassroots Foundation";
+
+  const staffRoles = [
+    { role: "first_team_manager", name: "First-Team Manager", effect: "+15 Morale & Tactical Alignment" },
+    { role: "general_manager", name: "General Manager", effect: "+20 Loyalty & Sponsor Relations" },
+    { role: "head_of_youth", name: "Head of Youth Dev", effect: "+15 Academy Pipeline Loyalty" },
+    { role: "chief_scout", name: "Chief Scout", effect: "+15 Scouting Motivation" },
+    { role: "medical_director", name: "Head of Medical", effect: "+15 Fitness Regimen Dedication" },
+  ];
+
   const handleGift = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!giftingItem || !selectedPlayerId || busyItem) return;
+    if (!giftingItem || busyItem) return;
+    if (recipientType === "player" && !selectedPlayerId) return;
     const catalogKey = keyOf(giftingItem);
     if (!catalogKey) {
       toast.error("This showroom item is missing its catalogue reference.");
       return;
     }
-    const giftIntent = `${catalogKey}:${selectedPlayerId}`;
+    const targetIdentifier = recipientType === "player" ? selectedPlayerId : selectedStaffRole;
+    const giftIntent = `${catalogKey}:${targetIdentifier}`;
     setBusyItem(`gift:${catalogKey}`);
     try {
       const { data: responseData } = await api.post(`/owner/clubs/${club.club_id}/showroom/gift`, {
-        player_id: selectedPlayerId,
+        player_id: recipientType === "player" ? selectedPlayerId : undefined,
+        recipient_type: recipientType,
+        staff_role: recipientType === "staff" ? selectedStaffRole : undefined,
         catalog_key: catalogKey,
         note: giftNote.trim(),
         idempotency_key: stableIntentKey(giftIntentKeys, giftIntent, "showroom-gift"),
       });
       const result = responseData ?? {};
       giftIntentKeys.current.delete(giftIntent);
-      const recipient = result?.player || selectedPlayer;
-      setGiftReceipt({ item: giftingItem, player: recipient, note: giftNote.trim(), result });
+      const recipient = recipientType === "player"
+        ? (result?.player || selectedPlayer)
+        : { name: staffRoles.find(r => r.role === selectedStaffRole)?.name || selectedStaffRole.replace(/_/g, " ").toUpperCase(), role: selectedStaffRole };
+      setGiftReceipt({ item: giftingItem, player: recipient, note: giftNote.trim(), result, recipientType });
       setGiftingItem(null);
       setSelectedPlayerId("");
       setGiftNote("");
       const giftName = giftingItem?.name || result?.asset?.custom_name || "luxury gift";
       if (result?.broadcast_event) {
-        toast.success(`GTEX confirmed ${giftName} for ${recipient?.name || "your player"}; a verified gift event was recorded.`);
+        toast.success(`GTEX confirmed ${giftName} for ${recipient?.name || "recipient"}; a verified gift event was recorded.`);
       } else {
-        toast.success(`GTEX recorded ${giftName} for ${recipient?.name || "your player"}.`);
+        toast.success(`GTEX recorded ${giftName} for ${recipient?.name || "recipient"}.`);
       }
       refresh();
     } catch (e) {
@@ -198,6 +218,13 @@ function ShowroomPanel({ club }: any) {
           </p>
         </div>
         <div className="sm:ml-auto flex items-center gap-3 shrink-0">
+          <div className="shrink-0 rounded-lg border border-amber-500/30 bg-amber-950/40 px-3 py-2">
+            <div className="text-[9px] uppercase tracking-wider text-amber-300 font-bold">Prestige Rating</div>
+            <div className="font-mono text-sm font-black text-amber-200">
+              {clubPrestige}/100 <span className="text-[10px] text-slate-400">· Tier {prestigeTierNum}</span>
+            </div>
+            <div className="text-[9px] text-amber-300/80 font-medium">{prestigeTierLabel}</div>
+          </div>
           <Link
             to="/app/showroom"
             className="flex items-center gap-1 rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs font-bold text-amber-200 hover:bg-amber-400/20 transition-colors"
@@ -269,6 +296,17 @@ function ShowroomPanel({ club }: any) {
                   <div className="min-h-[92px]">
                     <h4 className="text-sm font-extrabold leading-snug text-white">{it.name}</h4>
                     <p className="mt-1 line-clamp-3 text-[11px] leading-5 text-slate-400">{it.model || it.description || "A limited prestige asset for your club collection."}</p>
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      <span className="rounded bg-amber-400/10 border border-amber-400/30 px-1.5 py-0.5 text-[9px] font-bold text-amber-300">
+                        +Prestige
+                      </span>
+                      <span className="rounded bg-emerald-400/10 border border-emerald-400/30 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">
+                        +Academy Ceiling
+                      </span>
+                      <span className="rounded bg-indigo-400/10 border border-indigo-400/30 px-1.5 py-0.5 text-[9px] font-bold text-indigo-300">
+                        +Staff/Player Pull
+                      </span>
+                    </div>
                   </div>
                   <div className="mt-auto space-y-2 border-t border-slate-800 pt-3">
                     <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500">
@@ -289,22 +327,16 @@ function ShowroomPanel({ club }: any) {
                           <Btn
                             variant="ghost"
                             className="w-full border border-purple-400/25 px-3 text-xs text-purple-300 hover:border-purple-300/60 hover:text-purple-200"
-                            disabled={!!busyItem || eligibleRegens.length === 0}
-                            title={eligibleRegens.length > 0
-                              ? `Gift ${it.name} to an academy regen`
-                              : "Luxury gifts are reserved for academy regens"}
+                            disabled={!!busyItem}
+                            title={`Gift ${it.name} to player or staff`}
                             onClick={() => {
                               setGiftingItem(it);
-                              setSelectedPlayerId(eligibleRegens[0]?.id || "");
+                              setRecipientType("player");
+                              setSelectedPlayerId(eligibleRegens[0]?.id || squad[0]?.id || "");
                             }}
                           >
-                            <Gift className="mr-1 h-3.5 w-3.5" /> Gift a regen
+                            <Gift className="mr-1 h-3.5 w-3.5" /> Gift Asset
                           </Btn>
-                          {eligibleRegens.length === 0 && (
-                            <p className="mt-1 text-[9px] leading-4 text-slate-500">
-                              Regen only · add an academy regen first
-                            </p>
-                          )}
                         </div>
                       )}
                     </div>
@@ -395,31 +427,84 @@ function ShowroomPanel({ club }: any) {
             </div>
             <form onSubmit={handleGift} className="space-y-4 p-5">
               <div className="rounded-lg border border-purple-400/20 bg-purple-400/[0.06] p-3 text-xs leading-5 text-slate-300">
-                This luxury incentive is reserved for an academy regen. GTEX charges the club treasury, records the verified gift event, and shows only the actual morale change returned by the server.
+                Gift prestige assets to squad players or key executive staff to boost morale, loyalty, and performance. GTEX charges the club treasury and records the verified gift event.
               </div>
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Choose academy regen</label>
-                <div className="mt-2 grid max-h-52 gap-2 overflow-y-auto sm:grid-cols-2">
-                  {eligibleRegens.map((p: any) => (
-                    <button
-                      type="button"
-                      key={p.id}
-                      onClick={() => setSelectedPlayerId(p.id)}
-                      className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${selectedPlayerId === p.id ? "border-purple-300/70 bg-purple-400/10" : "border-slate-800 bg-slate-950/50 hover:border-slate-600"}`}
-                    >
-                      {p.portrait_url ? <img src={p.portrait_url} alt="" className="h-11 w-11 shrink-0 rounded-full border border-white/10 object-cover" /> : <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-800 text-xs font-black text-amber-200">{String(p.name || "?").slice(0, 1)}</div>}
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-xs font-extrabold text-white">{p.name}</div>
-                        <div className="mt-0.5 text-[10px] text-slate-500">{p.position || "Regen player"} · OVR {p.rating ?? "—"}</div>
-                        <div className="mt-0.5 text-[8px] font-black tracking-[0.16em] text-amber-300">ACADEMY REGEN</div>
-                        <div className="text-[10px] text-slate-400">Morale {p.morale ?? "—"}%</div>
-                      </div>
-                      {selectedPlayerId === p.id && <CheckCircle className="h-4 w-4 shrink-0 text-purple-200" />}
-                    </button>
-                  ))}
+
+              <div className="flex rounded-lg border border-purple-500/30 bg-purple-950/40 p-1">
+                <button
+                  type="button"
+                  onClick={() => setRecipientType("player")}
+                  className={`flex-1 rounded-md py-1.5 text-xs font-bold transition ${
+                    recipientType === "player"
+                      ? "bg-purple-600 text-white shadow-sm"
+                      : "text-purple-300 hover:text-white"
+                  }`}
+                >
+                  Squad Player / Regen
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRecipientType("staff")}
+                  className={`flex-1 rounded-md py-1.5 text-xs font-bold transition ${
+                    recipientType === "staff"
+                      ? "bg-purple-600 text-white shadow-sm"
+                      : "text-purple-300 hover:text-white"
+                  }`}
+                >
+                  Coach / Executive Staff
+                </button>
+              </div>
+
+              {recipientType === "player" ? (
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Choose player or regen</label>
+                  <div className="mt-2 grid max-h-52 gap-2 overflow-y-auto sm:grid-cols-2">
+                    {(eligibleRegens.length > 0 ? eligibleRegens : squad).map((p: any) => (
+                      <button
+                        type="button"
+                        key={p.id}
+                        onClick={() => setSelectedPlayerId(p.id)}
+                        className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${selectedPlayerId === p.id ? "border-purple-300/70 bg-purple-400/10" : "border-slate-800 bg-slate-950/50 hover:border-slate-600"}`}
+                      >
+                        {p.portrait_url ? <img src={p.portrait_url} alt="" className="h-11 w-11 shrink-0 rounded-full border border-white/10 object-cover" /> : <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-800 text-xs font-black text-amber-200">{String(p.name || "?").slice(0, 1)}</div>}
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-xs font-extrabold text-white">{p.name}</div>
+                          <div className="mt-0.5 text-[10px] text-slate-500">{p.position || "Squad player"} · OVR {p.rating ?? "—"}</div>
+                          {p.is_regen ? (
+                            <div className="mt-0.5 text-[8px] font-black tracking-[0.16em] text-amber-300">ACADEMY REGEN</div>
+                          ) : (
+                            <div className="mt-0.5 text-[8px] font-black tracking-[0.16em] text-cyan-300">FIRST TEAM</div>
+                          )}
+                          <div className="text-[10px] text-slate-400">Morale {p.morale ?? "—"}%</div>
+                        </div>
+                        {selectedPlayerId === p.id && <CheckCircle className="h-4 w-4 shrink-0 text-purple-200" />}
+                      </button>
+                    ))}
+                  </div>
+                  {(eligibleRegens.length === 0 && squad.length === 0) && <p className="mt-2 text-xs text-amber-200">No squad members are available.</p>}
                 </div>
-                {eligibleRegens.length === 0 && <p className="mt-2 text-xs text-amber-200">No eligible academy regens are available. Develop an academy regen before sending a luxury gift.</p>}
-              </div>
+              ) : (
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Select Coach or Executive Staff</label>
+                  <div className="mt-2 space-y-2">
+                    {staffRoles.map((s) => (
+                      <button
+                        type="button"
+                        key={s.role}
+                        onClick={() => setSelectedStaffRole(s.role)}
+                        className={`flex w-full items-center justify-between rounded-xl border p-3 text-left transition ${selectedStaffRole === s.role ? "border-purple-300/70 bg-purple-400/10" : "border-slate-800 bg-slate-950/50 hover:border-slate-600"}`}
+                      >
+                        <div>
+                          <div className="text-xs font-bold text-white">{s.name}</div>
+                          <div className="text-[10px] text-purple-300">{s.effect}</div>
+                        </div>
+                        {selectedStaffRole === s.role && <CheckCircle className="h-4 w-4 text-purple-200" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Personal note</label>
                 <input
@@ -433,7 +518,11 @@ function ShowroomPanel({ club }: any) {
               </div>
               <div className="flex gap-2 pt-1">
                 <button type="button" onClick={() => setGiftingItem(null)} className="flex-1 rounded-lg border border-slate-700 px-4 py-3 text-xs font-bold text-slate-300 hover:bg-white/5" disabled={!!busyItem}>Cancel</button>
-                <button type="submit" disabled={!selectedPlayerId || !!busyItem} className="flex-1 rounded-lg bg-purple-500 px-4 py-3 text-xs font-black text-white transition hover:bg-purple-400 disabled:opacity-50">
+                <button
+                  type="submit"
+                  disabled={(recipientType === "player" && !selectedPlayerId) || (recipientType === "staff" && !selectedStaffRole) || !!busyItem}
+                  className="flex-1 rounded-lg bg-purple-500 px-4 py-3 text-xs font-black text-white transition hover:bg-purple-400 disabled:opacity-50"
+                >
                   {busyItem === `gift:${keyOf(giftingItem)}` ? "Delivering gift…" : `Confirm gift · ${formatPrice(giftingItem)} GTX`}
                 </button>
               </div>
@@ -476,11 +565,23 @@ function ShowroomPanel({ club }: any) {
               <h3 className="mt-2 text-xl font-black text-white">{giftReceipt.item.name}</h3>
               <p className="mt-2 text-xs text-slate-300">A personal gift from the club owner to</p>
               <div className="mx-auto mt-4 flex max-w-xs items-center gap-3 rounded-xl border border-purple-300/20 bg-black/30 p-3 text-left">
-                {giftReceipt.player?.portrait_url ? <img src={giftReceipt.player.portrait_url} alt="" className="h-14 w-14 rounded-full border border-purple-300/30 object-cover" /> : <div className="flex h-14 w-14 items-center justify-center rounded-full bg-purple-400/10 text-lg font-black text-purple-200">{String(giftReceipt.player?.name || "P").slice(0,1)}</div>}
+                {giftReceipt.player?.portrait_url ? (
+                  <img src={giftReceipt.player.portrait_url} alt="" className="h-14 w-14 rounded-full border border-purple-300/30 object-cover" />
+                ) : (
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-purple-400/10 text-lg font-black text-purple-200">
+                    {String(giftReceipt.player?.name || "R").slice(0,1)}
+                  </div>
+                )}
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-extrabold text-white">{giftReceipt.player?.name || "Squad player"}</div>
-                  <div className="text-[10px] text-slate-400">{giftReceipt.player?.position || "First-team squad"}</div>
-                  {Number(giftReceipt.result?.morale_delta || 0) > 0 && <div className="mt-1 text-[10px] font-bold text-emerald-300">Morale +{giftReceipt.result.morale_delta} · confirmed</div>}
+                  <div className="truncate text-sm font-extrabold text-white">{giftReceipt.player?.name || "Recipient"}</div>
+                  <div className="text-[10px] text-slate-400">
+                    {giftReceipt.recipientType === "staff" ? "Executive Staff" : (giftReceipt.player?.position || "Squad member")}
+                  </div>
+                  {Number(giftReceipt.result?.morale_delta || 0) > 0 ? (
+                    <div className="mt-1 text-[10px] font-bold text-emerald-300">Morale +{giftReceipt.result.morale_delta} · confirmed</div>
+                  ) : giftReceipt.recipientType === "staff" ? (
+                    <div className="mt-1 text-[10px] font-bold text-purple-300">Staff Loyalty & Alignment Boosted</div>
+                  ) : null}
                 </div>
                 <CheckCircle className="h-5 w-5 shrink-0 text-emerald-300" />
               </div>

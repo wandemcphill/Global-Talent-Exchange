@@ -99,10 +99,43 @@ export function briefingTargetPath(target: BriefingTarget | null): string | null
   }
 }
 
-export function briefingTargetLabel(target: BriefingTarget | null): string | null {
+export const briefingTargetLabel = (target: BriefingTarget | null): string | null => {
   if (!target) return null;
   return { decision: "Open decision", club_history: "View club history", match_result: "View match result" }[target.type];
-}
+};
+
+export type StaffBriefingSection = {
+  role: string;
+  sender: string;
+  title: string;
+  summary: string;
+};
+
+export type BriefingMetrics = {
+  cash_gtex?: number;
+  prestige?: number;
+  prestige_tier?: number;
+  squad_size?: number;
+  avg_morale?: number;
+  ready_academy_prospects?: number;
+  open_decisions?: number;
+};
+
+export type DailyBriefing = {
+  id?: string;
+  club_id?: string;
+  world_day?: number;
+  headline?: string;
+  summary?: string;
+  body?: string;
+  created_at?: string;
+  generated_at?: string;
+  metrics?: BriefingMetrics;
+  sections?: StaffBriefingSection[];
+};
+
+export const clubBriefingEndpoint = (clubId: string) => `/owner/clubs/${encodeURIComponent(clubId)}/briefing`;
+export const clubBriefingGenerateEndpoint = (clubId: string) => `/owner/clubs/${encodeURIComponent(clubId)}/briefing/generate`;
 
 /** Resolve what the panel should show. With no published contract this is always `unavailable`. */
 export function useOwnerBriefing(): BriefingViewState {

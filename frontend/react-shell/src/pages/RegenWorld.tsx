@@ -188,29 +188,33 @@ export function RegenWorld() {
             A living, generation-driven football scouting universe. Explore next-gen prospects, tracked bloodlines, and world ranking leaderboards.
           </p>
 
-          {/* Quick World Stats Ticker */}
-          <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3 text-left">
-            <div className="rounded-lg border border-emerald-500/20 bg-black/40 p-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Gen Active</p>
-              <p className="gx-mono text-xl font-black text-emerald-300">
-                Gen {trackingData?.current_generation ?? "1 · Alpha"}
-              </p>
+            {/* Quick World Stats Ticker */}
+            <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3 text-left">
+              <div className="rounded-lg border border-emerald-500/20 bg-black/40 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Gen Active</p>
+                <p className="gx-mono text-xl font-black text-emerald-300">
+                  Gen {trackingData?.current_generation ?? "1"}
+                </p>
+              </div>
+              <div className="rounded-lg border border-emerald-500/20 bg-black/40 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Seeded</p>
+                <p className="gx-mono text-xl font-black text-white">
+                  {trackingData?.total_regens_generated != null ? `${trackingData.total_regens_generated}` : "—"}
+                </p>
+              </div>
+              <div className="rounded-lg border border-emerald-500/20 bg-black/40 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Top Potential</p>
+                <p className="gx-mono text-xl font-black text-amber-300">
+                  {trackingData?.top_potential != null ? `${trackingData.top_potential} POT` : "—"}
+                </p>
+              </div>
+              <div className="rounded-lg border border-emerald-500/20 bg-black/40 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Scouted Nations</p>
+                <p className="gx-mono text-xl font-black text-cyan-300">
+                  {trackingData?.nations_count != null ? `${trackingData.nations_count} Regions` : "—"}
+                </p>
+              </div>
             </div>
-            <div className="rounded-lg border border-emerald-500/20 bg-black/40 p-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Seeded</p>
-              <p className="gx-mono text-xl font-black text-white">
-                {trackingData?.total_regens_generated ?? "1,240+"}
-              </p>
-            </div>
-            <div className="rounded-lg border border-emerald-500/20 bg-black/40 p-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Top Potential</p>
-              <p className="gx-mono text-xl font-black text-amber-300">94 POT</p>
-            </div>
-            <div className="rounded-lg border border-emerald-500/20 bg-black/40 p-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Scouted Nations</p>
-              <p className="gx-mono text-xl font-black text-cyan-300">32 Regions</p>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -343,24 +347,26 @@ export function RegenWorld() {
           <p className="gx-eyebrow text-emerald-400">Founding DNA Lineages</p>
           {loadingBloodlines ? (
             <Loading label="Tracing genetic pedigree..." />
-          ) : (
+          ) : bloodlinesData && bloodlinesData.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {(bloodlinesData.length > 0 ? bloodlinesData : [
-                { id: "bl-1", name: "Lagos Super-Eagles DNA", generation: 1, archetypes: "High Pace Winger / Power Forward", count: 84 },
-                { id: "bl-2", name: "Accra Midfield Maestro", generation: 2, archetypes: "Deep Lying Playmaker", count: 62 },
-                { id: "bl-3", name: "Dakar Iron Fortress", generation: 1, archetypes: "Stopper / Sweeper Keeper", count: 53 },
-              ]).map((bl: any) => (
+              {bloodlinesData.map((bl: any) => (
                 <div key={bl.id} className="rounded-xl border border-emerald-500/30 bg-[#051310] p-5 shadow-lg space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1.5 text-xs font-black uppercase text-emerald-300">
                       <Dna size={14} /> Gen {bl.generation || 1}
                     </span>
-                    <span className="gx-mono text-xs font-bold text-amber-300">{bl.count || 40}+ Lineage Seeds</span>
+                    <span className="gx-mono text-xs font-bold text-amber-300">{bl.count || 0} Lineage Seeds</span>
                   </div>
                   <h3 className="gx-display text-xl font-bold uppercase text-white">{bl.name}</h3>
-                  <p className="text-xs text-slate-300">{bl.archetypes || "Balanced Physical & Technical Traits"}</p>
+                  <p className="text-xs text-slate-300">{bl.archetypes || bl.description || "Balanced Physical & Technical Traits"}</p>
                 </div>
               ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center" data-testid="bloodlines-empty-state">
+              <Dna className="mx-auto size-10 text-emerald-400/50 mb-3" />
+              <p className="gx-display text-xl font-bold uppercase text-white">No active DNA lineages recorded</p>
+              <p className="text-sm text-slate-400 mt-1">Founding bloodlines are established as academy regens graduate through competitive seasons.</p>
             </div>
           )}
         </div>
@@ -369,7 +375,7 @@ export function RegenWorld() {
           <p className="gx-eyebrow text-emerald-400">Official GTEX World Leaderboard</p>
           {loadingRankings ? (
             <Loading label="Querying rankings engine..." />
-          ) : (
+          ) : rankingsData && rankingsData.length > 0 ? (
             <div className="overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 shadow-xl">
               <table className="gx-table w-full">
                 <thead>
@@ -382,25 +388,27 @@ export function RegenWorld() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(rankingsData.length > 0 ? rankingsData : [
-                    { id: "rk-1", rank: 1, player_name: "Adeola Alabi", position: "FWD", category: "Overall", score: 96.4 },
-                    { id: "rk-2", rank: 2, player_name: "Kofi Boateng", position: "MID", category: "Overall", score: 94.8 },
-                    { id: "rk-3", rank: 3, player_name: "Moussa Sene", position: "DEF", category: "Overall", score: 92.1 },
-                  ]).map((entry: any) => (
+                  {rankingsData.map((entry: any) => (
                     <tr
-                      key={entry.id}
+                      key={entry.id || entry.rank}
                       onClick={() => entry.player_id && updateSelectedPlayer(entry.player_id)}
                       className="cursor-pointer hover:bg-emerald-500/10 transition-colors"
                     >
                       <td className="gx-mono font-black text-amber-300">#{entry.rank}</td>
-                      <td className="font-bold text-white uppercase">{entry.player_name}</td>
+                      <td className="font-bold text-white uppercase">{entry.player_name || entry.name}</td>
                       <td className="gx-mono text-emerald-400">{entry.position || "MID"}</td>
-                      <td className="text-slate-400 text-xs">{entry.category}</td>
-                      <td className="gx-mono font-bold text-right text-emerald-300">{entry.score} pts</td>
+                      <td className="text-slate-400 text-xs">{entry.category || "Overall"}</td>
+                      <td className="gx-mono font-bold text-right text-emerald-300">{entry.score ?? entry.ranking_score ?? "—"} pts</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center" data-testid="rankings-empty-state">
+              <Trophy className="mx-auto size-10 text-emerald-400/50 mb-3" />
+              <p className="gx-display text-xl font-bold uppercase text-white">Leaderboards calibrating</p>
+              <p className="text-sm text-slate-400 mt-1">Global rankings are updated following competitive matchday results.</p>
             </div>
           )}
         </div>
@@ -409,34 +417,37 @@ export function RegenWorld() {
           <p className="gx-eyebrow text-amber-400">Regen Hall of Fame</p>
           {loadingHall ? (
             <Loading label="Consulting immortals archive..." />
-          ) : (
+          ) : hallData && hallData.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {(hallData.length > 0 ? hallData : [
-                { id: "hof-1", player_name: "Chukwudi Okafor", total_awards: 4, legacy_score: 98.2, seasons_active: 8 },
-                { id: "hof-2", player_name: "Abdoulaye Diallo", total_awards: 3, legacy_score: 95.0, seasons_active: 7 },
-              ]).map((entry: any) => (
+              {hallData.map((entry: any) => (
                 <div key={entry.id} className="rounded-xl border border-amber-400/40 bg-gradient-to-b from-[#1c1407] to-[#0c0903] p-5 shadow-2xl space-y-2">
                   <div className="flex items-center gap-2 text-amber-400">
                     <Trophy size={16} />
                     <span className="text-xs font-black uppercase tracking-wider">Immortalized Legend</span>
                   </div>
-                  <h3 className="gx-display text-2xl font-black uppercase text-white">{entry.player_name}</h3>
+                  <h3 className="gx-display text-2xl font-black uppercase text-white">{entry.player_name || entry.name}</h3>
                   <div className="grid grid-cols-3 gap-2 pt-2 border-t border-amber-500/20 text-center">
                     <div>
-                      <p className="gx-display text-xl font-bold text-amber-300">{entry.total_awards}</p>
+                      <p className="gx-display text-xl font-bold text-amber-300">{entry.total_awards ?? 0}</p>
                       <p className="text-[9px] uppercase text-slate-400">Trophies</p>
                     </div>
                     <div>
-                      <p className="gx-display text-xl font-bold text-emerald-300">{entry.legacy_score}</p>
+                      <p className="gx-display text-xl font-bold text-emerald-300">{entry.legacy_score ?? "0.0"}</p>
                       <p className="text-[9px] uppercase text-slate-400">Legacy</p>
                     </div>
                     <div>
-                      <p className="gx-display text-xl font-bold text-white">{entry.seasons_active}</p>
+                      <p className="gx-display text-xl font-bold text-white">{entry.seasons_active ?? 1}</p>
                       <p className="text-[9px] uppercase text-slate-400">Seasons</p>
                     </div>
                   </div>
                 </div>
               ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center" data-testid="hall-empty-state">
+              <Award className="mx-auto size-10 text-amber-400/50 mb-3" />
+              <p className="gx-display text-xl font-bold uppercase text-white">No legends inducted yet</p>
+              <p className="text-sm text-slate-400 mt-1">Hall of Fame inductions take place at the end of each global season cycle.</p>
             </div>
           )}
         </div>

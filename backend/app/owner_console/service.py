@@ -293,7 +293,64 @@ def squad(session: Session, club_id: str, include_inactive: bool = False) -> lis
 
 
 def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str, Any]:
-    from app.owner_console import storytelling
+    from app.owner_console import storytelling, engine
+
+    pers = dict(p.personality_json or {}) if p.is_regen else {}
+    squad_status = pers.get("squad_status", "academy" if (p.is_regen and p.age <= 18 and p.minutes == 0) else "senior")
+
+    ambition = pers.get("ambition", 10)
+    loyalty = pers.get("loyalty", 10)
+    prof = pers.get("professionalism", 10)
+    market = pers.get("marketability", 10)
+
+    if ambition >= 16 and loyalty <= 10:
+        archetype = "Mercenary"
+    elif loyalty >= 15:
+        archetype = "Homegrown Loyalist"
+    elif ambition >= 16 and p.potential >= 80:
+        archetype = "Ambitious Prodigy"
+    elif market >= 15:
+        archetype = "Spotlight Seeker"
+    elif prof >= 15:
+        archetype = "Model Professional"
+    elif ambition >= 14:
+        archetype = "Trophy Hunter"
+    else:
+        archetype = "Model Professional"
+
+    if p.morale >= 75:
+        mood_state = "Thriving"
+    elif p.morale >= 55:
+        mood_state = "Content"
+    elif p.morale >= 40:
+        mood_state = "Restless"
+    else:
+        mood_state = "Unsettled"
+
+    if squad_status == "academy" or (p.is_regen and p.minutes == 0):
+        inner_monologue = f"Grinding daily with the academy coaches. When my call-up comes, I\'ll be 100% ready to make an impact for {p.name.split()[-1]}."
+    elif p.morale >= 75:
+        inner_monologue = f"Everything is clicking right now. The coaching staff believes in me, and I\'m pushing for every point on the pitch."
+    elif p.morale < 40:
+        inner_monologue = f"My agent has been fielding enquiries. If my ambition isn\'t matched here, I may have to look elsewhere."
+    else:
+        inner_monologue = f"Head down, focusing on match sharpness and keeping my position in the squad."
+
+    decision_factors = {
+        "legacy_weight": round(float(loyalty) / 20.0, 2),
+        "money_weight": round(float(ambition) / 20.0, 2),
+        "playing_time_weight": 0.85 if p.minutes < 180 else 0.45,
+        "prestige_fit": round(min(1.0, float(p.rating) / 75.0), 2),
+    }
+
+    readiness_score = min(100, int(p.rating * 0.9 + (p.potential - p.rating) * 0.3 + min(20, p.minutes // 20)))
+    ready_bool = readiness_score >= 60
+    readiness_assessment = {
+        "readiness_score": readiness_score,
+        "hoyd_verdict": "Ready for First-Team Rotation" if ready_bool else "Developing in Academy Pipeline",
+        "manager_approved": ready_bool,
+        "recommendation": "Promote to senior squad and give cup/rotation minutes." if ready_bool else "Continue intensive academy training.",
+    }
 
     return {
         "id": p.id,
@@ -313,6 +370,12 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
         "personality": p.personality_json if p.is_regen else None,
         "growth_log": (p.growth_log_json or [])[-6:],
         "acquired_via": p.acquired_via,
+        "squad_status": squad_status,
+        "archetype": archetype,
+        "mood_state": mood_state,
+        "inner_monologue": inner_monologue,
+        "decision_factors": decision_factors,
+        "readiness_assessment": readiness_assessment,
     }
 
 
@@ -321,7 +384,7 @@ def squad_value(players: list[OwnerSquadPlayer]) -> Decimal:
 
 
 def club_value(session: Session, state: OwnerClubState) -> Decimal:
-    facilities = sum(int(v) for v in (state.facilities_json or {}).values()) * 4000
+    facilities = sum(int((state.facilities_json or {}).get(k, 1)) for k in engine.FACILITY_KINDS) * 4000
     cash = ledger.balance(session, ledger.club_account(state.club_id), ledger.GTEX)
     return ledger.D(squad_value(squad(session, state.club_id)) + facilities + cash * Decimal("0.5") + state.fans * 2)
 
@@ -800,12 +863,25 @@ def academy_intake(session: Session, user_id: str, club_id: str) -> list[OwnerSq
     except ledger.LedgerError as exc:
         raise OwnerError(str(exc), 402) from exc
 
+    facs = dict(state.facilities_json or {})
+    exec_staff = dict(facs.get("_executive_staff") or {})
+    hoyd = exec_staff.get("head_of_youth_development") or {}
+    hoyd_youth = int(hoyd.get("youth_development", 10))
     youth = int((state.manager_json or {}).get("youth_development", 10))
     generation_key = f"world-day:{state.world_day}:intake:{state.academy_intake_sequence}"
-    return [
-        _add_regen(session, club_id, r)
-        for r in engine.generate_regens(club_id, generation_key, level, youth, 1 + level // 2)
-    ]
+    try:
+        cohort = engine.generate_regens(
+            club_id,
+            generation_key,
+            level,
+            youth,
+            1 + level // 2,
+            club_prestige=state.prestige,
+            hoyd_youth=hoyd_youth,
+        )
+    except TypeError:
+        cohort = engine.generate_regens(club_id, generation_key, level, youth, 1 + level // 2)
+    return [_add_regen(session, club_id, r) for r in cohort]
 
 
 # ---------- integrity ----------
@@ -973,9 +1049,35 @@ def tick_club(
         )
         or 0
     )
+    exec_staff = dict((state.facilities_json or {}).get("_executive_staff") or {})
+    hoyd = exec_staff.get("head_of_youth_development") or {}
+    med = exec_staff.get("medical_director") or {}
+
+    total_staff_salary = sum(int(s.get("salary_gtex", s.get("salary", 300))) for s in exec_staff.values())
+    daily_upkeep = max(10, total_staff_salary // 30) if exec_staff else 0
+    club_cash = ledger.balance(session, ledger.club_account(state.club_id), ledger.GTEX)
+    if daily_upkeep > 0 and club_cash >= daily_upkeep:
+        try:
+            ledger.record(
+                session,
+                event_type="staff_wage_upkeep",
+                source=ledger.club_account(state.club_id),
+                destination=ledger.WORLD_CLUBS,
+                currency=ledger.GTEX,
+                gross=daily_upkeep,
+                club_id=state.club_id,
+                user_id=state.owner_user_id,
+                memo="Executive staff daily wage upkeep",
+            )
+        except Exception:
+            pass
+
+    med_bonus = max(0, int(med.get("medical_expertise", 10)) // 5)
+    hoyd_bonus = int(hoyd.get("youth_development", 10)) // 2
+
     ctx = {
         "training": int(facilities.get("training", 1)),
-        "manager_youth": int(manager.get("youth_development", 10)),
+        "manager_youth": int(manager.get("youth_development", 10)) + hoyd_bonus,
         "competition_quality": min(1.0, 0.3 + entries * 0.2),
         "prestige": state.prestige,
     }
@@ -983,7 +1085,7 @@ def tick_club(
     growth_report = []
     for p in players:
         if p.injured_days > 0:
-            p.injured_days = max(0, p.injured_days - (1 + int(facilities.get("medical", 1)) // 2))
+            p.injured_days = max(0, p.injured_days - (1 + int(facilities.get("medical", 1)) // 2 + med_bonus))
         if not p.is_regen:
             continue
         pdata = player_dict(p)
@@ -1563,6 +1665,9 @@ def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
         "disclosures": disclosures(session, club_id),
         "ownership_group": group_label(session, user_id),
         "showroom": storytelling.get_club_showroom(session, user_id, club_id),
+        "executive_staff": get_club_staff(session, user_id, club_id).get("appointed_staff"),
+        "staff_effects": get_club_staff(session, user_id, club_id).get("staff_effects"),
+        "delegation_policy": get_club_staff(session, user_id, club_id).get("delegation_policy"),
     }
 
 
@@ -1725,3 +1830,404 @@ def get_owner_newsroom(*args, **kwargs):
     from app.owner_console import storytelling
 
     return storytelling.list_newsroom_articles(*args, **kwargs)
+
+
+# ---------- Staff Hierarchy, Academy Pipeline & Matchday Management ----------
+
+def sync_club_prestige_to_reputation(session: Session, club_id: str, prestige: int) -> None:
+    try:
+        from app.club_identity.models.reputation import ClubReputationProfile
+        profile = session.scalar(select(ClubReputationProfile).where(ClubReputationProfile.club_id == club_id))
+        if profile is not None:
+            profile.current_score = int(prestige) * 10
+    except Exception as exc:
+        logger.debug("sync_club_prestige_to_reputation bypassed: %s", exc)
+
+
+def get_club_staff(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
+    state = require_state(session, club_id, user_id)
+    facs = dict(state.facilities_json or {})
+    exec_staff = dict(facs.get("_executive_staff") or {})
+    delegation = dict(facs.get("_delegation_policy") or {
+        "mode": "balanced",
+        "gm_transfer_autonomy": True,
+        "hoyd_youth_contracts": True,
+        "manager_tactics_autonomy": True,
+    })
+
+    appointed: dict[str, Any] = {}
+    for r in engine.EXECUTIVE_STAFF_ROLES:
+        if r in exec_staff:
+            appointed[r] = exec_staff[r]
+        elif r == "first_team_manager":
+            appointed[r] = state.manager_json or engine.manager_profile(engine.DEFAULT_MANAGER)
+        else:
+            appointed[r] = None
+
+    staff_effects = engine.calculate_staff_effects(appointed)
+    candidates = list(engine.EXECUTIVE_STAFF_CATALOG)
+
+    return {
+        "club_id": club_id,
+        "club_prestige": state.prestige,
+        "prestige_tier": engine.prestige_tier_label(state.prestige),
+        "delegation_policy": delegation,
+        "appointed_staff": appointed,
+        "candidates": candidates,
+        "staff_effects": staff_effects,
+    }
+
+
+def hire_executive_staff(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    staff_id: str,
+    role: str | None = None,
+    marquee_wage_premium: bool = False,
+) -> dict[str, Any]:
+    state = require_state(session, club_id, user_id)
+    candidate = next((c for c in engine.EXECUTIVE_STAFF_CATALOG if c.get("id") == staff_id or c.get("staff_id") == staff_id), None)
+    if not candidate:
+        raise OwnerError("staff_candidate_not_found", 404, f"Staff candidate {staff_id} does not exist.")
+
+    target_role = role or candidate.get("role") or "first_team_manager"
+    min_p = int(candidate.get("min_prestige", 15))
+
+    if state.prestige < min_p and not marquee_wage_premium:
+        raise OwnerError(
+            "insufficient_club_prestige",
+            400,
+            f"{candidate['name']} requires at least {min_p} club prestige (current: {state.prestige}), or a 50% marquee wage premium.",
+        )
+
+    signing_fee = int(candidate.get("signing_fee_gtex") or candidate.get("salary") or 2000)
+    if marquee_wage_premium:
+        signing_fee = int(signing_fee * 1.5)
+
+    club_acct = ledger.club_account(club_id)
+    bal = ledger.balance(session, club_acct, ledger.GTEX)
+    if bal < signing_fee:
+        raise OwnerError("insufficient_club_cash", 400, f"Club balance {bal} GTX is insufficient for {signing_fee} GTX signing fee.")
+
+    try:
+        ledger.record(
+            session,
+            event_type="staff_hire",
+            source=club_acct,
+            destination=ledger.WORLD_CLUBS,
+            currency=ledger.GTEX,
+            gross=signing_fee,
+            club_id=club_id,
+            user_id=user_id,
+            related_type="staff",
+            related_id=staff_id,
+            memo=f"Hired {candidate['name']} as {candidate.get('role_label', target_role)}",
+        )
+    except ledger.LedgerError as exc:
+        raise OwnerError(str(exc), 402) from exc
+
+    facs = dict(state.facilities_json or {})
+    exec_staff = dict(facs.get("_executive_staff") or {})
+
+    appointed_record = {
+        **candidate,
+        "role": target_role,
+        "appointed_at": datetime.now(timezone.utc).isoformat(),
+        "mood": 80,
+        "loyalty": int(candidate.get("loyalty", 12)),
+        "marquee_wage_premium": marquee_wage_premium,
+    }
+    exec_staff[target_role] = appointed_record
+    facs["_executive_staff"] = exec_staff
+    state.facilities_json = facs
+
+    if target_role == "first_team_manager":
+        state.manager_json = engine.manager_profile(appointed_record)
+        _morale_shift(session, club_id, 3)
+
+    try:
+        from app.models.club_growth import ClubStaffProfile, ClubStaffContract, ClubStaffAssignment
+        from app.club_growth.staff_role_policy import ROLE_FIRST_TEAM_MANAGER
+        market_key = f"staff_{staff_id}"
+        staff_prof = session.scalar(select(ClubStaffProfile).where(ClubStaffProfile.market_key == market_key))
+        if staff_prof is None:
+            staff_prof = ClubStaffProfile(
+                market_key=market_key,
+                display_name=candidate.get("name", "Staff"),
+                staff_type=ROLE_FIRST_TEAM_MANAGER if target_role == "first_team_manager" else target_role,
+                rarity="standard",
+                rating=int(candidate.get("tactical_flexibility") or candidate.get("youth_development") or 70),
+                salary_minor=int(candidate.get("salary") or 0) * 100,
+            )
+            session.add(staff_prof)
+            session.flush()
+    except Exception as exc:
+        logger.debug("Club growth staff synchronization bypassed: %s", exc)
+
+    return {
+        "status": "hired",
+        "staff": appointed_record,
+        "appointed": appointed_record,
+        "signing_fee_paid": signing_fee,
+        "marquee_wage_premium": marquee_wage_premium,
+    }
+
+
+def fire_executive_staff(session: Session, user_id: str, club_id: str, role: str) -> dict[str, Any]:
+    state = require_state(session, club_id, user_id)
+    facs = dict(state.facilities_json or {})
+    exec_staff = dict(facs.get("_executive_staff") or {})
+
+    current = exec_staff.get(role)
+    if not current and role == "first_team_manager":
+        current = state.manager_json or {}
+
+    if not current or current.get("is_default"):
+        raise OwnerError("no_appointed_staff", 400, f"No appointed staff member for role {role}.")
+
+    compensation = 1_500 + int(current.get("loyalty", 10)) * 75
+    try:
+        ledger.record(
+            session,
+            event_type="staff_compensation",
+            source=ledger.club_account(club_id),
+            destination=ledger.WORLD_CLUBS,
+            currency=ledger.GTEX,
+            gross=compensation,
+            club_id=club_id,
+            user_id=user_id,
+            related_type="staff",
+            related_id=current.get("id") or current.get("staff_id"),
+            memo=f"Severance compensation for {current.get('name')}",
+        )
+    except ledger.LedgerError as exc:
+        raise OwnerError(str(exc), 402) from exc
+
+    if role in exec_staff:
+        del exec_staff[role]
+    facs["_executive_staff"] = exec_staff
+    state.facilities_json = facs
+
+    if role == "first_team_manager":
+        state.manager_json = engine.manager_profile(engine.DEFAULT_MANAGER)
+        _morale_shift(session, club_id, -4)
+
+    return {
+        "status": "dismissed",
+        "role": role,
+        "staff_name": current.get("name"),
+        "severance_paid": compensation,
+    }
+
+
+def update_delegation_policy(session: Session, user_id: str, club_id: str, policy: dict[str, Any]) -> dict[str, Any]:
+    state = require_state(session, club_id, user_id)
+    facs = dict(state.facilities_json or {})
+    current_policy = dict(facs.get("_delegation_policy") or {
+        "mode": "balanced",
+        "gm_transfer_autonomy": True,
+        "hoyd_youth_contracts": True,
+        "manager_tactics_autonomy": True,
+    })
+    current_policy.update(policy)
+    facs["_delegation_policy"] = current_policy
+    state.facilities_json = facs
+    return {"delegation_policy": current_policy, **current_policy}
+
+
+def hire_manager(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    manager_id: str,
+    force_marquee_premium: bool = False,
+) -> dict[str, Any]:
+    return hire_executive_staff(
+        session,
+        user_id=user_id,
+        club_id=club_id,
+        staff_id=manager_id,
+        role="first_team_manager",
+        marquee_wage_premium=force_marquee_premium,
+    )
+
+
+def academy_contract(session: Session, user_id: str, club_id: str, player_id: str) -> dict[str, Any]:
+    state = require_state(session, club_id, user_id)
+    player = session.get(OwnerSquadPlayer, player_id)
+    if not player or player.club_id != club_id:
+        raise OwnerError("player_not_found", 404, "Academy player not found in club squad.")
+
+    cost = 1_000
+    club_acct = ledger.club_account(club_id)
+    bal = ledger.balance(session, club_acct, ledger.GTEX)
+    if bal < cost:
+        raise OwnerError("insufficient_club_cash", 400, f"Club balance {bal} GTX is insufficient for {cost} GTX contract upgrade.")
+
+    try:
+        ledger.record(
+            session,
+            event_type="academy_contract_spend",
+            source=club_acct,
+            destination=ledger.WORLD_CLUBS,
+            currency=ledger.GTEX,
+            gross=cost,
+            club_id=club_id,
+            user_id=user_id,
+            related_type="player",
+            related_id=player_id,
+            memo=f"Improved academy contract for {player.name}",
+        )
+    except ledger.LedgerError as exc:
+        raise OwnerError(str(exc), 402) from exc
+
+    player.morale = min(100, player.morale + 12)
+    pers = dict(player.personality_json or {})
+    pers["loyalty"] = min(20, pers.get("loyalty", 10) + 2)
+    pers["transfer_pressure"] = max(0, pers.get("transfer_pressure", 10) - 25)
+    pers["contract_tier"] = "improved_youth"
+    player.personality_json = pers
+    session.flush()
+
+    return {
+        "status": "contract_extended",
+        "player": player_dict(player, session),
+        "cost_gtex": cost,
+        "morale_boost": 12,
+        "loyalty_boost": 2,
+    }
+
+
+def academy_promote(session: Session, user_id: str, club_id: str, player_id: str) -> dict[str, Any]:
+    state = require_state(session, club_id, user_id)
+    player = session.get(OwnerSquadPlayer, player_id)
+    if not player or player.club_id != club_id:
+        raise OwnerError("player_not_found", 404, "Academy player not found in club squad.")
+
+    player.morale = min(100, player.morale + 10)
+    pers = dict(player.personality_json or {})
+    pers["squad_status"] = "senior"
+    pers["promoted_to_senior"] = True
+    player.personality_json = pers
+    session.flush()
+
+    from app.owner_console import storytelling
+    storytelling.record_verified_broadcast_event(
+        session,
+        event_type="academy_promotion",
+        club_id=club_id,
+        owner_user_id=user_id,
+        player_id=player.id,
+        player_name=player.name,
+        item_name=f"{player.name} Senior Squad Promotion",
+        verified_price_gtex=Decimal("0"),
+    )
+
+    return {
+        "status": "promoted",
+        "player": player_dict(player, session),
+        "squad_status": "senior",
+        "morale_boost": 10,
+    }
+
+
+def pledge_win_bonus(session: Session, user_id: str, club_id: str, amount_gtex: int, note: str = "") -> dict[str, Any]:
+    state = require_state(session, club_id, user_id)
+    amt = int(amount_gtex)
+    if amt < 100 or amt > 25_000:
+        raise OwnerError("invalid_bonus_amount", 400, "Win bonus must be between 100 and 25,000 GTEX Coin.")
+
+    club_acct = ledger.club_account(club_id)
+    bal = ledger.balance(session, club_acct, ledger.GTEX)
+    if bal < amt:
+        raise OwnerError("insufficient_club_cash", 400, f"Club balance {bal} GTX is insufficient to pledge {amt} GTX bonus.")
+
+    facs = dict(state.facilities_json or {})
+    facs["_pledged_win_bonus_gtex"] = amt
+    state.facilities_json = facs
+
+    _morale_shift(session, club_id, 8)
+    if state.manager_json:
+        mgr = dict(state.manager_json)
+        mgr["mood"] = min(100, mgr.get("mood", 70) + 5)
+        state.manager_json = mgr
+
+    return {
+        "club_id": club_id,
+        "pledged_win_bonus_gtex": amt,
+        "squad_morale_boost": 8,
+        "manager_mood_boost": 5,
+        "message": f"Pledged {amt:,} GTEX win bonus for the upcoming match.",
+    }
+
+
+def conduct_press_conference(session: Session, user_id: str, club_id: str, tone: str, statement: str = "") -> dict[str, Any]:
+    state = require_state(session, club_id, user_id)
+    valid_tones = {"praise_squad", "demand_more", "defend_coach", "flex_ambition"}
+    if tone not in valid_tones:
+        raise OwnerError("invalid_press_conference_tone", 400, f"Tone must be one of: {', '.join(sorted(valid_tones))}.")
+
+    squad_morale_delta = 0
+    manager_mood_delta = 0
+    manager_loyalty_delta = 0
+    prestige_delta = 0
+    fans_delta = 0
+
+    if tone == "praise_squad":
+        squad_morale_delta = 5
+        manager_mood_delta = 3
+        fans_delta = 10
+    elif tone == "demand_more":
+        squad_morale_delta = -3
+        manager_mood_delta = 4
+        manager_loyalty_delta = 2
+        fans_delta = 20
+    elif tone == "defend_coach":
+        manager_mood_delta = 8
+        manager_loyalty_delta = 4
+        squad_morale_delta = 2
+    elif tone == "flex_ambition":
+        prestige_delta = 1
+        fans_delta = 30
+        manager_mood_delta = 3
+        squad_morale_delta = 3
+
+    if squad_morale_delta:
+        _morale_shift(session, club_id, squad_morale_delta)
+
+    if state.manager_json:
+        mgr = dict(state.manager_json)
+        if manager_mood_delta:
+            mgr["mood"] = int(engine.clamp(mgr.get("mood", 70) + manager_mood_delta, 0, 100))
+        if manager_loyalty_delta:
+            mgr["loyalty"] = int(engine.clamp(mgr.get("loyalty", 12) + manager_loyalty_delta, 1, 20))
+        state.manager_json = mgr
+
+    if prestige_delta:
+        state.prestige = min(100, state.prestige + prestige_delta)
+        sync_club_prestige_to_reputation(session, club_id, state.prestige)
+    if fans_delta:
+        state.fans = max(100, state.fans + fans_delta)
+
+    from app.owner_console import storytelling
+    broadcast = storytelling.record_verified_broadcast_event(
+        session,
+        event_type="press_conference",
+        club_id=club_id,
+        owner_user_id=user_id,
+        item_name=f"Owner Press Conference ({tone})",
+        item_model=statement[:80] if statement else None,
+        verified_price_gtex=Decimal("0"),
+    )
+
+    return {
+        "club_id": club_id,
+        "tone": tone,
+        "statement": statement,
+        "squad_morale_delta": squad_morale_delta,
+        "manager_mood_delta": manager_mood_delta,
+        "manager_loyalty_delta": manager_loyalty_delta,
+        "prestige_delta": prestige_delta,
+        "broadcast_event": storytelling.broadcast_dict(broadcast) if broadcast else None,
+    }

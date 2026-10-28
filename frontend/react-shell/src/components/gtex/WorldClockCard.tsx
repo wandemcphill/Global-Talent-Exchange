@@ -98,10 +98,17 @@ export function WorldClockView({ state }: { state: WorldClockViewState }) {
             </div>
             <div>
               <dt className="uppercase tracking-wider text-slate-400">Current season</dt>
-              <dd className="mt-1 flex items-start gap-1.5 text-sm text-slate-300" data-testid="world-clock-season-unavailable">
-                <CalendarDays size={14} className="mt-0.5 shrink-0 text-slate-400" aria-hidden="true" />
-                <span>Not shown: awaiting the approved season calendar.</span>
-              </dd>
+              {state.clock.currentSeasonLabel ? (
+                <dd className="gx-mono mt-1 text-sm font-bold text-emerald-400" data-testid="world-clock-season-label">
+                  {state.clock.currentSeasonLabel}
+                  {typeof state.clock.gtexYearsRunning === "number" && ` (Year ${state.clock.gtexYearsRunning})`}
+                </dd>
+              ) : (
+                <dd className="mt-1 flex items-start gap-1.5 text-sm text-slate-300" data-testid="world-clock-season-unavailable">
+                  <CalendarDays size={14} className="mt-0.5 shrink-0 text-slate-400" aria-hidden="true" />
+                  <span>Not shown: awaiting the approved season calendar.</span>
+                </dd>
+              )}
             </div>
           </dl>
 

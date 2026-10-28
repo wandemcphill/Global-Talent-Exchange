@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gte_frontend/features/club_growth_redesign/club_growth_redesign.dart';
 import 'package:gte_frontend/features/club_lifecycle_redesign/club_lifecycle_redesign.dart';
+import 'package:gte_frontend/features/owner_console/widgets/gtex_boardroom_delegation_panel.dart';
 import 'package:gte_frontend/features/transfer_center/presentation/gtex_transfers_hub_panel.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
@@ -2183,6 +2184,30 @@ class _BoardroomExecutivePanel extends StatelessWidget {
                 mode: GtexDelegationPolicyMode.approvalRequired,
                 capLabel: 'Scouting & Academy Intake',
               ),
+            ],
+          ),
+        ),
+        const SizedBox(height: GtexSpacing.md),
+        const GtexBoardroomDelegationPanel(
+          clubLegacyEnabled: true,
+          gmHired: true,
+        ),
+        const SizedBox(height: GtexSpacing.md),
+        GtexPanel(
+          key: const Key('gtex-boardroom-executive-hierarchy'),
+          title: 'Executive & Football Staff Hierarchy',
+          subtitle:
+              'General Manager (Business & Transfers) · First-Team Manager (Tactics & Lineup) · HOYD (Academy & Readiness) · Chief Scout · Medical Director',
+          accent: GtexColors.cyan,
+          child: const Wrap(
+            spacing: GtexSpacing.sm,
+            runSpacing: GtexSpacing.sm,
+            children: <Widget>[
+              GtexStatusChip(label: 'GM: Commercial & Transfer Autonomy', color: GtexColors.gold),
+              GtexStatusChip(label: 'First-Team Manager: Squad & Matchday', color: GtexColors.pitch),
+              GtexStatusChip(label: 'HOYD: Youth Intake & Readiness Sign-Off', color: GtexColors.cyan),
+              GtexStatusChip(label: 'Chief Scout: Global Regen Network', color: GtexColors.purple),
+              GtexStatusChip(label: 'Medical Director: Recovery & Fitness', color: GtexColors.mint),
             ],
           ),
         ),

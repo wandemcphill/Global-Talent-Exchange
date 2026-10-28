@@ -16,6 +16,9 @@ FAN = "FAN_COIN"
 PLATFORM_FEES = "platform:fees"
 PLATFORM_GRANTS = "platform:grants"
 PLATFORM_SPONSORS = "platform:sponsor_pool"
+TV_BROADCAST_POOL = "platform:tv_pool"
+COMPETITION_PRIZE_POOL = "platform:competition_pool"
+JACKPOT_ECOSYSTEM_POOL = "platform:jackpot_pool"
 WORLD_MARKET = "world:market"
 WORLD_CLUBS = "world:clubs"
 PAYSTACK = "external:paystack"
@@ -402,3 +405,73 @@ def pending_withdrawals(session: Session, user_id: str) -> list[OwnerWithdrawal]
             .order_by(OwnerWithdrawal.created_at.desc())
         ).all()
     )
+
+def ecosystem_waterfall_summary(session: Session, club_id: str | None = None) -> dict[str, Any]:
+    from typing import Any
+    total_fees_dec = session.scalar(
+        select(func.coalesce(func.sum(LedgerEvent.platform_fee), 0))
+        .where(LedgerEvent.currency == GTEX, LedgerEvent.status == "completed")
+    ) or Decimal("0")
+    total_fees = float(total_fees_dec)
+
+    tv_pool = round(50_000.0 + total_fees * 0.40, 2)
+    comp_pool = round(45_000.0 + total_fees * 0.35, 2)
+    jackpot_pool = round(30_000.0 + total_fees * 0.25, 2)
+
+    club_tv_rev = 0.0
+    club_grants = 0.0
+    club_prizes = 0.0
+    club_matchday = 0.0
+
+    if club_id:
+        club_tv_rev = float(session.scalar(
+            select(func.coalesce(func.sum(LedgerEvent.gross_amount), 0))
+            .where(
+                LedgerEvent.club_id == club_id,
+                LedgerEvent.status == "completed",
+                LedgerEvent.event_type.in_(("tv_broadcast_revenue", "tv_revenue"))
+            )
+        ) or 0)
+        club_grants = float(session.scalar(
+            select(func.coalesce(func.sum(LedgerEvent.gross_amount), 0))
+            .where(
+                LedgerEvent.club_id == club_id,
+                LedgerEvent.status == "completed",
+                LedgerEvent.event_type.in_(("competition_entry_grant", "participation_grant"))
+            )
+        ) or 0)
+        club_prizes = float(session.scalar(
+            select(func.coalesce(func.sum(LedgerEvent.gross_amount), 0))
+            .where(
+                LedgerEvent.club_id == club_id,
+                LedgerEvent.status == "completed",
+                LedgerEvent.event_type.in_(("competition_prize", "match_prize", "competition_reward"))
+            )
+        ) or 0)
+        club_matchday = float(session.scalar(
+            select(func.coalesce(func.sum(LedgerEvent.gross_amount), 0))
+            .where(
+                LedgerEvent.club_id == club_id,
+                LedgerEvent.status == "completed",
+                LedgerEvent.event_type.in_(("gate_receipts", "matchday_revenue", "match_ticket_revenue"))
+            )
+        ) or 0)
+
+    return {
+        "club_id": club_id,
+        "total_platform_fees_gtex": total_fees,
+        "tv_broadcast_pool_gtex": tv_pool,
+        "competition_prize_pool_gtex": comp_pool,
+        "jackpot_ecosystem_pool_gtex": jackpot_pool,
+        "allocation_breakdown": {
+            "tv_broadcast_share_pct": 40.0,
+            "competition_prize_share_pct": 35.0,
+            "jackpot_ecosystem_share_pct": 25.0,
+        },
+        "club_tv_revenue_gtex": club_tv_rev,
+        "club_competition_grants_gtex": club_grants,
+        "club_prize_winnings_gtex": club_prizes,
+        "club_matchday_revenue_gtex": club_matchday,
+        "club_total_recycled_revenue_gtex": round(club_tv_rev + club_grants + club_prizes + club_matchday, 2),
+    }
+

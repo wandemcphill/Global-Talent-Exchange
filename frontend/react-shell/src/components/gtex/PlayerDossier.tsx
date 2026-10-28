@@ -590,12 +590,74 @@ export function PlayerDossier({ playerId, onClose, onMakeOffer, onAddToWatchlist
             {/* Attributes Breakdown */}
             <div className="rounded-md border border-white/10 bg-slate-900/60 p-4 space-y-3">
               <p className="gx-eyebrow text-slate-400">Core Attributes & Radar</p>
+              {(() => {
+                const attrs = p.attributes || p.core_attributes || cardInfo.attributes || regenData?.attributes;
+                if (attrs && typeof attrs === "object" && Object.keys(attrs).length > 0) {
+                  return (
+                    <div className="space-y-2">
+                      {Object.entries(attrs).map(([key, val]: any) => (
+                        <TraitBar key={key} label={key.replace(/_/g, " ").toUpperCase()} value={Number(val) || 0} max={99} />
+                      ))}
+                    </div>
+                  );
+                }
+                return (
+                  <div className="rounded border border-dashed border-white/10 bg-black/30 p-3 text-center text-xs text-slate-400">
+                    Detailed attribute radar pending technical staff assessment. Overall rating: <span className="text-emerald-400 font-bold">{rating}</span>.
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Living Star Character & Agency Dossier */}
+            <div className="rounded-md border border-purple-500/30 bg-purple-950/20 p-4 space-y-4" data-testid="living-star-agency-dossier">
+              <div className="flex items-center justify-between border-b border-purple-500/20 pb-2">
+                <div className="flex items-center gap-2 text-purple-300">
+                  <Sparkles size={16} />
+                  <span className="text-xs font-black uppercase tracking-wider">Living Star Character & Agency</span>
+                </div>
+                <span className="rounded bg-purple-500/20 px-2 py-0.5 text-[10px] font-bold text-purple-200">
+                  {p.archetype || p.personality?.archetype || cardInfo.archetype || (potential - rating >= 12 ? "Generational Prodigy" : "Technical Playmaker")}
+                </span>
+              </div>
+
+              {/* Inner Monologue */}
+              <div className="rounded-lg border border-purple-500/20 bg-black/40 p-3">
+                <p className="text-[9px] font-black uppercase tracking-wider text-purple-400">Inner Monologue</p>
+                <p className="mt-1 text-xs italic text-purple-100">
+                  "{p.inner_monologue || p.thoughts || p.personality?.inner_monologue || "I am staying disciplined every session. My legacy will be defined on the continental stage."}"
+                </p>
+              </div>
+
+              {/* Decision Weights */}
               <div className="space-y-2">
-                <TraitBar label="Pace" value={Math.min(99, Math.round(rating * 1.05))} max={99} />
-                <TraitBar label="Technical" value={Math.min(99, Math.round(rating * 0.98))} max={99} />
-                <TraitBar label="Tactical Vision" value={Math.min(99, Math.round(rating * 1.02))} max={99} />
-                <TraitBar label="Physicality" value={Math.min(99, Math.round(rating * 0.94))} max={99} />
-                <TraitBar label="Mentality / Composure" value={Math.min(99, Math.round(rating * 1.01))} max={99} />
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Autonomous Decision Weights</p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <TraitBar label="Money / Wage Pull" value={p.decision_weights?.money ?? p.personality?.ambition ?? 65} max={100} />
+                  <TraitBar label="Legacy / Prestige" value={p.decision_weights?.legacy ?? p.personality?.marketability ?? 80} max={100} />
+                  <TraitBar label="First-Team Minutes" value={p.decision_weights?.playing_time ?? (100 - (p.personality?.adaptability ?? 30))} max={100} />
+                  <TraitBar label="Club Standing & Vision" value={p.decision_weights?.prestige ?? p.personality?.growth_responsiveness ?? 75} max={100} />
+                </div>
+              </div>
+
+              {/* HOYD & Manager Readiness Assessment */}
+              <div className="rounded-lg border border-white/5 bg-black/40 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-300">HOYD Senior Readiness</span>
+                  <span className="gx-mono text-xs font-bold text-emerald-400">
+                    {p.readiness_score ?? (rating >= 68 ? 92 : rating >= 62 ? 76 : 54)}%
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-500 to-cyan-400"
+                    style={{ width: `${p.readiness_score ?? (rating >= 68 ? 92 : rating >= 62 ? 76 : 54)}%` }}
+                  />
+                </div>
+                <p className="text-[11px] text-slate-300">
+                  <b className="text-purple-300">Staff Verdict: </b>
+                  {p.hoyd_verdict || (potential >= 82 ? "Prime candidate for senior promotion and high-leverage fixtures." : "Conditioning and tactical tutoring recommended before top-flight minutes.")}
+                </p>
               </div>
             </div>
 

@@ -260,6 +260,7 @@ def match_dict(m: OwnerMatch, full: bool = False) -> dict[str, Any]:
         "away_goals": m.away_goals,
         "played_at": m.played_at.isoformat() if m.played_at else None,
     }
+    data["tv_revenue"] = 250 + 50 * 8
     if full:
         data["events"] = m.events_json
         data["narrative"] = m.narrative_json
@@ -563,6 +564,24 @@ def enter_competition(session: Session, user_id: str, competition_id: str, club_
     if state.stage == "competition":
         state.stage = "active"
     session.flush()
+
+    try:
+        ledger.record(
+            session,
+            event_type="competition_entry_grant",
+            source=ledger.COMPETITION_PRIZE_POOL,
+            destination=ledger.club_account(club_id),
+            currency=ledger.GTEX,
+            gross=500,
+            club_id=club_id,
+            user_id=user_id,
+            related_type="competition",
+            related_id=comp.id,
+            memo=f"Participation grant for entering {comp.name}",
+        )
+    except Exception as exc:
+        logger.warning("competition_entry_grant failed: %s", exc)
+
     return entry
 
 
@@ -770,6 +789,54 @@ def _post_match_club(
         deal.matches_remaining -= 1
         if deal.matches_remaining <= 0:
             deal.status = "completed"
+
+    # TV Broadcast Revenue
+    tv_rev = 250 + state.prestige * 8
+    try:
+        ledger.record(
+            session,
+            event_type="tv_broadcast_revenue",
+            source=ledger.TV_BROADCAST_POOL,
+            destination=ledger.club_account(state.club_id),
+            currency=ledger.GTEX,
+            gross=tv_rev,
+            club_id=state.club_id,
+            user_id=state.owner_user_id,
+            related_type="match",
+            related_id=match.id,
+            memo=f"TV broadcast distribution vs {match.away_name if is_home else match.home_name}",
+        )
+        notes.append(f"TV revenue {tv_rev:,}")
+    except Exception as exc:
+        logger.warning("tv_broadcast_revenue recording failed: %s", exc)
+
+    # Settle pledged pre-match win bonus if victorious
+    if result > 0:
+        facs = dict(state.facilities_json or {})
+        pledged_bonus = int(facs.get("_pledged_win_bonus_gtex", 0))
+        if pledged_bonus > 0:
+            facs["_pledged_win_bonus_gtex"] = 0
+            state.facilities_json = facs
+            try:
+                ledger.record(
+                    session,
+                    event_type="owner_win_bonus_payout",
+                    source=ledger.club_account(state.club_id),
+                    destination=ledger.WORLD_CLUBS,
+                    currency=ledger.GTEX,
+                    gross=pledged_bonus,
+                    club_id=state.club_id,
+                    user_id=state.owner_user_id,
+                    related_type="match",
+                    related_id=match.id,
+                    memo="Pledged win bonus paid for victory",
+                )
+                for p in squad(session, state.club_id):
+                    p.morale = int(engine.clamp(p.morale + 4, 0, 100))
+                notes.append(f"Pledged win bonus paid {pledged_bonus:,}")
+            except Exception as exc:
+                logger.warning("pledged_win_bonus payout failed: %s", exc)
+
     return notes
 
 

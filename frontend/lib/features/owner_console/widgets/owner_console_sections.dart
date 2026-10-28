@@ -17,6 +17,49 @@ const String _nationalPath = '/national-team';
 
 String _gtx(double v) => '${v.toStringAsFixed(v.abs() >= 100 ? 0 : 2)} GTX';
 
+double _numVal(Object? v) =>
+    v is num ? v.toDouble() : double.tryParse('${v ?? ''}') ?? 0;
+
+BriefingViewState _briefingStateFromControlCenter(
+  OwnerControlCenter d,
+  String? clubId,
+) {
+  final Map<String, dynamic> raw = d.dailyBriefing;
+  if (raw.isEmpty) {
+    return const BriefingUnavailable();
+  }
+  final List<BriefingEvent> events = <BriefingEvent>[];
+  final Object? sections = raw['sections'];
+  if (sections is List) {
+    for (int i = 0; i < sections.length; i++) {
+      final Object? item = sections[i];
+      if (item is Map) {
+        final String role = '${item['role'] ?? 'Executive'}';
+        final String sender = '${item['sender'] ?? role}';
+        final String title = '${item['title'] ?? 'Briefing'}';
+        final String summary = '${item['summary'] ?? ''}';
+        events.add(
+          BriefingEvent(
+            eventId: 'sec-$i',
+            headline: '$role ($sender): $title',
+            occurredAt: '${raw['created_at'] ?? raw['generated_at'] ?? 'Today'}',
+            detail: summary,
+          ),
+        );
+      }
+    }
+  }
+  return BriefingReady(
+    OwnerBriefing(
+      briefingId: '${raw['id'] ?? 'daily-briefing'}',
+      clubId: '${raw['club_id'] ?? clubId ?? 'club'}',
+      worldDate: 'Day ${raw['world_day'] ?? 1}',
+      events: events,
+      explanation: '${raw['summary'] ?? raw['headline'] ?? ''}',
+    ),
+  );
+}
+
 /// Where a decision is resolved, by inbox item kind.
 String decisionRoute(String kind) {
   final String k = kind.toLowerCase();
@@ -571,11 +614,28 @@ class ControlCenterSection extends StatelessWidget {
           GtexWorldClockPanel(
             load: r is OwnerWorldClockGateway ? (r as OwnerWorldClockGateway).fetchWorldClock : null,
           ),
-          // No persisted briefing contract is published yet; see gtex_world_clock_models.dart.
           GtexOwnerBriefingPanel(
-            state: const BriefingUnavailable(),
+            state: _briefingStateFromControlCenter(d, clubId),
             onNavigate: onNavigate,
           ),
+          if (d.ecosystemWaterfall.isNotEmpty)
+            GtexPanel(
+              key: const Key('owner-console-ecosystem-waterfall'),
+              title: 'Ecosystem Revenue & Broadcast Waterfall',
+              subtitle: '40% TV Broadcast · 35% Competition Grants · 25% Global Jackpot',
+              accent: GtexColors.gold,
+              child: Wrap(
+                spacing: GtexSpacing.sm,
+                runSpacing: GtexSpacing.sm,
+                children: <Widget>[
+                  _Stat('TV Broadcast Pool', _gtx(_numVal(d.ecosystemWaterfall['tv_broadcast_pool_gtex']))),
+                  _Stat('Competition Pool', _gtx(_numVal(d.ecosystemWaterfall['competition_prize_pool_gtex']))),
+                  _Stat('Jackpot Pool', _gtx(_numVal(d.ecosystemWaterfall['jackpot_ecosystem_pool_gtex']))),
+                  _Stat('Club TV Revenue', _gtx(_numVal(d.ecosystemWaterfall['club_tv_revenue_gtex']))),
+                  _Stat('Entry Grants', _gtx(_numVal(d.ecosystemWaterfall['club_competition_grants_gtex']))),
+                ],
+              ),
+            ),
           GtexPanel(
             key: const Key('owner-console-health'),
             title: 'Live Club Health',

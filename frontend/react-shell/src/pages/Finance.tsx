@@ -1,7 +1,8 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ShieldAlert } from "lucide-react";
+import { Flame, ShieldAlert, Sparkles, Tv, Trophy } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { publicUrl } from "@/lib/publicPath";
 import { fmt, label, useRefreshOwner } from "@/lib/owner";
@@ -186,6 +187,25 @@ export default function Finance() {
       <PageHeader eyebrow="Finance" title="Money, clearly labelled" sub="Every total on this page is derived from the unified ledger: gross, platform fee and net for every event." />
       <div className="grid gap-6 lg:grid-cols-12">
         <Balances w={data.wallet} />
+        {data.ecosystem_waterfall && (
+          <Panel
+            eyebrow="Ecosystem Revenue Recycling · Giving Back to Club Owners"
+            title="TV Broadcast, Competition Grants & Jackpot Waterfall"
+            className="lg:col-span-12"
+            testid="finance-ecosystem-waterfall"
+          >
+            <div className="grid gap-4 md:grid-cols-4">
+              <Stat label="40% TV Broadcast Pool" value={<Coin amount={data.ecosystem_waterfall.tv_broadcast_pool_gtex ?? 0} />} />
+              <Stat label="35% Competition Prize Pool" value={<Coin amount={data.ecosystem_waterfall.competition_prize_pool_gtex ?? 0} />} />
+              <Stat label="25% Global Jackpot Pool" value={<Coin amount={data.ecosystem_waterfall.jackpot_ecosystem_pool_gtex ?? 0} />} />
+              <Stat label="Your Club TV & Grant Earnings" value={<Coin amount={Number(data.ecosystem_waterfall.club_tv_revenue_gtex || 0) + Number(data.ecosystem_waterfall.club_competition_grants_gtex || 0)} />} tone="good" />
+            </div>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+              <span>Platform fees from transfers, regen sales, and gifting rakes recycle back into TV rights, competition grants, and the GTEX Jackpot.</span>
+              <Link to="/app/jackpot" className="text-amber-300 hover:underline font-semibold">Open Global Jackpot Hub →</Link>
+            </div>
+          </Panel>
+        )}
         {data.clubs.map((c: any) => (
           <Panel key={c.club_id} eyebrow="Club treasury" title={c.club_name} className="lg:col-span-6" testid={`treasury-${c.club_id}`}>
             <div className="grid grid-cols-3 gap-4">

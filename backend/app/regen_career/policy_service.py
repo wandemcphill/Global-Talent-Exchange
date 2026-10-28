@@ -26,6 +26,30 @@ from app.regen_universe.models import RegenSeason
 _SEASON_NUMBER_RE = re.compile(r"(?:season|s)[ _-]?(\d+)$", re.IGNORECASE)
 
 
+class RegenLineagePolicyError(ValueError):
+    """Raised when lineage policy invariants fail."""
+    pass
+
+
+def _extract_season_start_year(season_label: str | None, default_year: int = 2026) -> int:
+    """Safely extract a season starting year from arbitrary season labels without failing."""
+    if not season_label:
+        return default_year
+    text = str(season_label).strip()
+    match = re.search(r"\b(20\d\d)\b", text)
+    if match:
+        return int(match.group(1))
+    digits = re.findall(r"\d+", text)
+    if digits:
+        for d in digits:
+            v = int(d)
+            if 1900 <= v <= 2100:
+                return v
+        val = int(digits[0])
+        return default_year + max(0, val - 1)
+    return default_year
+
+
 @dataclass(frozen=True, slots=True)
 class RegenCareerPolicyContext:
     player_id: str
@@ -212,4 +236,4 @@ class RegenCareerPolicyService:
         return max(0.0, min(1.0, (ambition * 0.35) + (resilience * 0.35) + (loyalty * 0.30)))
 
 
-__all__ = ["RegenCareerPolicyContext", "RegenCareerPolicyService"]
+__all__ = ["RegenCareerPolicyContext", "RegenCareerPolicyService", "RegenLineagePolicyError", "_extract_season_start_year"]

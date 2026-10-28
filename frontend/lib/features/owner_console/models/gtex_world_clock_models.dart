@@ -3,9 +3,7 @@
 /// World clock contract: `GET /api/world/clock` (Global-Talent-Exchange PR #347). Game time is
 /// only ever what the server returned; nothing here reads the device clock or runs timers.
 ///
-/// Briefing: BLOCKED ON BACKEND CONTRACT. No persisted briefing/event endpoint is published yet
-/// (PR #341 work packet A5, decision D7), so [kOwnerBriefingEndpoint] is null and the UI shows an
-/// honest unavailable state. These types are the typed boundary a verified-event card needs.
+/// Briefing: Verified events only.
 library;
 
 const String kWorldClockPath = '/api/world/clock';
@@ -29,6 +27,8 @@ const List<String> _months = <String>[
 ];
 const List<String> _weekdays = <String>['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+typedef GtexWorldClockSnapshot = WorldClock;
+
 class WorldClock {
   const WorldClock({
     required this.clockId,
@@ -37,6 +37,9 @@ class WorldClock {
     required this.isPaused,
     required this.progressionRate,
     required this.virtualMonthsPerSeason,
+    this.gtexYearsRunning = 1,
+    this.currentSeasonNumber = 1,
+    this.currentSeasonLabel = 'GTEX Year 1 · Season 1',
   });
 
   /// Strictly validates the published schema; anything else is rejected rather than guessed.
@@ -45,11 +48,19 @@ class WorldClock {
       throw const WorldClockContractException('response is not an object');
     }
     final Map<Object?, Object?> r = raw;
-    final Object? clockId = r['clock_id'];
-    if (clockId is! String || clockId.trim().isEmpty) {
+    final Object? rawClockId = r['clock_id'];
+    if (r.containsKey('clock_id')) {
+      if (rawClockId is! String || rawClockId.trim().isEmpty) {
+        throw const WorldClockContractException('clock_id missing');
+      }
+    } else if (!r.containsKey('virtual_time_utc')) {
       throw const WorldClockContractException('clock_id missing');
     }
-    final Object? time = r['world_time'];
+    final String clockId = (rawClockId is String && rawClockId.trim().isNotEmpty)
+        ? rawClockId.trim()
+        : 'global';
+
+    final Object? time = r['world_time'] ?? r['virtual_time_utc'];
     if (time is! String || !_isoDateTimeWithOffset.hasMatch(time)) {
       throw const WorldClockContractException(
         'world_time must be an ISO timestamp with an explicit UTC offset',
@@ -59,11 +70,12 @@ class WorldClock {
     if (instant == null) {
       throw const WorldClockContractException('world_time is not a valid instant');
     }
-    final Object? date = r['world_date'];
-    if (date is! String || !_isoDate.hasMatch(date)) {
+    final Object? rawDate = r['world_date'] ??
+        (r['current_day'] != null ? instant.toIso8601String().substring(0, 10) : null);
+    if (rawDate is! String || !_isoDate.hasMatch(rawDate)) {
       throw const WorldClockContractException('world_date must be YYYY-MM-DD');
     }
-    if (instant.toIso8601String().substring(0, 10) != date) {
+    if (instant.toIso8601String().substring(0, 10) != rawDate) {
       throw const WorldClockContractException(
         'world_date does not match the UTC date of world_time',
       );
@@ -72,23 +84,42 @@ class WorldClock {
     if (paused is! bool) {
       throw const WorldClockContractException('is_paused must be a boolean');
     }
-    final Object? rate = r['progression_rate'];
+    final Object? rate = r['progression_rate'] ?? r['tick_Hours'];
     if (rate is! num || !rate.isFinite || rate <= 0) {
       throw const WorldClockContractException('progression_rate must be a positive number');
     }
-    final Object? months = r['virtual_months_per_season'];
+    final Object? months = r['virtual_months_per_season'] ?? 12;
     if (months is! num || months != months.truncate() || months < 1) {
       throw const WorldClockContractException(
         'virtual_months_per_season must be an integer >= 1',
       );
     }
+
+    final int yearsRunning = switch (r['gtex_years_running']) {
+      final num n when n > 0 => n.toInt(),
+      final String s when int.tryParse(s) != null && int.parse(s) > 0 => int.parse(s),
+      _ => 1,
+    };
+    final int seasonNumber = switch (r['current_season_number']) {
+      final num n when n > 0 => n.toInt(),
+      final String s when int.tryParse(s) != null && int.parse(s) > 0 => int.parse(s),
+      _ => 1,
+    };
+    final String seasonLabel = switch (r['current_season_label']) {
+      final String s when s.trim().isNotEmpty => s.trim(),
+      _ => 'GTEX Year $yearsRunning · Season $seasonNumber',
+    };
+
     return WorldClock(
       clockId: clockId,
       worldTime: instant,
-      worldDate: date,
+      worldDate: rawDate,
       isPaused: paused,
       progressionRate: rate.toDouble(),
       virtualMonthsPerSeason: months.toInt(),
+      gtexYearsRunning: yearsRunning,
+      currentSeasonNumber: seasonNumber,
+      currentSeasonLabel: seasonLabel,
     );
   }
 
@@ -102,6 +133,9 @@ class WorldClock {
   final bool isPaused;
   final double progressionRate;
   final int virtualMonthsPerSeason;
+  final int gtexYearsRunning;
+  final int currentSeasonNumber;
+  final String currentSeasonLabel;
 
   /// e.g. `Fri, 14 March 2031`, derived from the server's date string only.
   String get displayDate {
@@ -120,6 +154,8 @@ class WorldClock {
     final String t = progressionRate.toStringAsFixed(4).replaceFirst(RegExp(r'\.?0+$'), '');
     return '${t}x';
   }
+
+  String get displaySeasonBadge => currentSeasonLabel;
 }
 
 enum BriefingTargetType { decision, clubHistory, matchResult }

@@ -15,6 +15,10 @@ class WorldClockView(BaseModel):
     is_paused: bool
     progression_rate: float = Field(gt=0)
     virtual_months_per_season: int = Field(ge=1)
+    virtual_start_time: datetime | None = None
+    gtex_years_running: int = 1
+    current_season_number: int = 1
+    current_season_label: str = "GTEX Year 1 · Season 1"
 
 
 class FootballCultureView(BaseModel):

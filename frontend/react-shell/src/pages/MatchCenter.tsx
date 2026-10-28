@@ -27,7 +27,7 @@ import {
   Zap,
 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
-import { useRefreshOwner } from "@/lib/owner";
+import { useActiveClub, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Loading, Panel } from "@/components/gtex/ui";
 
 const GIFTS = [
@@ -521,7 +521,7 @@ function TacticalHUD({
   const dispatchInstruction = async () => {
     setSubmitting(true);
     try {
-      await api.post(`/api/matches/${matchId}/tactics`, {
+      await api.post(`/matches/${matchId}/tactics`, {
         press_intensity: press,
         defensive_line: line,
         tempo: tempo,
@@ -694,7 +694,7 @@ function PreMatchBriefing({ match, preMatch, matchId }: { match: any; preMatch?:
 
   const { data: initialPreds } = useQuery({
     queryKey: ["predictions", matchId],
-    queryFn: async () => (await api.get(`/api/matches/${matchId}/predictions`)).data,
+    queryFn: async () => (await api.get(`/matches/${matchId}/predictions`)).data,
     initialData: preMatch?.fan_predictions,
     enabled: !!matchId,
   });
@@ -704,7 +704,7 @@ function PreMatchBriefing({ match, preMatch, matchId }: { match: any; preMatch?:
 
   const handleVote = async (choiceKey: "home" | "draw" | "away", optLabel: string) => {
     try {
-      const res = await api.post(`/api/matches/${matchId}/predictions`, { choice: choiceKey });
+      const res = await api.post(`/matches/${matchId}/predictions`, { choice: choiceKey });
       setPollVote(optLabel);
       setPredictionData(res.data);
       toast.success(`Vote logged: ${optLabel}`);
@@ -907,6 +907,7 @@ function PostMatchAnalytics({
   matchId,
   homeScore,
   awayScore,
+  clubId,
 }: {
   match: any;
   postMatch?: any;
@@ -914,8 +915,10 @@ function PostMatchAnalytics({
   matchId: string;
   homeScore: number;
   awayScore: number;
+  clubId?: string;
 }) {
   const [pressAnswers, setPressAnswers] = useState<Record<number, number>>({});
+  const [submittingPress, setSubmittingPress] = useState(false);
   const [rewardsClaimed, setRewardsClaimed] = useState(false);
   const [claimingRewards, setClaimingRewards] = useState(false);
 
@@ -938,7 +941,7 @@ function PostMatchAnalytics({
   const claimRewards = async () => {
     setClaimingRewards(true);
     try {
-      const res = await api.post(`/api/matches/${matchId}/rewards/claim`);
+      const res = await api.post(`/matches/${matchId}/rewards/claim`);
       setRewardsClaimed(true);
       if (res.data?.status === "already_claimed") {
         toast.info("Matchday settlement rewards were already claimed for this fixture.");
@@ -963,9 +966,9 @@ function PostMatchAnalytics({
       journalist: "Samir Croft",
       q: "Manager, your side adapted rapidly during high-intensity sequences. What was your key tactical directive?",
       opts: [
-        { text: '"We instructed our fullbacks to invert and create central superiority."', effect: "+15 TACTICS · +10 BOARD" },
-        { text: '"The squad adapted to the tempo flawlessly. Pure collective discipline."', effect: "+20 MORALE · +10 CHEMISTRY" },
-        { text: '"We remained pragmatic and exploited defensive transition errors."', effect: "+12 PRAGMATISM" },
+        { text: '"We instructed our fullbacks to invert and create central superiority."', effect: "+15 TACTICS · +10 BOARD", tone: "tactical" },
+        { text: '"The squad adapted to the tempo flawlessly. Pure collective discipline."', effect: "+20 MORALE · +10 CHEMISTRY", tone: "inspirational" },
+        { text: '"We remained pragmatic and exploited defensive transition errors."', effect: "+12 PRAGMATISM", tone: "pragmatic" },
       ],
     },
     {
@@ -973,12 +976,33 @@ function PostMatchAnalytics({
       journalist: "Laura Evans",
       q: "The fans generated a tremendous roar. How crucial was that stadium atmosphere today?",
       opts: [
-        { text: '"This result belongs to our supporters. They pushed us across the line."', effect: "+25 FAN APPROVAL" },
-        { text: '"Professional job. We enjoy tonight and resume work at 8 AM tomorrow."', effect: "+15 STANDARDS" },
-        { text: '"Every match demands this intensity. We are raising the bar."', effect: "+18 DETERMINATION" },
+        { text: '"This result belongs to our supporters. They pushed us across the line."', effect: "+25 FAN APPROVAL", tone: "fan_focused" },
+        { text: '"Professional job. We enjoy tonight and resume work at 8 AM tomorrow."', effect: "+15 STANDARDS", tone: "disciplined" },
+        { text: '"Every match demands this intensity. We are raising the bar."', effect: "+18 DETERMINATION", tone: "ambitious" },
       ],
     },
   ];
+
+  const submitPressConference = async (qIdx: number, optIdx: number, opt: any) => {
+    setPressAnswers((prev) => ({ ...prev, [qIdx]: optIdx }));
+    setSubmittingPress(true);
+    try {
+      if (clubId) {
+        await api.post(`/owner/clubs/${clubId}/press-conference`, {
+          match_id: matchId,
+          statement: opt.text,
+          tone: opt.tone || "confident",
+        });
+        toast.success(`Published to GTEX Wire: ${opt.effect}`);
+      } else {
+        toast.success(`Statement noted: ${opt.text}`);
+      }
+    } catch (err: any) {
+      toast.error(errMsg(err));
+    } finally {
+      setSubmittingPress(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -1075,10 +1099,8 @@ function PostMatchAnalytics({
                 {q.opts.map((opt, optIdx) => (
                   <button
                     key={optIdx}
-                    onClick={() => {
-                      setPressAnswers((prev) => ({ ...prev, [qIdx]: optIdx }));
-                      toast.info("Response selected for preview only; no manager effects were applied.");
-                    }}
+                    disabled={submittingPress}
+                    onClick={() => submitPressConference(qIdx, optIdx, opt)}
                     className={`flex w-full items-center justify-between rounded-sm px-3 py-2 text-left text-xs transition-colors ${
                       pressAnswers[qIdx] === optIdx
                         ? "border border-emerald-500/50 bg-emerald-500/15 text-white"
@@ -1086,7 +1108,7 @@ function PostMatchAnalytics({
                     }`}
                   >
                     <span>{opt.text}</span>
-                    <span className="gx-mono text-[9px] font-bold text-slate-500">PREVIEW ONLY</span>
+                    <span className="gx-mono text-[9px] font-bold text-emerald-400">{opt.effect}</span>
                   </button>
                 ))}
               </div>
@@ -1135,9 +1157,10 @@ function PostMatchAnalytics({
 }
 
 export default function MatchCenter() {
+  const { active: activeClub } = useActiveClub();
   const { id } = useParams();
   const [params] = useSearchParams();
-  const clubId = params.get("club") || "";
+  const clubId = params.get("club") || activeClub?.club_id || "";
   const { data: m, isLoading } = useQuery({
     queryKey: ["match", id],
     queryFn: async () => (await api.get(`/owner/matches/${id}`)).data,
@@ -1146,7 +1169,7 @@ export default function MatchCenter() {
 
   const { data: liveState } = useQuery({
     queryKey: ["match-live-state", id],
-    queryFn: async () => (await api.get(`/api/matches/${id}/state`)).data,
+    queryFn: async () => (await api.get(`/matches/${id}/state`)).data,
     refetchInterval: (query) => {
       const data = query.state.data;
       if (!data) return 2500;
@@ -1444,6 +1467,7 @@ export default function MatchCenter() {
             matchId={id || ""}
             homeScore={score.home}
             awayScore={score.away}
+            clubId={clubId}
           />
         )}
 
