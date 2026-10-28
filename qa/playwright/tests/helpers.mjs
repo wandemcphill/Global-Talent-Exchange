@@ -38,24 +38,46 @@ export async function attachDiagnostics(testInfo) {
 
 export async function enableAccessibility(page) {
   try {
-    // Do not toggle accessibility if the labelled form is already exposed.
-    const emailInput = page
-      .locator(
-        'input[aria-label="Email"], input[aria-label*="email" i], input[type="email"], input[autocomplete="username"], input[placeholder*="email" i]',
-      )
-      .first();
-    if (await emailInput.isVisible().catch(() => false)) return;
+    // Do not toggle accessibility if semantics nodes or labelled inputs are already exposed.
+    const hasSemantics = await page
+      .evaluate(() => {
+        const nodes = document.querySelectorAll(
+          'flt-semantics[role], input[aria-label], [role="button"]:not([aria-label="Enable accessibility"])',
+        );
+        return nodes.length > 0;
+      })
+      .catch(() => false);
+    if (hasSemantics) return;
 
-    // Flutter's accessibility toggle is stateful. Dispatching both element.click()
-    // and a synthetic click can toggle semantics on and immediately back off,
-    // leaving signIn() with no labelled inputs and forcing brittle coordinate entry.
-    const toggle = page.locator('[aria-label="Enable accessibility"]').first();
-    if (await toggle.isVisible().catch(() => false)) {
-      await toggle.click({ force: true });
-      await page.waitForTimeout(300);
-    }
+    // Flutter's accessibility toggle is a 1x1 off-screen placeholder and is stateful.
+    // Invoke a single native DOM click without dispatching a second synthetic MouseEvent.
+    await page.evaluate(() => {
+      const element = document.querySelector('[aria-label="Enable accessibility"]');
+      if (element) {
+        element.focus?.();
+        element.click?.();
+      }
+    });
+    await page.waitForTimeout(300);
   } catch {
     // Accessibility may already be enabled or the toggle may not be present.
+  }
+}
+
+async function fillFlutterTextField(page, locator, value) {
+  await locator.click({ force: true });
+  // Wait for Flutter Web's SemanticsTextField to round-trip focus to Dart and attach
+  // the active TextInputClient before setting the DOM input value.
+  await page.waitForTimeout(300);
+  await locator.fill(value);
+  await page.waitForTimeout(200);
+  const currentValue = await locator.inputValue().catch(() => "");
+  if (currentValue !== value) {
+    await locator.click({ force: true });
+    await page.waitForTimeout(250);
+    await page.keyboard.press("Control+A").catch(() => {});
+    await page.keyboard.type(value, { delay: 15 });
+    await page.waitForTimeout(200);
   }
 }
 
@@ -81,31 +103,46 @@ export async function signIn(page) {
   await page.goto(loginUrl, { waitUntil: "domcontentloaded", timeout: 120_000 });
 
   const surface = page.locator("flt-glass-pane, flutter-view, canvas").first();
-  await expect(surface).toBeVisible({ timeout: 120_000 });
-  await page.waitForTimeout(1500);
-
-  await enableAccessibility(page);
+  const surfaceReady = await surface
+    .waitFor({ state: "visible", timeout: 45_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!surfaceReady) {
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 60_000 });
+    await expect(surface).toBeVisible({ timeout: 75_000 });
+  }
+  await page.waitForTimeout(1000);
 
   const emailInput = page
     .locator(
       'input[aria-label="Email"], input[aria-label*="email" i], input[type="email"], input[autocomplete="username"], input[placeholder*="email" i]',
     )
     .first();
+  const passwordInput = page
+    .locator(
+      'input[aria-label="Password"], input[aria-label*="password" i], input[type="password"], input[autocomplete="current-password"], input[placeholder*="password" i]',
+    )
+    .first();
+  const enterBtn = page.getByRole("button", { name: /ENTER GTEX/i });
+
+  const waitDeadline = Date.now() + 45_000;
+  while (Date.now() < waitDeadline) {
+    await enableAccessibility(page);
+    if (await emailInput.isVisible().catch(() => false)) break;
+    if (await profileButton.isVisible().catch(() => false)) {
+      signedInPages.add(page);
+      return;
+    }
+    await page.waitForTimeout(400);
+  }
+
   if (await emailInput.isVisible().catch(() => false)) {
-    await emailInput.fill(process.env.GTEX_E2E_EMAIL);
-    const passwordInput = page
-      .locator(
-        'input[aria-label="Password"], input[aria-label*="password" i], input[type="password"], input[autocomplete="current-password"], input[placeholder*="password" i]',
-      )
-      .first();
+    await fillFlutterTextField(page, emailInput, process.env.GTEX_E2E_EMAIL);
     await expect(passwordInput).toBeVisible({ timeout: 30_000 });
-    await passwordInput.fill(process.env.GTEX_E2E_PASSWORD);
-    const enterBtn = page.getByRole("button", { name: /ENTER GTEX/i });
+    await fillFlutterTextField(page, passwordInput, process.env.GTEX_E2E_PASSWORD);
     await expect(enterBtn).toBeVisible({ timeout: 30_000 });
     await enterBtn.click({ force: true });
   } else {
-    // A valid persisted session may redirect away from the login form. Detect
-    // the authenticated shell before attempting coordinate-based form entry.
     if (await profileButton.isVisible().catch(() => false)) {
       signedInPages.add(page);
       return;
@@ -115,12 +152,12 @@ export async function signIn(page) {
     const x = isNarrow ? Math.round(viewport.width * 0.5) : Math.round(viewport.width * 0.72);
     const emailY = 250;
     await page.mouse.click(x, emailY);
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(250);
     await page.keyboard.press("Control+A").catch(() => {});
-    await page.keyboard.type(process.env.GTEX_E2E_EMAIL);
+    await page.keyboard.type(process.env.GTEX_E2E_EMAIL, { delay: 15 });
     await page.keyboard.press("Tab");
-    await page.waitForTimeout(150);
-    await page.keyboard.type(process.env.GTEX_E2E_PASSWORD);
+    await page.waitForTimeout(250);
+    await page.keyboard.type(process.env.GTEX_E2E_PASSWORD, { delay: 15 });
     await page.keyboard.press("Enter");
     await page.waitForTimeout(800);
     if (!page.url().includes("/app/")) {
@@ -130,7 +167,34 @@ export async function signIn(page) {
   }
 
   const authenticatedRoute = isHashRouting ? /#\/app(?:\/|$)/ : /\/app\//;
-  await expect(page).toHaveURL(authenticatedRoute, { timeout: 30_000 });
+  const authDeadline = Date.now() + 30_000;
+  let retriedSubmit = false;
+  while (Date.now() < authDeadline) {
+    if (authenticatedRoute.test(page.url())) break;
+    const missingEmail = await page
+      .getByText("Enter your email address.", { exact: true })
+      .isVisible()
+      .catch(() => false);
+    const missingPassword = await page
+      .getByText("Enter your password.", { exact: true })
+      .isVisible()
+      .catch(() => false);
+    if ((missingEmail || missingPassword) && !retriedSubmit) {
+      retriedSubmit = true;
+      if (await emailInput.isVisible().catch(() => false)) {
+        await fillFlutterTextField(page, emailInput, process.env.GTEX_E2E_EMAIL);
+      }
+      if (await passwordInput.isVisible().catch(() => false)) {
+        await fillFlutterTextField(page, passwordInput, process.env.GTEX_E2E_PASSWORD);
+      }
+      if (await enterBtn.isVisible().catch(() => false)) {
+        await enterBtn.click({ force: true });
+      }
+    }
+    await page.waitForTimeout(400);
+  }
+
+  await expect(page).toHaveURL(authenticatedRoute, { timeout: 15_000 });
   await expect(profileButton).toBeVisible({ timeout: 30_000 });
   signedInPages.add(page);
   await page.waitForTimeout(1500);
