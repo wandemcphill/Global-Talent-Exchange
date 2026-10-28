@@ -11,6 +11,7 @@ import {
 } from "@/lib/owner";
 import { api } from "@/lib/api";
 import { Loading, Btn } from "@/components/gtex/ui";
+import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
 import {
   Sparkles,
   Plane,
@@ -347,6 +348,24 @@ export function Showroom() {
         </div>
       </div>
 
+      {/* 3D Bespoke Luxury Vault & Interactive 360 Turntable */}
+      {filteredItems.length > 0 && (
+        <Cinema3DStage
+          scene="luxury_turntable"
+          compact
+          title={`3D Luxury Vault · ${filteredItems[0]?.name || "Rose-Gold Tourbillon"}`}
+          subtitle={`Interactive 360° 3D Inspection & Gifting Preview · ${active?.club_name || "GTEX FC"}`}
+          badgeText="3D SHOWROOM VAULT"
+          clubName={active?.club_name || "GTEX FC"}
+          subjectName={filteredItems[0]?.name || "G650 Executive Jet"}
+          assetCategory={filteredItems[0]?.category || "watch"}
+          stats={[
+            { label: "Valuation", value: `${formatPrice(filteredItems[0])} GTX`, accent: "#F5B83D" },
+            { label: "Prestige Boost", value: `+${filteredItems[0]?.prestige_bonus || 8} PTS`, accent: "#00E676" },
+          ]}
+        />
+      )}
+
       {/* Catalogue Grid */}
       {isLoading ? (
         <Loading label="Opening the boardroom showroom catalogue..." />
@@ -618,6 +637,19 @@ export function Showroom() {
               </div>
             </div>
 
+            <div className="px-6 pt-4">
+              <Cinema3DStage
+                scene="luxury_turntable"
+                compact
+                title={`3D Handover Ceremony · ${giftingItem.name}`}
+                subtitle={`Presenting to ${recipientType === "player" ? (selectedPlayer?.name || "Squad Member") : selectedStaffRole.replace(/_/g, " ").toUpperCase()}`}
+                badgeText="3D GIFT UNBOXING"
+                clubName={active?.club_name || "GTEX FC"}
+                subjectName={giftingItem.name}
+                assetCategory={giftingItem.category || "watch"}
+                quote={giftNote || "A personal token of boardroom appreciation and loyalty."}
+              />
+            </div>
             <form onSubmit={handleGift} className="p-6 space-y-4">
               <div className="rounded-xl border border-purple-400/20 bg-purple-400/10 p-3 text-xs leading-relaxed text-purple-200">
                 Luxury incentives can be gifted to an <b>Academy Regen</b> (boosting squad morale) or an <b>Executive Staff / Coach</b> (boosting mood by +15 and organizational loyalty by +3).

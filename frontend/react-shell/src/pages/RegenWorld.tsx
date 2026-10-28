@@ -8,6 +8,7 @@ import { journeyLinks, readJourneyParams } from "@/lib/playerJourney";
 import { RegenCard } from "@/components/gtex/RegenCard";
 import { PlayerDossier } from "@/components/gtex/PlayerDossier";
 import { Loading } from "@/components/gtex/ui";
+import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
 import { toast } from "sonner";
 
 export function RegenWorld() {
@@ -411,6 +412,21 @@ export function RegenWorld() {
         </div>
       ) : tab === "rankings" ? (
         <div className="space-y-4" data-testid="regen-rankings-view">
+          <Cinema3DStage
+            scene="world_gala"
+            compact
+            title={`3D GTEX World Player of the Year Gala · ${rankingsData?.[0]?.player_name || rankingsData?.[0]?.name || "Global #1 Laureate"}`}
+            subtitle="Monaco Theatre · Official GTEX d'Or & Golden Boy 3D Presentation"
+            badgeText="3D BALLON D'OR STAGE"
+            clubName={activeClub?.club_name || "GTEX World XI"}
+            subjectName={rankingsData?.[0]?.player_name || rankingsData?.[0]?.name || "World #1 Wonderkid"}
+            overallRating={94}
+            quote="Standing under these lights with the GTEX d'Or is the pinnacle of my career."
+            stats={[
+              { label: "World Rank", value: "#1 GLOBAL", accent: "#F5B83D" },
+              { label: "Gala Score", value: `${rankingsData?.[0]?.score || 985} PTS`, accent: "#00E676" },
+            ]}
+          />
           <p className="gx-eyebrow text-emerald-400">Official GTEX World Leaderboard</p>
           {loadingRankings ? (
             <Loading label="Querying rankings engine..." />
@@ -453,6 +469,20 @@ export function RegenWorld() {
         </div>
       ) : (
         <div className="space-y-4" data-testid="regen-hall-view">
+          <Cinema3DStage
+            scene="world_gala"
+            compact
+            title={`3D Immortalized Legend Ceremony · ${hallData?.[0]?.player_name || hallData?.[0]?.name || "GTEX Founding Icon"}`}
+            subtitle="3D Golden Globe & Hall of Fame Bust Unveiling"
+            badgeText="3D IMMORTALS STAGE"
+            clubName={activeClub?.club_name || "GTEX Hall of Fame"}
+            subjectName={hallData?.[0]?.player_name || hallData?.[0]?.name || "GTEX Legend"}
+            overallRating={96}
+            stats={[
+              { label: "Career Trophies", value: `${hallData?.[0]?.total_awards ?? 7}`, accent: "#F5B83D" },
+              { label: "Legacy Score", value: `${hallData?.[0]?.legacy_score ?? "99.4"}`, accent: "#00E676" },
+            ]}
+          />
           <p className="gx-eyebrow text-amber-400">Regen Hall of Fame</p>
           {loadingHall ? (
             <Loading label="Consulting immortals archive..." />

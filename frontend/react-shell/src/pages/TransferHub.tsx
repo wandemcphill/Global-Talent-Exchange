@@ -23,6 +23,7 @@ import { api, errMsg } from "@/lib/api";
 import { fmt, useActiveClub, useClub } from "@/lib/owner";
 import { Loading } from "@/components/gtex/ui";
 import { PlayerDossier } from "@/components/gtex/PlayerDossier";
+import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
 import {
   describeNegotiation,
   describeOffer,
@@ -1136,14 +1137,32 @@ export function TransferHub() {
 
       {/* Offer Modal */}
       {offerListing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-2xl border border-emerald-500/40 bg-[#07130e] p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="w-full max-w-xl rounded-2xl border border-emerald-500/40 bg-[#07130e] p-6 shadow-2xl space-y-4 my-auto">
             <h3 className="gx-display text-2xl font-black uppercase text-white">
               Submit Sporting Transfer Offer
             </h3>
             <p className="text-xs text-slate-300">
               Offering from: <b className="text-emerald-400">{activeClub?.club_name}</b>
             </p>
+
+            <Cinema3DStage
+              scene="negotiation_table"
+              compact
+              title={`3D Executive War Room · ${offerListing.player?.full_name || offerListing.player_id}`}
+              subtitle={`Asking Reference: ${fmt(offerListing.base_price || 0)} GTX · Current Offer: ${fmt(Number(offerAmount || 0))} GTX`}
+              badgeText="LIVE 3D NEGOTIATION"
+              clubName={activeClub?.club_name || "GTEX FC"}
+              subjectName={offerListing.player?.full_name || String(offerListing.player_id)}
+              subjectRole={`Transfer Bid: ${fmt(Number(offerAmount || 0))} GTX · Wage: ${fmt(Number(offerWage || 0))} GTX/wk`}
+              agentMood={
+                Number(offerAmount || 0) >= Number(offerListing.base_price || 0)
+                  ? "eager"
+                  : Number(offerAmount || 0) >= Number(offerListing.base_price || 0) * 0.8
+                  ? "tense"
+                  : "hostile"
+              }
+            />
 
             <div className="space-y-3">
               <div>
@@ -1194,8 +1213,8 @@ export function TransferHub() {
 
       {/* Contract negotiation modal */}
       {contractOfferNegotiation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-2xl border border-emerald-500/40 bg-[#07130e] p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="w-full max-w-xl rounded-2xl border border-emerald-500/40 bg-[#07130e] p-6 shadow-2xl space-y-4 my-auto">
             <h3 className="gx-display text-2xl font-black uppercase text-white">
               Submit Contract Terms
             </h3>
@@ -1203,6 +1222,19 @@ export function TransferHub() {
               {contractOfferNegotiation.player_name || `Player ${contractOfferNegotiation.player_id}`}
               {" · "}Listing {String(contractOfferNegotiation.listing_id).slice(0, 8)}
             </p>
+
+            <Cinema3DStage
+              scene="negotiation_table"
+              compact
+              title={`3D Contract Suite · ${contractOfferNegotiation.player_name || contractOfferNegotiation.player_id}`}
+              subtitle={`${contractYears}-Year Deal · Squad Role: ${contractExpectedRole || "Starter"}`}
+              badgeText="3D AGENT TABLE"
+              clubName={activeClub?.club_name || "GTEX FC"}
+              subjectName={contractOfferNegotiation.player_name || String(contractOfferNegotiation.player_id)}
+              subjectRole={`Proposed Wage: ${fmt(Number(contractWageOffer || 0))} GTX/wk (${contractYears} yrs)`}
+              agentMood={Number(contractWageOffer || 0) >= 2000 ? "eager" : "tense"}
+            />
+
             <div className="space-y-3">
               <div>
                 <label className="gx-label">Weekly Wage Offer (GTX)</label>
@@ -1270,15 +1302,15 @@ export function TransferHub() {
       {/* NEW SIGNING PRESENTATION / UNVEIL MODAL */}
       {unveilingPlayer && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 overflow-y-auto"
           role="dialog"
           aria-modal="true"
           data-testid="new-signing-presentation-modal"
         >
-          <div className="w-full max-w-lg rounded-2xl border border-amber-400/50 bg-gradient-to-br from-slate-900 via-slate-950 to-emerald-950/30 p-6 shadow-2xl space-y-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-amber-400/50 bg-gradient-to-br from-slate-900 via-slate-950 to-emerald-950/30 p-6 shadow-2xl space-y-4 my-auto">
             <div className="flex items-center justify-between">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/20 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-amber-300">
-                <Camera size={12} /> Official Club Signing Presentation
+                <Camera size={12} /> Official 3D Club Signing Presentation
               </span>
               <button type="button" onClick={() => setUnveilingPlayer(null)} className="text-slate-400 hover:text-white">
                 <X size={16} />
@@ -1288,6 +1320,34 @@ export function TransferHub() {
             <h3 className="gx-display text-2xl font-black uppercase text-white">
               Unveil {unveilingPlayer.name} at {activeClub?.club_name}
             </h3>
+
+            {/* Live 3D Signing Walkout & Kit Reveal Stage */}
+            <Cinema3DStage
+              scene="signing_walkout"
+              compact
+              title={`${unveilingPlayer.name} · Official #${shirtNumber || 9} Kit Unveil`}
+              subtitle={`${activeClub?.club_name || "GTEX FC"} · ${
+                unveilTheme === "viral_helicopter"
+                  ? "VIP Galáctico Helicopter Touchdown"
+                  : unveilTheme === "stadium_floodlights"
+                  ? "Night Stadium Floodlight Walkout"
+                  : "Executive Press Conference Diorama"
+              }`}
+              badgeText="3D KIT & WALKOUT"
+              clubName={activeClub?.club_name || "GTEX FC"}
+              subjectName={unveilingPlayer.name}
+              subjectRole={unveilingPlayer.position || "First-Team Signing"}
+              jerseyNumber={shirtNumber || 9}
+              overallRating={unveilingPlayer.rating || 84}
+              spectacleTier={
+                unveilTheme === "viral_helicopter"
+                  ? "galactico_helicopter"
+                  : unveilTheme === "stadium_floodlights"
+                  ? "floodlight_walkout"
+                  : "standard_press"
+              }
+              quote={unveilQuote}
+            />
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
@@ -1379,34 +1439,28 @@ export function TransferHub() {
       {/* UNVEILED SIGNING RECEIPT MODAL */}
       {unveiledReceipt && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 overflow-y-auto"
           role="dialog"
           aria-modal="true"
           data-testid="signing-unveiled-receipt"
         >
-          <div className="w-full max-w-md rounded-2xl border border-emerald-400/50 bg-gradient-to-br from-slate-900 via-slate-950 to-emerald-950/40 p-6 text-center shadow-2xl space-y-4">
-            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border-2 border-amber-400 bg-amber-400/15 text-2xl font-black text-amber-300">
-              #{unveiledReceipt.shirtNumber}
-            </div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400">
-              Official Signing Unveiled · {activeClub?.club_name}
-            </p>
-            <h3 className="gx-display text-3xl font-black uppercase text-white">
-              {unveiledReceipt.player.name}
-            </h3>
-            <blockquote className="rounded-xl border border-white/10 bg-black/40 p-3 text-xs italic text-slate-200">
-              “{unveiledReceipt.quote}”
-            </blockquote>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
-                <span className="text-[10px] uppercase text-slate-400 block">Replica Shirt Surge</span>
-                <span className="gx-mono font-black text-amber-300">+{fmt(unveiledReceipt.shirtSalesBonus)} GTX</span>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
-                <span className="text-[10px] uppercase text-slate-400 block">Supporter & Player Morale</span>
-                <span className="gx-mono font-black text-emerald-300">+{unveiledReceipt.moraleBoost} Boost</span>
-              </div>
-            </div>
+          <div className="w-full max-w-xl rounded-2xl border border-emerald-400/50 bg-gradient-to-br from-slate-900 via-slate-950 to-emerald-950/40 p-6 text-center shadow-2xl space-y-4 my-auto">
+            <Cinema3DStage
+              scene="signing_walkout"
+              compact
+              title={`${unveiledReceipt.player.name} (#${unveiledReceipt.shirtNumber}) Unveiled`}
+              subtitle={`Official ${activeClub?.club_name || "GTEX FC"} Broadcast Feed`}
+              badgeText="LIVE 3D BROADCAST"
+              clubName={activeClub?.club_name || "GTEX FC"}
+              subjectName={unveiledReceipt.player.name}
+              jerseyNumber={unveiledReceipt.shirtNumber}
+              overallRating={unveiledReceipt.player.rating || 85}
+              quote={unveiledReceipt.quote}
+              stats={[
+                { label: "Shirt Surge", value: `+${fmt(unveiledReceipt.shirtSalesBonus)} GTX`, accent: "#F5B83D" },
+                { label: "Morale Boost", value: `+${unveiledReceipt.moraleBoost}`, accent: "#00E676" },
+              ]}
+            />
             <button
               type="button"
               onClick={() => setUnveiledReceipt(null)}

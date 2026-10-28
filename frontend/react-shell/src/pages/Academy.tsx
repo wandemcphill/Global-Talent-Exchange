@@ -18,6 +18,7 @@ import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, TraitBar } from "@/
 import { PlayerCard } from "@/components/gtex/PlayerCard";
 import { PackReveal } from "@/components/gtex/PackReveal";
 import { PlayerDrawer } from "@/components/gtex/PlayerDrawer";
+import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
 
 const seenKey = (clubId: string) => `gtex.regens.seen.${clubId}`;
 const readSeen = (clubId: string): string[] => JSON.parse(localStorage.getItem(seenKey(clubId)) || "[]");
@@ -144,6 +145,22 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
       title="Build-A-Son Legacy Program"
       testid="build-a-son-panel"
     >
+      <div className="mb-6">
+        <Cinema3DStage
+          scene="build_a_son"
+          compact
+          title={`3D Bloodline Induction · ${sonName.trim() || "Dynasty Heir Jr."}`}
+          subtitle={`Passing the Torch at ${club?.club_name || "GTEX FC"} · Position: ${sonPosition} (${sonCountry})`}
+          badgeText="3D DNA TUNNEL WALKOUT"
+          clubName={club?.club_name || "GTEX FC"}
+          subjectName={sonName.trim() || "Dynasty Heir Jr."}
+          subjectRole={`${sonPosition} · Second-Generation Club Scion`}
+          jerseyNumber={sonPosition === "ST" ? 9 : sonPosition === "AM" || sonPosition === "RW" ? 10 : 7}
+          overallRating={74}
+          potentialRating={94}
+          quote="Growing up in these stands, wearing my father's crest is my destiny."
+        />
+      </div>
       <div className="grid gap-6 lg:grid-cols-12">
         <form onSubmit={handleRequestSon} className="space-y-4 lg:col-span-7" data-testid="build-a-son-form">
           <p className="text-xs text-slate-300 leading-relaxed">

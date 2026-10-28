@@ -6,6 +6,7 @@ import '../../regen_redesign/data/gtex_share_market_api.dart';
 import '../../regen_redesign/widgets/gtex_wonderkid_board.dart';
 import '../data/owner_console_api.dart';
 import '../models/gtex_world_clock_models.dart';
+import 'gtex_cinema_3d_stage.dart';
 import 'gtex_world_clock_panel.dart';
 import 'owner_admin_review_section.dart';
 
@@ -697,6 +698,21 @@ class ControlCenterSection extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+          if (clubs.isNotEmpty)
+            GtexCinema3DStage(
+              key: const Key('owner-console-3d-stage'),
+              scene: GtexCinema3DScene.signingWalkout,
+              compact: true,
+              title: '3D Club Presentation & Executive Stage · ${clubs.first.name}',
+              subtitle: 'Manager Day 1: ${clubs.first.managerName ?? "Head Coach"} · Switch between 3D Motion & FM 3D Still',
+              badgeText: '3D SUITE',
+              clubName: clubs.first.name,
+              subjectName: clubs.first.managerName ?? 'MARQUEE #9',
+              subjectRole: clubs.first.managerTrait ?? 'Tactical Architect',
+              jerseyNumber: 9,
+              overallRating: 89,
+              quote: 'Every detail of this club is built for continental supremacy.',
             ),
           GtexPanel(
             key: const Key('owner-console-health'),

@@ -40,6 +40,7 @@ import { Btn, Chip, Coin, Empty, Loading, Panel, Stat } from "@/components/gtex/
 import { InboxItem } from "@/components/gtex/InboxItem";
 import { WorldClockCard } from "@/components/gtex/WorldClockCard";
 import { OwnerBriefingPanel } from "@/components/gtex/OwnerBriefingPanel";
+import { Cinema3DStage, Cinema3DSceneType } from "@/components/gtex/Cinema3DStage";
 
 function NoClubDashboard({ onCreateClub }: { onCreateClub: () => void }) {
   return (
@@ -118,6 +119,7 @@ export function ControlCenter() {
   const [winBonusAmount, setWinBonusAmount] = useState("5000");
   const [winBonusNote, setWinBonusNote] = useState("Victory performance bonus for the starting squad.");
   const [pledgingBonus, setPledgingBonus] = useState(false);
+  const [active3DScene, setActive3DScene] = useState<Cinema3DSceneType>("manager_arrival");
 
   if (isLoading) return <Loading label="Loading your GTEX workspace..." />;
   if (isError || !data) return <Empty title="GTEX workspace unavailable" body="We could not load your account right now. Please refresh and try again." />;
@@ -323,6 +325,84 @@ export function ControlCenter() {
             </p>
           </Link>
         ))}
+      </section>
+
+      {/* 2a-3D. INTERACTIVE 3D CEREMONIAL & BOARDROOM PRESENTATION SUITE */}
+      <section className="rounded-2xl border border-amber-500/30 bg-slate-950/80 p-5 shadow-2xl space-y-4" data-testid="executive-3d-suite">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-400">
+              GTEX 3D CEREMONIAL & DIORAMA ENGINE · FIFA MOTION + FM 3D STILLS
+            </p>
+            <h3 className="gx-display text-xl font-black uppercase text-white mt-0.5">
+              3D Club Presentation & Executive Stage
+            </h3>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { id: "manager_arrival" as Cinema3DSceneType, label: "3D Manager Day 1" },
+              { id: "signing_walkout" as Cinema3DSceneType, label: "3D Signing Walkout" },
+              { id: "world_gala" as Cinema3DSceneType, label: "3D World Player Gala" },
+              { id: "luxury_turntable" as Cinema3DSceneType, label: "3D Luxury Vault" },
+              { id: "boardroom_clash" as Cinema3DSceneType, label: "3D Boardroom Clash" },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActive3DScene(tab.id)}
+                className={`rounded-lg px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider transition-all ${
+                  active3DScene === tab.id
+                    ? "bg-amber-400 text-slate-950 font-black shadow-md"
+                    : "border border-white/10 bg-slate-900/70 text-slate-300 hover:text-white"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <Cinema3DStage
+          scene={active3DScene}
+          compact
+          title={
+            active3DScene === "manager_arrival"
+              ? `3D First-Day Training Ground Arrival · ${executives[0].name}`
+              : active3DScene === "signing_walkout"
+              ? `3D Stadium Floodlight Signing Walkout · ${activeClubProfile.club_name}`
+              : active3DScene === "world_gala"
+              ? `3D GTEX World Player of the Year Gala · ${activeClubProfile.club_name}`
+              : active3DScene === "luxury_turntable"
+              ? `3D Owner Luxury Vault & Gifting Unveil · ${activeClubProfile.club_name}`
+              : `3D Executive Boardroom War Room · ${executives[0].name} vs ${executives[1].name}`
+          }
+          subtitle={
+            active3DScene === "manager_arrival"
+              ? `Trait: ${executives[0].secretTrait} · Mandate: ${executives[0].agenda}`
+              : active3DScene === "boardroom_clash"
+              ? `Tactical Ambition vs. Commercial Wage Cap Discipline`
+              : `Interactive 360° 3D Stage · Switch between FIFA Motion & FM 3D Diorama Still`
+          }
+          badgeText="LIVE 3D STAGE"
+          clubName={activeClubProfile.club_name || "GTEX FC"}
+          subjectName={
+            active3DScene === "manager_arrival" || active3DScene === "boardroom_clash"
+              ? executives[0].name
+              : active3DScene === "luxury_turntable"
+              ? "Rose-Gold Tourbillon"
+              : "Marquee #9 Superstar"
+          }
+          subjectRole={
+            active3DScene === "manager_arrival"
+              ? `First-Team Manager · Mood ${executives[0].mood}`
+              : active3DScene === "boardroom_clash"
+              ? `Executive Alignment: ${executives[0].secretTrait}`
+              : "Club Icon"
+          }
+          jerseyNumber={9}
+          overallRating={89}
+          quote="Every detail of this club's 3D identity is built for continental supremacy."
+        />
       </section>
 
       {/* 2b. AUTHORITATIVE WORLD TIME + PERSISTED-EVENT DAILY BRIEFING */}

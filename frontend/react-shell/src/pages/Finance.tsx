@@ -8,6 +8,7 @@ import { publicUrl } from "@/lib/publicPath";
 import { fmt, label, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, Stat } from "@/components/gtex/ui";
 import { CoinTraderDesk } from "@/components/gtex/CoinTraderDesk";
+import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
 
 function Balances({ w }: any) {
   const rows = [
@@ -287,6 +288,26 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
         </p>
       </div>
 
+      {sponsorData?.offers?.length > 0 && (
+        <div className="my-4">
+          <Cinema3DStage
+            scene="stadium_sponsor"
+            compact
+            title={`3D Kit & Stadium LED Sponsor Mockup · ${sponsorData.offers[0]?.sponsor_name || "Global Partner"}`}
+            subtitle={`Negotiated by ${sponsorData.gm_name || "General Manager"} · Prestige Tier: ${sponsorData.prestige_tier || "Contender"}`}
+            badgeText="3D COMMERCIAL KIT PREVIEW"
+            clubName={clubs?.find((c: any) => c.club_id === activeClubId)?.club_name || "GTEX FC"}
+            subjectName={sponsorData.offers[0]?.sponsor_name || "FRONT-OF-SHIRT PARTNER"}
+            sponsorName={sponsorData.offers[0]?.sponsor_name || "GTEX GLOBAL AIRWAYS"}
+            jerseyNumber={10}
+            overallRating={90}
+            stats={[
+              { label: "Upfront Bonus", value: `+${fmt(sponsorData.offers[0]?.upfront_signing_bonus_gtex || 0)} GTX`, accent: "#F5B83D" },
+              { label: "Win Clause", value: `+${fmt(sponsorData.offers[0]?.win_bonus_gtex || 0)} GTX`, accent: "#00E676" },
+            ]}
+          />
+        </div>
+      )}
       {isLoading || !sponsorData ? (
         <Loading label="GM negotiating seasonal sponsor contracts" />
       ) : (
