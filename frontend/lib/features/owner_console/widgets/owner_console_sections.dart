@@ -6,6 +6,7 @@ import '../../regen_redesign/data/gtex_share_market_api.dart';
 import '../../regen_redesign/widgets/gtex_wonderkid_board.dart';
 import '../data/owner_console_api.dart';
 import '../models/gtex_world_clock_models.dart';
+import 'gtex_apex_widgets.dart';
 import 'gtex_cinema_3d_stage.dart';
 import 'gtex_world_clock_panel.dart';
 import 'owner_admin_review_section.dart';
@@ -714,6 +715,30 @@ class ControlCenterSection extends StatelessWidget {
               overallRating: 89,
               quote: 'Every detail of this club is built for continental supremacy.',
             ),
+          if (clubs.isNotEmpty) ...<Widget>[
+            GtexHolographicPlayerCard(
+              key: const Key('owner-console-apex-holo-card'),
+              name: clubs.first.managerName ?? 'Kylian Regent',
+              position: 'ST',
+              overall: 91,
+              potential: 96,
+              clubName: clubs.first.name,
+              priceLabel: '18,500 GTX',
+              badgeLabel: '★ CLUB TALISMAN FOIL',
+              onTap: () => onNavigate(_clubPath),
+            ),
+            GtexTelemetrySparklineCard(
+              key: const Key('owner-console-apex-sparkline'),
+              title: 'Live Treasury & Commercial Pulse',
+              amount: health.isNotEmpty ? health.first.cash : 248500,
+              subtitle: '${clubs.first.name} · 7-Day Matchday & Broadcast Velocity',
+            ),
+            GtexTacticalPitch25D(
+              key: const Key('owner-console-apex-pitch'),
+              formation: '4-3-3',
+              talismanName: 'REGENT #9',
+            ),
+          ],
           GtexPanel(
             key: const Key('owner-console-health'),
             title: 'Live Club Health',

@@ -13,7 +13,7 @@ class GtexPageSurface extends StatelessWidget {
     this.margin = EdgeInsets.zero,
     this.accent = GtexColors.pitch,
     this.isSelected = false,
-    this.blurSigma = 12,
+    this.blurSigma = 14,
   });
 
   final Widget child;
@@ -26,13 +26,6 @@ class GtexPageSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final BorderRadius radius = BorderRadius.circular(GtexSpacing.radiusLg);
-    final Color surfaceColor =
-        isSelected
-            ? Color.alphaBlend(
-              accent.withValues(alpha: 0.09),
-              GtexColors.panel.withValues(alpha: 0.76),
-            )
-            : GtexColors.panel.withValues(alpha: 0.72);
 
     return Padding(
       padding: margin,
@@ -41,28 +34,42 @@ class GtexPageSurface extends StatelessWidget {
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
+            duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,
             decoration: BoxDecoration(
               borderRadius: radius,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: <Color>[
+                  isSelected
+                      ? Color.alphaBlend(
+                          accent.withValues(alpha: 0.14),
+                          const Color(0xFF111B30),
+                        )
+                      : const Color(0xFF111B30).withValues(alpha: 0.88),
+                  const Color(0xFF090F1C).withValues(alpha: 0.94),
+                  const Color(0xFF060A14).withValues(alpha: 0.98),
+                ],
+              ),
               border: Border.all(
-                color:
-                    isSelected
-                        ? accent.withValues(alpha: 0.78)
-                        : GtexColors.line.withValues(alpha: 0.72),
+                color: isSelected
+                    ? accent.withValues(alpha: 0.82)
+                    : Colors.white.withValues(alpha: 0.13),
+                width: isSelected ? 1.5 : 1.0,
               ),
               boxShadow: <BoxShadow>[
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.20),
-                  blurRadius: 26,
-                  spreadRadius: -18,
-                  offset: const Offset(0, 18),
+                  color: Colors.black.withValues(alpha: 0.58),
+                  blurRadius: 34,
+                  spreadRadius: -10,
+                  offset: const Offset(0, 16),
                 ),
-                if (isSelected) GtexColors.glow(accent, opacity: 0.18),
+                if (isSelected) GtexColors.glow(accent, opacity: 0.22),
               ],
             ),
             child: Material(
-              color: surfaceColor,
+              color: Colors.transparent,
               borderRadius: radius,
               clipBehavior: Clip.antiAlias,
               child: Padding(padding: padding, child: child),
