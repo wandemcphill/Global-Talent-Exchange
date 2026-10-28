@@ -36,6 +36,14 @@ class GtexAudioSettingsSheet extends StatefulWidget {
 class _GtexAudioSettingsSheetState extends State<GtexAudioSettingsSheet> {
   bool _showCredits = false;
 
+  Future<void> _openExternalUrl(String? rawUrl) async {
+    if (rawUrl == null || rawUrl.isEmpty) return;
+    final Uri uri = Uri.parse(rawUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -43,12 +51,16 @@ class _GtexAudioSettingsSheetState extends State<GtexAudioSettingsSheet> {
       builder: (BuildContext context, Widget? child) {
         final AmbientAudioState state = widget.controller;
         final GtexTrackMetadata track = state.currentTrack;
+        final bool isHyped = state.hypedTrackIds.contains(track.id);
+        final int hypeTotal = state.hypeCountFor(track);
+        final int tipTotal = state.artistTipTotals[track.id] ?? 0;
+        final bool isAnthem = state.selectedGoalAnthemId == track.id;
 
         return DraggableScrollableSheet(
           expand: false,
-          initialChildSize: 0.75,
-          minChildSize: 0.4,
-          maxChildSize: 0.9,
+          initialChildSize: 0.82,
+          minChildSize: 0.45,
+          maxChildSize: 0.94,
           builder: (BuildContext context, ScrollController scrollController) {
             return Container(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
@@ -145,19 +157,24 @@ class _GtexAudioSettingsSheetState extends State<GtexAudioSettingsSheet> {
                   if (_showCredits) ...<Widget>[
                     _buildCreditsView(context, state),
                   ] else ...<Widget>[
-                    // Now Playing Panel
+                    // Now Playing & Artist Spotlight Panel
                     GtexPanel(
                       title: track.title,
-                      subtitle: '${track.artist} • ${track.album}',
-                      accent: GtexColors.pitch,
+                      subtitle: '${track.artist} (${track.artistHandle}) • ${track.album}',
+                      accent: track.isPromoted ? GtexColors.gold : GtexColors.pitch,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
                           Wrap(
                             spacing: 8,
                             runSpacing: 4,
                             children: <Widget>[
+                              if (track.isPromoted)
+                                _Chip(
+                                  label: '★ PROMOTED · ${track.sponsorTier.toUpperCase()}',
+                                  color: GtexColors.gold,
+                                ),
                               _Chip(label: track.genre, color: GtexColors.pitch),
                               _Chip(label: '${track.bpm} BPM', color: GtexColors.cyan),
                               _Chip(label: track.durationFormatted, color: GtexColors.gold),
@@ -165,9 +182,135 @@ class _GtexAudioSettingsSheetState extends State<GtexAudioSettingsSheet> {
                                 label: 'Context: ${state.currentContext.label}',
                                 color: GtexColors.mint,
                               ),
+                              _Chip(label: track.region, color: GtexColors.cyan),
                             ],
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 10),
+                          Text(
+                            track.artistBio,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: GtexColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Artist Promotion Engagement Actions: Hype, Tip Artist, Set Goal/Walkout Anthem
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: <Widget>[
+                              InkWell(
+                                onTap: () => state.toggleHypeTrack(track.id),
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: isHyped
+                                        ? GtexColors.gold.withValues(alpha: 0.22)
+                                        : GtexColors.surfaceHover,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: isHyped ? GtexColors.gold : GtexColors.surfaceBorder,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '🔥 HYPE ($hypeTotal)',
+                                    style: TextStyle(
+                                      color: isHyped ? GtexColors.gold : GtexColors.text,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              InkWell(
+                                onTap: () => state.tipArtist(track.id, fanCoins: 10),
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: GtexColors.pitch.withValues(alpha: 0.14),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: GtexColors.pitch.withValues(alpha: 0.45)),
+                                  ),
+                                  child: Text(
+                                    tipTotal > 0
+                                        ? '💎 BACKED (+$tipTotal FAN)'
+                                        : '💎 TIP ARTIST (+10 FAN)',
+                                    style: const TextStyle(
+                                      color: GtexColors.pitch,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              InkWell(
+                                onTap: () => state.setGoalAnthemTrack(track.id),
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: isAnthem
+                                        ? GtexColors.cyan.withValues(alpha: 0.20)
+                                        : GtexColors.surfaceHover,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: isAnthem ? GtexColors.cyan : GtexColors.surfaceBorder,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    isAnthem ? '⚽ ACTIVE GOAL/WALKOUT ANTHEM' : '⚽ SET AS GOAL ANTHEM',
+                                    style: TextStyle(
+                                      color: isAnthem ? GtexColors.cyan : GtexColors.textSecondary,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          // External Artist Streaming Links
+                          if (track.spotifyUrl != null ||
+                              track.appleMusicUrl != null ||
+                              track.audiomackUrl != null ||
+                              track.youtubeUrl != null) ...<Widget>[
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: <Widget>[
+                                if (track.spotifyUrl != null)
+                                  _StreamLinkButton(
+                                    label: 'Spotify ↗',
+                                    color: const Color(0xFF1DB954),
+                                    onTap: () => _openExternalUrl(track.spotifyUrl),
+                                  ),
+                                if (track.appleMusicUrl != null)
+                                  _StreamLinkButton(
+                                    label: 'Apple Music ↗',
+                                    color: const Color(0xFFFA243C),
+                                    onTap: () => _openExternalUrl(track.appleMusicUrl),
+                                  ),
+                                if (track.audiomackUrl != null)
+                                  _StreamLinkButton(
+                                    label: 'Audiomack ↗',
+                                    color: const Color(0xFFFFA200),
+                                    onTap: () => _openExternalUrl(track.audiomackUrl),
+                                  ),
+                                if (track.youtubeUrl != null)
+                                  _StreamLinkButton(
+                                    label: 'YouTube ↗',
+                                    color: const Color(0xFF38BDF8),
+                                    onTap: () => _openExternalUrl(track.youtubeUrl),
+                                  ),
+                              ],
+                            ),
+                          ],
+
+                          const SizedBox(height: 14),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: <Widget>[
@@ -283,6 +426,60 @@ class _GtexAudioSettingsSheetState extends State<GtexAudioSettingsSheet> {
                         );
                       }).toList(),
                     ),
+                    const SizedBox(height: 20),
+
+                    // Promoted Artist Roster / Jukebox Selector
+                    Text(
+                      'GTEX TRAX · PROMOTED ARTIST ROSTER',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: GtexColors.gold,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.9,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ...state.catalogue.allTracks.map((GtexTrackMetadata item) {
+                      final bool selected = item.id == track.id;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? GtexColors.pitch.withValues(alpha: 0.12)
+                              : GtexColors.surfaceHover,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: selected ? GtexColors.pitch : GtexColors.surfaceBorder,
+                          ),
+                        ),
+                        child: ListTile(
+                          dense: true,
+                          onTap: () => state.setTrack(item),
+                          leading: Icon(
+                            selected ? Icons.equalizer_rounded : Icons.album_rounded,
+                            color: item.isPromoted ? GtexColors.gold : GtexColors.pitch,
+                          ),
+                          title: Text(
+                            item.title,
+                            style: TextStyle(
+                              color: GtexColors.text,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13,
+                            ),
+                          ),
+                          subtitle: Text(
+                            '${item.artist} • ${item.genre} • ${item.region}',
+                            style: const TextStyle(
+                              color: GtexColors.textSecondary,
+                              fontSize: 11,
+                            ),
+                          ),
+                          trailing: _Chip(
+                            label: item.isPromoted ? item.sponsorTier : 'Official',
+                            color: item.isPromoted ? GtexColors.gold : GtexColors.pitch,
+                          ),
+                        ),
+                      );
+                    }),
                   ],
                 ],
               ),
@@ -317,6 +514,42 @@ class _GtexAudioSettingsSheetState extends State<GtexAudioSettingsSheet> {
         const SizedBox(height: 16),
         ...catalogue.map((track) => _TrackCreditCard(track: track)),
       ],
+    );
+  }
+}
+
+class _StreamLinkButton extends StatelessWidget {
+  const _StreamLinkButton({
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: color.withValues(alpha: 0.45)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
     );
   }
 }

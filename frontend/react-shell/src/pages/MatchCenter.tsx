@@ -539,8 +539,8 @@ function Pitch2DView({
         {cameraMode !== "2d" && (
           <div className="pointer-events-none absolute inset-x-8 top-10 z-10 flex items-center justify-around overflow-hidden rounded-sm border border-emerald-400/30 bg-gradient-to-r from-slate-950 via-emerald-950/90 to-slate-950 py-1 text-[9px] font-black tracking-[0.26em] text-emerald-300 shadow-[0_0_25px_rgba(0,232,122,0.25)]">
             <span>GTEX SOVEREIGN EXCHANGE</span>
-            <span className="text-amber-400">★ $TALENT LIQUIDITY POOL ★</span>
-            <span className="hidden md:inline">CHAMPIONS BROADCAST FEED</span>
+            <span className="text-amber-400">🎵 GTEX TRAX: KAZEEM – LAGOS NIGHTLIGHTS</span>
+            <span className="hidden md:inline">★ $TALENT LIQUIDITY POOL ★</span>
             <span className="text-cyan-300">70/30 CLUB REVENUE SPLIT</span>
           </div>
         )}

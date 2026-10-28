@@ -29,6 +29,13 @@ abstract class AmbientAudioState extends ChangeNotifier {
   double get masterVolume => mixer.masterVolume;
   double get musicVolume => mixer.musicVolume;
 
+  Set<String> get hypedTrackIds => const <String>{};
+  Map<String, int> get artistTipTotals => const <String, int>{};
+  String get selectedGoalAnthemId => 'gtex-trax-afro-01';
+
+  int hypeCountFor(GtexTrackMetadata track) =>
+      track.hypeCount + (hypedTrackIds.contains(track.id) ? 1 : 0);
+
   Future<void> bootstrap();
   Future<void> preload();
   Future<void> play();
@@ -42,6 +49,10 @@ abstract class AmbientAudioState extends ChangeNotifier {
   Future<void> shuffleTrack() async {}
   Future<void> setTrack(GtexTrackMetadata track) async {}
   Future<void> resolveWebAutoplay() async {}
+
+  void toggleHypeTrack(String trackId) {}
+  void tipArtist(String trackId, {int fanCoins = 10}) {}
+  void setGoalAnthemTrack(String trackId) {}
 }
 
 class AmbientAudioController extends ChangeNotifier
@@ -92,6 +103,10 @@ class AmbientAudioController extends ChangeNotifier
   GtexAudioContext _currentContext = GtexAudioContext.home;
   late GtexTrackMetadata _currentTrack = GtexSoundtrackCatalogue.fallbackTrack;
 
+  final Set<String> _hypedTrackIds = <String>{};
+  final Map<String, int> _artistTipTotals = <String, int>{};
+  String _selectedGoalAnthemId = 'gtex-trax-afro-01';
+
   @override
   bool get isMuted => _isMuted;
 
@@ -130,6 +145,41 @@ class AmbientAudioController extends ChangeNotifier
 
   @override
   double get musicVolume => _mixer.musicVolume;
+
+  @override
+  Set<String> get hypedTrackIds => Set<String>.unmodifiable(_hypedTrackIds);
+
+  @override
+  Map<String, int> get artistTipTotals => Map<String, int>.unmodifiable(_artistTipTotals);
+
+  @override
+  String get selectedGoalAnthemId => _selectedGoalAnthemId;
+
+  @override
+  int hypeCountFor(GtexTrackMetadata track) =>
+      track.hypeCount + (_hypedTrackIds.contains(track.id) ? 1 : 0);
+
+  @override
+  void toggleHypeTrack(String trackId) {
+    if (_hypedTrackIds.contains(trackId)) {
+      _hypedTrackIds.remove(trackId);
+    } else {
+      _hypedTrackIds.add(trackId);
+    }
+    notifyListeners();
+  }
+
+  @override
+  void tipArtist(String trackId, {int fanCoins = 10}) {
+    _artistTipTotals[trackId] = (_artistTipTotals[trackId] ?? 0) + fanCoins;
+    notifyListeners();
+  }
+
+  @override
+  void setGoalAnthemTrack(String trackId) {
+    _selectedGoalAnthemId = trackId;
+    notifyListeners();
+  }
 
   @override
   Future<void> bootstrap() async {

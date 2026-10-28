@@ -29,6 +29,7 @@ import { fmt, useActiveClub, useControlCenter } from "@/lib/owner";
 import { Loading } from "@/components/gtex/ui";
 import { GlobalLiveTicker } from "@/components/gtex/GlobalLiveTicker";
 import { CommandPaletteModal } from "@/components/gtex/ApexWidgets";
+import { GtexTraxTopBarControl } from "@/components/gtex/GtexTraxPlayer";
 import { formatWorldDate, formatWorldTime, useWorldClock } from "@/lib/worldClock";
 
 const NAV = [
@@ -358,8 +359,9 @@ export default function AppShell() {
             </kbd>
           </button>
 
-          {/* Glowing Vault Balance Pills */}
+          {/* Glowing Vault Balance Pills & GTEX TRAX Artist Radio */}
           <div className="ml-auto flex items-center gap-2.5 text-xs">
+            <GtexTraxTopBarControl />
             {hasActiveClub ? (
               <span
                 data-testid="topbar-gtex-balance"

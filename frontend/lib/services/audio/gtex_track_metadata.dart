@@ -17,6 +17,19 @@ class GtexTrackMetadata {
     required this.licenceUrl,
     required this.attributionRequired,
     required this.provenance,
+    this.isPromoted = false,
+    this.sponsorTier = 'Official Theme',
+    this.artistHandle = '@gtex_audio',
+    this.artistBio = 'Official GTEX Soundtrack OS artist.',
+    this.region = 'Global',
+    this.spotifyUrl,
+    this.appleMusicUrl,
+    this.audiomackUrl,
+    this.youtubeUrl,
+    this.hypeCount = 1200,
+    this.streamImpressions = 45000,
+    this.isGoalAnthem = false,
+    this.isWalkoutAnthem = false,
   });
 
   final String id;
@@ -36,6 +49,21 @@ class GtexTrackMetadata {
   final String licenceUrl;
   final bool attributionRequired;
   final String provenance;
+
+  /// Artist promotion, discovery & matchday placement metadata
+  final bool isPromoted;
+  final String sponsorTier; // 'Headliner' | 'Spotlight' | 'Rising Star' | 'Official Theme'
+  final String artistHandle;
+  final String artistBio;
+  final String region;
+  final String? spotifyUrl;
+  final String? appleMusicUrl;
+  final String? audiomackUrl;
+  final String? youtubeUrl;
+  final int hypeCount;
+  final int streamImpressions;
+  final bool isGoalAnthem;
+  final bool isWalkoutAnthem;
 
   String get durationFormatted {
     final int minutes = durationSeconds ~/ 60;
@@ -60,6 +88,19 @@ class GtexTrackMetadata {
       'licence_url': licenceUrl,
       'attribution_required': attributionRequired,
       'provenance': provenance,
+      'is_promoted': isPromoted,
+      'sponsor_tier': sponsorTier,
+      'artist_handle': artistHandle,
+      'artist_bio': artistBio,
+      'region': region,
+      'spotify_url': spotifyUrl,
+      'apple_music_url': appleMusicUrl,
+      'audiomack_url': audiomackUrl,
+      'youtube_url': youtubeUrl,
+      'hype_count': hypeCount,
+      'stream_impressions': streamImpressions,
+      'is_goal_anthem': isGoalAnthem,
+      'is_walkout_anthem': isWalkoutAnthem,
     };
   }
 
@@ -86,6 +127,19 @@ class GtexTrackMetadata {
       licenceUrl: json['licence_url'] as String? ?? 'https://gtex.io/legal/audio-licensing',
       attributionRequired: json['attribution_required'] as bool? ?? false,
       provenance: json['provenance'] as String? ?? 'GTEX In-House Asset Bundle',
+      isPromoted: json['is_promoted'] as bool? ?? false,
+      sponsorTier: json['sponsor_tier'] as String? ?? 'Official Theme',
+      artistHandle: json['artist_handle'] as String? ?? '@gtex_audio',
+      artistBio: json['artist_bio'] as String? ?? 'Official GTEX Soundtrack OS artist.',
+      region: json['region'] as String? ?? 'Global',
+      spotifyUrl: json['spotify_url'] as String?,
+      appleMusicUrl: json['apple_music_url'] as String?,
+      audiomackUrl: json['audiomack_url'] as String?,
+      youtubeUrl: json['youtube_url'] as String?,
+      hypeCount: json['hype_count'] as int? ?? 1200,
+      streamImpressions: json['stream_impressions'] as int? ?? 45000,
+      isGoalAnthem: json['is_goal_anthem'] as bool? ?? false,
+      isWalkoutAnthem: json['is_walkout_anthem'] as bool? ?? false,
     );
   }
 }

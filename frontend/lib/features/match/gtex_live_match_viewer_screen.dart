@@ -482,7 +482,7 @@ class _GtexLiveMatchViewerScreenState extends State<GtexLiveMatchViewerScreen>
                       style: TextStyle(color: _green, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 1.5),
                     ),
                     Text(
-                      '★ \$TALENT LIQUIDITY ★',
+                      '🎵 GTEX TRAX: KAZEEM – LAGOS NIGHTLIGHTS',
                       style: TextStyle(color: _amber, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 1.5),
                     ),
                     Text(
