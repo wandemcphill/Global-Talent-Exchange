@@ -376,6 +376,49 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
         "inner_monologue": inner_monologue,
         "decision_factors": decision_factors,
         "readiness_assessment": readiness_assessment,
+        "origin_backstory": (
+            {
+                "title": "Street Cage Prodigy",
+                "story": "Discovered playing barefoot five-a-side on concrete courts; fearless 1v1 flair in big games and fiercely loyal to family.",
+                "signature_perk": "+Clutch Derby Performance",
+                "hidden_flaw": "Suspicious of corporate wage caps",
+            }
+            if sum(ord(ch) for ch in str(p.id or p.name)) % 3 == 0
+            else (
+                {
+                    "title": "Dynasty Legacy Scion",
+                    "story": "Child of a former continental icon; grew up inside elite dressing rooms with high tactical IQ and media poise.",
+                    "signature_perk": "+Media Marketability & Composure",
+                    "hidden_flaw": "Demands marquee status early",
+                }
+                if sum(ord(ch) for ch in str(p.id or p.name)) % 3 == 1
+                else {
+                    "title": "Academy Reject Chip-on-Shoulder",
+                    "story": "Released by a rival academy at age 14 for being 'too small'; obsessive after-hours work rate and holds a grudge against rivals.",
+                    "signature_perk": "+25% Training Growth vs. Rivals",
+                    "hidden_flaw": "Volatile when benched in grudge matches",
+                }
+            )
+        ),
+        "super_agent": {
+            "agency_name": "Apex Power-Broker Representation" if ambition >= 15 else "Meridian Football Advisory",
+            "agent_style": "Mino-Style Super-Agent" if ambition >= 15 else "Pragmatic Career Planner",
+            "aggression": 18 if ambition >= 15 else 10,
+            "current_demand": (
+                "Monitoring Tier-1 club interest; expects improved contract or Showroom luxury gift."
+                if ambition >= 15
+                else "Prioritizing consistent match minutes and high-level training facilities."
+            ),
+        },
+        "drama_arc": {
+            "headline": f"Agent Transfer Rumblings Around {p.name}" if p.morale < 45 else f"Breakout Star Saga: {p.name}",
+            "risk_level": "high" if p.morale < 45 else ("medium" if ambition >= 16 and p.minutes < 90 else "low"),
+            "owner_hook": (
+                "Offer improved youth contract, promise minutes, or gift a Showroom luxury item to lock down loyalty."
+                if p.morale < 55
+                else "High morale — prime candidate for Senior Promotion or Sponsor Endorsement."
+            ),
+        },
     }
 
 
@@ -1865,7 +1908,32 @@ def get_club_staff(session: Session, user_id: str, club_id: str) -> dict[str, An
             appointed[r] = None
 
     staff_effects = engine.calculate_staff_effects(appointed)
-    candidates = list(engine.EXECUTIVE_STAFF_CATALOG)
+    agenda_by_role = {
+        "general_manager": ("Build a Self-Sustaining Trading & Commercial Empire", "Ruthless Release-Clause Shark"),
+        "first_team_manager": ("Win Silverware Now & Demand Tactical Autonomy", "Touchline Firebrand"),
+        "head_of_youth_development": ("Golden Generation Purist (50%+ Academy XI)", "Favorite-Son Wonderkid Bias"),
+        "chief_scout": ("Uncover Unheralded Continental Wonderkids", "Underground Agent Network"),
+        "medical_director": ("Zero-Tolerance Sports Science Load Management", "Strict Recovery Veto"),
+    }
+    for r_key, st_val in list(appointed.items()):
+        if isinstance(st_val, dict):
+            ag, tr = agenda_by_role.get(r_key, ("Elevate Club Standards", "Boardroom Strategist"))
+            st_copy = dict(st_val)
+            st_copy.setdefault("personal_agenda", ag)
+            st_copy.setdefault("secret_trait", tr)
+            st_copy.setdefault(
+                "poaching_risk",
+                "high" if int(st_copy.get("mood", 75)) < 55 or (int(st_copy.get("ambition", 12)) >= 16 and state.prestige < 60) else "low",
+            )
+            appointed[r_key] = st_copy
+
+    candidates = []
+    for cand in engine.EXECUTIVE_STAFF_CATALOG:
+        c_copy = dict(cand)
+        ag, tr = agenda_by_role.get(str(c_copy.get("role")), ("Elevate Club Standards", "Boardroom Strategist"))
+        c_copy.setdefault("personal_agenda", ag)
+        c_copy.setdefault("secret_trait", tr)
+        candidates.append(c_copy)
 
     return {
         "club_id": club_id,
@@ -2230,4 +2298,289 @@ def conduct_press_conference(session: Session, user_id: str, club_id: str, tone:
         "manager_loyalty_delta": manager_loyalty_delta,
         "prestige_delta": prestige_delta,
         "broadcast_event": storytelling.broadcast_dict(broadcast) if broadcast else None,
+    }
+
+
+# ---------- GM Sponsor Contract Negotiation & Shareholder Dividend / Takeover Loops ----------
+
+def get_sponsor_offers(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
+    state = require_state(session, club_id, user_id)
+    facs = dict(state.facilities_json or {})
+    exec_staff = dict(facs.get("_executive_staff") or {})
+    gm = exec_staff.get("general_manager") or {
+        "name": "Dayo Adeleke",
+        "negotiation": 15,
+    }
+    gm_name = str(gm.get("name", "General Manager"))
+    gm_nego = int(gm.get("negotiation", 13))
+    comm_level = int(facs.get("commercial", 1))
+
+    offers = engine.generate_sponsor_offers(
+        club_id=club_id,
+        prestige=state.prestige,
+        gm_negotiation=gm_nego,
+        commercial_level=comm_level,
+    )
+    deals = session.scalars(
+        select(OwnerSponsorDeal)
+        .where(OwnerSponsorDeal.club_id == club_id)
+        .order_by(OwnerSponsorDeal.created_at.desc())
+    ).all()
+
+    return {
+        "club_id": club_id,
+        "gm_name": gm_name,
+        "gm_negotiation": gm_nego,
+        "club_prestige": state.prestige,
+        "prestige_tier": engine.prestige_tier_label(state.prestige),
+        "active_win_bonus_clause_gtex": int(facs.get("_sponsor_win_bonus_clause_gtex", 0)),
+        "offers": offers,
+        "active_deals": [
+            {
+                "id": d.id,
+                "sponsor_name": d.sponsor_name,
+                "slot": d.slot,
+                "per_match_gross": str(d.per_match_gross),
+                "matches_remaining": d.matches_remaining,
+                "status": d.status,
+            }
+            for d in deals
+        ],
+    }
+
+
+def sign_sponsor_offer(session: Session, user_id: str, club_id: str, offer_id: str) -> dict[str, Any]:
+    state = require_state(session, club_id, user_id)
+    info = get_sponsor_offers(session, user_id, club_id)
+    offer = next((o for o in info["offers"] if o["offer_id"] == offer_id), None)
+    if not offer:
+        raise OwnerError("sponsor_offer_not_found", 404, f"Sponsor offer '{offer_id}' not found.")
+    if offer.get("locked"):
+        raise OwnerError(
+            "sponsor_prestige_insufficient",
+            403,
+            f"Club prestige ({state.prestige}) is below the required {offer['min_prestige_required']} for {offer['sponsor_name']}.",
+        )
+
+    upfront = int(offer["upfront_signing_bonus_gtex"])
+    per_match = Decimal(str(offer["per_match_gross_gtex"]))
+    win_clause = int(offer["win_bonus_clause_gtex"])
+    duration = int(offer.get("matches_duration", 10))
+
+    if upfront > 0:
+        ledger.record(
+            session,
+            event_type="sponsor_signing_bonus",
+            source=ledger.PLATFORM_SPONSORS,
+            destination=ledger.club_account(club_id),
+            currency=ledger.GTEX,
+            gross=upfront,
+            club_id=club_id,
+            user_id=user_id,
+            related_type="sponsor_offer",
+            related_id=offer_id,
+            memo=f"Sponsor signing bonus: {offer['sponsor_name']} ({offer['slot']})",
+        )
+
+    deal = OwnerSponsorDeal(
+        club_id=club_id,
+        sponsor_name=offer["sponsor_name"],
+        slot=offer["slot"],
+        per_match_gross=per_match,
+        status="active",
+        matches_remaining=duration,
+    )
+    session.add(deal)
+
+    facs = dict(state.facilities_json or {})
+    facs["_sponsor_win_bonus_clause_gtex"] = win_clause
+    facs["_active_sponsor_name"] = offer["sponsor_name"]
+    state.facilities_json = facs
+    state.prestige = min(100, state.prestige + 1)
+    sync_club_prestige_to_reputation(session, club_id, state.prestige)
+    session.flush()
+
+    return {
+        "status": "signed",
+        "club_id": club_id,
+        "offer": offer,
+        "deal_id": deal.id,
+        "upfront_signing_bonus_gtex": upfront,
+        "win_bonus_clause_gtex": win_clause,
+        "prestige": state.prestige,
+    }
+
+
+def get_club_shareholders(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
+    from app.models.user import User
+    from app.owner_console import money
+    from app.owner_console.models import LedgerEvent, SupportUnitHolding
+
+    state = get_state(session, club_id)
+    if state is None:
+        raise OwnerError("club_not_found", 404, "Club not found.")
+
+    holdings = list(
+        session.scalars(
+            select(SupportUnitHolding)
+            .where(SupportUnitHolding.club_id == club_id, SupportUnitHolding.units > 0)
+            .order_by(SupportUnitHolding.units.desc())
+        ).all()
+    )
+    total_units = sum(h.units for h in holdings)
+    my_holding = next((h for h in holdings if h.user_id == user_id), None)
+    my_units = int(my_holding.units) if my_holding else 0
+
+    acct = ledger.club_account(club_id)
+    waterfall_earned = session.scalar(
+        select(func.coalesce(func.sum(LedgerEvent.net_amount), 0)).where(
+            LedgerEvent.destination_account == acct,
+            LedgerEvent.currency == ledger.GTEX,
+            LedgerEvent.status == "completed",
+            LedgerEvent.event_type.in_(
+                (
+                    "tv_broadcast_revenue",
+                    "competition_prize",
+                    "competition_entry_grant",
+                    "sponsor_revenue",
+                    "sponsor_signing_bonus",
+                    "gate_receipts",
+                )
+            ),
+        )
+    )
+    dividends_paid = session.scalar(
+        select(func.coalesce(func.sum(LedgerEvent.gross_amount), 0)).where(
+            LedgerEvent.source_account == acct,
+            LedgerEvent.event_type == "shareholder_dividend",
+            LedgerEvent.status == "completed",
+        )
+    )
+    accrued_pool = max(
+        250,
+        int(Decimal(str(waterfall_earned or 0)) * Decimal("0.15") - Decimal(str(dividends_paid or 0))),
+    )
+
+    shareholders_list: list[dict[str, Any]] = []
+    for h in holdings:
+        u = session.get(User, h.user_id)
+        pct = round((h.units / max(1, total_units)) * 100, 1)
+        est_div = int(round(accrued_pool * (h.units / max(1, total_units))))
+        tier_info = money._tier(h.units)
+        shareholders_list.append(
+            {
+                "user_id": h.user_id,
+                "username": u.username if u else f"investor_{h.user_id[:6]}",
+                "units": h.units,
+                "share_pct": pct,
+                "tier": tier_info.get("tier"),
+                "estimated_dividend_gtex": est_div,
+            }
+        )
+
+    valuation = int(club_value(session, state))
+    return {
+        "club_id": club_id,
+        "club_name": state.club_name,
+        "prestige": state.prestige,
+        "prestige_tier": engine.prestige_tier_label(state.prestige),
+        "valuation_gtex": valuation,
+        "total_minority_units": total_units,
+        "shareholder_count": len(holdings),
+        "accrued_dividend_pool_gtex": accrued_pool,
+        "minority_takeover_threshold_units": 500,
+        "my_units": my_units,
+        "shareholders": shareholders_list,
+    }
+
+
+def distribute_shareholder_dividend(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    amount_gtex: int | None = None,
+) -> dict[str, Any]:
+    from app.owner_console.models import SupportUnitHolding
+
+    state = require_state(session, club_id, user_id)
+    info = get_club_shareholders(session, user_id, club_id)
+    holdings = list(
+        session.scalars(
+            select(SupportUnitHolding).where(SupportUnitHolding.club_id == club_id, SupportUnitHolding.units > 0)
+        ).all()
+    )
+    if not holdings:
+        holding = SupportUnitHolding(user_id=user_id, club_id=club_id, units=10)
+        session.add(holding)
+        session.flush()
+        holdings = [holding]
+
+    total_units = sum(h.units for h in holdings)
+    pool_to_pay = int(amount_gtex) if amount_gtex and int(amount_gtex) > 0 else int(info["accrued_dividend_pool_gtex"])
+    pool_to_pay = max(100, min(pool_to_pay, 25_000))
+
+    club_acct = ledger.club_account(club_id)
+    bal = ledger.balance(session, club_acct, ledger.GTEX)
+    if bal < pool_to_pay:
+        raise OwnerError("insufficient_club_cash", 400, f"Club balance {bal} GTX is insufficient for {pool_to_pay} GTX dividend.")
+
+    distributions: list[dict[str, Any]] = []
+    for h in holdings:
+        payout = max(1, int(round(pool_to_pay * (h.units / max(1, total_units)))))
+        ledger.record(
+            session,
+            event_type="shareholder_dividend",
+            source=club_acct,
+            destination=ledger.user_account(h.user_id),
+            currency=ledger.GTEX,
+            gross=payout,
+            balance_class="earned",
+            club_id=club_id,
+            user_id=h.user_id,
+            related_type="shareholder_dividend",
+            related_id=club_id,
+            memo=f"Seasonal TV & Trophy Shareholder Dividend ({h.units} units in {state.club_name})",
+        )
+        distributions.append({"user_id": h.user_id, "units": h.units, "payout_gtex": payout})
+
+    state.fans = max(200, state.fans + 25)
+    state.prestige = min(100, state.prestige + 1)
+    sync_club_prestige_to_reputation(session, club_id, state.prestige)
+    session.flush()
+
+    return {
+        "status": "distributed",
+        "club_id": club_id,
+        "total_distributed_gtex": sum(d["payout_gtex"] for d in distributions),
+        "recipient_count": len(distributions),
+        "distributions": distributions,
+        "prestige": state.prestige,
+    }
+
+
+def submit_takeover_bid(session: Session, user_id: str, club_id: str, units: int) -> dict[str, Any]:
+    from app.owner_console import money
+
+    res = money.buy_support_units(session, user_id, club_id, int(units))
+    info = get_club_shareholders(session, user_id, club_id)
+    takeover_triggered = res["units"] >= info["minority_takeover_threshold_units"]
+    state = get_state(session, club_id)
+    if takeover_triggered and state is not None:
+        facs = dict(state.facilities_json or {})
+        facs["_co_chair_user_id"] = user_id
+        state.facilities_json = facs
+        state.prestige = min(100, state.prestige + 2)
+        sync_club_prestige_to_reputation(session, club_id, state.prestige)
+        session.flush()
+
+    return {
+        **res,
+        "takeover_triggered": takeover_triggered,
+        "shareholders_summary": info,
+    }
+
+
+def _unused_service_tail():
+    return {
+        "broadcast_event": None
     }

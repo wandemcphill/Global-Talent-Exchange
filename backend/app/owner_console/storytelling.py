@@ -1891,7 +1891,7 @@ def get_daily_briefing(session: Session, user_id: str, club_id: str, force_refre
 
     facs = dict(state.facilities_json or {})
     cached = facs.get("_daily_briefing")
-    if cached and not force_refresh and cached.get("world_day") == world_day:
+    if cached and not force_refresh and cached.get("world_day") == world_day and "boardroom_dilemma" in cached:
         return cached
 
     gm = (facs.get("_executive_staff") or {}).get("general_manager") or {
@@ -1943,6 +1943,14 @@ def get_daily_briefing(session: Session, user_id: str, club_id: str, force_refre
         ],
     }
 
+    if "boardroom_dilemma" not in briefing:
+        briefing["boardroom_dilemma"] = engine.generate_boardroom_dilemma(
+            club_id=club_id,
+            world_day=world_day,
+            gm_name=str(gm.get("name", "General Manager")),
+            manager_name=str(mgr.get("name", "First-Team Manager")),
+            hoyd_name=str(hoyd.get("name", "Head of Youth Development")),
+        )
     facs["_daily_briefing"] = briefing
     state.facilities_json = facs
     return briefing
@@ -2045,4 +2053,131 @@ def converse_with_staff(session: Session, user_id: str, club_id: str, role: str,
         "staff_message": staff_entry,
         "history": history[-30:],
         "messages": history[-30:],
+    }
+
+
+def resolve_briefing_dilemma(session: Session, user_id: str, club_id: str, choice_id: str) -> dict[str, Any]:
+    from app.owner_console import engine, ledger, service
+
+    state = require_state(session, club_id, user_id)
+    briefing = dict(get_daily_briefing(session, user_id, club_id, force_refresh=False))
+    dilemma = dict(briefing.get("boardroom_dilemma") or {})
+    if not dilemma:
+        raise OwnerError("dilemma_not_found", 404, "No active boardroom dilemma found in today's briefing.")
+    if dilemma.get("status") == "resolved":
+        return {"briefing": briefing, "dilemma": dilemma, "outcome": dilemma.get("resolution_outcome")}
+
+    choices = list(dilemma.get("choices") or [])
+    chosen = next((c for c in choices if c.get("choice_id") == choice_id), None)
+    if not chosen:
+        raise OwnerError("invalid_dilemma_choice", 400, f"Choice '{choice_id}' is not valid for this dilemma.")
+
+    facs = dict(state.facilities_json or {})
+    exec_staff = dict(facs.get("_executive_staff") or {})
+    mgr = dict(state.manager_json or engine.manager_profile(engine.DEFAULT_MANAGER))
+    squad_players = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
+
+    def _shift_exec_mood(role_key: str, delta: int) -> None:
+        if role_key in exec_staff and isinstance(exec_staff[role_key], dict):
+            st = dict(exec_staff[role_key])
+            st["mood"] = int(engine.clamp(int(st.get("mood", 75)) + delta, 0, 100))
+            exec_staff[role_key] = st
+
+    outcome_notes: list[str] = []
+    if choice_id == "enforce_gm_wage_cap":
+        ledger.record(
+            session,
+            event_type="commercial_cost_rebate",
+            source=ledger.PLATFORM_SPONSORS,
+            destination=ledger.club_account(club_id),
+            currency=ledger.GTEX,
+            gross=500,
+            club_id=club_id,
+            user_id=user_id,
+            related_type="dilemma",
+            related_id=dilemma.get("dilemma_id"),
+            memo="Boardroom dilemma: GM wage cap efficiency rebate",
+        )
+        _shift_exec_mood("general_manager", 8)
+        mgr["mood"] = int(engine.clamp(int(mgr.get("mood", 70)) - 4, 0, 100))
+        outcome_notes.append("Enforced GM's wage discipline (+500 GTEX treasury efficiency, +8 GM mood, -4 Manager mood).")
+    elif choice_id == "back_manager_target":
+        for p in squad_players:
+            p.morale = int(engine.clamp(p.morale + 6, 0, 100))
+        mgr["mood"] = int(engine.clamp(int(mgr.get("mood", 70)) + 10, 0, 100))
+        _shift_exec_mood("general_manager", -4)
+        outcome_notes.append("Backed First-Team Manager's squad priority (+6 Squad Morale, +10 Manager mood, -4 GM mood).")
+    elif choice_id == "owner_performance_compromise":
+        bal = ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)
+        if bal >= 400:
+            ledger.record(
+                session,
+                event_type="boardroom_incentive_pool",
+                source=ledger.club_account(club_id),
+                destination=ledger.WORLD_CLUBS,
+                currency=ledger.GTEX,
+                gross=400,
+                club_id=club_id,
+                user_id=user_id,
+                related_type="dilemma",
+                related_id=dilemma.get("dilemma_id"),
+                memo="Boardroom dilemma: performance-linked incentive compromise",
+            )
+        _shift_exec_mood("general_manager", 5)
+        mgr["mood"] = int(engine.clamp(int(mgr.get("mood", 70)) + 5, 0, 100))
+        for p in squad_players:
+            p.morale = int(engine.clamp(p.morale + 4, 0, 100))
+        state.prestige = int(engine.clamp(state.prestige + 1, 0, 100))
+        service.sync_club_prestige_to_reputation(session, club_id, state.prestige)
+        outcome_notes.append("Funded performance-linked clause (+5 GM & Manager mood, +4 Squad Morale, +1 Prestige).")
+    elif choice_id == "mandate_youth_minutes":
+        _shift_exec_mood("head_of_youth_development", 10)
+        mgr["mood"] = int(engine.clamp(int(mgr.get("mood", 70)) - 3, 0, 100))
+        for p in squad_players:
+            if p.is_regen:
+                p.morale = int(engine.clamp(p.morale + 8, 0, 100))
+                pers = dict(p.personality_json or {})
+                pers["loyalty"] = min(20, int(pers.get("loyalty", 10)) + 1)
+                p.personality_json = pers
+        state.prestige = int(engine.clamp(state.prestige + 1, 0, 100))
+        service.sync_club_prestige_to_reputation(session, club_id, state.prestige)
+        outcome_notes.append("Mandated youth pathway minutes (+10 HOYD mood, +8 Regen morale, +1 Prestige).")
+    elif choice_id == "prioritize_senior_results":
+        mgr["mood"] = int(engine.clamp(int(mgr.get("mood", 70)) + 8, 0, 100))
+        _shift_exec_mood("head_of_youth_development", -4)
+        for p in squad_players:
+            if not p.is_regen:
+                p.morale = int(engine.clamp(p.morale + 5, 0, 100))
+        outcome_notes.append("Prioritized immediate senior results (+8 Manager mood, +5 Senior morale, -4 HOYD mood).")
+    else:
+        _shift_exec_mood("head_of_youth_development", 5)
+        _shift_exec_mood("general_manager", 5)
+        mgr["mood"] = int(engine.clamp(int(mgr.get("mood", 70)) + 5, 0, 100))
+        for p in squad_players:
+            p.morale = int(engine.clamp(p.morale + 4, 0, 100))
+        state.prestige = int(engine.clamp(state.prestige + 1, 0, 100))
+        service.sync_club_prestige_to_reputation(session, club_id, state.prestige)
+        outcome_notes.append("Established structured rotation & alignment policy (+5 Staff mood, +4 Squad Morale, +1 Prestige).")
+
+    dilemma["status"] = "resolved"
+    dilemma["selected_choice_id"] = choice_id
+    dilemma["resolution_outcome"] = " ".join(outcome_notes)
+    briefing["boardroom_dilemma"] = dilemma
+
+    facs["_executive_staff"] = exec_staff
+    facs["_daily_briefing"] = briefing
+    state.facilities_json = facs
+    state.manager_json = mgr
+    session.flush()
+
+    return {
+        "briefing": briefing,
+        "dilemma": dilemma,
+        "outcome": dilemma["resolution_outcome"],
+    }
+
+
+def _unused_storytelling_tail():
+    return {
+        "messages": []
     }

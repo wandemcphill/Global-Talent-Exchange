@@ -272,11 +272,13 @@ class GtexOwnerBriefingPanel extends StatelessWidget {
     required this.state,
     required this.onNavigate,
     this.onRetry,
+    this.onResolveDilemma,
   });
 
   final BriefingViewState state;
   final ValueChanged<String> onNavigate;
   final VoidCallback? onRetry;
+  final Future<void> Function(String choiceId)? onResolveDilemma;
 
   @override
   Widget build(BuildContext context) {
@@ -320,6 +322,11 @@ class GtexOwnerBriefingPanel extends StatelessWidget {
                   style: TextStyle(color: GtexColors.gold, fontSize: 12),
                 ),
               ),
+            if (briefing.boardroomDilemma != null)
+              _BoardroomDilemmaCard(
+                dilemma: briefing.boardroomDilemma!,
+                onResolve: onResolveDilemma,
+              ),
             for (final BriefingEvent e in briefing.events)
               _EventCard(event: e, onNavigate: onNavigate),
             if (briefing.rejectedEventCount > 0)
@@ -346,6 +353,337 @@ class GtexOwnerBriefingPanel extends StatelessWidget {
       subtitle: 'Verified events only',
       accent: GtexColors.gold,
       child: body,
+    );
+  }
+}
+
+class _BoardroomDilemmaCard extends StatefulWidget {
+  const _BoardroomDilemmaCard({
+    required this.dilemma,
+    this.onResolve,
+  });
+
+  final BoardroomDilemma dilemma;
+  final Future<void> Function(String choiceId)? onResolve;
+
+  @override
+  State<_BoardroomDilemmaCard> createState() => _BoardroomDilemmaCardState();
+}
+
+class _BoardroomDilemmaCardState extends State<_BoardroomDilemmaCard> {
+  String? _busyChoiceId;
+  String? _selectedChoiceId;
+  String? _resolutionOutcome;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedChoiceId = widget.dilemma.selectedChoiceId;
+    _resolutionOutcome = widget.dilemma.resolutionOutcome;
+  }
+
+  @override
+  void didUpdateWidget(covariant _BoardroomDilemmaCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.dilemma != oldWidget.dilemma) {
+      if (widget.dilemma.selectedChoiceId != null) {
+        _selectedChoiceId = widget.dilemma.selectedChoiceId;
+      }
+      if (widget.dilemma.resolutionOutcome != null) {
+        _resolutionOutcome = widget.dilemma.resolutionOutcome;
+      }
+    }
+  }
+
+  Future<void> _choose(BoardroomDilemmaChoice choice) async {
+    if (widget.onResolve == null) return;
+    setState(() {
+      _busyChoiceId = choice.choiceId;
+      _error = null;
+    });
+    try {
+      await widget.onResolve!(choice.choiceId);
+      if (mounted) {
+        setState(() {
+          _selectedChoiceId = choice.choiceId;
+          _resolutionOutcome =
+              'Decision ratified: ${choice.label} (${choice.effectsPreview})';
+          _busyChoiceId = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _busyChoiceId = null;
+          _error = '$e';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final BoardroomDilemma d = widget.dilemma;
+    final bool isResolved =
+        d.isResolved || (_selectedChoiceId != null && _selectedChoiceId!.isNotEmpty);
+    final String? activeSelectedId = _selectedChoiceId ?? d.selectedChoiceId;
+    final String? outcomeText = _resolutionOutcome ?? d.resolutionOutcome;
+
+    return Container(
+      key: const Key('owner-boardroom-dilemma-card'),
+      margin: const EdgeInsets.only(bottom: GtexSpacing.sm),
+      padding: const EdgeInsets.all(GtexSpacing.sm),
+      decoration: BoxDecoration(
+        color: GtexColors.panelStrong,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isResolved
+              ? GtexColors.pitch.withValues(alpha: 0.6)
+              : GtexColors.gold.withValues(alpha: 0.8),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              const Icon(Icons.meeting_room_rounded, size: 16, color: GtexColors.gold),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text(
+                  'EXECUTIVE BOARDROOM DILEMMA',
+                  style: TextStyle(
+                    color: GtexColors.gold,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              GtexStatusChip(
+                key: const Key('boardroom-dilemma-status-chip'),
+                label: isResolved ? 'Resolved' : 'Action Required',
+                color: isResolved ? GtexColors.pitch : GtexColors.gold,
+                compact: true,
+                icon: isResolved ? Icons.check_circle_outline : Icons.pending_actions_rounded,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            d.title,
+            key: const Key('boardroom-dilemma-title'),
+            style: const TextStyle(
+              color: GtexColors.text,
+              fontWeight: FontWeight.w900,
+              fontSize: 15,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            d.conflictSummary,
+            key: const Key('boardroom-dilemma-summary'),
+            style: const TextStyle(
+              color: GtexColors.textSecondary,
+              fontSize: 12,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: GtexColors.panel,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: GtexColors.line),
+            ),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    d.roleA,
+                    style: const TextStyle(
+                      color: GtexColors.cyan,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 6),
+                  child: Text(
+                    'VS',
+                    style: TextStyle(
+                      color: GtexColors.gold,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    d.roleB,
+                    textAlign: TextAlign.end,
+                    style: const TextStyle(
+                      color: GtexColors.purple,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Resolution Choices:',
+            style: TextStyle(
+              color: GtexColors.textMuted,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          for (final BoardroomDilemmaChoice choice in d.choices) ...<Widget>[
+            _buildChoiceTile(choice, isResolved, activeSelectedId),
+            const SizedBox(height: 6),
+          ],
+          if (outcomeText != null && outcomeText.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 4),
+            Container(
+              key: const Key('boardroom-dilemma-outcome'),
+              width: double.infinity,
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: GtexColors.pitch.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: GtexColors.pitch.withValues(alpha: 0.5)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const Icon(Icons.verified_rounded, size: 16, color: GtexColors.pitch),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      outcomeText,
+                      style: const TextStyle(
+                        color: GtexColors.text,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (_error != null) ...<Widget>[
+            const SizedBox(height: 4),
+            Text(
+              _error!,
+              key: const Key('boardroom-dilemma-error'),
+              style: const TextStyle(color: GtexColors.danger, fontSize: 12),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChoiceTile(
+    BoardroomDilemmaChoice choice,
+    bool isResolved,
+    String? activeSelectedId,
+  ) {
+    final bool isSelected = activeSelectedId == choice.choiceId;
+    final bool isBusy = _busyChoiceId == choice.choiceId;
+
+    return Container(
+      key: Key('dilemma-choice-${choice.choiceId}'),
+      padding: const EdgeInsets.all(GtexSpacing.sm),
+      decoration: BoxDecoration(
+        color: isSelected ? GtexColors.pitch.withValues(alpha: 0.1) : GtexColors.panel,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isSelected
+              ? GtexColors.pitch
+              : (isResolved ? GtexColors.line : GtexColors.gold.withValues(alpha: 0.45)),
+          width: isSelected ? 2 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  choice.label,
+                  style: TextStyle(
+                    color: isSelected ? GtexColors.pitch : GtexColors.text,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              if (isSelected)
+                const GtexStatusChip(
+                  label: 'Selected',
+                  color: GtexColors.pitch,
+                  compact: true,
+                  icon: Icons.check,
+                )
+              else if (choice.backedRole.isNotEmpty)
+                GtexStatusChip(
+                  label: 'Backs ${choice.backedRole}',
+                  color: GtexColors.cyan,
+                  compact: true,
+                ),
+            ],
+          ),
+          if (choice.summary.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 3),
+            Text(
+              choice.summary,
+              style: const TextStyle(color: GtexColors.textSecondary, fontSize: 12),
+            ),
+          ],
+          if (choice.effectsPreview.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              decoration: BoxDecoration(
+                color: GtexColors.panelStrong,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                'Effects: ${choice.effectsPreview}',
+                style: const TextStyle(
+                  color: GtexColors.gold,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+          if (!isResolved && widget.onResolve != null) ...<Widget>[
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerRight,
+              child: GtexActionButton(
+                key: Key('dilemma-choice-btn-${choice.choiceId}'),
+                label: isBusy ? 'Submitting...' : 'Choose Option',
+                compact: true,
+                icon: Icons.check_circle_outline,
+                onPressed: _busyChoiceId == null ? () => _choose(choice) : null,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

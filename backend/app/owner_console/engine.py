@@ -932,3 +932,292 @@ def explain_match(
         "draw": f"{mine['name']} and {theirs['name']} share the points",
     }[result]
     return {"result": result, "headline": headline, "why": factors, "next_actions": next_actions}
+
+
+def generate_sponsor_offers(
+    club_id: str,
+    prestige: int = 35,
+    gm_negotiation: int = 12,
+    commercial_level: int = 1,
+) -> list[dict[str, Any]]:
+    """Generate 3 competing seasonal sponsor offers presented by the General Manager, gated by club prestige."""
+    nego_mult = 1.0 + max(0, int(gm_negotiation) - 10) * 0.04 + max(0, int(commercial_level) - 1) * 0.08
+    prestige_val = int(prestige)
+
+    base_offers = [
+        {
+            "offer_id": "sponsor_guaranteed_airways",
+            "sponsor_name": "Aether Global Airways",
+            "slot": "Front of Shirt",
+            "strategy_profile": "guaranteed_heavy",
+            "upfront_signing_bonus_gtex": int(round(1_200 * nego_mult, -1)),
+            "per_match_gross_gtex": int(round(280 * nego_mult, -1)),
+            "win_bonus_clause_gtex": int(round(80 * nego_mult, -1)),
+            "matches_duration": 10,
+            "min_prestige_required": 20,
+            "gm_recommendation": "High guaranteed upfront liquidity with reliable per-match baseline; ideal for stabilizing club cash flow.",
+        },
+        {
+            "offer_id": "sponsor_balanced_chronos",
+            "sponsor_name": "Chronos Precision Labs",
+            "slot": "Stadium Naming & Kit Sleeve",
+            "strategy_profile": "balanced",
+            "upfront_signing_bonus_gtex": int(round(900 * nego_mult, -1)),
+            "per_match_gross_gtex": int(round(360 * nego_mult, -1)),
+            "win_bonus_clause_gtex": int(round(220 * nego_mult, -1)),
+            "matches_duration": 10,
+            "min_prestige_required": 40,
+            "gm_recommendation": "Balanced structure pairing a solid signing bonus with strong matchday and victory incentives.",
+        },
+        {
+            "offer_id": "sponsor_superclub_sovereign",
+            "sponsor_name": "Sovereign Quantum Group",
+            "slot": "Global Principal Partner",
+            "strategy_profile": "trophy_incentive_heavy",
+            "upfront_signing_bonus_gtex": int(round(1_800 * nego_mult, -1)),
+            "per_match_gross_gtex": int(round(520 * nego_mult, -1)),
+            "win_bonus_clause_gtex": int(round(480 * nego_mult, -1)),
+            "matches_duration": 10,
+            "min_prestige_required": 65,
+            "gm_recommendation": "Marquee superclub contract with massive victory bonus clauses. Requires Tier 2+ Prestige or elite GM negotiation.",
+        },
+    ]
+
+    out: list[dict[str, Any]] = []
+    for offer in base_offers:
+        min_p = int(offer["min_prestige_required"])
+        effective_min_p = max(15, min_p - (10 if int(gm_negotiation) >= 17 else 0))
+        locked = prestige_val < effective_min_p
+        out.append(
+            {
+                **offer,
+                "min_prestige_required": effective_min_p,
+                "locked": locked,
+            }
+        )
+    return out
+
+
+def generate_boardroom_dilemma(
+    club_id: str,
+    world_day: int,
+    gm_name: str = "General Manager",
+    manager_name: str = "First-Team Manager",
+    hoyd_name: str = "Head of Youth Development",
+) -> dict[str, Any]:
+    """Generate an interactive multi-choice boardroom dilemma for the Daily AI Owner Briefing."""
+    templates = [
+        {
+            "key": "wage_cap_vs_target",
+            "title": "Executive Clash: Wage Cap Discipline vs. Marquee Reinforcements",
+            "conflict_summary": (
+                f"{manager_name} (First-Team Manager) is demanding immediate wage-structure flexibility to keep senior stars motivated, "
+                f"while {gm_name} (General Manager) insists on enforcing strict commercial cost controls to protect the club treasury."
+            ),
+            "role_a": f"General Manager ({gm_name})",
+            "role_b": f"First-Team Manager ({manager_name})",
+            "choices": [
+                {
+                    "choice_id": "enforce_gm_wage_cap",
+                    "label": "Enforce GM's Wage Cap",
+                    "summary": f"Back {gm_name}'s financial discipline and rebate commercial overhead into the club treasury.",
+                    "backed_role": "general_manager",
+                    "effects_preview": "+500 GTEX Treasury Efficiency · +8 GM Mood · -4 First-Team Manager Mood",
+                },
+                {
+                    "choice_id": "back_manager_target",
+                    "label": "Back Manager's Squad Priority",
+                    "summary": f"Authorize {manager_name}'s dressing-room incentives to energize the senior squad.",
+                    "backed_role": "first_team_manager",
+                    "effects_preview": "+6 Squad Morale · +10 First-Team Manager Mood · -4 GM Mood",
+                },
+                {
+                    "choice_id": "owner_performance_compromise",
+                    "label": "Fund Performance-Linked Clause",
+                    "summary": "Inject 400 GTEX into a performance bonus pool that satisfies both executives and boosts club prestige.",
+                    "backed_role": "compromise",
+                    "effects_preview": "-400 GTEX Club Cash · +5 GM & Manager Mood · +4 Squad Morale · +1 Prestige",
+                },
+            ],
+        },
+        {
+            "key": "academy_pathway_vs_veterans",
+            "title": "Boardroom Debate: Academy Regen Pathway vs. Veteran Certainty",
+            "conflict_summary": (
+                f"{hoyd_name} (Head of Youth Development) argues our top academy prospects need guaranteed match minutes now, "
+                f"whereas {manager_name} (First-Team Manager) wants to rely on seasoned starters for immediate results."
+            ),
+            "role_a": f"Head of Youth Development ({hoyd_name})",
+            "role_b": f"First-Team Manager ({manager_name})",
+            "choices": [
+                {
+                    "choice_id": "mandate_youth_minutes",
+                    "label": "Mandate Youth Pathway Minutes",
+                    "summary": f"Back {hoyd_name} and fast-track academy regens into senior matchday contention.",
+                    "backed_role": "head_of_youth_development",
+                    "effects_preview": "+10 HOYD Mood · +8 Regen Morale & Loyalty · +1 Prestige · -3 Manager Mood",
+                },
+                {
+                    "choice_id": "prioritize_senior_results",
+                    "label": "Prioritize Immediate Senior Results",
+                    "summary": f"Give {manager_name} full autonomy to field the strongest veteran XI without youth quotas.",
+                    "backed_role": "first_team_manager",
+                    "effects_preview": "+8 First-Team Manager Mood · +5 Senior Squad Morale · -4 HOYD Mood",
+                },
+                {
+                    "choice_id": "hybrid_cup_rotation",
+                    "label": "Establish Cup & Showcase Rotation",
+                    "summary": "Create a structured rotation policy aligning the HOYD and First-Team Manager.",
+                    "backed_role": "compromise",
+                    "effects_preview": "+5 HOYD & Manager Mood · +4 Squad Morale · +1 Prestige",
+                },
+            ],
+        },
+    ]
+    templates.extend(
+        [
+            {
+                "key": "super_agent_ultimatum",
+                "title": "Midnight Ultimatum: Super-Agent Threatens Rival Transfer Leak",
+                "conflict_summary": (
+                    f"An aggressive Mino-style Super-Agent representing your top regen prospect has leaked interest from a bitter rival club. "
+                    f"{gm_name} wants to call the agent's bluff and ban him from the training ground, while {manager_name} begs you to keep the player happy before matchday."
+                ),
+                "role_a": f"General Manager ({gm_name})",
+                "role_b": f"First-Team Manager ({manager_name})",
+                "choices": [
+                    {
+                        "choice_id": "enforce_gm_wage_cap",
+                        "label": "Call the Agent's Bluff & Hold the Line",
+                        "summary": f"Back {gm_name}: refuse agent blackmail and reinforce club authority.",
+                        "backed_role": "general_manager",
+                        "effects_preview": "+500 GTEX Treasury · +8 GM Mood · +1 Prestige · -4 Manager Mood",
+                    },
+                    {
+                        "choice_id": "back_manager_target",
+                        "label": "Appease the Star & Promise Spotlight",
+                        "summary": f"Side with {manager_name} and guarantee key matchday status to calm the dressing room.",
+                        "backed_role": "first_team_manager",
+                        "effects_preview": "+6 Squad Morale · +10 Manager Mood · -4 GM Mood",
+                    },
+                    {
+                        "choice_id": "owner_performance_compromise",
+                        "label": "Restructure Deal with Loyalty Bonus",
+                        "summary": "Tie the agent's demands strictly to on-pitch trophy and goal milestones (-400 GTEX).",
+                        "backed_role": "compromise",
+                        "effects_preview": "-400 GTEX Club Cash · +5 GM & Manager Mood · +4 Squad Morale · +1 Prestige",
+                    },
+                ],
+            },
+            {
+                "key": "regen_nightlife_tabloid",
+                "title": "Sim-Life Tabloid Scandal: Wonderkid Spotted at VIP Supercar Lounge",
+                "conflict_summary": (
+                    f"Photos surfaced in the GTEX Newsroom of your breakout academy regen at a late-night VIP supercar lounge 48 hours before kickoff. "
+                    f"{manager_name} demands an immediate fine and benching, while {hoyd_name} warns harsh public punishment will shatter the youngster's confidence."
+                ),
+                "role_a": f"Head of Youth Development ({hoyd_name})",
+                "role_b": f"First-Team Manager ({manager_name})",
+                "choices": [
+                    {
+                        "choice_id": "mandate_youth_minutes",
+                        "label": "Protect the Wonderkid & Shield from Media",
+                        "summary": f"Back {hoyd_name}: handle it internally and turn the media noise into 'Us Against the World' motivation.",
+                        "backed_role": "head_of_youth_development",
+                        "effects_preview": "+10 HOYD Mood · +8 Regen Morale & Loyalty · +1 Prestige · -3 Manager Mood",
+                    },
+                    {
+                        "choice_id": "prioritize_senior_results",
+                        "label": "Drop & Fine — Enforce Iron Dressing-Room Code",
+                        "summary": f"Back {manager_name}: send a ruthless message that no player is bigger than the badge.",
+                        "backed_role": "first_team_manager",
+                        "effects_preview": "+8 First-Team Manager Mood · +5 Senior Squad Morale · -4 HOYD Mood",
+                    },
+                    {
+                        "choice_id": "hybrid_cup_rotation",
+                        "label": "Assign Senior Captain Mentorship & PR Charity Duty",
+                        "summary": "Pair the regen with a veteran leader and deflect tabloid pressure constructively.",
+                        "backed_role": "compromise",
+                        "effects_preview": "+5 HOYD & Manager Mood · +4 Squad Morale · +1 Prestige",
+                    },
+                ],
+            },
+            {
+                "key": "rival_owner_mind_games",
+                "title": "Rivalry Grudge Saga: Rival Owner Mocks Your Club on Live Broadcast",
+                "conflict_summary": (
+                    f"A rival club owner went on live GTEX broadcast claiming your club 'buys Showroom glamour instead of real football heritage'. "
+                    f"{manager_name} wants to fire back in the press and pledge a derby bonus, while {gm_name} advises a cold, corporate focus."
+                ),
+                "role_a": f"General Manager ({gm_name})",
+                "role_b": f"First-Team Manager ({manager_name})",
+                "choices": [
+                    {
+                        "choice_id": "enforce_gm_wage_cap",
+                        "label": "Take the High Road & Monetize the Hype",
+                        "summary": f"Let {gm_name} turn the media attention into a commercial broadcast sponsor activation (+500 GTEX).",
+                        "backed_role": "general_manager",
+                        "effects_preview": "+500 GTEX Commercial Windfall · +8 GM Mood · -4 Manager Mood",
+                    },
+                    {
+                        "choice_id": "back_manager_target",
+                        "label": "Clap Back Publicly & Fire Up the Dressing Room",
+                        "summary": f"Unleash {manager_name} in the press conference and turn the next fixture into a blood-and-thunder grudge match.",
+                        "backed_role": "first_team_manager",
+                        "effects_preview": "+6 Squad Morale · +10 Manager Mood · -4 GM Mood",
+                    },
+                    {
+                        "choice_id": "owner_performance_compromise",
+                        "label": "Pledge Double Grudge-Match Win Bonus",
+                        "summary": "Let your treasury and scoreboard do the talking with a 400 GTEX victory pot.",
+                        "backed_role": "compromise",
+                        "effects_preview": "-400 GTEX Club Cash · +5 GM & Manager Mood · +4 Squad Morale · +1 Prestige",
+                    },
+                ],
+            },
+            {
+                "key": "executive_poaching_raid",
+                "title": "Boardroom Poaching Raid: Tier-1 Superclub Approaches Your Executive",
+                "conflict_summary": (
+                    f"Rumors are swirling that a Tier-1 Continental Superclub has privately sounded out {gm_name} with a lucrative contract to defect and bring your scouting dossier along."
+                ),
+                "role_a": f"General Manager ({gm_name})",
+                "role_b": f"First-Team Manager ({manager_name})",
+                "choices": [
+                    {
+                        "choice_id": "enforce_gm_wage_cap",
+                        "label": "Expand GM Authority & Commercial Autonomy",
+                        "summary": f"Publicly affirm {gm_name} as the architect of your project and lock in his commercial vision.",
+                        "backed_role": "general_manager",
+                        "effects_preview": "+500 GTEX Commercial Rebate · +8 GM Mood · -4 Manager Mood",
+                    },
+                    {
+                        "choice_id": "back_manager_target",
+                        "label": "Shift Power to First-Team Manager",
+                        "summary": f"Make clear that {manager_name} runs football decisions if the GM's head is turned.",
+                        "backed_role": "first_team_manager",
+                        "effects_preview": "+6 Squad Morale · +10 Manager Mood · -4 GM Mood",
+                    },
+                    {
+                        "choice_id": "owner_performance_compromise",
+                        "label": "Host Executive Unity Summit & Retention Bonus",
+                        "summary": "Reward the entire executive suite with a 400 GTEX retention bonus to cement boardroom loyalty.",
+                        "backed_role": "compromise",
+                        "effects_preview": "-400 GTEX Club Cash · +5 GM & Manager Mood · +4 Squad Morale · +1 Prestige",
+                    },
+                ],
+            },
+        ]
+    )
+    chosen = templates[int(world_day) % len(templates)]
+    return {
+        "dilemma_id": f"dilemma:{club_id}:{world_day}:{chosen['key']}",
+        "title": chosen["title"],
+        "conflict_summary": chosen["conflict_summary"],
+        "role_a": chosen["role_a"],
+        "role_b": chosen["role_b"],
+        "status": "open",
+        "selected_choice_id": None,
+        "resolution_outcome": None,
+        "choices": chosen["choices"],
+    }

@@ -269,3 +269,63 @@ def test_ecosystem_revenue_waterfall_win_bonus_and_press_conference():
 
     pc = service.conduct_press_conference(session, "user-1", "club-1", "praise_squad", "Proud of the boys")
     assert pc["tone"] == "praise_squad"
+
+
+def test_boardroom_dilemma_generation_and_resolution():
+    session = _session()
+    _seed_club(session, prestige=60, cash=100_000)
+
+    briefing = storytelling.get_daily_briefing(session, "user-1", "club-1")
+    assert "boardroom_dilemma" in briefing
+    dilemma = briefing["boardroom_dilemma"]
+    assert dilemma["status"] == "open"
+    assert len(dilemma["choices"]) == 3
+
+    first_choice_id = dilemma["choices"][0]["choice_id"]
+    resolved = storytelling.resolve_briefing_dilemma(session, "user-1", "club-1", first_choice_id)
+    assert resolved["dilemma"]["status"] == "resolved"
+    assert resolved["dilemma"]["selected_choice_id"] == first_choice_id
+    assert resolved["outcome"]
+
+
+def test_gm_sponsor_negotiation_and_signing():
+    session = _session()
+    _seed_club(session, prestige=45, cash=100_000)
+
+    offers_resp = service.get_sponsor_offers(session, "user-1", "club-1")
+    assert len(offers_resp["offers"]) == 3
+    unlocked = [o for o in offers_resp["offers"] if not o["locked"]]
+    locked = [o for o in offers_resp["offers"] if o["locked"]]
+    assert len(unlocked) >= 2
+    assert len(locked) == 1
+
+    signed = service.sign_sponsor_offer(session, "user-1", "club-1", unlocked[0]["offer_id"])
+    assert signed["status"] == "signed"
+    assert signed["upfront_signing_bonus_gtex"] > 0
+    assert signed["win_bonus_clause_gtex"] > 0
+
+
+def test_shareholder_dividends_and_minority_takeover():
+    session = _session()
+    _seed_club(session, prestige=65, cash=100_000)
+    # Seed user account with GTEX for buying minority units
+    ledger.record(
+        session,
+        event_type="deposit",
+        source=ledger.PAYSTACK,
+        destination=ledger.user_account("user-1"),
+        currency=ledger.GTEX,
+        gross=50_000,
+        balance_class="deposited",
+        user_id="user-1",
+        memo="Seed user balance",
+    )
+
+    bid = service.submit_takeover_bid(session, "user-1", "club-1", 20)
+    assert bid["units"] == 20
+    assert bid["shareholders_summary"]["total_minority_units"] == 20
+
+    div = service.distribute_shareholder_dividend(session, "user-1", "club-1", 500)
+    assert div["status"] == "distributed"
+    assert div["total_distributed_gtex"] == 500
+    assert div["recipient_count"] == 1

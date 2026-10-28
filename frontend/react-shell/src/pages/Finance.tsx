@@ -179,6 +179,415 @@ function LedgerTable({ rows }: any) {
   );
 }
 
+function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
+  const [selectedClub, setSelectedClub] = useState("");
+  const activeClubId = selectedClub || clubs?.[0]?.club_id || "";
+  const refresh = useRefreshOwner();
+  const [signingOfferId, setSigningOfferId] = useState<string | null>(null);
+
+  const { data: sponsorData, isLoading, refetch } = useQuery({
+    queryKey: ["sponsor-offers", activeClubId],
+    queryFn: async () => (await api.get(`/owner/clubs/${activeClubId}/sponsors/offers`)).data,
+    enabled: Boolean(activeClubId),
+  });
+
+  const handleSign = async (offer: any) => {
+    if (!activeClubId) return;
+    setSigningOfferId(offer.offer_id);
+    try {
+      const { data: r } = await api.post(`/owner/clubs/${activeClubId}/sponsors/sign`, { offer_id: offer.offer_id });
+      toast.success(
+        `Signed sponsorship with ${offer.sponsor_name}! +${fmt(r.upfront_signing_bonus_gtex || offer.upfront_signing_bonus_gtex)} GTX upfront bonus credited.`,
+      );
+      await refetch();
+      refresh();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setSigningOfferId(null);
+    }
+  };
+
+  if (!activeClubId) return null;
+
+  return (
+    <Panel
+      eyebrow="Commercial Operations · Seasonal Revenue"
+      title="GM Sponsor Contract Negotiation Desk"
+      testid="sponsor-negotiation-desk"
+      className="lg:col-span-12"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+        <div className="flex flex-wrap items-center gap-3">
+          {clubs && clubs.length > 1 && (
+            <select
+              className="gx-input w-52"
+              value={activeClubId}
+              onChange={(e) => setSelectedClub(e.target.value)}
+              data-testid="sponsor-club-select"
+            >
+              {clubs.map((c: any) => (
+                <option key={c.club_id} value={c.club_id}>
+                  {c.club_name}
+                </option>
+              ))}
+            </select>
+          )}
+          {sponsorData && (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-slate-400">
+                General Manager: <b className="text-white">{sponsorData.gm_name}</b> (Negotiation {sponsorData.gm_negotiation}/20)
+              </span>
+              <span className="text-slate-600">·</span>
+              <span className="text-slate-400">
+                Prestige: <b className="text-amber-300">{sponsorData.club_prestige} ({sponsorData.prestige_tier})</b>
+              </span>
+              {Boolean(sponsorData.active_win_bonus_clause_gtex) && (
+                <>
+                  <span className="text-slate-600">·</span>
+                  <span className="text-emerald-400 font-semibold">
+                    Active Win Bonus: +{fmt(sponsorData.active_win_bonus_clause_gtex)} GTX
+                  </span>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+        <p className="text-xs text-slate-400">
+          Seasonal sponsorship packages negotiated by your General Manager.
+        </p>
+      </div>
+
+      {isLoading || !sponsorData ? (
+        <Loading label="GM negotiating seasonal sponsor contracts" />
+      ) : (
+        <div className="mt-4 space-y-6">
+          <div className="grid gap-4 md:grid-cols-3">
+            {(sponsorData.offers || []).map((offer: any) => {
+              const isLocked = Boolean(offer.locked);
+              const isSigning = signingOfferId === offer.offer_id;
+              return (
+                <div
+                  key={offer.offer_id}
+                  data-testid={`sponsor-offer-card-${offer.offer_id}`}
+                  className={`flex flex-col justify-between rounded-xl border p-4.5 transition ${
+                    isLocked
+                      ? "border-white/5 bg-slate-950/40 opacity-70"
+                      : "border-sky-500/20 bg-gradient-to-b from-[#0b1a33]/60 via-[#0a1428]/40 to-black/60 hover:border-sky-400/50"
+                  }`}
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h4 className="text-sm font-bold text-white">{offer.sponsor_name}</h4>
+                        <p className="text-xs text-sky-300 font-semibold mt-0.5">{offer.slot}</p>
+                      </div>
+                      <Chip tone={isLocked ? "red" : "gold"}>
+                        {offer.strategy_profile?.replace(/_/g, " ")}
+                      </Chip>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 rounded-lg border border-white/5 bg-black/40 p-2.5 text-xs">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Upfront Bonus</span>
+                        <span className="gx-mono text-xs font-black text-emerald-400">
+                          +{fmt(offer.upfront_signing_bonus_gtex)} GTX
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Per Match Payout</span>
+                        <span className="gx-mono text-xs font-black text-cyan-300">
+                          {fmt(offer.per_match_gross_gtex)} GTX
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Win-Bonus Clause</span>
+                        <span className="gx-mono text-xs font-black text-amber-300">
+                          +{fmt(offer.win_bonus_clause_gtex)} GTX
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Duration / Gate</span>
+                        <span className="gx-mono text-xs text-slate-300">
+                          {offer.matches_duration} matches · P{offer.min_prestige_required}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="rounded-md border border-white/5 bg-slate-900/50 p-2.5 text-[11px] text-slate-300 leading-relaxed italic">
+                      <span className="font-semibold not-italic text-amber-300 block mb-0.5">GM Recommendation:</span>
+                      "{offer.gm_recommendation}"
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-white/10">
+                    {isLocked ? (
+                      <button
+                        type="button"
+                        disabled
+                        className="gx-btn w-full opacity-60 cursor-not-allowed text-xs text-rose-300 border-rose-500/30"
+                      >
+                        Locked · Requires Prestige {offer.min_prestige_required}
+                      </button>
+                    ) : (
+                      <Btn
+                        variant="primary"
+                        className="w-full text-xs"
+                        disabled={Boolean(signingOfferId)}
+                        onClick={() => handleSign(offer)}
+                        data-testid={`sign-sponsor-${offer.offer_id}`}
+                      >
+                        {isSigning ? "Signing Contract…" : "Sign Sponsor Deal"}
+                      </Btn>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {sponsorData.active_deals && sponsorData.active_deals.length > 0 && (
+            <div className="rounded-xl border border-white/10 bg-black/30 p-4">
+              <h5 className="text-xs font-bold uppercase tracking-wider text-slate-300 mb-2.5">
+                Active Sponsorship Contracts
+              </h5>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {sponsorData.active_deals.map((deal: any) => (
+                  <div
+                    key={deal.id}
+                    className="flex items-center justify-between rounded-lg border border-white/5 bg-slate-900/40 p-2.5 text-xs"
+                  >
+                    <div>
+                      <p className="font-semibold text-white">{deal.sponsor_name}</p>
+                      <p className="text-[11px] text-slate-400">{deal.slot} · {fmt(deal.per_match_gross)} GTX / match</p>
+                    </div>
+                    <div className="text-right">
+                      <Chip tone="emerald">{deal.status}</Chip>
+                      <p className="text-[10px] text-slate-400 mt-1">{deal.matches_remaining} matches left</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+function ClubShareholderDesk({ clubs }: { clubs: any[] }) {
+  const [selectedClub, setSelectedClub] = useState("");
+  const activeClubId = selectedClub || clubs?.[0]?.club_id || "";
+  const refresh = useRefreshOwner();
+  const [dividendAmount, setDividendAmount] = useState("");
+  const [takeoverUnits, setTakeoverUnits] = useState("10");
+  const [distributing, setDistributing] = useState(false);
+  const [bidding, setBidding] = useState(false);
+
+  const { data: shData, isLoading, refetch } = useQuery({
+    queryKey: ["club-shareholders", activeClubId],
+    queryFn: async () => (await api.get(`/owner/clubs/${activeClubId}/shareholders`)).data,
+    enabled: Boolean(activeClubId),
+  });
+
+  const handleDistribute = async () => {
+    if (!activeClubId) return;
+    setDistributing(true);
+    try {
+      const body = dividendAmount ? { amount_gtex: Number(dividendAmount) } : {};
+      const { data: res } = await api.post(`/owner/clubs/${activeClubId}/shareholders/distribute-dividend`, body);
+      toast.success(
+        `Distributed ${fmt(res.total_distributed_gtex)} GTX dividend across ${res.recipient_count} shareholders!`,
+      );
+      setDividendAmount("");
+      await refetch();
+      refresh();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setDistributing(false);
+    }
+  };
+
+  const handleTakeoverBid = async () => {
+    if (!activeClubId) return;
+    setBidding(true);
+    try {
+      const unitsNum = Number(takeoverUnits) || 10;
+      const { data: res } = await api.post(`/owner/clubs/${activeClubId}/shareholders/takeover-bid`, {
+        units: unitsNum,
+      });
+      toast.success(`Acquired ${res.units} units in ${res.club_name || shData?.club_name}! Tier: ${res.tier}`);
+      await refetch();
+      refresh();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBidding(false);
+    }
+  };
+
+  if (!activeClubId) return null;
+
+  return (
+    <Panel
+      eyebrow="Governance, Equity & Dividends"
+      title="Club Equity, Minority Share Dividends & Takeover Desk"
+      testid="club-shareholder-dividend-desk"
+      className="lg:col-span-12"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+        <div className="flex flex-wrap items-center gap-3">
+          {clubs && clubs.length > 1 && (
+            <select
+              className="gx-input w-52"
+              value={activeClubId}
+              onChange={(e) => setSelectedClub(e.target.value)}
+              data-testid="shareholder-club-select"
+            >
+              {clubs.map((c: any) => (
+                <option key={c.club_id} value={c.club_id}>
+                  {c.club_name}
+                </option>
+              ))}
+            </select>
+          )}
+          {shData && (
+            <span className="text-xs text-slate-300">
+              Valuation: <b className="text-white">{fmt(shData.valuation_gtex)} GTX</b> · Prestige {shData.prestige} ({shData.prestige_tier})
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-slate-400">
+          Minority support units entitle fans and co-owners to seasonal TV/competition prize dividend pools.
+        </p>
+      </div>
+
+      {isLoading || !shData ? (
+        <Loading label="Reading club shareholder registry" />
+      ) : (
+        <div className="mt-4 space-y-6">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <Stat label="Total Minority Units" value={`${fmt(shData.total_minority_units)} Units`} testid="sh-total-units" />
+            <Stat
+              label="Accrued Dividend Pool"
+              value={<Coin amount={shData.accrued_dividend_pool_gtex} />}
+              tone="good"
+              testid="sh-accrued-pool"
+            />
+            <Stat label="Shareholder Count" value={fmt(shData.shareholder_count)} testid="sh-count" />
+            <Stat
+              label="Your Holding / Takeover Goal"
+              value={`${fmt(shData.my_units)} / ${fmt(shData.minority_takeover_threshold_units)}`}
+              tone={shData.my_units >= shData.minority_takeover_threshold_units ? "good" : "warn"}
+              testid="sh-my-units"
+            />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4 space-y-3">
+              <div>
+                <h5 className="text-sm font-bold text-white">Distribute Seasonal Dividend</h5>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Distribute funds from the accrued TV rights and prize pool ({fmt(shData.accrued_dividend_pool_gtex)} GTX) proportionally to all minority shareholders.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min={100}
+                  max={25000}
+                  className="gx-input flex-1"
+                  placeholder={`Amount (defaults to ${fmt(shData.accrued_dividend_pool_gtex)} GTX)`}
+                  value={dividendAmount}
+                  onChange={(e) => setDividendAmount(e.target.value)}
+                  data-testid="dividend-amount-input"
+                />
+                <Btn
+                  variant="gold"
+                  disabled={distributing}
+                  onClick={handleDistribute}
+                  data-testid="distribute-dividend-btn"
+                >
+                  {distributing ? "Distributing…" : "Distribute Seasonal Dividend"}
+                </Btn>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4 space-y-3">
+              <div>
+                <h5 className="text-sm font-bold text-white">Acquire Minority Stake / Takeover Units</h5>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Purchase additional minority equity units to increase your dividend entitlement and work toward the {shData.minority_takeover_threshold_units}-unit co-chair takeover threshold.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  max={500}
+                  className="gx-input w-28"
+                  value={takeoverUnits}
+                  onChange={(e) => setTakeoverUnits(e.target.value)}
+                  data-testid="takeover-units-input"
+                />
+                <Btn
+                  variant="primary"
+                  className="flex-1"
+                  disabled={bidding}
+                  onClick={handleTakeoverBid}
+                  data-testid="takeover-bid-btn"
+                >
+                  {bidding ? "Acquiring…" : "Acquire Minority Stake / Takeover Units"}
+                </Btn>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-black/40 p-4">
+            <h5 className="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3">
+              Club Shareholder Registry ({shData.shareholders?.length || 0} Investors)
+            </h5>
+            {(!shData.shareholders || shData.shareholders.length === 0) ? (
+              <p className="text-xs text-slate-400 py-3 text-center">No minority shareholders registered yet.</p>
+            ) : (
+              <div className="gx-scroll overflow-x-auto">
+                <table className="gx-table w-full min-w-[640px]">
+                  <thead>
+                    <tr>
+                      <th>Shareholder</th>
+                      <th>Units Held</th>
+                      <th>Share %</th>
+                      <th>Tier</th>
+                      <th>Est. Seasonal Dividend</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shData.shareholders.map((sh: any) => (
+                      <tr key={sh.user_id} data-testid={`shareholder-row-${sh.user_id}`}>
+                        <td className="font-semibold text-white">{sh.username}</td>
+                        <td className="gx-mono">{fmt(sh.units)}</td>
+                        <td className="gx-mono text-cyan-300">{sh.share_pct}%</td>
+                        <td>
+                          {sh.tier ? <Chip tone="gold">{sh.tier}</Chip> : <span className="text-slate-500 text-xs">—</span>}
+                        </td>
+                        <td className="gx-mono text-emerald-300">
+                          {fmt(sh.estimated_dividend_gtex)} GTX
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 export default function Finance() {
   const { data, isLoading } = useQuery({ queryKey: ["finance"], queryFn: async () => (await api.get("/owner/finance")).data });
   if (isLoading || !data) return <Loading label="Reading the ledger" />;
@@ -218,6 +627,8 @@ export default function Finance() {
             </div>
           </Panel>
         ))}
+        <SponsorNegotiationDesk clubs={data.clubs} />
+        <ClubShareholderDesk clubs={data.clubs} />
         <Deposit configured={data.paystack_configured} rates={data.treasury_rates} mode={data.paystack_mode} />
         <Withdraw rates={data.treasury_rates} />
         {data.withdrawals.length > 0 && (

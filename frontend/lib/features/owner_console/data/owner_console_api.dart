@@ -802,6 +802,52 @@ abstract class OwnerConsoleReader {
     String? developmentFocus,
     String? style,
   });
+
+  Future<Map<String, dynamic>> resolveBriefingDilemma(
+    String clubId,
+    String choiceId,
+  ) async => <String, dynamic>{};
+
+  Future<GtexSponsorOffersPayload> fetchSponsorOffers(String clubId) async =>
+      const GtexSponsorOffersPayload(
+        gmName: 'General Manager',
+        gmNegotiation: 10,
+        clubPrestige: 20,
+        prestigeTier: 'Contender',
+        activeWinBonusClauseGtex: 0,
+        offers: <GtexSponsorOffer>[],
+        activeDeals: <Map<String, dynamic>>[],
+      );
+
+  Future<Map<String, dynamic>> signSponsorOffer(
+    String clubId,
+    String offerId,
+  ) async => <String, dynamic>{};
+
+  Future<GtexClubShareholdersPayload> fetchClubShareholders(String clubId) async =>
+      const GtexClubShareholdersPayload(
+        clubId: '',
+        clubName: '',
+        prestige: 0,
+        prestigeTier: '',
+        valuationGtex: 0,
+        totalMinorityUnits: 0,
+        shareholderCount: 0,
+        accruedDividendPoolGtex: 0,
+        minorityTakeoverThresholdUnits: 0,
+        myUnits: 0,
+        shareholders: <GtexClubShareholder>[],
+      );
+
+  Future<Map<String, dynamic>> distributeShareholderDividend(
+    String clubId, {
+    int? amountGtex,
+  }) async => <String, dynamic>{};
+
+  Future<Map<String, dynamic>> submitTakeoverBid(
+    String clubId,
+    int units,
+  ) async => <String, dynamic>{};
 }
 
 class OwnerConsoleApi implements OwnerConsoleReader, GtexOwnerInboxDataSource, OwnerLegacyGiftGateway, OwnerWorldClockGateway {
@@ -1409,5 +1455,77 @@ class OwnerConsoleApi implements OwnerConsoleReader, GtexOwnerInboxDataSource, O
       if (developmentFocus != null) 'development_focus': developmentFocus,
       if (style != null) 'style': style,
     }, clubId);
+  }
+
+  @override
+  Future<Map<String, dynamic>> resolveBriefingDilemma(
+    String clubId,
+    String choiceId,
+  ) async {
+    final Object? res = await client.post(
+      '/api/owner/clubs/$clubId/briefing/resolve-dilemma',
+      body: <String, Object?>{
+        'choice_id': choiceId,
+      },
+    );
+    return res is Map ? Map<String, dynamic>.from(res) : <String, dynamic>{};
+  }
+
+  @override
+  Future<GtexSponsorOffersPayload> fetchSponsorOffers(String clubId) async {
+    final Map<String, dynamic> res = await client.getMap(
+      '/api/owner/clubs/$clubId/sponsors/offers',
+    );
+    return GtexSponsorOffersPayload.fromJson(res);
+  }
+
+  @override
+  Future<Map<String, dynamic>> signSponsorOffer(
+    String clubId,
+    String offerId,
+  ) async {
+    final Object? res = await client.post(
+      '/api/owner/clubs/$clubId/sponsors/sign',
+      body: <String, Object?>{
+        'offer_id': offerId,
+      },
+    );
+    return res is Map ? Map<String, dynamic>.from(res) : <String, dynamic>{};
+  }
+
+  @override
+  Future<GtexClubShareholdersPayload> fetchClubShareholders(String clubId) async {
+    final Map<String, dynamic> res = await client.getMap(
+      '/api/owner/clubs/$clubId/shareholders',
+    );
+    return GtexClubShareholdersPayload.fromJson(res);
+  }
+
+  @override
+  Future<Map<String, dynamic>> distributeShareholderDividend(
+    String clubId, {
+    int? amountGtex,
+  }) async {
+    final Object? res = await client.post(
+      '/api/owner/clubs/$clubId/shareholders/distribute-dividend',
+      body: <String, Object?>{
+        if (amountGtex != null) 'amount_gtex': amountGtex,
+      },
+    );
+    return res is Map ? Map<String, dynamic>.from(res) : <String, dynamic>{};
+  }
+
+  @override
+  Future<Map<String, dynamic>> submitTakeoverBid(
+    String clubId,
+    int units,
+  ) async {
+    final Object? res = await client.post(
+      '/api/owner/clubs/$clubId/shareholders/takeover-bid',
+      body: <String, Object?>{
+        'units': units,
+      },
+    );
+    return res is Map ? Map<String, dynamic>.from(res) : <String, dynamic>{};
   }
 }

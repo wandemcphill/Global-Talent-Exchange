@@ -836,6 +836,25 @@ def _post_match_club(
                 notes.append(f"Pledged win bonus paid {pledged_bonus:,}")
             except Exception as exc:
                 logger.warning("pledged_win_bonus payout failed: %s", exc)
+        sponsor_win_clause = int((state.facilities_json or {}).get("_sponsor_win_bonus_clause_gtex", 0))
+        if sponsor_win_clause > 0:
+            try:
+                ledger.record(
+                    session,
+                    event_type="sponsor_win_bonus",
+                    source=ledger.PLATFORM_SPONSORS,
+                    destination=ledger.club_account(state.club_id),
+                    currency=ledger.GTEX,
+                    gross=sponsor_win_clause,
+                    club_id=state.club_id,
+                    user_id=state.owner_user_id,
+                    related_type="match",
+                    related_id=match.id,
+                    memo=f"Sponsor victory bonus clause ({(state.facilities_json or {}).get('_active_sponsor_name', 'Partner')})",
+                )
+                notes.append(f"Sponsor win bonus {sponsor_win_clause:,}")
+            except Exception as exc:
+                logger.warning("sponsor_win_bonus payout failed: %s", exc)
 
     return notes
 

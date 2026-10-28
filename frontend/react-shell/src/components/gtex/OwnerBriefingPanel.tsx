@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Newspaper,
@@ -22,6 +22,7 @@ import {
   briefingTargetPath,
   clubBriefingEndpoint,
   clubBriefingGenerateEndpoint,
+  clubBriefingResolveDilemmaEndpoint,
   useOwnerBriefing,
   type BriefingViewState,
   type DailyBriefing,
@@ -159,7 +160,10 @@ export function OwnerBriefingPanel({
   clubId?: string;
   initialData?: DailyBriefing | null;
 }) {
+  const queryClient = useQueryClient();
   const [busyGenerating, setBusyGenerating] = useState(false);
+  const [resolvingChoiceId, setResolvingChoiceId] = useState<string | null>(null);
+  const activeClubId = clubId;
 
   const {
     data: fetchedData,
@@ -196,6 +200,22 @@ export function OwnerBriefingPanel({
     }
   };
 
+  const handleResolveDilemma = async (choiceId: string) => {
+    if (!activeClubId) return;
+    setResolvingChoiceId(choiceId);
+    try {
+      const { data } = await api.post(clubBriefingResolveDilemmaEndpoint(activeClubId), { choice_id: choiceId });
+      queryClient.invalidateQueries({ queryKey: ["owner-briefing", activeClubId] });
+      queryClient.invalidateQueries({ queryKey: ["owner-daily-briefing", activeClubId] });
+      await refetch();
+      toast.success(data?.outcome || "Boardroom dilemma resolved.");
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setResolvingChoiceId(null);
+    }
+  };
+
   if (!clubId && !briefing) {
     return <OwnerBriefingView state={useOwnerBriefing()} />;
   }
@@ -214,6 +234,7 @@ export function OwnerBriefingPanel({
 
   const sections: StaffBriefingSection[] = briefing?.sections || [];
   const metrics = briefing?.metrics;
+  const dilemma = briefing?.boardroom_dilemma;
 
   return (
     <section className={SHELL} data-testid="owner-briefing" aria-labelledby="owner-briefing-heading">
@@ -275,6 +296,98 @@ export function OwnerBriefingPanel({
             <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
               <p className="text-[10px] uppercase font-bold text-slate-400">Open Actions</p>
               <p className="gx-mono text-sm font-black text-cyan-300 mt-0.5">{metrics.open_decisions} Pending</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {dilemma && (
+        <div
+          data-testid="owner-briefing-dilemma"
+          className="mt-4 rounded-xl border border-amber-500/40 bg-gradient-to-br from-amber-950/40 via-[#0d1627] to-[#070e1c] p-4 sm:p-5 shadow-lg space-y-3.5"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2.5">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={16} className="text-amber-400" />
+              <h3 className="text-xs font-black uppercase tracking-wider text-amber-300">
+                Boardroom Dilemma · Executive Disagreement
+              </h3>
+            </div>
+            {dilemma.status === "resolved" ? (
+              <span
+                data-testid="dilemma-status-resolved"
+                className="rounded bg-emerald-950/80 border border-emerald-500/40 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-300"
+              >
+                Resolved
+              </span>
+            ) : (
+              <span
+                data-testid="dilemma-status-open"
+                className="rounded bg-amber-950/80 border border-amber-500/40 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-300 animate-pulse"
+              >
+                Decision Required
+              </span>
+            )}
+          </div>
+
+          <div>
+            <h4 className="text-base font-bold text-white">{dilemma.title}</h4>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs font-semibold">
+              <span className="text-amber-200">{dilemma.role_a}</span>
+              <span className="text-slate-500 font-black text-[10px] uppercase">vs</span>
+              <span className="text-sky-200">{dilemma.role_b}</span>
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-slate-300">{dilemma.conflict_summary}</p>
+          </div>
+
+          {dilemma.status === "resolved" && (
+            <div
+              data-testid="dilemma-resolution-outcome"
+              className="rounded-lg border border-emerald-500/40 bg-emerald-950/40 p-3 text-xs text-emerald-200"
+            >
+              <span className="font-black uppercase tracking-wider text-[10px] text-emerald-400 block mb-1">
+                Resolution Outcome
+              </span>
+              <p className="leading-relaxed text-emerald-100">{dilemma.resolution_outcome || "Dilemma resolved by owner decree."}</p>
+            </div>
+          )}
+
+          {dilemma.status === "open" && (
+            <div className="space-y-2 pt-1">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Owner Decision · Select Executive Path:
+              </p>
+              <div className="grid gap-2.5 sm:grid-cols-3">
+                {dilemma.choices.map((choice) => {
+                  const isSelected = resolvingChoiceId === choice.choice_id;
+                  return (
+                    <button
+                      key={choice.choice_id}
+                      type="button"
+                      data-testid={`dilemma-choice-${choice.choice_id}`}
+                      disabled={Boolean(resolvingChoiceId)}
+                      onClick={() => handleResolveDilemma(choice.choice_id)}
+                      className="group relative flex flex-col justify-between rounded-xl border border-white/10 bg-black/40 p-3.5 text-left transition hover:border-amber-400/60 hover:bg-amber-950/20 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-xs font-black text-white group-hover:text-amber-300 transition-colors">
+                            {choice.label}
+                          </span>
+                          {isSelected && <RefreshCw size={12} className="animate-spin text-amber-300" />}
+                        </div>
+                        <p className="mt-1 text-[11px] leading-relaxed text-slate-300">{choice.summary}</p>
+                      </div>
+                      <div className="mt-3 pt-2 border-t border-white/5 space-y-1">
+                        <p className="text-[10px] text-slate-400">
+                          Backs: <span className="font-semibold text-slate-200">{choice.backed_role}</span>
+                        </p>
+                        <p className="text-[10px] font-semibold text-emerald-300">{choice.effects_preview}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>

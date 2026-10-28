@@ -35,6 +35,7 @@ export type OwnerBriefing = {
   rejectedEventCount: number;
   /** Optional AI prose. Explanatory only; never the source of game facts. */
   explanation?: string;
+  boardroom_dilemma?: BoardroomDilemma | null;
 };
 
 export type BriefingViewState =
@@ -104,6 +105,26 @@ export const briefingTargetLabel = (target: BriefingTarget | null): string | nul
   return { decision: "Open decision", club_history: "View club history", match_result: "View match result" }[target.type];
 };
 
+export interface BoardroomDilemmaChoice {
+  choice_id: string;
+  label: string;
+  summary: string;
+  backed_role: string;
+  effects_preview: string;
+}
+
+export interface BoardroomDilemma {
+  dilemma_id: string;
+  title: string;
+  conflict_summary: string;
+  role_a: string;
+  role_b: string;
+  status: "open" | "resolved";
+  selected_choice_id?: string | null;
+  resolution_outcome?: string | null;
+  choices: BoardroomDilemmaChoice[];
+}
+
 export type StaffBriefingSection = {
   role: string;
   sender: string;
@@ -132,10 +153,13 @@ export type DailyBriefing = {
   generated_at?: string;
   metrics?: BriefingMetrics;
   sections?: StaffBriefingSection[];
+  boardroom_dilemma?: BoardroomDilemma | null;
 };
 
 export const clubBriefingEndpoint = (clubId: string) => `/owner/clubs/${encodeURIComponent(clubId)}/briefing`;
 export const clubBriefingGenerateEndpoint = (clubId: string) => `/owner/clubs/${encodeURIComponent(clubId)}/briefing/generate`;
+export const clubBriefingResolveDilemmaEndpoint = (clubId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/briefing/resolve-dilemma`;
 
 /** Resolve what the panel should show. With no published contract this is always `unavailable`. */
 export function useOwnerBriefing(): BriefingViewState {

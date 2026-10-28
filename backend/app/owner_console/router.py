@@ -1379,3 +1379,80 @@ def hold_press_conference(
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
     return _run(session, service.conduct_press_conference, session, user.id, club_id, payload.tone, payload.statement)
+
+
+# ---------- Boardroom Dilemma, GM Sponsor Negotiation & Shareholder Dividend/Takeover ----------
+
+class ResolveDilemmaRequest(BaseModel):
+    choice_id: str = Field(min_length=1, max_length=80)
+
+
+class SignSponsorOfferRequest(BaseModel):
+    offer_id: str = Field(min_length=1, max_length=80)
+
+
+class DistributeDividendRequest(BaseModel):
+    amount_gtex: int | None = None
+
+
+class TakeoverBidRequest(BaseModel):
+    units: int = Field(ge=1, le=500, default=10)
+
+
+@router.post("/clubs/{club_id}/briefing/resolve-dilemma")
+def resolve_dilemma(
+    club_id: str,
+    payload: ResolveDilemmaRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(session, storytelling.resolve_briefing_dilemma, session, user.id, club_id, payload.choice_id)
+
+
+@router.get("/clubs/{club_id}/sponsors/offers")
+def get_sponsor_offers(
+    club_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(session, service.get_sponsor_offers, session, user.id, club_id)
+
+
+@router.post("/clubs/{club_id}/sponsors/sign")
+def sign_sponsor_offer(
+    club_id: str,
+    payload: SignSponsorOfferRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(session, service.sign_sponsor_offer, session, user.id, club_id, payload.offer_id)
+
+
+@router.get("/clubs/{club_id}/shareholders")
+def get_shareholders(
+    club_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(session, service.get_club_shareholders, session, user.id, club_id)
+
+
+@router.post("/clubs/{club_id}/shareholders/distribute-dividend")
+def distribute_dividend(
+    club_id: str,
+    payload: DistributeDividendRequest | None = None,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    amt = payload.amount_gtex if payload else None
+    return _run(session, service.distribute_shareholder_dividend, session, user.id, club_id, amt)
+
+
+@router.post("/clubs/{club_id}/shareholders/takeover-bid")
+def submit_takeover(
+    club_id: str,
+    payload: TakeoverBidRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(session, service.submit_takeover_bid, session, user.id, club_id, payload.units)
