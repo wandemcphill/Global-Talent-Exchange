@@ -14,7 +14,19 @@ from app.club_growth.personal_manager_policy import (
     PersonalManagerBand,
     validate_personal_manager_creation,
 )
-from app.club_growth.staff_role_policy import evaluate_staff_role
+from app.club_growth.staff_role_policy import (
+    ROLE_AGENT,
+    ROLE_FIRST_TEAM_COACH,
+    ROLE_FIRST_TEAM_MANAGER,
+    ROLE_GENERAL_MANAGER,
+    ROLE_HEAD_OF_YOUTH_DEVELOPMENT,
+    ROLE_MEDICAL,
+    ROLE_PERFORMANCE_ANALYST,
+    ROLE_SCOUT,
+    ROLE_YOUTH_COACH,
+    evaluate_staff_role,
+    normalise_staff_role,
+)
 from app.ingestion.models import ImageModerationStatus, Player, PlayerImageMetadata
 from app.models.base import utcnow
 from app.models.club_growth import (
@@ -361,6 +373,47 @@ class ClubGrowthService:
             staff = self.session.get(ClubStaffProfile, staff_id)
         if staff is None or not staff.active:
             raise ClubGrowthError("staff_profile_not_found")
+        supported_role_scopes = {
+            ROLE_FIRST_TEAM_MANAGER,
+            ROLE_GENERAL_MANAGER,
+            ROLE_HEAD_OF_YOUTH_DEVELOPMENT,
+            ROLE_YOUTH_COACH,
+            ROLE_FIRST_TEAM_COACH,
+            ROLE_SCOUT,
+            ROLE_AGENT,
+            ROLE_MEDICAL,
+            ROLE_PERFORMANCE_ANALYST,
+        }
+        requested_role_scope = str(payload.role_scope or "club").strip()
+        normalized_role_scope = normalise_staff_role(requested_role_scope)
+        if requested_role_scope.lower() == "club":
+            # Generic legacy requests infer a distinct canonical role from the
+            # staff profile where possible. Unknown legacy staff types retain
+            # the generic "club" scope instead of being silently reclassified.
+            inferred_role_scope = normalise_staff_role(staff.staff_type)
+            role_scope = inferred_role_scope if inferred_role_scope in supported_role_scopes else "club"
+        elif normalized_role_scope in supported_role_scopes:
+            decision = evaluate_staff_role(
+                role_key=normalized_role_scope,
+                staff_type=staff.staff_type,
+                specialisations=set(staff.skills_json or []),
+            )
+            if not decision.allowed:
+                raise ClubGrowthError(decision.reason)
+            role_scope = decision.role_key
+        else:
+            # Preserve a custom historical role scope; known canonical scopes
+            # above are always validated and normalized.
+            role_scope = requested_role_scope
+        if role_scope in supported_role_scopes:
+            decision = evaluate_staff_role(
+                role_key=role_scope,
+                staff_type=staff.staff_type,
+                specialisations=set(staff.skills_json or []),
+            )
+            if not decision.allowed:
+                raise ClubGrowthError(decision.reason)
+
         if payload.exclusive:
             active_exclusive = self.session.scalar(
                 select(ClubStaffContract).where(
@@ -378,7 +431,7 @@ class ClubGrowthService:
             salary_minor=payload.salary_minor if payload.salary_minor is not None else staff.salary_minor,
             commission_bps=payload.commission_bps if payload.commission_bps is not None else staff.commission_bps,
             duration_days=payload.duration_days,
-            role_scope=payload.role_scope,
+            role_scope=role_scope,
             exclusive=payload.exclusive,
             metadata_json={"source": "club_growth_batch_25"},
         )
@@ -515,7 +568,15 @@ class ClubGrowthService:
         club = self._require_club_access(actor=actor, club_id=club_id)
         academy = self.ensure_academy_profile(club_id=club_id)
         facility_service = AcademyFacilityEconomyService(self.session)
-        capacity, quality_score = facility_service.get_academy_capacity_and_quality(club_id)
+        capacity, facility_quality_score = facility_service.get_academy_capacity_and_quality(club_id)
+        staff_effects = self._staff_effects(self.list_staff_contracts(club_id=club_id))
+        head_of_youth_development_quality = staff_effects["head_of_youth_development_quality"]
+        # Ratings are 0-100. Every ten points of active, appointed HOYD quality
+        # adds one academy-quality point, capped at +10, on top of facility quality.
+        # This makes the appointed role consequential while keeping the effect
+        # bounded, transparent and auditable in the generated prospect metadata.
+        head_of_youth_development_bonus = min(10, head_of_youth_development_quality // 10)
+        quality_score = min(100, facility_quality_score + head_of_youth_development_bonus)
 
         existing_count = int(
             self.session.scalar(select(func.count(AcademyProspect.id)).where(AcademyProspect.club_id == club_id)) or 0
@@ -555,6 +616,9 @@ class ClubGrowthService:
                     "portrait_source_provider": NEWGEN_FACE_BANK_PROVIDER,
                     "portrait_source_collection": NEWGEN_FACE_BANK_COLLECTION,
                     "source": "academy_to_regen_batch_26",
+                    "academy_facility_quality_score": facility_quality_score,
+                    "head_of_youth_development_quality": head_of_youth_development_quality,
+                    "head_of_youth_development_bonus": head_of_youth_development_bonus,
                     "academy_quality_score": quality_score,
                     "academy_capacity_limit": capacity,
                 },
@@ -568,6 +632,9 @@ class ClubGrowthService:
             status="completed",
             metadata_json={
                 "academy_level": academy.level,
+                "academy_facility_quality_score": facility_quality_score,
+                "head_of_youth_development_quality": head_of_youth_development_quality,
+                "head_of_youth_development_bonus": head_of_youth_development_bonus,
                 "academy_quality_score": quality_score,
                 "academy_capacity_limit": capacity,
             },
@@ -996,8 +1063,8 @@ class ClubGrowthService:
         return prospect
 
     def _assign_staff_role(self, *, club_id: str, contract: ClubStaffContract) -> None:
-        role_key = contract.role_scope or (
-            contract.staff_profile.staff_type if contract.staff_profile is not None else "club"
+        role_key = normalise_staff_role(
+            contract.role_scope or (contract.staff_profile.staff_type if contract.staff_profile is not None else "club")
         )
         assignment = self.session.scalar(
             select(ClubStaffAssignment).where(
@@ -1020,23 +1087,38 @@ class ClubGrowthService:
 
     def _staff_effects(self, contracts: list[ClubStaffContract]) -> dict[str, int]:
         active = [item for item in contracts if item.status == "active" and item.staff_profile is not None]
+        role_keys = {item.id: normalise_staff_role(item.role_scope) for item in active}
         scout_quality = sum(
             item.staff_profile.rating
             for item in active
-            if item.staff_profile.staff_type in {"scout", "academy_director"}
+            if role_keys[item.id] == ROLE_SCOUT
+            or (role_keys[item.id] == "club" and item.staff_profile.staff_type in {"scout", "academy_director"})
         )
         training_bonus = sum(
-            item.staff_profile.rating for item in active if item.staff_profile.staff_type in {"coach", "manager"}
+            item.staff_profile.rating
+            for item in active
+            if role_keys[item.id] in {ROLE_FIRST_TEAM_MANAGER, ROLE_FIRST_TEAM_COACH, ROLE_YOUTH_COACH}
+            or (role_keys[item.id] == "club" and item.staff_profile.staff_type in {"coach", "manager"})
+        )
+        general_manager_quality = sum(
+            item.staff_profile.rating for item in active if role_keys[item.id] == ROLE_GENERAL_MANAGER
+        )
+        head_of_youth_development_quality = sum(
+            item.staff_profile.rating for item in active if role_keys[item.id] == ROLE_HEAD_OF_YOUTH_DEVELOPMENT
         )
         negotiation_bonus = sum(
             item.staff_profile.rating
             for item in active
-            if item.staff_profile.staff_type in {"agent", "negotiation_specialist"}
+            if role_keys[item.id] == ROLE_AGENT
+            or role_keys[item.id] == ROLE_GENERAL_MANAGER
+            or (role_keys[item.id] == "club" and item.staff_profile.staff_type == "negotiation_specialist")
         )
         return {
             "scout_quality": min(100, scout_quality),
             "training_bonus": min(100, training_bonus),
             "negotiation_bonus": min(100, negotiation_bonus),
+            "general_manager_quality": min(100, general_manager_quality),
+            "head_of_youth_development_quality": min(100, head_of_youth_development_quality),
         }
 
     def _sponsorship_summary(self, *, club_id: str) -> SponsorshipClubSummaryView:
