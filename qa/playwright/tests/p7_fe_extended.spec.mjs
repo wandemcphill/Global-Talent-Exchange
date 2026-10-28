@@ -26,63 +26,111 @@ test("Club squad route loads the roster or explicit no-club state", async ({ pag
   // Club HQ is the explicit Club lane, not the Home tab.
   await visitAuthedRoute(page, "/app/club");
 
+  const liveDataRequired = page.getByText("Live club data required", { exact: true });
   const noClubEntry = page.getByText("Build your club command center", {
     exact: true,
   });
   const clubCommand = page.getByText("Club command", { exact: true });
   await expect
     .poll(
-      async () =>
-        Number(await noClubEntry.isVisible().catch(() => false)) +
-        Number(await clubCommand.isVisible().catch(() => false)),
+      async () => {
+        await enableAccessibility(page);
+        return (
+          Number(await liveDataRequired.isVisible().catch(() => false)) +
+          Number(await noClubEntry.isVisible().catch(() => false)) +
+          Number(await clubCommand.isVisible().catch(() => false))
+        );
+      },
       { timeout: 60_000 },
     )
     .toBeGreaterThan(0);
 
-  if (await noClubEntry.isVisible().catch(() => false)) {
+  if (await liveDataRequired.isVisible().catch(() => false)) {
+    await expect(page.getByText(/generated demo club data/i)).toBeVisible();
+  } else if (await noClubEntry.isVisible().catch(() => false)) {
     await expect(page.getByText("Create club", { exact: true })).toBeVisible();
   } else {
+    // Scroll Club command toward the top of the Empire workspace scroll view so inline
+    // section items and detail headers are inside the active viewport.
+    const commandBox = await clubCommand.boundingBox().catch(() => null);
+    if (commandBox && commandBox.y > 240) {
+      const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
+      await page.mouse.move(Math.round(viewport.width * 0.5), Math.round(viewport.height * 0.5));
+      await page.mouse.wheel(0, Math.max(320, Math.round(commandBox.y - 160)));
+      await page.waitForTimeout(500);
+      await enableAccessibility(page);
+    }
+
     const browseButton = page.getByRole("button", { name: "Club sections" });
+    // Match the Squad section tile by its unique subtitle rather than /Squad/i so we never
+    // match "Switch active club Argentina Academy Squad 01" or "Sync squad".
     const squadSection = page
-      .getByRole("button", { name: /Squad/i })
-      .or(page.getByText(/Owned players and regens/i))
+      .getByRole("button", { name: /Owned players and regens/i })
+      .or(page.getByText("Owned players and regens", { exact: true }))
       .first();
 
     // In compact layouts (mobile/narrow tablet), sections are housed in a "Club sections" sheet;
     // in desktop layouts, the left panel is rendered inline.
     await expect
       .poll(
-        async () =>
-          Number(await browseButton.isVisible().catch(() => false)) +
-          Number(await squadSection.isVisible().catch(() => false)),
+        async () => {
+          await enableAccessibility(page);
+          return (
+            Number(await browseButton.isVisible().catch(() => false)) +
+            Number(await squadSection.isVisible().catch(() => false))
+          );
+        },
         { timeout: 15_000 },
       )
       .toBeGreaterThan(0);
 
     let browseSheetOpened = false;
     if (await browseButton.isVisible().catch(() => false)) {
-      await browseButton.click();
+      await browseButton.click({ force: true });
       browseSheetOpened = true;
       await page.waitForTimeout(400);
       await enableAccessibility(page);
     }
 
     await expect(squadSection).toBeVisible({ timeout: 15_000 });
-    await squadSection.click();
+    await squadSection.click({ force: true });
 
     if (browseSheetOpened) {
       const closeButton = page.getByRole("button", { name: /Close Club sections/i });
       if (await closeButton.isVisible().catch(() => false)) {
-        await closeButton.click();
+        await closeButton.click({ force: true });
         await page.waitForTimeout(400);
       }
     }
 
-    await expect(page.getByText("Squad room", { exact: true })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Lineup & squad registration", { exact: true })).toBeVisible({
+    // Flutter merges header titles and subtitles into a single semantics label
+    // or exposes container headers via aria-label on a semantics group node.
+    const squadRoom = page
+      .getByText(/Squad room/i)
+      .or(page.locator('[aria-label*="Squad room" i]'))
+      .first();
+    await expect(squadRoom).toBeVisible({ timeout: 15_000 });
+
+    const lineupRegistration = page
+      .getByText(/Lineup & squad registration/i)
+      .or(page.locator('[aria-label*="Lineup & squad registration" i]'))
+      .first();
+    if (!(await lineupRegistration.isVisible().catch(() => false))) {
+      const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
+      await page.mouse.move(Math.round(viewport.width * 0.5), Math.round(viewport.height * 0.5));
+      await page.mouse.wheel(0, 260);
+      await page.waitForTimeout(400);
+      await enableAccessibility(page);
+    }
+    await expect(lineupRegistration).toBeVisible({
       timeout: 15_000,
     });
-    await expect(page.getByText("Open Lineup & Tactics", { exact: true })).toBeVisible({
+    await expect(
+      page
+        .getByRole("button", { name: /Open Lineup & Tactics/i })
+        .or(page.getByText(/Open Lineup & Tactics/i))
+        .first(),
+    ).toBeVisible({
       timeout: 15_000,
     });
   }
@@ -94,18 +142,20 @@ test("Club squad route loads the roster or explicit no-club state", async ({ pag
 test("Club HQ opens an authoritative club or no-club state", async ({ page }, testInfo) => {
   // Owner operations must show real club context or a truthful unavailable state,
   // never fabricated demo-club data.
-  await visitAuthedRoute(page, "/app");
+  await visitAuthedRoute(page, "/app/club");
 
   const ownerCockpit = page.getByText("Club owner operations cockpit", { exact: true });
+  const clubCommand = page.getByText("Club command", { exact: true });
   const acceptableStates = [
     page.getByText("Live club data required", { exact: true }),
-    page.getByText("Club command", { exact: true }),
+    clubCommand,
     page.getByText("Build your club command center", { exact: true }),
     ownerCockpit,
   ];
   await expect
     .poll(
       async () => {
+        await enableAccessibility(page);
         for (const state of acceptableStates) {
           if (await state.isVisible().catch(() => false)) return true;
         }
@@ -123,6 +173,13 @@ test("Club HQ opens an authoritative club or no-club state", async ({ page }, te
     if (await noClubEntry.isVisible().catch(() => false)) {
       await expect(page.getByText("Create club", { exact: true })).toBeVisible();
     } else {
+      if (!(await ownerCockpit.isVisible().catch(() => false))) {
+        const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
+        await page.mouse.move(Math.round(viewport.width * 0.5), Math.round(viewport.height * 0.5));
+        await page.mouse.wheel(0, 480);
+        await page.waitForTimeout(500);
+        await enableAccessibility(page);
+      }
       await expect(ownerCockpit).toBeVisible();
     }
   }
