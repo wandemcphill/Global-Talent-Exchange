@@ -34,6 +34,8 @@ class AppRoutes {
   static const String matchesNativeThreeD = '/matches/native-3d';
   static const String matchesSpectate = '/matches/spectate';
   static const String matchesSimulate = '/matches/simulate';
+  static const String inbox = '/app/inbox';
+  static const String ownerInbox = '/inbox';
 
   static String matchesViewerLocation(String matchKey) =>
       '/matches/viewer/$matchKey';
@@ -345,6 +347,21 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     state: AppRouteSurfaceState.hidden,
     summary:
         'Legacy local simulation route redirects to the active Matchday surface.',
+  ),
+  AppRouteSurface(
+    label: 'Owner Decision Inbox',
+    location: AppRoutes.inbox,
+    state: AppRouteSurfaceState.live,
+    summary:
+        'Private actionable owner inbox for managerial requests, deadlines, and club decisions.',
+    quickAction: true,
+  ),
+  AppRouteSurface(
+    label: 'Owner Inbox Redirect',
+    location: AppRoutes.ownerInbox,
+    state: AppRouteSurfaceState.hidden,
+    summary:
+        'Legacy inbox route redirects to the private owner decision inbox.',
   ),
 ];
 

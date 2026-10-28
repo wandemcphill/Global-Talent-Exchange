@@ -10,6 +10,12 @@ When `GTE_WORLD_CLOCK_VIRTUAL_START_DATE` is unset, a newly initialized clock an
 
 `GTE_WORLD_CLOCK_VIRTUAL_MONTHS_PER_SEASON` controls the season-age mapping. It is persisted into the clock row and used for virtual-age metadata; changing it is a game-rule decision and should be planned, not casually changed in production.
 
+## Read API contract
+
+The public read-only snapshot is `GET /api/world/clock`. It returns the persisted global clock's current virtual `world_time` (UTC ISO timestamp), `world_date` (the date from that virtual time), `is_paused`, `progression_rate`, and `virtual_months_per_season`, plus the canonical clock ID. React and Flutter must read this endpoint instead of deriving the game's authoritative date from a browser/device clock or client-side timer.
+
+The first read may initialize and persist the singleton row if a fresh database has no clock row yet. Initialization handles the competing-insert case by rereading the row created by another process. Repeated reads must not reset the epoch or virtual start time. This response does not claim to determine the active competition season: season mapping must use the approved calendar/season contract rather than inferring a season from a local clock or hardcoding a year.
+
 ## Fixture execution
 
 The autonomous scanner finds scheduled matches, resolves an authoritative kickoff from `scheduled_at` or the supported match-date/window fields, and excludes fixtures whose kickoff cannot be resolved or is still in the future. Execution goes through the canonical match simulation and lifecycle path. Strict persisted-squad resolution is enabled in production; there is no synthetic-squad fallback for missing production squads.

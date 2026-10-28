@@ -5,6 +5,8 @@ import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 import '../../regen_redesign/data/gtex_share_market_api.dart';
 import '../../regen_redesign/widgets/gtex_wonderkid_board.dart';
 import '../data/owner_console_api.dart';
+import '../models/gtex_world_clock_models.dart';
+import 'gtex_world_clock_panel.dart';
 import 'owner_admin_review_section.dart';
 
 final String _marketPath = const GteNavigationRoute.market().path;
@@ -410,6 +412,7 @@ class ControlCenterSection extends StatelessWidget {
             d.upcoming.where((OwnerFixture f) => f.involves(clubId)).toList();
         final List<OwnerClubCard> clubs = d.clubs;
         final Set<String> myIds = clubs.map((OwnerClubCard c) => c.clubId).toSet();
+        final OwnerConsoleReader r = reader;
         return _sectionList(<Widget>[
           if (d.legacy.isNotEmpty)
             GtexPanel(
@@ -545,6 +548,13 @@ class ControlCenterSection extends StatelessWidget {
             title: 'Owner Inbox',
             subtitle: '${d.inboxOpenCount} unread',
             accent: GtexColors.purple,
+            onTap: () => onNavigate('/app/inbox'),
+            trailing: TextButton.icon(
+              key: const Key('owner-inbox-open-queue-btn'),
+              onPressed: () => onNavigate('/app/inbox'),
+              icon: const Icon(Icons.arrow_forward_rounded, size: 14),
+              label: const Text('Open Queue'),
+            ),
             child: Column(
               children: <Widget>[
                 if (inbox.isEmpty) const _Quiet('Inbox clear'),
@@ -557,6 +567,14 @@ class ControlCenterSection extends StatelessWidget {
                   ),
               ],
             ),
+          ),
+          GtexWorldClockPanel(
+            load: r is OwnerWorldClockGateway ? (r as OwnerWorldClockGateway).fetchWorldClock : null,
+          ),
+          // No persisted briefing contract is published yet; see gtex_world_clock_models.dart.
+          GtexOwnerBriefingPanel(
+            state: const BriefingUnavailable(),
+            onNavigate: onNavigate,
           ),
           GtexPanel(
             key: const Key('owner-console-health'),
