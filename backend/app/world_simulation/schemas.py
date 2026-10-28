@@ -1,9 +1,20 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class WorldClockView(BaseModel):
+    """Read-only snapshot of the authoritative GTEX virtual-world clock."""
+
+    clock_id: str
+    world_time: datetime
+    world_date: date
+    is_paused: bool
+    progression_rate: float = Field(gt=0)
+    virtual_months_per_season: int = Field(ge=1)
 
 
 class FootballCultureView(BaseModel):

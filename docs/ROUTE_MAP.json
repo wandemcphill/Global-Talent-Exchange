@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1877,
+  "route_count": 1878,
   "routes": [
     {
       "method": "POST",
@@ -3359,6 +3359,31 @@
       },
       "version": "canonical",
       "domain": "ads"
+    },
+    {
+      "method": "GET",
+      "path": "/api/world/clock",
+      "effective_paths": [
+        "/api/world/clock"
+      ],
+      "file": "backend/app/world_simulation/router.py",
+      "handler": "get_world_clock",
+      "router_variable": "router",
+      "module_path": "app.world_simulation.router",
+      "module_mounts": [
+        "world_simulation"
+      ],
+      "request_shape": {
+        "parameters": [
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "WorldClockView",
+        "returns": "WorldClockView"
+      },
+      "version": "canonical",
+      "domain": "world"
     },
     {
       "method": "GET",
