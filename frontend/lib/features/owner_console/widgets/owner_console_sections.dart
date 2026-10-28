@@ -49,6 +49,10 @@ BriefingViewState _briefingStateFromControlCenter(
       }
     }
   }
+  final Object? rawDilemma = raw['boardroom_dilemma'];
+  final BoardroomDilemma? dilemma = rawDilemma is Map
+      ? BoardroomDilemma.fromJson(Map<String, dynamic>.from(rawDilemma))
+      : null;
   return BriefingReady(
     OwnerBriefing(
       briefingId: '${raw['id'] ?? 'daily-briefing'}',
@@ -56,6 +60,7 @@ BriefingViewState _briefingStateFromControlCenter(
       worldDate: 'Day ${raw['world_day'] ?? 1}',
       events: events,
       explanation: '${raw['summary'] ?? raw['headline'] ?? ''}',
+      boardroomDilemma: dilemma,
     ),
   );
 }
@@ -617,6 +622,16 @@ class ControlCenterSection extends StatelessWidget {
           GtexOwnerBriefingPanel(
             state: _briefingStateFromControlCenter(d, clubId),
             onNavigate: onNavigate,
+            onResolveDilemma: clubs.isNotEmpty
+                ? (String choiceId) async {
+                    final String targetClubId = clubId ?? clubs.first.clubId;
+                    await r.resolveBriefingDilemma(
+                      targetClubId,
+                      choiceId,
+                    );
+                    onResolved('Boardroom dilemma ratified ($choiceId).');
+                  }
+                : null,
           ),
           if (d.ecosystemWaterfall.isNotEmpty)
             GtexPanel(
@@ -633,6 +648,53 @@ class ControlCenterSection extends StatelessWidget {
                   _Stat('Jackpot Pool', _gtx(_numVal(d.ecosystemWaterfall['jackpot_ecosystem_pool_gtex']))),
                   _Stat('Club TV Revenue', _gtx(_numVal(d.ecosystemWaterfall['club_tv_revenue_gtex']))),
                   _Stat('Entry Grants', _gtx(_numVal(d.ecosystemWaterfall['club_competition_grants_gtex']))),
+                ],
+              ),
+            ),
+          if (clubs.isNotEmpty)
+            GtexPanel(
+              key: const Key('owner-console-executive-triumvirate'),
+              title: 'Executive Boardroom Triumvirate',
+              subtitle: 'Live Staff Agendas, Secret Traits & Alignment',
+              accent: GtexColors.purple,
+              child: Column(
+                children: <Widget>[
+                  _Row(
+                    key: const Key('owner-exec-manager'),
+                    title: 'First-Team Manager · ${clubs.first.managerName ?? 'Tactical Head Coach'}',
+                    subtitle: '${clubs.first.managerTrait ?? 'Tactical Purist'} — ${clubs.first.managerAgenda ?? 'Demands marquee reinforcements for continental push.'}',
+                    accent: GtexColors.pitch,
+                    trailing: GtexStatusChip(
+                      label: 'Mood ${clubs.first.managerMood ?? 72}',
+                      color: (clubs.first.managerMood ?? 72) < 50 ? GtexColors.red : GtexColors.pitch,
+                      compact: true,
+                    ),
+                    onTap: () => onNavigate(_clubPath),
+                  ),
+                  _Row(
+                    key: const Key('owner-exec-gm'),
+                    title: 'General Manager · ${clubs.first.gmName ?? 'Commercial & Sporting Director'}',
+                    subtitle: '${clubs.first.gmTrait ?? 'Wage Cap Hawk'} — ${clubs.first.gmAgenda ?? 'Focused on commercial sponsors, stadium ad surfaces & FFP margin.'}',
+                    accent: GtexColors.gold,
+                    trailing: GtexStatusChip(
+                      label: 'Mood ${clubs.first.gmMood ?? 76}',
+                      color: (clubs.first.gmMood ?? 76) < 50 ? GtexColors.red : GtexColors.gold,
+                      compact: true,
+                    ),
+                    onTap: () => onNavigate(_marketPath),
+                  ),
+                  _Row(
+                    key: const Key('owner-exec-hoyd'),
+                    title: 'Head of Youth Dev · ${clubs.first.hoydName ?? 'Academy & Dynasty Director'}',
+                    subtitle: '${clubs.first.hoydTrait ?? 'Bloodline Scout'} — ${clubs.first.hoydAgenda ?? 'Pushing for Build-A-Son dynasty heirs & U19 wonderkid minutes.'}',
+                    accent: GtexColors.cyan,
+                    trailing: GtexStatusChip(
+                      label: 'Mood ${clubs.first.hoydMood ?? 80}',
+                      color: (clubs.first.hoydMood ?? 80) < 50 ? GtexColors.red : GtexColors.cyan,
+                      compact: true,
+                    ),
+                    onTap: () => onNavigate(_regensPath),
+                  ),
                 ],
               ),
             ),
@@ -800,15 +862,16 @@ class MarketSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<(String, String, String)> links = <(String, String, String)>[
-      ('Transfer Hub', 'Listings, offers, loans and swaps', _marketPath),
-      ('My ownership', 'Shortlist and share holdings', '$_marketPath?mode=ownership'),
-      ('Wallet', 'GTX balance and ledger', const GteNavigationRoute.wallet().path),
+      ('Transfer Hub', 'Listings, offers, contract negotiations & signing unveilings', _marketPath),
+      ('My ownership', 'Shortlist, minority share dividends & club takeover bids', '$_marketPath?mode=ownership'),
+      ('Competitions & ELO Matchmaking', 'GTEX/User-hosted cups, global leaderboards & instant quick games', _playPath),
+      ('Wallet & Sponsor Desk', 'GTX balance, unified ledger, GM sponsors & stadium ad surfaces', const GteNavigationRoute.wallet().path),
     ];
     return _sectionList(<Widget>[
       GtexPanel(
         key: const Key('owner-console-market'),
-        title: 'Market & Transfers',
-        subtitle: 'Price history now shows on every selected player',
+        title: 'Market, Transfers & Commercial Hub',
+        subtitle: 'Price history, contract negotiations, and club share dividends',
         accent: GtexColors.cyan,
         child: Column(
           children: <Widget>[
@@ -834,12 +897,23 @@ class AcademySection extends StatelessWidget {
       children: <Widget>[
         Padding(
           padding: const EdgeInsets.fromLTRB(GtexSpacing.md, GtexSpacing.md, GtexSpacing.md, 0),
-          child: _Row(
-            key: const Key('owner-academy-open-regen-world'),
-            title: 'Open Regen World',
-            subtitle: 'Prospects, Wonderkids, Rankings, Create-a-Son',
-            accent: GtexColors.purple,
-            onTap: () => onNavigate(_regensPath),
+          child: Column(
+            children: <Widget>[
+              _Row(
+                key: const Key('owner-academy-open-regen-world'),
+                title: 'Open Regen World',
+                subtitle: 'Prospects, Wonderkids, Rankings, Create-a-Son',
+                accent: GtexColors.purple,
+                onTap: () => onNavigate(_regensPath),
+              ),
+              _Row(
+                key: const Key('owner-academy-build-a-son-banner'),
+                title: 'Build-A-Son Dynasty Legacy & Bloodlines',
+                subtitle: 'Induct a second-generation club heir via /regens/request-son with custom position & DNA lineage',
+                accent: GtexColors.gold,
+                onTap: () => onNavigate(_regensPath),
+              ),
+            ],
           ),
         ),
         Expanded(child: GtexWonderkidBoard(reader: shareMarket)),

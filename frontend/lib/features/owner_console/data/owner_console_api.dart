@@ -204,6 +204,16 @@ class OwnerClubCard {
     this.competitionName,
     this.managerName,
     this.managerMood,
+    this.managerTrait,
+    this.managerAgenda,
+    this.gmName,
+    this.gmMood,
+    this.gmTrait,
+    this.gmAgenda,
+    this.hoydName,
+    this.hoydMood,
+    this.hoydTrait,
+    this.hoydAgenda,
     this.countryCode,
     this.stage,
     this.worldDay = 0,
@@ -211,6 +221,8 @@ class OwnerClubCard {
 
   factory OwnerClubCard.fromJson(Map<String, dynamic> j) {
     final Map<String, dynamic> manager = _map(j['manager']);
+    final Map<String, dynamic> gm = _map(j['general_manager']);
+    final Map<String, dynamic> hoyd = _map(j['head_of_youth_development']);
     return OwnerClubCard(
       clubId: '${j['club_id']}',
       name: _text(j['club_name']) ?? 'Club',
@@ -220,6 +232,16 @@ class OwnerClubCard {
       competitionName: _text(_map(j['competition'])['name']),
       managerName: _text(manager['name']),
       managerMood: manager['mood'] == null ? null : _int(manager['mood']),
+      managerTrait: _text(manager['secret_trait']),
+      managerAgenda: _text(manager['personal_agenda']),
+      gmName: _text(gm['name']),
+      gmMood: gm['mood'] == null ? null : _int(gm['mood']),
+      gmTrait: _text(gm['secret_trait']),
+      gmAgenda: _text(gm['personal_agenda']),
+      hoydName: _text(hoyd['name']),
+      hoydMood: hoyd['mood'] == null ? null : _int(hoyd['mood']),
+      hoydTrait: _text(hoyd['secret_trait']),
+      hoydAgenda: _text(hoyd['personal_agenda']),
       countryCode: _text(j['country_code']),
       stage: _text(j['stage']),
       worldDay: _int(j['world_day']),
@@ -234,6 +256,16 @@ class OwnerClubCard {
   final String? competitionName;
   final String? managerName;
   final int? managerMood;
+  final String? managerTrait;
+  final String? managerAgenda;
+  final String? gmName;
+  final int? gmMood;
+  final String? gmTrait;
+  final String? gmAgenda;
+  final String? hoydName;
+  final int? hoydMood;
+  final String? hoydTrait;
+  final String? hoydAgenda;
   final String? countryCode;
   final String? stage;
   final int worldDay;

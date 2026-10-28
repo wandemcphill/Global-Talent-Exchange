@@ -5,6 +5,7 @@ import {
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
+  Award,
   BookOpen,
   Building,
   CandlestickChart,
@@ -12,9 +13,11 @@ import {
   Clock,
   Coins,
   Compass,
+  Crown,
   DollarSign,
   ExternalLink,
   Flame,
+  Gift,
   Globe2,
   Inbox,
   Newspaper,
@@ -23,6 +26,8 @@ import {
   ShieldAlert,
   Shirt,
   Sparkles,
+  Sprout,
+  Swords,
   Trophy,
   Users,
   Video,
@@ -30,7 +35,7 @@ import {
   X,
 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
-import { fmt, label, useActiveClub, useControlCenter, useRefreshOwner } from "@/lib/owner";
+import { fmt, label, useActiveClub, useClub, useControlCenter, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Coin, Empty, Loading, Panel, Stat } from "@/components/gtex/ui";
 import { InboxItem } from "@/components/gtex/InboxItem";
 import { WorldClockCard } from "@/components/gtex/WorldClockCard";
@@ -105,6 +110,7 @@ function NoClubDashboard({ onCreateClub }: { onCreateClub: () => void }) {
 export function ControlCenter() {
   const { data, isLoading, isError } = useControlCenter();
   const { active: activeClub } = useActiveClub();
+  const { data: clubDetail } = useClub(activeClub?.club_id);
   const refresh = useRefreshOwner();
   const navigate = useNavigate();
 
@@ -124,6 +130,43 @@ export function ControlCenter() {
   const pendingInbox = data.inbox?.filter((i: any) => !i.is_read) || [];
   const waterfall = data.ecosystem_waterfall || {};
   const tvRevenue = waterfall.club_tv_revenue_gtex ?? data.economy?.tv_revenue ?? data.economy?.broadcast_revenue ?? null;
+
+  const staffMap = clubDetail?.staff || {};
+  const executives = [
+    {
+      roleKey: "first_team_manager",
+      roleLabel: "First-Team Manager",
+      name: staffMap.first_team_manager?.name || activeClubProfile.manager?.name || "Tactical Boss",
+      mood: staffMap.first_team_manager?.mood ?? activeClubProfile.manager?.mood ?? 78,
+      agenda: staffMap.first_team_manager?.personal_agenda || "Win silverware & enforce high-press identity",
+      secretTrait: staffMap.first_team_manager?.secret_trait || "Dressing-Room Loyalist",
+      poachingRisk: staffMap.first_team_manager?.poaching_risk || "low",
+      to: "/app/squad",
+      tone: "emerald",
+    },
+    {
+      roleKey: "general_manager",
+      roleLabel: "General Manager (GM)",
+      name: staffMap.general_manager?.name || "Commercial Director",
+      mood: staffMap.general_manager?.mood ?? 82,
+      agenda: staffMap.general_manager?.personal_agenda || "Maximize sponsor yield & wage-to-turnover discipline",
+      secretTrait: staffMap.general_manager?.secret_trait || "Clause Architect",
+      poachingRisk: staffMap.general_manager?.poaching_risk || "low",
+      to: "/app/finance",
+      tone: "cyan",
+    },
+    {
+      roleKey: "head_of_youth_development",
+      roleLabel: "Head of Youth Dev (HOYD)",
+      name: staffMap.head_of_youth_development?.name || "Youth Director",
+      mood: staffMap.head_of_youth_development?.mood ?? 85,
+      agenda: staffMap.head_of_youth_development?.personal_agenda || "Fast-track academy wonderkids & Build-A-Son scions",
+      secretTrait: staffMap.head_of_youth_development?.secret_trait || "Bloodline Whisperer",
+      poachingRisk: staffMap.head_of_youth_development?.poaching_risk || "medium",
+      to: "/app/academy",
+      tone: "amber",
+    },
+  ];
 
   const handlePledgeWinBonus = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -246,6 +289,40 @@ export function ControlCenter() {
             <p className="text-[11px] text-slate-400 mt-1">Continental Matchday Allocation</p>
           </div>
         </div>
+      </section>
+
+      {/* 2a. EXECUTIVE BOARDROOM TRIUMVIRATE (MANAGER, GM, HOYD) */}
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="executive-triumvirate-strip">
+        {executives.map((exec) => (
+          <Link
+            key={exec.roleKey}
+            to={exec.to}
+            className="group rounded-2xl border border-white/10 bg-slate-900/60 p-4 transition-all hover:border-emerald-500/40 hover:bg-slate-900/90 shadow-lg space-y-2.5"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-300">
+                {exec.roleLabel}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <Chip tone={exec.mood >= 70 ? "emerald" : exec.mood >= 50 ? "gold" : "red"}>
+                  Mood {exec.mood}
+                </Chip>
+                {exec.poachingRisk === "high" && <Chip tone="red">Poach Risk</Chip>}
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <h3 className="gx-display text-lg font-bold uppercase text-white group-hover:text-emerald-300">
+                {exec.name}
+              </h3>
+              <span className="rounded bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                {exec.secretTrait}
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 line-clamp-2">
+              <b className="text-slate-300">Agenda:</b> {exec.agenda}
+            </p>
+          </Link>
+        ))}
       </section>
 
       {/* 2b. AUTHORITATIVE WORLD TIME + PERSISTED-EVENT DAILY BRIEFING */}
@@ -441,29 +518,36 @@ export function ControlCenter() {
 
       {/* 4. OPERATIONAL WORKSPACE LAUNCHERS */}
       <section className="space-y-4">
-        <h3 className="gx-display text-2xl font-black uppercase text-white tracking-wide">
-          Club Operations Workspaces
-        </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="flex items-center justify-between">
+          <h3 className="gx-display text-2xl font-black uppercase text-white tracking-wide">
+            Club Operations Workspaces
+          </h3>
+          <span className="text-xs text-slate-400">9 Integrated Executive Suites</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-3">
           {[
-            { to: "/app/squad", label: "Squad Tactics", icon: Shirt, color: "text-emerald-400" },
-            { to: "/app/regen-world", label: "Regen World", icon: Sparkles, color: "text-amber-300" },
-            { to: "/app/transfer-hub", label: "Transfer Hub", icon: Compass, color: "text-cyan-300" },
-            { to: "/app/awards", label: "Regen Awards", icon: Trophy, color: "text-amber-400" },
-            { to: "/app/newsroom", label: "Press Room", icon: Newspaper, color: "text-white" },
-            { to: "/app/finance", label: "Club Ledger", icon: Wallet, color: "text-emerald-300" },
+            { to: "/app/squad", label: "Squad Tactics", sub: "Lineup & Morale", icon: Shirt, color: "text-emerald-400" },
+            { to: "/app/academy", label: "Youth & Son", sub: "Build-A-Son & HOYD", icon: Sprout, color: "text-emerald-300" },
+            { to: "/app/regen-world", label: "Regen World", sub: "Bloodlines & DNA", icon: Sparkles, color: "text-amber-300" },
+            { to: "/app/transfer-hub", label: "Transfer Hub", sub: "Bids & Unveilings", icon: Compass, color: "text-cyan-300" },
+            { to: "/app/competitions", label: "Competitions", sub: "ELO & Leaderboards", icon: Swords, color: "text-emerald-400" },
+            { to: "/app/showroom", label: "Luxury Room", sub: "Jets, Watches & Gifts", icon: Gift, color: "text-purple-300" },
+            { to: "/app/jackpot", label: "Jackpot Pool", sub: "25% Fee Recycling", icon: Crown, color: "text-amber-400" },
+            { to: "/app/newsroom", label: "AI Newsroom", sub: "Press & Broadcasts", icon: Newspaper, color: "text-white" },
+            { to: "/app/finance", label: "Club Ledger", sub: "Sponsors & Shares", icon: Wallet, color: "text-emerald-300" },
           ].map((op) => {
             const Icon = op.icon;
             return (
               <Link
                 key={op.to}
                 to={op.to}
-                className="group rounded-xl border border-white/10 bg-slate-900/60 p-4 text-center transition-all hover:-translate-y-1 hover:border-emerald-500/40 hover:bg-slate-900/90 shadow-lg"
+                className="group rounded-xl border border-white/10 bg-slate-900/60 p-3.5 text-center transition-all hover:-translate-y-1 hover:border-emerald-500/40 hover:bg-slate-900/90 shadow-lg"
               >
-                <Icon size={22} className={`mx-auto mb-2 ${op.color} transition-transform group-hover:scale-110`} />
-                <p className="gx-display text-sm font-bold uppercase text-white group-hover:text-emerald-300 transition-colors">
+                <Icon size={20} className={`mx-auto mb-1.5 ${op.color} transition-transform group-hover:scale-110`} />
+                <p className="gx-display text-xs font-bold uppercase text-white group-hover:text-emerald-300 transition-colors">
                   {op.label}
                 </p>
+                <p className="text-[10px] text-slate-400 mt-0.5 truncate">{op.sub}</p>
               </Link>
             );
           })}

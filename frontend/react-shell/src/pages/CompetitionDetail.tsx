@@ -1,10 +1,10 @@
 import React, { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Coins, Flame, Sparkles, Tv, Trophy } from "lucide-react";
+import { CheckCircle2, Coins, Crown, Flame, Medal, Sparkles, Tv, Trophy } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
-import { fmt, useControlCenter, useRefreshOwner } from "@/lib/owner";
+import { fmt, label, useControlCenter, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Coin, Loading, PageHeader, Panel } from "@/components/gtex/ui";
 
 function Standings({ rows, myIds }: any) {
@@ -79,13 +79,57 @@ function PlayPanel({ comp, clubId }: any) {
 
 export default function CompetitionDetail() {
   const { id } = useParams();
+  const qc = useQueryClient();
+  const refresh = useRefreshOwner();
   const { data: cc } = useControlCenter();
   const { data: comp, isLoading } = useQuery({ queryKey: ["competition", id], queryFn: async () => (await api.get(`/owner/competitions/${id}`)).data });
+  const { data: hostedFinance } = useQuery({
+    queryKey: ["hosted-competition-finance", id],
+    queryFn: async () => {
+      try {
+        return (await api.get(`/hosted-competitions/${id}/finance`)).data;
+      } catch {
+        return null;
+      }
+    },
+    enabled: Boolean(id),
+  });
+  const [settling, setSettling] = useState(false);
+
   if (isLoading || !comp) return <Loading />;
   const myIds = comp.my_club_ids || [];
   const myClub = myIds[0] || cc?.clubs?.[0]?.club_id;
   const rounds: Record<string, any[]> = {};
   comp.fixtures.forEach((m: any) => { (rounds[m.round] = rounds[m.round] || []).push(m); });
+
+  const totalPool = Number(hostedFinance?.net_reward_pool ?? comp.prize_pool ?? 0);
+  const firstPrize = Math.round(totalPool * 0.55);
+  const runnerUpPrize = Math.round(totalPool * 0.28);
+  const thirdPrize = Math.max(0, totalPool - firstPrize - runnerUpPrize);
+  const leaderClub = comp.standings?.[0]?.club_name || "TBD";
+  const runnerUpClub = comp.standings?.[1]?.club_name || "TBD";
+  const thirdClub = comp.standings?.[2]?.club_name || "TBD";
+
+  const handleFinalizeHostedSettlement = async () => {
+    if (!id) return;
+    setSettling(true);
+    try {
+      await api.post(`/hosted-competitions/${id}/finalize`, {
+        note: "Owner competition prize & settlement finalization",
+      });
+      toast.success("Competition settlement finalized and prize payouts credited to club ledgers!");
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["competition", id] }),
+        qc.invalidateQueries({ queryKey: ["hosted-competition-finance", id] }),
+      ]);
+      refresh();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setSettling(false);
+    }
+  };
+
   return (
     <div data-testid="competition-detail-page" className="space-y-6">
       <PageHeader eyebrow={`${comp.host_type === "gtex" ? "GTEX-hosted" : "User-hosted"} · ${comp.format}`} title={comp.name} sub={comp.description}
@@ -95,8 +139,8 @@ export default function CompetitionDetail() {
         <Panel eyebrow="Pre-match" title="Owner decisions" className="lg:col-span-5" live testid="owner-match-panel">
           {myIds.length ? <PlayPanel comp={comp} clubId={myClub} /> : <p className="text-sm text-slate-400">You haven't entered this competition.</p>}
         </Panel>
-        {/* Ecosystem Waterfall & Broadcast Revenue Panel */}
-        <Panel eyebrow="Ecosystem Economics" title="TV Rights & Prize Distribution Waterfall" className="lg:col-span-12" testid="competition-waterfall-panel">
+        {/* Ecosystem Waterfall & Prize Settlement Desk */}
+        <Panel eyebrow="Ecosystem Economics & Prize Settlement" title="TV Rights, Podium Payouts & Settlement Waterfall" className="lg:col-span-12" testid="competition-waterfall-panel">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-xl border border-white/10 bg-black/40 p-3.5">
               <p className="text-[10px] uppercase font-bold text-slate-400">Competition Prize Pool</p>
@@ -119,16 +163,49 @@ export default function CompetitionDetail() {
               <p className="text-[10px] text-slate-400 mt-0.5">25% Recycled to Global Jackpot</p>
             </div>
           </div>
+
+          {/* Podium Settlement Split */}
+          <div className="mt-4 grid gap-3 sm:grid-cols-3" data-testid="competition-settlement-tiers">
+            <div className="rounded-xl border border-amber-400/35 bg-amber-500/10 p-3.5 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase text-amber-300 flex items-center gap-1"><Crown size={12} /> 1st Place Champion (55%)</p>
+                <p className="text-xs font-bold text-white mt-0.5">{leaderClub}</p>
+              </div>
+              <span className="gx-mono text-base font-black text-amber-300">{fmt(firstPrize)} GTX</span>
+            </div>
+            <div className="rounded-xl border border-slate-400/25 bg-slate-800/40 p-3.5 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase text-slate-300 flex items-center gap-1"><Medal size={12} /> 2nd Place Runner-Up (28%)</p>
+                <p className="text-xs font-bold text-white mt-0.5">{runnerUpClub}</p>
+              </div>
+              <span className="gx-mono text-base font-black text-slate-200">{fmt(runnerUpPrize)} GTX</span>
+            </div>
+            <div className="rounded-xl border border-amber-700/35 bg-amber-950/20 p-3.5 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase text-amber-400 flex items-center gap-1"><Trophy size={12} /> 3rd / Semi-Finalist (17%)</p>
+                <p className="text-xs font-bold text-white mt-0.5">{thirdClub}</p>
+              </div>
+              <span className="gx-mono text-base font-black text-amber-400">{fmt(thirdPrize)} GTX</span>
+            </div>
+          </div>
+
           <div className="mt-4 rounded-xl border border-dashed border-emerald-500/30 bg-emerald-950/20 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-emerald-200">
             <div className="flex items-center gap-2">
               <Sparkles size={15} className="text-emerald-400 shrink-0" />
               <span>
-                Canonical Waterfall: <b>40% TV Broadcast Rights</b> · <b>35% Competition Prize Pool</b> · <b>25% Global Jackpot Pool</b>
+                Settlement Status: <b className="uppercase text-white">{label(comp.status === "finished" ? "settled_to_ledger" : "escrow_locked")}</b> · 40% TV Broadcast · 35% Competition Prize Pool · 25% Global Jackpot
               </span>
             </div>
-            <Link to="/app/jackpot" className="gx-btn gx-btn-secondary text-[11px] py-1 px-3 w-fit">
-              View Global Jackpot →
-            </Link>
+            <div className="flex items-center gap-2">
+              {comp.host_type === "user" && comp.status !== "finished" && (
+                <Btn variant="gold" onClick={handleFinalizeHostedSettlement} disabled={settling} data-testid="finalize-hosted-settlement-btn">
+                  <CheckCircle2 size={13} /> {settling ? "Settling…" : "Finalize Hosted Settlement"}
+                </Btn>
+              )}
+              <Link to="/app/jackpot" className="gx-btn gx-btn-secondary text-[11px] py-1 px-3 w-fit">
+                View Global Jackpot →
+              </Link>
+            </div>
           </div>
         </Panel>
         <Panel eyebrow="Schedule" title="Fixtures" className="lg:col-span-12" testid="fixtures-panel">
