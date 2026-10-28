@@ -1,4 +1,5 @@
 import 'package:gte_frontend/data/gte_authed_api.dart';
+import 'package:gte_frontend/data/gte_api_repository.dart' show GteApiException;
 import 'package:gte_frontend/features/owner_console/models/gtex_owner_inbox_models.dart';
 import 'package:gte_frontend/features/owner_console/widgets/club_legacy_desk.dart';
 
@@ -928,27 +929,47 @@ class OwnerConsoleApi implements OwnerConsoleReader, GtexOwnerInboxDataSource, O
       throw StateError('Select an active club before gifting a luxury item.');
     }
 
-    // The existing legacy inventory uses an offer/accept ownership transfer.
-    // The club owner is authorized to accept a gift addressed to a player in
-    // their own squad, which invokes the canonical player-gift broadcast path.
-    final Object? offeredPayload = await client.post(
-      '/owner/legacy/$clubId/desk',
-      body: <String, Object?>{
-        'action': 'gift',
-        'payload': <String, Object?>{
-          'asset_id': assetId,
-          'recipient_ref': playerId,
+    // The legacy route can create a durable offer. Fall back only when the
+    // server definitively reports that route as unavailable; network and 5xx
+    // failures are ambiguous and must not issue a second gift.
+    Object? offeredPayload;
+    try {
+      offeredPayload = await client.post(
+        '/owner/legacy/$clubId/desk',
+        body: <String, Object?>{
+          'action': 'gift',
+          'payload': <String, Object?>{
+            'asset_id': assetId,
+            'recipient_ref': playerId,
+          },
         },
-      },
-    );
+      );
+    } on GteApiException catch (error) {
+      if (error.statusCode != 404 && error.statusCode != 405) {
+        rethrow;
+      }
+      await client.post(
+        '/owner/clubs/$clubId/showroom/gift',
+        body: <String, Object?>{
+          'player_id': playerId,
+          'asset_id': assetId,
+          'idempotency_key': 'owner-gift-$clubId-$assetId-$playerId',
+        },
+      );
+      return;
+    }
+
     final Map<String, dynamic> offered = _map(offeredPayload);
-    final String? giftId = _text(offered['id']) ?? _text(_map(offered['gift'])['id']);
+    final String? giftId =
+        _text(offered['id']) ?? _text(_map(offered['gift'])['id']);
     if (giftId == null) {
-      throw const FormatException(
-        'GTEX did not return a gift reference. The asset transfer could not be confirmed.',
+      throw StateError(
+        'Legacy gift response did not include a gift ID; refusing a second gift fallback.',
       );
     }
 
+    // The offer already exists. If acceptance times out, propagate the error
+    // instead of issuing a second canonical gift.
     await client.post(
       '/owner/legacy/$clubId/desk',
       body: <String, Object?>{
@@ -964,10 +985,47 @@ class OwnerConsoleApi implements OwnerConsoleReader, GtexOwnerInboxDataSource, O
     if (resolvedClubId == null) {
       return const <ShowroomExhibit>[];
     }
-    final Map<String, dynamic> room = await client.getMap(
-      '/owner/legacy/$resolvedClubId/showroom',
-    );
-    return _maps(room['exhibits']).map(ShowroomExhibit.fromJson).toList();
+    try {
+      final Map<String, dynamic> room = await client.getMap(
+        '/owner/legacy/$resolvedClubId/showroom',
+      );
+      final List<Map<String, dynamic>> exhibits = _maps(room['exhibits']);
+      if (exhibits.isNotEmpty) {
+        return exhibits.map(ShowroomExhibit.fromJson).toList();
+      }
+    } catch (_) {
+      // Legacy flag disabled or endpoint unavailable; fallback to canonical showroom below
+    }
+
+    try {
+      final Map<String, dynamic> canonical = await client.getMap(
+        '/owner/clubs/$resolvedClubId/showroom',
+      );
+      final List<Map<String, dynamic>> catalog = _maps(canonical['catalog']);
+      final Set<String> ownedKeys = _maps(canonical['owned_assets'])
+          .map((Map<String, dynamic> m) => '${m['catalog_key'] ?? m['id']}')
+          .toSet();
+
+      return catalog.map((Map<String, dynamic> item) {
+        final String key = '${item['catalog_key'] ?? item['id']}';
+        final bool isOwned = ownedKeys.contains(key);
+        final String cat = '${item['category'] ?? 'watch'}';
+        return ShowroomExhibit(
+          id: key,
+          name: '${item['name'] ?? 'Asset'}',
+          category: cat,
+          ownershipLabel: isOwned ? 'Owned Asset' : 'Available',
+          fallbackLabel: '${item['model'] ?? item['name']}',
+          sku: key,
+          price: '${item['price_gtex'] ?? '0'}',
+          ownerClass: 'club',
+          status: 'active',
+          owned: isOwned,
+        );
+      }).toList();
+    } catch (_) {
+      return const <ShowroomExhibit>[];
+    }
   }
 
   @override
