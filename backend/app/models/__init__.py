@@ -191,6 +191,10 @@ from app.models.competition_entry import CompetitionEntry
 from app.models.competition_history_entry import CompetitionHistoryEntry
 from app.models.competition_invite import CompetitionInvite
 from app.models.competition_match import CompetitionMatch
+from app.models.owner_competition_lifecycle_mapping import (
+    OwnerCompetitionLifecycleMapping,
+    OwnerMatchLifecycleMapping,
+)
 from app.models.competition_match_event import CompetitionMatchEvent
 from app.models.player_match_performance import PlayerMatchPerformance
 from app.models.club_ranking_integrity import ClubRankingAbuseFlag, ClubRankingEvent, CompetitionIntegrityScore

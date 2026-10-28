@@ -25,6 +25,10 @@ from app.owner_console.models import (
     OwnerWithdrawal,
 )
 from app.owner_console.service import OwnerError
+from app.services.owner_competition_lifecycle_mapping_service import (
+    OwnerCompetitionLifecycleMappingError,
+    OwnerCompetitionLifecycleMappingService,
+)
 
 router = APIRouter(prefix="/owner", tags=["owner-console"])
 
@@ -98,6 +102,14 @@ class WatchlistAddRequest(BaseModel):
 
 class EnterRequest(BaseModel):
     club_id: str
+
+
+class OwnerCompetitionCanonicalMappingRequest(BaseModel):
+    canonical_competition_id: str = Field(min_length=1, max_length=36)
+
+
+class OwnerMatchCanonicalMappingRequest(BaseModel):
+    canonical_match_id: str = Field(min_length=1, max_length=36)
 
 
 class PlayRequest(BaseModel):
@@ -256,10 +268,9 @@ def unsign(
 
 
 @router.post("/clubs/{club_id}/autopick")
-def autopick(
-    club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)
-) -> dict[str, Any]:
+def autopick(club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
     return _run(session, service.autopick_squad, session, user.id, club_id)
+
 
 @router.get("/market/quote")
 def quote(player_ids: str, session: Session = Depends(get_session), user=Depends(get_current_user)) -> dict[str, Any]:
@@ -827,9 +838,12 @@ def play(
 @router.get("/matches/{match_id}")
 def match(match_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
     m = session.get(OwnerMatch, match_id)
-    if m is None:
+    if m is not None:
+        return comps.mapped_match_dict(session, m, full=True)
+    canonical_view = comps.canonical_match_detail(session, match_id, full=True)
+    if canonical_view is None:
         raise HTTPException(404, detail={"code": "match_not_found"})
-    return comps.match_dict(m, full=True)
+    return canonical_view
 
 
 @router.post("/matches/{match_id}/forfeit")
@@ -1055,3 +1069,104 @@ def flag_decision(
 @router.post("/admin/payouts/{event_id}/release")
 def release(event_id: str, admin=Depends(get_current_admin), session: Session = Depends(get_session)) -> dict[str, Any]:
     return ledger.serialize(_run(session, money.release_payout, session, event_id))
+
+
+# ---------- canonical global competition reconciliation ----------
+
+
+def _raise_mapping_error(exc: OwnerCompetitionLifecycleMappingError) -> None:
+    status_code = (
+        404
+        if exc.code
+        in {
+            "legacy_competition_not_found",
+            "canonical_competition_not_found",
+            "legacy_match_not_found",
+            "canonical_match_not_found",
+        }
+        else 409
+    )
+    raise HTTPException(
+        status_code=status_code,
+        detail={"code": exc.code, "detail": exc.detail},
+    ) from exc
+
+
+@router.post("/admin/competitions/{legacy_competition_id}/canonical-mapping")
+def map_global_competition_to_canonical(
+    legacy_competition_id: str,
+    body: OwnerCompetitionCanonicalMappingRequest,
+    admin=Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Explicitly reconcile a global owner-console competition with its canonical record.
+
+    This is an operator-only mapping operation. It never copies legacy scores,
+    events, standings, or ledger entries and never replays historical settlement.
+    """
+    mapper = OwnerCompetitionLifecycleMappingService(session)
+    try:
+        mapping = mapper.bind_competition(
+            legacy_competition_id,
+            body.canonical_competition_id,
+        )
+        metadata = dict(mapping.metadata_json or {})
+        metadata.setdefault("provisioned_by_user_id", str(getattr(admin, "id", "")))
+        metadata.setdefault("provisioning_method", "admin_api")
+        mapping.metadata_json = metadata
+        session.commit()
+    except OwnerCompetitionLifecycleMappingError as exc:
+        session.rollback()
+        _raise_mapping_error(exc)
+    except Exception:
+        session.rollback()
+        raise
+    logging.getLogger(__name__).info(
+        "owner_competition_canonical_mapping_created legacy=%s canonical=%s actor=%s",
+        legacy_competition_id,
+        mapping.canonical_competition_id,
+        getattr(admin, "id", "unknown"),
+    )
+    return {
+        "legacy_competition_id": mapping.legacy_competition_id,
+        "canonical_competition_id": mapping.canonical_competition_id,
+        "mapping_status": mapping.mapping_status,
+    }
+
+
+@router.post("/admin/matches/{legacy_match_id}/canonical-mapping")
+def map_global_match_to_canonical(
+    legacy_match_id: str,
+    body: OwnerMatchCanonicalMappingRequest,
+    admin=Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Explicitly link one scheduled global fixture to its canonical fixture."""
+    mapper = OwnerCompetitionLifecycleMappingService(session)
+    try:
+        mapping = mapper.bind_scheduled_match(
+            legacy_match_id,
+            body.canonical_match_id,
+        )
+        metadata = dict(mapping.metadata_json or {})
+        metadata.setdefault("provisioned_by_user_id", str(getattr(admin, "id", "")))
+        metadata.setdefault("provisioning_method", "admin_api")
+        mapping.metadata_json = metadata
+        session.commit()
+    except OwnerCompetitionLifecycleMappingError as exc:
+        session.rollback()
+        _raise_mapping_error(exc)
+    except Exception:
+        session.rollback()
+        raise
+    logging.getLogger(__name__).info(
+        "owner_match_canonical_mapping_created legacy=%s canonical=%s actor=%s",
+        legacy_match_id,
+        mapping.canonical_match_id,
+        getattr(admin, "id", "unknown"),
+    )
+    return {
+        "legacy_match_id": mapping.legacy_match_id,
+        "canonical_match_id": mapping.canonical_match_id,
+        "mapping_status": mapping.mapping_status,
+    }
