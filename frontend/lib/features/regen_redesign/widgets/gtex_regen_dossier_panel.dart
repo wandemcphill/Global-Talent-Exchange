@@ -18,6 +18,8 @@ class GtexRegenDossierPanel extends StatelessWidget {
     required this.result,
     this.onRetry,
     this.ownershipActionsBuilder,
+    this.onOpenTransfersHub,
+    this.onOpenSquad,
   });
 
   final GtexRegenDossierResult result;
@@ -28,6 +30,8 @@ class GtexRegenDossierPanel extends StatelessWidget {
   /// the dossier and remains testable without a repository.
   final Widget Function(BuildContext context, GtexRegenDossier dossier)?
   ownershipActionsBuilder;
+  final ValueChanged<String>? onOpenTransfersHub;
+  final ValueChanged<String>? onOpenSquad;
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +43,12 @@ class GtexRegenDossierPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         _LivingStarSection(dossier: dossier),
+        const SizedBox(height: GtexSpacing.md),
+        _JourneyTrackerSection(
+          dossier: dossier,
+          onOpenTransfersHub: onOpenTransfersHub,
+          onOpenSquad: onOpenSquad,
+        ),
         const SizedBox(height: GtexSpacing.md),
         _LineageSection(dossier: dossier),
         const SizedBox(height: GtexSpacing.md),
@@ -1012,6 +1022,208 @@ class _OwnershipSection extends StatelessWidget {
                 ),
               ),
             ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+
+/// REGEN CONTRACT & RECRUITMENT JOURNEY
+///
+/// Provides a clear, honest progression tracker through the 5 key stages:
+/// Discovery -> Market Availability -> Transfer Room Offers -> Contract Terms -> Squad Registration.
+/// Respects backend reality: contracts or accepted offers never register a player prematurely.
+class _JourneyTrackerSection extends StatelessWidget {
+  const _JourneyTrackerSection({
+    required this.dossier,
+    this.onOpenTransfersHub,
+    this.onOpenSquad,
+  });
+
+  final GtexRegenDossier dossier;
+  final ValueChanged<String>? onOpenTransfersHub;
+  final ValueChanged<String>? onOpenSquad;
+
+  @override
+  Widget build(BuildContext context) {
+    final RegenLifecycleState? lifecycle = dossier.lifecycle;
+    final RegenOfferMarket? market = lifecycle?.offerMarket;
+    final RegenPressureState? pressure = lifecycle?.pressureState;
+    final bool isListed = lifecycle?.transferListed ?? false;
+    final bool isFreeAgent = lifecycle?.freeAgent ?? false;
+    final int competingOffers = market?.visibleOfferCount ?? 0;
+
+    return GtexPanel(
+      title: 'Recruitment & Contract Journey',
+      subtitle: 'Canonical lifecycle progression for ${dossier.displayName}',
+      accent: GtexColors.cyan,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          _JourneyStepTile(
+            stepNumber: 1,
+            title: 'Discovery & Scout Intel',
+            subtitle:
+                'Scout confidence: ${dossier.profile.scoutConfidence} · Source: ${dossier.profile.generationSource}',
+            statusLabel: 'Verified Intel',
+            statusColor: GtexColors.mint,
+            icon: Icons.search_rounded,
+          ),
+          const SizedBox(height: GtexSpacing.sm),
+          _JourneyStepTile(
+            stepNumber: 2,
+            title: 'Market Availability',
+            subtitle: isFreeAgent
+                ? 'Unattached free agent — direct contract talks permitted'
+                : isListed
+                    ? 'Listed on the sporting transfer market'
+                    : 'Under contract at current club (unlisted)',
+            statusLabel:
+                isFreeAgent
+                    ? 'Free agent'
+                    : isListed
+                    ? 'Transfer listed'
+                    : 'Club-bound',
+            statusColor:
+                isFreeAgent
+                    ? GtexColors.gold
+                    : isListed
+                    ? GtexColors.cyan
+                    : GtexColors.textMuted,
+            icon: Icons.storefront_outlined,
+          ),
+          const SizedBox(height: GtexSpacing.sm),
+          _JourneyStepTile(
+            stepNumber: 3,
+            title: 'Transfer Room & Offers',
+            subtitle: competingOffers > 0
+                ? '${competingOffers} active competing offer(s) recorded in transfer room'
+                : 'Submit or negotiate club-to-club transfer terms in Transfer Hub',
+            statusLabel:
+                competingOffers > 0
+                    ? '${competingOffers} active offer(s)'
+                    : 'Ready for offer',
+            statusColor: competingOffers > 0 ? GtexColors.gold : GtexColors.cyan,
+            icon: Icons.swap_horiz_rounded,
+            actionLabel: onOpenTransfersHub != null ? 'Open Transfers Hub' : null,
+            onAction:
+                onOpenTransfersHub != null
+                    ? () => onOpenTransfersHub!(dossier.playerId)
+                    : null,
+          ),
+          const SizedBox(height: GtexSpacing.sm),
+          _JourneyStepTile(
+            stepNumber: 4,
+            title: 'Contract & Agent Terms',
+            subtitle:
+                'Wage offer and contract length must satisfy player & agent demands',
+            statusLabel:
+                pressure?.refusesNewContract == true
+                    ? 'Refusing terms'
+                    : 'Negotiable',
+            statusColor:
+                pressure?.refusesNewContract == true
+                    ? GtexColors.danger
+                    : GtexColors.mint,
+            icon: Icons.handshake_outlined,
+          ),
+          const SizedBox(height: GtexSpacing.sm),
+          _JourneyStepTile(
+            stepNumber: 5,
+            title: 'Squad & Match Registration',
+            subtitle:
+                'Registration requires verified roster sync from the active club session. Offers or agreed terms do not grant match eligibility until confirmed by the backend.',
+            statusLabel: 'Awaiting Club Sync',
+            statusColor: GtexColors.textMuted,
+            icon: Icons.how_to_reg_outlined,
+            actionLabel: onOpenSquad != null ? 'View Squad Room' : null,
+            onAction:
+                onOpenSquad != null ? () => onOpenSquad!(dossier.playerId) : null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _JourneyStepTile extends StatelessWidget {
+  const _JourneyStepTile({
+    required this.stepNumber,
+    required this.title,
+    required this.subtitle,
+    required this.statusLabel,
+    required this.statusColor,
+    required this.icon,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final int stepNumber;
+  final String title;
+  final String subtitle;
+  final String statusLabel;
+  final Color statusColor;
+  final IconData icon;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(GtexSpacing.sm),
+      decoration: BoxDecoration(
+        color: GtexColors.surfaceOverlay,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: GtexColors.surfaceBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Icon(icon, size: 16, color: statusColor),
+              const SizedBox(width: GtexSpacing.xs),
+              Expanded(
+                child: Text(
+                  '${stepNumber}. ${title}',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: GtexColors.text,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              GtexStatusChip(
+                label: statusLabel,
+                color: statusColor,
+                compact: true,
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: GtexColors.textSecondary,
+              height: 1.35,
+            ),
+          ),
+          if (actionLabel != null && onAction != null) ...<Widget>[
+            const SizedBox(height: GtexSpacing.xs),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: onAction,
+                icon: const Icon(Icons.arrow_forward_rounded, size: 14),
+                label: Text(actionLabel!),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ),
           ],
         ],
       ),
