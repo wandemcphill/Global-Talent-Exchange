@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
@@ -27,9 +28,12 @@ enum GtexCinema3DMode {
   fmDiorama,
 }
 
-/// GTEX Volumetric 3D Presentation, Broadcast & Diorama Stage (Flutter — Full 17-Scene Suite)
-/// Combines FIFA/eFootball-style 60fps 3D Motion Cinema with Football Manager-style
-/// 3D Diorama Stills and interactive 360-degree Matrix4 perspective rotation.
+/// GTEX Next-Gen v2.0 Volumetric 3D Presentation, Broadcast & Diorama Stage (Flutter — Full 17-Scene Suite)
+/// Features:
+///  - True Dual-Sided 180° Matrix4 Volumes (Front Face + Extruded Depth Plane + Counter-Rotated True Back Face)
+///  - `Director Cut` 3-Shot Camera Choreography (Macro Close-Up -> 180° Back Reveal -> Hero Wide Orbit)
+///  - Interactive Pyro & Confetti Particle Burst Painter
+///  - Livery / Kit Edition Customizer (Home / Gold / Midnight)
 class GtexCinema3DStage extends StatefulWidget {
   const GtexCinema3DStage({
     super.key,
@@ -80,9 +84,14 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
   late final AnimationController _controller;
   double _rotY = -0.22;
   double _rotX = 0.1;
+  double _cameraScale = 1.0;
   bool _dragging = false;
   int _salutes = 54;
   bool _saluted = false;
+  int _liveryIndex = 0; // 0: Home, 1: Gold, 2: Midnight
+  String? _directorShotLabel;
+  double _pyroBurstSeed = 0.0;
+  Timer? _directorTimer;
 
   @override
   void initState() {
@@ -96,8 +105,61 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
 
   @override
   void dispose() {
+    _directorTimer?.cancel();
     _controller.dispose();
     super.dispose();
+  }
+
+  void _triggerPyro() {
+    setState(() {
+      _pyroBurstSeed = DateTime.now().millisecondsSinceEpoch.toDouble();
+    });
+  }
+
+  void _flip180() {
+    setState(() {
+      final bool isBack = math.cos(_rotY) < 0;
+      _rotY = isBack ? -0.22 : math.pi - 0.18;
+    });
+  }
+
+  void _runDirectorCut() {
+    _directorTimer?.cancel();
+    setState(() {
+      _mode = GtexCinema3DMode.motion3d;
+      _directorShotLabel = 'SHOT 1 · MACRO CREST CLOSE-UP';
+      _cameraScale = 1.18;
+      _rotX = 0.18;
+      _rotY = -0.15;
+    });
+
+    _directorTimer = Timer(const Duration(milliseconds: 1400), () {
+      if (!mounted) return;
+      setState(() {
+        _directorShotLabel = 'SHOT 2 · 180° BACK PRINT & PYRO';
+        _cameraScale = 1.06;
+        _rotX = 0.08;
+        _rotY = math.pi - 0.12;
+        _pyroBurstSeed = DateTime.now().millisecondsSinceEpoch.toDouble();
+      });
+
+      _directorTimer = Timer(const Duration(milliseconds: 1500), () {
+        if (!mounted) return;
+        setState(() {
+          _directorShotLabel = 'SHOT 3 · HERO WIDE 360° ORBIT';
+          _cameraScale = 1.0;
+          _rotX = 0.1;
+          _rotY = -0.22;
+        });
+
+        _directorTimer = Timer(const Duration(milliseconds: 1400), () {
+          if (!mounted) return;
+          setState(() {
+            _directorShotLabel = null;
+          });
+        });
+      });
+    });
   }
 
   @override
@@ -107,7 +169,11 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
         widget.scene == GtexCinema3DScene.privateJetFlex ||
         widget.scene == GtexCinema3DScene.clubTakeover ||
         widget.scene == GtexCinema3DScene.wonderkidEmergence;
-    final Color accentColor = isGala ? GtexColors.gold : GtexColors.pitch;
+    final Color accentColor = _liveryIndex == 1
+        ? GtexColors.gold
+        : _liveryIndex == 2
+            ? GtexColors.cyan
+            : (isGala ? GtexColors.gold : GtexColors.pitch);
 
     return Container(
       decoration: BoxDecoration(
@@ -174,9 +240,90 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
                     ],
                   ],
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: <Widget>[
+                    InkWell(
+                      onTap: _runDirectorCut,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: GtexColors.gold,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'Director Cut',
+                          style: TextStyle(
+                            color: Color(0xFF050811),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: _flip180,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.white24),
+                        ),
+                        child: const Text(
+                          'Flip 180°',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: _triggerPyro,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: GtexColors.gold.withValues(alpha: 0.16),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: GtexColors.gold.withValues(alpha: 0.45)),
+                        ),
+                        child: const Text(
+                          'Pyro',
+                          style: TextStyle(
+                            color: GtexColors.gold,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => setState(() => _liveryIndex = (_liveryIndex + 1) % 3),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: GtexColors.cyan.withValues(alpha: 0.16),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: GtexColors.cyan.withValues(alpha: 0.45)),
+                        ),
+                        child: Text(
+                          _liveryIndex == 0
+                              ? 'Home'
+                              : _liveryIndex == 1
+                                  ? 'Gold'
+                                  : 'Midnight',
+                          style: const TextStyle(
+                            color: GtexColors.cyan,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
                     InkWell(
                       onTap: () => setState(() => _mode = GtexCinema3DMode.motion3d),
                       child: Container(
@@ -199,7 +346,6 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
                         ),
                       ),
                     ),
-                    const SizedBox(width: 4),
                     InkWell(
                       onTap: () => setState(() {
                         _mode = GtexCinema3DMode.fmDiorama;
@@ -251,20 +397,24 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
                       ? _controller.value * 2 * math.pi
                       : 0.0;
                   final double effectiveRotY =
-                      _mode == GtexCinema3DMode.motion3d && !_dragging
+                      _mode == GtexCinema3DMode.motion3d && !_dragging && _directorShotLabel == null
                           ? _rotY + math.sin(t) * 0.45
                           : _rotY;
+
+                  final bool isShowingBack = math.cos(effectiveRotY) < 0;
 
                   final Matrix4 backShadowMatrix = Matrix4.identity()
                     ..setEntry(3, 2, 0.0015)
                     ..translateByDouble(8.0, 10.0, -18.0, 1.0)
+                    ..scaleByDouble(_cameraScale, _cameraScale, 1.0, 1.0)
                     ..rotateX(_rotX)
                     ..rotateY(effectiveRotY);
 
                   final Matrix4 mainMatrix = Matrix4.identity()
                     ..setEntry(3, 2, 0.0015)
+                    ..scaleByDouble(_cameraScale, _cameraScale, 1.0, 1.0)
                     ..rotateX(_rotX)
-                    ..rotateY(effectiveRotY);
+                    ..rotateY(isShowingBack ? effectiveRotY + math.pi : effectiveRotY);
 
                   return Stack(
                     alignment: Alignment.center,
@@ -274,6 +424,7 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
                           painter: _Cinema3DBackdropPainter(
                             phase: t,
                             isGala: isGala,
+                            pyroSeed: _pyroBurstSeed,
                           ),
                         ),
                       ),
@@ -286,35 +437,62 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
                           child: _build3DCenterpiece(),
                         ),
                       ),
-                      // Foreground Volumetric 3D Object
+                      // Foreground Dual-Sided Volumetric 3D Object
                       Transform(
                         alignment: Alignment.center,
                         transform: mainMatrix,
-                        child: _build3DCenterpiece(),
+                        child: isShowingBack
+                            ? _build3DBackCenterpiece(accentColor)
+                            : _build3DCenterpiece(),
                       ),
                       Positioned(
                         top: 8,
                         left: 10,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.65),
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.14),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.65),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.14),
+                                ),
+                              ),
+                              child: Text(
+                                _directorShotLabel ?? 'Drag 360° Volumetric 3D Camera',
+                                style: const TextStyle(
+                                  color: GtexColors.textSecondary,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                             ),
-                          ),
-                          child: const Text(
-                            'Drag 360° Volumetric 3D Camera',
-                            style: TextStyle(
-                              color: GtexColors.textSecondary,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: (isShowingBack ? GtexColors.cyan : GtexColors.pitch)
+                                    .withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                  color: isShowingBack ? GtexColors.cyan : GtexColors.pitch,
+                                ),
+                              ),
+                              child: Text(
+                                isShowingBack ? '180° BACK FACE' : 'FRONT FACE',
+                                style: TextStyle(
+                                  color: isShowingBack ? GtexColors.cyan : GtexColors.pitch,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
                       ),
                     ],
@@ -383,9 +561,91 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
                         : () => setState(() {
                               _saluted = true;
                               _salutes += 1;
+                              _pyroBurstSeed =
+                                  DateTime.now().millisecondsSinceEpoch.toDouble();
                             }),
                   ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _build3DBackCenterpiece(Color accentColor) {
+    final String surname = widget.subjectName.split(' ').last.toUpperCase();
+    return Container(
+      width: 185,
+      height: 170,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[
+            Color(0xFF0F172A),
+            Color(0xFF040814),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: accentColor, width: 2.5),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: accentColor.withValues(alpha: 0.45),
+            blurRadius: 28,
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: <Widget>[
+          Text(
+            widget.scene == GtexCinema3DScene.privateJetFlex
+                ? 'VIP CABIN CUTAWAY'
+                : widget.scene == GtexCinema3DScene.facilityUpgrade ||
+                        widget.scene == GtexCinema3DScene.stadiumAdDisplay
+                    ? '4-ZONE REVENUE BLUEPRINT'
+                    : 'OFFICIAL REVERSE 3D VIEW',
+            style: TextStyle(
+              color: accentColor,
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          Column(
+            children: <Widget>[
+              Text(
+                widget.scene == GtexCinema3DScene.privateJetFlex
+                    ? '14-SEAT LOUNGE'
+                    : '#${widget.jerseyNumber} $surname',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'OVR ${widget.overallRating} · VERIFIED BACKPLATE',
+                style: const TextStyle(
+                  color: GtexColors.gold,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          Text(
+            '${widget.clubName} · ${widget.ownerName}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: GtexColors.textSecondary,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -549,7 +809,6 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              // Stacked 3D Stadium Rings
               Container(
                 width: 135,
                 height: 68,
@@ -599,14 +858,14 @@ class _GtexCinema3DStageState extends State<GtexCinema3DStage>
           height: 175,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
+            gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: <Color>[
-                Color(0xFF059669),
-                Color(0xFF0F172A),
-                Color(0xFFB45309),
-              ],
+              colors: _liveryIndex == 1
+                  ? const <Color>[Color(0xFFB45309), Color(0xFF0F172A), Color(0xFFF59E0B)]
+                  : _liveryIndex == 2
+                      ? const <Color>[Color(0xFF0284C7), Color(0xFF090D16), Color(0xFF7E22CE)]
+                      : const <Color>[Color(0xFF059669), Color(0xFF0F172A), Color(0xFFB45309)],
             ),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: GtexColors.gold, width: 2.5),
@@ -698,10 +957,12 @@ class _Cinema3DBackdropPainter extends CustomPainter {
   const _Cinema3DBackdropPainter({
     required this.phase,
     required this.isGala,
+    required this.pyroSeed,
   });
 
   final double phase;
   final bool isGala;
+  final double pyroSeed;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -746,9 +1007,24 @@ class _Cinema3DBackdropPainter extends CustomPainter {
         ).createShader(Rect.fromLTWH(0, 0, w, h));
       canvas.drawPath(cone, beamPaint);
     }
+
+    // Pyro / Confetti Sparkles
+    if (pyroSeed > 0) {
+      final Paint sparkPaint = Paint()..style = PaintingStyle.fill;
+      for (int i = 0; i < 28; i++) {
+        final double px = (w * 0.2) + ((i * 37.0 + phase * 40) % (w * 0.6));
+        final double py = (h * 0.18) + ((i * 29.0 + math.sin(phase + i) * 30) % (h * 0.65));
+        sparkPaint.color = i.isEven
+            ? GtexColors.gold.withValues(alpha: 0.75)
+            : GtexColors.pitch.withValues(alpha: 0.75);
+        canvas.drawCircle(Offset(px, py), 2.5 + (i % 3), sparkPaint);
+      }
+    }
   }
 
   @override
   bool shouldRepaint(covariant _Cinema3DBackdropPainter oldDelegate) =>
-      oldDelegate.phase != phase || oldDelegate.isGala != isGala;
+      oldDelegate.phase != phase ||
+      oldDelegate.isGala != isGala ||
+      oldDelegate.pyroSeed != pyroSeed;
 }

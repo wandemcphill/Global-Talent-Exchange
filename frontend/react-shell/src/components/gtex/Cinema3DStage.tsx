@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Camera,
   Film,
@@ -11,13 +11,14 @@ import {
   Shield,
   Award,
   Layers,
-  Plane,
-  Building2,
   Trophy,
   Radio,
   Tv,
   Crown,
   ThumbsUp,
+  RefreshCw,
+  Clapperboard,
+  Palette,
 } from "lucide-react";
 
 export type Cinema3DSceneType =
@@ -72,15 +73,25 @@ export interface Cinema3DStageProps {
   actionLabel?: string;
 }
 
+interface BurstParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  size: number;
+  color: string;
+  alpha: number;
+  rot: number;
+}
+
 /**
- * GTEX Multi-Layer Volumetric 3D Presentation, Broadcast & Diorama Engine
+ * GTEX Next-Gen v2.0 Volumetric 3D Presentation, Broadcast & Diorama Engine
  * Features:
- *  - True multi-plane `translateZ` 3D depth extrusions (-30px to +42px)
- *  - Double-sided 3D sculpted Football Jersey (Front Crest/Sponsor + Back Surname/Number)
- *  - 3D Stacked-Tier Stadium Cathedral Bowl with live pitch markings & 360° LED ribbon
- *  - 3D Swept-Wing Private Jet on a lit night runway with approach strobes
- *  - 3D Multi-Gear Tourbillon Vault & Volumetric Golden Globe Trophy Plinth
- *  - Real-time dynamic specular light sheen reacting to 360° camera angle
+ *  1. True Dual-Sided 180° 3D Volumes (Front Face + Extruded Metallic Side Slabs + True Reverse Back Face)
+ *  2. `Director Cut` 3-Shot FIFA Walkout Camera Choreography (Macro Close-Up -> 180° Back Reveal -> Hero Wide Orbit)
+ *  3. Interactive 60fps Canvas Pyro, Confetti & Paparazzi Flashbulb Physics
+ *  4. Zero-Asset Procedural WebAudio Sound Synthesizer (Walkout Sub-Bass Boom, Pyro Pop, Camera Shutter)
+ *  5. Interactive 3D Kit / Livery Variant Switcher (Home / Away Gold / Midnight Blackout)
  */
 export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
   scene,
@@ -119,8 +130,15 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
   const [rotX, setRotX] = useState<number>(8);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [cameraAngle, setCameraAngle] = useState<"wide" | "hero" | "closeup">("hero");
+  const [directorShotLabel, setDirectorShotLabel] = useState<string | null>(null);
+  const [liveryVariant, setLiveryVariant] = useState<"home" | "gold" | "midnight">("home");
   const [saluteCount, setSaluteCount] = useState<number>(initialSalutes);
   const [hasSaluted, setHasSaluted] = useState<boolean>(false);
+
+  const targetRotYRef = useRef<number | null>(null);
+  const directorTimerRef = useRef<number | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const burstParticlesRef = useRef<BurstParticle[]>([]);
 
   const dragStartRef = useRef<{ x: number; y: number; rotY: number; rotX: number }>({
     x: 0,
@@ -130,22 +148,168 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
   });
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Smooth orbital oscillation / 360 rotation in Motion 3D mode
+  // Compute active livery palette based on user customizer toggle
+  const activePrimary =
+    liveryVariant === "gold"
+      ? "#F5B83D"
+      : liveryVariant === "midnight"
+      ? "#38BDF8"
+      : primaryColor;
+  const activeSecondary =
+    liveryVariant === "gold"
+      ? "#FEF08A"
+      : liveryVariant === "midnight"
+      ? "#A855F7"
+      : secondaryColor;
+
+  // Zero-Asset Procedural WebAudio Synthesizer
+  const playProceduralSfx = useCallback(
+    (kind: "boom" | "pyro" | "flip", forcePlay = false) => {
+      if (!soundEnabled && !forcePlay) return;
+      try {
+        const AudioContextClass =
+          window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (!AudioContextClass) return;
+        if (!audioCtxRef.current) {
+          audioCtxRef.current = new AudioContextClass();
+        }
+        const ctx = audioCtxRef.current;
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        if (kind === "boom") {
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(115, now);
+          osc.frequency.exponentialRampToValueAtTime(28, now + 0.65);
+          gain.gain.setValueAtTime(0.24, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+        } else if (kind === "pyro") {
+          osc.type = "triangle";
+          osc.frequency.setValueAtTime(260, now);
+          osc.frequency.exponentialRampToValueAtTime(48, now + 0.45);
+          gain.gain.setValueAtTime(0.18, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+        } else {
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(180, now);
+          osc.frequency.exponentialRampToValueAtTime(75, now + 0.25);
+          gain.gain.setValueAtTime(0.14, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        }
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.72);
+      } catch {
+        // Ignore audio autoplay blocks
+      }
+    },
+    [soundEnabled]
+  );
+
+  // Trigger 60fps Pyro & Confetti Fountain Burst
+  const triggerPyroBurst = useCallback(() => {
+    const palette = [activePrimary, activeSecondary, "#FFFFFF", "#FDE047", "#38BDF8"];
+    const nextParticles: BurstParticle[] = [];
+    for (let i = 0; i < 56; i++) {
+      nextParticles.push({
+        x: 200 + Math.random() * 400,
+        y: 340,
+        vx: (Math.random() - 0.5) * 9,
+        vy: -(4.2 + Math.random() * 7.5),
+        size: 3.5 + Math.random() * 4.5,
+        color: palette[i % palette.length],
+        alpha: 1,
+        rot: Math.random() * Math.PI,
+      });
+    }
+    burstParticlesRef.current = [...burstParticlesRef.current.slice(-60), ...nextParticles];
+    playProceduralSfx("pyro");
+  }, [activePrimary, activeSecondary, playProceduralSfx]);
+
+  // Flip 180° between Front Face and True Back Face
+  const handleFlip180 = () => {
+    const norm = ((rotY % 360) + 360) % 360;
+    const isCurrentlyBack = norm > 90 && norm < 270;
+    targetRotYRef.current = isCurrentlyBack ? -18 : 165;
+    playProceduralSfx("flip");
+  };
+
+  // Run 3-Shot FIFA Pack-Walkout Director Cut Choreography
+  const handleDirectorCut = () => {
+    if (directorTimerRef.current) {
+      window.clearTimeout(directorTimerRef.current);
+    }
+    setMode("motion_3d");
+    setIsPlaying(true);
+    setDirectorShotLabel("SHOT 1 · MACRO CREST CLOSE-UP");
+    setCameraAngle("closeup");
+    setRotX(14);
+    targetRotYRef.current = -14;
+    playProceduralSfx("boom");
+
+    directorTimerRef.current = window.setTimeout(() => {
+      setDirectorShotLabel("SHOT 2 · 180° BACK PRINT & PYRO REVEAL");
+      setCameraAngle("hero");
+      setRotX(6);
+      targetRotYRef.current = 172;
+      triggerPyroBurst();
+
+      directorTimerRef.current = window.setTimeout(() => {
+        setDirectorShotLabel("SHOT 3 · HERO WIDE 360° ORBIT");
+        setCameraAngle("hero");
+        setRotX(8);
+        targetRotYRef.current = -18;
+        triggerPyroBurst();
+
+        directorTimerRef.current = window.setTimeout(() => {
+          setDirectorShotLabel(null);
+          targetRotYRef.current = null;
+        }, 1600);
+      }, 1700);
+    }, 1500);
+  };
+
   useEffect(() => {
-    if (mode !== "motion_3d" || !isPlaying || isDragging) return;
+    return () => {
+      if (directorTimerRef.current) {
+        window.clearTimeout(directorTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Smooth orbital oscillation / 360 rotation + target interpolation
+  useEffect(() => {
+    if (isDragging) return;
     let rafId: number;
     let lastTime = performance.now();
     const animate = (now: number) => {
       const dt = (now - lastTime) / 1000;
       lastTime = now;
-      setRotY((prev) => (prev + dt * 24) % 360);
+      setRotY((prev) => {
+        if (targetRotYRef.current !== null) {
+          const diff = targetRotYRef.current - prev;
+          if (Math.abs(diff) < 0.8) {
+            const snapped = targetRotYRef.current;
+            targetRotYRef.current = null;
+            return snapped;
+          }
+          return prev + diff * Math.min(1, dt * 7.5);
+        }
+        if (mode === "motion_3d" && isPlaying) {
+          return (prev + dt * 24) % 360;
+        }
+        return prev;
+      });
       rafId = requestAnimationFrame(animate);
     };
     rafId = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(rafId);
   }, [mode, isPlaying, isDragging]);
 
-  // 60fps Volumetric Stadium Lighting, Runway Approach Strobes, Flashbulbs & Depth Particles
+  // 60fps Volumetric Stadium Lighting, Runway Approach Strobes, Flashbulbs & Pyro Particles
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -236,7 +400,6 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
         ctx.lineTo(w, py);
         ctx.stroke();
 
-        // Runway approach strobe lights for Private Jet Flex & Helicopter scenes
         if (scene === "private_jet_flex" || spectacleTier === "galactico_helicopter") {
           const strobeAlpha = 0.35 + 0.65 * Math.max(0, Math.sin(tick * 5 - r * 0.7));
           ctx.fillStyle = `rgba(245, 184, 61, ${strobeAlpha})`;
@@ -271,7 +434,6 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
         ctx.closePath();
         ctx.fill();
 
-        // Top stadium floodlight bulb glow
         const bulb = ctx.createRadialGradient(bx, 6, 1, bx, 6, 26);
         bulb.addColorStop(0, "rgba(255,255,255,0.85)");
         bulb.addColorStop(1, "rgba(255,255,255,0)");
@@ -298,7 +460,7 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
         }
       });
 
-      // 5. Floating 3D Depth Particles / Gold Gala Confetti
+      // 5. Ambient Floating 3D Depth Particles
       particles.forEach((p) => {
         if (mode === "motion_3d" && isPlaying) {
           p.x = (p.x + p.vx + w) % w;
@@ -314,7 +476,28 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
         ctx.restore();
       });
 
-      if (mode === "motion_3d" && isPlaying) {
+      // 6. Active Pyro & Confetti Burst Particles
+      const bursts = burstParticlesRef.current;
+      for (let i = bursts.length - 1; i >= 0; i--) {
+        const bp = bursts[i];
+        bp.x += bp.vx;
+        bp.y += bp.vy;
+        bp.vy += 0.22;
+        bp.alpha -= 0.015;
+        if (bp.alpha <= 0) {
+          bursts.splice(i, 1);
+          continue;
+        }
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, bp.alpha);
+        ctx.fillStyle = bp.color;
+        ctx.translate(bp.x, bp.y);
+        ctx.rotate(bp.rot + bp.alpha * 5);
+        ctx.fillRect(-bp.size / 2, -bp.size / 2, bp.size, bp.size * 0.65);
+        ctx.restore();
+      }
+
+      if ((mode === "motion_3d" && isPlaying) || burstParticlesRef.current.length > 0) {
         animationFrameId = requestAnimationFrame(render);
       }
     };
@@ -327,6 +510,7 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     setIsDragging(true);
+    targetRotYRef.current = null;
     dragStartRef.current = {
       x: e.clientX,
       y: e.clientY,
@@ -347,10 +531,11 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
     setIsDragging(false);
   };
 
-  const cameraScale = cameraAngle === "closeup" ? 1.18 : cameraAngle === "wide" ? 0.88 : 1.0;
-  // Dynamic specular highlight position based on rotation
+  const cameraScale = cameraAngle === "closeup" ? 1.22 : cameraAngle === "wide" ? 0.88 : 1.0;
   const specularX = 50 + Math.sin((rotY * Math.PI) / 180) * 40;
   const surname = subjectName.split(" ").slice(-1)[0] || subjectName;
+  const normAngle = ((rotY % 360) + 360) % 360;
+  const isShowingBackFace = normAngle > 90 && normAngle < 270;
 
   return (
     <div
@@ -406,38 +591,83 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
           )}
         </div>
 
-        {/* Mode & Camera Switcher */}
-        <div className="flex items-center gap-1.5">
+        {/* v2.0 Mode, Director Cut, 180° Flip, Pyro & Camera Switcher */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {/* Director Cut 3-Shot Button */}
+          <button
+            type="button"
+            onClick={handleDirectorCut}
+            className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 bg-amber-400 text-slate-950 hover:bg-amber-300 shadow"
+            title="Play 3-Shot FIFA Walkout Director Cut"
+          >
+            <Clapperboard size={11} /> Director Cut
+          </button>
+
+          {/* 180° Front/Back Flip Button */}
+          <button
+            type="button"
+            onClick={handleFlip180}
+            className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1 bg-white/10 hover:bg-white/15 text-white border border-white/15"
+            title="Flip 180° between Front and True Back Face"
+          >
+            <RefreshCw size={11} className="text-emerald-400" /> Flip 180°
+          </button>
+
+          {/* Pyro Confetti Burst Button */}
+          <button
+            type="button"
+            onClick={triggerPyroBurst}
+            className="px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1 bg-white/5 hover:bg-white/15 text-amber-300 border border-amber-400/30"
+            title="Fire Club Confetti & Pyro Burst"
+          >
+            <Sparkles size={11} /> Pyro
+          </button>
+
+          {/* Livery / Kit Edition Switcher */}
+          <button
+            type="button"
+            onClick={() =>
+              setLiveryVariant((v) =>
+                v === "home" ? "gold" : v === "gold" ? "midnight" : "home"
+              )
+            }
+            className="px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1 bg-white/5 hover:bg-white/15 text-cyan-300 border border-cyan-400/30"
+            title="Cycle 3D Livery / Kit Edition (Home / Gold / Midnight)"
+          >
+            <Palette size={11} /> {liveryVariant}
+          </button>
+
           <div className="inline-flex rounded-lg p-0.5 bg-black/50 border border-white/10">
             <button
               type="button"
               onClick={() => setMode("motion_3d")}
-              className="px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all flex items-center gap-1"
+              className="px-2 py-1 rounded-md text-[10px] font-semibold transition-all flex items-center gap-1"
               style={{
                 background: mode === "motion_3d" ? "rgba(0, 230, 118, 0.22)" : "transparent",
                 color: mode === "motion_3d" ? "#00E676" : "var(--gtex-text-muted)",
               }}
             >
-              <Film size={11} /> 3D Video / Motion
+              <Film size={11} /> 3D Motion
             </button>
             <button
               type="button"
               onClick={() => {
                 setMode("fm_diorama");
+                targetRotYRef.current = null;
                 setRotY(-18);
                 setRotX(8);
               }}
-              className="px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all flex items-center gap-1"
+              className="px-2 py-1 rounded-md text-[10px] font-semibold transition-all flex items-center gap-1"
               style={{
                 background: mode === "fm_diorama" ? "rgba(56, 189, 248, 0.22)" : "transparent",
                 color: mode === "fm_diorama" ? "#38BDF8" : "var(--gtex-text-muted)",
               }}
             >
-              <Camera size={11} /> FM 3D Still
+              <Camera size={11} /> FM Still
             </button>
           </div>
 
-          <div className="hidden sm:inline-flex rounded-lg p-0.5 bg-black/50 border border-white/10">
+          <div className="hidden lg:inline-flex rounded-lg p-0.5 bg-black/50 border border-white/10">
             {(["wide", "hero", "closeup"] as const).map((cam) => (
               <button
                 key={cam}
@@ -467,6 +697,7 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
           <button
             type="button"
             onClick={() => {
+              targetRotYRef.current = null;
               setRotY(-18);
               setRotX(8);
               setCameraAngle("hero");
@@ -478,8 +709,12 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => setSoundEnabled((s) => !s)}
-            title="Toggle Crowd & Shutter Audio FX"
+            onClick={() => {
+              const next = !soundEnabled;
+              setSoundEnabled(next);
+              if (next) playProceduralSfx("boom", true);
+            }}
+            title="Toggle Procedural WebAudio Walkout & Pyro SFX"
             className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/80"
           >
             {soundEnabled ? <Volume2 size={13} className="text-emerald-400" /> : <VolumeX size={13} />}
@@ -545,8 +780,8 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
             transform: `rotateX(76deg) rotateZ(${rotY}deg) scale(${cameraScale})`,
             background:
               "radial-gradient(circle, rgba(245,184,61,0.42) 0%, rgba(0,230,118,0.22) 48%, rgba(56,189,248,0.12) 68%, transparent 78%)",
-            border: "2px solid rgba(245, 184, 61, 0.7)",
-            boxShadow: "0 0 45px rgba(245, 184, 61, 0.45), inset 0 0 25px rgba(0, 230, 118, 0.35)",
+            border: `2px solid ${activePrimary}`,
+            boxShadow: `0 0 45px ${activePrimary}66, inset 0 0 25px ${activeSecondary}44`,
           }}
         />
         <div
@@ -556,7 +791,7 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
           }}
         />
 
-        {/* True Multi-Layer Volumetric 3D Centerpiece Assembly */}
+        {/* True Multi-Layer Dual-Sided 180° Volumetric 3D Centerpiece Assembly */}
         <div
           className="relative z-10 transition-transform duration-75"
           style={{
@@ -564,6 +799,75 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
             transform: `scale(${cameraScale}) rotateX(${rotX}deg) rotateY(${rotY}deg)`,
           }}
         >
+          {/* Extruded Side Wall Slabs (-10px, -5px, 0px, +5px, +10px) for solid 3D thickness at 90° */}
+          {[-10, -5, 0, 5, 10].map((z) => (
+            <div
+              key={z}
+              className="absolute inset-1 rounded-2xl pointer-events-none"
+              style={{
+                transform: `translateZ(${z}px)`,
+                border: `2px solid ${activePrimary}55`,
+                background: "rgba(9, 14, 28, 0.55)",
+              }}
+            />
+          ))}
+
+          {/* =====================================================================
+              TRUE REVERSE BACK FACE (rotateY(180deg) translateZ(16px))
+              Visible whenever rotated 90°..270° or via "Flip 180°" button!
+             ===================================================================== */}
+          <div
+            className="absolute inset-0 rounded-2xl p-4 border-2 flex flex-col items-center justify-between text-center overflow-hidden"
+            style={{
+              transform: "rotateY(180deg) translateZ(16px)",
+              backfaceVisibility: "hidden",
+              background: "linear-gradient(150deg, rgba(15,23,42,0.98), rgba(4,8,18,0.99))",
+              borderColor: activeSecondary,
+              boxShadow: `0 22px 50px rgba(0,0,0,0.85), inset 0 0 28px ${activeSecondary}33`,
+            }}
+          >
+            <div className="w-full flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-amber-300 border-b border-white/10 pb-1.5">
+              <span>
+                {scene === "private_jet_flex" || scene === "luxury_turntable"
+                  ? "🛋️ VIP INTERIOR / CASEBACK"
+                  : scene === "facility_upgrade" ||
+                    scene === "academy_upgrade" ||
+                    scene === "stadium_ad_display"
+                  ? "📐 3D ENGINEERING BLUEPRINT"
+                  : "🔄 OFFICIAL REVERSE 3D VIEW"}
+              </span>
+              <span className="px-2 py-0.5 rounded bg-emerald-400 text-slate-950 font-black">
+                180° BACK
+              </span>
+            </div>
+
+            <div className="my-auto py-2 px-3 rounded-xl bg-white/[0.04] border border-white/15 w-full">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-cyan-300">
+                {scene === "private_jet_flex"
+                  ? "14-SEAT LEATHER CABIN & TACTICAL LOUNGE"
+                  : scene === "luxury_turntable"
+                  ? "OPEN SAPPHIRE TOURBILLON · 28,800 VPH"
+                  : scene === "facility_upgrade" || scene === "stadium_ad_display"
+                  ? `4-ZONE REVENUE: ${adSurfaceZone}`
+                  : `${surname} · OFFICIAL SQUAD REGISTRATION`}
+              </div>
+              <div
+                className="text-3xl font-black tracking-tight text-white mt-0.5"
+                style={{ textShadow: "0 4px 12px rgba(0,0,0,0.9)" }}
+              >
+                {scene === "private_jet_flex"
+                  ? "TAIL #GTX-VIP"
+                  : scene === "facility_upgrade" || scene === "academy_upgrade"
+                  ? `LEVEL ${facilityLevel}/5`
+                  : `#${jerseyNumber} ${surname}`}
+              </div>
+            </div>
+
+            <div className="w-full py-1 px-2 rounded-lg bg-amber-400/15 border border-amber-400/40 text-[10px] font-black text-amber-300 truncate">
+              Verified by {clubName} · {ownerName}
+            </div>
+          </div>
+
           {/* =====================================================================
               1. 3D SCULPTED FOOTBALL JERSEY (SIGNING / BUILD-A-SON / WONDERKID / SPONSOR)
              ===================================================================== */}
@@ -571,39 +875,23 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
             scene === "build_a_son" ||
             scene === "stadium_sponsor" ||
             scene === "wonderkid_emergence") && (
-            <div className="relative" style={{ transformStyle: "preserve-3d" }}>
-              {/* Back Extrusion Plate (translateZ -14px) for 3D Thickness */}
-              <div
-                className="absolute inset-0 rounded-2xl pointer-events-none"
-                style={{
-                  transform: "translateZ(-14px)",
-                  background: "linear-gradient(145deg, #020617, #0f172a)",
-                  border: "2px solid rgba(245, 184, 61, 0.45)",
-                  boxShadow: "0 25px 50px rgba(0,0,0,0.85)",
-                }}
-              />
-
-              {/* Mid Extrusion Rib (translateZ -7px) */}
-              <div
-                className="absolute inset-0 rounded-2xl pointer-events-none"
-                style={{
-                  transform: "translateZ(-7px)",
-                  background: primaryColor,
-                  opacity: 0.45,
-                }}
-              />
-
-              {/* Main Contoured 3D Jersey Silhouette & Body (translateZ 0px) */}
+            <div
+              className="relative"
+              style={{ transformStyle: "preserve-3d", backfaceVisibility: "hidden" }}
+            >
+              {/* Main Contoured 3D Jersey Silhouette & Body (translateZ +15px) */}
               <div
                 className="relative w-52 h-56 rounded-2xl p-4 border-2 flex flex-col items-center justify-between overflow-hidden"
                 style={{
+                  transform: "translateZ(15px)",
                   transformStyle: "preserve-3d",
+                  backfaceVisibility: "hidden",
                   background:
                     scene === "wonderkid_emergence"
                       ? "linear-gradient(150deg, #F59E0B 0%, #0b1322 60%, #10B981 100%)"
-                      : `linear-gradient(145deg, ${primaryColor} 0%, #0a1222 68%, ${secondaryColor} 100%)`,
+                      : `linear-gradient(145deg, ${activePrimary} 0%, #0a1222 68%, ${activeSecondary} 100%)`,
                   borderColor: "#FDE047",
-                  boxShadow: `0 22px 48px -8px ${primaryColor}77, inset 0 0 30px rgba(255,255,255,0.25)`,
+                  boxShadow: `0 22px 48px -8px ${activePrimary}77, inset 0 0 30px rgba(255,255,255,0.25)`,
                 }}
               >
                 {/* Dynamic Specular Light Sheen */}
@@ -617,7 +905,7 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
                 {/* Sculpted SVG Football Kit Silhouette Overlay */}
                 <svg
                   viewBox="0 0 200 200"
-                  className="absolute inset-0 w-full h-full opacity-30 pointer-events-none"
+                  className="absolute inset-0 w-full h-full opacity-35 pointer-events-none"
                 >
                   <path
                     d="M55,20 L80,28 Q100,42 120,28 L145,20 L185,55 L162,85 L145,70 L145,180 L55,180 L55,70 L38,85 L15,55 Z"
@@ -696,28 +984,22 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
               2. 3D SWEPT-WING EXECUTIVE JET ON LIT NIGHT RUNWAY & LUXURY VAULT
              ===================================================================== */}
           {(scene === "private_jet_flex" || scene === "luxury_turntable") && (
-            <div className="relative" style={{ transformStyle: "preserve-3d" }}>
-              {/* Back Vault Shadow Plate (-16px) */}
-              <div
-                className="absolute inset-0 rounded-2xl pointer-events-none"
-                style={{
-                  transform: "translateZ(-16px)",
-                  background: "#090614",
-                  border: "2px solid rgba(245, 184, 61, 0.4)",
-                }}
-              />
-
+            <div
+              className="relative"
+              style={{ transformStyle: "preserve-3d", backfaceVisibility: "hidden" }}
+            >
               <div
                 className="w-68 h-52 rounded-2xl flex flex-col items-center justify-between p-4 border-2 relative overflow-hidden"
                 style={{
+                  transform: "translateZ(15px)",
                   transformStyle: "preserve-3d",
+                  backfaceVisibility: "hidden",
                   background:
                     "radial-gradient(circle at 35% 25%, rgba(245,184,61,0.38), rgba(15,12,28,0.96) 72%)",
                   borderColor: "#FDE047",
                   boxShadow: "0 24px 55px rgba(245, 184, 61, 0.35), inset 0 0 32px rgba(245, 184, 61, 0.22)",
                 }}
               >
-                {/* Dynamic Specular Reflection */}
                 <div
                   className="absolute inset-0 pointer-events-none"
                   style={{
@@ -742,7 +1024,6 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
                 >
                   {scene === "private_jet_flex" || assetCategory === "jet" ? (
                     <div className="relative flex items-center justify-center">
-                      {/* Glowing Jet Exhaust & Wing Span SVG */}
                       <svg viewBox="0 0 220 90" className="w-48 h-24 drop-shadow-[0_10px_20px_rgba(245,184,61,0.6)]">
                         <defs>
                           <linearGradient id="fuselageGrad" x1="0" y1="0" x2="1" y2="1">
@@ -751,14 +1032,10 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
                             <stop offset="100%" stopColor="#78350F" />
                           </linearGradient>
                         </defs>
-                        {/* Swept Wings */}
                         <polygon points="90,45 45,85 70,85 125,45" fill="url(#fuselageGrad)" />
                         <polygon points="90,45 55,8 78,8 125,45" fill="#FDE047" opacity="0.85" />
-                        {/* Tail Fin with Club Livery */}
-                        <polygon points="22,42 8,14 32,14 48,42" fill={primaryColor} stroke="#FDE047" strokeWidth="2" />
-                        {/* Main Fuselage */}
+                        <polygon points="22,42 8,14 32,14 48,42" fill={activePrimary} stroke="#FDE047" strokeWidth="2" />
                         <path d="M18,45 Q110,30 205,45 Q110,58 18,45 Z" fill="#FFFFFF" stroke="#F59E0B" strokeWidth="2.5" />
-                        {/* Cockpit Windows */}
                         <path d="M168,41 L188,44 L168,46 Z" fill="#0284C7" />
                       </svg>
                     </div>
@@ -788,11 +1065,16 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
           {(scene === "facility_upgrade" ||
             scene === "academy_upgrade" ||
             scene === "stadium_ad_display") && (
-            <div className="relative" style={{ transformStyle: "preserve-3d" }}>
+            <div
+              className="relative"
+              style={{ transformStyle: "preserve-3d", backfaceVisibility: "hidden" }}
+            >
               <div
                 className="w-72 h-52 rounded-2xl p-4 border-2 flex flex-col items-center justify-between text-center relative overflow-hidden"
                 style={{
+                  transform: "translateZ(15px)",
                   transformStyle: "preserve-3d",
+                  backfaceVisibility: "hidden",
                   background:
                     "linear-gradient(155deg, rgba(8, 47, 73, 0.95), rgba(4, 12, 26, 0.98))",
                   borderColor: scene === "stadium_ad_display" ? "#F5B83D" : "#38BDF8",
@@ -815,7 +1097,7 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
                   </span>
                 </div>
 
-                {/* Multi-Tier 3D Isometric Stadium Bowl (Stacked translateZ Rings) */}
+                {/* Multi-Tier 3D Isometric Stadium Bowl */}
                 <div
                   className="relative w-52 h-28 flex items-center justify-center my-1"
                   style={{
@@ -823,22 +1105,18 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
                     transform: "rotateX(48deg) translateZ(16px)",
                   }}
                 >
-                  {/* Outer Roof Halo Ring (+28px) */}
                   <div
                     className="absolute inset-0 rounded-full border-4 border-cyan-300/80 shadow-[0_0_25px_rgba(56,189,248,0.5)]"
                     style={{ transform: "translateZ(26px)" }}
                   />
-                  {/* Upper Grandstand Bowl (+16px) */}
                   <div
                     className="absolute inset-2 rounded-full border-4 border-amber-400/90 bg-slate-900/90"
                     style={{ transform: "translateZ(14px)" }}
                   />
-                  {/* 360° Pitchside LED Ribbon (+6px) & Turf Pitch */}
                   <div
                     className="relative w-36 h-16 rounded-full border-2 border-emerald-300 bg-emerald-600 flex items-center justify-center shadow-inner"
                     style={{ transform: "translateZ(4px)" }}
                   >
-                    {/* Pitch Markings */}
                     <div className="w-28 h-11 border border-white/75 rounded-sm flex items-center justify-center">
                       <div className="w-6 h-6 rounded-full border border-white/80" />
                     </div>
@@ -861,23 +1139,16 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
               4. 3D VOLUMETRIC GOLDEN GLOBE TROPHY & FINALS PLINTH
              ===================================================================== */}
           {(scene === "world_gala" || scene === "competition_final") && (
-            <div className="relative flex flex-col items-center" style={{ transformStyle: "preserve-3d" }}>
-              {/* Back Aura Ring (-14px) */}
-              <div
-                className="absolute -top-3 w-44 h-44 rounded-full pointer-events-none"
-                style={{
-                  transform: "translateZ(-14px)",
-                  background: "radial-gradient(circle, rgba(253,224,71,0.45), transparent 70%)",
-                }}
-              />
-              {/* 3D Sculpted Golden Sphere (translateZ +20px) */}
+            <div
+              className="relative flex flex-col items-center"
+              style={{ transformStyle: "preserve-3d", backfaceVisibility: "hidden" }}
+            >
               <div
                 className="w-36 h-36 rounded-full flex flex-col items-center justify-center border-4 relative"
                 style={{
-                  transform: "translateZ(20px)",
+                  transform: "translateZ(22px)",
                   borderColor: "#FEF08A",
-                  background:
-                    `radial-gradient(circle at ${specularX}% 28%, #FFFFFF 0%, #FEF08A 22%, #F59E0B 58%, #78350F 100%)`,
+                  background: `radial-gradient(circle at ${specularX}% 28%, #FFFFFF 0%, #FEF08A 22%, #F59E0B 58%, #78350F 100%)`,
                   boxShadow: "0 18px 50px rgba(245, 184, 61, 0.8), inset 0 -12px 28px rgba(0,0,0,0.55)",
                 }}
               >
@@ -890,7 +1161,6 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
                   {scene === "competition_final" ? "FINAL PLINTH" : "GTEX D'OR"}
                 </span>
               </div>
-              {/* 3D Tiered Onyx Plinth Base (translateZ +30px) */}
               <div
                 className="w-44 h-14 -mt-2 rounded-xl border-2 flex flex-col items-center justify-center px-3 shadow-2xl"
                 style={{
@@ -916,7 +1186,9 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
             <div
               className="w-68 h-50 rounded-2xl p-4 border-2 flex flex-col items-center justify-between text-center relative"
               style={{
+                transform: "translateZ(15px)",
                 transformStyle: "preserve-3d",
+                backfaceVisibility: "hidden",
                 background:
                   "radial-gradient(circle at 50% 20%, rgba(245,184,61,0.4), rgba(8,14,28,0.97) 75%)",
                 borderColor: "#FDE047",
@@ -952,20 +1224,16 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
             scene === "negotiation_table" ||
             scene === "manager_arrival" ||
             scene === "boardroom_clash") && (
-            <div className="relative" style={{ transformStyle: "preserve-3d" }}>
-              {/* Back Glass Wall (-15px) */}
-              <div
-                className="absolute inset-0 rounded-2xl pointer-events-none"
-                style={{
-                  transform: "translateZ(-15px)",
-                  background: "#050B16",
-                  border: "2px solid rgba(56, 189, 248, 0.35)",
-                }}
-              />
+            <div
+              className="relative"
+              style={{ transformStyle: "preserve-3d", backfaceVisibility: "hidden" }}
+            >
               <div
                 className="w-72 h-48 rounded-2xl p-4 border-2 flex flex-col justify-between relative"
                 style={{
+                  transform: "translateZ(15px)",
                   transformStyle: "preserve-3d",
+                  backfaceVisibility: "hidden",
                   background:
                     "linear-gradient(160deg, rgba(16, 28, 48, 0.96), rgba(7, 12, 24, 0.98))",
                   borderColor:
@@ -1010,7 +1278,6 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
                   </span>
                 </div>
 
-                {/* Floating 3D Hologram Dossier (translateZ +30px) */}
                 <div
                   className="my-auto text-center py-2 px-3 rounded-xl bg-white/[0.04] border border-white/10"
                   style={{ transform: "translateZ(30px)" }}
@@ -1041,10 +1308,24 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
           )}
         </div>
 
-        {/* Drag Hint Pill */}
-        <div className="absolute top-3 left-4 z-20 pointer-events-none flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/65 border border-white/15 text-[10px] text-white/80 font-semibold">
-          <Layers size={11} className="text-amber-400" />
-          Drag 360° Volumetric 3D Camera · {rotY.toFixed(0)}°
+        {/* Camera & Face Orientation HUD Pill */}
+        <div className="absolute top-3 left-4 z-20 pointer-events-none flex flex-wrap items-center gap-1.5">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/75 border border-white/15 text-[10px] text-white/90 font-semibold">
+            <Layers size={11} className="text-amber-400" />
+            <span>
+              {directorShotLabel || `360° Volumetric Rig · ${Math.round(normAngle)}°`}
+            </span>
+          </div>
+          <span
+            className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase"
+            style={{
+              background: isShowingBackFace ? "rgba(56,189,248,0.22)" : "rgba(0,230,118,0.2)",
+              color: isShowingBackFace ? "#38BDF8" : "#00E676",
+              border: `1px solid ${isShowingBackFace ? "#38BDF8" : "#00E676"}`,
+            }}
+          >
+            {isShowingBackFace ? "180° BACK FACE" : "FRONT FACE"}
+          </span>
         </div>
       </div>
 
@@ -1104,6 +1385,7 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
               if (!hasSaluted) {
                 setSaluteCount((c) => c + 1);
                 setHasSaluted(true);
+                triggerPyroBurst();
               }
             }}
             className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shrink-0 border ${
