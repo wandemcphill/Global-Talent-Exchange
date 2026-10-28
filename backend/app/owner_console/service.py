@@ -254,7 +254,7 @@ def _bootstrap_starter_club(session: Session, user_id: str, state: OwnerClubStat
         )
     )
     already_in = session.scalar(select(OwnerCompetitionEntry).where(OwnerCompetitionEntry.club_id == state.club_id))
-    if league is not None and already_in is None and state.stage != "squad":
+    if league is not None and already_in is None and state.stage != "squad" and league.host_type != "gtex":
         comps.enter_competition(session, user_id, league.id, state.club_id)
     if state.last_tick_at is None and state.stage in ("competition", "active"):
         tick_club(session, state)
@@ -578,9 +578,7 @@ def appoint_manager(session: Session, user_id: str, club_id: str, snapshot: dict
 
         mgr_id = str(profile.get("manager_id") or "default")
         market_key = f"mgr_{mgr_id}"
-        staff_profile = session.scalar(
-            select(ClubStaffProfile).where(ClubStaffProfile.market_key == market_key)
-        )
+        staff_profile = session.scalar(select(ClubStaffProfile).where(ClubStaffProfile.market_key == market_key))
         if staff_profile is None:
             staff_profile = ClubStaffProfile(
                 market_key=market_key,
@@ -631,7 +629,7 @@ def appoint_manager(session: Session, user_id: str, club_id: str, snapshot: dict
         else:
             assignment.staff_contract_id = contract.id
             assignment.active = True
-    except Exception as exc:
+    except Exception:
         pass
 
     return state
@@ -680,7 +678,7 @@ def fire_manager(session: Session, user_id: str, club_id: str) -> dict[str, Any]
                 if contract and contract.status == "active":
                     contract.status = "terminated"
                     contract.terminated_at = datetime.now(timezone.utc)
-    except Exception as exc:
+    except Exception:
         pass
 
     return {

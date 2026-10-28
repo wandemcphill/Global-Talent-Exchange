@@ -9,6 +9,7 @@ import '../../ui_gtex/components/gtex_status_chip.dart';
 import '../../ui_gtex/layout/gtex_focus_flow_scaffold.dart';
 import '../../ui_gtex/theme/gtex_colors.dart';
 import '../../ui_gtex/theme/gtex_spacing.dart';
+import 'club_location_fields.dart';
 
 class CreateClubScreen extends StatefulWidget {
   const CreateClubScreen({
@@ -17,12 +18,16 @@ class CreateClubScreen extends StatefulWidget {
     required this.accessToken,
     required this.backendMode,
     this.onClubCreated,
+    this.api,
   });
 
   final String baseUrl;
   final String accessToken;
   final GteBackendMode backendMode;
   final ValueChanged<GteCreatedClubProfile>? onClubCreated;
+
+  /// Optional API override, used by tests.
+  final ClubCreationApi? api;
 
   @override
   State<CreateClubScreen> createState() => _CreateClubScreenState();
@@ -33,15 +38,7 @@ class _CreateClubScreenState extends State<CreateClubScreen> {
   final TextEditingController _clubNameController = TextEditingController();
   final TextEditingController _shortNameController = TextEditingController();
   final TextEditingController _slugController = TextEditingController();
-  final TextEditingController _countryCodeController = TextEditingController(
-    text: 'NG',
-  );
-  final TextEditingController _regionController = TextEditingController(
-    text: 'Lagos',
-  );
-  final TextEditingController _cityController = TextEditingController(
-    text: 'Lagos',
-  );
+  final ClubLocationController _location = ClubLocationController();
   final TextEditingController _venueController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _primaryColorController = TextEditingController();
@@ -50,6 +47,7 @@ class _CreateClubScreenState extends State<CreateClubScreen> {
   final TextEditingController _accentColorController = TextEditingController();
 
   bool _submitting = false;
+  String? _locationError;
   bool _slugWasEdited = false;
   String _visibility = 'public';
   _ClubPalette _selectedPalette = _clubPalettes.first;
@@ -57,11 +55,12 @@ class _CreateClubScreenState extends State<CreateClubScreen> {
   @override
   void initState() {
     super.initState();
-    _api = ClubCreationApi.standard(
-      baseUrl: widget.baseUrl,
-      accessToken: widget.accessToken,
-      mode: widget.backendMode,
-    );
+    _api = widget.api ??
+        ClubCreationApi.standard(
+          baseUrl: widget.baseUrl,
+          accessToken: widget.accessToken,
+          mode: widget.backendMode,
+        );
     _applyPalette(_selectedPalette);
     _clubNameController.addListener(_handleClubNameChanged);
     _slugController.addListener(_handleSlugEdited);
@@ -72,9 +71,7 @@ class _CreateClubScreenState extends State<CreateClubScreen> {
     _clubNameController.dispose();
     _shortNameController.dispose();
     _slugController.dispose();
-    _countryCodeController.dispose();
-    _regionController.dispose();
-    _cityController.dispose();
+    _location.dispose();
     _venueController.dispose();
     _descriptionController.dispose();
     _primaryColorController.dispose();
@@ -127,7 +124,17 @@ class _CreateClubScreenState extends State<CreateClubScreen> {
       return;
     }
 
+    final String? locationError = _location.validate();
+    final ClubLocationSelection? location = _location.selection;
+    if (locationError != null || location == null) {
+      setState(() {
+        _locationError = locationError;
+      });
+      AppFeedback.showError(context, locationError ?? 'Select a location.');
+      return;
+    }
     setState(() {
+      _locationError = null;
       _submitting = true;
     });
     try {
@@ -140,9 +147,9 @@ class _CreateClubScreenState extends State<CreateClubScreen> {
           secondaryColor: _normalizedHex(_secondaryColorController.text),
           accentColor: _normalizedHex(_accentColorController.text),
           homeVenueName: _emptyToNull(_venueController.text),
-          countryCode: _emptyToNull(_countryCodeController.text),
-          regionName: _emptyToNull(_regionController.text),
-          cityName: _emptyToNull(_cityController.text),
+          countryCode: location.countryCode,
+          regionName: location.regionName,
+          cityName: location.cityName,
           description: _emptyToNull(_descriptionController.text),
           visibility: _visibility,
         ),
@@ -333,32 +340,10 @@ class _CreateClubScreenState extends State<CreateClubScreen> {
                     ),
                   ),
                   const SizedBox(height: GtexSpacing.sm),
-                  TextField(
-                    controller: _countryCodeController,
-                    style: const TextStyle(color: GtexColors.text),
-                    decoration: _gtexInputDecoration(
-                      label: 'Country code',
-                      hint: 'NG',
-                      icon: Icons.flag_outlined,
-                    ),
-                  ),
-                  const SizedBox(height: GtexSpacing.sm),
-                  TextField(
-                    controller: _regionController,
-                    style: const TextStyle(color: GtexColors.text),
-                    decoration: _gtexInputDecoration(
-                      label: 'Region',
-                      icon: Icons.map_outlined,
-                    ),
-                  ),
-                  const SizedBox(height: GtexSpacing.sm),
-                  TextField(
-                    controller: _cityController,
-                    style: const TextStyle(color: GtexColors.text),
-                    decoration: _gtexInputDecoration(
-                      label: 'City',
-                      icon: Icons.location_city_outlined,
-                    ),
+                  ClubLocationFields(
+                    controller: _location,
+                    decoration: _gtexInputDecoration,
+                    errorText: _locationError,
                   ),
                   const SizedBox(height: GtexSpacing.sm),
                   TextField(

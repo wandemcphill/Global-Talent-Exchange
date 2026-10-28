@@ -16,7 +16,9 @@ from app.owner_console import alerts, competitions as comps, ledger, service, st
 from app.owner_console.models import (
     LedgerEvent,
     OwnerBroadcastEvent,
+    OwnerCompetition,
     OwnerInboxItem,
+    OwnerMatch,
     OwnerNewsroomArticle,
     OwnerShowroomAsset,
     OwnerSquadPlayer,
@@ -744,3 +746,385 @@ def test_player_portrait_manifest_resolution_assets_key_and_media_mount(client, 
     # 2. Test static mount /api/media/regen-faces/* exists on FastAPI app
     test_media_res = client.get("/api/media/regen-faces/manifest.json")
     assert test_media_res.status_code in (200, 404)
+
+
+def test_global_competitions_cannot_use_owner_console_simulator(monkeypatch):
+    """Global GTEX competitions must not create a second result on the legacy rail."""
+    global_competition = OwnerCompetition(id="global-comp-1", name="Global Cup", host_type="gtex")
+
+    class SessionStub:
+        def get(self, model, identifier):
+            assert model is OwnerCompetition
+            assert identifier == global_competition.id
+            return global_competition
+
+    monkeypatch.setattr(comps, "require_state", lambda *args, **kwargs: object())
+
+    with pytest.raises(OwnerError) as exc_info:
+        comps.play_next(
+            SessionStub(),
+            user_id="owner-1",
+            competition_id=global_competition.id,
+            club_id="club-1",
+            mentality="balanced",
+            lineup_mode="strongest",
+        )
+
+    assert exc_info.value.code == "canonical_fixture_mapping_required"
+    assert exc_info.value.status == 409
+
+
+def test_unmapped_global_fixture_history_is_explicitly_read_only(monkeypatch):
+    from app.services.owner_competition_lifecycle_mapping_service import (
+        OwnerCompetitionLifecycleMappingService,
+    )
+
+    global_competition = OwnerCompetition(
+        id="global-history-1",
+        name="Historical Global Cup",
+        host_type="gtex",
+    )
+    legacy_match = OwnerMatch(
+        id="legacy-history-match-1",
+        competition_id=global_competition.id,
+        round_number=1,
+        home_club_id="club-home",
+        away_club_id="club-away",
+        home_name="Home FC",
+        away_name="Away FC",
+        status="completed",
+        home_goals=2,
+        away_goals=1,
+    )
+
+    class SessionStub:
+        def get(self, model, identifier):
+            assert model is OwnerCompetition
+            assert identifier == global_competition.id
+            return global_competition
+
+    monkeypatch.setattr(
+        OwnerCompetitionLifecycleMappingService,
+        "canonical_match_for_legacy_match",
+        lambda self, legacy_match_id: None,
+    )
+
+    historical = comps.mapped_match_dict(SessionStub(), legacy_match)
+
+    assert historical["home_goals"] == 2
+    assert historical["away_goals"] == 1
+    assert historical["execution_model"] == "legacy_historical"
+    assert historical["canonical_lifecycle_status"] == "unmapped"
+    assert historical["history_read_only"] is True
+
+
+def test_user_hosted_competitions_keep_their_separate_execution_rail():
+    """User-hosted tournaments remain supported while global lifecycle is reconciled."""
+    user_competition = OwnerCompetition(id="user-comp-1", name="Friends Cup", host_type="user", host_user_id="owner-1")
+
+    comps.ensure_owner_console_execution_allowed(user_competition)
+
+
+def _lifecycle_mapping_test_id() -> str:
+    from uuid import uuid4
+
+    return str(uuid4())
+
+
+def _lifecycle_mapping_test_canonical_competition(session, name: str, source_type: str = "gtex"):
+    from app.models.competition import UserCompetition
+
+    competition = UserCompetition(
+        host_user_id=_lifecycle_mapping_test_id(),
+        name=name,
+        format="league",
+        currency="coin",
+        source_type=source_type,
+        source_id=_lifecycle_mapping_test_id(),
+        status="draft",
+        stage="registration",
+    )
+    session.add(competition)
+    session.flush()
+    return competition
+
+
+def test_global_competition_mapping_is_idempotent_and_one_to_one(app):
+    from app.models.owner_competition_lifecycle_mapping import OwnerCompetitionLifecycleMapping
+    from app.services.owner_competition_lifecycle_mapping_service import (
+        OwnerCompetitionLifecycleMappingError,
+        OwnerCompetitionLifecycleMappingService,
+    )
+
+    with app.state.session_factory() as session:
+        legacy = OwnerCompetition(name=f"Global Cup {_lifecycle_mapping_test_id()}", host_type="gtex")
+        canonical = _lifecycle_mapping_test_canonical_competition(session, "Canonical Global Cup")
+        another_canonical = _lifecycle_mapping_test_canonical_competition(session, "Another Canonical Cup")
+        user_hosted_canonical = _lifecycle_mapping_test_canonical_competition(
+            session, "User Hosted Canonical Cup", source_type="user"
+        )
+        session.add(legacy)
+        session.flush()
+
+        service = OwnerCompetitionLifecycleMappingService(session)
+        first = service.bind_competition(legacy.id, canonical.id)
+        repeated = service.bind_competition(legacy.id, canonical.id)
+        assert repeated.id == first.id
+
+        with pytest.raises(OwnerCompetitionLifecycleMappingError) as exc_info:
+            service.bind_competition(legacy.id, another_canonical.id)
+        assert exc_info.value.code == "legacy_competition_already_mapped"
+
+        another_legacy = OwnerCompetition(name=f"Other Cup {_lifecycle_mapping_test_id()}", host_type="gtex")
+        session.add(another_legacy)
+        session.flush()
+        with pytest.raises(OwnerCompetitionLifecycleMappingError) as exc_info:
+            service.bind_competition(another_legacy.id, canonical.id)
+        assert exc_info.value.code == "canonical_competition_already_mapped"
+
+        unlinked_legacy = OwnerCompetition(name=f"Global Cup {_lifecycle_mapping_test_id()}", host_type="gtex")
+        session.add(unlinked_legacy)
+        session.flush()
+        with pytest.raises(OwnerCompetitionLifecycleMappingError) as exc_info:
+            service.bind_competition(unlinked_legacy.id, user_hosted_canonical.id)
+        assert exc_info.value.code == "canonical_competition_not_global"
+
+        assert (
+            session.scalar(
+                select(OwnerCompetitionLifecycleMapping).where(
+                    OwnerCompetitionLifecycleMapping.legacy_competition_id == legacy.id
+                )
+            ).id
+            == first.id
+        )
+
+
+def test_user_hosted_competition_stays_on_separate_lifecycle(app):
+    from app.services.owner_competition_lifecycle_mapping_service import (
+        OwnerCompetitionLifecycleMappingError,
+        OwnerCompetitionLifecycleMappingService,
+    )
+
+    with app.state.session_factory() as session:
+        legacy = OwnerCompetition(
+            name=f"Friends Cup {_lifecycle_mapping_test_id()}",
+            host_type="user",
+            host_user_id=_lifecycle_mapping_test_id(),
+        )
+        canonical = _lifecycle_mapping_test_canonical_competition(session, "Canonical Global Cup")
+        session.add(legacy)
+        session.flush()
+
+        with pytest.raises(OwnerCompetitionLifecycleMappingError) as exc_info:
+            OwnerCompetitionLifecycleMappingService(session).bind_competition(legacy.id, canonical.id)
+        assert exc_info.value.code == "user_hosted_competition_uses_separate_lifecycle"
+
+
+def test_scheduled_fixture_mapping_checks_identity_and_preserves_results(app):
+    from app.models.competition_match import CompetitionMatch
+    from app.models.competition_round import CompetitionRound
+    from app.models.owner_competition_lifecycle_mapping import OwnerMatchLifecycleMapping
+    from app.owner_console.models import OwnerMatch
+    from app.services.owner_competition_lifecycle_mapping_service import (
+        OwnerCompetitionLifecycleMappingError,
+        OwnerCompetitionLifecycleMappingService,
+    )
+
+    with app.state.session_factory() as session:
+        legacy_competition = OwnerCompetition(
+            name=f"Global Cup {_lifecycle_mapping_test_id()}",
+            host_type="gtex",
+        )
+        canonical_competition = _lifecycle_mapping_test_canonical_competition(session, "Canonical Global Cup")
+        session.add(legacy_competition)
+        session.flush()
+
+        home_club_id, away_club_id = _lifecycle_mapping_test_id(), _lifecycle_mapping_test_id()
+        legacy_match = OwnerMatch(
+            competition_id=legacy_competition.id,
+            round_number=1,
+            home_club_id=home_club_id,
+            away_club_id=away_club_id,
+            home_name="Home",
+            away_name="Away",
+            status="scheduled",
+        )
+        round_row = CompetitionRound(
+            competition_id=canonical_competition.id,
+            round_number=1,
+            stage="league",
+            group_key="A",
+            status="scheduled",
+        )
+        session.add_all([legacy_match, round_row])
+        session.flush()
+
+        canonical_match = CompetitionMatch(
+            competition_id=canonical_competition.id,
+            round_id=round_row.id,
+            round_number=1,
+            stage="league",
+            group_key="A",
+            home_club_id=home_club_id,
+            away_club_id=away_club_id,
+            status="scheduled",
+        )
+        mismatched_match = CompetitionMatch(
+            competition_id=canonical_competition.id,
+            round_id=round_row.id,
+            round_number=1,
+            stage="league",
+            group_key="A",
+            home_club_id=away_club_id,
+            away_club_id=home_club_id,
+            status="scheduled",
+        )
+        session.add_all([canonical_match, mismatched_match])
+        session.flush()
+
+        service = OwnerCompetitionLifecycleMappingService(session)
+        service.bind_competition(legacy_competition.id, canonical_competition.id)
+        mapping = service.bind_scheduled_match(legacy_match.id, canonical_match.id)
+        assert service.bind_scheduled_match(legacy_match.id, canonical_match.id).id == mapping.id
+        assert service.canonical_match_for_legacy_match(legacy_match.id).id == canonical_match.id
+
+        another_legacy_match = OwnerMatch(
+            competition_id=legacy_competition.id,
+            round_number=1,
+            home_club_id=home_club_id,
+            away_club_id=away_club_id,
+            home_name="Home",
+            away_name="Away",
+            status="scheduled",
+        )
+        session.add(another_legacy_match)
+        session.flush()
+        with pytest.raises(OwnerCompetitionLifecycleMappingError) as exc_info:
+            service.bind_scheduled_match(another_legacy_match.id, canonical_match.id)
+        assert exc_info.value.code == "canonical_match_already_mapped"
+
+        with pytest.raises(OwnerCompetitionLifecycleMappingError) as exc_info:
+            service.bind_scheduled_match(another_legacy_match.id, mismatched_match.id)
+        assert exc_info.value.code == "fixture_club_identity_mismatch"
+
+        assert legacy_match.home_goals is None
+        assert legacy_match.away_goals is None
+        assert legacy_match.played_at is None
+        assert canonical_match.home_score == 0
+        assert canonical_match.away_score == 0
+        assert canonical_match.completed_at is None
+        assert (
+            session.scalar(
+                select(OwnerMatchLifecycleMapping).where(OwnerMatchLifecycleMapping.legacy_match_id == legacy_match.id)
+            ).canonical_match_id
+            == canonical_match.id
+        )
+
+
+def test_pre_match_tactics_are_saved_on_canonical_fixture_and_kickoff_is_enforced(app):
+    from app.models.competition_match import CompetitionMatch
+    from app.models.competition_round import CompetitionRound
+    from app.owner_console.models import OwnerMatch
+    from app.services.owner_competition_lifecycle_mapping_service import (
+        OwnerCompetitionLifecycleMappingError,
+        OwnerCompetitionLifecycleMappingService,
+    )
+    from app.services.world_clock_service import WorldClockService
+
+    with app.state.session_factory() as session:
+        home_club_id, away_club_id = _lifecycle_mapping_test_id(), _lifecycle_mapping_test_id()
+        legacy_competition = OwnerCompetition(
+            name=f"Global Cup {_lifecycle_mapping_test_id()}",
+            host_type="gtex",
+            status="running",
+            current_round=1,
+        )
+        canonical_competition = _lifecycle_mapping_test_canonical_competition(session, "Canonical Tactical Cup")
+        virtual_now = WorldClockService(session).now_virtual()
+        kickoff_at = virtual_now + timedelta(days=2)
+        canonical_competition.scheduled_start_at = kickoff_at
+        session.add(legacy_competition)
+        session.flush()
+        legacy_match = OwnerMatch(
+            competition_id=legacy_competition.id,
+            round_number=1,
+            home_club_id=home_club_id,
+            away_club_id=away_club_id,
+            home_name="Home",
+            away_name="Away",
+            status="scheduled",
+        )
+        round_row = CompetitionRound(
+            competition_id=canonical_competition.id,
+            round_number=1,
+            stage="league",
+            group_key="A",
+            status="scheduled",
+        )
+        session.add_all([legacy_match, round_row])
+        session.flush()
+        canonical_match = CompetitionMatch(
+            competition_id=canonical_competition.id,
+            round_id=round_row.id,
+            round_number=1,
+            stage="league",
+            group_key="A",
+            home_club_id=home_club_id,
+            away_club_id=away_club_id,
+            match_date=kickoff_at.date(),
+            scheduled_at=kickoff_at,
+            status="scheduled",
+        )
+        session.add(canonical_match)
+        session.flush()
+
+        service = OwnerCompetitionLifecycleMappingService(session)
+        service.bind_competition(legacy_competition.id, canonical_competition.id)
+        service.bind_scheduled_match(legacy_match.id, canonical_match.id)
+        saved = service.save_pre_match_tactics(
+            legacy_match_id=legacy_match.id,
+            club_id=home_club_id,
+            user_id=_lifecycle_mapping_test_id(),
+            mentality="attacking",
+            lineup_mode="rotate",
+        )
+        assert saved.id == canonical_match.id
+        assert saved.metadata_json["owner_pre_match_tactics"][home_club_id]["mentality"] == "attacking"
+        assert saved.metadata_json["owner_pre_match_tactics"][home_club_id]["lineup_mode"] == "rotate"
+        assert saved.status == "scheduled"
+        assert saved.completed_at is None
+
+        saved.scheduled_at = virtual_now - timedelta(hours=1)
+        session.flush()
+        with pytest.raises(OwnerCompetitionLifecycleMappingError) as exc_info:
+            service.save_pre_match_tactics(
+                legacy_match_id=legacy_match.id,
+                club_id=away_club_id,
+                user_id=_lifecycle_mapping_test_id(),
+                mentality="defensive",
+                lineup_mode="strongest",
+            )
+        assert exc_info.value.code == "kickoff_already_due"
+
+
+def test_global_competition_entry_does_not_charge_legacy_ledger(monkeypatch):
+    global_competition = OwnerCompetition(id="global-entry-guard", name="Global Cup", host_type="gtex")
+
+    class SessionStub:
+        def get(self, model, identifier):
+            assert model is OwnerCompetition
+            assert identifier == global_competition.id
+            return global_competition
+
+    monkeypatch.setattr(comps, "require_state", lambda *args, **kwargs: object())
+
+    with pytest.raises(OwnerError) as exc_info:
+        comps.enter_competition(
+            SessionStub(),
+            user_id="owner-1",
+            competition_id=global_competition.id,
+            club_id="club-1",
+        )
+
+    assert exc_info.value.code == "canonical_competition_mapping_required"
+    assert exc_info.value.status == 409
