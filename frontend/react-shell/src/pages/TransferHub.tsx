@@ -5,18 +5,22 @@ import {
   AlertCircle,
   ArrowLeftRight,
   ArrowRight,
+  Camera,
   CheckCircle2,
   Clock,
   Filter,
+  Flame,
   Handshake,
+  Megaphone,
   MessageSquare,
   Search,
+  Shirt,
   Sparkles,
   UserCheck,
   X,
 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
-import { fmt, useActiveClub } from "@/lib/owner";
+import { fmt, useActiveClub, useClub } from "@/lib/owner";
 import { Loading } from "@/components/gtex/ui";
 import { PlayerDossier } from "@/components/gtex/PlayerDossier";
 import {
@@ -35,6 +39,7 @@ export function TransferHub() {
   const navigate = useNavigate();
   const location = useLocation();
   const { active: activeClub } = useActiveClub();
+  const { data: clubDetail } = useClub(activeClub?.club_id);
 
   const journeyParams = useMemo(() => readJourneyParams(location.search), [location.search]);
 
@@ -43,6 +48,13 @@ export function TransferHub() {
   const [search, setSearch] = useState("");
   const [selectedPosition, setSelectedPosition] = useState("ALL");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+
+  // New Signing Presentation / Unveil Ceremony Modal State
+  const [unveilingPlayer, setUnveilingPlayer] = useState<any | null>(null);
+  const [shirtNumber, setShirtNumber] = useState("9");
+  const [unveilTheme, setUnveilTheme] = useState<"stadium_floodlights" | "boardroom_press" | "viral_helicopter">("stadium_floodlights");
+  const [unveilQuote, setUnveilQuote] = useState("I came here to lift trophies under these floodlights and make history for the supporters.");
+  const [unveiledReceipt, setUnveiledReceipt] = useState<any | null>(null);
 
   useEffect(() => {
     if (journeyParams.lane && journeyParams.lane !== lane) {
@@ -246,7 +258,7 @@ export function TransferHub() {
 
     setSubmittingContractOffer(true);
     try {
-      await api.post(
+      const { data: updatedNeg } = await api.post(
         `/transfer-market/listings/${contractOfferNegotiation.listing_id}/contract-offer`,
         {
           bidder_club_id: activeClub.club_id,
@@ -256,10 +268,19 @@ export function TransferHub() {
         },
       );
       toast.success("Contract offer submitted to the transfer workflow.");
+      const targetName = contractOfferNegotiation.player_name || `Player ${contractOfferNegotiation.player_id}`;
       setContractOfferNegotiation(null);
       setContractWageOffer("");
       setContractYears("3");
       setContractExpectedRole("");
+      if (updatedNeg?.status === "completed") {
+        setUnveilingPlayer({
+          player_id: updatedNeg.player_id,
+          name: targetName,
+          position: updatedNeg.expected_role || "STARTER",
+          rating: 82,
+        });
+      }
       await qc.invalidateQueries({ queryKey: ["transfer-market-negotiations", activeClub.club_id] });
       await qc.invalidateQueries({ queryKey: ["transfer-offers", activeClub.club_id] });
     } catch (e) {
@@ -267,6 +288,42 @@ export function TransferHub() {
     } finally {
       setSubmittingContractOffer(false);
     }
+  };
+
+  const handleSyncTeamDynamics = async (positionDemand: string) => {
+    if (!activeClub?.club_id) return;
+    try {
+      await api.post(`/transfer-market/coaches/${activeClub.club_id}/demands`, {
+        position: positionDemand,
+        urgency: "high",
+        preferred_style: "high_intensity",
+        min_rating: 72,
+      });
+      await api.put(`/transfer-market/clubs/${activeClub.club_id}/team-dynamics`, {
+        dressing_room_morale: 84,
+        tactical_cohesion: 80,
+        leadership_balance: 78,
+        wage_harmony: 82,
+      });
+      toast.success(`First-Team Manager transfer demand (${positionDemand}) & dressing-room dynamics synced!`);
+    } catch (e) {
+      toast.error(errMsg(e));
+    }
+  };
+
+  const handleConfirmUnveiling = () => {
+    if (!unveilingPlayer) return;
+    const shirtSalesBonus = unveilTheme === "viral_helicopter" ? 1850 : unveilTheme === "stadium_floodlights" ? 1200 : 750;
+    setUnveiledReceipt({
+      player: unveilingPlayer,
+      shirtNumber,
+      theme: unveilTheme,
+      quote: unveilQuote,
+      shirtSalesBonus,
+      moraleBoost: 8,
+    });
+    setUnveilingPlayer(null);
+    toast.success(`Unveiled ${unveilingPlayer.name} (#${shirtNumber}) to the global press room!`);
   };
 
   // Filter listings
@@ -299,6 +356,8 @@ export function TransferHub() {
     return true;
   });
 
+  const squadCandidates: any[] = clubDetail?.squad || [];
+
   return (
     <div className="space-y-8 p-4 sm:p-8" data-testid="transfer-hub-screen">
       {/* Transfer Command Header */}
@@ -316,7 +375,7 @@ export function TransferHub() {
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
             <div className="rounded-lg border border-white/10 bg-black/40 px-3.5 py-2">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Transfer Budget</p>
               <p className="gx-mono text-lg font-black text-emerald-300">
@@ -329,6 +388,67 @@ export function TransferHub() {
                 {activeClub?.wage_budget != null ? fmt(activeClub.wage_budget) : "—"} <span className="text-[10px] text-amber-400/80">GTX/w</span>
               </p>
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                const candidate = squadCandidates[0] || {
+                  player_id: "star-signing",
+                  name: "Star Signing",
+                  position: "ST",
+                  rating: 84,
+                };
+                setUnveilingPlayer(candidate);
+              }}
+              className="gx-btn gx-btn-primary text-xs flex items-center gap-1.5"
+              data-testid="open-signing-presentation-btn"
+            >
+              <Camera size={14} /> Stage Signing Presentation
+            </button>
+          </div>
+        </div>
+
+        {/* Transfer Drama, Super-Agent Rumors & Coach Demands Strip */}
+        <div
+          className="mt-5 grid gap-3 md:grid-cols-3 rounded-xl border border-white/10 bg-black/40 p-3.5 text-xs"
+          data-testid="transfer-drama-strip"
+        >
+          <div className="flex items-start gap-2.5">
+            <Flame size={16} className="text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold uppercase tracking-wider text-amber-300 text-[10px]">Window Drama & Rumor Mill</p>
+              <p className="text-slate-300 mt-0.5">
+                Super-agent <b>Mino Sterling</b> is briefing media that rival clubs are preparing late release-clause raids before the deadline.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-2.5">
+            <Megaphone size={16} className="text-cyan-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold uppercase tracking-wider text-cyan-300 text-[10px]">Manager Priority Target</p>
+              <p className="text-slate-300 mt-0.5">
+                First-Team Manager requests a high-pressing spine signing to maintain dressing-room ambition.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => handleSyncTeamDynamics("ST")}
+              className="gx-btn gx-btn-secondary text-xs"
+              data-testid="sync-coach-demand-st"
+            >
+              Log Manager ST Demand
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSyncTeamDynamics("CB")}
+              className="gx-btn gx-btn-ghost text-xs"
+              data-testid="sync-coach-demand-cb"
+            >
+              Log CB Demand
+            </button>
           </div>
         </div>
 
@@ -777,16 +897,32 @@ export function TransferHub() {
                           <div>
                             <p className="text-xs font-bold text-white">Transfer & Contract Finalized</p>
                             <p className="text-[11px] text-emerald-200">
-                              Player is signed to your club. Proceed to Squad room to sync and register their competition roster.
+                              Player is signed to your club. Unveil them to the media or proceed to Squad room.
                             </p>
                           </div>
                         </div>
-                        <a
-                          href={journeyLinks.squad(negotiation.player_id)}
-                          className="gx-btn gx-btn-primary text-xs shrink-0 inline-flex items-center gap-1"
-                        >
-                          Register in Squad <ArrowRight size={12} />
-                        </a>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setUnveilingPlayer({
+                                player_id: negotiation.player_id,
+                                name: negotiation.player_name || `Player ${negotiation.player_id}`,
+                                position: negotiation.expected_role || "STARTER",
+                                rating: 83,
+                              })
+                            }
+                            className="gx-btn gx-btn-secondary text-xs inline-flex items-center gap-1"
+                          >
+                            <Camera size={12} /> Unveil Signing
+                          </button>
+                          <a
+                            href={journeyLinks.squad(negotiation.player_id)}
+                            className="gx-btn gx-btn-primary text-xs shrink-0 inline-flex items-center gap-1"
+                          >
+                            Register in Squad <ArrowRight size={12} />
+                          </a>
+                        </div>
                       </div>
                     ) : (
                       <div className="pt-2 border-t border-white/10 flex flex-wrap gap-2">
@@ -1127,6 +1263,157 @@ export function TransferHub() {
                 {submittingContractOffer ? "Submitting..." : "Submit terms"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* NEW SIGNING PRESENTATION / UNVEIL MODAL */}
+      {unveilingPlayer && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4"
+          role="dialog"
+          aria-modal="true"
+          data-testid="new-signing-presentation-modal"
+        >
+          <div className="w-full max-w-lg rounded-2xl border border-amber-400/50 bg-gradient-to-br from-slate-900 via-slate-950 to-emerald-950/30 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/20 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-amber-300">
+                <Camera size={12} /> Official Club Signing Presentation
+              </span>
+              <button type="button" onClick={() => setUnveilingPlayer(null)} className="text-slate-400 hover:text-white">
+                <X size={16} />
+              </button>
+            </div>
+
+            <h3 className="gx-display text-2xl font-black uppercase text-white">
+              Unveil {unveilingPlayer.name} at {activeClub?.club_name}
+            </h3>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="gx-label">Select Squad Player / Signing</label>
+                <select
+                  className="gx-input mt-1"
+                  value={unveilingPlayer.id || unveilingPlayer.player_id}
+                  onChange={(e) => {
+                    const found = squadCandidates.find((s: any) => String(s.id || s.player_id) === e.target.value);
+                    if (found) setUnveilingPlayer(found);
+                  }}
+                >
+                  <option value={unveilingPlayer.id || unveilingPlayer.player_id}>{unveilingPlayer.name}</option>
+                  {squadCandidates.map((s: any) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.position} · OVR {s.rating})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="gx-label">Assign Jersey Number</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={99}
+                  value={shirtNumber}
+                  onChange={(e) => setShirtNumber(e.target.value)}
+                  className="gx-input mt-1"
+                  data-testid="signing-shirt-number-input"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="gx-label">Presentation Spectacle Tier</label>
+              <div className="grid grid-cols-3 gap-2 mt-1">
+                {[
+                  { id: "boardroom_press", label: "Press Flash", bonus: "+750 Shirt GTX" },
+                  { id: "stadium_floodlights", label: "Floodlight Pitch", bonus: "+1,200 Shirt GTX" },
+                  { id: "viral_helicopter", label: "VIP Helicopter", bonus: "+1,850 Shirt GTX" },
+                ].map((tier) => (
+                  <button
+                    key={tier.id}
+                    type="button"
+                    onClick={() => setUnveilTheme(tier.id as any)}
+                    className={`rounded-xl border p-2.5 text-left text-xs transition ${
+                      unveilTheme === tier.id
+                        ? "border-amber-400 bg-amber-500/20 text-white"
+                        : "border-white/10 bg-black/40 text-slate-300"
+                    }`}
+                  >
+                    <p className="font-bold">{tier.label}</p>
+                    <p className="text-[10px] text-emerald-300 mt-0.5">{tier.bonus}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="gx-label">Player First Press Quote</label>
+              <input
+                type="text"
+                maxLength={180}
+                value={unveilQuote}
+                onChange={(e) => setUnveilQuote(e.target.value)}
+                className="gx-input mt-1"
+              />
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button type="button" onClick={() => setUnveilingPlayer(null)} className="gx-btn gx-btn-secondary flex-1">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmUnveiling}
+                className="gx-btn gx-btn-primary flex-1"
+                data-testid="confirm-signing-presentation-btn"
+              >
+                <Shirt size={14} /> Broadcast Unveiling
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* UNVEILED SIGNING RECEIPT MODAL */}
+      {unveiledReceipt && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4"
+          role="dialog"
+          aria-modal="true"
+          data-testid="signing-unveiled-receipt"
+        >
+          <div className="w-full max-w-md rounded-2xl border border-emerald-400/50 bg-gradient-to-br from-slate-900 via-slate-950 to-emerald-950/40 p-6 text-center shadow-2xl space-y-4">
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border-2 border-amber-400 bg-amber-400/15 text-2xl font-black text-amber-300">
+              #{unveiledReceipt.shirtNumber}
+            </div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400">
+              Official Signing Unveiled · {activeClub?.club_name}
+            </p>
+            <h3 className="gx-display text-3xl font-black uppercase text-white">
+              {unveiledReceipt.player.name}
+            </h3>
+            <blockquote className="rounded-xl border border-white/10 bg-black/40 p-3 text-xs italic text-slate-200">
+              “{unveiledReceipt.quote}”
+            </blockquote>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
+                <span className="text-[10px] uppercase text-slate-400 block">Replica Shirt Surge</span>
+                <span className="gx-mono font-black text-amber-300">+{fmt(unveiledReceipt.shirtSalesBonus)} GTX</span>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
+                <span className="text-[10px] uppercase text-slate-400 block">Supporter & Player Morale</span>
+                <span className="gx-mono font-black text-emerald-300">+{unveiledReceipt.moraleBoost} Boost</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setUnveiledReceipt(null)}
+              className="gx-btn gx-btn-primary w-full"
+            >
+              Return to Transfer Hub
+            </button>
           </div>
         </div>
       )}

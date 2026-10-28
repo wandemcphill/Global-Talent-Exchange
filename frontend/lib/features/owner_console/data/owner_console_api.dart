@@ -848,6 +848,27 @@ abstract class OwnerConsoleReader {
     String clubId,
     int units,
   ) async => <String, dynamic>{};
+
+  Future<Map<String, dynamic>> requestSonOptions() async => <String, dynamic>{};
+
+  Future<Map<String, dynamic>> requestSon({
+    required String parentPlayerId,
+    String? requestedName,
+    String? requestedPosition,
+    String? requestedCountryCode,
+    String paymentMethod = 'wallet',
+  }) async => <String, dynamic>{};
+
+  Future<Map<String, dynamic>> fetchGlobalLeaderboard({int limit = 20}) async =>
+      <String, dynamic>{};
+
+  Future<Map<String, dynamic>> createQuickGame({
+    required String userId,
+    bool includeBots = true,
+  }) async => <String, dynamic>{};
+
+  Future<Map<String, dynamic>> resolveStadiumPlacements(String homeClubId) async =>
+      <String, dynamic>{};
 }
 
 class OwnerConsoleApi implements OwnerConsoleReader, GtexOwnerInboxDataSource, OwnerLegacyGiftGateway, OwnerWorldClockGateway {
@@ -1524,6 +1545,65 @@ class OwnerConsoleApi implements OwnerConsoleReader, GtexOwnerInboxDataSource, O
       '/api/owner/clubs/$clubId/shareholders/takeover-bid',
       body: <String, Object?>{
         'units': units,
+      },
+    );
+    return res is Map ? Map<String, dynamic>.from(res) : <String, dynamic>{};
+  }
+
+  @override
+  Future<Map<String, dynamic>> requestSonOptions() async =>
+      client.getMap('/regens/request-son/options');
+
+  @override
+  Future<Map<String, dynamic>> requestSon({
+    required String parentPlayerId,
+    String? requestedName,
+    String? requestedPosition,
+    String? requestedCountryCode,
+    String paymentMethod = 'wallet',
+  }) async {
+    final Object? res = await client.post(
+      '/regens/request-son',
+      body: <String, Object?>{
+        'parent_player_id': parentPlayerId,
+        if (requestedName != null && requestedName.trim().isNotEmpty)
+          'requested_name': requestedName.trim(),
+        if (requestedPosition != null && requestedPosition.trim().isNotEmpty)
+          'requested_position': requestedPosition.trim().toUpperCase(),
+        if (requestedCountryCode != null && requestedCountryCode.trim().isNotEmpty)
+          'requested_country_code': requestedCountryCode.trim().toUpperCase(),
+        'payment_method': paymentMethod,
+      },
+    );
+    return res is Map ? Map<String, dynamic>.from(res) : <String, dynamic>{};
+  }
+
+  @override
+  Future<Map<String, dynamic>> fetchGlobalLeaderboard({int limit = 20}) async =>
+      client.getMap('/leaderboard/global', query: <String, Object?>{'limit': limit});
+
+  @override
+  Future<Map<String, dynamic>> createQuickGame({
+    required String userId,
+    bool includeBots = true,
+  }) async {
+    final Object? res = await client.post(
+      '/api/simulation-matchmaking/quick-game',
+      body: <String, Object?>{
+        'mode': 'quick_game',
+        'user_id': userId,
+        'include_bots': includeBots,
+      },
+    );
+    return res is Map ? Map<String, dynamic>.from(res) : <String, dynamic>{};
+  }
+
+  @override
+  Future<Map<String, dynamic>> resolveStadiumPlacements(String homeClubId) async {
+    final Object? res = await client.post(
+      '/sponsorship/placements',
+      body: <String, Object?>{
+        'home_club_id': homeClubId,
       },
     );
     return res is Map ? Map<String, dynamic>.from(res) : <String, dynamic>{};

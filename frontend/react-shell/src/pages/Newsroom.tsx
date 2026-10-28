@@ -32,6 +32,9 @@ export function Newsroom() {
     { key: "facility_upgrade", label: "Club Infrastructure", icon: Building },
     { key: "private_jet_purchase", label: "Aviation & Jets", icon: Plane },
     { key: "player_gift", label: "Player Milestones", icon: Gift },
+    { key: "new_signing_presentation", label: "Signing Unveilings", icon: Flame },
+    { key: "build_a_son_induction", label: "Build-A-Son & Regens", icon: Radio },
+    { key: "press_conference", label: "Rivalry & Press", icon: Newspaper },
   ];
 
   // Lead story is the most prominent or first verified article

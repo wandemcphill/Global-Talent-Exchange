@@ -363,7 +363,46 @@ export function RegenWorld() {
               ))}
             </div>
           ) : (
-            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center" data-testid="bloodlines-empty-state">
+            <div className="space-y-6" data-testid="bloodlines-empty-state">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {[
+                  {
+                    name: "Owner's Bloodline Scion (Build-A-Son)",
+                    gen: "Dynasty Heir",
+                    perk: "20/20 Loyalty · 85–96 POT",
+                    desc: "Inducted directly by Club Owners via the Academy Build-A-Son Endowment. Carries family legacy, elite composure, and fan adoration.",
+                  },
+                  {
+                    name: "Street Cage Prodigy",
+                    gen: "Concrete Five-a-Side",
+                    perk: "+Clutch Derby Flair",
+                    desc: "Fearless improviser forged on neighborhood concrete pitches; thrives under high-pressure floodlights.",
+                  },
+                  {
+                    name: "Dynasty Legacy Scion",
+                    gen: "Second-Generation Pro",
+                    perk: "+Media Marketability",
+                    desc: "Raised in elite dressing rooms with polished technique, high commercial value, and lofty personal ambition.",
+                  },
+                  {
+                    name: "Academy Reject Chip-on-Shoulder",
+                    gen: "Redemption Arc",
+                    perk: "+25% Growth vs. Rivals",
+                    desc: "Overlooked at age 14 and driven by relentless after-hours training to prove every doubter wrong.",
+                  },
+                ].map((arch) => (
+                  <div key={arch.name} className="rounded-xl border border-emerald-500/30 bg-[#051310] p-5 shadow-lg space-y-2 text-left">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-[10px] font-black uppercase text-emerald-300">
+                        <Dna size={13} /> {arch.gen}
+                      </span>
+                      <span className="rounded bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-300">{arch.perk}</span>
+                    </div>
+                    <h3 className="gx-display text-lg font-bold uppercase text-white">{arch.name}</h3>
+                    <p className="text-xs text-slate-300 leading-relaxed">{arch.desc}</p>
+                  </div>
+                ))}
+              </div>
               <Dna className="mx-auto size-10 text-emerald-400/50 mb-3" />
               <p className="gx-display text-xl font-bold uppercase text-white">No active DNA lineages recorded</p>
               <p className="text-sm text-slate-400 mt-1">Founding bloodlines are established as academy regens graduate through competitive seasons.</p>

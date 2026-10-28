@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Sprout,
   Award,
   Sparkles,
-  TrendingUp,
   UserCheck,
   FileText,
-  ShieldCheck,
   ExternalLink,
   Building,
-  CheckCircle2,
+  Crown,
+  Dna,
 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmt, label, useActiveClub, useClub, useRefreshOwner } from "@/lib/owner";
@@ -23,6 +23,271 @@ const seenKey = (clubId: string) => `gtex.regens.seen.${clubId}`;
 const readSeen = (clubId: string): string[] => JSON.parse(localStorage.getItem(seenKey(clubId)) || "[]");
 
 const TRAITS = ["ambition", "loyalty", "marketability", "professionalism", "adaptability", "growth_responsiveness", "environment_sensitivity"];
+const SON_POSITIONS = ["ST", "RW", "LW", "AM", "CM", "DM", "RB", "LB", "CB", "GK"];
+
+function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: () => void }) {
+  const qc = useQueryClient();
+  const [parentId, setParentId] = useState("");
+  const [sonName, setSonName] = useState("");
+  const [sonPosition, setSonPosition] = useState("ST");
+  const [sonCountry, setSonCountry] = useState("NGA");
+  const [busyOrder, setBusyOrder] = useState<string | null>(null);
+
+  const { data: options } = useQuery({
+    queryKey: ["request-son-options", club?.club_id],
+    queryFn: async () => {
+      try {
+        return (await api.get("/regens/request-son/options")).data;
+      } catch {
+        return null;
+      }
+    },
+    enabled: Boolean(club?.club_id),
+  });
+
+  const { data: ordersData } = useQuery({
+    queryKey: ["regen-creation-orders", club?.club_id],
+    queryFn: async () => {
+      try {
+        return (await api.get("/regens/creation-orders", { params: { limit: 10 } })).data;
+      } catch {
+        return { orders: [] };
+      }
+    },
+    enabled: Boolean(club?.club_id),
+  });
+
+  const eligibleParents: any[] =
+    options?.eligible_parents?.length > 0
+      ? options.eligible_parents
+      : (club?.squad || []).slice(0, 8).map((p: any) => ({
+          player_id: p.player_ref || p.player_id || p.id,
+          full_name: p.name,
+          position: p.position,
+          country_code: p.nationality || "NGA",
+          club_name: club?.club_name,
+        }));
+
+  useEffect(() => {
+    if (!parentId && eligibleParents.length > 0) {
+      setParentId(String(eligibleParents[0].player_id));
+    }
+  }, [eligibleParents, parentId]);
+
+  const baseCost = Number(options?.pricing?.base_cost_coin ?? 1500);
+  const nameCost = sonName.trim() ? Number(options?.pricing?.name_cost_coin ?? 500) : 0;
+  const customCost = Number(options?.pricing?.customization_cost_coin ?? 500);
+  const totalEstimated = baseCost + nameCost + customCost;
+
+  const orders: any[] = ordersData?.orders || ordersData?.items || [];
+
+  const handleRequestSon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!parentId) {
+      toast.error("Select a parent club legend / senior player to pass on the bloodline.");
+      return;
+    }
+    setBusyOrder("create");
+    try {
+      const { data: order } = await api.post("/regens/request-son", {
+        parent_player_id: parentId,
+        requested_name: sonName.trim() || undefined,
+        requested_position: sonPosition,
+        requested_country_code: sonCountry.trim().toUpperCase() || undefined,
+        payment_method: "wallet",
+      });
+      // Immediately pay with wallet & generate if pending payment
+      if (order?.id && order.status !== "generated") {
+        try {
+          await api.post(`/regens/creation-orders/${order.id}/pay-with-wallet`);
+          await api.post(`/regens/creation-orders/${order.id}/generate-after-payment`);
+        } catch {
+          // Order created; user can complete payment/generation from the order row below
+        }
+      }
+      toast.success(`Build-A-Son dynasty order submitted${sonName ? ` for ${sonName}` : ""}!`);
+      setSonName("");
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["regen-creation-orders"] }),
+        qc.invalidateQueries({ queryKey: ["request-son-options"] }),
+      ]);
+      onOrderUpdated();
+    } catch (err) {
+      toast.error(errMsg(err));
+    } finally {
+      setBusyOrder(null);
+    }
+  };
+
+  const handleCompleteOrder = async (orderId: string, step: "pay" | "generate") => {
+    setBusyOrder(`${orderId}:${step}`);
+    try {
+      if (step === "pay") {
+        await api.post(`/regens/creation-orders/${orderId}/pay-with-wallet`);
+        toast.success("Build-A-Son order paid from GTEX wallet.");
+      } else {
+        await api.post(`/regens/creation-orders/${orderId}/generate-after-payment`);
+        toast.success("Dynasty heir generated and inducted into your Academy!");
+      }
+      await qc.invalidateQueries({ queryKey: ["regen-creation-orders"] });
+      onOrderUpdated();
+    } catch (err) {
+      toast.error(errMsg(err));
+    } finally {
+      setBusyOrder(null);
+    }
+  };
+
+  return (
+    <Panel
+      eyebrow="Canonical Regen Creation Engine · Dynasty Bloodline"
+      title="Build-A-Son Legacy Program"
+      testid="build-a-son-panel"
+    >
+      <div className="grid gap-6 lg:grid-cols-12">
+        <form onSubmit={handleRequestSon} className="space-y-4 lg:col-span-7" data-testid="build-a-son-form">
+          <p className="text-xs text-slate-300 leading-relaxed">
+            Induct a second-generation dynasty heir into <b className="text-white">{club?.club_name}</b> using the canonical{" "}
+            <span className="gx-mono text-emerald-300">/regens/request-son</span> pipeline. Select an eligible club parent to pass on DNA bloodline traits, position affinity, and supporter adoration.
+          </p>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="gx-label">Parent Player (Bloodline Progenitor)</label>
+              <select
+                className="gx-input mt-1"
+                value={parentId}
+                onChange={(e) => setParentId(e.target.value)}
+                data-testid="build-a-son-parent-select"
+              >
+                {eligibleParents.map((p: any) => (
+                  <option key={p.player_id} value={p.player_id}>
+                    {p.full_name} ({p.position || "PRO"})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="gx-label">Requested Heir Name (Optional)</label>
+              <input
+                type="text"
+                maxLength={120}
+                placeholder="e.g. Adewale Jr."
+                value={sonName}
+                onChange={(e) => setSonName(e.target.value)}
+                className="gx-input mt-1"
+                data-testid="build-a-son-name-input"
+              />
+            </div>
+
+            <div>
+              <label className="gx-label">Preferred Position</label>
+              <select
+                className="gx-input mt-1"
+                value={sonPosition}
+                onChange={(e) => setSonPosition(e.target.value)}
+                data-testid="build-a-son-position-select"
+              >
+                {SON_POSITIONS.map((pos) => (
+                  <option key={pos} value={pos}>
+                    {pos}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="gx-label">Nationality Code (ISO)</label>
+              <input
+                type="text"
+                maxLength={8}
+                placeholder="NGA"
+                value={sonCountry}
+                onChange={(e) => setSonCountry(e.target.value.toUpperCase())}
+                className="gx-input mt-1 uppercase"
+                data-testid="build-a-son-country-input"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3 text-xs">
+            <div className="flex items-center gap-2 text-amber-200">
+              <Crown size={15} className="text-amber-400" />
+              <span>
+                Base: <b>{fmt(baseCost)}</b> · Name: <b>{fmt(nameCost)}</b> · Custom Position: <b>{fmt(customCost)}</b>
+              </span>
+            </div>
+            <Btn type="submit" variant="gold" disabled={busyOrder === "create"} data-testid="build-a-son-submit">
+              <Dna size={14} />
+              {busyOrder === "create" ? "Inducting Heir…" : `Induct Dynasty Son · ${fmt(totalEstimated)} GTX`}
+            </Btn>
+          </div>
+        </form>
+
+        <div className="space-y-3 rounded-xl border border-white/10 bg-slate-950/60 p-4 lg:col-span-5" data-testid="build-a-son-orders">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">
+              Dynasty Creation Orders ({orders.length})
+            </span>
+            <Chip tone="emerald">DNA Lineage Active</Chip>
+          </div>
+
+          {orders.length === 0 ? (
+            <p className="text-xs text-slate-400 py-4 text-center">
+              No Build-A-Son creation orders yet. Submit the form to induct your first dynasty scion.
+            </p>
+          ) : (
+            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+              {orders.map((ord: any) => (
+                <div
+                  key={ord.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/40 p-2.5 text-xs"
+                  data-testid={`son-order-${ord.id}`}
+                >
+                  <div>
+                    <p className="font-bold text-white">
+                      {ord.requested_name || ord.generated_player?.full_name || "Dynasty Heir"} ·{" "}
+                      <span className="text-emerald-300">{ord.requested_position || ord.generated_player?.position || "ST"}</span>
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Status: <b className="uppercase text-amber-300">{label(ord.status)}</b> · <Coin amount={Number(ord.amount_coin || 0)} />
+                    </p>
+                  </div>
+                  <div className="flex gap-1.5">
+                    {ord.status === "pending_payment" && (
+                      <Btn
+                        variant="gold"
+                        onClick={() => handleCompleteOrder(ord.id, "pay")}
+                        disabled={busyOrder === `${ord.id}:pay`}
+                      >
+                        Pay Wallet
+                      </Btn>
+                    )}
+                    {ord.status === "paid" && !ord.generated_player_id && (
+                      <Btn
+                        variant="primary"
+                        onClick={() => handleCompleteOrder(ord.id, "generate")}
+                        disabled={busyOrder === `${ord.id}:generate`}
+                      >
+                        Generate Son
+                      </Btn>
+                    )}
+                    {ord.generated_player && (
+                      <Chip tone="emerald">
+                        OVR {ord.generated_player.current_rating} / POT {ord.generated_player.potential_rating}
+                      </Chip>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </Panel>
+  );
+}
 
 function AcademyProspectCard({
   p,
@@ -39,7 +304,6 @@ function AcademyProspectCard({
   const last = p.growth_log?.[p.growth_log.length - 1];
   const pressure = t.transfer_pressure ?? 0;
   const ceiling = Math.max(0, (p.potential || 0) - (p.rating || 0));
-  const totalGain = (p.growth_log || []).reduce((s: number, g: any) => s + Number(g.gain || 0), 0);
 
   const [busyAction, setBusyAction] = useState<string | null>(null);
 
@@ -49,6 +313,9 @@ function AcademyProspectCard({
   const readiness = p.readiness_score ?? (p.rating >= 68 ? 92 : p.rating >= 62 ? 76 : 54);
   const hoydVerdict = p.hoyd_verdict || (p.potential >= 82 ? "Prime candidate for senior promotion" : "Conditioning recommended before top-flight minutes");
   const managerApproved = p.manager_approved ?? (p.rating >= 60);
+  const originBackstory = p.origin_backstory || t.origin_backstory;
+  const superAgent = p.super_agent || t.super_agent;
+  const dramaArc = p.drama_arc || t.drama_arc;
 
   const handleContract = async () => {
     setBusyAction("contract");
@@ -84,10 +351,15 @@ function AcademyProspectCard({
       <div className="space-y-4">
         {/* Top Header & Badges */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <span className="rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2.5 py-0.5 text-[10px] font-black uppercase">
               {archetype}
             </span>
+            {originBackstory?.label && (
+              <span className="rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 text-[9px] font-black uppercase">
+                {originBackstory.label}
+              </span>
+            )}
             {p.promoted && (
               <span className="rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 text-[9px] font-black uppercase">
                 Senior Promoted
@@ -141,6 +413,27 @@ function AcademyProspectCard({
               <p className="text-[9px] font-black uppercase tracking-wider text-emerald-400">Inner Monologue</p>
               <p className="text-xs italic text-slate-300 mt-0.5">"{monologue}"</p>
             </div>
+
+            {/* Backstory / Super-Agent / Drama Arc */}
+            {(originBackstory || superAgent || dramaArc) && (
+              <div className="rounded-lg border border-amber-500/20 bg-amber-950/15 p-2.5 text-[11px] space-y-1">
+                {originBackstory?.hook && (
+                  <p className="text-amber-200">
+                    <b>Backstory:</b> {originBackstory.hook}
+                  </p>
+                )}
+                {superAgent?.name && (
+                  <p className="text-slate-300">
+                    <b>Agent:</b> {superAgent.name} ({superAgent.style})
+                  </p>
+                )}
+                {dramaArc?.headline && (
+                  <p className="text-rose-300">
+                    <b>Active Arc:</b> {dramaArc.headline}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* HOYD & Manager Assessment */}
             <div className="rounded-lg border border-purple-500/20 bg-purple-950/20 p-2.5 text-xs">
@@ -301,6 +594,9 @@ export default function Academy() {
           <p className="text-[11px] text-purple-200 mt-1">Senior Transition Autonomy Active</p>
         </div>
       </section>
+
+      {/* 1B. Canonical Build-A-Son Legacy Program */}
+      <BuildASonDesk club={club} onOrderUpdated={refresh} />
 
       {/* 2. Category Tabs */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">

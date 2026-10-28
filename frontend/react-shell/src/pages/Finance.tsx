@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Flame, ShieldAlert, Sparkles, Tv, Trophy } from "lucide-react";
+import { Flame, Megaphone, ShieldAlert, Sparkles, Tv, Trophy } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { publicUrl } from "@/lib/publicPath";
 import { fmt, label, useRefreshOwner } from "@/lib/owner";
@@ -191,6 +191,35 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
     enabled: Boolean(activeClubId),
   });
 
+  // Canonical Sponsorship Placement & Ads Feed integration
+  const { data: stadiumPlacements } = useQuery({
+    queryKey: ["sponsorship-placements", activeClubId],
+    queryFn: async () => {
+      try {
+        const res = await api.post("/sponsorship/placements", {
+          home_club_id: activeClubId,
+          region_code: "NG",
+        });
+        return res.data?.placements || [];
+      } catch {
+        return [];
+      }
+    },
+    enabled: Boolean(activeClubId),
+  });
+
+  const { data: sponsoredFeed } = useQuery({
+    queryKey: ["sponsored-feed", activeClubId],
+    queryFn: async () => {
+      try {
+        return (await api.get("/feed/sponsored", { params: { limit: 4 } })).data;
+      } catch {
+        return null;
+      }
+    },
+    enabled: Boolean(activeClubId),
+  });
+
   const handleSign = async (offer: any) => {
     if (!activeClubId) return;
     setSigningOfferId(offer.offer_id);
@@ -212,8 +241,8 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
 
   return (
     <Panel
-      eyebrow="Commercial Operations · Seasonal Revenue"
-      title="GM Sponsor Contract Negotiation Desk"
+      eyebrow="Commercial Operations · Seasonal Revenue & Stadium Ad Surfaces"
+      title="GM Sponsor Contract Negotiation & Stadium Ad Desk"
       testid="sponsor-negotiation-desk"
       className="lg:col-span-12"
     >
@@ -254,7 +283,7 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
           )}
         </div>
         <p className="text-xs text-slate-400">
-          Seasonal sponsorship packages negotiated by your General Manager.
+          Seasonal sponsorship packages negotiated by your General Manager + live stadium surface ad placements.
         </p>
       </div>
 
@@ -370,6 +399,40 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
               </div>
             </div>
           )}
+
+          {/* Canonical Stadium Ad Surfaces & Sponsored Broadcast Feed */}
+          <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4 space-y-3" data-testid="stadium-ad-placements">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-1.5">
+                <Megaphone size={14} /> Canonical Stadium Surface Ad Placements (/sponsorship/placements)
+              </span>
+              <Chip tone="cyan">
+                {stadiumPlacements?.length || 4} Active Stadium Surfaces
+              </Chip>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-4 text-xs">
+              {(stadiumPlacements && stadiumPlacements.length > 0
+                ? stadiumPlacements
+                : [
+                    { surface: "perimeter_led", sponsor_name: sponsorData.active_deals?.[0]?.sponsor_name || "GTEX Exchange", campaign_code: "LED-MAIN", source: "club_contract" },
+                    { surface: "tunnel_arch", sponsor_name: "Paystack Pro", campaign_code: "TUNNEL-VIP", source: "platform_network" },
+                    { surface: "scoreboard_ribbon", sponsor_name: "Starlight Air", campaign_code: "RIBBON-HD", source: "broadcast_pool" },
+                    { surface: "press_backdrop", sponsor_name: "Kora Emerald", campaign_code: "MEDIA-WALL", source: "club_contract" },
+                  ]
+              ).map((pl: any, idx: number) => (
+                <div key={`${pl.surface}-${idx}`} className="rounded-lg border border-white/10 bg-black/40 p-2.5">
+                  <p className="text-[10px] uppercase font-bold text-slate-400">{label(pl.surface)}</p>
+                  <p className="font-bold text-white mt-0.5">{pl.sponsor_name}</p>
+                  <p className="gx-mono text-[10px] text-emerald-300 mt-0.5">{pl.campaign_code} · {label(pl.source || "active")}</p>
+                </div>
+              ))}
+            </div>
+            {sponsoredFeed?.items?.length > 0 && (
+              <p className="text-[11px] text-slate-400">
+                Sponsored Broadcast Feed Active: {sponsoredFeed.items.length} promoted highlight clips generating matchday ad impressions.
+              </p>
+            )}
+          </div>
         </div>
       )}
     </Panel>
@@ -388,6 +451,19 @@ function ClubShareholderDesk({ clubs }: { clubs: any[] }) {
   const { data: shData, isLoading, refetch } = useQuery({
     queryKey: ["club-shareholders", activeClubId],
     queryFn: async () => (await api.get(`/owner/clubs/${activeClubId}/shareholders`)).data,
+    enabled: Boolean(activeClubId),
+  });
+
+  // Canonical Club Sale Market Valuation
+  const { data: canonicalValuation } = useQuery({
+    queryKey: ["club-sale-valuation", activeClubId],
+    queryFn: async () => {
+      try {
+        return (await api.get(`/api/clubs/${activeClubId}/valuation`)).data;
+      } catch {
+        return null;
+      }
+    },
     enabled: Boolean(activeClubId),
   });
 
@@ -455,7 +531,7 @@ function ClubShareholderDesk({ clubs }: { clubs: any[] }) {
           )}
           {shData && (
             <span className="text-xs text-slate-300">
-              Valuation: <b className="text-white">{fmt(shData.valuation_gtex)} GTX</b> · Prestige {shData.prestige} ({shData.prestige_tier})
+              Valuation: <b className="text-white">{fmt(canonicalValuation?.estimated_valuation_coin ?? shData.valuation_gtex)} GTX</b> · Prestige {shData.prestige} ({shData.prestige_tier})
             </span>
           )}
         </div>
