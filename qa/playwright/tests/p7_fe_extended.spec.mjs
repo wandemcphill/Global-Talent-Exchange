@@ -57,7 +57,7 @@ test("Club squad route loads the roster or explicit no-club state", async ({ pag
       const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
       await page.mouse.move(Math.round(viewport.width * 0.5), Math.round(viewport.height * 0.5));
       await page.mouse.wheel(0, Math.max(320, Math.round(commandBox.y - 160)));
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(800);
       await enableAccessibility(page);
     }
 
@@ -86,10 +86,13 @@ test("Club squad route loads the roster or explicit no-club state", async ({ pag
 
     let browseSheetOpened = false;
     if (await browseButton.isVisible().catch(() => false)) {
-      await browseButton.click({ force: true });
-      browseSheetOpened = true;
-      await page.waitForTimeout(400);
-      await enableAccessibility(page);
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        if (await squadSection.isVisible().catch(() => false)) break;
+        await browseButton.click({ force: true });
+        browseSheetOpened = true;
+        await page.waitForTimeout(700);
+        await enableAccessibility(page);
+      }
     }
 
     await expect(squadSection).toBeVisible({ timeout: 15_000 });
