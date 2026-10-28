@@ -1,21 +1,72 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeftRight, Clock, Filter, Handshake, MessageSquare, Search, Sparkles } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowLeftRight,
+  ArrowRight,
+  CheckCircle2,
+  Clock,
+  Filter,
+  Handshake,
+  MessageSquare,
+  Search,
+  Sparkles,
+  UserCheck,
+  X,
+} from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmt, useActiveClub } from "@/lib/owner";
 import { Loading } from "@/components/gtex/ui";
 import { PlayerDossier } from "@/components/gtex/PlayerDossier";
+import {
+  describeNegotiation,
+  describeOffer,
+  formatWhen,
+  isNegotiationActionable,
+  journeyLinks,
+  readJourneyParams,
+  TransferLane,
+} from "@/lib/playerJourney";
 import { toast } from "sonner";
-
-export type TransferLane = "listings" | "offers" | "negotiations" | "bids" | "shortlist";
 
 export function TransferHub() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { active: activeClub } = useActiveClub();
-  const [lane, setLane] = useState<TransferLane>("listings");
+
+  const journeyParams = useMemo(() => readJourneyParams(location.search), [location.search]);
+
+  const [lane, setLane] = useState<TransferLane>(journeyParams.lane || "listings");
+  const [targetPlayerId, setTargetPlayerId] = useState<string | null>(journeyParams.player);
   const [search, setSearch] = useState("");
   const [selectedPosition, setSelectedPosition] = useState("ALL");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (journeyParams.lane && journeyParams.lane !== lane) {
+      setLane(journeyParams.lane);
+    }
+    if (journeyParams.player !== targetPlayerId) {
+      setTargetPlayerId(journeyParams.player);
+    }
+  }, [journeyParams.lane, journeyParams.player]);
+
+  const updateLane = (nextLane: TransferLane) => {
+    setLane(nextLane);
+    const searchParams = new URLSearchParams(location.search);
+    searchParams.set("lane", nextLane);
+    navigate({ search: `?${searchParams.toString()}` }, { replace: true });
+  };
+
+  const clearTargetFilter = () => {
+    setTargetPlayerId(null);
+    const searchParams = new URLSearchParams(location.search);
+    searchParams.delete("player");
+    const nextSearch = searchParams.toString();
+    navigate({ search: nextSearch ? `?${nextSearch}` : "" }, { replace: true });
+  };
 
   // Offer modal state
   const [offerListing, setOfferListing] = useState<any | null>(null);
@@ -32,7 +83,7 @@ export function TransferHub() {
 
   // Lane 1: Listings Query
   const {
-    data: listingsData,
+    data: listingsData = [],
     isLoading: loadingListings,
     error: listingsError,
     refetch: refetchListings,
@@ -48,7 +99,7 @@ export function TransferHub() {
 
   // Lane 2: Offers Query (Incoming & Outgoing for active club)
   const {
-    data: offersData,
+    data: offersData = [],
     isLoading: loadingOffers,
     error: offersError,
     refetch: refetchOffers,
@@ -63,10 +114,9 @@ export function TransferHub() {
     enabled: !!activeClub?.club_id && lane === "offers",
   });
 
-  // Read watchlist entries for the verified active club; the backend returns the
-  // canonical player record and an active market listing only when one exists.
+  // Read watchlist entries for the verified active club
   const {
-    data: shortlistData,
+    data: shortlistData = [],
     isLoading: loadingShortlist,
     error: shortlistError,
     refetch: refetchShortlist,
@@ -82,13 +132,12 @@ export function TransferHub() {
     enabled: !!activeClub?.club_id && lane === "shortlist",
   });
 
-  // A club must be able to place the opening bid as well as raise an existing bid.
-  const bidListings = (listingsData || []).filter(
+  const bidListings = listingsData.filter(
     (listing: any) => listing.status === "open",
   );
 
   const {
-    data: negotiationsData,
+    data: negotiationsData = [],
     isLoading: loadingNegotiations,
     error: negotiationsError,
     refetch: refetchNegotiations,
@@ -221,10 +270,32 @@ export function TransferHub() {
   };
 
   // Filter listings
-  const filteredListings = (listingsData || []).filter((l: any) => {
+  const filteredListings = listingsData.filter((l: any) => {
     const p = l.player || {};
     const name = (p.full_name || p.name || p.player_name || l.player_id || "").toLowerCase();
+    if (targetPlayerId && l.player_id !== targetPlayerId) return false;
     if (search && !name.includes(search.toLowerCase())) return false;
+    return true;
+  });
+
+  // Filter negotiations
+  const filteredNegotiations = negotiationsData.filter((n: any) => {
+    if (targetPlayerId && n.player_id !== targetPlayerId) return false;
+    return true;
+  });
+
+  // Filter offers
+  const filteredOffers = offersData.filter((offer: any) => {
+    if (targetPlayerId) {
+      const matchListing = listingsData.find((l: any) => l.id === offer.listing_id);
+      if (matchListing && matchListing.player_id !== targetPlayerId) return false;
+    }
+    return true;
+  });
+
+  // Filter shortlist
+  const filteredShortlist = shortlistData.filter((entry: any) => {
+    if (targetPlayerId && entry.player_id !== targetPlayerId) return false;
     return true;
   });
 
@@ -260,23 +331,43 @@ export function TransferHub() {
             </div>
           </div>
         </div>
+
+        {/* Active Journey Filter Pill (carried canonical ID) */}
+        {targetPlayerId && (
+          <div
+            className="mt-4 inline-flex items-center gap-2 rounded-lg border border-cyan-500/40 bg-cyan-950/60 px-3 py-1.5 text-xs text-cyan-200"
+            data-testid="target-player-filter-banner"
+          >
+            <span>
+              Target prospect: <b className="font-mono text-white">{targetPlayerId}</b>
+            </span>
+            <button
+              type="button"
+              onClick={clearTargetFilter}
+              className="rounded p-0.5 hover:bg-white/10 text-slate-300 hover:text-white"
+              title="Clear player filter"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
       </section>
 
       {/* Five Lanes Navigation Tabs */}
       <nav className="flex flex-wrap gap-2 border-b border-white/10 pb-4" data-testid="transfer-hub-lanes">
         {[
-          { id: "listings", label: "Market Listings", count: listingsData?.length, icon: ArrowLeftRight },
-          { id: "offers", label: "Active Offers", count: offersData?.length, icon: Handshake },
-          { id: "negotiations", label: "Negotiations", count: negotiationsData?.length, icon: MessageSquare },
+          { id: "listings", label: "Market Listings", count: filteredListings.length, icon: ArrowLeftRight },
+          { id: "offers", label: "Active Offers", count: filteredOffers.length, icon: Handshake },
+          { id: "negotiations", label: "Negotiations", count: filteredNegotiations.length, icon: MessageSquare },
           { id: "bids", label: "Window Bids", count: bidListings.length, icon: Clock },
-          { id: "shortlist", label: "Shortlist", count: shortlistData?.length, icon: Sparkles },
+          { id: "shortlist", label: "Shortlist", count: filteredShortlist.length, icon: Sparkles },
         ].map((item) => {
           const Icon = item.icon;
           const active = lane === item.id;
           return (
             <button
               key={item.id}
-              onClick={() => setLane(item.id as any)}
+              onClick={() => updateLane(item.id as any)}
               data-testid={`lane-${item.id}`}
               className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-all ${
                 active
@@ -343,7 +434,20 @@ export function TransferHub() {
             <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
               <ArrowLeftRight className="mx-auto size-10 text-emerald-400/50 mb-3" />
               <p className="gx-display text-xl font-bold uppercase text-white">No active transfer listings</p>
-              <p className="text-sm text-slate-400 mt-1">Clubs have not placed matching players on the market.</p>
+              <p className="text-sm text-slate-400 mt-1">
+                {targetPlayerId
+                  ? `Target prospect ${targetPlayerId} is not currently listed by their club.`
+                  : "Clubs have not placed matching players on the market."}
+              </p>
+              {targetPlayerId && (
+                <button
+                  type="button"
+                  onClick={clearTargetFilter}
+                  className="gx-btn gx-btn-secondary mt-4 text-xs"
+                >
+                  View All Listings
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 place-items-center">
@@ -422,7 +526,7 @@ export function TransferHub() {
               <p className="text-sm text-slate-300 mt-1">{errMsg(offersError)}</p>
               <button type="button" onClick={() => refetchOffers()} className="gx-btn gx-btn-secondary mt-3 text-xs">Retry</button>
             </div>
-          ) : (offersData || []).length === 0 ? (
+          ) : filteredOffers.length === 0 ? (
             <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
               <Handshake className="mx-auto size-10 text-emerald-400/50 mb-3" />
               <p className="gx-display text-xl font-bold uppercase text-white">No open transfer offers</p>
@@ -432,18 +536,22 @@ export function TransferHub() {
             </div>
           ) : (
             <div className="space-y-3">
-              {(offersData || []).map((offer: any) => {
+              {filteredOffers.map((offer: any) => {
                 const isIncoming = offer.seller_club_id === activeClub?.club_id;
-                const offerListing = (listingsData || []).find(
+                const matchListing = listingsData.find(
                   (listing: any) => listing.id === offer.listing_id,
                 );
                 const offerPlayerName =
-                  offerListing?.player?.full_name || `Listing ${String(offer.listing_id).slice(0, 8)}`;
+                  matchListing?.player?.full_name || `Listing ${String(offer.listing_id).slice(0, 8)}`;
+                const offerPlayerId = matchListing?.player_id;
                 const offerIsActionable = ["open", "countered"].includes(String(offer.status));
+                const offerStatusView = describeOffer(offer.status);
+
                 return (
                   <div
                     key={offer.id}
                     className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-xl border border-white/10 bg-slate-900/60 p-4 shadow-lg"
+                    data-testid={`transfer-offer-row-${offer.id}`}
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
@@ -453,6 +561,9 @@ export function TransferHub() {
                           {isIncoming ? "Incoming Offer" : "Outgoing Offer"}
                         </span>
                         <span className="gx-mono text-xs text-slate-400">ID: {offer.id.slice(0, 8)}</span>
+                        {offerPlayerId && (
+                          <span className="gx-mono text-[10px] text-slate-500">Player: {offerPlayerId}</span>
+                        )}
                       </div>
                       <h4 className="gx-display text-lg font-bold uppercase text-white">
                         {offerPlayerName}
@@ -460,9 +571,12 @@ export function TransferHub() {
                       <p className="text-xs text-slate-300">
                         Offered: <b className="text-amber-300 font-mono">{fmt(offer.cash_amount)} GTX</b> · Proposed Wage: <b className="text-white font-mono">{offer.conditional_terms?.proposed_weekly_wage != null ? `${fmt(offer.conditional_terms.proposed_weekly_wage)} GTX/w` : "Not specified"}</b>
                       </p>
+                      <p className="text-[11px] text-slate-400 italic">
+                        {offerStatusView.explanation}
+                      </p>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
                       {isIncoming && offerIsActionable && (
                         <>
                           <button
@@ -483,8 +597,19 @@ export function TransferHub() {
                           </button>
                         </>
                       )}
-                      <span className="gx-mono text-xs font-bold text-slate-400 uppercase">
-                        Status: <b className="text-white">{offer.status || "Pending"}</b>
+
+                      {!isIncoming && offer.status === "accepted" && (
+                        <button
+                          type="button"
+                          onClick={() => updateLane("negotiations")}
+                          className="gx-btn gx-btn-primary text-xs font-bold"
+                        >
+                          Negotiate Terms <ArrowRight size={12} className="ml-1 inline" />
+                        </button>
+                      )}
+
+                      <span className="gx-mono text-xs font-bold uppercase">
+                        Status: <b className={offerStatusView.tone === "emerald" ? "text-emerald-300" : offerStatusView.tone === "red" ? "text-rose-400" : "text-white"}>{offerStatusView.label}</b>
                       </span>
                     </div>
                   </div>
@@ -495,7 +620,7 @@ export function TransferHub() {
         </div>
       )}
 
-      {/* Lane 3: Persisted negotiations only */}
+      {/* Lane 3: Persisted negotiations */}
       {lane === "negotiations" && (
         <div className="space-y-4" data-testid="lane-negotiations-view">
           {loadingNegotiations ? (
@@ -518,53 +643,161 @@ export function TransferHub() {
                 Retry
               </button>
             </div>
-          ) : (negotiationsData || []).length === 0 ? (
+          ) : filteredNegotiations.length === 0 ? (
             <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
               <MessageSquare className="mx-auto size-10 text-emerald-400/50 mb-3" />
               <p className="gx-display text-xl font-bold uppercase text-white">No accessible active negotiations</p>
               <p className="text-sm text-slate-400 mt-1">
-                This view only shows negotiations returned by the authenticated API. Browse market listings or active offers to start a real transfer workflow.
+                {targetPlayerId
+                  ? `No active negotiation recorded for prospect ${targetPlayerId}. Once a transfer offer is accepted, negotiations start automatically.`
+                  : "This view only shows negotiations returned by the authenticated API. Browse market listings or active offers to start a real transfer workflow."}
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {(negotiationsData || []).map((negotiation: any) => (
-                <div key={negotiation.id} className="rounded-xl border border-white/10 bg-slate-900/60 p-4 space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="rounded bg-amber-500/20 text-amber-300 px-2 py-0.5 text-[9px] font-black uppercase">
-                      {String(negotiation.status || "unknown").replaceAll("_", " ")}
-                    </span>
-                    <span className="gx-mono text-xs text-slate-400">Negotiation {String(negotiation.id).slice(0, 8)}</span>
-                  </div>
-                  <h4 className="gx-display text-xl font-bold uppercase text-white">
-                    {negotiation.player_name || `Player ${negotiation.player_id}`}
-                  </h4>
-                  <p className="text-xs text-slate-300">
-                    Listing {String(negotiation.listing_id).slice(0, 8)}
-                    {" · "}Listing status: {negotiation.listing_status || "Not recorded"}
-                    {" · "}Expected role: {negotiation.expected_role || "Not recorded"}
-                  </p>
-                  {negotiation.listing_base_price != null && (
-                    <p className="text-xs text-slate-400">
-                      Listing price: {fmt(negotiation.listing_base_price)} GTX
-                    </p>
-                  )}
-                  <p className="text-xs text-slate-400">
-                    {negotiation.wage_offer_amount != null
-                      ? `Recorded wage offer: ${fmt(negotiation.wage_offer_amount)} GTX/w`
-                      : "No wage offer is recorded for this negotiation."}
-                  </p>
-                  <div className="pt-2 border-t border-white/10">
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedPlayerId(negotiation.player_id)}
-                        className="gx-btn gx-btn-secondary text-xs"
-                      >
-                        View player dossier
-                      </button>
-                      {negotiation.bidder_club_id === activeClub?.club_id &&
-                        ["awaiting_contract_offer", "player_delayed", "counter_offer"].includes(String(negotiation.status)) && (
+            <div className="space-y-4">
+              {filteredNegotiations.map((negotiation: any) => {
+                const statusView = describeNegotiation(negotiation.status, {
+                  decisionDueAt: negotiation.decision_due_at,
+                });
+                const isCompleted = negotiation.status === "completed";
+                const isBuyer = negotiation.bidder_club_id === activeClub?.club_id;
+                const actionable = isBuyer && isNegotiationActionable(negotiation.status);
+
+                return (
+                  <div
+                    key={negotiation.id}
+                    className="rounded-xl border border-white/10 bg-slate-900/70 p-5 space-y-4 shadow-xl"
+                    data-testid={`negotiation-card-${negotiation.id}`}
+                  >
+                    {/* Header */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`rounded px-2.5 py-0.5 text-[10px] font-black uppercase ${
+                            statusView.tone === "emerald"
+                              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                              : statusView.tone === "cyan"
+                              ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
+                              : statusView.tone === "red"
+                              ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                              : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                          }`}
+                        >
+                          {statusView.label}
+                        </span>
+                        <span className="gx-mono text-xs text-slate-400">ID: {negotiation.id.slice(0, 8)}</span>
+                      </div>
+                      <span className="text-xs text-slate-400">
+                        {negotiation.selling_club_id} → {negotiation.bidder_club_id}
+                      </span>
+                    </div>
+
+                    {/* Player Info */}
+                    <div>
+                      <h4 className="gx-display text-2xl font-black uppercase text-white">
+                        {negotiation.player_name || `Player ${negotiation.player_id}`}
+                      </h4>
+                      <p className="gx-mono text-xs text-slate-400 mt-0.5">
+                        Canonical Player ID: {negotiation.player_id}
+                      </p>
+                      <p className="text-xs text-slate-300 mt-2">
+                        Listing {String(negotiation.listing_id).slice(0, 8)} · Expected role: {negotiation.expected_role || "Not specified"} · {negotiation.contract_years} year contract
+                      </p>
+                      <p className="text-xs text-slate-400 mt-0.5">{statusView.explanation}</p>
+                    </div>
+
+                    {/* DECISION LOOP BREAKDOWN: Player, Coach, Agent */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+                      {/* Player Decision */}
+                      <div className="rounded-lg border border-white/5 bg-black/40 p-3 space-y-1.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Player Decision</p>
+                        {negotiation.player_decision ? (
+                          <>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-white capitalize">{negotiation.player_decision.interest_level || "Neutral"}</span>
+                              <span className="gx-mono text-xs text-emerald-300">{negotiation.player_decision.decision_score?.toFixed(0)}/100</span>
+                            </div>
+                            {negotiation.player_decision.concerns?.length > 0 && (
+                              <p className="text-[11px] text-amber-300">
+                                Concerns: {negotiation.player_decision.concerns.join(", ")}
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-xs text-slate-500 italic">No player response recorded yet.</p>
+                        )}
+                      </div>
+
+                      {/* Coach Opinion */}
+                      <div className="rounded-lg border border-white/5 bg-black/40 p-3 space-y-1.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Coach Tactical Opinion</p>
+                        {negotiation.coach_opinion ? (
+                          <>
+                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                              negotiation.coach_opinion.stance === "approve"
+                                ? "bg-emerald-950 text-emerald-300"
+                                : negotiation.coach_opinion.stance === "reject"
+                                ? "bg-rose-950 text-rose-300"
+                                : "bg-slate-800 text-slate-300"
+                            }`}>
+                              Stance: {negotiation.coach_opinion.stance}
+                            </span>
+                            <p className="text-[11px] text-slate-300">{negotiation.coach_opinion.reason || "Tactical alignment noted."}</p>
+                          </>
+                        ) : (
+                          <p className="text-xs text-slate-500 italic">Coach stance not recorded.</p>
+                        )}
+                      </div>
+
+                      {/* Agent Negotiation */}
+                      <div className="rounded-lg border border-white/5 bg-black/40 p-3 space-y-1.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Agent Clause Demands</p>
+                        {negotiation.agent_negotiation ? (
+                          <>
+                            <span className="text-xs font-bold text-white uppercase">{negotiation.agent_negotiation.action}</span>
+                            {negotiation.agent_negotiation.demands?.length > 0 ? (
+                              <p className="text-[11px] text-cyan-300">
+                                Demands: {negotiation.agent_negotiation.demands.join(", ")}
+                              </p>
+                            ) : (
+                              <p className="text-[11px] text-slate-400">No special clauses demanded.</p>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-xs text-slate-500 italic">Agent has not raised demands.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Completion banner or Action bar */}
+                    {isCompleted ? (
+                      <div className="rounded-lg border border-emerald-500/40 bg-emerald-950/40 p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
+                          <div>
+                            <p className="text-xs font-bold text-white">Transfer & Contract Finalized</p>
+                            <p className="text-[11px] text-emerald-200">
+                              Player is signed to your club. Proceed to Squad room to sync and register their competition roster.
+                            </p>
+                          </div>
+                        </div>
+                        <a
+                          href={journeyLinks.squad(negotiation.player_id)}
+                          className="gx-btn gx-btn-primary text-xs shrink-0 inline-flex items-center gap-1"
+                        >
+                          Register in Squad <ArrowRight size={12} />
+                        </a>
+                      </div>
+                    ) : (
+                      <div className="pt-2 border-t border-white/10 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPlayerId(negotiation.player_id)}
+                          className="gx-btn gx-btn-secondary text-xs"
+                        >
+                          View player dossier
+                        </button>
+                        {actionable && (
                           <button
                             type="button"
                             onClick={() => {
@@ -581,10 +814,11 @@ export function TransferHub() {
                             Submit contract terms
                           </button>
                         )}
-                    </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -676,7 +910,7 @@ export function TransferHub() {
               <p className="text-xs text-slate-400 mt-1">Players saved by scouting actions for the active club.</p>
             </div>
             <span className="text-xs text-slate-400">
-              {(shortlistData || []).length} saved target{(shortlistData || []).length === 1 ? "" : "s"}
+              {filteredShortlist.length} saved target{filteredShortlist.length === 1 ? "" : "s"}
             </span>
           </div>
           {loadingShortlist ? (
@@ -693,17 +927,17 @@ export function TransferHub() {
               <p className="text-sm text-slate-300 mt-1">{errMsg(shortlistError)}</p>
               <button type="button" onClick={() => refetchShortlist()} className="gx-btn gx-btn-secondary mt-3 text-xs">Retry</button>
             </div>
-          ) : (shortlistData || []).length === 0 ? (
+          ) : filteredShortlist.length === 0 ? (
             <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
               <Sparkles className="mx-auto size-10 text-emerald-400/50 mb-3" />
               <p className="gx-display text-xl font-bold uppercase text-white">No saved scouting targets</p>
               <p className="text-sm text-slate-400 mt-1">
-                Open a real player's dossier and use Add to Watchlist. Saved targets will appear here after the backend confirms the write.
+                Open a prospect's dossier and click Shortlist. Saved targets appear here after the backend confirms the write.
               </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {(shortlistData || []).map((entry: any) => {
+              {filteredShortlist.map((entry: any) => {
                 const player = entry.player || {};
                 const listing = entry.active_listing;
                 const hasListing = Boolean(listing?.id);
@@ -724,6 +958,7 @@ export function TransferHub() {
                     <h4 className="gx-display text-lg font-bold uppercase text-white">
                       {player.full_name || entry.player_id}
                     </h4>
+                    <p className="gx-mono text-[10px] text-slate-400">Canonical ID: {entry.player_id}</p>
                     <p className="text-xs text-slate-400">
                       {player.current_club_name ? `Current club: ${player.current_club_name}` : "No current club is recorded."}
                     </p>
@@ -903,15 +1138,15 @@ export function TransferHub() {
           onClose={() => setSelectedPlayerId(null)}
           onMakeOffer={(playerId) => {
             setSelectedPlayerId(null);
-            const listing = (listingsData || []).find(
+            const matchListing = listingsData.find(
               (item: any) => item.player_id === playerId && item.status === "open",
             );
-            if (!listing) {
+            if (!matchListing) {
               toast.error("A formal offer requires an active transfer-market listing for this player.");
               return;
             }
-            setOfferListing(listing);
-            setOfferAmount(String(listing.base_price));
+            setOfferListing(matchListing);
+            setOfferAmount(String(matchListing.base_price));
           }}
           onAddToWatchlist={async (id) => {
             if (!activeClub?.club_id) {
