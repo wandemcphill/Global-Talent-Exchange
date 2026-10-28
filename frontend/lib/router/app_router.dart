@@ -19,6 +19,7 @@ import 'package:gte_frontend/features/match/match_viewer_route_screen.dart';
 import 'package:gte_frontend/features/matchday_economy_redesign/matchday_economy_screen.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/features/owner_console/data/owner_console_api.dart';
+import 'package:gte_frontend/features/owner_console/presentation/owner_inbox_screen.dart';
 import 'package:gte_frontend/features/owner_console/presentation/public_showroom_screen.dart';
 import 'package:gte_frontend/features/federations/federations_hub_screen.dart';
 import 'package:gte_frontend/features/tasks/gtex_daily_challenges_screen.dart';
@@ -131,10 +132,15 @@ GoRouter buildGtexAppRouter({
         path: '/showroom/:code',
         pageBuilder: (BuildContext context, GoRouterState state) {
           final String code = state.pathParameters['code']?.trim() ?? '';
-          final OwnerConsoleApi api = OwnerConsoleApi(client: dependenciesBuilder(context).createAuthedApi());
+          final OwnerConsoleApi api = OwnerConsoleApi(
+            client: dependenciesBuilder(context).createAuthedApi(),
+          );
           return NoTransitionPage<void>(
             key: state.pageKey,
-            child: PublicShowroomScreen(code: code, load: () => api.fetchPublicShowroom(code)),
+            child: PublicShowroomScreen(
+              code: code,
+              load: () => api.fetchPublicShowroom(code),
+            ),
           );
         },
       ),
@@ -320,6 +326,36 @@ GoRouter buildGtexAppRouter({
                     dependenciesBuilder: dependenciesBuilder,
                   ),
                 ),
+      ),
+      GoRoute(
+        path: '/app/inbox',
+        name: 'ownerDecisionInbox',
+        pageBuilder: (BuildContext context, GoRouterState state) {
+          final GteNavigationDependencies dependencies = dependenciesBuilder(
+            context,
+          );
+          final String? clubId =
+              state.uri.queryParameters['club_id']?.trim() ??
+              dependencies.currentClubId;
+          final String initialStatus =
+              state.uri.queryParameters['status']?.trim() ?? 'open';
+          final String initialCategory =
+              state.uri.queryParameters['category']?.trim() ?? 'all';
+          final bool initialUnreadOnly =
+              state.uri.queryParameters['unread_only']?.trim().toLowerCase() ==
+              'true';
+          return NoTransitionPage<void>(
+            key: state.pageKey,
+            child: GtexOwnerInboxScreen(
+              dependencies: dependencies,
+              clubId: clubId,
+              initialStatus: initialStatus,
+              initialCategory: initialCategory,
+              initialUnreadOnly: initialUnreadOnly,
+              onOpenLogin: () => context.go(gtexLoginRoute),
+            ),
+          );
+        },
       ),
       GoRoute(
         path: '/app/:section',
@@ -555,19 +591,15 @@ List<RouteBase> _buildLegacyAliasRoutes({
           context,
         );
         final String? tabSlug = state.uri.queryParameters['tab'];
-        final GteTransferCenterTab tab = GteTransferCenterTab.values
-            .firstWhere(
-              (GteTransferCenterTab item) => item.slug == tabSlug,
-              orElse: () => GteTransferCenterTab.windows,
-            );
+        final GteTransferCenterTab tab = GteTransferCenterTab.values.firstWhere(
+          (GteTransferCenterTab item) => item.slug == tabSlug,
+          orElse: () => GteTransferCenterTab.windows,
+        );
         return NoTransitionPage<void>(
           key: state.pageKey,
           child: GteAppRouteRegistry(
             dependencies: dependencies,
-          ).buildScreen(
-            context,
-            FootballTransferCenterRouteData(tab: tab),
-          ),
+          ).buildScreen(context, FootballTransferCenterRouteData(tab: tab)),
         );
       },
     ),
@@ -758,7 +790,11 @@ List<RouteBase> _buildLegacyAliasRoutes({
         final GteNavigationDependencies dependencies = dependenciesBuilder(
           context,
         );
-        final String clubId = (dependencies.currentClubId ?? state.uri.queryParameters['club_id'] ?? '').trim();
+        final String clubId =
+            (dependencies.currentClubId ??
+                    state.uri.queryParameters['club_id'] ??
+                    '')
+                .trim();
         return NoTransitionPage<void>(
           key: state.pageKey,
           child:
@@ -970,9 +1006,14 @@ List<RouteBase> _buildLegacyAliasRoutes({
     ),
     GoRoute(
       path: '/inbox',
-      redirect:
-          (BuildContext context, GoRouterState state) =>
-              const GteNavigationRoute.community().path,
+      redirect: (BuildContext context, GoRouterState state) {
+        const String inboxRoutePath = '/app/inbox';
+        final Map<String, String> qp = state.uri.queryParameters;
+        if (qp.isEmpty) {
+          return inboxRoutePath;
+        }
+        return Uri(path: inboxRoutePath, queryParameters: qp).toString();
+      },
     ),
     GoRoute(
       path: '/matches',

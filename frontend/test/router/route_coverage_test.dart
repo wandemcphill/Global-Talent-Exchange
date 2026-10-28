@@ -274,7 +274,8 @@ void main() {
         '/payments',
         '/social',
         '/chat',
-        '/inbox',
+        // /inbox now redirects to the dedicated owner decision inbox screen,
+        // not the generic premium shell.
         '/play',
       ]) {
         await tester.pumpWidget(
