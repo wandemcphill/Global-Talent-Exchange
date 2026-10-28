@@ -19,6 +19,9 @@ export type WorldClock = {
   isPaused: boolean;
   progressionRate: number;
   virtualMonthsPerSeason: number;
+  currentSeasonLabel?: string;
+  currentSeasonNumber?: number;
+  gtexYearsRunning?: number;
 };
 
 export class WorldClockContractError extends Error {
@@ -66,7 +69,7 @@ export function parseWorldClock(raw: unknown): WorldClock {
   ) {
     throw new WorldClockContractError("virtual_months_per_season must be an integer >= 1");
   }
-  return {
+  const res: WorldClock = {
     clockId: r.clock_id,
     worldTime: r.world_time,
     worldDate: r.world_date,
@@ -74,6 +77,16 @@ export function parseWorldClock(raw: unknown): WorldClock {
     progressionRate: r.progression_rate,
     virtualMonthsPerSeason: r.virtual_months_per_season,
   };
+  if (typeof r.current_season_label === "string" && r.current_season_label.trim()) {
+    res.currentSeasonLabel = r.current_season_label.trim();
+  }
+  if (typeof r.current_season_number === "number") {
+    res.currentSeasonNumber = r.current_season_number;
+  }
+  if (typeof r.gtex_years_running === "number") {
+    res.gtexYearsRunning = r.gtex_years_running;
+  }
+  return res;
 }
 
 export async function fetchWorldClock(): Promise<WorldClock> {

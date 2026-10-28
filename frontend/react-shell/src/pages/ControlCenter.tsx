@@ -10,6 +10,7 @@ import {
   CandlestickChart,
   CheckCircle2,
   Clock,
+  Coins,
   Compass,
   DollarSign,
   ExternalLink,
@@ -26,6 +27,7 @@ import {
   Users,
   Video,
   Wallet,
+  X,
 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmt, label, useActiveClub, useControlCenter, useRefreshOwner } from "@/lib/owner";
@@ -103,7 +105,13 @@ function NoClubDashboard({ onCreateClub }: { onCreateClub: () => void }) {
 export function ControlCenter() {
   const { data, isLoading, isError } = useControlCenter();
   const { active: activeClub } = useActiveClub();
+  const refresh = useRefreshOwner();
   const navigate = useNavigate();
+
+  const [winBonusOpen, setWinBonusOpen] = useState(false);
+  const [winBonusAmount, setWinBonusAmount] = useState("5000");
+  const [winBonusNote, setWinBonusNote] = useState("Victory performance bonus for the starting squad.");
+  const [pledgingBonus, setPledgingBonus] = useState(false);
 
   if (isLoading) return <Loading label="Loading your GTEX workspace..." />;
   if (isError || !data) return <Empty title="GTEX workspace unavailable" body="We could not load your account right now. Please refresh and try again." />;
@@ -114,7 +122,31 @@ export function ControlCenter() {
   const upcomingFixture = data.fixtures?.upcoming?.[0];
   const recentResult = data.fixtures?.recent?.[0];
   const pendingInbox = data.inbox?.filter((i: any) => !i.is_read) || [];
-  const tvRevenue = data.economy?.tv_revenue ?? data.economy?.broadcast_revenue ?? (activeClubProfile.value ? Math.round(activeClubProfile.value * 0.08) : null);
+  const waterfall = data.ecosystem_waterfall || {};
+  const tvRevenue = waterfall.club_tv_revenue_gtex ?? data.economy?.tv_revenue ?? data.economy?.broadcast_revenue ?? null;
+
+  const handlePledgeWinBonus = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = Number(winBonusAmount);
+    if (!amount || amount <= 0) {
+      toast.error("Please enter a valid GTX bonus amount.");
+      return;
+    }
+    setPledgingBonus(true);
+    try {
+      await api.post(`/owner/clubs/${activeClubProfile.club_id}/win-bonus`, {
+        amount_gtex: amount,
+        note: winBonusNote.trim() || undefined,
+      });
+      toast.success(`Pledged ${fmt(amount)} GTX pre-match win bonus! Squad morale boosted.`);
+      setWinBonusOpen(false);
+      refresh();
+    } catch (err) {
+      toast.error(errMsg(err));
+    } finally {
+      setPledgingBonus(false);
+    }
+  };
 
   return (
     <div className="space-y-8 p-4 sm:p-8" data-testid="control-center-screen">
@@ -157,7 +189,7 @@ export function ControlCenter() {
           {/* Quick Demarcation: Public Club Home Link */}
           <div className="flex flex-col sm:flex-row gap-3">
             <Link
-              to={`/app/clubs/${activeClubProfile.club_id}/story`}
+              to={`/club/${activeClubProfile.public_profile_slug || activeClubProfile.club_id}`}
               className="gx-btn gx-btn-secondary text-xs flex items-center gap-2"
               data-testid="view-public-club-home-btn"
             >
@@ -199,10 +231,10 @@ export function ControlCenter() {
           <div className="rounded-xl border border-white/10 bg-black/40 p-4">
             <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Club Valuation</p>
             <p className="gx-mono text-2xl font-black text-emerald-300 mt-1">
-              {fmt(activeClubProfile.value ?? 1850000)} <span className="text-xs text-emerald-400/80">GTX</span>
+              {activeClubProfile.value ? fmt(activeClubProfile.value) : fmt(activeClubProfile.cash || 0)} <span className="text-xs text-emerald-400/80">GTX</span>
             </p>
             <p className="text-[11px] text-slate-400 mt-1">
-              Trend: <b className="text-emerald-400">+{activeClubProfile.value_trend ?? "4.2"}%</b>
+              Trend: <b className="text-emerald-400">+{activeClubProfile.value_trend ?? "0.0"}%</b>
             </p>
           </div>
 
@@ -219,8 +251,78 @@ export function ControlCenter() {
       {/* 2b. AUTHORITATIVE WORLD TIME + PERSISTED-EVENT DAILY BRIEFING */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <WorldClockCard />
-        <OwnerBriefingPanel />
+        <OwnerBriefingPanel clubId={activeClubProfile.club_id} initialData={data.daily_briefing} />
       </div>
+
+      {/* 2c. ECOSYSTEM REVENUE & PRE-MATCH WIN BONUS */}
+      <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-6 shadow-xl space-y-4" data-testid="ecosystem-revenue-card">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <Coins className="text-amber-400" size={18} />
+              <h3 className="gx-display text-xl font-bold uppercase text-white">
+                Ecosystem Revenue & Win Bonus Command
+              </h3>
+            </div>
+            <p className="text-xs text-slate-400 mt-1">
+              TV broadcast allocation, participation grants, prize recycling, and squad win bonus incentives.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setWinBonusOpen(true)}
+            className="gx-btn gx-btn-primary text-xs flex items-center gap-2 w-fit"
+            data-testid="pledge-win-bonus-btn"
+          >
+            <Flame size={14} className="text-amber-300" />
+            <span>Pledge Win Bonus</span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="rounded-xl border border-white/10 bg-black/40 p-3.5">
+            <p className="text-[10px] uppercase font-bold text-slate-400">TV Broadcast Rights</p>
+            <p className="gx-mono text-xl font-black text-cyan-300 mt-1">
+              {fmt(waterfall.club_tv_revenue_gtex ?? 0)} <span className="text-xs">GTX</span>
+            </p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Continental pool share</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-black/40 p-3.5">
+            <p className="text-[10px] uppercase font-bold text-slate-400">Competition Grants</p>
+            <p className="gx-mono text-xl font-black text-emerald-300 mt-1">
+              {fmt(waterfall.club_competition_grants_gtex ?? 0)} <span className="text-xs">GTX</span>
+            </p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Participation stipend</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-black/40 p-3.5">
+            <p className="text-[10px] uppercase font-bold text-slate-400">Prize Winnings</p>
+            <p className="gx-mono text-xl font-black text-amber-300 mt-1">
+              {fmt(waterfall.club_prize_winnings_gtex ?? 0)} <span className="text-xs">GTX</span>
+            </p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Matchday performance</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-black/40 p-3.5">
+            <p className="text-[10px] uppercase font-bold text-slate-400">Matchday Gate & Misc</p>
+            <p className="gx-mono text-xl font-black text-purple-300 mt-1">
+              {fmt(waterfall.club_matchday_revenue_gtex ?? 0)} <span className="text-xs">GTX</span>
+            </p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Turnstile & concessions</p>
+          </div>
+        </div>
+
+        {/* Recycling Waterfall Note */}
+        <div className="rounded-xl border border-dashed border-emerald-500/30 bg-emerald-950/20 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-emerald-200">
+          <div className="flex items-center gap-2">
+            <Sparkles size={15} className="text-emerald-400 shrink-0" />
+            <span>
+              Ecosystem Fee Recycling: <b>40% TV Broadcast Pool</b> · <b>35% Competition Prizes</b> · <b>25% Global Jackpot Pool</b>
+            </span>
+          </div>
+          <Link to="/app/jackpot" className="text-emerald-300 hover:text-white font-bold uppercase underline shrink-0">
+            View Jackpot Pool →
+          </Link>
+        </div>
+      </section>
 
       {/* 3. MATCHDAY RAIL & ACTION QUEUE */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -245,15 +347,24 @@ export function ControlCenter() {
                 <span className="flex items-center gap-1.5 rounded bg-emerald-950 px-2 py-0.5 text-[9px] font-black uppercase text-emerald-300 border border-emerald-500/30">
                   <Radio size={10} className="text-emerald-400 animate-pulse" /> NEXT FIXTURE
                 </span>
-                <span className="gx-mono text-[10px] text-slate-400">
-                  Round {upcomingFixture?.round ?? 8}
-                </span>
+                {upcomingFixture?.round && (
+                  <span className="gx-mono text-[10px] text-slate-400">
+                    Round {upcomingFixture.round}
+                  </span>
+                )}
               </div>
-              <div className="space-y-1">
-                <p className="text-sm font-bold text-white uppercase">{upcomingFixture?.home_name || activeClubProfile.club_name}</p>
-                <p className="gx-mono text-base font-black text-emerald-400">vs</p>
-                <p className="text-sm font-bold text-white uppercase">{upcomingFixture?.away_name || "Lagos Sporting Club"}</p>
-              </div>
+              {upcomingFixture ? (
+                <div className="space-y-1">
+                  <p className="text-sm font-bold text-white uppercase">{upcomingFixture.home_name || activeClubProfile.club_name}</p>
+                  <p className="gx-mono text-base font-black text-emerald-400">vs</p>
+                  <p className="text-sm font-bold text-white uppercase">{upcomingFixture.away_name || "Opponent"}</p>
+                </div>
+              ) : (
+                <div className="py-2 text-center">
+                  <p className="text-xs font-bold text-slate-300">No Scheduled Match</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Fixtures appear once calendar draw occurs.</p>
+                </div>
+              )}
               <Link
                 to={upcomingFixture ? `/app/competitions/${upcomingFixture.competition_id}` : "/app/competitions"}
                 className="gx-btn gx-btn-primary w-full text-xs font-bold text-center mt-2"
@@ -268,17 +379,26 @@ export function ControlCenter() {
                 <span className="rounded bg-slate-800 px-2 py-0.5 text-[9px] font-black uppercase text-slate-300">
                   LATEST RESULT
                 </span>
-                <span className="gx-mono text-[10px] text-slate-400">
-                  Round {recentResult?.round ?? 7}
-                </span>
+                {recentResult?.round && (
+                  <span className="gx-mono text-[10px] text-slate-400">
+                    Round {recentResult.round}
+                  </span>
+                )}
               </div>
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-slate-200">{recentResult?.home_name || activeClubProfile.club_name}</p>
-                <p className="gx-mono text-xl font-black text-amber-300">
-                  {recentResult ? `${recentResult.home_goals} - ${recentResult.away_goals}` : "2 - 1 (W)"}
-                </p>
-                <p className="text-sm font-semibold text-slate-200">{recentResult?.away_name || "Accra Athletic"}</p>
-              </div>
+              {recentResult ? (
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-slate-200">{recentResult.home_name || activeClubProfile.club_name}</p>
+                  <p className="gx-mono text-xl font-black text-amber-300">
+                    {recentResult.home_goals} - {recentResult.away_goals}
+                  </p>
+                  <p className="text-sm font-semibold text-slate-200">{recentResult.away_name || "Opponent"}</p>
+                </div>
+              ) : (
+                <div className="py-2 text-center">
+                  <p className="text-xs font-bold text-slate-300">No Results Recorded Yet</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Completed match reports will show here.</p>
+                </div>
+              )}
               <Link
                 to={recentResult ? `/app/match/${recentResult.id}` : "/app/competitions"}
                 className="gx-btn gx-btn-secondary w-full text-xs font-bold text-center mt-2"
@@ -349,6 +469,65 @@ export function ControlCenter() {
           })}
         </div>
       </section>
+
+      {/* Pledge Win Bonus Modal */}
+      {winBonusOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" data-testid="win-bonus-modal">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#070B11] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <Flame className="text-amber-400" size={18} />
+                <h3 className="gx-display text-lg font-black uppercase text-white">Pledge Match Win Bonus</h3>
+              </div>
+              <button onClick={() => setWinBonusOpen(false)} className="text-slate-400 hover:text-white"><X size={16} /></button>
+            </div>
+            <form onSubmit={handlePledgeWinBonus} className="space-y-4">
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Pledging a matchday victory bonus motivates the squad, elevates morale (+8 to +15), and sharpens coach tactical commitment for the next fixture.
+              </p>
+              <div>
+                <label className="gx-label">Bonus Amount (GTX)</label>
+                <input
+                  type="number"
+                  min="1000"
+                  step="500"
+                  value={winBonusAmount}
+                  onChange={(e) => setWinBonusAmount(e.target.value)}
+                  className="gx-input w-full mt-1"
+                  required
+                />
+              </div>
+              <div>
+                <label className="gx-label">Locker Room Note / Owner Speech</label>
+                <input
+                  type="text"
+                  value={winBonusNote}
+                  onChange={(e) => setWinBonusNote(e.target.value)}
+                  className="gx-input w-full mt-1"
+                  placeholder="Victory incentive statement..."
+                />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setWinBonusOpen(false)}
+                  className="gx-btn gx-btn-secondary flex-1 text-xs"
+                  disabled={pledgingBonus}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="gx-btn gx-btn-primary flex-1 text-xs"
+                  disabled={pledgingBonus}
+                >
+                  {pledgingBonus ? "Pledging…" : "Confirm Win Bonus"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

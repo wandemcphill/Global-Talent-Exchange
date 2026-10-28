@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+import logging
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.models.club_profile import ClubProfile
@@ -21,6 +22,9 @@ from app.owner_console.models import (
     OwnerSquadPlayer,
     RelatedPartyTransfer,
 )
+from app.services.world_clock_service import WorldClockService
+
+logger = logging.getLogger(__name__)
 
 MAX_CLUBS = 3
 LAUNCH_GRANT_GTEX = 100_000
@@ -257,7 +261,11 @@ def _bootstrap_starter_club(session: Session, user_id: str, state: OwnerClubStat
     if league is not None and already_in is None and state.stage != "squad" and league.host_type != "gtex":
         comps.enter_competition(session, user_id, league.id, state.club_id)
     if state.last_tick_at is None and state.stage in ("competition", "active"):
-        tick_club(session, state)
+        tick_club(
+            session,
+            state,
+            world_tick_date=WorldClockService(session).now_virtual_date(),
+        )
     if state.stage == "competition":
         state.stage = "active"
 
@@ -285,7 +293,64 @@ def squad(session: Session, club_id: str, include_inactive: bool = False) -> lis
 
 
 def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str, Any]:
-    from app.owner_console import storytelling
+    from app.owner_console import storytelling, engine
+
+    pers = dict(p.personality_json or {}) if p.is_regen else {}
+    squad_status = pers.get("squad_status", "academy" if (p.is_regen and p.age <= 18 and p.minutes == 0) else "senior")
+
+    ambition = pers.get("ambition", 10)
+    loyalty = pers.get("loyalty", 10)
+    prof = pers.get("professionalism", 10)
+    market = pers.get("marketability", 10)
+
+    if ambition >= 16 and loyalty <= 10:
+        archetype = "Mercenary"
+    elif loyalty >= 15:
+        archetype = "Homegrown Loyalist"
+    elif ambition >= 16 and p.potential >= 80:
+        archetype = "Ambitious Prodigy"
+    elif market >= 15:
+        archetype = "Spotlight Seeker"
+    elif prof >= 15:
+        archetype = "Model Professional"
+    elif ambition >= 14:
+        archetype = "Trophy Hunter"
+    else:
+        archetype = "Model Professional"
+
+    if p.morale >= 75:
+        mood_state = "Thriving"
+    elif p.morale >= 55:
+        mood_state = "Content"
+    elif p.morale >= 40:
+        mood_state = "Restless"
+    else:
+        mood_state = "Unsettled"
+
+    if squad_status == "academy" or (p.is_regen and p.minutes == 0):
+        inner_monologue = f"Grinding daily with the academy coaches. When my call-up comes, I\'ll be 100% ready to make an impact for {p.name.split()[-1]}."
+    elif p.morale >= 75:
+        inner_monologue = f"Everything is clicking right now. The coaching staff believes in me, and I\'m pushing for every point on the pitch."
+    elif p.morale < 40:
+        inner_monologue = f"My agent has been fielding enquiries. If my ambition isn\'t matched here, I may have to look elsewhere."
+    else:
+        inner_monologue = f"Head down, focusing on match sharpness and keeping my position in the squad."
+
+    decision_factors = {
+        "legacy_weight": round(float(loyalty) / 20.0, 2),
+        "money_weight": round(float(ambition) / 20.0, 2),
+        "playing_time_weight": 0.85 if p.minutes < 180 else 0.45,
+        "prestige_fit": round(min(1.0, float(p.rating) / 75.0), 2),
+    }
+
+    readiness_score = min(100, int(p.rating * 0.9 + (p.potential - p.rating) * 0.3 + min(20, p.minutes // 20)))
+    ready_bool = readiness_score >= 60
+    readiness_assessment = {
+        "readiness_score": readiness_score,
+        "hoyd_verdict": "Ready for First-Team Rotation" if ready_bool else "Developing in Academy Pipeline",
+        "manager_approved": ready_bool,
+        "recommendation": "Promote to senior squad and give cup/rotation minutes." if ready_bool else "Continue intensive academy training.",
+    }
 
     return {
         "id": p.id,
@@ -305,6 +370,12 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
         "personality": p.personality_json if p.is_regen else None,
         "growth_log": (p.growth_log_json or [])[-6:],
         "acquired_via": p.acquired_via,
+        "squad_status": squad_status,
+        "archetype": archetype,
+        "mood_state": mood_state,
+        "inner_monologue": inner_monologue,
+        "decision_factors": decision_factors,
+        "readiness_assessment": readiness_assessment,
     }
 
 
@@ -313,7 +384,7 @@ def squad_value(players: list[OwnerSquadPlayer]) -> Decimal:
 
 
 def club_value(session: Session, state: OwnerClubState) -> Decimal:
-    facilities = sum(int(v) for v in (state.facilities_json or {}).values()) * 4000
+    facilities = sum(int((state.facilities_json or {}).get(k, 1)) for k in engine.FACILITY_KINDS) * 4000
     cash = ledger.balance(session, ledger.club_account(state.club_id), ledger.GTEX)
     return ledger.D(squad_value(squad(session, state.club_id)) + facilities + cash * Decimal("0.5") + state.fans * 2)
 
@@ -755,6 +826,26 @@ def academy_intake(session: Session, user_id: str, club_id: str) -> list[OwnerSq
     state = require_state(session, club_id, user_id)
     level = int((state.facilities_json or {}).get("academy", 1))
     cost = 1_500 * level
+
+    # Intake is an owner decision within the shared world; it must not advance
+    # this club's private simulation day. Claim a distinct persisted sequence so
+    # two same-day intakes produce different deterministic cohorts and separate
+    # ledger references.
+    next_sequence = int(state.academy_intake_sequence or 0) + 1
+    claimed_sequence = session.execute(
+        update(OwnerClubState)
+        .where(
+            OwnerClubState.id == state.id,
+            OwnerClubState.academy_intake_sequence == int(state.academy_intake_sequence or 0),
+        )
+        .values(academy_intake_sequence=next_sequence)
+        .returning(OwnerClubState.academy_intake_sequence)
+        .execution_options(synchronize_session=False)
+    ).scalar_one_or_none()
+    if claimed_sequence is None:
+        raise OwnerError("academy_intake_conflict", 409)
+    state.academy_intake_sequence = int(claimed_sequence)
+
     try:
         ledger.record(
             session,
@@ -766,17 +857,31 @@ def academy_intake(session: Session, user_id: str, club_id: str) -> list[OwnerSq
             club_id=club_id,
             user_id=user_id,
             related_type="academy",
-            related_id=str(state.world_day),
+            related_id=f"intake:{state.academy_intake_sequence}",
             memo="Academy scouting intake",
         )
     except ledger.LedgerError as exc:
         raise OwnerError(str(exc), 402) from exc
+
+    facs = dict(state.facilities_json or {})
+    exec_staff = dict(facs.get("_executive_staff") or {})
+    hoyd = exec_staff.get("head_of_youth_development") or {}
+    hoyd_youth = int(hoyd.get("youth_development", 10))
     youth = int((state.manager_json or {}).get("youth_development", 10))
-    state.world_day += 1
-    return [
-        _add_regen(session, club_id, r)
-        for r in engine.generate_regens(club_id, state.world_day, level, youth, 1 + level // 2)
-    ]
+    generation_key = f"world-day:{state.world_day}:intake:{state.academy_intake_sequence}"
+    try:
+        cohort = engine.generate_regens(
+            club_id,
+            generation_key,
+            level,
+            youth,
+            1 + level // 2,
+            club_prestige=state.prestige,
+            hoyd_youth=hoyd_youth,
+        )
+    except TypeError:
+        cohort = engine.generate_regens(club_id, generation_key, level, youth, 1 + level // 2)
+    return [_add_regen(session, club_id, r) for r in cohort]
 
 
 # ---------- integrity ----------
@@ -921,9 +1026,17 @@ def _item(
     return item, prompt
 
 
-def tick_club(session: Session, state: OwnerClubState, use_ai: bool = True) -> dict[str, Any]:
+def tick_club(
+    session: Session,
+    state: OwnerClubState,
+    use_ai: bool = True,
+    *,
+    world_tick_date: date | None = None,
+) -> dict[str, Any]:
     state.world_day += 1
     state.last_tick_at = now()
+    if world_tick_date is not None:
+        state.last_world_tick_date = world_tick_date
     rng = engine.seeded("tick", state.club_id, state.world_day)
     manager = state.manager_json or engine.manager_profile(engine.DEFAULT_MANAGER)
     facilities = state.facilities_json or {}
@@ -936,9 +1049,35 @@ def tick_club(session: Session, state: OwnerClubState, use_ai: bool = True) -> d
         )
         or 0
     )
+    exec_staff = dict((state.facilities_json or {}).get("_executive_staff") or {})
+    hoyd = exec_staff.get("head_of_youth_development") or {}
+    med = exec_staff.get("medical_director") or {}
+
+    total_staff_salary = sum(int(s.get("salary_gtex", s.get("salary", 300))) for s in exec_staff.values())
+    daily_upkeep = max(10, total_staff_salary // 30) if exec_staff else 0
+    club_cash = ledger.balance(session, ledger.club_account(state.club_id), ledger.GTEX)
+    if daily_upkeep > 0 and club_cash >= daily_upkeep:
+        try:
+            ledger.record(
+                session,
+                event_type="staff_wage_upkeep",
+                source=ledger.club_account(state.club_id),
+                destination=ledger.WORLD_CLUBS,
+                currency=ledger.GTEX,
+                gross=daily_upkeep,
+                club_id=state.club_id,
+                user_id=state.owner_user_id,
+                memo="Executive staff daily wage upkeep",
+            )
+        except Exception:
+            pass
+
+    med_bonus = max(0, int(med.get("medical_expertise", 10)) // 5)
+    hoyd_bonus = int(hoyd.get("youth_development", 10)) // 2
+
     ctx = {
         "training": int(facilities.get("training", 1)),
-        "manager_youth": int(manager.get("youth_development", 10)),
+        "manager_youth": int(manager.get("youth_development", 10)) + hoyd_bonus,
         "competition_quality": min(1.0, 0.3 + entries * 0.2),
         "prestige": state.prestige,
     }
@@ -946,7 +1085,7 @@ def tick_club(session: Session, state: OwnerClubState, use_ai: bool = True) -> d
     growth_report = []
     for p in players:
         if p.injured_days > 0:
-            p.injured_days = max(0, p.injured_days - (1 + int(facilities.get("medical", 1)) // 2))
+            p.injured_days = max(0, p.injured_days - (1 + int(facilities.get("medical", 1)) // 2 + med_bonus))
         if not p.is_regen:
             continue
         pdata = player_dict(p)
@@ -1526,17 +1665,569 @@ def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
         "disclosures": disclosures(session, club_id),
         "ownership_group": group_label(session, user_id),
         "showroom": storytelling.get_club_showroom(session, user_id, club_id),
+        "executive_staff": get_club_staff(session, user_id, club_id).get("appointed_staff"),
+        "staff_effects": get_club_staff(session, user_id, club_id).get("staff_effects"),
+        "delegation_policy": get_club_staff(session, user_id, club_id).get("delegation_policy"),
+    }
+
+
+def _owner_tick_supports_row_locks(session: Session) -> bool:
+    bind = session.get_bind()
+    dialect = getattr(bind, "dialect", None)
+    return bool(getattr(dialect, "name", "") not in {"sqlite"})
+
+
+def process_due_owner_world_ticks(
+    session: Session,
+    *,
+    user_id: str | None = None,
+    limit: int = 500,
+    max_days_per_club: int = 7,
+    include_details: bool = False,
+) -> dict[str, Any]:
+    """Advance active owner-club simulation from the persisted GTEX world calendar.
+
+    The owner console previously advanced one private world_day only when a user
+    visited the control centre. This scheduler is safe to run from the simulation
+    worker or as an opportunistic catch-up on owner login. PostgreSQL row locks
+    prevent the worker and a concurrent owner request from advancing one club at
+    the same time. Legacy rows receive a forward-only date anchor on first use;
+    their old wall-clock tick history is not replayed because it was not recorded
+    against the canonical virtual calendar.
+    """
+    if user_id is not None:
+        _require_normal_user_account(session, user_id)
+
+    clock = WorldClockService(session)
+    clock_state = clock.get_or_create_state()
+    target_date = clock.now_virtual().date()
+
+    stmt = (
+        select(OwnerClubState)
+        .where(OwnerClubState.stage.in_(("competition", "active")))
+        .order_by(
+            OwnerClubState.last_world_tick_date.asc().nullsfirst(),
+            OwnerClubState.created_at.asc(),
+        )
+        .limit(max(1, int(limit)))
+    )
+    if user_id is not None:
+        stmt = stmt.where(OwnerClubState.owner_user_id == user_id)
+    if _owner_tick_supports_row_locks(session):
+        stmt = stmt.with_for_update(skip_locked=True)
+
+    states = list(session.scalars(stmt).all())
+    if not states:
+        return {
+            "target_world_date": target_date.isoformat(),
+            "clubs_considered": 0,
+            "ticks_executed": 0,
+            "clubs_backlogged": 0,
+            "ticks_failed": 0,
+            "clock_paused": bool(clock_state.is_paused),
+            **({"tick_results": []} if include_details else {}),
+        }
+
+    anchored = 0
+    if clock_state.is_paused:
+        # Anchor legacy rows while paused but do not advance them until the
+        # shared clock resumes.
+        for state in states:
+            if state.last_world_tick_date is None:
+                state.last_world_tick_date = target_date
+                anchored += 1
+        session.flush()
+        return {
+            "target_world_date": target_date.isoformat(),
+            "clubs_considered": len(states),
+            "ticks_executed": 0,
+            "clubs_backlogged": 0,
+            "ticks_failed": 0,
+            "legacy_anchors_created": anchored,
+            "clock_paused": True,
+            **({"tick_results": []} if include_details else {}),
+        }
+
+    ticks_executed = 0
+    clubs_backlogged = 0
+    ticks_failed = 0
+    tick_results: list[dict[str, Any]] = []
+    catch_up_limit = max(1, int(max_days_per_club))
+
+    for state in states:
+        if state.last_world_tick_date is None:
+            # Preserve existing world_day/progression. Old ticks were gated by
+            # visits and wall-clock thresholds, so historical virtual dates
+            # cannot be reconstructed reliably. Start the shared-calendar
+            # contract from this date. An active state with no prior tick gets
+            # one initial simulation day now.
+            if state.last_tick_at is None:
+                state.last_world_tick_date = target_date - timedelta(days=1)
+            else:
+                state.last_world_tick_date = target_date
+            anchored += 1
+
+        due_days = (target_date - state.last_world_tick_date).days
+        if due_days <= 0:
+            continue
+
+        for _ in range(min(due_days, catch_up_limit)):
+            next_world_date = state.last_world_tick_date + timedelta(days=1)
+            try:
+                # Keep each day's world-date anchor and all gameplay/inbox writes
+                # in the same savepoint. A failed tick remains retryable without
+                # reverting completed ticks for other clubs in this cycle.
+                with session.begin_nested():
+                    tick_result = tick_club(
+                        session,
+                        state,
+                        use_ai=False,
+                        world_tick_date=next_world_date,
+                    )
+                    session.flush()
+            except Exception:
+                ticks_failed += 1
+                logger.exception(
+                    "owner_console.world_tick_failed club_id=%s world_date=%s",
+                    state.club_id,
+                    next_world_date.isoformat(),
+                )
+                session.refresh(state)
+                break
+            ticks_executed += 1
+            if include_details:
+                tick_results.append(
+                    {
+                        "club_id": state.club_id,
+                        "world_date": next_world_date.isoformat(),
+                        **tick_result,
+                    }
+                )
+
+        if state.last_world_tick_date is not None and state.last_world_tick_date < target_date:
+            clubs_backlogged += 1
+
+    session.flush()
+    return {
+        "target_world_date": target_date.isoformat(),
+        "clubs_considered": len(states),
+        "ticks_executed": ticks_executed,
+        "clubs_backlogged": clubs_backlogged,
+        "ticks_failed": ticks_failed,
+        "legacy_anchors_created": anchored,
+        "clock_paused": False,
+        **({"tick_results": tick_results} if include_details else {}),
     }
 
 
 def maybe_auto_tick(session: Session, user_id: str) -> None:
-    for state in user_states(session, user_id):
-        last = aware(state.last_tick_at)
-        if state.stage in ("competition", "active") and (last is None or now() - last > timedelta(hours=6)):
-            tick_club(session, state, use_ai=False)
+    # Keep an opportunistic catch-up for owner visits, but use the exact same
+    # persisted-world scheduling service as the autonomous worker.
+    process_due_owner_world_ticks(session, user_id=user_id)
 
 
 def get_owner_newsroom(*args, **kwargs):
     from app.owner_console import storytelling
 
     return storytelling.list_newsroom_articles(*args, **kwargs)
+
+
+# ---------- Staff Hierarchy, Academy Pipeline & Matchday Management ----------
+
+def sync_club_prestige_to_reputation(session: Session, club_id: str, prestige: int) -> None:
+    try:
+        from app.club_identity.models.reputation import ClubReputationProfile
+        profile = session.scalar(select(ClubReputationProfile).where(ClubReputationProfile.club_id == club_id))
+        if profile is not None:
+            profile.current_score = int(prestige) * 10
+    except Exception as exc:
+        logger.debug("sync_club_prestige_to_reputation bypassed: %s", exc)
+
+
+def get_club_staff(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
+    state = require_state(session, club_id, user_id)
+    facs = dict(state.facilities_json or {})
+    exec_staff = dict(facs.get("_executive_staff") or {})
+    delegation = dict(facs.get("_delegation_policy") or {
+        "mode": "balanced",
+        "gm_transfer_autonomy": True,
+        "hoyd_youth_contracts": True,
+        "manager_tactics_autonomy": True,
+    })
+
+    appointed: dict[str, Any] = {}
+    for r in engine.EXECUTIVE_STAFF_ROLES:
+        if r in exec_staff:
+            appointed[r] = exec_staff[r]
+        elif r == "first_team_manager":
+            appointed[r] = state.manager_json or engine.manager_profile(engine.DEFAULT_MANAGER)
+        else:
+            appointed[r] = None
+
+    staff_effects = engine.calculate_staff_effects(appointed)
+    candidates = list(engine.EXECUTIVE_STAFF_CATALOG)
+
+    return {
+        "club_id": club_id,
+        "club_prestige": state.prestige,
+        "prestige_tier": engine.prestige_tier_label(state.prestige),
+        "delegation_policy": delegation,
+        "appointed_staff": appointed,
+        "candidates": candidates,
+        "staff_effects": staff_effects,
+    }
+
+
+def hire_executive_staff(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    staff_id: str,
+    role: str | None = None,
+    marquee_wage_premium: bool = False,
+) -> dict[str, Any]:
+    state = require_state(session, club_id, user_id)
+    candidate = next((c for c in engine.EXECUTIVE_STAFF_CATALOG if c.get("id") == staff_id or c.get("staff_id") == staff_id), None)
+    if not candidate:
+        raise OwnerError("staff_candidate_not_found", 404, f"Staff candidate {staff_id} does not exist.")
+
+    target_role = role or candidate.get("role") or "first_team_manager"
+    min_p = int(candidate.get("min_prestige", 15))
+
+    if state.prestige < min_p and not marquee_wage_premium:
+        raise OwnerError(
+            "insufficient_club_prestige",
+            400,
+            f"{candidate['name']} requires at least {min_p} club prestige (current: {state.prestige}), or a 50% marquee wage premium.",
+        )
+
+    signing_fee = int(candidate.get("signing_fee_gtex") or candidate.get("salary") or 2000)
+    if marquee_wage_premium:
+        signing_fee = int(signing_fee * 1.5)
+
+    club_acct = ledger.club_account(club_id)
+    bal = ledger.balance(session, club_acct, ledger.GTEX)
+    if bal < signing_fee:
+        raise OwnerError("insufficient_club_cash", 400, f"Club balance {bal} GTX is insufficient for {signing_fee} GTX signing fee.")
+
+    try:
+        ledger.record(
+            session,
+            event_type="staff_hire",
+            source=club_acct,
+            destination=ledger.WORLD_CLUBS,
+            currency=ledger.GTEX,
+            gross=signing_fee,
+            club_id=club_id,
+            user_id=user_id,
+            related_type="staff",
+            related_id=staff_id,
+            memo=f"Hired {candidate['name']} as {candidate.get('role_label', target_role)}",
+        )
+    except ledger.LedgerError as exc:
+        raise OwnerError(str(exc), 402) from exc
+
+    facs = dict(state.facilities_json or {})
+    exec_staff = dict(facs.get("_executive_staff") or {})
+
+    appointed_record = {
+        **candidate,
+        "role": target_role,
+        "appointed_at": datetime.now(timezone.utc).isoformat(),
+        "mood": 80,
+        "loyalty": int(candidate.get("loyalty", 12)),
+        "marquee_wage_premium": marquee_wage_premium,
+    }
+    exec_staff[target_role] = appointed_record
+    facs["_executive_staff"] = exec_staff
+    state.facilities_json = facs
+
+    if target_role == "first_team_manager":
+        state.manager_json = engine.manager_profile(appointed_record)
+        _morale_shift(session, club_id, 3)
+
+    try:
+        from app.models.club_growth import ClubStaffProfile, ClubStaffContract, ClubStaffAssignment
+        from app.club_growth.staff_role_policy import ROLE_FIRST_TEAM_MANAGER
+        market_key = f"staff_{staff_id}"
+        staff_prof = session.scalar(select(ClubStaffProfile).where(ClubStaffProfile.market_key == market_key))
+        if staff_prof is None:
+            staff_prof = ClubStaffProfile(
+                market_key=market_key,
+                display_name=candidate.get("name", "Staff"),
+                staff_type=ROLE_FIRST_TEAM_MANAGER if target_role == "first_team_manager" else target_role,
+                rarity="standard",
+                rating=int(candidate.get("tactical_flexibility") or candidate.get("youth_development") or 70),
+                salary_minor=int(candidate.get("salary") or 0) * 100,
+            )
+            session.add(staff_prof)
+            session.flush()
+    except Exception as exc:
+        logger.debug("Club growth staff synchronization bypassed: %s", exc)
+
+    return {
+        "status": "hired",
+        "staff": appointed_record,
+        "appointed": appointed_record,
+        "signing_fee_paid": signing_fee,
+        "marquee_wage_premium": marquee_wage_premium,
+    }
+
+
+def fire_executive_staff(session: Session, user_id: str, club_id: str, role: str) -> dict[str, Any]:
+    state = require_state(session, club_id, user_id)
+    facs = dict(state.facilities_json or {})
+    exec_staff = dict(facs.get("_executive_staff") or {})
+
+    current = exec_staff.get(role)
+    if not current and role == "first_team_manager":
+        current = state.manager_json or {}
+
+    if not current or current.get("is_default"):
+        raise OwnerError("no_appointed_staff", 400, f"No appointed staff member for role {role}.")
+
+    compensation = 1_500 + int(current.get("loyalty", 10)) * 75
+    try:
+        ledger.record(
+            session,
+            event_type="staff_compensation",
+            source=ledger.club_account(club_id),
+            destination=ledger.WORLD_CLUBS,
+            currency=ledger.GTEX,
+            gross=compensation,
+            club_id=club_id,
+            user_id=user_id,
+            related_type="staff",
+            related_id=current.get("id") or current.get("staff_id"),
+            memo=f"Severance compensation for {current.get('name')}",
+        )
+    except ledger.LedgerError as exc:
+        raise OwnerError(str(exc), 402) from exc
+
+    if role in exec_staff:
+        del exec_staff[role]
+    facs["_executive_staff"] = exec_staff
+    state.facilities_json = facs
+
+    if role == "first_team_manager":
+        state.manager_json = engine.manager_profile(engine.DEFAULT_MANAGER)
+        _morale_shift(session, club_id, -4)
+
+    return {
+        "status": "dismissed",
+        "role": role,
+        "staff_name": current.get("name"),
+        "severance_paid": compensation,
+    }
+
+
+def update_delegation_policy(session: Session, user_id: str, club_id: str, policy: dict[str, Any]) -> dict[str, Any]:
+    state = require_state(session, club_id, user_id)
+    facs = dict(state.facilities_json or {})
+    current_policy = dict(facs.get("_delegation_policy") or {
+        "mode": "balanced",
+        "gm_transfer_autonomy": True,
+        "hoyd_youth_contracts": True,
+        "manager_tactics_autonomy": True,
+    })
+    current_policy.update(policy)
+    facs["_delegation_policy"] = current_policy
+    state.facilities_json = facs
+    return {"delegation_policy": current_policy, **current_policy}
+
+
+def hire_manager(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    manager_id: str,
+    force_marquee_premium: bool = False,
+) -> dict[str, Any]:
+    return hire_executive_staff(
+        session,
+        user_id=user_id,
+        club_id=club_id,
+        staff_id=manager_id,
+        role="first_team_manager",
+        marquee_wage_premium=force_marquee_premium,
+    )
+
+
+def academy_contract(session: Session, user_id: str, club_id: str, player_id: str) -> dict[str, Any]:
+    state = require_state(session, club_id, user_id)
+    player = session.get(OwnerSquadPlayer, player_id)
+    if not player or player.club_id != club_id:
+        raise OwnerError("player_not_found", 404, "Academy player not found in club squad.")
+
+    cost = 1_000
+    club_acct = ledger.club_account(club_id)
+    bal = ledger.balance(session, club_acct, ledger.GTEX)
+    if bal < cost:
+        raise OwnerError("insufficient_club_cash", 400, f"Club balance {bal} GTX is insufficient for {cost} GTX contract upgrade.")
+
+    try:
+        ledger.record(
+            session,
+            event_type="academy_contract_spend",
+            source=club_acct,
+            destination=ledger.WORLD_CLUBS,
+            currency=ledger.GTEX,
+            gross=cost,
+            club_id=club_id,
+            user_id=user_id,
+            related_type="player",
+            related_id=player_id,
+            memo=f"Improved academy contract for {player.name}",
+        )
+    except ledger.LedgerError as exc:
+        raise OwnerError(str(exc), 402) from exc
+
+    player.morale = min(100, player.morale + 12)
+    pers = dict(player.personality_json or {})
+    pers["loyalty"] = min(20, pers.get("loyalty", 10) + 2)
+    pers["transfer_pressure"] = max(0, pers.get("transfer_pressure", 10) - 25)
+    pers["contract_tier"] = "improved_youth"
+    player.personality_json = pers
+    session.flush()
+
+    return {
+        "status": "contract_extended",
+        "player": player_dict(player, session),
+        "cost_gtex": cost,
+        "morale_boost": 12,
+        "loyalty_boost": 2,
+    }
+
+
+def academy_promote(session: Session, user_id: str, club_id: str, player_id: str) -> dict[str, Any]:
+    state = require_state(session, club_id, user_id)
+    player = session.get(OwnerSquadPlayer, player_id)
+    if not player or player.club_id != club_id:
+        raise OwnerError("player_not_found", 404, "Academy player not found in club squad.")
+
+    player.morale = min(100, player.morale + 10)
+    pers = dict(player.personality_json or {})
+    pers["squad_status"] = "senior"
+    pers["promoted_to_senior"] = True
+    player.personality_json = pers
+    session.flush()
+
+    from app.owner_console import storytelling
+    storytelling.record_verified_broadcast_event(
+        session,
+        event_type="academy_promotion",
+        club_id=club_id,
+        owner_user_id=user_id,
+        player_id=player.id,
+        player_name=player.name,
+        item_name=f"{player.name} Senior Squad Promotion",
+        verified_price_gtex=Decimal("0"),
+    )
+
+    return {
+        "status": "promoted",
+        "player": player_dict(player, session),
+        "squad_status": "senior",
+        "morale_boost": 10,
+    }
+
+
+def pledge_win_bonus(session: Session, user_id: str, club_id: str, amount_gtex: int, note: str = "") -> dict[str, Any]:
+    state = require_state(session, club_id, user_id)
+    amt = int(amount_gtex)
+    if amt < 100 or amt > 25_000:
+        raise OwnerError("invalid_bonus_amount", 400, "Win bonus must be between 100 and 25,000 GTEX Coin.")
+
+    club_acct = ledger.club_account(club_id)
+    bal = ledger.balance(session, club_acct, ledger.GTEX)
+    if bal < amt:
+        raise OwnerError("insufficient_club_cash", 400, f"Club balance {bal} GTX is insufficient to pledge {amt} GTX bonus.")
+
+    facs = dict(state.facilities_json or {})
+    facs["_pledged_win_bonus_gtex"] = amt
+    state.facilities_json = facs
+
+    _morale_shift(session, club_id, 8)
+    if state.manager_json:
+        mgr = dict(state.manager_json)
+        mgr["mood"] = min(100, mgr.get("mood", 70) + 5)
+        state.manager_json = mgr
+
+    return {
+        "club_id": club_id,
+        "pledged_win_bonus_gtex": amt,
+        "squad_morale_boost": 8,
+        "manager_mood_boost": 5,
+        "message": f"Pledged {amt:,} GTEX win bonus for the upcoming match.",
+    }
+
+
+def conduct_press_conference(session: Session, user_id: str, club_id: str, tone: str, statement: str = "") -> dict[str, Any]:
+    state = require_state(session, club_id, user_id)
+    valid_tones = {"praise_squad", "demand_more", "defend_coach", "flex_ambition"}
+    if tone not in valid_tones:
+        raise OwnerError("invalid_press_conference_tone", 400, f"Tone must be one of: {', '.join(sorted(valid_tones))}.")
+
+    squad_morale_delta = 0
+    manager_mood_delta = 0
+    manager_loyalty_delta = 0
+    prestige_delta = 0
+    fans_delta = 0
+
+    if tone == "praise_squad":
+        squad_morale_delta = 5
+        manager_mood_delta = 3
+        fans_delta = 10
+    elif tone == "demand_more":
+        squad_morale_delta = -3
+        manager_mood_delta = 4
+        manager_loyalty_delta = 2
+        fans_delta = 20
+    elif tone == "defend_coach":
+        manager_mood_delta = 8
+        manager_loyalty_delta = 4
+        squad_morale_delta = 2
+    elif tone == "flex_ambition":
+        prestige_delta = 1
+        fans_delta = 30
+        manager_mood_delta = 3
+        squad_morale_delta = 3
+
+    if squad_morale_delta:
+        _morale_shift(session, club_id, squad_morale_delta)
+
+    if state.manager_json:
+        mgr = dict(state.manager_json)
+        if manager_mood_delta:
+            mgr["mood"] = int(engine.clamp(mgr.get("mood", 70) + manager_mood_delta, 0, 100))
+        if manager_loyalty_delta:
+            mgr["loyalty"] = int(engine.clamp(mgr.get("loyalty", 12) + manager_loyalty_delta, 1, 20))
+        state.manager_json = mgr
+
+    if prestige_delta:
+        state.prestige = min(100, state.prestige + prestige_delta)
+        sync_club_prestige_to_reputation(session, club_id, state.prestige)
+    if fans_delta:
+        state.fans = max(100, state.fans + fans_delta)
+
+    from app.owner_console import storytelling
+    broadcast = storytelling.record_verified_broadcast_event(
+        session,
+        event_type="press_conference",
+        club_id=club_id,
+        owner_user_id=user_id,
+        item_name=f"Owner Press Conference ({tone})",
+        item_model=statement[:80] if statement else None,
+        verified_price_gtex=Decimal("0"),
+    )
+
+    return {
+        "club_id": club_id,
+        "tone": tone,
+        "statement": statement,
+        "squad_morale_delta": squad_morale_delta,
+        "manager_mood_delta": manager_mood_delta,
+        "manager_loyalty_delta": manager_loyalty_delta,
+        "prestige_delta": prestige_delta,
+        "broadcast_event": storytelling.broadcast_dict(broadcast) if broadcast else None,
+    }

@@ -95,6 +95,21 @@ class WorldClockService:
         virtual_seconds = elapsed_seconds * rate
         return start + timedelta(seconds=virtual_seconds)
 
+    def gtex_years_running(self) -> int:
+        state = self.get_or_create_state()
+        v_now = self.now_virtual()
+        v_start = _as_utc(state.virtual_start_time)
+        return max(1, (v_now.year - v_start.year) + 1)
+
+    def current_season_number(self) -> int:
+        state = self.get_or_create_state()
+        v_now = self.now_virtual()
+        v_start = _as_utc(state.virtual_start_time)
+        return max(1, int((v_now - v_start).days // 365) + 1)
+
+    def current_season_label(self) -> str:
+        return f"GTEX Year {self.gtex_years_running()} · Season {self.current_season_number()}"
+
     def now_virtual_date(self) -> date:
         return self.now_virtual().date()
 

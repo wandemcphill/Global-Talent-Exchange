@@ -56,6 +56,27 @@ class ShowroomExhibit {
   final String? ownerClass;
   final String? status;
   final bool owned;
+
+  int get prestigeBonus {
+    if (category == 'jet') return 12;
+    if (id.startsWith('facility:')) return 20;
+    if (category == 'coach') return 8;
+    return 5;
+  }
+
+  int get academyCeilingBonus {
+    if (id.startsWith('facility:')) return 25;
+    if (category == 'jet') return 5;
+    if (category == 'coach') return 4;
+    return 2;
+  }
+
+  int get staffPullBonus {
+    if (category == 'jet') return 15;
+    if (id.startsWith('facility:')) return 10;
+    if (category == 'coach') return 6;
+    return 8;
+  }
 }
 
 class OwnerGiftRecipient {
@@ -96,6 +117,8 @@ abstract interface class OwnerLegacyGiftGateway {
   Future<void> giftOwnedAssetToPlayer({
     required String assetId,
     required String playerId,
+    String recipientType = 'player',
+    String? staffRole,
   });
 }
 
@@ -351,6 +374,8 @@ class OwnerControlCenter {
     required this.integrityScore,
     this.inboxUnreadCount = 0,
     this.legacy = const <OwnerLegacyRating>[],
+    this.dailyBriefing = const <String, dynamic>{},
+    this.ecosystemWaterfall = const <String, dynamic>{},
   });
 
   factory OwnerControlCenter.fromJson(Map<String, dynamic> j) {
@@ -381,6 +406,8 @@ class OwnerControlCenter {
       legacy: j['legacy'] is List
           ? _maps(j['legacy']).map(OwnerLegacyRating.fromJson).toList()
           : const <OwnerLegacyRating>[],
+      dailyBriefing: _map(j['daily_briefing']),
+      ecosystemWaterfall: _map(j['ecosystem_waterfall']),
     );
   }
 
@@ -402,6 +429,8 @@ class OwnerControlCenter {
   final Map<String, double> earnings;
   final int integrityScore;
   final List<OwnerLegacyRating> legacy;
+  final Map<String, dynamic> dailyBriefing;
+  final Map<String, dynamic> ecosystemWaterfall;
 }
 
 class OwnerLegacyRating {
@@ -689,6 +718,90 @@ abstract class OwnerConsoleReader {
   Future<ClubLegacyDeskData> fetchDesk();
 
   Future<void> performDesk(String action, [Map<String, Object?> payload = const <String, Object?>{}]);
+
+  Future<Map<String, dynamic>> fetchClubStaff(String clubId);
+
+  Future<void> hireClubStaff({
+    required String clubId,
+    required String staffId,
+    String? role,
+    bool marqueeWagePremium = false,
+  });
+
+  Future<void> fireClubStaff({
+    required String clubId,
+    required String role,
+  });
+
+  Future<void> updateDelegationPolicy(
+    String clubId,
+    Map<String, dynamic> policy,
+  );
+
+  Future<Map<String, dynamic>> fetchStaffChat(
+    String clubId, {
+    String? role,
+  });
+
+  Future<Map<String, dynamic>> sendStaffChat({
+    required String clubId,
+    required String role,
+    required String message,
+    String topic = 'general',
+  });
+
+  Future<Map<String, dynamic>> fetchDailyBriefing(String clubId);
+
+  Future<Map<String, dynamic>> generateDailyBriefing(String clubId);
+
+  Future<void> promoteAcademyPlayer({
+    required String clubId,
+    required String playerId,
+  });
+
+  Future<void> offerAcademyContract({
+    required String clubId,
+    required String playerId,
+  });
+
+  Future<Map<String, dynamic>> fetchEconomyWaterfall({String? clubId});
+
+  Future<void> pledgeWinBonus({
+    required String clubId,
+    required int amountGtex,
+    String note = '',
+  });
+
+  Future<void> giftShowroomAsset({
+    required String clubId,
+    required String assetId,
+    String? playerId,
+    String? catalogKey,
+    String? note,
+    String recipientType = 'player',
+    String? staffRole,
+  });
+
+  Future<void> appointDeskExecutive({
+    String? clubId,
+    String role = 'gm',
+    String name = 'Ada Okonkwo',
+    String personality = 'cautious',
+    String wage = '4000',
+    String? specialty,
+    String? style,
+  });
+
+  Future<void> hireYouthCoach({
+    String? clubId,
+    String name = 'Tunde Bakare',
+    String wage = '2000',
+    int prestige = 20,
+    int ambition = 8,
+    int seed = 3,
+    String? developmentFocus,
+    String? style,
+  });
 }
 
 class OwnerConsoleApi implements OwnerConsoleReader, GtexOwnerInboxDataSource, OwnerLegacyGiftGateway, OwnerWorldClockGateway {
@@ -930,10 +1043,22 @@ class OwnerConsoleApi implements OwnerConsoleReader, GtexOwnerInboxDataSource, O
   Future<void> giftOwnedAssetToPlayer({
     required String assetId,
     required String playerId,
+    String recipientType = 'player',
+    String? staffRole,
   }) async {
     final String? clubId = await resolveClubId();
     if (clubId == null) {
       throw StateError('Select an active club before gifting a luxury item.');
+    }
+
+    if (recipientType == 'staff') {
+      await giftShowroomAsset(
+        clubId: clubId,
+        assetId: assetId,
+        recipientType: 'staff',
+        staffRole: staffRole ?? playerId,
+      );
+      return;
     }
 
     // The legacy route can create a durable offer. Fall back only when the
@@ -1093,5 +1218,196 @@ class OwnerConsoleApi implements OwnerConsoleReader, GtexOwnerInboxDataSource, O
   @override
   Future<void> seedDefaultTournaments() async {
     await client.post('/admin/national-team-engine/competitions/seed-defaults');
+  }
+
+  @override
+  Future<Map<String, dynamic>> fetchClubStaff(String clubId) async {
+    return await client.getMap('/owner/clubs/$clubId/staff');
+  }
+
+  @override
+  Future<void> hireClubStaff({
+    required String clubId,
+    required String staffId,
+    String? role,
+    bool marqueeWagePremium = false,
+  }) async {
+    await client.post(
+      '/owner/clubs/$clubId/staff/hire',
+      body: <String, Object?>{
+        'staff_id': staffId,
+        if (role != null) 'role': role,
+        'marquee_wage_premium': marqueeWagePremium,
+      },
+    );
+  }
+
+  @override
+  Future<void> fireClubStaff({
+    required String clubId,
+    required String role,
+  }) async {
+    await client.post('/owner/clubs/$clubId/staff/$role/fire');
+  }
+
+  @override
+  Future<void> updateDelegationPolicy(
+    String clubId,
+    Map<String, dynamic> policy,
+  ) async {
+    await client.request(
+      'PUT',
+      '/owner/clubs/$clubId/delegation',
+      body: policy,
+    );
+  }
+
+  @override
+  Future<Map<String, dynamic>> fetchStaffChat(
+    String clubId, {
+    String? role,
+  }) async {
+    return await client.getMap(
+      '/owner/clubs/$clubId/staff/chat',
+      query: <String, Object?>{
+        if (role != null && role.isNotEmpty) 'role': role,
+      },
+    );
+  }
+
+  @override
+  Future<Map<String, dynamic>> sendStaffChat({
+    required String clubId,
+    required String role,
+    required String message,
+    String topic = 'general',
+  }) async {
+    final Object? res = await client.post(
+      '/owner/clubs/$clubId/staff/chat',
+      body: <String, Object?>{
+        'role': role,
+        'message': message,
+        'topic': topic,
+      },
+    );
+    return res is Map ? Map<String, dynamic>.from(res) : <String, dynamic>{};
+  }
+
+  @override
+  Future<Map<String, dynamic>> fetchDailyBriefing(String clubId) async {
+    return await client.getMap('/owner/clubs/$clubId/briefing');
+  }
+
+  @override
+  Future<Map<String, dynamic>> generateDailyBriefing(String clubId) async {
+    final Object? res = await client.post('/owner/clubs/$clubId/briefing/generate');
+    return res is Map ? Map<String, dynamic>.from(res) : <String, dynamic>{};
+  }
+
+  @override
+  Future<void> promoteAcademyPlayer({
+    required String clubId,
+    required String playerId,
+  }) async {
+    await client.post('/owner/clubs/$clubId/academy/$playerId/promote');
+  }
+
+  @override
+  Future<void> offerAcademyContract({
+    required String clubId,
+    required String playerId,
+  }) async {
+    await client.post('/owner/clubs/$clubId/academy/$playerId/contract');
+  }
+
+  @override
+  Future<Map<String, dynamic>> fetchEconomyWaterfall({String? clubId}) async {
+    return await client.getMap(
+      '/owner/economy/waterfall',
+      query: <String, Object?>{
+        if (clubId != null && clubId.isNotEmpty) 'club_id': clubId,
+      },
+    );
+  }
+
+  @override
+  Future<void> pledgeWinBonus({
+    required String clubId,
+    required int amountGtex,
+    String note = '',
+  }) async {
+    await client.post(
+      '/owner/clubs/$clubId/win-bonus',
+      body: <String, Object?>{
+        'amount_gtex': amountGtex,
+        'note': note,
+      },
+    );
+  }
+
+  @override
+  Future<void> giftShowroomAsset({
+    required String clubId,
+    required String assetId,
+    String? playerId,
+    String? catalogKey,
+    String? note,
+    String recipientType = 'player',
+    String? staffRole,
+  }) async {
+    await client.post(
+      '/owner/clubs/$clubId/showroom/gift',
+      body: <String, Object?>{
+        if (playerId != null && playerId.isNotEmpty) 'player_id': playerId,
+        if (catalogKey != null && catalogKey.isNotEmpty) 'catalog_key': catalogKey,
+        'asset_id': assetId,
+        if (note != null && note.isNotEmpty) 'note': note,
+        'recipient_type': recipientType,
+        if (staffRole != null && staffRole.isNotEmpty) 'staff_role': staffRole,
+        'idempotency_key': 'owner-gift-$clubId-$assetId-${playerId ?? staffRole ?? "recipient"}-${DateTime.now().millisecondsSinceEpoch}',
+      },
+    );
+  }
+
+  @override
+  Future<void> appointDeskExecutive({
+    String? clubId,
+    String role = 'gm',
+    String name = 'Ada Okonkwo',
+    String personality = 'cautious',
+    String wage = '4000',
+    String? specialty,
+    String? style,
+  }) async {
+    await performDesk('hire', <String, Object?>{
+      'role': role,
+      'name': name,
+      'personality': personality,
+      'wage': wage,
+      if (specialty != null) 'specialty': specialty,
+      if (style != null) 'style': style,
+    }, clubId);
+  }
+
+  @override
+  Future<void> hireYouthCoach({
+    String? clubId,
+    String name = 'Tunde Bakare',
+    String wage = '2000',
+    int prestige = 20,
+    int ambition = 8,
+    int seed = 3,
+    String? developmentFocus,
+    String? style,
+  }) async {
+    await performDesk('manager', <String, Object?>{
+      'candidate_name': name,
+      'wage': wage,
+      'prestige': prestige,
+      'ambition': ambition,
+      'seed': seed,
+      if (developmentFocus != null) 'development_focus': developmentFocus,
+      if (style != null) 'style': style,
+    }, clubId);
   }
 }

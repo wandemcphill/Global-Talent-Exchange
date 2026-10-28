@@ -19,6 +19,8 @@ class ClubLegacyShowroom extends StatefulWidget {
     this.loadGiftRecipients,
     this.giftOwnedAsset,
     this.onGiftCompleted,
+    this.prestigeTier,
+    this.clubPrestige,
   });
 
   final List<ShowroomExhibit> exhibits;
@@ -29,6 +31,16 @@ class ClubLegacyShowroom extends StatefulWidget {
   final Future<void> Function({required String assetId, required String playerId})?
       giftOwnedAsset;
   final Future<void> Function()? onGiftCompleted;
+  final String? prestigeTier;
+  final int? clubPrestige;
+
+  static String resolvePrestigeTier(int prestige) {
+    if (prestige >= 80) return 'Tier 1: Global Superclub';
+    if (prestige >= 60) return 'Tier 2: Continental Contender';
+    if (prestige >= 40) return 'Tier 3: Top Flight Regular';
+    if (prestige >= 20) return 'Tier 4: Emerging Contender';
+    return 'Tier 5: Grassroots Foundation';
+  }
 
   /// Resolves the H9 visibility / broadcast classification label for an exhibit.
   static String visibilityBadgeLabel(ShowroomExhibit exhibit) {
@@ -256,7 +268,38 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
     }
 
     OwnerGiftRecipient? selectedPlayer;
-    final OwnerGiftRecipient? recipient = await showDialog<OwnerGiftRecipient>(
+    Map<String, String>? selectedStaff;
+    String recipientTab = 'regen';
+
+    const List<Map<String, String>> staffOptions = <Map<String, String>>[
+      <String, String>{
+        'role': 'first_team_manager',
+        'title': 'First-Team Manager',
+        'subtitle': 'Tactical cohesion & match leadership',
+      },
+      <String, String>{
+        'role': 'general_manager',
+        'title': 'General Manager',
+        'subtitle': 'Executive desk & delegation oversight',
+      },
+      <String, String>{
+        'role': 'head_of_youth_development',
+        'title': 'Head of Youth Development',
+        'subtitle': 'Academy pipeline & intake quality',
+      },
+      <String, String>{
+        'role': 'chief_scout',
+        'title': 'Chief Scout',
+        'subtitle': 'Global network & recruit discovery',
+      },
+      <String, String>{
+        'role': 'medical_director',
+        'title': 'Medical Director',
+        'subtitle': 'Injury prevention & recovery boost',
+      },
+    ];
+
+    final Object? result = await showDialog<Object>(
       context: context,
       builder: (BuildContext dialogContext) => StatefulBuilder(
         builder: (BuildContext context, StateSetter setDialogState) => AlertDialog(
@@ -268,24 +311,134 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
           titlePadding: const EdgeInsets.fromLTRB(20, 20, 12, 8),
           contentPadding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
           actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          title: Row(
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              const Icon(Icons.card_giftcard_rounded, color: GtexColors.gold),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Choose an academy regen',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
+              Row(
+                children: <Widget>[
+                  const Icon(Icons.card_giftcard_rounded, color: GtexColors.gold),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      recipientTab == 'regen'
+                          ? 'Choose an academy regen'
+                          : 'Choose coaching & executive staff',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                   ),
-                ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: <Widget>[
+                  ChoiceChip(
+                    key: const Key('club-showroom-gift-tab-regen'),
+                    label: const Text('Squad Regen', style: TextStyle(fontSize: 11)),
+                    selected: recipientTab == 'regen',
+                    selectedColor: GtexColors.gold.withValues(alpha: 0.25),
+                    onSelected: (bool sel) {
+                      if (sel) setDialogState(() => recipientTab = 'regen');
+                    },
+                  ),
+                  ChoiceChip(
+                    key: const Key('club-showroom-gift-tab-staff'),
+                    label: const Text('Coaching & Staff', style: TextStyle(fontSize: 11)),
+                    selected: recipientTab == 'staff',
+                    selectedColor: GtexColors.gold.withValues(alpha: 0.25),
+                    onSelected: (bool sel) {
+                      if (sel) setDialogState(() => recipientTab = 'staff');
+                    },
+                  ),
+                ],
               ),
             ],
           ),
           content: SizedBox(
             width: 460,
-            child: FutureBuilder<List<OwnerGiftRecipient>>(
+            child: recipientTab == 'staff'
+                ? ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: staffOptions.length,
+                    separatorBuilder: (_, __) => Divider(
+                      height: 1,
+                      color: Colors.white.withValues(alpha: 0.07),
+                    ),
+                    itemBuilder: (BuildContext context, int index) {
+                      final Map<String, String> staff = staffOptions[index];
+                      final bool chosen = selectedStaff?['role'] == staff['role'];
+                      return InkWell(
+                        key: Key('club-showroom-staff-${staff['role']}'),
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () => setDialogState(() => selectedStaff = staff),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          padding: const EdgeInsets.all(9),
+                          decoration: BoxDecoration(
+                            color: chosen ? GtexColors.gold.withValues(alpha: 0.12) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: chosen ? GtexColors.gold : Colors.transparent,
+                            ),
+                          ),
+                          child: Row(
+                            children: <Widget>[
+                              CircleAvatar(
+                                radius: 24,
+                                backgroundColor: const Color(0xFF1C2B40),
+                                child: const Icon(Icons.person_rounded, color: GtexColors.gold),
+                              ),
+                              const SizedBox(width: 11),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: <Widget>[
+                                    Text(
+                                      staff['title']!,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF79D8A4).withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(5),
+                                        border: Border.all(color: const Color(0xFF79D8A4).withValues(alpha: 0.4)),
+                                      ),
+                                      child: const Text(
+                                        'STAFF MOOD +15 · LOYALTY +3',
+                                        style: TextStyle(color: Color(0xFF79D8A4), fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 0.7),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      staff['subtitle']!,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(color: Color(0xFFAAB8CB), fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                chosen ? Icons.check_circle_rounded : Icons.circle_outlined,
+                                color: chosen ? GtexColors.gold : const Color(0xFF75859A),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  )
+                : FutureBuilder<List<OwnerGiftRecipient>>(
               future: recipientsFuture,
               builder: (BuildContext context, AsyncSnapshot<List<OwnerGiftRecipient>> snapshot) {
                 if (snapshot.connectionState != ConnectionState.done) {
@@ -416,23 +569,49 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
             ),
             FilledButton.icon(
               key: const Key('club-showroom-gift-confirm'),
-              onPressed: selectedPlayer == null ? null : () => Navigator.of(dialogContext).pop(selectedPlayer),
+              onPressed: (recipientTab == 'regen' ? selectedPlayer == null : selectedStaff == null)
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(recipientTab == 'regen' ? selectedPlayer : selectedStaff),
               icon: const Icon(Icons.redeem_rounded),
-              label: const Text('Gift selected player'),
+              label: Text(recipientTab == 'regen' ? 'Gift selected player' : 'Gift selected staff'),
             ),
           ],
         ),
       ),
     );
-    if (!mounted || recipient == null) return;
+    if (!mounted || result == null) return;
 
     try {
       setState(() => _pendingPurchases.add('gift:${exhibit.id}'));
-      await giftOwnedAsset(assetId: exhibit.id, playerId: recipient.id);
-      if (!mounted) return;
-      await widget.onGiftCompleted?.call();
-      if (!mounted) return;
-      await _showGiftArrived(exhibit, recipient);
+      if (result is OwnerGiftRecipient) {
+        await giftOwnedAsset(assetId: exhibit.id, playerId: result.id);
+        if (!mounted) return;
+        await widget.onGiftCompleted?.call();
+        if (!mounted) return;
+        await _showGiftArrived(exhibit, result);
+      } else if (result is Map) {
+        final Map<String, String> staff = Map<String, String>.from(result);
+        final String role = staff['role'] ?? 'first_team_manager';
+        if (widget.onAction != null) {
+          await widget.onAction!('gift', <String, Object?>{
+            'asset_id': exhibit.id,
+            'recipient_type': 'staff',
+            'staff_role': role,
+            'note': 'Luxury staff gift',
+          });
+        } else {
+          await giftOwnedAsset(assetId: exhibit.id, playerId: role);
+        }
+        if (!mounted) return;
+        await widget.onGiftCompleted?.call();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gifted ${exhibit.name} to ${staff['title']}! Staff Mood +15 · Loyalty +3'),
+            backgroundColor: const Color(0xFF1B382B),
+          ),
+        );
+      }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -618,6 +797,70 @@ class _ClubLegacyShowroomState extends State<ClubLegacyShowroom> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           SizedBox(height: 220, child: card),
+          const SizedBox(height: GtexSpacing.sm),
+          Wrap(
+            spacing: GtexSpacing.xs,
+            runSpacing: GtexSpacing.xs,
+            children: <Widget>[
+              Container(
+                key: const Key('club-showroom-prestige-tier-badge'),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: GtexColors.gold.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: GtexColors.gold.withValues(alpha: 0.35)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    const Icon(Icons.stars_rounded, color: GtexColors.gold, size: 14),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        widget.prestigeTier ?? ClubLegacyShowroom.resolvePrestigeTier(widget.clubPrestige ?? 55),
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: GtexColors.gold,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: GtexSpacing.xs),
+          Wrap(
+            key: Key('club-showroom-impact-badges-${exhibit.id}'),
+            spacing: GtexSpacing.xs,
+            runSpacing: GtexSpacing.xs,
+            children: <Widget>[
+              GtexStatusChip(
+                key: Key('impact-prestige-${exhibit.id}'),
+                label: '+${exhibit.prestigeBonus} Prestige',
+                color: GtexColors.gold,
+                compact: true,
+                icon: Icons.trending_up_rounded,
+              ),
+              GtexStatusChip(
+                key: Key('impact-academy-${exhibit.id}'),
+                label: '+${exhibit.academyCeilingBonus} Academy Ceiling',
+                color: GtexColors.cyan,
+                compact: true,
+                icon: Icons.school_rounded,
+              ),
+              GtexStatusChip(
+                key: Key('impact-staff-pull-${exhibit.id}'),
+                label: '+${exhibit.staffPullBonus} Transfer/Staff Pull',
+                color: GtexColors.purple,
+                compact: true,
+                icon: Icons.groups_rounded,
+              ),
+            ],
+          ),
           const SizedBox(height: GtexSpacing.sm),
           Wrap(
             spacing: GtexSpacing.xs,
@@ -1006,6 +1249,8 @@ class ShowroomSection extends StatefulWidget {
     this.onAction,
     this.loadGiftRecipients,
     this.giftOwnedAsset,
+    this.prestigeTier,
+    this.clubPrestige,
   });
 
   final Future<List<ShowroomExhibit>> Function() load;
@@ -1013,6 +1258,8 @@ class ShowroomSection extends StatefulWidget {
   final Future<List<OwnerGiftRecipient>> Function()? loadGiftRecipients;
   final Future<void> Function({required String assetId, required String playerId})?
       giftOwnedAsset;
+  final String? prestigeTier;
+  final int? clubPrestige;
 
   @override
   State<ShowroomSection> createState() => _ShowroomSectionState();
@@ -1094,6 +1341,8 @@ class _ShowroomSectionState extends State<ShowroomSection> {
           onAction: _handleAction,
           loadGiftRecipients: widget.loadGiftRecipients,
           giftOwnedAsset: widget.giftOwnedAsset,
+          prestigeTier: widget.prestigeTier,
+          clubPrestige: widget.clubPrestige,
           onGiftCompleted: () async {
             if (mounted) _reload();
           },

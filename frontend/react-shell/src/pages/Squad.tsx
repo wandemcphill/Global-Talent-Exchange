@@ -1,5 +1,27 @@
 import React, { useState, useMemo } from "react";
-import { ArrowRight, CheckCircle2, AlertCircle, X } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  AlertCircle,
+  X,
+  Users,
+  UserCheck,
+  UserMinus,
+  MessageSquare,
+  Settings2,
+  TrendingUp,
+  Sparkles,
+  Shield,
+  HeartPulse,
+  Search,
+  Award,
+  DollarSign,
+  Briefcase,
+  Sprout,
+  Send,
+  Shirt,
+  Compass,
+} from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -25,7 +47,7 @@ function ManagerSheet({ club }: any) {
   };
   return (
     <Panel eyebrow="Manager realism engine" title={m.name} testid="manager-sheet" className="lg:col-span-5"
-      action={!m.is_default && <Btn variant="danger" onClick={fire} data-testid="fire-manager-button">Dismiss</Btn>}>
+      action={<Btn variant="danger" onClick={fire} data-testid="fire-manager-button">Dismiss</Btn>}>
       <div className="mb-5 flex flex-wrap gap-2">
         <Chip tone="cyan">{m.tactical_preference}</Chip>
         <Chip tone="gold">Temperament: {m.temperament}</Chip>
@@ -80,39 +102,32 @@ function HireManager({ club }: any) {
   );
 }
 
-function SquadCards({ club }: any) {
-  const [selected, setSelected] = useState<any | null>(null);
+function SquadCards({ club, onSelectPlayer }: any) {
   return (
-    <>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" data-testid="squad-cards-grid">
-        {club.squad.map((p: any) => (
-          <div key={p.id} className="cursor-pointer" onClick={() => setSelected(p)}>
-            <PlayerCard
-              name={p.name}
-              rating={p.rating}
-              potential={p.potential}
-              position={p.position}
-              age={p.age}
-              nationality={p.nationality}
-              club={club.club_name}
-              image={p.image || p.portrait_url || p.image_url}
-              regen={Boolean(p.is_regen)}
-              variant="compact"
-              testid={`squad-player-${p.id}`}
-              onClick={() => setSelected(p)}
-            />
-          </div>
-        ))}
-      </div>
-      <PlayerDrawer
-        playerId={selected?.id ?? null}
-        onClose={() => setSelected(null)}
-      />
-    </>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" data-testid="squad-cards-grid">
+      {club.squad.map((p: any) => (
+        <div key={p.id} className="cursor-pointer" onClick={() => onSelectPlayer && onSelectPlayer(p)}>
+          <PlayerCard
+            name={p.name}
+            rating={p.rating}
+            potential={p.potential}
+            position={p.position}
+            age={p.age}
+            nationality={p.nationality}
+            club={club.club_name}
+            image={p.image || p.portrait_url || p.image_url}
+            regen={Boolean(p.is_regen)}
+            variant="compact"
+            testid={`squad-player-${p.id}`}
+            onClick={() => onSelectPlayer && onSelectPlayer(p)}
+          />
+        </div>
+      ))}
+    </div>
   );
 }
 
-function SquadTable({ club, targetPlayerId }: any) {
+function SquadTable({ club, targetPlayerId, onSelectPlayer }: any) {
   const [view, setView] = useState<"table" | "cards">("table");
   const [mentality, setMentality] = useState(club.mentality || "balanced");
   const save = async (m: string) => {
@@ -127,7 +142,7 @@ function SquadTable({ club, targetPlayerId }: any) {
   return (
     <Panel eyebrow={`${club.squad.length} players`} title="Squad" testid="squad-table-panel" className="lg:col-span-7"
       action={<div className="flex flex-wrap gap-1">{["cards", "table"].map((v) => <button key={v} data-testid={`squad-view-${v}`} onClick={() => setView(v as any)} className={`gx-btn ${view === v ? "gx-btn-primary" : "gx-btn-ghost"}`}>{v}</button>)}<span className="mx-1 w-px bg-white/10" />{["defensive", "balanced", "attacking"].map((m) => <button key={m} data-testid={`default-mentality-${m}`} onClick={() => save(m)} className={`gx-btn ${mentality === m ? "gx-btn-primary" : "gx-btn-secondary"}`}>{m}</button>)}</div>}>
-      {view === "cards" ? <div className="gx-scroll max-h-[640px] overflow-auto pr-1"><SquadCards club={club} /></div> : (
+      {view === "cards" ? <div className="gx-scroll max-h-[640px] overflow-auto pr-1"><SquadCards club={club} onSelectPlayer={onSelectPlayer} /></div> : (
       <div className="gx-scroll max-h-[560px] overflow-auto">
         <table className="gx-table w-full min-w-[620px]">
           <thead><tr><th>Player</th><th>Pos</th><th>Age</th><th>Rtg/Pot</th><th>Morale</th><th>Mins</th><th>Value</th></tr></thead>
@@ -138,7 +153,8 @@ function SquadTable({ club, targetPlayerId }: any) {
                 <tr
                   key={p.id}
                   data-testid={`squad-row-${p.id}`}
-                  className={isTarget ? "bg-emerald-500/10 border-l-4 border-emerald-400" : ""}
+                  onClick={() => onSelectPlayer && onSelectPlayer(p)}
+                  className={`cursor-pointer transition-colors hover:bg-emerald-500/10 ${isTarget ? "bg-emerald-500/10 border-l-4 border-emerald-400" : ""}`}
                 >
                   <td className="font-medium text-white">
                     {p.name} {p.is_regen && <Chip tone="emerald">Regen</Chip>} {p.status === "listed" && <Chip tone="gold">Listed</Chip>} {p.injured_days > 0 && <Chip tone="red">Injured</Chip>}
@@ -160,7 +176,6 @@ function SquadTable({ club, targetPlayerId }: any) {
     </Panel>
   );
 }
-
 
 function SquadRegistrationPanel({ club, targetPlayerId }: any) {
   const [busy, setBusy] = useState("");
@@ -186,7 +201,8 @@ function SquadRegistrationPanel({ club, targetPlayerId }: any) {
   const sync = async () => {
     setBusy("sync");
     try {
-      await api.post(endpoint, { season_label: SQUAD_SEASON_LABEL, player_ids: [] });
+      const playerIds = (club.squad || []).map((p: any) => String(p.player_ref || p.id));
+      await api.post(endpoint, { season_label: SQUAD_SEASON_LABEL, player_ids: playerIds });
       await registrationQuery.refetch();
       toast.success("Club squad synced for registration.");
     } catch (error) {
@@ -322,10 +338,688 @@ function SquadRegistrationPanel({ club, targetPlayerId }: any) {
   );
 }
 
+const STAFF_ROLES: Array<{
+  key: string;
+  label: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  color: string;
+  badgeTone: "purple" | "cyan" | "emerald" | "gold" | "red";
+  effectKey: string;
+  effectLabel: string;
+}> = [
+  {
+    key: "general_manager",
+    label: "General Manager (GM)",
+    icon: Briefcase,
+    color: "text-purple-400",
+    badgeTone: "purple",
+    effectKey: "transfer_fee_discount_pct",
+    effectLabel: "Transfer Discount & Sponsorship",
+  },
+  {
+    key: "first_team_manager",
+    label: "First-Team Manager",
+    icon: Shirt,
+    color: "text-sky-400",
+    badgeTone: "cyan",
+    effectKey: "tactical_match_bonus",
+    effectLabel: "Tactics & Matchday Momentum",
+  },
+  {
+    key: "head_of_youth_development",
+    label: "Head of Youth Dev (HOYD)",
+    icon: Sprout,
+    color: "text-emerald-400",
+    badgeTone: "emerald",
+    effectKey: "academy_potential_bonus",
+    effectLabel: "Academy Potential & Regen Growth",
+  },
+  {
+    key: "chief_scout",
+    label: "Chief Scout",
+    icon: Search,
+    color: "text-amber-400",
+    badgeTone: "gold",
+    effectKey: "scouting_precision_bonus",
+    effectLabel: "Scouting Precision & Wonderkid Pull",
+  },
+  {
+    key: "medical_director",
+    label: "Medical Director",
+    icon: HeartPulse,
+    color: "text-rose-400",
+    badgeTone: "red",
+    effectKey: "injury_recovery_bonus",
+    effectLabel: "Injury Recovery & Fatigue Guard",
+  },
+];
+
+function StaffChatModal({
+  clubId,
+  initialRole = "general_manager",
+  appointedStaff,
+  onClose,
+}: {
+  clubId: string;
+  initialRole?: string;
+  appointedStaff?: any;
+  onClose: () => void;
+}) {
+  const [activeRole, setActiveRole] = useState(initialRole);
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [history, setHistory] = useState<any[]>([]);
+
+  const { data: chatData, refetch } = useQuery({
+    queryKey: ["staff-chat", clubId, activeRole],
+    queryFn: async () => {
+      try {
+        const { data } = await api.get(`/owner/clubs/${clubId}/staff/chat`, {
+          params: { role: activeRole },
+        });
+        return data;
+      } catch {
+        return { history: [] };
+      }
+    },
+    enabled: Boolean(clubId && activeRole),
+  });
+
+  React.useEffect(() => {
+    if (chatData?.history) {
+      setHistory(chatData.history);
+    }
+  }, [chatData]);
+
+  const currentRoleConfig = STAFF_ROLES.find((r) => r.key === activeRole) || STAFF_ROLES[0];
+  const staffMember = appointedStaff?.[activeRole] || { name: `${currentRoleConfig.label}` };
+
+  const suggestions: Record<string, string[]> = {
+    general_manager: [
+      "Review our transfer budget and financial runway.",
+      "Are there commercial sponsor partnerships on the table?",
+      "Recommend priority signings for this window.",
+    ],
+    first_team_manager: [
+      "How sharp is squad morale and readiness for the next match?",
+      "Can we adjust to a high pressing tactical shape?",
+      "Who deserves more starting minutes in training?",
+    ],
+    head_of_youth_development: [
+      "Which academy prospect has the highest ceiling?",
+      "Who is ready for a first-team senior contract?",
+      "How are our youth training facilities performing?",
+    ],
+    chief_scout: [
+      "What top-tier regens have we spotted across Africa & Latin America?",
+      "Provide a scouting dossier on available wonderkids.",
+      "Which positions lack depth in our current pipeline?",
+    ],
+    medical_director: [
+      "Report on current squad fitness and injury recovery timelines.",
+      "Are any key players carrying fatigue risks?",
+      "What preventive conditioning regimens are active?",
+    ],
+  };
+
+  const handleSend = async (customText?: string) => {
+    const text = (customText || message).trim();
+    if (!text || busy) return;
+    setBusy(true);
+
+    const userEntry = {
+      sender: "Club Owner",
+      role: "owner",
+      role_label: "Owner",
+      message: text,
+      timestamp: new Date().toISOString(),
+    };
+    setHistory((prev) => [...prev, userEntry]);
+    setMessage("");
+
+    try {
+      const { data } = await api.post(`/owner/clubs/${clubId}/staff/chat`, {
+        role: activeRole,
+        message: text,
+      });
+      if (data?.reply) {
+        setHistory((prev) => [...prev, data.reply]);
+      } else if (data?.history) {
+        setHistory(data.history);
+      }
+      refetch();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" data-testid="staff-chat-modal">
+      <div className="flex h-[600px] w-full max-w-2xl flex-col rounded-2xl border border-white/10 bg-[#070B11] shadow-2xl overflow-hidden">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between border-b border-white/10 bg-slate-950/80 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <span className="flex size-9 items-center justify-center rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/30">
+              <MessageSquare size={18} />
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="gx-display text-lg font-black uppercase text-white">Boardroom AI Staff Chat</h3>
+                <span className="rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 text-[9px] font-black uppercase">
+                  Persona Grounded
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                Direct council with <b className="text-white">{staffMember.name}</b> · {currentRoleConfig.label}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded p-1 text-slate-400 hover:text-white hover:bg-white/10"><X size={18} /></button>
+        </div>
+
+        {/* Role Selector Tabs */}
+        <div className="flex overflow-x-auto border-b border-white/10 bg-black/40 px-4 py-2 gap-1.5">
+          {STAFF_ROLES.map((r) => {
+            const Icon = r.icon;
+            const active = r.key === activeRole;
+            return (
+              <button
+                key={r.key}
+                onClick={() => setActiveRole(r.key)}
+                className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold whitespace-nowrap transition-all ${
+                  active
+                    ? "bg-purple-600/30 text-purple-200 border border-purple-500/50 shadow-sm"
+                    : "text-slate-400 hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                <Icon size={14} className={r.color} />
+                <span>{r.label.split(" (")[0]}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Message Viewport */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {history.length === 0 ? (
+            <div className="py-12 text-center space-y-2">
+              <p className="text-sm font-bold text-slate-300">Start the council with your {currentRoleConfig.label}</p>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                Ask questions regarding transfers, tactical adjustments, youth contracts, or training regimens.
+              </p>
+            </div>
+          ) : (
+            history.map((msg, idx) => {
+              const isOwner = msg.role === "owner" || msg.sender === "Club Owner";
+              return (
+                <div key={idx} className={`flex flex-col ${isOwner ? "items-end" : "items-start"}`}>
+                  <span className="text-[10px] font-bold text-slate-500 mb-1 px-1">
+                    {msg.sender || (isOwner ? "Owner" : currentRoleConfig.label)}
+                  </span>
+                  <div
+                    className={`max-w-[85%] rounded-2xl p-3.5 text-xs leading-relaxed ${
+                      isOwner
+                        ? "bg-emerald-600 text-white rounded-br-none shadow-md"
+                        : "bg-slate-900 border border-white/10 text-slate-200 rounded-bl-none shadow-md"
+                    }`}
+                  >
+                    {msg.message}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Quick Suggestion Prompts */}
+        <div className="border-t border-white/10 bg-slate-950/60 px-4 py-2 flex flex-wrap gap-1.5">
+          {(suggestions[activeRole] || []).map((sug, i) => (
+            <button
+              key={i}
+              onClick={() => handleSend(sug)}
+              disabled={busy}
+              className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] text-slate-300 hover:border-purple-400/50 hover:text-white transition"
+            >
+              “{sug}”
+            </button>
+          ))}
+        </div>
+
+        {/* Message Input Box */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSend();
+          }}
+          className="flex items-center gap-2 border-t border-white/10 bg-slate-950 p-4"
+        >
+          <input
+            type="text"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder={`Ask ${staffMember.name || currentRoleConfig.label}...`}
+            className="gx-input flex-1 text-xs"
+            disabled={busy}
+          />
+          <button
+            type="submit"
+            disabled={!message.trim() || busy}
+            className="gx-btn gx-btn-primary flex items-center gap-1.5 text-xs px-4"
+          >
+            <Send size={13} />
+            <span>{busy ? "Thinking…" : "Send"}</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function BoardroomSection({ club }: any) {
+  const refresh = useRefreshOwner();
+  const [chatRole, setChatRole] = useState<string | null>(null);
+  const [hiringBusy, setHiringBusy] = useState<string | null>(null);
+  const [marqueePremiums, setMarqueePremiums] = useState<Record<string, boolean>>({});
+  const [delegationBusy, setDelegationBusy] = useState(false);
+  const [roleFilter, setRoleFilter] = useState("all");
+
+  const { data: staffData, refetch: refetchStaff } = useQuery({
+    queryKey: ["club-staff", club.club_id],
+    queryFn: async () => {
+      try {
+        const { data } = await api.get(`/owner/clubs/${club.club_id}/staff`);
+        return data;
+      } catch {
+        return null;
+      }
+    },
+    enabled: Boolean(club?.club_id),
+  });
+
+  const appointed = staffData?.appointed_staff || {
+    first_team_manager: club.manager_profile || {
+      name: club.manager?.name || "Kwame Mensah",
+      tactics_stat: 76,
+      discipline: 74,
+      youth_dev: 78,
+    },
+    general_manager: { name: "Adeola Alabi", attributes: { negotiations: 82, commercial: 80 } },
+    head_of_youth_development: { name: "Ousmane Diallo", attributes: { talent_spotting: 85, youth_conditioning: 81 } },
+    chief_scout: { name: "Lars Lindstrom", attributes: { international_network: 83, precision: 80 } },
+    medical_director: { name: "Dr. Chioma Eze", attributes: { sports_medicine: 86, rehabilitation: 84 } },
+  };
+
+  const effects = staffData?.staff_effects || {
+    transfer_fee_discount_pct: 5,
+    sponsor_revenue_bonus_pct: 8,
+    academy_potential_bonus: 4,
+    tactical_match_bonus: 3,
+    scouting_precision_bonus: 6,
+    injury_recovery_bonus: 10,
+  };
+
+  const delegation = staffData?.delegation_policy || {
+    mode: "balanced",
+    gm_transfer_autonomy: false,
+    hoyd_youth_contracts: false,
+    manager_tactics_autonomy: true,
+  };
+
+  const clubPrestige = staffData?.club_prestige ?? club.health?.prestige ?? 55;
+  const prestigeTier = staffData?.prestige_tier ?? (clubPrestige >= 85 ? 1 : clubPrestige >= 70 ? 2 : clubPrestige >= 50 ? 3 : clubPrestige >= 35 ? 4 : 5);
+  const candidates: any[] = staffData?.candidates || [
+    { staff_id: "st-cand-1", role: "general_manager", name: "David Sterling", min_prestige: 60, salary_gtex: 12500, specialty: "Continental Broadcast & Kit Sponsor Magnate" },
+    { staff_id: "st-cand-2", role: "head_of_youth_development", name: "Bakary Traore", min_prestige: 50, salary_gtex: 9000, specialty: "Master of African Academy Regens & Pace Archetypes" },
+    { staff_id: "st-cand-3", role: "chief_scout", name: "Matteo Silva", min_prestige: 65, salary_gtex: 11000, specialty: "South American Wonderkid & High-Ceiling Specialist" },
+    { staff_id: "st-cand-4", role: "medical_director", name: "Dr. Elena Rostova", min_prestige: 55, salary_gtex: 9500, specialty: "Advanced Cryotherapy & Hamstring Injury Recovery" },
+  ];
+
+  const handleHire = async (candidate: any) => {
+    setHiringBusy(candidate.staff_id);
+    const usePremium = Boolean(marqueePremiums[candidate.staff_id]);
+    try {
+      await api.post(`/owner/clubs/${club.club_id}/staff/hire`, {
+        staff_id: candidate.staff_id,
+        role: candidate.role,
+        marquee_wage_premium: usePremium,
+      });
+      toast.success(`Appointed ${candidate.name} as ${candidate.role.replace(/_/g, " ")}.`);
+      await refetchStaff();
+      refresh();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setHiringBusy(null);
+    }
+  };
+
+  const handleFireStaff = async (role: string) => {
+    if (!window.confirm(`Dismiss ${role.replace(/_/g, " ")} from executive staff?`)) return;
+    try {
+      await api.post(`/owner/clubs/${club.club_id}/staff/${role}/fire`);
+      toast.warning(`Dismissed ${role.replace(/_/g, " ")}.`);
+      await refetchStaff();
+      refresh();
+    } catch (e) {
+      toast.error(errMsg(e));
+    }
+  };
+
+  const handleUpdateDelegation = async (updates: Partial<typeof delegation>) => {
+    setDelegationBusy(true);
+    const nextPolicy = { ...delegation, ...updates };
+    try {
+      await api.put(`/owner/clubs/${club.club_id}/delegation`, nextPolicy);
+      toast.success("Boardroom delegation policy updated.");
+      await refetchStaff();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setDelegationBusy(false);
+    }
+  };
+
+  const filteredCandidates = roleFilter === "all" ? candidates : candidates.filter((c) => c.role === roleFilter);
+
+  return (
+    <section className="space-y-6 mb-8" data-testid="executive-boardroom-section">
+      {/* 1. Header & Prestige Tier Overview */}
+      <div className="rounded-2xl border-2 border-purple-500/30 bg-gradient-to-br from-[#180a29] via-[#0d091a] to-[#06040c] p-6 sm:p-8 shadow-2xl">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/10 pb-6">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-purple-400/40 bg-purple-950/80 px-3 py-1 text-[11px] font-black uppercase tracking-widest text-purple-300">
+              <Shield size={12} /> Executive Boardroom & Football Operations
+            </div>
+            <h2 className="gx-display mt-2 text-2xl sm:text-3xl font-black uppercase text-white">
+              Club Executive Leadership
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl">
+              Appoint elite executives to amplify transfer fee discounts, academy regens, tactical acumen, and medical recovery.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl border border-white/10 bg-black/50 p-3 text-right">
+              <p className="text-[10px] uppercase font-bold text-slate-400">Club Prestige</p>
+              <p className="gx-mono text-2xl font-black text-amber-300">{clubPrestige}/100</p>
+              <span className="text-[10px] font-bold uppercase text-emerald-400">Tier {prestigeTier} Standing</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Staff Effects Grid */}
+        <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="rounded-xl border border-white/10 bg-black/40 p-3 text-center">
+            <p className="text-[9px] uppercase font-bold text-slate-400">Transfer Discount</p>
+            <p className="gx-mono text-lg font-black text-purple-300 mt-0.5">-{effects.transfer_fee_discount_pct ?? 5}%</p>
+            <p className="text-[9px] text-slate-500">GM Autonomy</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-black/40 p-3 text-center">
+            <p className="text-[9px] uppercase font-bold text-slate-400">Sponsor Bonus</p>
+            <p className="gx-mono text-lg font-black text-emerald-300 mt-0.5">+{effects.sponsor_revenue_bonus_pct ?? 8}%</p>
+            <p className="text-[9px] text-slate-500">Commercial</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-black/40 p-3 text-center">
+            <p className="text-[9px] uppercase font-bold text-slate-400">Academy Potential</p>
+            <p className="gx-mono text-lg font-black text-cyan-300 mt-0.5">+{effects.academy_potential_bonus ?? 4} pts</p>
+            <p className="text-[9px] text-slate-500">HOYD Intake</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-black/40 p-3 text-center">
+            <p className="text-[9px] uppercase font-bold text-slate-400">Tactical Match Bonus</p>
+            <p className="gx-mono text-lg font-black text-amber-300 mt-0.5">+{effects.tactical_match_bonus ?? 3} pts</p>
+            <p className="text-[9px] text-slate-500">Manager Tactics</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-black/40 p-3 text-center">
+            <p className="text-[9px] uppercase font-bold text-slate-400">Scouting Precision</p>
+            <p className="gx-mono text-lg font-black text-blue-300 mt-0.5">+{effects.scouting_precision_bonus ?? 6}%</p>
+            <p className="text-[9px] text-slate-500">Chief Scout</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-black/40 p-3 text-center">
+            <p className="text-[9px] uppercase font-bold text-slate-400">Injury Recovery</p>
+            <p className="gx-mono text-lg font-black text-rose-300 mt-0.5">+{effects.injury_recovery_bonus ?? 10}%</p>
+            <p className="text-[9px] text-slate-500">Medical Speed</p>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. 5 Appointed Executive Roles */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5" data-testid="appointed-staff-grid">
+        {STAFF_ROLES.map((roleDef) => {
+          const person = appointed[roleDef.key];
+          const Icon = roleDef.icon;
+          const isAppointed = Boolean(person?.name);
+
+          return (
+            <div
+              key={roleDef.key}
+              className="flex flex-col justify-between rounded-xl border border-white/10 bg-slate-900/60 p-4 shadow-lg space-y-3 hover:border-white/20 transition-colors"
+            >
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className={`flex size-8 items-center justify-center rounded-lg bg-white/5 ${roleDef.color}`}>
+                    <Icon size={16} />
+                  </span>
+                  <Chip tone={roleDef.badgeTone}>{isAppointed ? "Appointed" : "Vacant"}</Chip>
+                </div>
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider mt-2">
+                  {roleDef.label}
+                </p>
+                <h4 className="font-bold text-white text-sm truncate mt-0.5">
+                  {person?.name || "Unassigned"}
+                </h4>
+                <p className="text-[11px] text-slate-400 line-clamp-2 mt-1">
+                  {person?.specialty || person?.philosophy_summary || roleDef.effectLabel}
+                </p>
+              </div>
+
+              <div className="space-y-2 pt-2 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setChatRole(roleDef.key)}
+                  className="w-full rounded-lg bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 py-1.5 text-xs font-bold text-purple-200 flex items-center justify-center gap-1.5 transition"
+                  data-testid={`chat-staff-${roleDef.key}`}
+                >
+                  <MessageSquare size={13} />
+                  <span>Talk to Staff</span>
+                </button>
+                {isAppointed && (
+                  <button
+                    type="button"
+                    onClick={() => handleFireStaff(roleDef.key)}
+                    className="w-full text-center text-[10px] font-bold uppercase text-red-400 hover:text-red-300 py-1 transition"
+                  >
+                    Dismiss / Replace
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 3. Boardroom Delegation Policy Controls */}
+      <Panel eyebrow="Strategic Governance" title="Boardroom Delegation Policy" testid="delegation-policy-panel">
+        <p className="text-xs text-slate-400 mb-4 max-w-2xl leading-relaxed">
+          Decide how much authority to delegate to your General Manager, Head of Youth Development, and First-Team Manager.
+        </p>
+
+        <div className="flex flex-wrap items-center gap-2 mb-5">
+          <span className="text-xs uppercase font-bold text-slate-400 mr-2">Governance Mode:</span>
+          {(["hands_on", "balanced", "gm_led"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              disabled={delegationBusy}
+              onClick={() => handleUpdateDelegation({ mode: m })}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition ${
+                delegation.mode === m
+                  ? "bg-purple-600 text-white shadow-md border border-purple-400"
+                  : "bg-white/5 text-slate-400 hover:text-white border border-white/10"
+              }`}
+            >
+              {m.replace(/_/g, " ")}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3 pt-3 border-t border-white/10">
+          <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-black/30 p-3.5 cursor-pointer hover:bg-black/50 transition">
+            <input
+              type="checkbox"
+              checked={Boolean(delegation.gm_transfer_autonomy)}
+              onChange={(e) => handleUpdateDelegation({ gm_transfer_autonomy: e.target.checked })}
+              className="mt-0.5 rounded border-white/20 bg-slate-900 text-purple-600"
+            />
+            <div>
+              <p className="text-xs font-bold text-white">GM Transfer Autonomy</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Allows GM to negotiate fees and submit shortlist targets.</p>
+            </div>
+          </label>
+
+          <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-black/30 p-3.5 cursor-pointer hover:bg-black/50 transition">
+            <input
+              type="checkbox"
+              checked={Boolean(delegation.hoyd_youth_contracts)}
+              onChange={(e) => handleUpdateDelegation({ hoyd_youth_contracts: e.target.checked })}
+              className="mt-0.5 rounded border-white/20 bg-slate-900 text-emerald-600"
+            />
+            <div>
+              <p className="text-xs font-bold text-white">HOYD Youth Autonomy</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">HOYD automatically signs contracts for top academy gems.</p>
+            </div>
+          </label>
+
+          <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-black/30 p-3.5 cursor-pointer hover:bg-black/50 transition">
+            <input
+              type="checkbox"
+              checked={Boolean(delegation.manager_tactics_autonomy)}
+              onChange={(e) => handleUpdateDelegation({ manager_tactics_autonomy: e.target.checked })}
+              className="mt-0.5 rounded border-white/20 bg-slate-900 text-sky-600"
+            />
+            <div>
+              <p className="text-xs font-bold text-white">Manager Tactical Autonomy</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Manager commands in-match tactical changes and subs.</p>
+            </div>
+          </label>
+        </div>
+      </Panel>
+
+      {/* 4. Candidate Market per Role */}
+      <Panel eyebrow="Talent Acquisition" title="Executive & Coaching Candidate Market" testid="staff-candidates-panel">
+        <div className="flex flex-wrap gap-2 mb-5">
+          <button
+            onClick={() => setRoleFilter("all")}
+            className={`gx-btn ${roleFilter === "all" ? "gx-btn-primary" : "gx-btn-ghost"} text-xs`}
+          >
+            All Candidates ({candidates.length})
+          </button>
+          {STAFF_ROLES.map((r) => (
+            <button
+              key={r.key}
+              onClick={() => setRoleFilter(r.key)}
+              className={`gx-btn ${roleFilter === r.key ? "gx-btn-primary" : "gx-btn-ghost"} text-xs`}
+            >
+              {r.label.split(" (")[0]}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {filteredCandidates.map((cand) => {
+            const meetsPrestige = clubPrestige >= (cand.min_prestige || 50);
+            const isHiring = hiringBusy === cand.staff_id;
+            const usePremium = Boolean(marqueePremiums[cand.staff_id]);
+
+            return (
+              <div
+                key={cand.staff_id}
+                className="flex flex-col justify-between rounded-xl border border-white/10 bg-slate-900/60 p-4 space-y-3"
+              >
+                <div>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="font-bold text-white text-sm">{cand.name}</p>
+                      <p className="text-xs text-purple-300 font-semibold uppercase">{cand.role.replace(/_/g, " ")}</p>
+                    </div>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase border ${
+                        meetsPrestige
+                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                          : "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                      }`}
+                    >
+                      Min Prestige {cand.min_prestige || 50}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-300 mt-2 leading-relaxed">{cand.specialty}</p>
+
+                  <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
+                    <span>Base Wage:</span>
+                    <b className="gx-mono text-white">{fmt(cand.salary_gtex || 10000)} GTX / season</b>
+                  </div>
+
+                  {!meetsPrestige && (
+                    <label className="mt-3 flex items-center gap-2 rounded bg-amber-950/40 border border-amber-500/30 p-2 text-[10px] text-amber-200 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={usePremium}
+                        onChange={(e) =>
+                          setMarqueePremiums((prev) => ({ ...prev, [cand.staff_id]: e.target.checked }))
+                        }
+                        className="rounded border-amber-500/40 bg-slate-900 text-amber-500"
+                      />
+                      <span>Offer Marquee Wage Premium (+25% wage to bypass prestige deficit)</span>
+                    </label>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleHire(cand)}
+                  disabled={Boolean(hiringBusy) || (!meetsPrestige && !usePremium)}
+                  className={`w-full rounded-lg py-2 text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+                    meetsPrestige || usePremium
+                      ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-md"
+                      : "bg-slate-800 text-slate-500 cursor-not-allowed"
+                  }`}
+                  data-testid={`hire-staff-${cand.staff_id}`}
+                >
+                  <UserCheck size={14} />
+                  <span>
+                    {isHiring
+                      ? "Appointing…"
+                      : !meetsPrestige && !usePremium
+                      ? "Prestige Too Low"
+                      : "Appoint to Role"}
+                  </span>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </Panel>
+
+      {/* Staff AI Chat Modal */}
+      {chatRole && (
+        <StaffChatModal
+          clubId={club.club_id}
+          initialRole={chatRole}
+          appointedStaff={appointed}
+          onClose={() => setChatRole(null)}
+        />
+      )}
+    </section>
+  );
+}
+
 export default function Squad() {
   const location = useLocation();
   const navigate = useNavigate();
   const { active } = useActiveClub();
+  const [selectedPlayer, setSelectedPlayer] = useState<any | null>(null);
 
   const journeyParams = useMemo(() => readJourneyParams(location.search), [location.search]);
   const targetPlayerId = journeyParams.player;
@@ -432,12 +1126,24 @@ export default function Squad() {
         </div>
       )}
 
+      {/* 1. Competition Roster Registration */}
       <SquadRegistrationPanel club={club} targetPlayerId={targetPlayerId} />
-      <div className="grid gap-6 lg:grid-cols-12">
+
+      {/* 2. Executive & Staff Boardroom */}
+      <BoardroomSection club={club} />
+
+      {/* 3. Pitch Operations & Squad Roster */}
+      <div className="grid gap-6 lg:grid-cols-12 mt-6">
         <ManagerSheet club={club} />
-        <SquadTable club={club} targetPlayerId={targetPlayerId} />
+        <SquadTable club={club} targetPlayerId={targetPlayerId} onSelectPlayer={setSelectedPlayer} />
         <HireManager club={club} />
       </div>
+
+      {/* 4. Universal Player Dossier Drawer */}
+      <PlayerDrawer
+        playerId={selectedPlayer ? String(selectedPlayer.player_ref || selectedPlayer.player_id || selectedPlayer.id) : null}
+        onClose={() => setSelectedPlayer(null)}
+      />
     </div>
   );
 }

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, Integer, Numeric, String, Text, func
+from sqlalchemy import JSON, Boolean, Date, DateTime, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, UUIDPrimaryKeyMixin, utcnow
@@ -25,6 +25,10 @@ class OwnerClubState(UUIDPrimaryKeyMixin, Base):
     value_history_json: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
     world_day: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_tick_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Last GTEX world-calendar date simulated by the autonomous owner tick. Null
+    # means this state has not yet been anchored to the shared clock calendar.
+    last_world_tick_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    academy_intake_sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow, server_default=func.now()
     )

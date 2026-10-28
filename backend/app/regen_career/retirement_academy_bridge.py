@@ -31,7 +31,7 @@ class RegenRetirementAcademyBridge:
 
     @staticmethod
     def enabled() -> bool:
-        return os.getenv(ENABLED_ENV, "0").strip().lower() in {"1", "true", "yes", "on"}
+        return os.getenv(ENABLED_ENV, "1").strip().lower() in {"1", "true", "yes", "on"}
 
     def consume(self, *, state: dict[str, Any]) -> RetirementAcademyBridgeResult | None:
         plan = dict(state.get("legacy_intake_plan") or {})

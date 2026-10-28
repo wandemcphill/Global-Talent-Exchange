@@ -29,6 +29,7 @@ import { ClubStory } from "@/pages/ClubStory";
 import PublicClubProfile from "@/pages/PublicClubProfile";
 import { Newsroom } from "@/pages/Newsroom";
 import { Showroom } from "@/pages/Showroom";
+import Jackpot from "@/pages/Jackpot";
 import { ROUTER_BASENAME } from "@/lib/publicPath";
 
 export default function App() {
@@ -63,6 +64,7 @@ export default function App() {
             <Route path="academy" element={<Academy />} />
             <Route path="national" element={<NationalTeam />} />
             <Route path="finance" element={<Finance />} />
+            <Route path="jackpot" element={<Jackpot />} />
             <Route path="creator-access" element={<CreatorAccess />} />
             <Route path="coin-traders" element={<CoinTraders />} />
             <Route path="inbox" element={<InboxPage />} />

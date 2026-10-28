@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_admin, get_session
 from app.models.world_clock import WorldClockState
-from app.services.world_clock_service import DEFAULT_CLOCK_ID, WorldClockService
+from app.services.world_clock_service import DEFAULT_CLOCK_ID, WorldClockService, _as_utc
 from app.world_simulation.schemas import (
     ClubWorldContextView,
     ClubWorldProfileUpsertRequest,
@@ -50,6 +50,10 @@ def get_world_clock(session: Session = Depends(get_session)) -> WorldClockView:
         clock_id=state.id,
         world_time=world_time,
         world_date=world_time.date(),
+        virtual_start_time=_as_utc(state.virtual_start_time),
+        gtex_years_running=max(1, (world_time.year - _as_utc(state.virtual_start_time).year) + 1),
+        current_season_number=max(1, int((world_time - _as_utc(state.virtual_start_time)).days // 365) + 1),
+        current_season_label=f"GTEX Year {max(1, (world_time.year - _as_utc(state.virtual_start_time).year) + 1)} · Season {max(1, int((world_time - _as_utc(state.virtual_start_time)).days // 365) + 1)}",
         is_paused=bool(state.is_paused),
         progression_rate=float(state.progression_rate or 1.0),
         virtual_months_per_season=int(state.virtual_months_per_season or 12),

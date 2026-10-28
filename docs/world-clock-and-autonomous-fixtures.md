@@ -24,6 +24,14 @@ A fixture attempt runs inside a database savepoint so partial result/event/repla
 
 When Kafka brokers are absent and autonomous execution is enabled, `gtex-simulation-worker` polls the database on `GTE_AUTONOMOUS_FIXTURE_INTERVAL_SECONDS`. Row locking is used on PostgreSQL to prevent concurrent workers from claiming the same due fixture. The configured Render services and CI checks do not, by themselves, prove production end-to-end execution: production verification still requires evidence from the deployed clock row, worker health/logs, persisted results, standings, and idempotent settlement.
 
+## Owner-console simulation ticks
+
+The owner-console simulation tick is scheduled by `process_due_owner_world_ticks()`, which compares each active club's persisted `last_world_tick_date` with the current virtual date. The autonomous database-polling simulation worker runs this in its own transaction/session after the canonical fixture scan. It does not depend on the owner opening the control centre. Owner visits may trigger the same catch-up logic, but cannot advance an isolated club ahead of the shared virtual calendar.
+
+Catch-up is bounded per cycle. Backlogged clubs remain eligible on later cycles, and each day is isolated in a database savepoint so a failed club-day can be retried without rolling back another club's successful day. PostgreSQL row locks avoid concurrent worker/request ticks for the same club. SQLite tests do not prove PostgreSQL lock behavior or production worker health; those require separate verification.
+
+Legacy owner-console states only tracked a local `world_day` and wall-clock `last_tick_at`. Their historical world dates cannot be reconstructed honestly. The first scheduler pass preserves `world_day` and anchors previously ticked states to the current shared world date instead of replaying fabricated history. New active states with no tick receive one initial scheduled tick. Academy intake has its own persisted sequence, so an owner decision to request an intake does not advance the world date or private simulation day.
+
 ## Operational checks
 
 - Confirm the `world_clock_state` row exists and inspect the persisted UTC epoch, virtual start, rate, and pause state.

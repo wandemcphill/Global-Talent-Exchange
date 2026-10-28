@@ -85,6 +85,41 @@ class ShowroomGiftRequest(BaseModel):
     asset_id: str | None = None
     note: str = ""
     idempotency_key: str | None = None
+    recipient_type: str = "player"
+    staff_role: str | None = None
+
+
+class StaffHireRequest(BaseModel):
+    staff_id: str
+    role: str | None = None
+    marquee_wage_premium: bool = False
+
+
+class StaffFireRequest(BaseModel):
+    role: str | None = None
+
+
+class DelegationPolicyRequest(BaseModel):
+    mode: str = "balanced"
+    gm_transfer_autonomy: bool = True
+    hoyd_youth_contracts: bool = True
+    manager_tactics_autonomy: bool = True
+
+
+class StaffChatRequest(BaseModel):
+    role: str
+    message: str
+    topic: str = "general"
+
+
+class WinBonusRequest(BaseModel):
+    amount_gtex: int
+    note: str = ""
+
+
+class PressConferenceRequest(BaseModel):
+    tone: str
+    statement: str = ""
 
 
 class WatchlistAddRequest(BaseModel):
@@ -364,6 +399,8 @@ def gift_showroom(
         asset_id=body.asset_id,
         note=body.note,
         idempotency_key=body.idempotency_key,
+        recipient_type=body.recipient_type,
+        staff_role=body.staff_role,
     )
 
 
@@ -443,8 +480,26 @@ def intake(club_id: str, user=Depends(get_current_user), session: Session = Depe
 @router.post("/clubs/{club_id}/advance")
 def advance(club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
     def go():
+        # Advancing one club independently would violate the shared-world rule.
+        # Preserve this legacy endpoint as an owner-triggered catch-up request;
+        # the persisted global clock decides whether any simulation day is due.
         state = service.require_state(session, club_id, user.id)
-        return service.tick_club(session, state)
+        result = service.process_due_owner_world_ticks(
+            session,
+            user_id=user.id,
+            include_details=True,
+        )
+        session.refresh(state)
+        club_ticks = [row for row in result.get("tick_results", []) if row.get("club_id") == club_id]
+        latest_tick = club_ticks[-1] if club_ticks else None
+        return {
+            "club_id": club_id,
+            "world_day": state.world_day,
+            "new_items": int(latest_tick.get("new_items", 0)) if latest_tick else 0,
+            "growth": list(latest_tick.get("growth", [])) if latest_tick else [],
+            "advanced": bool(club_ticks),
+            "world_tick": result,
+        }
 
     return _run(session, go)
 
@@ -540,6 +595,8 @@ def control_center(user=Depends(get_current_user), session: Session = Depends(ge
             ][:6],
             "ticker": storytelling.list_ticker_events(session, user_id=user.id, limit=12),
             "newsroom": storytelling.list_newsroom_articles(session, user_id=user.id, limit=8),
+            "daily_briefing": storytelling.get_daily_briefing(session, user.id, states[0].club_id) if states else None,
+            "ecosystem_waterfall": ledger.ecosystem_waterfall_summary(session, states[0].club_id if states else None),
             "health": [service.club_health(session, s) for s in states],
             "board": board,
             "fixtures": {
@@ -881,6 +938,7 @@ def finance(user=Depends(get_current_user), session: Session = Depends(get_sessi
         "paystack_mode": "live" if (money.paystack_secret() or "").startswith("sk_live_") else "test",
         "treasury_rates": {k: str(v) for k, v in money.treasury_rates(session).items()},
         "withdrawal_processor_mode": "manual_bank_transfer",
+        "ecosystem_waterfall": ledger.ecosystem_waterfall_summary(session, states[0].club_id if states else None),
     }
 
 
@@ -1170,3 +1228,154 @@ def map_global_match_to_canonical(
         "canonical_match_id": mapping.canonical_match_id,
         "mapping_status": mapping.mapping_status,
     }
+
+
+# ---------- Executive Staff & Delegation ----------
+
+@router.get("/clubs/{club_id}/staff")
+def get_club_staff(
+    club_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(session, service.get_club_staff, session, user.id, club_id)
+
+
+@router.post("/clubs/{club_id}/staff/hire")
+def hire_club_staff(
+    club_id: str,
+    payload: StaffHireRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(
+        session,
+        service.hire_executive_staff,
+        session,
+        user.id,
+        club_id,
+        payload.staff_id,
+        role=payload.role,
+        marquee_wage_premium=payload.marquee_wage_premium,
+    )
+
+
+@router.post("/clubs/{club_id}/staff/{role}/fire")
+def fire_club_staff(
+    club_id: str,
+    role: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(session, service.fire_executive_staff, session, user.id, club_id, role)
+
+
+@router.put("/clubs/{club_id}/delegation")
+def update_delegation(
+    club_id: str,
+    payload: DelegationPolicyRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(session, service.update_delegation_policy, session, user.id, club_id, payload.model_dump())
+
+
+# ---------- Daily AI Briefing & Boardroom Chat ----------
+
+@router.get("/clubs/{club_id}/briefing")
+def get_daily_briefing(
+    club_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(session, storytelling.get_daily_briefing, session, user.id, club_id, force_refresh=False)
+
+
+@router.post("/clubs/{club_id}/briefing/generate")
+def generate_daily_briefing(
+    club_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(session, storytelling.get_daily_briefing, session, user.id, club_id, force_refresh=True)
+
+
+@router.get("/clubs/{club_id}/staff/chat")
+def get_staff_chat(
+    club_id: str,
+    role: str | None = Query(default=None),
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(session, storytelling.get_staff_chat_history, session, user.id, club_id, role=role)
+
+
+@router.post("/clubs/{club_id}/staff/chat")
+def post_staff_chat(
+    club_id: str,
+    payload: StaffChatRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(
+        session,
+        storytelling.converse_with_staff,
+        session,
+        user.id,
+        club_id,
+        payload.role,
+        payload.message,
+        payload.topic,
+    )
+
+
+# ---------- Academy Contract & Promotion Pipeline ----------
+
+@router.post("/clubs/{club_id}/academy/{player_id}/contract")
+def offer_academy_contract(
+    club_id: str,
+    player_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(session, service.academy_contract, session, user.id, club_id, player_id)
+
+
+@router.post("/clubs/{club_id}/academy/{player_id}/promote")
+def promote_academy_player(
+    club_id: str,
+    player_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(session, service.academy_promote, session, user.id, club_id, player_id)
+
+
+# ---------- Ecosystem Waterfall, Win Bonus & Press Conference ----------
+
+@router.get("/economy/waterfall")
+def get_waterfall(
+    club_id: str | None = Query(default=None),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return ledger.ecosystem_waterfall_summary(session, club_id=club_id)
+
+
+@router.post("/clubs/{club_id}/win-bonus")
+def pledge_win_bonus(
+    club_id: str,
+    payload: WinBonusRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(session, service.pledge_win_bonus, session, user.id, club_id, payload.amount_gtex, payload.note)
+
+
+@router.post("/clubs/{club_id}/press-conference")
+def hold_press_conference(
+    club_id: str,
+    payload: PressConferenceRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(session, service.conduct_press_conference, session, user.id, club_id, payload.tone, payload.statement)

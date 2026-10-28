@@ -66,6 +66,12 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "image_file": "sovereign_900x_jet.webp",
         "description": "Executive intercontinental aircraft for continental away fixtures and owner mobility.",
         "can_gift_to_player": True,
+        "can_gift_to_staff": True,
+        "staff_mood_boost": 18,
+        "staff_loyalty_boost": 4,
+        "academy_ceiling_bonus": 4,
+        "transfer_pull_bonus": 8,
+        "staff_pull_bonus": 8,
     },
     "gulfstream_g700_exec_jet": {
         "catalog_key": "gulfstream_g700_exec_jet",
@@ -78,6 +84,12 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "image_file": "sovereign_900x_jet.webp",
         "description": "Ultra-long-range boardroom in the sky featuring bespoke club livery and recovery suites.",
         "can_gift_to_player": True,
+        "can_gift_to_staff": True,
+        "staff_mood_boost": 20,
+        "staff_loyalty_boost": 5,
+        "academy_ceiling_bonus": 5,
+        "transfer_pull_bonus": 10,
+        "staff_pull_bonus": 10,
     },
     "vanguard_xii_coach": {
         "catalog_key": "vanguard_xii_coach",
@@ -90,6 +102,12 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "image_file": "vanguard_xii_coach.webp",
         "description": "Armored luxury transit for matchday squad arrivals with custom tactical review screens.",
         "can_gift_to_player": False,
+        "can_gift_to_staff": True,
+        "staff_mood_boost": 12,
+        "staff_loyalty_boost": 2,
+        "academy_ceiling_bonus": 1,
+        "transfer_pull_bonus": 2,
+        "staff_pull_bonus": 2,
     },
     "veloce_gt9_hypercar": {
         "catalog_key": "veloce_gt9_hypercar",
@@ -102,6 +120,12 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "image_file": "veloce_gt9_hypercar.webp",
         "description": "Hand-built performance vehicle. Kept in private owner collection unless gifted to a star player.",
         "can_gift_to_player": True,
+        "can_gift_to_staff": True,
+        "staff_mood_boost": 16,
+        "staff_loyalty_boost": 3,
+        "academy_ceiling_bonus": 2,
+        "transfer_pull_bonus": 4,
+        "staff_pull_bonus": 4,
     },
     "chronos_tourbillon_watch": {
         "catalog_key": "chronos_tourbillon_watch",
@@ -114,6 +138,12 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "image_file": "chronos_tourbillon_watch.webp",
         "description": "Haute horlogerie timepiece. Perfect personal milestone gift for squad leaders and regens.",
         "can_gift_to_player": True,
+        "can_gift_to_staff": True,
+        "staff_mood_boost": 15,
+        "staff_loyalty_boost": 3,
+        "academy_ceiling_bonus": 1,
+        "transfer_pull_bonus": 2,
+        "staff_pull_bonus": 2,
     },
     "penthouse_box_suite": {
         "catalog_key": "penthouse_box_suite",
@@ -126,6 +156,12 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "image_file": "arena_imperiale_stadium.webp",
         "description": "VIP private salon inside the stadium for high-stakes investor hosting and sponsor meetings.",
         "can_gift_to_player": False,
+        "can_gift_to_staff": True,
+        "staff_mood_boost": 14,
+        "staff_loyalty_boost": 3,
+        "academy_ceiling_bonus": 1,
+        "transfer_pull_bonus": 3,
+        "staff_pull_bonus": 3,
     },
 }
 
@@ -747,7 +783,7 @@ def record_match_news_article(
 
 
 def get_club_showroom(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
-    require_state(session, club_id, user_id)
+    state = require_state(session, club_id, user_id)
     items = []
     for k, v in SHOWROOM_CATALOG.items():
         items.append(
@@ -808,9 +844,13 @@ def get_club_showroom(session: Session, user_id: str, club_id: str) -> dict[str,
                 "created_at": b.created_at.isoformat() if b.created_at else None,
             }
         )
+    club_prestige = int(getattr(state, "prestige", 45))
+    from app.owner_console import engine
     return {
         "catalog": items,
         "owned_assets": owned,
+        "club_prestige": club_prestige,
+        "prestige_tier": engine.prestige_tier_label(club_prestige),
     }
 
 
@@ -1128,8 +1168,100 @@ def gift_asset_to_squad_player(
     asset_id: str | None = None,
     note: str = "",
     idempotency_key: str | None = None,
+    recipient_type: str = "player",
+    staff_role: str | None = None,
 ) -> dict[str, Any]:
-    require_state(session, club_id, user_id)
+    state = require_state(session, club_id, user_id)
+    from app.owner_console import engine
+
+    is_staff = (
+        recipient_type == "staff"
+        or staff_role is not None
+        or str(player_id).startswith("staff:")
+        or str(player_id) in engine.EXECUTIVE_STAFF_ROLES
+        or str(player_id) == "manager"
+    )
+
+    if is_staff:
+        role = staff_role or (str(player_id).split("staff:")[-1] if str(player_id).startswith("staff:") else str(player_id))
+        if role == "manager":
+            role = "first_team_manager"
+        item_key = catalog_key or "chronos_tourbillon_watch"
+        item = SHOWROOM_CATALOG.get(item_key)
+        if not item or not item.get("can_gift_to_staff", True):
+            raise OwnerError("invalid_gift_item", 400, "Item cannot be gifted to staff.")
+
+        price = Decimal(str(item["price_gtex"]))
+        club_acct = ledger.club_account(club_id)
+        bal = ledger.balance(session, club_acct, ledger.GTEX)
+        if bal < price:
+            raise OwnerError("insufficient_club_cash", 400, f"Club cash {bal} GTX is insufficient for {price} GTX gift.")
+
+        facs = dict(state.facilities_json or {})
+        exec_staff = dict(facs.get("_executive_staff") or {})
+        target_staff = exec_staff.get(role)
+        if not target_staff:
+            if role == "first_team_manager":
+                target_staff = dict(state.manager_json or engine.manager_profile(engine.DEFAULT_MANAGER))
+            else:
+                candidate = next((c for c in engine.EXECUTIVE_STAFF_CATALOG if c["role"] == role), None)
+                target_staff = dict(candidate) if candidate else {"id": f"staff_{role}", "name": role.replace("_", " ").title(), "role": role}
+
+        mood_boost = int(item.get("staff_mood_boost", 15))
+        loyalty_boost = int(item.get("staff_loyalty_boost", 3))
+        target_staff["mood"] = min(100, int(target_staff.get("mood", 70)) + mood_boost)
+        target_staff["loyalty"] = min(20, int(target_staff.get("loyalty", 12)) + loyalty_boost)
+
+        if role == "first_team_manager":
+            state.manager_json = target_staff
+        exec_staff[role] = target_staff
+        facs["_executive_staff"] = exec_staff
+        state.facilities_json = facs
+
+        leg = ledger.record(
+            session,
+            event_type="staff_luxury_gift",
+            currency=ledger.GTEX,
+            gross=price,
+            source=club_acct,
+            destination=ledger.WORLD_CLUBS,
+            user_id=user_id,
+            club_id=club_id,
+            memo=f"Gifted {item['name']} to {target_staff.get('name')}",
+        )
+
+        image_url = resolve_showroom_image_url(item_key)
+        broadcast = record_verified_broadcast_event(
+            session,
+            event_type="staff_gift",
+            club_id=club_id,
+            owner_user_id=user_id,
+            item_name=item["name"],
+            item_model=item.get("model"),
+            item_image_url=image_url,
+            verified_price_gtex=price,
+            ledger_event_id=leg.id,
+            idempotency_key=idempotency_key,
+        )
+
+        return {
+            "recipient_type": "staff",
+            "staff": {
+                "id": target_staff.get("id") or target_staff.get("staff_id") or role,
+                "role": role,
+                "name": target_staff.get("name", "Staff Member"),
+                "mood": target_staff["mood"],
+                "loyalty": target_staff["loyalty"],
+            },
+            "mood_delta": mood_boost,
+            "loyalty_delta": loyalty_boost,
+            "asset": {
+                "catalog_key": item_key,
+                "custom_name": item["name"],
+                "image_url": image_url,
+            },
+            "broadcast_event": broadcast_dict(broadcast) if broadcast else None,
+        }
     item_key = catalog_key or "chronos_tourbillon_watch"
     item = SHOWROOM_CATALOG.get(item_key)
     if not item or not item.get("can_gift_to_player"):
@@ -1737,4 +1869,180 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
         "club_news": club_news,
         "achievements": achievements,
         "owner_legacy": owner_legacy,
+    }
+
+
+# ---------- Daily AI Briefing & Boardroom Conversations ----------
+
+def get_daily_briefing(session: Session, user_id: str, club_id: str, force_refresh: bool = False) -> dict[str, Any]:
+    from sqlalchemy import func
+    from app.owner_console import engine, ledger
+    state = require_state(session, club_id, user_id)
+    world_day = state.world_day
+    cash_bal = float(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX))
+    squad_players = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
+    squad_size = len(squad_players)
+    avg_morale = int(sum(p.morale for p in squad_players) / max(1, squad_size))
+    ready_prospects = sum(1 for p in squad_players if p.is_regen and p.rating >= 58)
+    open_decisions = session.scalar(
+        select(func.count(OwnerInboxItem.id)).where(OwnerInboxItem.club_id == club_id, OwnerInboxItem.status == "open")
+    ) or 0
+    tier_label = engine.prestige_tier_label(state.prestige)
+
+    facs = dict(state.facilities_json or {})
+    cached = facs.get("_daily_briefing")
+    if cached and not force_refresh and cached.get("world_day") == world_day:
+        return cached
+
+    gm = (facs.get("_executive_staff") or {}).get("general_manager") or {
+        "name": "Dayo Adeleke", "role_label": "General Manager"
+    }
+    mgr = state.manager_json or engine.manager_profile(engine.DEFAULT_MANAGER)
+    hoyd = (facs.get("_executive_staff") or {}).get("head_of_youth_development") or {
+        "name": "Femi Ogunleye", "role_label": "Head of Youth Development"
+    }
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    briefing = {
+        "id": f"briefing:{club_id}:{world_day}",
+        "club_id": club_id,
+        "world_day": world_day,
+        "headline": f"Daily Owner Briefing · {state.club_name or 'Club'} ({tier_label})",
+        "summary": f"Treasury stands at {cash_bal:,.0f} GTEX. Squad morale average is {avg_morale}% across {squad_size} players with {ready_prospects} academy talents pushing for senior minutes.",
+        "body": f"Good morning, Director. Here is your daily operational digest for World Day {world_day}. The executive staff has prepared their status reports below.",
+        "created_at": now_iso,
+        "generated_at": now_iso,
+        "metrics": {
+            "cash_gtex": int(cash_bal),
+            "prestige": state.prestige,
+            "prestige_tier": tier_label,
+            "squad_size": squad_size,
+            "avg_morale": avg_morale,
+            "ready_academy_prospects": ready_prospects,
+            "open_decisions": open_decisions,
+        },
+        "sections": [
+            {
+                "role": "General Manager",
+                "sender": gm.get("name", "General Manager"),
+                "title": "Treasury & Commercial Pulse",
+                "summary": f"Club liquidity is stable at {cash_bal:,.0f} GTEX. Commercial partnerships and matchday revenues are on schedule.",
+            },
+            {
+                "role": "First-Team Manager",
+                "sender": mgr.get("name", "First-Team Manager"),
+                "title": "Squad Morale & Match Readiness",
+                "summary": f"First-team dressing room morale is at {avg_morale}%. Tactical cohesion is progressing well toward our next competitive fixture.",
+            },
+            {
+                "role": "Head of Youth Development",
+                "sender": hoyd.get("name", "Head of Youth Development"),
+                "title": "Academy Pipeline & First-Team Readiness",
+                "summary": f"We have {ready_prospects} academy prospects displaying senior-level technical attributes and ready for first-team integration.",
+            },
+        ],
+    }
+
+    facs["_daily_briefing"] = briefing
+    state.facilities_json = facs
+    return briefing
+
+
+def get_staff_chat_history(session: Session, user_id: str, club_id: str, role: str | None = None) -> dict[str, Any]:
+    state = require_state(session, club_id, user_id)
+    facs = dict(state.facilities_json or {})
+    all_history = list(facs.get("_staff_chat_history") or [])
+    if role:
+        filtered = [m for m in all_history if m.get("role") == role]
+    else:
+        filtered = all_history
+    return {
+        "club_id": club_id,
+        "role": role,
+        "messages": filtered[-30:],
+        "history": filtered[-30:],
+    }
+
+
+def converse_with_staff(session: Session, user_id: str, club_id: str, role: str, message: str, topic: str = "general") -> dict[str, Any]:
+    import secrets
+    from app.owner_console import engine, ledger
+    state = require_state(session, club_id, user_id)
+    facs = dict(state.facilities_json or {})
+    exec_staff = dict(facs.get("_executive_staff") or {})
+
+    # Resolve staff persona
+    target_staff = exec_staff.get(role)
+    if not target_staff:
+        if role in ("first_team_manager", "manager"):
+            target_staff = dict(state.manager_json or engine.manager_profile(engine.DEFAULT_MANAGER))
+        else:
+            cand = next((c for c in engine.EXECUTIVE_STAFF_CATALOG if c["role"] == role), None)
+            target_staff = dict(cand) if cand else {"name": role.replace("_", " ").title(), "role": role, "style": "Pragmatic Professional", "mood": 75}
+
+    staff_name = target_staff.get("name", "Staff Member")
+    cash_bal = float(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX))
+    tier = engine.prestige_tier_label(state.prestige)
+    squad_players = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
+    player_names = [p.name for p in squad_players[:3]]
+
+    # Grounded response generation
+    reply_text = ""
+    msg_lower = message.lower()
+    if role == "general_manager":
+        if "budget" in msg_lower or "cash" in msg_lower or "money" in msg_lower:
+            reply_text = f"Director, our balance is currently {cash_bal:,.0f} GTEX. Operating within our means at {tier} level keeps our wage-to-turnover ratio healthy."
+        elif "transfer" in msg_lower or "sign" in msg_lower:
+            reply_text = f"Our recruitment desk has flagged several intriguing market opportunities. Given our {tier} status, we can target high-ceiling players without overpaying on fees."
+        else:
+            reply_text = f"Understood, Director. As General Manager, I'm aligning our commercial and sporting operations to ensure long-term stability and success."
+    elif role in ("first_team_manager", "manager"):
+        if "tactics" in msg_lower or "formation" in msg_lower:
+            reply_text = f"Tactically, I'm tailoring our shape to match our squad's strengths. Leaders like {player_names[0] if player_names else 'our key players'} set the tempo in training."
+        elif "morale" in msg_lower or "mood" in msg_lower:
+            reply_text = f"The boys are hungry. Mood in the dressing room is focused, and we're ready to put everything on the line in our next match."
+        else:
+            reply_text = f"Message received, Boss. My staff and I are entirely committed to delivering three points on matchday."
+    elif role == "head_of_youth_development":
+        reply_text = f"The academy pipeline is advancing nicely. We've got raw talent grinding in daily drills, and with our facilities, we'll see several breakout stars ready for senior promotion."
+    elif role == "chief_scout":
+        reply_text = f"Our scouting network is constantly updating player performance dossiers across the region. We're prioritizing gems with high development headroom and sound temperament."
+    elif role == "medical_director":
+        reply_text = f"Medical room report: player workloads and recovery protocols are being strictly monitored to minimize muscular injuries and maximize match availability."
+    else:
+        reply_text = f"Thank you for the guidance, Director. I am completely focused on executing our club's strategy."
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    user_entry = {
+        "id": f"msg:{club_id}:{secrets.token_hex(4)}",
+        "role": role,
+        "sender": "Owner",
+        "sender_type": "owner",
+        "message": message,
+        "topic": topic,
+        "created_at": now_iso,
+    }
+    staff_entry = {
+        "id": f"msg:{club_id}:{secrets.token_hex(4)}",
+        "role": role,
+        "sender": staff_name,
+        "sender_type": "staff",
+        "message": reply_text,
+        "topic": topic,
+        "created_at": now_iso,
+    }
+
+    history = list(facs.get("_staff_chat_history") or [])
+    history.extend([user_entry, staff_entry])
+    facs["_staff_chat_history"] = history[-30:]
+    state.facilities_json = facs
+
+    return {
+        "role": role,
+        "staff_name": staff_name,
+        "reply": reply_text,
+        "user_message": user_entry,
+        "staff_message": staff_entry,
+        "history": history[-30:],
+        "messages": history[-30:],
     }

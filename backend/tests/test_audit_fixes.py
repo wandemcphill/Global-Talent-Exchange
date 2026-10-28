@@ -9,10 +9,15 @@ from sqlalchemy.pool import StaticPool
 from app.models.base import Base
 import app.models  # noqa: F401
 from app.models.club_profile import ClubProfile
-from app.models.club_growth import ClubStaffContract, ClubStaffAssignment, ClubStaffProfile
+from app.models.club_growth import ClubStaffContract, ClubStaffAssignment
 from app.models.hosted_competition import CompetitionTemplate
 from app.models.user import User
-from app.club_growth.staff_role_policy import ROLE_FIRST_TEAM_MANAGER, normalise_staff_role
+from app.club_growth.staff_role_policy import (
+    ROLE_FIRST_TEAM_MANAGER,
+    ROLE_GENERAL_MANAGER,
+    ROLE_HEAD_OF_YOUTH_DEVELOPMENT,
+    normalise_staff_role,
+)
 from app.owner_console.service import appoint_manager, fire_manager
 from app.owner_console.models import OwnerClubState
 from app.hosted_competition_engine.service import HostedCompetitionService
@@ -31,9 +36,11 @@ def db_session():
         yield session
 
 
-def test_fix_4_normalise_staff_role_supports_gm():
-    assert normalise_staff_role("gm") == ROLE_FIRST_TEAM_MANAGER
-    assert normalise_staff_role("general_manager") == ROLE_FIRST_TEAM_MANAGER
+def test_fix_4_normalise_staff_role_keeps_leadership_roles_distinct():
+    assert normalise_staff_role("gm") == ROLE_GENERAL_MANAGER
+    assert normalise_staff_role("general_manager") == ROLE_GENERAL_MANAGER
+    assert normalise_staff_role("hoyd") == ROLE_HEAD_OF_YOUTH_DEVELOPMENT
+    assert normalise_staff_role("head_of_youth_development") == ROLE_HEAD_OF_YOUTH_DEVELOPMENT
     assert normalise_staff_role("head_coach") == ROLE_FIRST_TEAM_MANAGER
     assert normalise_staff_role("manager") == ROLE_FIRST_TEAM_MANAGER
 
@@ -52,7 +59,9 @@ def test_fix_4_owner_appoint_and_fire_manager_syncs_club_growth(db_session):
         accent_color="#ff0000",
     )
     db_session.add(club)
-    state = OwnerClubState(club_id="club_test_mgr", owner_user_id="user_test_mgr", club_name="Test Manager FC", stage="competition")
+    state = OwnerClubState(
+        club_id="club_test_mgr", owner_user_id="user_test_mgr", club_name="Test Manager FC", stage="competition"
+    )
     db_session.add(state)
     db_session.commit()
 
@@ -86,8 +95,21 @@ def test_fix_4_owner_appoint_and_fire_manager_syncs_club_growth(db_session):
     # Fire manager
     try:
         from app.models.wallet import LedgerAccount, LedgerAccountKind, LedgerUnit
-        acc = LedgerAccount(id="acc_club", owner_id="club_test_mgr", kind=LedgerAccountKind.CLUB_TREASURY, unit=LedgerUnit.GTEX_COIN, balance_minor=10000000)
-        world_acc = LedgerAccount(id="world_clubs", owner_id="world_clubs", kind=LedgerAccountKind.WORLD_POOL, unit=LedgerUnit.GTEX_COIN, balance_minor=0)
+
+        acc = LedgerAccount(
+            id="acc_club",
+            owner_id="club_test_mgr",
+            kind=LedgerAccountKind.CLUB_TREASURY,
+            unit=LedgerUnit.GTEX_COIN,
+            balance_minor=10000000,
+        )
+        world_acc = LedgerAccount(
+            id="world_clubs",
+            owner_id="world_clubs",
+            kind=LedgerAccountKind.WORLD_POOL,
+            unit=LedgerUnit.GTEX_COIN,
+            balance_minor=0,
+        )
         db_session.add(acc)
         db_session.add(world_acc)
         db_session.commit()

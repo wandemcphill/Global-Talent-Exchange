@@ -2,8 +2,9 @@ import React, { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Coins, Flame, Sparkles, Tv, Trophy } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
-import { useControlCenter, useRefreshOwner } from "@/lib/owner";
+import { fmt, useControlCenter, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Coin, Loading, PageHeader, Panel } from "@/components/gtex/ui";
 
 function Standings({ rows, myIds }: any) {
@@ -93,6 +94,42 @@ export default function CompetitionDetail() {
         <Panel eyebrow="Table" title="Standings" className="lg:col-span-7" testid="standings-panel"><Standings rows={comp.standings} myIds={myIds} /></Panel>
         <Panel eyebrow="Pre-match" title="Owner decisions" className="lg:col-span-5" live testid="owner-match-panel">
           {myIds.length ? <PlayPanel comp={comp} clubId={myClub} /> : <p className="text-sm text-slate-400">You haven't entered this competition.</p>}
+        </Panel>
+        {/* Ecosystem Waterfall & Broadcast Revenue Panel */}
+        <Panel eyebrow="Ecosystem Economics" title="TV Rights & Prize Distribution Waterfall" className="lg:col-span-12" testid="competition-waterfall-panel">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl border border-white/10 bg-black/40 p-3.5">
+              <p className="text-[10px] uppercase font-bold text-slate-400">Competition Prize Pool</p>
+              <p className="gx-mono text-xl font-black text-amber-300 mt-1">{fmt(comp.prize_pool)} <span className="text-xs">GTX</span></p>
+              <p className="text-[10px] text-slate-400 mt-0.5">35% Ecosystem allocation</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-black/40 p-3.5">
+              <p className="text-[10px] uppercase font-bold text-slate-400">TV & Broadcast Rights</p>
+              <p className="gx-mono text-xl font-black text-cyan-300 mt-1">{fmt(comp.broadcast_pool ?? Math.round(Number(comp.prize_pool || 0) * 1.14))} <span className="text-xs">GTX</span></p>
+              <p className="text-[10px] text-slate-400 mt-0.5">40% Matchday broadcast share</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-black/40 p-3.5">
+              <p className="text-[10px] uppercase font-bold text-slate-400">Participation Grants</p>
+              <p className="gx-mono text-xl font-black text-emerald-300 mt-1">{fmt(comp.participation_grant ?? 2500)} <span className="text-xs">GTX / club</span></p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Base stipend per entrant</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-black/40 p-3.5">
+              <p className="text-[10px] uppercase font-bold text-slate-400">Jackpot Contribution</p>
+              <p className="gx-mono text-xl font-black text-purple-300 mt-1">{fmt(comp.jackpot_contribution ?? Math.round(Number(comp.prize_pool || 0) * 0.71))} <span className="text-xs">GTX</span></p>
+              <p className="text-[10px] text-slate-400 mt-0.5">25% Recycled to Global Jackpot</p>
+            </div>
+          </div>
+          <div className="mt-4 rounded-xl border border-dashed border-emerald-500/30 bg-emerald-950/20 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-emerald-200">
+            <div className="flex items-center gap-2">
+              <Sparkles size={15} className="text-emerald-400 shrink-0" />
+              <span>
+                Canonical Waterfall: <b>40% TV Broadcast Rights</b> · <b>35% Competition Prize Pool</b> · <b>25% Global Jackpot Pool</b>
+              </span>
+            </div>
+            <Link to="/app/jackpot" className="gx-btn gx-btn-secondary text-[11px] py-1 px-3 w-fit">
+              View Global Jackpot →
+            </Link>
+          </div>
         </Panel>
         <Panel eyebrow="Schedule" title="Fixtures" className="lg:col-span-12" testid="fixtures-panel">
           <div className="grid gap-4 md:grid-cols-3">

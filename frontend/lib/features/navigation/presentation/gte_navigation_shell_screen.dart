@@ -1,3 +1,4 @@
+import 'package:gte_frontend/features/owner_console/widgets/gtex_world_clock_panel.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -1451,6 +1452,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
 
   List<Widget> _buildShellV3ExtraActions(BuildContext context) {
     final List<Widget> actions = <Widget>[
+      const GtexWorldClockHeaderPill(),
       _buildThemePickerAction(context),
       _buildAmbientAction(),
     ];

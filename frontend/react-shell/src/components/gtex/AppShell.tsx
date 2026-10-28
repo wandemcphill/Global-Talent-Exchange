@@ -5,8 +5,10 @@ import {
   BookOpen,
   Building2,
   CandlestickChart,
+  Clock,
   Compass,
   Flag,
+  Flame,
   Gauge,
   Globe,
   Inbox,
@@ -25,11 +27,13 @@ import { useAuth } from "@/lib/auth";
 import { fmt, useActiveClub, useControlCenter } from "@/lib/owner";
 import { Loading } from "@/components/gtex/ui";
 import { GlobalLiveTicker } from "@/components/gtex/GlobalLiveTicker";
+import { formatWorldDate, formatWorldTime, useWorldClock } from "@/lib/worldClock";
 
 const NAV = [
   { to: "/app", label: "Control Center", icon: Gauge, end: true, id: "home" },
   { to: "/app/clubs", label: "My Clubs", icon: Building2, id: "clubs" },
   { to: "/app/showroom", label: "Showroom", icon: Sparkles, id: "showroom" },
+  { to: "/app/jackpot", label: "Global Jackpot", icon: Flame, id: "jackpot" },
   { to: "/app/story", label: "Club Story", icon: BookOpen, id: "story" },
   { to: "/app/newsroom", label: "AI Newsroom", icon: Newspaper, id: "newsroom" },
   { to: "/app/transfer-hub", label: "Transfer Hub", icon: Compass, id: "transfers" },
@@ -101,6 +105,27 @@ function ClubSwitcher() {
   );
 }
 
+function GlobalWorldClockPill() {
+  const { data: clock } = useWorldClock();
+  if (!clock) return null;
+  return (
+    <div
+      data-testid="global-world-clock-pill"
+      className="hidden md:flex items-center gap-2 rounded-full border border-sky-400/30 bg-sky-950/40 px-3 py-1 text-[11px] font-medium text-sky-200"
+      title={`Authoritative GTEX World Clock · ${clock.isPaused ? "Paused" : "Running"}`}
+    >
+      <Clock size={13} className="text-amber-300 shrink-0" />
+      <span className="font-bold text-amber-300">
+        {clock.currentSeasonLabel || `GTEX Year ${clock.gtexYearsRunning || 1}`}
+      </span>
+      <span className="text-white/40">·</span>
+      <span className="gx-mono text-white">{formatWorldDate(clock.worldDate)}</span>
+      <span className="text-white/40">·</span>
+      <span className="gx-mono text-sky-300">{formatWorldTime(clock.worldTime)}</span>
+    </div>
+  );
+}
+
 export default function AppShell() {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
@@ -162,7 +187,7 @@ export default function AppShell() {
   const normalNav = hasActiveClub
     ? NAV
     : NAV.filter((item) =>
-        ["home", "clubs", "showroom", "regen-world", "awards", "market", "competitions", "national", "finance", "creator-access", "coin-traders"].includes(item.id),
+        ["home", "clubs", "showroom", "jackpot", "regen-world", "awards", "market", "competitions", "national", "finance", "creator-access", "coin-traders"].includes(item.id),
       );
   const visibleNav = isTraderAccount
     ? NAV.filter((item) => ["coin-traders", "finance"].includes(item.id))
@@ -232,6 +257,7 @@ export default function AppShell() {
         <header className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-white/[0.08] bg-slate-950/85 px-4 py-3 backdrop-blur-xl sm:px-8">
           <p className="gx-display text-xl font-black text-white lg:hidden">GTEX</p>
           {!isDedicatedAccount && <ClubSwitcher />}
+          <GlobalWorldClockPill />
 
           <div className="ml-auto flex items-center gap-4 text-xs">
             {hasActiveClub ? (

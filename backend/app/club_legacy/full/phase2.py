@@ -135,11 +135,11 @@ def roll_prospect(*, quality: int, prestige: int, seed: int) -> dict[str, Any]:
     star_roll = rng.random()
     good_roll = rng.random()
     gem_roll = rng.random()
-    small_club = int(prestige) < 35
+    gem_chance = 0.05 + max(0.0, min(0.18, (int(prestige) - 30) * 0.0025))
     if star_roll < star_chance(quality):
         potential = rng.randint(86, 93)
         band = "high"
-    elif good_roll < good_prospect_chance(quality) or (small_club and gem_roll < 0.15):
+    elif good_roll < good_prospect_chance(quality) or gem_roll < gem_chance:
         potential = rng.randint(75, 85)
         band = "good"
     else:

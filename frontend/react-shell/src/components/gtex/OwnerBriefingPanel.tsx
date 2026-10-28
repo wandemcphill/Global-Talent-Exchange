@@ -1,11 +1,31 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { Newspaper, AlertTriangle, ArrowRight } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
+import {
+  Newspaper,
+  AlertTriangle,
+  ArrowRight,
+  RefreshCw,
+  Sparkles,
+  ShieldAlert,
+  Users,
+  Coins,
+  Award,
+  Sprout,
+  UserCheck,
+} from "lucide-react";
+import { api, errMsg } from "@/lib/api";
+import { fmt } from "@/lib/owner";
 import {
   briefingTargetLabel,
   briefingTargetPath,
+  clubBriefingEndpoint,
+  clubBriefingGenerateEndpoint,
   useOwnerBriefing,
   type BriefingViewState,
+  type DailyBriefing,
+  type StaffBriefingSection,
 } from "@/lib/ownerBriefing";
 
 const SHELL =
@@ -121,8 +141,171 @@ export function OwnerBriefingView({ state, onRetry }: { state: BriefingViewState
   );
 }
 
-export function OwnerBriefingPanel() {
-  return <OwnerBriefingView state={useOwnerBriefing()} />;
+function RoleBadge({ role }: { role: string }) {
+  const norm = String(role || "").toLowerCase();
+  if (norm.includes("gm") || norm.includes("general")) {
+    return <span className="rounded bg-purple-900/40 text-purple-300 border border-purple-500/30 px-2 py-0.5 text-[10px] font-black uppercase">General Manager</span>;
+  }
+  if (norm.includes("hoyd") || norm.includes("youth")) {
+    return <span className="rounded bg-emerald-900/40 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-black uppercase">Head of Youth Dev</span>;
+  }
+  return <span className="rounded bg-sky-900/40 text-sky-300 border border-sky-500/30 px-2 py-0.5 text-[10px] font-black uppercase">First-Team Manager</span>;
+}
+
+export function OwnerBriefingPanel({
+  clubId,
+  initialData,
+}: {
+  clubId?: string;
+  initialData?: DailyBriefing | null;
+}) {
+  const [busyGenerating, setBusyGenerating] = useState(false);
+
+  const {
+    data: fetchedData,
+    isLoading,
+    refetch,
+  } = useQuery({
+    queryKey: ["owner-daily-briefing", clubId],
+    queryFn: async () => {
+      if (!clubId) return null;
+      try {
+        const { data } = await api.get(clubBriefingEndpoint(clubId));
+        return data as DailyBriefing;
+      } catch {
+        return null;
+      }
+    },
+    enabled: Boolean(clubId),
+    initialData: initialData || undefined,
+  });
+
+  const briefing = fetchedData || initialData;
+
+  const handleGenerate = async () => {
+    if (!clubId) return;
+    setBusyGenerating(true);
+    try {
+      await api.post(clubBriefingGenerateEndpoint(clubId));
+      await refetch();
+      toast.success("Fresh AI owner briefing compiled by club staff.");
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusyGenerating(false);
+    }
+  };
+
+  if (!clubId && !briefing) {
+    return <OwnerBriefingView state={useOwnerBriefing()} />;
+  }
+
+  if (isLoading && !briefing) {
+    return (
+      <section className={SHELL} data-testid="owner-briefing">
+        <div className="flex items-center gap-2">
+          <Newspaper size={16} className="text-amber-300" />
+          <h2 className="gx-eyebrow !m-0">Owner daily briefing</h2>
+        </div>
+        <p className="mt-4 text-sm text-slate-300">Loading your executive briefing…</p>
+      </section>
+    );
+  }
+
+  const sections: StaffBriefingSection[] = briefing?.sections || [];
+  const metrics = briefing?.metrics;
+
+  return (
+    <section className={SHELL} data-testid="owner-briefing" aria-labelledby="owner-briefing-heading">
+      <div className="flex items-center justify-between border-b border-white/10 pb-3">
+        <div className="flex items-center gap-2">
+          <Newspaper size={16} className="text-amber-300" />
+          <h2 id="owner-briefing-heading" className="gx-eyebrow !m-0">
+            Owner Daily Briefing
+          </h2>
+          {briefing?.world_day && (
+            <span className="gx-mono text-[10px] text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded">
+              Day {briefing.world_day}
+            </span>
+          )}
+        </div>
+        {clubId && (
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={busyGenerating}
+            className="flex items-center gap-1.5 text-xs text-sky-300 hover:text-sky-200 font-bold uppercase transition"
+            title="Generate a fresh daily briefing from GM, Manager & HOYD"
+          >
+            <RefreshCw size={13} className={busyGenerating ? "animate-spin" : ""} />
+            <span>{busyGenerating ? "Compiling…" : "Refresh"}</span>
+          </button>
+        )}
+      </div>
+
+      {briefing?.headline && (
+        <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-3.5">
+          <p className="text-xs uppercase font-black tracking-wider text-emerald-300">Executive Summary</p>
+          <p className="text-base font-bold text-white mt-1">{briefing.headline}</p>
+          {briefing.summary && <p className="text-xs leading-5 text-slate-300 mt-1">{briefing.summary}</p>}
+        </div>
+      )}
+
+      {metrics && (
+        <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
+          {typeof metrics.cash_gtex === "number" && (
+            <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
+              <p className="text-[10px] uppercase font-bold text-slate-400">Cash</p>
+              <p className="gx-mono text-sm font-black text-white mt-0.5">{fmt(metrics.cash_gtex)} GTX</p>
+            </div>
+          )}
+          {typeof metrics.avg_morale === "number" && (
+            <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
+              <p className="text-[10px] uppercase font-bold text-slate-400">Squad Morale</p>
+              <p className="gx-mono text-sm font-black text-emerald-300 mt-0.5">{metrics.avg_morale}/100</p>
+            </div>
+          )}
+          {typeof metrics.ready_academy_prospects === "number" && (
+            <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
+              <p className="text-[10px] uppercase font-bold text-slate-400">Academy Ready</p>
+              <p className="gx-mono text-sm font-black text-amber-300 mt-0.5">{metrics.ready_academy_prospects} Prospects</p>
+            </div>
+          )}
+          {typeof metrics.open_decisions === "number" && (
+            <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
+              <p className="text-[10px] uppercase font-bold text-slate-400">Open Actions</p>
+              <p className="gx-mono text-sm font-black text-cyan-300 mt-0.5">{metrics.open_decisions} Pending</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {sections.length > 0 ? (
+        <div className="mt-4 space-y-3">
+          {sections.map((sec, idx) => (
+            <div
+              key={idx}
+              className="rounded-xl border border-white/10 bg-slate-950/60 p-3.5 space-y-1.5 hover:border-white/20 transition-colors"
+            >
+              <div className="flex items-center justify-between">
+                <RoleBadge role={sec.role} />
+                <span className="text-[11px] font-bold text-slate-300">{sec.sender}</span>
+              </div>
+              <p className="text-sm font-bold text-white">{sec.title}</p>
+              <p className="text-xs leading-relaxed text-slate-300">{sec.summary}</p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-4 rounded-xl border border-dashed border-white/15 p-4 text-center text-xs text-slate-400">
+          <p className="font-bold text-white uppercase">Daily Briefing Up to Date</p>
+          <p className="mt-1 text-slate-400">
+            Click Refresh above to compile a fresh boardroom report from your GM, First-Team Manager, and HOYD.
+          </p>
+        </div>
+      )}
+    </section>
+  );
 }
 
 export default OwnerBriefingPanel;
