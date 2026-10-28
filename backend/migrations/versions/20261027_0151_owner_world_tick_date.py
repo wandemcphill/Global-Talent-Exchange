@@ -1,7 +1,7 @@
 """Add shared world-date and academy-intake sequence state to owner simulation.
 
 Revision ID: 20261027_0151_owner_world_tick_date
-Revises: 20261026_0150_world_clock_and_autonomous_fixtures
+Revises: 20261027_0151_owner_competition_lifecycle_mapping
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "20261027_0151_owner_world_tick_date"
-down_revision = "20261026_0150_world_clock_and_autonomous_fixtures"
+down_revision = "20261027_0151_owner_competition_lifecycle_mapping"
 branch_labels = None
 depends_on = None
 
