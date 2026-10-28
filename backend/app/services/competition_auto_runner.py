@@ -24,7 +24,9 @@ from app.models.competition_match_event import CompetitionMatchEvent
 from app.models.competition_participant import CompetitionParticipant
 from app.models.competition_rule_set import CompetitionRuleSet
 from app.models.user import User
+from app.match_engine.schemas import TeamTacticalPlanInput
 from app.match_engine.services.match_simulation_service import MatchSimulationService
+from app.match_engine.simulation.models import TacticalStyle
 from app.match_engine.services.team_factory import SyntheticSquadFactory
 from app.players.performance_recorder import PlayerMatchPerformanceRecorder
 from app.services.competition_lifecycle_service import CompetitionLifecycleService
@@ -118,6 +120,9 @@ class CompetitionAutoRunner:
                     self._simulate_match(competition, match)
                 changed = True
                 matches = self._matches(competition.id)
+                # Another worker may have completed and settled this competition
+                # while this worker waited on a fixture row lock.
+                self.session.refresh(competition)
 
             if simulate_scheduled_matches and matches and self._all_matches_complete(matches):
                 if CompetitionFormat(competition.format) is CompetitionFormat.LEAGUE:
@@ -191,10 +196,30 @@ class CompetitionAutoRunner:
         if match.status == MatchStatus.COMPLETED.value:
             return match
 
-        job = self._simulation_job(competition, match)
-        replay_payload = self.match_service.build_replay_payload(
-            self.team_factory.build_request(job, session=self.session)
+        # Serialize duplicate workers on the canonical fixture row. On PostgreSQL
+        # the lock is held through result/event/standing writes and the caller's
+        # transaction commit, so a competing worker re-reads the terminal status.
+        locked_match = self.session.scalar(
+            select(CompetitionMatch)
+            .where(CompetitionMatch.id == match.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
+        if locked_match is None:
+            raise ValueError(f"Canonical fixture {match.id} disappeared before execution.")
+        if locked_match.status == MatchStatus.COMPLETED.value:
+            return locked_match
+        if locked_match.status not in {
+            MatchStatus.SCHEDULED.value,
+            MatchStatus.IN_PROGRESS.value,
+        }:
+            raise ValueError(f"Canonical fixture {match.id} is {locked_match.status} and cannot be simulated.")
+        match = locked_match
+
+        job = self._simulation_job(competition, match)
+        request = self.team_factory.build_request(job, session=self.session)
+        request = self._apply_owner_pre_match_tactics(request, match)
+        replay_payload = self.match_service.build_replay_payload(request)
         self._store_match_viewer_payload(match, replay_payload)
         self._store_match_events(match, replay_payload)
         completed = self.lifecycle_service.complete_match(
@@ -208,6 +233,59 @@ class CompetitionAutoRunner:
         # completion timestamp, which is what form windows are ordered by.
         self._store_match_performances(completed, replay_payload)
         return completed
+
+    @staticmethod
+    def _apply_owner_pre_match_tactics(request, match):
+        """Apply validated owner choices saved against this canonical fixture ID."""
+        metadata = dict(match.metadata_json or {})
+        saved = dict(metadata.get("owner_pre_match_tactics") or {})
+        if not saved:
+            return request
+
+        def apply(team):
+            config = saved.get(team.team_id)
+            if not isinstance(config, dict):
+                return team
+            mentality = str(config.get("mentality") or "").strip().lower()
+            if mentality not in {"defensive", "balanced", "attacking"}:
+                return team
+            style = TacticalStyle(mentality)
+            tuning = {
+                "defensive": {
+                    "pressing": 38,
+                    "tempo": 42,
+                    "aggression": 35,
+                    "defensive_line": 32,
+                    "width": 42,
+                },
+                "balanced": {
+                    "pressing": 55,
+                    "tempo": 55,
+                    "aggression": 50,
+                    "defensive_line": 50,
+                    "width": 50,
+                },
+                "attacking": {
+                    "pressing": 72,
+                    "tempo": 76,
+                    "aggression": 68,
+                    "defensive_line": 68,
+                    "width": 66,
+                },
+            }[mentality]
+            plan_data = team.tactics.model_dump()
+            plan_data.update(tuning)
+            plan_data["style"] = style
+            plan_data["mentality"] = style
+            updated_team = team.model_copy(update={"tactics": TeamTacticalPlanInput.model_validate(plan_data)})
+            return updated_team
+
+        return request.model_copy(
+            update={
+                "home_team": apply(request.home_team),
+                "away_team": apply(request.away_team),
+            }
+        )
 
     def _store_match_performances(self, match: CompetitionMatch, replay_payload) -> None:
         """Persist per-player ratings so this match can reach form and valuation.
@@ -260,6 +338,9 @@ class CompetitionAutoRunner:
         scheduled_kickoff_at = (
             match.scheduled_at or self.effective_kickoff_at(competition, match) or window.kickoff_at(match_date)
         )
+        owner_tactics = dict((match.metadata_json or {}).get("owner_pre_match_tactics") or {})
+        home_owner_tactics = owner_tactics.get(match.home_club_id, {})
+        away_owner_tactics = owner_tactics.get(match.away_club_id, {})
         return MatchSimulationJob(
             fixture_id=match.id,
             competition_id=competition.id,
@@ -276,8 +357,18 @@ class CompetitionAutoRunner:
             simulation_seed=self._simulation_seed(match.id),
             home_club_id=match.home_club_id,
             home_club_name=self._club_name(competition.id, match.home_club_id),
+            home_lineup_mode=(
+                home_owner_tactics.get("lineup_mode", "strongest")
+                if isinstance(home_owner_tactics, dict)
+                else "strongest"
+            ),
             away_club_id=match.away_club_id,
             away_club_name=self._club_name(competition.id, match.away_club_id),
+            away_lineup_mode=(
+                away_owner_tactics.get("lineup_mode", "strongest")
+                if isinstance(away_owner_tactics, dict)
+                else "strongest"
+            ),
             is_cup_match=format_enum is CompetitionFormat.CUP,
             is_final=match.requires_winner and self._is_last_match(competition.id, match),
             allow_penalties=match.requires_winner,

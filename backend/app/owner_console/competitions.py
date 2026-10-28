@@ -109,7 +109,7 @@ def entries(session: Session, competition_id: str) -> list[OwnerCompetitionEntry
 def comp_dict(session: Session, comp: OwnerCompetition, user_id: str | None = None) -> dict[str, Any]:
     rows = entries(session, comp.id)
     mine = [e.club_id for e in rows if user_id and e.owner_user_id == user_id]
-    return {
+    data = {
         "id": comp.id,
         "name": comp.name,
         "host_type": comp.host_type,
@@ -130,6 +130,97 @@ def comp_dict(session: Session, comp: OwnerCompetition, user_id: str | None = No
         "is_host": bool(user_id and comp.host_user_id == user_id),
         "my_club_ids": mine,
     }
+    if comp.host_type == "gtex":
+        mapping = _active_owner_competition_mapping(session, comp.id)
+        data["execution_model"] = "canonical"
+        data["canonical_lifecycle_status"] = "active" if mapping is not None else "unmapped"
+        data["history_read_only"] = mapping is None
+        data["standings_source"] = "canonical" if mapping is not None else "legacy_historical"
+        if mapping is not None:
+            from decimal import Decimal
+
+            from app.common.enums.competition_status import CompetitionStatus
+            from app.models.competition import UserCompetition
+            from app.models.competition_match import CompetitionMatch
+            from app.models.competition_participant import CompetitionParticipant
+            from app.models.competition_reward_pool import CompetitionRewardPool
+
+            canonical = session.get(UserCompetition, mapping.canonical_competition_id)
+            if canonical is None:
+                data["canonical_lifecycle_status"] = "missing"
+                data["canonical_status"] = "missing"
+            else:
+                canonical_status = str(canonical.status)
+                data["canonical_competition_id"] = canonical.id
+                data["canonical_status"] = canonical_status
+                data["canonical_currency"] = canonical.currency
+                data["canonical_format"] = canonical.format
+
+                # Translate lifecycle state only for the existing owner-console UI
+                # contract; all displayed result/standings data remains canonical.
+                if canonical_status in {
+                    CompetitionStatus.DRAFT.value,
+                    CompetitionStatus.OPEN.value,
+                    CompetitionStatus.OPEN_FOR_JOIN.value,
+                    CompetitionStatus.PUBLISHED.value,
+                    CompetitionStatus.SEEDED.value,
+                    CompetitionStatus.FILLED.value,
+                    CompetitionStatus.LOCKED.value,
+                }:
+                    data["status"] = "open"
+                elif canonical_status in {CompetitionStatus.LIVE.value, CompetitionStatus.IN_PROGRESS.value}:
+                    data["status"] = "running"
+                elif canonical_status in {
+                    CompetitionStatus.COMPLETED.value,
+                    CompetitionStatus.SETTLED.value,
+                    CompetitionStatus.CANCELLED.value,
+                    CompetitionStatus.REFUNDED.value,
+                    CompetitionStatus.DISPUTED.value,
+                }:
+                    data["status"] = "finished"
+
+                canonical_participants = list(
+                    session.scalars(
+                        select(CompetitionParticipant).where(CompetitionParticipant.competition_id == canonical.id)
+                    ).all()
+                )
+                canonical_club_ids = {participant.club_id for participant in canonical_participants}
+                data["entrants"] = len(canonical_participants)
+                data["my_club_ids"] = [
+                    entry.club_id
+                    for entry in rows
+                    if user_id and entry.owner_user_id == user_id and entry.club_id in canonical_club_ids
+                ]
+                canonical_matches = list(
+                    session.scalars(
+                        select(CompetitionMatch).where(CompetitionMatch.competition_id == canonical.id)
+                    ).all()
+                )
+                current_rounds = [
+                    match.round_number for match in canonical_matches if match.status in {"scheduled", "in_progress"}
+                ]
+                data["current_round"] = (
+                    min(current_rounds)
+                    if current_rounds
+                    else max((match.round_number for match in canonical_matches), default=0)
+                )
+                data["total_rounds"] = max((match.round_number for match in canonical_matches), default=0)
+                data["entry_fee"] = str(Decimal(canonical.entry_fee_minor) / Decimal("10000"))
+                pools = list(
+                    session.scalars(
+                        select(CompetitionRewardPool).where(CompetitionRewardPool.competition_id == canonical.id)
+                    ).all()
+                )
+                prize_minor = (
+                    sum(max(int(pool.amount_minor or 0), 0) for pool in pools)
+                    if pools
+                    else max(int(canonical.net_prize_pool_minor or 0), 0)
+                )
+                data["prize_pool"] = str(Decimal(prize_minor) / Decimal("10000"))
+    else:
+        data["execution_model"] = "user_hosted_legacy"
+        data["canonical_lifecycle_status"] = "not_applicable"
+    return data
 
 
 def standings(session: Session, comp: OwnerCompetition) -> list[dict[str, Any]]:
@@ -175,6 +266,172 @@ def match_dict(m: OwnerMatch, full: bool = False) -> dict[str, Any]:
     return data
 
 
+def _active_owner_competition_mapping(session: Session, legacy_competition_id: str):
+    from app.models.owner_competition_lifecycle_mapping import OwnerCompetitionLifecycleMapping
+
+    return session.scalar(
+        select(OwnerCompetitionLifecycleMapping).where(
+            OwnerCompetitionLifecycleMapping.legacy_competition_id == legacy_competition_id,
+            OwnerCompetitionLifecycleMapping.mapping_status == "active",
+        )
+    )
+
+
+def _canonical_club_name(session: Session, club_id: str, legacy_match: OwnerMatch | None) -> str:
+    if legacy_match is not None:
+        if club_id == legacy_match.home_club_id:
+            return legacy_match.home_name
+        if club_id == legacy_match.away_club_id:
+            return legacy_match.away_name
+    from app.models.club_profile import ClubProfile
+
+    club = session.get(ClubProfile, club_id)
+    return club.club_name if club is not None else club_id
+
+
+def _canonical_match_dict(
+    session: Session,
+    canonical_match,
+    *,
+    legacy_match: OwnerMatch | None = None,
+    full: bool = False,
+) -> dict[str, Any]:
+    from app.common.enums.match_status import MatchStatus
+
+    completed = canonical_match.status == MatchStatus.COMPLETED.value or canonical_match.completed_at is not None
+    legacy_competition_id = legacy_match.competition_id if legacy_match is not None else None
+    data = {
+        "id": legacy_match.id if legacy_match is not None else canonical_match.id,
+        "legacy_match_id": legacy_match.id if legacy_match is not None else None,
+        "canonical_match_id": canonical_match.id,
+        "competition_id": legacy_competition_id or canonical_match.competition_id,
+        "canonical_competition_id": canonical_match.competition_id,
+        "round": canonical_match.round_number,
+        "home_club_id": canonical_match.home_club_id,
+        "away_club_id": canonical_match.away_club_id,
+        "home_name": _canonical_club_name(session, canonical_match.home_club_id, legacy_match),
+        "away_name": _canonical_club_name(session, canonical_match.away_club_id, legacy_match),
+        "status": canonical_match.status,
+        "home_goals": canonical_match.home_score if completed else None,
+        "away_goals": canonical_match.away_score if completed else None,
+        "played_at": canonical_match.completed_at.isoformat() if canonical_match.completed_at else None,
+        "execution_model": "canonical",
+    }
+    if full:
+        from app.models.competition_match_event import CompetitionMatchEvent
+
+        event_rows = session.scalars(
+            select(CompetitionMatchEvent)
+            .where(CompetitionMatchEvent.match_id == canonical_match.id)
+            .order_by(CompetitionMatchEvent.minute.asc().nulls_last(), CompetitionMatchEvent.created_at.asc())
+        ).all()
+        data["events"] = [
+            {
+                "minute": event.minute,
+                "type": event.event_type,
+                "team": event.club_id,
+                "player_id": event.player_id,
+                "text": (event.metadata_json or {}).get("commentary", ""),
+                "metadata": event.metadata_json,
+            }
+            for event in event_rows
+        ]
+        metadata = dict(canonical_match.metadata_json or {})
+        data["narrative"] = metadata.get("match_viewer") or metadata.get("replay_payload") or {}
+    return data
+
+
+def mapped_match_dict(session: Session, legacy_match: OwnerMatch, *, full: bool = False) -> dict[str, Any]:
+    from app.services.owner_competition_lifecycle_mapping_service import (
+        OwnerCompetitionLifecycleMappingService,
+    )
+
+    canonical_match = OwnerCompetitionLifecycleMappingService(session).canonical_match_for_legacy_match(legacy_match.id)
+    if canonical_match is None:
+        data = match_dict(legacy_match, full=full)
+        legacy_competition = session.get(OwnerCompetition, legacy_match.competition_id)
+        if legacy_competition is not None and legacy_competition.host_type == "gtex":
+            data.update(
+                execution_model="legacy_historical",
+                canonical_lifecycle_status="unmapped",
+                history_read_only=True,
+            )
+        return data
+    return _canonical_match_dict(session, canonical_match, legacy_match=legacy_match, full=full)
+
+
+def canonical_match_detail(session: Session, canonical_match_id: str, *, full: bool = False):
+    from app.models.competition_match import CompetitionMatch
+    from app.models.owner_competition_lifecycle_mapping import (
+        OwnerCompetitionLifecycleMapping,
+        OwnerMatchLifecycleMapping,
+    )
+
+    canonical_match = session.get(CompetitionMatch, canonical_match_id)
+    if canonical_match is None:
+        return None
+    competition_mapping = session.scalar(
+        select(OwnerCompetitionLifecycleMapping).where(
+            OwnerCompetitionLifecycleMapping.canonical_competition_id == canonical_match.competition_id,
+            OwnerCompetitionLifecycleMapping.mapping_status == "active",
+        )
+    )
+    if competition_mapping is None:
+        return None
+    match_mapping = session.scalar(
+        select(OwnerMatchLifecycleMapping).where(
+            OwnerMatchLifecycleMapping.canonical_match_id == canonical_match.id,
+            OwnerMatchLifecycleMapping.competition_mapping_id == competition_mapping.id,
+            OwnerMatchLifecycleMapping.mapping_status == "active",
+        )
+    )
+    legacy_match = session.get(OwnerMatch, match_mapping.legacy_match_id) if match_mapping is not None else None
+    return _canonical_match_dict(session, canonical_match, legacy_match=legacy_match, full=full)
+
+
+def _canonical_competition_standings(session: Session, legacy_competition_id: str, canonical_competition_id: str):
+    from app.models.competition_rule_set import CompetitionRuleSet
+    from app.services.competition_match_service import CompetitionMatchService
+
+    rule_set = session.scalar(
+        select(CompetitionRuleSet).where(CompetitionRuleSet.competition_id == canonical_competition_id)
+    )
+    if rule_set is None:
+        # An active mapping must never make legacy standings look authoritative.
+        return []
+
+    legacy_entries = {entry.club_id: entry for entry in entries(session, legacy_competition_id)}
+    participants = CompetitionMatchService(session).standings(
+        competition_id=canonical_competition_id,
+        rule_set=rule_set,
+    )
+    rows = []
+    for position, participant in enumerate(participants, start=1):
+        legacy_entry = legacy_entries.get(participant.club_id)
+        rows.append(
+            {
+                "club_id": participant.club_id,
+                "club_name": (
+                    legacy_entry.club_name
+                    if legacy_entry is not None
+                    else _canonical_club_name(session, participant.club_id, None)
+                ),
+                "is_ai": bool(legacy_entry.is_ai) if legacy_entry is not None else False,
+                "owner_user_id": legacy_entry.owner_user_id if legacy_entry is not None else None,
+                "played": participant.played,
+                "won": participant.wins,
+                "drawn": participant.draws,
+                "lost": participant.losses,
+                "gf": participant.goals_for,
+                "ga": participant.goals_against,
+                "points": participant.points,
+                "eliminated": bool(legacy_entry.eliminated) if legacy_entry is not None else False,
+                "final_position": position,
+            }
+        )
+    return rows
+
+
 def detail(session: Session, competition_id: str, user_id: str) -> dict[str, Any]:
     comp = session.get(OwnerCompetition, competition_id)
     if comp is None:
@@ -182,20 +439,69 @@ def detail(session: Session, competition_id: str, user_id: str) -> dict[str, Any
     matches = session.scalars(
         select(OwnerMatch).where(OwnerMatch.competition_id == comp.id).order_by(OwnerMatch.round_number.asc())
     ).all()
+    mapping = _active_owner_competition_mapping(session, comp.id) if comp.host_type == "gtex" else None
+    if mapping is None:
+        return {
+            **comp_dict(session, comp, user_id),
+            "standings": standings(session, comp),
+            "fixtures": [mapped_match_dict(session, match) for match in matches],
+        }
+
+    from app.models.competition import UserCompetition
+    from app.models.competition_match import CompetitionMatch
+    from app.models.owner_competition_lifecycle_mapping import OwnerMatchLifecycleMapping
+
+    canonical_competition = session.get(UserCompetition, mapping.canonical_competition_id)
+    if canonical_competition is None:
+        raise OwnerError(
+            "canonical_competition_not_found",
+            409,
+            "The global competition mapping references a missing canonical competition.",
+        )
+    legacy_matches_by_canonical_id = {
+        link.canonical_match_id: session.get(OwnerMatch, link.legacy_match_id)
+        for link in session.scalars(
+            select(OwnerMatchLifecycleMapping).where(
+                OwnerMatchLifecycleMapping.competition_mapping_id == mapping.id,
+                OwnerMatchLifecycleMapping.mapping_status == "active",
+            )
+        ).all()
+    }
+    canonical_matches = session.scalars(
+        select(CompetitionMatch)
+        .where(CompetitionMatch.competition_id == canonical_competition.id)
+        .order_by(CompetitionMatch.round_number.asc(), CompetitionMatch.scheduled_at.asc().nulls_last())
+    ).all()
     return {
         **comp_dict(session, comp, user_id),
-        "standings": standings(session, comp),
-        "fixtures": [match_dict(m) for m in matches],
+        "canonical_competition_id": canonical_competition.id,
+        "canonical_status": canonical_competition.status,
+        "canonical_lifecycle_status": "active",
+        "standings": _canonical_competition_standings(session, comp.id, canonical_competition.id),
+        "fixtures": [
+            _canonical_match_dict(
+                session,
+                canonical_match,
+                legacy_match=legacy_matches_by_canonical_id.get(canonical_match.id),
+            )
+            for canonical_match in canonical_matches
+        ],
     }
 
 
 def enter_competition(session: Session, user_id: str, competition_id: str, club_id: str) -> OwnerCompetitionEntry:
     state = require_state(session, club_id, user_id)
-    if state.stage == "squad":
+    if getattr(state, "stage", None) == "squad":
         raise OwnerError("sign_starting_squad_first", 409)
     comp = session.get(OwnerCompetition, competition_id)
     if comp is None:
         raise OwnerError("competition_not_found", 404)
+    if comp.host_type == "gtex":
+        raise OwnerError(
+            "canonical_competition_mapping_required",
+            409,
+            "Global GTEX entry must be processed by the canonical competition system; the legacy owner-console entry and fee path is disabled.",
+        )
     if comp.status != "open":
         raise OwnerError("competition_closed", 409)
     rows = entries(session, comp.id)
@@ -467,6 +773,100 @@ def _post_match_club(
     return notes
 
 
+def ensure_owner_console_execution_allowed(comp: OwnerCompetition) -> None:
+    """Keep global GTEX fixtures on the canonical CompetitionMatch execution rail."""
+    if comp.host_type == "gtex":
+        raise OwnerError(
+            "global_competition_uses_canonical_lifecycle",
+            409,
+            "Global GTEX fixtures must be executed by the canonical CompetitionMatch lifecycle. "
+            "The owner-console simulator is retained for historical reads and user-hosted tournaments "
+            "until the explicit fixture mapping is available.",
+        )
+
+
+def _save_global_competition_tactics(
+    session: Session,
+    user_id: str,
+    comp: OwnerCompetition,
+    club_id: str,
+    mentality: str,
+    lineup_mode: str,
+) -> dict[str, Any]:
+    if mentality not in engine.MENTALITY:
+        raise OwnerError("invalid_mentality")
+    if comp.status != "running":
+        raise OwnerError(
+            "canonical_fixture_mapping_required",
+            409,
+            "Global GTEX competitions must be reconciled to scheduled canonical fixtures before tactics can be submitted.",
+        )
+    by_id = {entry.club_id: entry for entry in entries(session, comp.id)}
+    if club_id not in by_id:
+        raise OwnerError("club_not_entered", 409)
+
+    round_matches = list(
+        session.scalars(
+            select(OwnerMatch).where(
+                OwnerMatch.competition_id == comp.id,
+                OwnerMatch.round_number == comp.current_round,
+                OwnerMatch.status == "scheduled",
+            )
+        ).all()
+    )
+    my_match = next(
+        (match for match in round_matches if club_id in (match.home_club_id, match.away_club_id)),
+        None,
+    )
+    if my_match is None:
+        raise OwnerError(
+            "no_fixture_this_round",
+            409,
+            "Your club has no scheduled fixture in the current round.",
+        )
+
+    from app.services.owner_competition_lifecycle_mapping_service import (
+        OwnerCompetitionLifecycleMappingError,
+        OwnerCompetitionLifecycleMappingService,
+    )
+
+    try:
+        canonical_match = OwnerCompetitionLifecycleMappingService(session).save_pre_match_tactics(
+            legacy_match_id=my_match.id,
+            club_id=club_id,
+            user_id=user_id,
+            mentality=mentality,
+            lineup_mode=lineup_mode,
+        )
+    except OwnerCompetitionLifecycleMappingError as exc:
+        raise OwnerError(exc.code, 409, exc.detail) from exc
+
+    return {
+        "execution": "canonical_fixture",
+        "tactics_saved": True,
+        "match": {
+            "id": my_match.id,
+            "legacy_match_id": my_match.id,
+            "canonical_match_id": canonical_match.id,
+            "competition_id": comp.id,
+            "canonical_competition_id": canonical_match.competition_id,
+            "round": canonical_match.round_number,
+            "home_club_id": canonical_match.home_club_id,
+            "away_club_id": canonical_match.away_club_id,
+            "status": canonical_match.status,
+            "home_goals": canonical_match.home_score,
+            "away_goals": canonical_match.away_score,
+            "played_at": None,
+            "tactics": {
+                "mentality": mentality,
+                "lineup_mode": lineup_mode,
+                "club_id": club_id,
+            },
+        },
+        "competition": comp_dict(session, comp, user_id),
+    }
+
+
 def play_next(
     session: Session, user_id: str, competition_id: str, club_id: str, mentality: str, lineup_mode: str
 ) -> dict[str, Any]:
@@ -474,6 +874,9 @@ def play_next(
     comp = session.get(OwnerCompetition, competition_id)
     if comp is None:
         raise OwnerError("competition_not_found", 404)
+    if comp.host_type == "gtex":
+        return _save_global_competition_tactics(session, user_id, comp, club_id, mentality, lineup_mode)
+    ensure_owner_console_execution_allowed(comp)
     if mentality not in engine.MENTALITY:
         raise OwnerError("invalid_mentality")
     by_id = {e.club_id: e for e in entries(session, comp.id)}
@@ -691,6 +1094,12 @@ def forfeit(session: Session, user_id: str, match_id: str, club_id: str) -> dict
     if m is None or club_id not in (m.home_club_id, m.away_club_id) or m.status != "scheduled":
         raise OwnerError("match_not_forfeitable", 409)
     comp = session.get(OwnerCompetition, m.competition_id)
+    if comp is not None and comp.host_type == "gtex":
+        raise OwnerError(
+            "global_competition_uses_canonical_lifecycle",
+            409,
+            "Global GTEX fixtures cannot be forfeited on the legacy owner-console rail.",
+        )
     by_id = {e.club_id: e for e in entries(session, comp.id)}
     opp = by_id[m.away_club_id if m.home_club_id == club_id else m.home_club_id]
     mine = by_id[club_id]

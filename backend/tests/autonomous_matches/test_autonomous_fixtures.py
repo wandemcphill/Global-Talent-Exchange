@@ -21,10 +21,16 @@ from app.models.competition_match import CompetitionMatch
 from app.models.competition_match_event import CompetitionMatchEvent
 from app.models.competition_round import CompetitionRound
 from app.models.competition_rule_set import CompetitionRuleSet
+from app.models.competition_reward import CompetitionReward
+from app.models.competition_reward_pool import CompetitionRewardPool
+from app.models.competition_participant import CompetitionParticipant
+from app.models.competition_prize_rule import CompetitionPrizeRule
 from app.models.player_contract import PlayerContract
 from app.models.user import KycStatus, User, UserRole
 from app.owner_console.engine import simulate_match as owner_simulate_match
+from app.owner_console.models import OwnerCompetition, OwnerMatch
 from app.services.autonomous_match_service import AutonomousMatchExecutionService
+from app.services.competition_auto_runner import CompetitionAutoRunner
 from app.services.competition_lifecycle_service import CompetitionLifecycleService
 
 
@@ -552,3 +558,344 @@ def test_owner_console_honest_failure_on_invalid_input() -> None:
     # Invalid side input missing required fields must raise honestly rather than falling back to Poisson
     with pytest.raises(Exception):
         owner_simulate_match("bad_seed", {"invalid": True}, {"invalid": True})
+
+
+def test_owner_pre_match_tactics_reach_canonical_runner_request(session_factory) -> None:
+    with session_factory() as session:
+        competition = _create_test_competition(session, "Owner Tactics Pipeline")
+        round_row = CompetitionRound(
+            id=str(uuid4()),
+            competition_id=competition.id,
+            round_number=1,
+            stage="league",
+            status="active",
+        )
+        session.add(round_row)
+        _, home_club = _create_user_and_club(session, "Owner Tactics Home")
+        _, away_club = _create_user_and_club(session, "Owner Tactics Away")
+        kickoff_at = datetime(2026, 1, 1, 9, 0, tzinfo=timezone.utc)
+        match = CompetitionMatch(
+            id=str(uuid4()),
+            competition_id=competition.id,
+            round_id=round_row.id,
+            round_number=1,
+            stage="league",
+            home_club_id=home_club.id,
+            away_club_id=away_club.id,
+            match_date=kickoff_at.date(),
+            scheduled_at=kickoff_at,
+            status=MatchStatus.SCHEDULED.value,
+            metadata_json={
+                "owner_pre_match_tactics": {
+                    home_club.id: {"mentality": "attacking", "lineup_mode": "rotate"},
+                    away_club.id: {"mentality": "defensive", "lineup_mode": "strongest"},
+                }
+            },
+        )
+        session.add(match)
+        session.flush()
+
+        runner = CompetitionAutoRunner(session)
+        job = runner._simulation_job(competition, match)
+        assert job.home_lineup_mode == "rotate"
+        assert job.away_lineup_mode == "strongest"
+
+        request = runner.team_factory.build_request(job, session=session)
+        request = runner._apply_owner_pre_match_tactics(request, match)
+        assert request.match_id == match.id
+        assert request.home_team.tactics.mentality.value == "attacking"
+        assert request.home_team.tactics.style.value == "attacking"
+        assert request.away_team.tactics.mentality.value == "defensive"
+        assert request.away_team.tactics.style.value == "defensive"
+
+
+def test_stale_worker_retry_cannot_reexecute_a_completed_fixture(session_factory) -> None:
+    from types import SimpleNamespace
+
+    with session_factory() as session:
+        competition = _create_test_competition(session, "Idempotent Match Runner")
+        round_row = CompetitionRound(
+            id=str(uuid4()),
+            competition_id=competition.id,
+            round_number=1,
+            stage="league",
+            status="active",
+        )
+        session.add(round_row)
+        _, home_club = _create_user_and_club(session, "Idempotent Home")
+        _, away_club = _create_user_and_club(session, "Idempotent Away")
+        session.add_all(
+            [
+                CompetitionParticipant(competition_id=competition.id, club_id=home_club.id, status="joined"),
+                CompetitionParticipant(competition_id=competition.id, club_id=away_club.id, status="joined"),
+            ]
+        )
+        kickoff_at = datetime(2026, 1, 1, 9, 0, tzinfo=timezone.utc)
+        match = CompetitionMatch(
+            id=str(uuid4()),
+            competition_id=competition.id,
+            round_id=round_row.id,
+            round_number=1,
+            stage="league",
+            home_club_id=home_club.id,
+            away_club_id=away_club.id,
+            match_date=kickoff_at.date(),
+            scheduled_at=kickoff_at,
+            status=MatchStatus.SCHEDULED.value,
+            metadata_json={},
+        )
+        session.add(match)
+        session.commit()
+
+        runner = CompetitionAutoRunner(session)
+        completed = runner._simulate_match(competition, match)
+        session.commit()
+        session.refresh(completed)
+        assert completed.status == MatchStatus.COMPLETED.value
+        original_score = (completed.home_score, completed.away_score)
+        original_events = len(
+            session.scalars(select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == completed.id)).all()
+        )
+        assert original_events > 0
+
+        # Represents another worker that selected the fixture before the first
+        # worker committed and is retrying with a stale scheduled snapshot.
+        stale_snapshot = SimpleNamespace(id=completed.id, status=MatchStatus.SCHEDULED.value)
+        retried = runner._simulate_match(competition, stale_snapshot)
+        session.commit()
+
+        assert retried.status == MatchStatus.COMPLETED.value
+        assert (retried.home_score, retried.away_score) == original_score
+        assert (
+            len(
+                session.scalars(
+                    select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == completed.id)
+                ).all()
+            )
+            == original_events
+        )
+        participants = session.scalars(
+            select(CompetitionParticipant).where(CompetitionParticipant.competition_id == competition.id)
+        ).all()
+        assert len(participants) == 2
+        assert all(participant.played == 1 for participant in participants)
+
+
+def test_global_owner_fixture_reconciles_and_executes_only_on_canonical_runner(
+    session_factory,
+    monkeypatch,
+) -> None:
+    from types import SimpleNamespace
+
+    from app.admin_engine.service import AdminEngineService
+    from app.models.owner_competition_lifecycle_mapping import (
+        OwnerCompetitionLifecycleMapping,
+        OwnerMatchLifecycleMapping,
+    )
+    from app.reward_engine.service import RewardEngineService
+    from app.services.owner_competition_lifecycle_mapping_service import (
+        OwnerCompetitionLifecycleMappingService,
+    )
+
+    with session_factory() as session:
+        AdminEngineService(session).seed_defaults()
+        eval_time = datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+        competition = _create_test_competition(session, "Reconciled Global League")
+        competition.source_type = "gtex"
+        competition.source_id = str(uuid4())
+        session.add(
+            CompetitionPrizeRule(
+                competition_id=competition.id,
+                payout_mode="percentage",
+                top_n=2,
+                payout_percentages=[70, 30],
+            )
+        )
+        round_row = CompetitionRound(
+            id=str(uuid4()),
+            competition_id=competition.id,
+            round_number=1,
+            stage="league",
+            status="active",
+        )
+        session.add(round_row)
+        home_user, home_club = _create_user_and_club(session, "Reconciled Home")
+        _, away_club = _create_user_and_club(session, "Reconciled Away")
+        RewardEngineService(session).credit_promo_pool(
+            actor=home_user,
+            amount=Decimal("100000.0000"),
+            reference=f"reconciled-promo-pool:{competition.id}",
+        )
+        session.add_all(
+            [
+                CompetitionParticipant(
+                    competition_id=competition.id,
+                    club_id=home_club.id,
+                    status="joined",
+                ),
+                CompetitionParticipant(
+                    competition_id=competition.id,
+                    club_id=away_club.id,
+                    status="joined",
+                ),
+            ]
+        )
+        canonical_match = CompetitionMatch(
+            id=str(uuid4()),
+            competition_id=competition.id,
+            round_id=round_row.id,
+            round_number=1,
+            stage="league",
+            home_club_id=home_club.id,
+            away_club_id=away_club.id,
+            match_date=eval_time.date(),
+            scheduled_at=eval_time - timedelta(hours=1),
+            status=MatchStatus.SCHEDULED.value,
+        )
+        legacy_competition = OwnerCompetition(
+            name="Legacy Global League",
+            host_type="gtex",
+            status="running",
+            current_round=1,
+        )
+        session.add(legacy_competition)
+        session.flush()
+        legacy_match = OwnerMatch(
+            competition_id=legacy_competition.id,
+            round_number=1,
+            home_club_id=home_club.id,
+            away_club_id=away_club.id,
+            home_name=home_club.club_name,
+            away_name=away_club.club_name,
+            status="scheduled",
+        )
+        session.add_all([canonical_match, legacy_match])
+        session.flush()
+
+        mapping_service = OwnerCompetitionLifecycleMappingService(session)
+        competition_mapping = mapping_service.bind_competition(
+            legacy_competition.id,
+            competition.id,
+        )
+        fixture_mapping = mapping_service.bind_scheduled_match(
+            legacy_match.id,
+            canonical_match.id,
+        )
+        assert competition_mapping.canonical_competition_id == competition.id
+        assert fixture_mapping.canonical_match_id == canonical_match.id
+        session.commit()
+
+        settlement_attempts: list[tuple[str, int]] = []
+        original_settle = CompetitionLifecycleService._settle_platform_rewards
+
+        def count_settlement(service, comp, rewards):
+            settlement_attempts.append((comp.id, len(rewards)))
+            return original_settle(service, comp, rewards)
+
+        monkeypatch.setattr(
+            CompetitionLifecycleService,
+            "_settle_platform_rewards",
+            count_settlement,
+        )
+
+        runner = CompetitionAutoRunner(session)
+        runner.run_until_idle(
+            competition,
+            simulate_scheduled_matches=True,
+            evaluation_time=eval_time,
+        )
+        session.commit()
+        session.refresh(competition)
+        completed = session.get(CompetitionMatch, canonical_match.id)
+        assert completed is not None
+        session.refresh(legacy_match)
+
+        assert completed.status == MatchStatus.COMPLETED.value
+        assert completed.completed_at is not None
+        assert competition.status == CompetitionStatus.SETTLED.value
+        assert competition.settled_at is not None
+        assert (
+            len(
+                session.scalars(
+                    select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == canonical_match.id)
+                ).all()
+            )
+            > 0
+        )
+        assert legacy_match.status == "scheduled"
+        assert legacy_match.home_goals is None
+        assert legacy_match.away_goals is None
+        assert legacy_match.played_at is None
+
+        original_score = (completed.home_score, completed.away_score)
+        original_event_count = len(
+            session.scalars(
+                select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == canonical_match.id)
+            ).all()
+        )
+        retried = runner._simulate_match(
+            competition,
+            SimpleNamespace(id=canonical_match.id, status=MatchStatus.SCHEDULED.value),
+        )
+        session.commit()
+
+        assert retried.status == MatchStatus.COMPLETED.value
+        assert (retried.home_score, retried.away_score) == original_score
+        assert (
+            len(
+                session.scalars(
+                    select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == canonical_match.id)
+                ).all()
+            )
+            == original_event_count
+        )
+        assert session.get(OwnerCompetitionLifecycleMapping, competition_mapping.id) is not None
+        assert session.get(OwnerMatchLifecycleMapping, fixture_mapping.id) is not None
+
+        # A retry of competition finalization must return the existing payout
+        # pools and reward ledger references without issuing another settlement.
+        reward_snapshot = sorted(
+            (
+                reward.id,
+                reward.ledger_transaction_id,
+                reward.status,
+            )
+            for reward in session.scalars(
+                select(CompetitionReward).where(CompetitionReward.competition_id == competition.id)
+            ).all()
+        )
+        pool_ids_before = sorted(
+            pool.id
+            for pool in session.scalars(
+                select(CompetitionRewardPool).where(CompetitionRewardPool.competition_id == competition.id)
+            ).all()
+        )
+        settled_at_before = competition.settled_at
+        settlement_attempt_count_before_retry = sum(
+            1 for competition_id, _ in settlement_attempts if competition_id == competition.id
+        )
+        assert settlement_attempt_count_before_retry >= 1
+
+        repeated_pools = CompetitionLifecycleService(session).finalize_competition(competition)
+        session.commit()
+        session.refresh(competition)
+
+        assert sorted(pool.id for pool in repeated_pools) == pool_ids_before
+        assert (
+            sorted(
+                (
+                    reward.id,
+                    reward.ledger_transaction_id,
+                    reward.status,
+                )
+                for reward in session.scalars(
+                    select(CompetitionReward).where(CompetitionReward.competition_id == competition.id)
+                ).all()
+            )
+            == reward_snapshot
+        )
+        assert competition.settled_at == settled_at_before
+        assert (
+            sum(1 for competition_id, _ in settlement_attempts if competition_id == competition.id)
+            == settlement_attempt_count_before_retry
+        )
