@@ -468,7 +468,7 @@ class NationalTeamsApi {
     required String managerId,
   }) async {
     final Object? payload = await client.post(
-      '/api/national-team-engine/entries//manager/hire',
+      '/api/national-team-engine/entries/$entryId/manager/hire',
       body: <String, Object?>{'manager_id': managerId},
     );
     return jsonMap(payload, label: 'hire national manager');
@@ -480,7 +480,7 @@ class NationalTeamsApi {
     String? tactic,
   }) async {
     final Object? payload = await client.post(
-      '/api/national-team-engine/entries//rentals/checkout',
+      '/api/national-team-engine/entries/$entryId/rentals/checkout',
       body: <String, Object?>{
         'player_ids': playerIds,
         if (tactic != null) 'tactic': tactic,
@@ -516,7 +516,7 @@ class NationalTeamsApi {
     required List<JsonMap> players,
   }) async {
     final Object? payload = await client.post(
-      '/api/national-team-engine/competitions//finals-squad',
+      '/api/national-team-engine/competitions/$competitionId/finals-squad',
       body: <String, Object?>{
         'country_code': countryCode,
         'country_name': countryName,
@@ -528,7 +528,7 @@ class NationalTeamsApi {
 
   Future<JsonMap> fetchRewardBreakdown(String competitionId) {
     return client.getMap(
-      '/api/national-team-engine/competitions//rewards/breakdown',
+      '/api/national-team-engine/competitions/$competitionId/rewards/breakdown',
       auth: false,
     );
   }
