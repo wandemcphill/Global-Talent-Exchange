@@ -12330,6 +12330,19 @@
         "handler": "get_competition_reward_breakdown_route",
         "source_file": "backend/app/national_team_engine/router.py",
         "response_model": "dict"
+      },
+      "get_api_v2_national_team_engine_managers_catalog": {
+        "method": "GET",
+        "canonical_path": "/api/v2/national-team-engine/managers/catalog",
+        "aliases": [
+          "/api/national-team-engine/managers/catalog",
+          "/api/v1/national-team-engine/managers/catalog",
+          "/api/v2/national-team-engine/managers/catalog",
+          "/national-team-engine/managers/catalog"
+        ],
+        "handler": "list_national_team_managers",
+        "source_file": "backend/app/national_team_engine/router.py",
+        "response_model": "list[dict]"
       }
     },
     "notifications": {
@@ -24452,7 +24465,8 @@
     "/api/v2/national-team-engine/entries/{entry_id}/manager/hire": "post_api_v2_national_team_engine_entries_entry_id_manager_hire",
     "/api/v2/national-team-engine/entries/{entry_id}/rentals/checkout": "post_api_v2_national_team_engine_entries_entry_id_rentals_checkout",
     "/api/v2/national-team-engine/competitions/{competition_id}/finals-squad": "post_api_v2_national_team_engine_competitions_competition_id_finals_squad",
-    "/api/v2/national-team-engine/competitions/{competition_id}/rewards/breakdown": "get_api_v2_national_team_engine_competitions_competition_id_rewards_breakdown"
+    "/api/v2/national-team-engine/competitions/{competition_id}/rewards/breakdown": "get_api_v2_national_team_engine_competitions_competition_id_rewards_breakdown",
+    "/api/v2/national-team-engine/managers/catalog": "get_api_v2_national_team_engine_managers_catalog"
   },
   "deprecated_aliases": {
     "/{club_id}/catalogue/load": "/api/v2/{club_id}/catalogue/load",
@@ -29106,6 +29120,10 @@
     "/api/national-team-engine/competitions/{competition_id}/rewards/breakdown": "/api/v2/national-team-engine/competitions/{competition_id}/rewards/breakdown",
     "/api/v1/national-team-engine/competitions/{competition_id}/rewards/breakdown": "/api/v2/national-team-engine/competitions/{competition_id}/rewards/breakdown",
     "/api/v2/national-team-engine/competitions/{competition_id}/rewards/breakdown": "/api/v2/national-team-engine/competitions/{competition_id}/rewards/breakdown",
-    "/national-team-engine/competitions/{competition_id}/rewards/breakdown": "/api/v2/national-team-engine/competitions/{competition_id}/rewards/breakdown"
+    "/national-team-engine/competitions/{competition_id}/rewards/breakdown": "/api/v2/national-team-engine/competitions/{competition_id}/rewards/breakdown",
+    "/api/national-team-engine/managers/catalog": "/api/v2/national-team-engine/managers/catalog",
+    "/api/v1/national-team-engine/managers/catalog": "/api/v2/national-team-engine/managers/catalog",
+    "/api/v2/national-team-engine/managers/catalog": "/api/v2/national-team-engine/managers/catalog",
+    "/national-team-engine/managers/catalog": "/api/v2/national-team-engine/managers/catalog"
   }
 }
