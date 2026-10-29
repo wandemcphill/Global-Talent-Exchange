@@ -20,6 +20,8 @@ from app.national_team_engine.schemas import (
     NationalTeamEntryDetailResponse,
     NationalTeamEntryResponse,
     NationalTeamEntryUpsertRequest,
+    NationalTeamManagerHireRequest,
+    NationalTeamRentalBasketCheckoutRequest,
     NationalTeamRentalCreateRequest,
     NationalTeamRentalPlayerCollectionResponse,
     NationalTeamRentalStatusResponse,
