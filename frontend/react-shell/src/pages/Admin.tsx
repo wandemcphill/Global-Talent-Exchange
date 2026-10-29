@@ -14,7 +14,7 @@ function GodModeControlDesk() {
     queryKey: ["admin-god-mode-bootstrap"],
     queryFn: async () => {
       try {
-        return (await api.get("/api/admin/god-mode/bootstrap")).data;
+        return (await api.get("/admin/god-mode/bootstrap")).data;
       } catch {
         return null;
       }
@@ -42,7 +42,7 @@ function GodModeControlDesk() {
   const updateCommissions = async () => {
     setSaving("commissions");
     try {
-      await api.put("/api/admin/god-mode/commissions", {
+      await api.put("/admin/god-mode/commissions", {
         buy_commission_bps: Number(buyBps),
         sell_commission_bps: Number(sellBps),
         instant_sell_fee_bps: Number(godMode?.commissions?.instant_sell_fee_bps ?? 500),
@@ -62,7 +62,7 @@ function GodModeControlDesk() {
   const updateCompetitionTopup = async () => {
     setSaving("competition");
     try {
-      await api.put("/api/admin/god-mode/competition-controls", {
+      await api.put("/admin/god-mode/competition-controls", {
         prize_pool_topup_pct: String(Number(topupPct || 0)),
         reason: reason.trim() || "Prize pool top-up adjustment",
       });

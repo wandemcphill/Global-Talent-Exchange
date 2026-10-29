@@ -20,6 +20,7 @@ import {
   ShoppingBag,
   Sparkles,
   Sprout,
+  Swords,
   Trophy,
   Wallet,
   Video,
@@ -40,6 +41,7 @@ const NAV = [
   { to: "/app/inbox", label: "Inbox", icon: Inbox, id: "inbox", category: "CLUB HQ & DYNASTY" },
 
   { to: "/app/squad", label: "Manager & Squad", icon: Shirt, id: "squad", category: "FOOTBALL & TRANSFERS" },
+  { to: "/app/lineup", label: "Lineup & Tactics", icon: Swords, id: "lineup", category: "FOOTBALL & TRANSFERS" },
   { to: "/app/transfer-hub", label: "Transfer Hub", icon: Compass, id: "transfers", category: "FOOTBALL & TRANSFERS" },
   { to: "/app/academy", label: "Academy", icon: Sprout, id: "academy", category: "FOOTBALL & TRANSFERS" },
   { to: "/app/competitions", label: "Competitions", icon: Trophy, id: "competitions", category: "FOOTBALL & TRANSFERS" },
@@ -201,7 +203,29 @@ export default function AppShell() {
     return <Navigate to="/app/creator-access" replace />;
   }
 
-  if (!isAdmin && !isDedicatedAccount && hasClubProfile && !hasActiveClub) {
+  // Club-independent pillars stay reachable via the user_id even while a club
+  // claim is still mid-onboarding (national team, wallet, market, world media).
+  const userLevelRoutes = [
+    "/app/clubs",
+    "/app/national",
+    "/app/finance",
+    "/app/market",
+    "/app/regen-world",
+    "/app/awards",
+    "/app/newsroom",
+    "/app/competitions",
+    "/app/jackpot",
+    "/app/creator-access",
+    "/app/coin-traders",
+    "/app/inbox",
+  ];
+  if (
+    !isAdmin &&
+    !isDedicatedAccount &&
+    hasClubProfile &&
+    !hasActiveClub &&
+    !routeIsAllowed(userLevelRoutes)
+  ) {
     return <Navigate to="/onboarding" replace />;
   }
 

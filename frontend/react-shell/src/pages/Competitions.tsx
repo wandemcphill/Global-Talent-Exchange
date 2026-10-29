@@ -109,7 +109,7 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
     queryKey: ["fast-match-entitlement"],
     queryFn: async () => {
       try {
-        return (await api.get("/api/simulation-matchmaking/fast-match/entitlement")).data;
+        return (await api.get("/simulation-matchmaking/fast-match/entitlement")).data;
       } catch {
         return null;
       }
@@ -124,7 +124,7 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
     setBusy(true);
     try {
       // Ensure simulation profile is registered for the active user/club
-      await api.put(`/api/simulation-matchmaking/profiles/${user.id}`, {
+      await api.put(`/simulation-matchmaking/profiles/${user.id}`, {
         user_id: user.id,
         club_id: activeClub.club_id,
         club_name: activeClub.club_name || "GTEX FC",
@@ -142,7 +142,7 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
         availability: "online",
       });
 
-      const { data } = await api.post("/api/simulation-matchmaking/quick-game", {
+      const { data } = await api.post("/simulation-matchmaking/quick-game", {
         mode: "quick_game",
         user_id: user.id,
         include_bots: true,
@@ -166,7 +166,7 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
   const settleQuickGame = async (matchId: string) => {
     setBusy(true);
     try {
-      const { data } = await api.post(`/api/simulation-matchmaking/quick-game/${matchId}/settle`);
+      const { data } = await api.post(`/simulation-matchmaking/quick-game/${matchId}/settle`);
       toast.success(`Quick match settled: ${data.home_score}–${data.away_score} (${label(data.result)})`);
       setLastMatch((prev: any) => (prev ? { ...prev, settlement: data } : prev));
       await qc.invalidateQueries({ queryKey: ["fast-match-entitlement"] });
@@ -271,7 +271,7 @@ function GlobalLeaderboardPanel({ worldClubs }: { worldClubs: any[] }) {
     queryKey: ["leaderboard-season-current"],
     queryFn: async () => {
       try {
-        return (await api.get("/season/current")).data;
+        return (await api.get("/v2/season/current")).data;
       } catch {
         return null;
       }
@@ -282,7 +282,7 @@ function GlobalLeaderboardPanel({ worldClubs }: { worldClubs: any[] }) {
     queryKey: ["leaderboard-global"],
     queryFn: async () => {
       try {
-        return (await api.get("/leaderboard/global", { params: { limit: 15 } })).data;
+        return (await api.get("/v2/leaderboard/global", { params: { limit: 15 } })).data;
       } catch {
         return null;
       }

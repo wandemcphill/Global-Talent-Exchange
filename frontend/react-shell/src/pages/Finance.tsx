@@ -223,7 +223,7 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
     queryKey: ["sponsored-feed", activeClubId],
     queryFn: async () => {
       try {
-        return (await api.get("/feed/sponsored", { params: { limit: 4 } })).data;
+        return (await api.get("/v2/feed/sponsored", { params: { limit: 4 } })).data;
       } catch {
         return null;
       }
@@ -507,7 +507,7 @@ function ClubShareholderDesk({ clubs }: { clubs: any[] }) {
     queryKey: ["club-sale-valuation", activeClubId],
     queryFn: async () => {
       try {
-        return (await api.get(`/api/clubs/${activeClubId}/valuation`)).data;
+        return (await api.get(`/clubs/${activeClubId}/valuation`)).data;
       } catch {
         return null;
       }

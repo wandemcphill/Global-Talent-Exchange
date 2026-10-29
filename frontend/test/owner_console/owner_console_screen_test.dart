@@ -68,6 +68,9 @@ Map<String, dynamic> _centerJson({bool withClubs = true, String? respondBy}) => 
 class _FakeOwner implements OwnerConsoleReader {
   _FakeOwner({this.withClubs = true, this.failDecide = false, this.emptyQueue = false, this.respondBy});
 
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+
   bool withClubs;
   final bool failDecide;
   final bool emptyQueue;

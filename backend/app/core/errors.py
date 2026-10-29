@@ -24,6 +24,7 @@ def error_content(*, message: str, code: str) -> dict[str, Any]:
         "error": True,
         "message": message,
         "code": code,
+        "detail": {"code": code, "detail": message},
     }
 
 

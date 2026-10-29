@@ -104,8 +104,8 @@ export default function CompetitionDetail() {
   comp.fixtures.forEach((m: any) => { (rounds[m.round] = rounds[m.round] || []).push(m); });
 
   const totalPool = Number(hostedFinance?.net_reward_pool ?? comp.prize_pool ?? 0);
-  const firstPrize = Math.round(totalPool * 0.55);
-  const runnerUpPrize = Math.round(totalPool * 0.28);
+  const firstPrize = Math.round(totalPool * 0.5);
+  const runnerUpPrize = Math.round(totalPool * 0.3);
   const thirdPrize = Math.max(0, totalPool - firstPrize - runnerUpPrize);
   const leaderClub = comp.standings?.[0]?.club_name || "TBD";
   const runnerUpClub = comp.standings?.[1]?.club_name || "TBD";
@@ -143,11 +143,11 @@ export default function CompetitionDetail() {
         badgeText="3D FINALS TROPHY PLINTH"
         clubName={leaderClub}
         subjectName={comp.name}
-        quote="Under the stadium pyrotechnics, one club will lift the 3D Championship Trophy and claim 55% of the prize pool."
+        quote="Under the stadium pyrotechnics, one club will lift the 3D Championship Trophy and claim 50% of the prize pool."
         stats={[
-          { label: "1st Place (55%)", value: `${fmt(firstPrize)} GTX`, accent: "#F5B83D" },
-          { label: "2nd Place (28%)", value: `${fmt(runnerUpPrize)} GTX`, accent: "#38BDF8" },
-          { label: "3rd Place (17%)", value: `${fmt(thirdPrize)} GTX`, accent: "#00E676" },
+          { label: "1st Place (50%)", value: `${fmt(firstPrize)} GTX`, accent: "#F5B83D" },
+          { label: "2nd Place (30%)", value: `${fmt(runnerUpPrize)} GTX`, accent: "#38BDF8" },
+          { label: "3rd Place (20%)", value: `${fmt(thirdPrize)} GTX`, accent: "#00E676" },
         ]}
       />
       <div className="grid gap-6 lg:grid-cols-12">
@@ -184,21 +184,21 @@ export default function CompetitionDetail() {
           <div className="mt-4 grid gap-3 sm:grid-cols-3" data-testid="competition-settlement-tiers">
             <div className="rounded-xl border border-amber-400/35 bg-amber-500/10 p-3.5 flex items-center justify-between">
               <div>
-                <p className="text-[10px] font-black uppercase text-amber-300 flex items-center gap-1"><Crown size={12} /> 1st Place Champion (55%)</p>
+                <p className="text-[10px] font-black uppercase text-amber-300 flex items-center gap-1"><Crown size={12} /> 1st Place Champion (50%)</p>
                 <p className="text-xs font-bold text-white mt-0.5">{leaderClub}</p>
               </div>
               <span className="gx-mono text-base font-black text-amber-300">{fmt(firstPrize)} GTX</span>
             </div>
             <div className="rounded-xl border border-slate-400/25 bg-slate-800/40 p-3.5 flex items-center justify-between">
               <div>
-                <p className="text-[10px] font-black uppercase text-slate-300 flex items-center gap-1"><Medal size={12} /> 2nd Place Runner-Up (28%)</p>
+                <p className="text-[10px] font-black uppercase text-slate-300 flex items-center gap-1"><Medal size={12} /> 2nd Place Runner-Up (30%)</p>
                 <p className="text-xs font-bold text-white mt-0.5">{runnerUpClub}</p>
               </div>
               <span className="gx-mono text-base font-black text-slate-200">{fmt(runnerUpPrize)} GTX</span>
             </div>
             <div className="rounded-xl border border-amber-700/35 bg-amber-950/20 p-3.5 flex items-center justify-between">
               <div>
-                <p className="text-[10px] font-black uppercase text-amber-400 flex items-center gap-1"><Trophy size={12} /> 3rd / Semi-Finalist (17%)</p>
+                <p className="text-[10px] font-black uppercase text-amber-400 flex items-center gap-1"><Trophy size={12} /> 3rd / Semi-Finalist (20%)</p>
                 <p className="text-xs font-bold text-white mt-0.5">{thirdClub}</p>
               </div>
               <span className="gx-mono text-base font-black text-amber-400">{fmt(thirdPrize)} GTX</span>
@@ -213,10 +213,10 @@ export default function CompetitionDetail() {
               </span>
             </div>
             <div className="flex items-center gap-2">
-              {comp.host_type === "user" && comp.status !== "finished" && (
-                <Btn variant="gold" onClick={handleFinalizeHostedSettlement} disabled={settling} data-testid="finalize-hosted-settlement-btn">
-                  <CheckCircle2 size={13} /> {settling ? "Settling…" : "Finalize Hosted Settlement"}
-                </Btn>
+              {comp.status !== "finished" && (
+                <span className="inline-flex items-center gap-1 text-[11px] text-emerald-300" data-testid="auto-settlement-note">
+                  <CheckCircle2 size={13} /> Prizes auto-settle to club treasuries when the final fixture is played.
+                </span>
               )}
               <Link to="/app/jackpot" className="gx-btn gx-btn-secondary text-[11px] py-1 px-3 w-fit">
                 View Global Jackpot →

@@ -93,6 +93,8 @@ class StaffHireRequest(BaseModel):
     staff_id: str
     role: str | None = None
     marquee_wage_premium: bool = False
+    contract_years: int = 3
+    pay_with_fan_coin: bool = True
 
 
 class StaffFireRequest(BaseModel):
@@ -1281,6 +1283,8 @@ def hire_club_staff(
         payload.staff_id,
         role=payload.role,
         marquee_wage_premium=payload.marquee_wage_premium,
+        contract_years=payload.contract_years,
+        pay_with_fan_coin=payload.pay_with_fan_coin,
     )
 
 

@@ -15,7 +15,7 @@ export default function Jackpot() {
     queryKey: ["jackpot-status"],
     queryFn: async () => {
       try {
-        return (await api.get("/jackpot/status")).data;
+        return (await api.get("/jackpot/state")).data;
       } catch {
         return null;
       }
@@ -76,7 +76,7 @@ export default function Jackpot() {
   }
 
   const jackpotBalance = Number(
-    status?.current_balance ?? waterfall?.jackpot_ecosystem_pool_gtex ?? 25000
+    (status?.balance ?? status?.current_balance) ?? waterfall?.jackpot_ecosystem_pool_gtex ?? 25000
   );
   const thresholdAmount = Number(status?.threshold_amount ?? 100000);
   const progressPct = Math.min(100, Math.round((jackpotBalance / Math.max(1, thresholdAmount)) * 100));

@@ -637,6 +637,7 @@ function BoardroomSection({ club }: any) {
   const [chatRole, setChatRole] = useState<string | null>(null);
   const [hiringBusy, setHiringBusy] = useState<string | null>(null);
   const [marqueePremiums, setMarqueePremiums] = useState<Record<string, boolean>>({});
+  const [contractYears, setContractYears] = useState<Record<string, number>>({});
   const [delegationBusy, setDelegationBusy] = useState(false);
   const [roleFilter, setRoleFilter] = useState("all");
 
@@ -694,11 +695,14 @@ function BoardroomSection({ club }: any) {
   const handleHire = async (candidate: any) => {
     setHiringBusy(candidate.staff_id);
     const usePremium = Boolean(marqueePremiums[candidate.staff_id]);
+    const years = contractYears[candidate.staff_id] || 3;
     try {
       await api.post(`/owner/clubs/${club.club_id}/staff/hire`, {
         staff_id: candidate.staff_id,
         role: candidate.role,
         marquee_wage_premium: usePremium,
+        contract_years: years,
+        pay_with_fan_coin: true,
       });
       toast.success(`Appointed ${candidate.name} as ${candidate.role.replace(/_/g, " ")}.`);
       await refetchStaff();
@@ -972,9 +976,24 @@ function BoardroomSection({ club }: any) {
                   <p className="text-xs text-slate-300 mt-2 leading-relaxed">{cand.specialty}</p>
 
                   <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
-                    <span>Base Wage:</span>
-                    <b className="gx-mono text-white">{fmt(cand.salary_gtex || 10000)} GTX / season</b>
+                    <span>Upfront Fan Coin Contract:</span>
+                    <b className="gx-mono text-amber-300">{fmt((cand.salary_fan_coin || 1200) * (contractYears[cand.staff_id] || 3))} FAN</b>
                   </div>
+                  <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-400">
+                    <span>Contract Length:</span>
+                    <select
+                      value={contractYears[cand.staff_id] || 3}
+                      onChange={(e) => setContractYears((prev) => ({ ...prev, [cand.staff_id]: Number(e.target.value) }))}
+                      className="rounded border border-white/20 bg-slate-800 px-2 py-0.5 text-xs font-bold text-white"
+                    >
+                      <option value={1}>1 Year ({fmt((cand.salary_fan_coin || 1200) * 1)} FAN)</option>
+                      <option value={2}>2 Years ({fmt((cand.salary_fan_coin || 1200) * 2)} FAN)</option>
+                      <option value={3}>3 Years (Recommended · {fmt((cand.salary_fan_coin || 1200) * 3)} FAN)</option>
+                      <option value={4}>4 Years ({fmt((cand.salary_fan_coin || 1200) * 4)} FAN)</option>
+                      <option value={5}>5 Years ({fmt((cand.salary_fan_coin || 1200) * 5)} FAN)</option>
+                    </select>
+                  </div>
+                  <p className="text-[10px] text-emerald-400 mt-1">Paid once upfront · club owes zero recurring debt</p>
 
                   {!meetsPrestige && (
                     <label className="mt-3 flex items-center gap-2 rounded bg-amber-950/40 border border-amber-500/30 p-2 text-[10px] text-amber-200 cursor-pointer">
