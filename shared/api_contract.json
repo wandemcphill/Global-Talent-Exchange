@@ -12278,6 +12278,58 @@
         "handler": "upsert_theme",
         "source_file": "backend/app/national_team_engine/router.py",
         "response_model": "TournamentThemeResponse"
+      },
+      "post_api_v2_national_team_engine_entries_entry_id_manager_hire": {
+        "method": "POST",
+        "canonical_path": "/api/v2/national-team-engine/entries/{entry_id}/manager/hire",
+        "aliases": [
+          "/api/national-team-engine/entries/{entry_id}/manager/hire",
+          "/api/v1/national-team-engine/entries/{entry_id}/manager/hire",
+          "/api/v2/national-team-engine/entries/{entry_id}/manager/hire",
+          "/national-team-engine/entries/{entry_id}/manager/hire"
+        ],
+        "handler": "hire_national_team_entry_manager",
+        "source_file": "backend/app/national_team_engine/router.py",
+        "response_model": "dict"
+      },
+      "post_api_v2_national_team_engine_entries_entry_id_rentals_checkout": {
+        "method": "POST",
+        "canonical_path": "/api/v2/national-team-engine/entries/{entry_id}/rentals/checkout",
+        "aliases": [
+          "/api/national-team-engine/entries/{entry_id}/rentals/checkout",
+          "/api/v1/national-team-engine/entries/{entry_id}/rentals/checkout",
+          "/api/v2/national-team-engine/entries/{entry_id}/rentals/checkout",
+          "/national-team-engine/entries/{entry_id}/rentals/checkout"
+        ],
+        "handler": "checkout_national_team_rental_basket",
+        "source_file": "backend/app/national_team_engine/router.py",
+        "response_model": "dict"
+      },
+      "post_api_v2_national_team_engine_competitions_competition_id_finals_squad": {
+        "method": "POST",
+        "canonical_path": "/api/v2/national-team-engine/competitions/{competition_id}/finals-squad",
+        "aliases": [
+          "/api/national-team-engine/competitions/{competition_id}/finals-squad",
+          "/api/v1/national-team-engine/competitions/{competition_id}/finals-squad",
+          "/api/v2/national-team-engine/competitions/{competition_id}/finals-squad",
+          "/national-team-engine/competitions/{competition_id}/finals-squad"
+        ],
+        "handler": "update_qualified_finals_squad_route",
+        "source_file": "backend/app/national_team_engine/router.py",
+        "response_model": "NationalTeamCompetitionEntryResponse"
+      },
+      "get_api_v2_national_team_engine_competitions_competition_id_rewards_breakdown": {
+        "method": "GET",
+        "canonical_path": "/api/v2/national-team-engine/competitions/{competition_id}/rewards/breakdown",
+        "aliases": [
+          "/api/national-team-engine/competitions/{competition_id}/rewards/breakdown",
+          "/api/v1/national-team-engine/competitions/{competition_id}/rewards/breakdown",
+          "/api/v2/national-team-engine/competitions/{competition_id}/rewards/breakdown",
+          "/national-team-engine/competitions/{competition_id}/rewards/breakdown"
+        ],
+        "handler": "get_competition_reward_breakdown_route",
+        "source_file": "backend/app/national_team_engine/router.py",
+        "response_model": "dict"
       }
     },
     "notifications": {
@@ -24396,7 +24448,11 @@
     "/api/v2/ws/tournament/{tournament_id}": "websocket_api_v2_ws_tournament_tournament_id",
     "/health": "get_health",
     "/ready": "get_ready",
-    "/version": "get_version"
+    "/version": "get_version",
+    "/api/v2/national-team-engine/entries/{entry_id}/manager/hire": "post_api_v2_national_team_engine_entries_entry_id_manager_hire",
+    "/api/v2/national-team-engine/entries/{entry_id}/rentals/checkout": "post_api_v2_national_team_engine_entries_entry_id_rentals_checkout",
+    "/api/v2/national-team-engine/competitions/{competition_id}/finals-squad": "post_api_v2_national_team_engine_competitions_competition_id_finals_squad",
+    "/api/v2/national-team-engine/competitions/{competition_id}/rewards/breakdown": "get_api_v2_national_team_engine_competitions_competition_id_rewards_breakdown"
   },
   "deprecated_aliases": {
     "/{club_id}/catalogue/load": "/api/v2/{club_id}/catalogue/load",
@@ -29034,6 +29090,22 @@
     "/ws/match/{match_id}": "/api/v2/ws/match/{match_id}",
     "/ws/matches/{match_id}": "/api/v2/ws/matches/{match_id}",
     "/ws/spectate/{match_id}": "/api/v2/ws/spectate/{match_id}",
-    "/ws/tournament/{tournament_id}": "/api/v2/ws/tournament/{tournament_id}"
+    "/ws/tournament/{tournament_id}": "/api/v2/ws/tournament/{tournament_id}",
+    "/api/national-team-engine/entries/{entry_id}/manager/hire": "/api/v2/national-team-engine/entries/{entry_id}/manager/hire",
+    "/api/v1/national-team-engine/entries/{entry_id}/manager/hire": "/api/v2/national-team-engine/entries/{entry_id}/manager/hire",
+    "/api/v2/national-team-engine/entries/{entry_id}/manager/hire": "/api/v2/national-team-engine/entries/{entry_id}/manager/hire",
+    "/national-team-engine/entries/{entry_id}/manager/hire": "/api/v2/national-team-engine/entries/{entry_id}/manager/hire",
+    "/api/national-team-engine/entries/{entry_id}/rentals/checkout": "/api/v2/national-team-engine/entries/{entry_id}/rentals/checkout",
+    "/api/v1/national-team-engine/entries/{entry_id}/rentals/checkout": "/api/v2/national-team-engine/entries/{entry_id}/rentals/checkout",
+    "/api/v2/national-team-engine/entries/{entry_id}/rentals/checkout": "/api/v2/national-team-engine/entries/{entry_id}/rentals/checkout",
+    "/national-team-engine/entries/{entry_id}/rentals/checkout": "/api/v2/national-team-engine/entries/{entry_id}/rentals/checkout",
+    "/api/national-team-engine/competitions/{competition_id}/finals-squad": "/api/v2/national-team-engine/competitions/{competition_id}/finals-squad",
+    "/api/v1/national-team-engine/competitions/{competition_id}/finals-squad": "/api/v2/national-team-engine/competitions/{competition_id}/finals-squad",
+    "/api/v2/national-team-engine/competitions/{competition_id}/finals-squad": "/api/v2/national-team-engine/competitions/{competition_id}/finals-squad",
+    "/national-team-engine/competitions/{competition_id}/finals-squad": "/api/v2/national-team-engine/competitions/{competition_id}/finals-squad",
+    "/api/national-team-engine/competitions/{competition_id}/rewards/breakdown": "/api/v2/national-team-engine/competitions/{competition_id}/rewards/breakdown",
+    "/api/v1/national-team-engine/competitions/{competition_id}/rewards/breakdown": "/api/v2/national-team-engine/competitions/{competition_id}/rewards/breakdown",
+    "/api/v2/national-team-engine/competitions/{competition_id}/rewards/breakdown": "/api/v2/national-team-engine/competitions/{competition_id}/rewards/breakdown",
+    "/national-team-engine/competitions/{competition_id}/rewards/breakdown": "/api/v2/national-team-engine/competitions/{competition_id}/rewards/breakdown"
   }
 }
