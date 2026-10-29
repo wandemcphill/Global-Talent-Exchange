@@ -804,9 +804,7 @@ class NationalTeamTournamentService:
         duration_days = DEFAULT_RENTAL_DURATION_DAYS
         metadata = dict(competition.metadata_json or {})
         scheduled_end = (
-            metadata.get("scheduled_end_at")
-            or metadata.get("end_date")
-            or metadata.get("tournament_end_at")
+            metadata.get("scheduled_end_at") or metadata.get("end_date") or metadata.get("tournament_end_at")
         )
         if scheduled_end:
             sched_dt = self._as_utc_datetime(scheduled_end)
@@ -2149,9 +2147,7 @@ class NationalTeamTournamentService:
 
         metadata = dict(competition.metadata_json or {})
         scheduled_end = (
-            metadata.get("scheduled_end_at")
-            or metadata.get("end_date")
-            or metadata.get("tournament_end_at")
+            metadata.get("scheduled_end_at") or metadata.get("end_date") or metadata.get("tournament_end_at")
         )
         sched_dt = self._as_utc_datetime(scheduled_end) if scheduled_end else None
         completed_at = self._as_utc_datetime(competition.completed_at)
@@ -3373,6 +3369,7 @@ class NationalTeamTournamentService:
             select(RentalContract)
             .where(RentalContract.status == RentalContractStatus.ACTIVE)
             .order_by(RentalContract.created_at.asc(), RentalContract.id.asc())
+            .with_for_update(skip_locked=True)
         )
         if competition_id is not None:
             stmt = stmt.where(RentalContract.tournament_id == competition_id)
