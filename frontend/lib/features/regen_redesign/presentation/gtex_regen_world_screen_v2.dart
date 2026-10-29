@@ -54,6 +54,11 @@ class _GtexRegenWorldScreenV2State extends State<GtexRegenWorldScreenV2> {
   String _query = '';
   String _origin = 'All';
   GtexRegenProspect? _selected;
+  List<GtexRegenProspect> _extraNationalProspects = const <GtexRegenProspect>[];
+  int? _loadedNationalPage;
+  bool? _hasMoreNationalRegens;
+  bool _loadingMoreNationalRegens = false;
+  String? _loadMoreNationalRegensError;
 
   /// The dossier for whichever regen is selected. Held beside the selection
   /// rather than fetched inside the panel, so changing selection supersedes
@@ -71,6 +76,52 @@ class _GtexRegenWorldScreenV2State extends State<GtexRegenWorldScreenV2> {
   void initState() {
     super.initState();
     _future = widget.repository.loadWorld();
+  }
+
+  Future<void> _loadMoreNationalRegens(GtexRegenWorldData data) async {
+    if (_loadingMoreNationalRegens ||
+        !(_hasMoreNationalRegens ?? data.hasMoreNationalRegens)) {
+      return;
+    }
+    setState(() {
+      _loadingMoreNationalRegens = true;
+      _loadMoreNationalRegensError = null;
+    });
+    try {
+      final GtexRegenProspectPage nextPage =
+          await widget.repository.loadMoreNationalRegens(
+        page: (_loadedNationalPage ?? data.nationalRegensPage) + 1,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        final Set<String> existingIds = <String>{
+          ...data.prospects.map((GtexRegenProspect item) => item.id),
+          ..._extraNationalProspects.map((GtexRegenProspect item) => item.id),
+        };
+        final List<GtexRegenProspect> newItems = nextPage.prospects
+            .where((GtexRegenProspect item) => existingIds.add(item.id))
+            .toList(growable: false);
+        _extraNationalProspects = <GtexRegenProspect>[
+          ..._extraNationalProspects,
+          ...newItems,
+        ];
+        _loadedNationalPage = nextPage.page;
+        _hasMoreNationalRegens = nextPage.hasNext;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loadMoreNationalRegensError =
+              'Unable to load more national-pool regens. Try again.';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loadingMoreNationalRegens = false);
+      }
+    }
   }
 
   void _select(GtexRegenProspect prospect) {
@@ -130,15 +181,23 @@ class _GtexRegenWorldScreenV2State extends State<GtexRegenWorldScreenV2> {
             icon: Icons.warning_amber_rounded,
             accent: GtexColors.purple,
             actionLabel: 'Retry',
-            onAction:
-                () => setState(() => _future = widget.repository.loadWorld()),
+            onAction: () => setState(() {
+              _extraNationalProspects = const <GtexRegenProspect>[];
+              _loadedNationalPage = null;
+              _hasMoreNationalRegens = null;
+              _loadMoreNationalRegensError = null;
+              _future = widget.repository.loadWorld();
+            }),
           );
         }
 
         final GtexRegenWorldData data = snapshot.data!;
-        final List<GtexRegenProspect> rawFiltered = _filteredProspects(
-          data.prospects,
-        );
+        final List<GtexRegenProspect> allProspects = <GtexRegenProspect>[
+          ...data.prospects,
+          ..._extraNationalProspects,
+        ];
+        final List<GtexRegenProspect> rawFiltered =
+            _filteredProspects(allProspects);
         final bool hiddenOriginLane =
             rawFiltered.isEmpty &&
             data.prospects.isNotEmpty &&
@@ -356,6 +415,10 @@ class _GtexRegenWorldScreenV2State extends State<GtexRegenWorldScreenV2> {
           prospects: prospects,
           selectedId: _selected?.id,
           onSelected: _select,
+          hasMore: _hasMoreNationalRegens ?? data.hasMoreNationalRegens,
+          isLoadingMore: _loadingMoreNationalRegens,
+          loadMoreError: _loadMoreNationalRegensError,
+          onLoadMore: () => _loadMoreNationalRegens(data),
         );
     }
   }
@@ -564,15 +627,55 @@ class _ProspectsBoard extends StatelessWidget {
     required this.prospects,
     required this.selectedId,
     required this.onSelected,
+    required this.hasMore,
+    required this.isLoadingMore,
+    required this.loadMoreError,
+    required this.onLoadMore,
   });
 
   final List<GtexRegenProspect> prospects;
   final String? selectedId;
   final ValueChanged<GtexRegenProspect> onSelected;
+  final bool hasMore;
+  final bool isLoadingMore;
+  final String? loadMoreError;
+  final VoidCallback onLoadMore;
+
+  Widget _buildLoadMoreFooter() {
+    if (!hasMore && loadMoreError == null) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.all(GtexSpacing.md),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (loadMoreError != null) ...<Widget>[
+            Text(
+              loadMoreError!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: GtexColors.textSecondary),
+            ),
+            const SizedBox(height: GtexSpacing.sm),
+          ],
+          GtexActionButton(
+            label: isLoadingMore
+                ? 'Loading regens...'
+                : loadMoreError == null
+                    ? 'Load more regens'
+                    : 'Retry loading regens',
+            icon: isLoadingMore ? Icons.hourglass_top : Icons.expand_more,
+            accent: GtexColors.purple,
+            onPressed: isLoadingMore ? null : onLoadMore,
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (prospects.isEmpty) {
+    if (prospects.isEmpty && !hasMore && loadMoreError == null) {
       return const GtexEmptyState(
         title: 'No regens in this lane',
         message: 'Adjust filters or refresh the live regen universe.',
@@ -607,7 +710,17 @@ class _ProspectsBoard extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Expanded(
+            if (prospects.isEmpty)
+              const Expanded(
+                child: GtexEmptyState(
+                  title: 'No regens loaded yet',
+                  message: 'Load the next page or retry to access the national pool.',
+                  icon: Icons.auto_awesome,
+                  accent: GtexColors.purple,
+                ),
+              )
+            else
+              Expanded(
               child: GridView.builder(
                 padding: const EdgeInsets.all(GtexSpacing.md),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -646,6 +759,7 @@ class _ProspectsBoard extends StatelessWidget {
                 },
               ),
             ),
+            _buildLoadMoreFooter(),
           ],
         );
       },

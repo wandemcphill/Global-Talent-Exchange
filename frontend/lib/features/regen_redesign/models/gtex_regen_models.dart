@@ -21,6 +21,20 @@ enum GtexRegenContractStatus {
   transferRequested,
 }
 
+class GtexRegenProspectPage {
+  const GtexRegenProspectPage({
+    required this.prospects,
+    required this.page,
+    required this.total,
+    required this.hasNext,
+  });
+
+  final List<GtexRegenProspect> prospects;
+  final int page;
+  final int total;
+  final bool hasNext;
+}
+
 class GtexRegenWorldData {
   const GtexRegenWorldData({
     required this.prospects,
@@ -32,6 +46,8 @@ class GtexRegenWorldData {
     required this.stats,
     this.createSonAvailable = true,
     this.createSonBlockedReason,
+    this.nationalRegensPage = 1,
+    this.hasMoreNationalRegens = false,
   });
 
   final List<GtexRegenProspect> prospects;
@@ -43,6 +59,8 @@ class GtexRegenWorldData {
   final GtexRegenWorldStats stats;
   final bool createSonAvailable;
   final String? createSonBlockedReason;
+  final int nationalRegensPage;
+  final bool hasMoreNationalRegens;
 }
 
 class GtexRegenWorldStats {
