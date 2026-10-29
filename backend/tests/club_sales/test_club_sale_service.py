@@ -556,7 +556,7 @@ def test_settled_transfer_amounts_are_immutable(session) -> None:
         actor=seller,
         club_id=club.id,
         offer_id=offer["offer_id"],
-        executed_sale_price=Decimal("80.0000"),
+        executed_sale_price=Decimal("95.0000"),
     )
 
     transfer_row = session.scalar(
