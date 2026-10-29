@@ -76,18 +76,18 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
 
       // Verify world clock container or badge is rendered without device time
       const clockElement = page
-        .locator('[data-testid="world-clock"], .world-clock-badge, text=/Season|World Date|UTC/i')
+        .locator('[data-testid="world-clock"], .world-clock-badge')
+        .or(page.getByText(/Season|World Date|UTC/i))
         .first();
 
       // Truthful boundary: briefing cards render persisted events or honest empty state
       const briefingSection = page
-        .locator(
-          '[data-testid="owner-briefing"], text=/Owner Briefing|Daily Briefing|No pending briefing/i',
-        )
+        .locator('[data-testid="owner-briefing"]')
+        .or(page.getByText(/Owner Briefing|Daily Briefing|No pending briefing/i))
         .first();
 
       await expect(
-        clockElement.or(briefingSection).or(page.getByText(/Control Center|Command Center/i)),
+        clockElement.or(briefingSection).or(page.getByText(/Control Center|Command Center/i)).first(),
       ).toBeVisible({ timeout: 15_000 });
       await assertNoHorizontalOverflow(page);
     });
@@ -98,12 +98,11 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
 
       // Staff hierarchy differentiates General Manager, Head Coach, and Youth Director
       const staffSection = page
-        .locator(
-          '[data-testid="staff-management"], text=/Staff|Manager|Head Coach|General Manager/i',
-        )
+        .locator('[data-testid="staff-management"]')
+        .or(page.getByText(/Staff|Manager|Head Coach|General Manager/i))
         .first();
 
-      await expect(staffSection.or(page.getByText(/Squad|Lineup|Tactics/i))).toBeVisible({
+      await expect(staffSection.or(page.getByText(/Squad|Lineup|Tactics/i)).first()).toBeVisible({
         timeout: 15_000,
       });
       await assertNoHorizontalOverflow(page);
@@ -162,9 +161,8 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
 
       // Displays honest negotiation intermediate states (draft/open/countered/accepted)
       const lifecycleCard = page
-        .locator(
-          '[data-testid="negotiation-card"], text=/Pending Decision|Under Negotiation|Awaiting/i',
-        )
+        .locator('[data-testid="negotiation-card"]')
+        .or(page.getByText(/Pending Decision|Under Negotiation|Awaiting/i))
         .first();
       if (await lifecycleCard.isVisible().catch(() => false)) {
         await expect(lifecycleCard).toBeVisible();
@@ -202,7 +200,8 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
 
       // Fixtures display scheduled kickoff under the world clock
       const fixtureRow = page
-        .locator('[data-testid="fixture-row"], text=/vs|Kickoff|Scheduled|FT/i')
+        .locator('[data-testid="fixture-row"]')
+        .or(page.getByText(/vs|Kickoff|Scheduled|FT/i))
         .first();
       if (await fixtureRow.isVisible().catch(() => false)) {
         await expect(fixtureRow).toBeVisible();
@@ -219,7 +218,7 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
       // Surface 1: Competition Standings
       await visitConsoleRoute(page, "/app/competitions");
       const standingsCard = page.getByText(/Standings|Table|Points|GD/i).first();
-      await expect(standingsCard.or(page.getByText(/Competitions/i))).toBeVisible({
+      await expect(standingsCard.or(page.getByText(/Competitions/i)).first()).toBeVisible({
         timeout: 15_000,
       });
 
@@ -249,7 +248,8 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
 
       // Verifies no fabricated client-side balance
       const ledgerEntry = page
-        .locator('[data-testid="ledger-entry"], text=/GTX|Settlement|Prize|Payout|Fee/i')
+        .locator('[data-testid="ledger-entry"]')
+        .or(page.getByText(/GTX|Settlement|Prize|Payout|Fee/i))
         .first();
       if (await ledgerEntry.isVisible().catch(() => false)) {
         await expect(ledgerEntry).toBeVisible();
@@ -266,9 +266,10 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
 
       // Refreshed control center updates next scheduled fixture & latest result
       const briefingOverview = page
-        .locator('[data-testid="briefing-summary"], text=/Briefing|Overview|Next Match|Recent/i')
+        .locator('[data-testid="briefing-summary"]')
+        .or(page.getByText(/Briefing|Overview|Next Match|Recent/i))
         .first();
-      await expect(briefingOverview.or(page.getByText(/Control Center|Titan/i))).toBeVisible({
+      await expect(briefingOverview.or(page.getByText(/Control Center|Titan/i)).first()).toBeVisible({
         timeout: 15_000,
       });
 
@@ -404,7 +405,7 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
         .first();
       const contentList = page.locator('[data-testid="transfer-listing"]').first();
 
-      await expect(emptyNotice.or(contentList).or(page.getByText(/Transfer Hub/i))).toBeVisible();
+      await expect(emptyNotice.or(contentList).or(page.getByText(/Transfer Hub/i)).first()).toBeVisible();
       await assertNoHorizontalOverflow(page);
     });
 
@@ -418,7 +419,7 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
       const errorIndicator = page
         .getByText(/Competition unavailable|Not found|Error loading|Go back/i)
         .first();
-      await expect(errorIndicator.or(page.getByText(/Competitions/i))).toBeVisible({
+      await expect(errorIndicator.or(page.getByText(/Competitions/i)).first()).toBeVisible({
         timeout: 15_000,
       });
 

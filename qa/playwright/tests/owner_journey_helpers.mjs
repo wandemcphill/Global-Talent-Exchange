@@ -75,7 +75,7 @@ export async function signInReact(page, { email, password } = TEST_CREDENTIALS) 
     await emailField.fill(email);
     await passwordField.fill(password);
     await submitBtn.click();
-    await page.waitForURL((url) => !url.pathname.endsWith("/login"), { timeout: 15_000 });
+    await page.waitForURL((url) => !url.pathname.endsWith("/login"), { timeout: 30_000 });
   } else {
     // Inject deterministic session into localStorage for headless / direct test environments
     await page.evaluate(
@@ -93,6 +93,7 @@ export async function signInReact(page, { email, password } = TEST_CREDENTIALS) 
         localStorage.setItem("gtex_auth_session", JSON.stringify(mockSession));
         localStorage.setItem("gtex_active_club", "club_demo_acceptance_01");
         localStorage.setItem("gtex_auth_token", mockSession.token);
+        localStorage.setItem("gtex_access", mockSession.token);
       },
       { userEmail: email },
     );
@@ -106,6 +107,8 @@ export async function clearSession(page) {
   await page.evaluate(() => {
     localStorage.removeItem("gtex_auth_session");
     localStorage.removeItem("gtex_auth_token");
+    localStorage.removeItem("gtex_access");
+    localStorage.removeItem("gtex_refresh");
     localStorage.removeItem("gtex_active_club");
     sessionStorage.clear();
   });

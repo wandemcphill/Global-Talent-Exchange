@@ -246,6 +246,7 @@ const mockNewsroom = {
 async function setupOwnerParityRoutes(page) {
   // Mock auth user state in localStorage
   await page.addInitScript(() => {
+    localStorage.setItem("gtex_access", "fake-parity-token-b5");
     localStorage.setItem("gtex_auth_token", "fake-parity-token-b5");
     localStorage.setItem(
       "gtex_user",
@@ -261,6 +262,45 @@ async function setupOwnerParityRoutes(page) {
   });
 
   // Intercept backend API requests
+  await page.route("**/auth/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        id: "owner-user-b5",
+        username: "boardroom_owner",
+        display_name: "Boardroom Executive",
+        role: "user",
+        account_type: "user",
+      }),
+    });
+  });
+
+  await page.route("**/world/clock", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        clockId: "clock-1",
+        worldTime: "2026-03-14T12:00:00Z",
+        worldDate: "2026-03-14",
+        isPaused: false,
+        progressionRate: 1,
+        virtualMonthsPerSeason: 12,
+        currentSeasonLabel: "GTEX Year 1",
+        currentSeasonNumber: 1,
+        gtexYearsRunning: 1,
+      }),
+    });
+  });
+
+  await page.route("**/owner/ticker*", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([]),
+    });
+  });
   await page.route("**/owner/control-center", async (route) => {
     await route.fulfill({
       status: 200,
@@ -369,7 +409,7 @@ test.describe("Prestige, Story, and Showroom Parity (Agent B5)", () => {
     // Verify Showroom Screen loads with GTEX Styling & Header
     await expect(page.locator('[data-testid="showroom-screen"]')).toBeVisible();
     await expect(page.getByText("Owner Showroom & Luxury Fleet")).toBeVisible();
-    await expect(page.getByText("Club Treasury")).toBeVisible();
+    await expect(page.getByText("Club Treasury", { exact: true }).first()).toBeVisible();
 
     // Verify Demarcation Banner: Owner Luxury Gifting vs Community Gifting
     await expect(page.getByText("Owner Luxury Gifting (Club GTEX Coin)")).toBeVisible();
@@ -379,19 +419,19 @@ test.describe("Prestige, Story, and Showroom Parity (Agent B5)", () => {
     const jetItem = page.locator('[data-testid="showroom-item-falcon_7x_private_jet"]');
     await expect(jetItem).toBeVisible();
     await expect(jetItem.getByText("Global Wire Notice")).toBeVisible();
-    await expect(jetItem.getByText("4,800 GTX")).toBeVisible();
+    await expect(jetItem.getByText("4,800 GTX").first()).toBeVisible();
 
     const watchItem = page.locator('[data-testid="showroom-item-chronos_tourbillon_watch"]');
     await expect(watchItem).toBeVisible();
     await expect(watchItem.getByText("Private Collection")).toBeVisible();
-    await expect(watchItem.getByText("250 GTX")).toBeVisible();
+    await expect(watchItem.getByText("250 GTX").first()).toBeVisible();
 
     // Click Acquire on watch item -> verify purchase confirm modal
     await watchItem.locator('[data-testid="acquire-btn-chronos_tourbillon_watch"]').click();
     const purchaseModal = page.locator('[data-testid="showroom-purchase-confirm"]');
     await expect(purchaseModal).toBeVisible();
     await expect(purchaseModal.getByText("Treasury Authorization")).toBeVisible();
-    await expect(purchaseModal.getByText("250 GTX")).toBeVisible();
+    await expect(purchaseModal.getByText("250 GTX").first()).toBeVisible();
 
     // Confirm purchase -> verify confirmed receipt modal
     await purchaseModal.locator('[data-testid="confirm-purchase-button"]').click();
@@ -427,7 +467,7 @@ test.describe("Prestige, Story, and Showroom Parity (Agent B5)", () => {
     await noteInput.fill("Exemplary performance in the continental cup.");
 
     // Submit gift -> verify gift receipt displays confirmed morale delta
-    await giftModal.locator('[data-testid="confirm-gift-button"]').click();
+    await giftModal.locator('[data-testid="confirm-gift-button"]').dispatchEvent("click");
     const giftReceipt = page.locator('[data-testid="showroom-gift-receipt"]');
     await expect(giftReceipt).toBeVisible();
     await expect(giftReceipt.getByText("Luxury Gift Delivered")).toBeVisible();

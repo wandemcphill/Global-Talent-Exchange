@@ -83,7 +83,7 @@ test("design lab captures three Flutter-native directions", async ({ page }, tes
   }
 });
 
-test.afterEach(async (_fixtures, testInfo) => {
+test.afterEach(async ({ page: _page }, testInfo) => {
   const diagnostics = diagnosticsByTest.get(testInfo.testId);
   if (diagnostics) {
     await testInfo.attach("browser-diagnostics.json", {

@@ -1373,15 +1373,16 @@ def tick_club(
         and (len(players) < 18 or manager.get("ambition", 10) >= 13)
         and rng.random() < 0.6
     ):
+        mgr_name = manager.get("name") or manager.get("display_name") or "First-Team Manager"
         budget = 4_000 + manager.get("ambition", 10) * 300
         pending.append(
             _item(
                 state.owner_user_id,
                 state.club_id,
                 "manager_request",
-                sender=manager["name"],
+                sender=mgr_name,
                 title=f"Manager requests {engine.ROLE_REQUESTS[thin]}",
-                what=f"{manager['name']} asks for a transfer budget of {budget:,} GTEX Coin to sign {engine.ROLE_REQUESTS[thin]}.",
+                what=f"{mgr_name} asks for a transfer budget of {budget:,} GTEX Coin to sign {engine.ROLE_REQUESTS[thin]}.",
                 why=f"Squad depth at {thin}: {sum(1 for x in positions if x.startswith(thin[:4]))} players. Transfer preference: {manager.get('transfer_preference')}.",
                 actions=[
                     {"key": "approve", "label": "Approve budget & open market", "style": "primary"},
@@ -1389,7 +1390,7 @@ def tick_club(
                 ],
                 payload={"subject": thin, "position": thin, "budget": budget},
                 priority="normal",
-                prompt=f"Sender: manager {manager['name']} (transfer preference {manager.get('transfer_preference')}, temperament {manager.get('temperament')}). Ask the owner for {budget} GTEX Coin budget to sign {engine.ROLE_REQUESTS[thin]}.",
+                prompt=f"Sender: manager {mgr_name} (transfer preference {manager.get('transfer_preference')}, temperament {manager.get('temperament')}). Ask the owner for {budget} GTEX Coin budget to sign {engine.ROLE_REQUESTS[thin]}.",
             )
         )
     sellable = [p for p in players if Decimal(p.value_coin) >= 1500]

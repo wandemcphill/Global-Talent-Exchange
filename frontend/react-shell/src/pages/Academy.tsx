@@ -530,7 +530,11 @@ export default function Academy() {
   if (isLoading || !club) return <Loading />;
 
   const regens: any[] = club.squad.filter((p: any) => Boolean(p.is_regen));
-  const facilityLevel = club.facilities?.academy ?? club.academy_level ?? 2;
+  const facilityLevel = Number(
+    typeof club.facilities?.academy === 'object' && club.facilities?.academy !== null
+      ? club.facilities?.academy?.level
+      : club.facilities?.academy ?? club.academy_level ?? 2
+  ) || 2;
   const clubPrestige = club.health?.prestige ?? 55;
   const prestigeTier = clubPrestige >= 85 ? 1 : clubPrestige >= 70 ? 2 : clubPrestige >= 50 ? 3 : clubPrestige >= 35 ? 4 : 5;
   const hoydRating = club.staff?.head_of_youth_development?.rating ?? club.hoyd?.rating ?? 78;

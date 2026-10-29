@@ -108,7 +108,7 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
   overallRating = 88,
   potentialRating,
   sponsorName = "GTEX GLOBAL AIRWAYS",
-  facilityLevel = 4,
+  facilityLevel: rawFacilityLevel = 4,
   adSurfaceZone = "360° Pitchside LED & Roof Naming Halo",
   spectacleTier = "floodlight_walkout",
   assetCategory = "watch",
@@ -123,6 +123,11 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
   onActionClick,
   actionLabel,
 }) => {
+  const facilityLevel = Number(
+    typeof rawFacilityLevel === 'object' && rawFacilityLevel !== null
+      ? (rawFacilityLevel as any).level ?? 1
+      : rawFacilityLevel
+  ) || 1;
   const [mode, setMode] = useState<Cinema3DMode>(defaultMode);
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(false);
