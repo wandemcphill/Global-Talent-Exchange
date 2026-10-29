@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import sys
-from http.server import HTTPServer, SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import urllib.parse
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -62,7 +62,11 @@ class GtexHandler(SimpleHTTPRequestHandler):
             return str(REACT_WEB_ROOT / "index.html")
 
         # Route React static build assets
-        if decoded_path.startswith("/static/") or decoded_path.startswith("/branding/") or decoded_path.startswith("/img/"):
+        if (
+            decoded_path.startswith("/static/")
+            or decoded_path.startswith("/branding/")
+            or decoded_path.startswith("/img/")
+        ):
             rel = decoded_path.lstrip("/")
             target = REACT_WEB_ROOT / rel
             if target.exists():
@@ -102,7 +106,7 @@ def run_server(port: int = 3000, host: str = "127.0.0.1") -> None:
     print(f"GTEX Frontend Server running at http://{host}:{port}/")
     print(f" - Flutter Web App:    http://{host}:{port}/")
     print(f" - Showcase & Landing: http://{host}:{port}/landing")
-    print(f" - Backend API:        http://127.0.0.1:8000/docs")
+    print(" - Backend API:        http://127.0.0.1:8000/docs")
     sys.stdout.flush()
     try:
         httpd.serve_forever()

@@ -292,8 +292,8 @@ To reproduce these exact verification runs and inspect captured artifacts:
 ```powershell
 $env:DATABASE_URL = "sqlite:///C:/Users/ayomc/.gemini/antigravity/scratch/Global-Talent-Exchange/gte_backend.db"
 $env:GTE_DATABASE_URL = "sqlite:///C:/Users/ayomc/.gemini/antigravity/scratch/Global-Talent-Exchange/gte_backend.db"
-$env:GTE_AUTH_SECRET = "local-demo-secret-local-demo-secret-1234"
-$env:GTE_MEDIA_SIGNING_SECRET = "local-media-secret-local-media-secret-1234"
+$env:GTE_AUTH_SECRET = "[REDACTED_SECRET]"
+$env:GTE_MEDIA_SIGNING_SECRET = "[REDACTED_SECRET]"
 $env:GTE_BACKEND_MODE = "live"
 $env:PYTHONPATH = "C:\Users\ayomc\.gemini\antigravity\scratch\Global-Talent-Exchange\backend"
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000

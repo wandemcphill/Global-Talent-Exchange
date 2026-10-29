@@ -3725,12 +3725,19 @@ class NationalTeamTournamentService:
     ) -> dict[str, Any]:
         from app.national_team_engine.competition_profiles import default_reward_structure_for, profile_for
 
-        slug = "-".join(
-            part for part in "".join(ch.lower() if ch.isalnum() else "-" for ch in title).split("-") if part
-        ) or "national-cup"
-        unique_suffix = hashlib.sha1(f"{actor.id}:{title}:{season_label}:{utcnow().isoformat()}".encode("utf-8")).hexdigest()[:6]
+        slug = (
+            "-".join(part for part in "".join(ch.lower() if ch.isalnum() else "-" for ch in title).split("-") if part)
+            or "national-cup"
+        )
+        unique_suffix = hashlib.sha1(
+            f"{actor.id}:{title}:{season_label}:{utcnow().isoformat()}".encode("utf-8")
+        ).hexdigest()[:6]
         key = f"user-{slug}-{unique_suffix}"
-        family = competition_family if competition_family in {"world_cup", "afcon", "copa", "euros", "asian_cup"} else "world_cup"
+        family = (
+            competition_family
+            if competition_family in {"world_cup", "afcon", "copa", "euros", "asian_cup"}
+            else "world_cup"
+        )
         band = age_band if age_band in {"senior", "u20", "u17"} else "senior"
         profile = profile_for(family=family, age_band=band, metadata_json={})
         competition = NationalTeamCompetition(
