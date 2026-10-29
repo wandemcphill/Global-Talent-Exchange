@@ -443,15 +443,18 @@ class _GtexAudioSettingsSheetState extends State<GtexAudioSettingsSheet> {
                       return Container(
                         margin: const EdgeInsets.only(bottom: 8),
                         decoration: BoxDecoration(
-                          color: selected
-                              ? GtexColors.pitch.withValues(alpha: 0.12)
-                              : GtexColors.surfaceHover,
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
                             color: selected ? GtexColors.pitch : GtexColors.surfaceBorder,
                           ),
                         ),
-                        child: ListTile(
+                        child: Material(
+                          color: selected
+                              ? GtexColors.pitch.withValues(alpha: 0.12)
+                              : GtexColors.surfaceHover,
+                          borderRadius: BorderRadius.circular(10),
+                          clipBehavior: Clip.antiAlias,
+                          child: ListTile(
                           dense: true,
                           onTap: () => state.setTrack(item),
                           leading: Icon(
@@ -478,7 +481,8 @@ class _GtexAudioSettingsSheetState extends State<GtexAudioSettingsSheet> {
                             color: item.isPromoted ? GtexColors.gold : GtexColors.pitch,
                           ),
                         ),
-                      );
+                      ),
+                    );
                     }),
                   ],
                 ],
