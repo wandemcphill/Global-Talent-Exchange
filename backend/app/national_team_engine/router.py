@@ -29,6 +29,7 @@ from app.national_team_engine.schemas import (
     NationalTeamSquadUpsertRequest,
     NationalTeamTournamentGiftRequest,
     NationalTeamTournamentGiftResponse,
+    NationalTeamUserHostCompetitionRequest,
     NationalTeamUserHistoryResponse,
     StadiumAdResponse,
     StadiumAdUpsertRequest,
