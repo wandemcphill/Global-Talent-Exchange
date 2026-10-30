@@ -123,9 +123,6 @@ services:
       - type: rewrite
         source: /console/*
         destination: /console/index.html
-      - type: rewrite
-        source: /*
-        destination: /index.html
     envVars:
       - key: GTE_API_BASE_URL
         value: https://gtex-api-opea.onrender.com

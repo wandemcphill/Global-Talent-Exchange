@@ -394,6 +394,7 @@ def _run_deferred_startup(*, app: FastAPI, context: ApplicationContext, modules:
         if module_loader_lock is not None:
             with module_loader_lock:
                 from app.modules import ensure_modules_loaded
+
                 ensure_modules_loaded(app)
         _ensure_initial_admin(context.settings, context.database.session_factory)
         run_module_hooks(app, context, modules, phase="startup")

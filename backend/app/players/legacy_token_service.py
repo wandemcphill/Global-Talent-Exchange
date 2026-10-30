@@ -880,7 +880,6 @@ class PlayerTokenMarketService:
         size.  Markets that are genuinely incomplete still fall through to the
         full defaults pass, so nothing is left unmaterialized.
         """
-        metadata = market.metadata_json or {}
         already_materialized = (
             int(market.total_shares or 0) > 0
             and self._amount(market.share_price_coin) > Decimal("0.0000")

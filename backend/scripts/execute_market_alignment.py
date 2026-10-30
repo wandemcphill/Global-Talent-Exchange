@@ -20,6 +20,7 @@ from sqlalchemy.orm import sessionmaker
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("gtex_market_alignment")
 
+
 def calculate_gsi_player_price(current_gsi: int, potential_gsi: int, is_real: bool, is_legend: bool) -> float:
     cur = max(40, min(99, current_gsi))
     pot = max(cur, min(99, potential_gsi))
@@ -34,7 +35,7 @@ def calculate_gsi_player_price(current_gsi: int, potential_gsi: int, is_real: bo
         base_price *= 0.40
     elif eval_gsi < 75.0:
         t = (eval_gsi - 70.0) / 5.0
-        base_price *= (0.40 + 0.60 * t)
+        base_price *= 0.40 + 0.60 * t
 
     if is_legend:
         return round(base_price * 3.6, 2)
@@ -71,7 +72,7 @@ def run_alignment():
         # =========================================================================
         logger.info("--- 1. Upgrading Cristiano Ronaldo to 98 GSI Prime Legend ---")
         cr7_id = "6e5ecc38-5ebe-453e-8ebb-9e297b6fbf0b"
-        cr7_price = calculate_gsi_player_price(98, 98, is_real=True, is_legend=True) # 1181.93 Coins
+        cr7_price = calculate_gsi_player_price(98, 98, is_real=True, is_legend=True)  # 1181.93 Coins
         cr7_val = 195_000_000.0
 
         cr7_dna = {
@@ -97,7 +98,7 @@ def run_alignment():
                 "dribbling": 18,
                 "flair": 19,
                 "long_shots": 19,
-                "free_kicks": 18
+                "free_kicks": 18,
             },
             "playstyle": "All-Time Iconic Ultimate Goal Machine & Complete Athletic Apex Forward",
             "traits": [
@@ -106,7 +107,7 @@ def run_alignment():
                 "Cuts Inside From Both Wings",
                 "Aerial Colossus",
                 "Penalty Specialist",
-                "Big Match Clutch Performer"
+                "Big Match Clutch Performer",
             ],
             "honors": [
                 "5x Ballon d'Or Winner",
@@ -114,8 +115,8 @@ def run_alignment():
                 "UEFA Euro 2016 Champion",
                 "All-Time International Top Goalscorer (130+ Goals)",
                 "All-Time UEFA Champions League Top Goalscorer (140 Goals)",
-                "4x European Golden Shoe"
-            ]
+                "4x European Golden Shoe",
+            ],
         }
         cr7_meta = {
             "asset_type": "legend_single_share",
@@ -124,10 +125,11 @@ def run_alignment():
             "current_gsi": 98,
             "potential_gsi": 98,
             "pricing_tier": "gsi_goat_legend",
-            "updated_by": "cr7_goat_upgrade"
+            "updated_by": "cr7_goat_upgrade",
         }
 
-        session.execute(text("""
+        session.execute(
+            text("""
             UPDATE ingestion_players SET
                 potential = 98,
                 market_value_eur = :val,
@@ -135,9 +137,12 @@ def run_alignment():
                 dna_profile = :dna,
                 updated_at = :now
             WHERE id = :id
-        """), {"id": cr7_id, "val": cr7_val, "dna": json.dumps(cr7_dna), "now": now})
+        """),
+            {"id": cr7_id, "val": cr7_val, "dna": json.dumps(cr7_dna), "now": now},
+        )
 
-        session.execute(text("""
+        session.execute(
+            text("""
             UPDATE player_share_markets SET
                 total_shares = 1,
                 circulating_shares = 1,
@@ -145,11 +150,19 @@ def run_alignment():
                 metadata_json = :meta,
                 updated_at = :now
             WHERE player_id = :id
-        """), {"id": cr7_id, "price": cr7_price, "meta": json.dumps(cr7_meta), "now": now})
+        """),
+            {"id": cr7_id, "price": cr7_price, "meta": json.dumps(cr7_meta), "now": now},
+        )
 
         # Retire duplicate Sportmonks CR7
-        session.execute(text("UPDATE ingestion_players SET is_tradable = false WHERE id = '070f38a3-87ae-4a1f-8b05-74d8dab4c778'"))
-        session.execute(text("UPDATE player_share_markets SET status = 'retired', circulating_shares = 0 WHERE player_id = '070f38a3-87ae-4a1f-8b05-74d8dab4c778'"))
+        session.execute(
+            text("UPDATE ingestion_players SET is_tradable = false WHERE id = '070f38a3-87ae-4a1f-8b05-74d8dab4c778'")
+        )
+        session.execute(
+            text(
+                "UPDATE player_share_markets SET status = 'retired', circulating_shares = 0 WHERE player_id = '070f38a3-87ae-4a1f-8b05-74d8dab4c778'"
+            )
+        )
         session.commit()
         logger.info("Cristiano Ronaldo upgraded to 98 GSI (Price: %.2f Coins). Duplicate retired.", cr7_price)
 
@@ -158,7 +171,7 @@ def run_alignment():
         # =========================================================================
         logger.info("--- 2. Downgrading Thierry Henry from 99 to 95 GSI ---")
         henry_id = "52801d1f-4b08-4af9-acab-cdc090a6edc5"
-        henry_price = calculate_gsi_player_price(95, 95, is_real=True, is_legend=True) # 1070.00 Coins
+        henry_price = calculate_gsi_player_price(95, 95, is_real=True, is_legend=True)  # 1070.00 Coins
         henry_val = 145_000_000.0
 
         henry_dna = {
@@ -179,23 +192,18 @@ def run_alignment():
                 "agility": 17,
                 "composure": 18,
                 "flair": 18,
-                "vision": 17
+                "vision": 17,
             },
             "playstyle": "Premier League Invincible King & Elegance In Motion",
-            "traits": [
-                "Places Shots",
-                "Runs With Ball Down Left",
-                "Likes To Try To Beat Offside Trap",
-                "Curls Ball"
-            ],
+            "traits": ["Places Shots", "Runs With Ball Down Left", "Likes To Try To Beat Offside Trap", "Curls Ball"],
             "honors": [
                 "FIFA World Cup Champion 1998",
                 "UEFA Euro 2000 Champion",
                 "UEFA Champions League Winner 2008-09 (Barcelona)",
                 "2x Premier League Champion (Arsenal Invincibles)",
                 "4x Premier League Golden Boot",
-                "Arsenal All-Time Record Goalscorer (228 Goals)"
-            ]
+                "Arsenal All-Time Record Goalscorer (228 Goals)",
+            ],
         }
         henry_meta = {
             "asset_type": "legend_single_share",
@@ -204,10 +212,11 @@ def run_alignment():
             "current_gsi": 95,
             "potential_gsi": 95,
             "pricing_tier": "gsi_legend",
-            "updated_by": "henry_calibrated_downgrade"
+            "updated_by": "henry_calibrated_downgrade",
         }
 
-        session.execute(text("""
+        session.execute(
+            text("""
             UPDATE ingestion_players SET
                 potential = 95,
                 market_value_eur = :val,
@@ -215,9 +224,12 @@ def run_alignment():
                 dna_profile = :dna,
                 updated_at = :now
             WHERE id = :id
-        """), {"id": henry_id, "val": henry_val, "dna": json.dumps(henry_dna), "now": now})
+        """),
+            {"id": henry_id, "val": henry_val, "dna": json.dumps(henry_dna), "now": now},
+        )
 
-        session.execute(text("""
+        session.execute(
+            text("""
             UPDATE player_share_markets SET
                 total_shares = 1,
                 circulating_shares = 1,
@@ -225,7 +237,9 @@ def run_alignment():
                 metadata_json = :meta,
                 updated_at = :now
             WHERE player_id = :id
-        """), {"id": henry_id, "price": henry_price, "meta": json.dumps(henry_meta), "now": now})
+        """),
+            {"id": henry_id, "price": henry_price, "meta": json.dumps(henry_meta), "now": now},
+        )
         session.commit()
         logger.info("Thierry Henry downgraded to 95 GSI (Price: %.2f Coins).", henry_price)
 
@@ -242,17 +256,25 @@ def run_alignment():
             "Mohamed Salah Ghaly",
             "Bukayo Saka",
             "Jamal Musiala",
-            "Federico Santiago Valverde Dipetta"
+            "Federico Santiago Valverde Dipetta",
         ]
         retired_count = 0
         for pattern in inexact_duplicate_names:
-            rows = session.execute(text("""
+            rows = session.execute(
+                text("""
                 SELECT id FROM ingestion_players 
                 WHERE source_provider = 'sportmonks' AND full_name ILIKE :p AND is_tradable = true
-            """), {"p": pattern}).fetchall()
+            """),
+                {"p": pattern},
+            ).fetchall()
             for r in rows:
                 session.execute(text("UPDATE ingestion_players SET is_tradable = false WHERE id = :id"), {"id": r[0]})
-                session.execute(text("UPDATE player_share_markets SET status = 'retired', circulating_shares = 0 WHERE player_id = :id"), {"id": r[0]})
+                session.execute(
+                    text(
+                        "UPDATE player_share_markets SET status = 'retired', circulating_shares = 0 WHERE player_id = :id"
+                    ),
+                    {"id": r[0]},
+                )
                 retired_count += 1
         session.commit()
         logger.info("Retired %d remaining inexact superstar duplicates.", retired_count)
@@ -261,10 +283,11 @@ def run_alignment():
         # 4. UPGRADE KEY WORLD STARS (Mbappé, Vini Jr, Rodri, Van Dijk, etc.)
         # =========================================================================
         logger.info("--- 4. Upgrading key world superstars to elite tier ---")
-        
+
         # 4a. Kylian Mbappé
-        mbappe_price = calculate_gsi_player_price(92, 95, is_real=True, is_legend=False) # 283.47 Coins
-        session.execute(text("""
+        mbappe_price = calculate_gsi_player_price(92, 95, is_real=True, is_legend=False)  # 283.47 Coins
+        session.execute(
+            text("""
             UPDATE ingestion_players SET
                 full_name = 'Kylian Mbappé',
                 position = 'ST',
@@ -284,9 +307,12 @@ def run_alignment():
                 ) || '{"potential": 95, "current_rating": 92, "potential_rating": 95}'::jsonb,
                 updated_at = :now
             WHERE full_name ILIKE '%Kylian Mbappé%' AND source_provider = 'sportmonks'
-        """), {"now": now})
+        """),
+            {"now": now},
+        )
 
-        session.execute(text("""
+        session.execute(
+            text("""
             UPDATE player_share_markets SET
                 total_shares = 200,
                 circulating_shares = 40,
@@ -294,11 +320,14 @@ def run_alignment():
                 status = 'active',
                 updated_at = :now
             WHERE player_id IN (SELECT id FROM ingestion_players WHERE full_name ILIKE '%Kylian Mbappé%' AND source_provider = 'sportmonks')
-        """), {"price": mbappe_price, "now": now})
+        """),
+            {"price": mbappe_price, "now": now},
+        )
 
         # 4b. Vinicius Junior
-        vini_price = calculate_gsi_player_price(91, 94, is_real=True, is_legend=False) # 275.69 Coins
-        session.execute(text("""
+        vini_price = calculate_gsi_player_price(91, 94, is_real=True, is_legend=False)  # 275.69 Coins
+        session.execute(
+            text("""
             UPDATE ingestion_players SET
                 full_name = 'Vinicius Junior',
                 position = 'LW',
@@ -318,9 +347,12 @@ def run_alignment():
                 ) || '{"potential": 94, "current_rating": 91, "potential_rating": 94}'::jsonb,
                 updated_at = :now
             WHERE full_name ILIKE '%Vinicius José Paixão%' AND source_provider = 'sportmonks'
-        """), {"now": now})
+        """),
+            {"now": now},
+        )
 
-        session.execute(text("""
+        session.execute(
+            text("""
             UPDATE player_share_markets SET
                 total_shares = 200,
                 circulating_shares = 40,
@@ -328,11 +360,14 @@ def run_alignment():
                 status = 'active',
                 updated_at = :now
             WHERE player_id IN (SELECT id FROM ingestion_players WHERE full_name ILIKE '%Vinicius José Paixão%' AND source_provider = 'sportmonks')
-        """), {"price": vini_price, "now": now})
+        """),
+            {"price": vini_price, "now": now},
+        )
 
         # 4c. Rodri (Rodrigo Hernández)
-        rodri_price = calculate_gsi_player_price(91, 92, is_real=True, is_legend=False) # 264.50 Coins
-        session.execute(text("""
+        rodri_price = calculate_gsi_player_price(91, 92, is_real=True, is_legend=False)  # 264.50 Coins
+        session.execute(
+            text("""
             UPDATE ingestion_players SET
                 full_name = 'Rodri (Rodrigo Hernández)',
                 position = 'DM',
@@ -352,9 +387,12 @@ def run_alignment():
                 ) || '{"potential": 92, "current_rating": 91, "potential_rating": 92}'::jsonb,
                 updated_at = :now
             WHERE full_name ILIKE '%Rodrigo Hernández Cascante%' AND source_provider = 'sportmonks'
-        """), {"now": now})
+        """),
+            {"now": now},
+        )
 
-        session.execute(text("""
+        session.execute(
+            text("""
             UPDATE player_share_markets SET
                 total_shares = 200,
                 circulating_shares = 40,
@@ -362,11 +400,14 @@ def run_alignment():
                 status = 'active',
                 updated_at = :now
             WHERE player_id IN (SELECT id FROM ingestion_players WHERE full_name ILIKE '%Rodrigo Hernández Cascante%' AND source_provider = 'sportmonks')
-        """), {"price": rodri_price, "now": now})
+        """),
+            {"price": rodri_price, "now": now},
+        )
 
         # 4d. Virgil van Dijk
-        vvd_price = calculate_gsi_player_price(90, 90, is_real=True, is_legend=False) # 250.00 Coins
-        session.execute(text("""
+        vvd_price = calculate_gsi_player_price(90, 90, is_real=True, is_legend=False)  # 250.00 Coins
+        session.execute(
+            text("""
             UPDATE ingestion_players SET
                 full_name = 'Virgil van Dijk',
                 position = 'CB',
@@ -385,9 +426,12 @@ def run_alignment():
                 ) || '{"potential": 90, "current_rating": 90, "potential_rating": 90}'::jsonb,
                 updated_at = :now
             WHERE full_name ILIKE '%Virgil van Dijk%' AND source_provider = 'sportmonks'
-        """), {"now": now})
+        """),
+            {"now": now},
+        )
 
-        session.execute(text("""
+        session.execute(
+            text("""
             UPDATE player_share_markets SET
                 total_shares = 200,
                 circulating_shares = 40,
@@ -395,11 +439,14 @@ def run_alignment():
                 status = 'active',
                 updated_at = :now
             WHERE player_id IN (SELECT id FROM ingestion_players WHERE full_name ILIKE '%Virgil van Dijk%' AND source_provider = 'sportmonks')
-        """), {"price": vvd_price, "now": now})
+        """),
+            {"price": vvd_price, "now": now},
+        )
 
         # 4e. Robert Lewandowski
-        lewa_price = calculate_gsi_player_price(89, 89, is_real=True, is_legend=False) # 241.22 Coins
-        session.execute(text("""
+        lewa_price = calculate_gsi_player_price(89, 89, is_real=True, is_legend=False)  # 241.22 Coins
+        session.execute(
+            text("""
             UPDATE ingestion_players SET
                 full_name = 'Robert Lewandowski',
                 position = 'ST',
@@ -418,9 +465,12 @@ def run_alignment():
                 ) || '{"potential": 89, "current_rating": 89, "potential_rating": 89}'::jsonb,
                 updated_at = :now
             WHERE full_name ILIKE '%Robert Lewandowski%' AND source_provider = 'sportmonks'
-        """), {"now": now})
+        """),
+            {"now": now},
+        )
 
-        session.execute(text("""
+        session.execute(
+            text("""
             UPDATE player_share_markets SET
                 total_shares = 400,
                 circulating_shares = 80,
@@ -428,11 +478,14 @@ def run_alignment():
                 status = 'active',
                 updated_at = :now
             WHERE player_id IN (SELECT id FROM ingestion_players WHERE full_name ILIKE '%Robert Lewandowski%' AND source_provider = 'sportmonks')
-        """), {"price": lewa_price, "now": now})
+        """),
+            {"price": lewa_price, "now": now},
+        )
 
         # 4f. Alisson Becker
-        alisson_price = calculate_gsi_player_price(89, 89, is_real=True, is_legend=False) # 241.22 Coins
-        session.execute(text("""
+        alisson_price = calculate_gsi_player_price(89, 89, is_real=True, is_legend=False)  # 241.22 Coins
+        session.execute(
+            text("""
             UPDATE ingestion_players SET
                 full_name = 'Alisson Becker',
                 position = 'GK',
@@ -451,9 +504,12 @@ def run_alignment():
                 ) || '{"potential": 89, "current_rating": 89, "potential_rating": 89}'::jsonb,
                 updated_at = :now
             WHERE full_name ILIKE '%Alisson Ramsés Becker%' AND source_provider = 'sportmonks'
-        """), {"now": now})
+        """),
+            {"now": now},
+        )
 
-        session.execute(text("""
+        session.execute(
+            text("""
             UPDATE player_share_markets SET
                 total_shares = 400,
                 circulating_shares = 80,
@@ -461,7 +517,9 @@ def run_alignment():
                 status = 'active',
                 updated_at = :now
             WHERE player_id IN (SELECT id FROM ingestion_players WHERE full_name ILIKE '%Alisson Ramsés Becker%' AND source_provider = 'sportmonks')
-        """), {"price": alisson_price, "now": now})
+        """),
+            {"price": alisson_price, "now": now},
+        )
 
         session.commit()
         logger.info("Key superstars upgraded with correct real-world stats and market shares.")
@@ -470,7 +528,8 @@ def run_alignment():
         # 5. CALIBRATE €300M PLACEHOLDER ANOMALIES IN FM23
         # =========================================================================
         logger.info("--- 5. Calibrating €300M placeholder anomalies in FM23 ---")
-        session.execute(text("""
+        session.execute(
+            text("""
             UPDATE ingestion_players SET
                 market_value_eur = CASE
                     WHEN potential >= 80 THEN 25000000.0
@@ -490,7 +549,9 @@ def run_alignment():
             WHERE source_provider = 'fm23_genie_scout'
               AND market_value_eur = 300000000
               AND potential < 88
-        """), {"now": now})
+        """),
+            {"now": now},
+        )
         session.commit()
         logger.info("Calibrated €300M placeholders to realistic GSI valuations.")
 
@@ -540,32 +601,35 @@ def run_alignment():
             tier_code, total_shares = get_shares_for_gsi(eval_gsi)
             new_price = calculate_gsi_player_price(cur, pot, is_real=True, is_legend=False)
 
-            sm_recalibrations.append({
-                "pid": pid,
-                "price": new_price,
-                "shares": total_shares,
-                "circ": total_shares,
-                "cur": cur,
-                "pot": pot
-            })
+            sm_recalibrations.append(
+                {"pid": pid, "price": new_price, "shares": total_shares, "circ": total_shares, "cur": cur, "pot": pot}
+            )
 
         batch_size = 500
         for i in range(0, len(sm_recalibrations), batch_size):
             chunk = sm_recalibrations[i : i + batch_size]
-            session.execute(text("""
+            session.execute(
+                text(
+                    """
                 UPDATE player_share_markets AS m
                 SET share_price_coin = v.price,
                     total_shares = v.shares,
                     circulating_shares = v.circ,
                     updated_at = :now
-                FROM (VALUES """ + ", ".join(f"('{r['pid']}', {r['price']}, {r['shares']}, {r['circ']})" for r in chunk) + """) 
+                FROM (VALUES """
+                    + ", ".join(f"('{r['pid']}', {r['price']}, {r['shares']}, {r['circ']})" for r in chunk)
+                    + """) 
                     AS v(pid, price, shares, circ)
                 WHERE m.player_id = v.pid
-            """), {"now": now})
+            """
+                ),
+                {"now": now},
+            )
             session.commit()
 
         logger.info("Universal alignment complete across %d Sportmonks active players.", len(sm_recalibrations))
         logger.info("=== MARKET ALIGNMENT SUCCESSFULLY COMPLETED ===")
+
 
 if __name__ == "__main__":
     t0 = time.time()

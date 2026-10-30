@@ -20,6 +20,7 @@ from sqlalchemy.orm import sessionmaker
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("gtex_reprice_dedup")
 
+
 def calculate_gsi_player_price(current_gsi: int, potential_gsi: int, is_real: bool, is_legend: bool) -> float:
     """Calculates clean player acquisition / share price with potential weighting and low-tier discount.
 
@@ -46,7 +47,7 @@ def calculate_gsi_player_price(current_gsi: int, potential_gsi: int, is_real: bo
         base_price *= 0.40
     elif eval_gsi < 75.0:
         t = (eval_gsi - 70.0) / 5.0
-        base_price *= (0.40 + 0.60 * t)
+        base_price *= 0.40 + 0.60 * t
 
     if is_legend:
         return round(base_price * 3.6, 2)
@@ -131,20 +132,26 @@ def run_migration():
         batch_size = 500
         for i in range(0, len(dup_ids), batch_size):
             chunk = dup_ids[i : i + batch_size]
-            session.execute(text("""
+            session.execute(
+                text("""
                 UPDATE ingestion_players
                 SET is_tradable = false,
                     updated_at = :now
                 WHERE id = ANY(:ids)
-            """), {"ids": chunk, "now": now})
+            """),
+                {"ids": chunk, "now": now},
+            )
 
-            session.execute(text("""
+            session.execute(
+                text("""
                 UPDATE player_share_markets
                 SET status = 'retired',
                     circulating_shares = 0,
                     updated_at = :now
                 WHERE player_id = ANY(:ids)
-            """), {"ids": chunk, "now": now})
+            """),
+                {"ids": chunk, "now": now},
+            )
             session.commit()
 
         logger.info("Successfully retired %d duplicate share markets and marked them non-tradable.", len(dedup_map))
@@ -177,27 +184,29 @@ def run_migration():
                 "current_gsi": cur,
                 "potential_gsi": pot,
                 "pricing_tier": "gsi_regen",
-                "updated_by": "gtex_reprice_dedup_migration"
+                "updated_by": "gtex_reprice_dedup_migration",
             }
-            regen_updates.append({
-                "pid": p_id,
-                "price": price,
-                "total_shares": 1,
-                "circulating": 1,
-                "meta": json.dumps(meta),
-                "now": now
-            })
+            regen_updates.append(
+                {"pid": p_id, "price": price, "total_shares": 1, "circulating": 1, "meta": json.dumps(meta), "now": now}
+            )
 
         for i in range(0, len(regen_updates), batch_size):
             chunk = regen_updates[i : i + batch_size]
-            session.execute(text("""
+            session.execute(
+                text(
+                    """
                 INSERT INTO player_share_markets (
                     id, player_id, total_shares, circulating_shares, share_price_coin,
                     status, revenue_distributed_coin, metadata_json, created_at, updated_at
                 )
                 SELECT 
                     p.id, p.id, 1, 1, v.price, 'active', 0.0, v.meta::json, v.now, v.now
-                FROM (VALUES """ + ", ".join(f"('{r['pid']}', {r['price']}, '{r['meta']}', '{r['now'].isoformat()}'::timestamptz)" for r in chunk) + """) 
+                FROM (VALUES """
+                    + ", ".join(
+                        f"('{r['pid']}', {r['price']}, '{r['meta']}', '{r['now'].isoformat()}'::timestamptz)"
+                        for r in chunk
+                    )
+                    + """) 
                     AS v(pid, price, meta, now)
                 JOIN ingestion_players p ON p.id = v.pid
                 ON CONFLICT (player_id) DO UPDATE SET
@@ -207,10 +216,14 @@ def run_migration():
                     status = 'active',
                     metadata_json = EXCLUDED.metadata_json,
                     updated_at = EXCLUDED.updated_at
-            """))
+            """
+                )
+            )
             session.commit()
             if (i + batch_size) % 3000 == 0 or (i + len(chunk)) == len(regen_updates):
-                logger.info("  Processed %d / %d gtex_regens", min(i + batch_size, len(regen_updates)), len(regen_updates))
+                logger.info(
+                    "  Processed %d / %d gtex_regens", min(i + batch_size, len(regen_updates)), len(regen_updates)
+                )
 
         # =========================================================================
         # STEP 3: REPRICE GTEX_NATIONAL_SEED (11,200 Players - 1-of-1 National Regens)
@@ -240,27 +253,29 @@ def run_migration():
                 "current_gsi": cur,
                 "potential_gsi": pot,
                 "pricing_tier": "gsi_national_seed",
-                "updated_by": "gtex_reprice_dedup_migration"
+                "updated_by": "gtex_reprice_dedup_migration",
             }
-            seed_updates.append({
-                "pid": p_id,
-                "price": price,
-                "total_shares": 1,
-                "circulating": 1,
-                "meta": json.dumps(meta),
-                "now": now
-            })
+            seed_updates.append(
+                {"pid": p_id, "price": price, "total_shares": 1, "circulating": 1, "meta": json.dumps(meta), "now": now}
+            )
 
         for i in range(0, len(seed_updates), batch_size):
             chunk = seed_updates[i : i + batch_size]
-            session.execute(text("""
+            session.execute(
+                text(
+                    """
                 INSERT INTO player_share_markets (
                     id, player_id, total_shares, circulating_shares, share_price_coin,
                     status, revenue_distributed_coin, metadata_json, created_at, updated_at
                 )
                 SELECT 
                     p.id, p.id, 1, 1, v.price, 'active', 0.0, v.meta::json, v.now, v.now
-                FROM (VALUES """ + ", ".join(f"('{r['pid']}', {r['price']}, '{r['meta']}', '{r['now'].isoformat()}'::timestamptz)" for r in chunk) + """) 
+                FROM (VALUES """
+                    + ", ".join(
+                        f"('{r['pid']}', {r['price']}, '{r['meta']}', '{r['now'].isoformat()}'::timestamptz)"
+                        for r in chunk
+                    )
+                    + """) 
                     AS v(pid, price, meta, now)
                 JOIN ingestion_players p ON p.id = v.pid
                 ON CONFLICT (player_id) DO UPDATE SET
@@ -270,10 +285,14 @@ def run_migration():
                     status = 'active',
                     metadata_json = EXCLUDED.metadata_json,
                     updated_at = EXCLUDED.updated_at
-            """))
+            """
+                )
+            )
             session.commit()
             if (i + batch_size) % 3000 == 0 or (i + len(chunk)) == len(seed_updates):
-                logger.info("  Processed %d / %d gtex_national_seeds", min(i + batch_size, len(seed_updates)), len(seed_updates))
+                logger.info(
+                    "  Processed %d / %d gtex_national_seeds", min(i + batch_size, len(seed_updates)), len(seed_updates)
+                )
 
         # =========================================================================
         # STEP 4: REPRICE SPORTMONKS (Active Real Players - Non-Duplicates)
@@ -326,28 +345,37 @@ def run_migration():
                 "current_gsi": cur,
                 "potential_gsi": pot,
                 "pricing_tier": "gsi_sportmonks",
-                "updated_by": "gtex_reprice_dedup_migration"
+                "updated_by": "gtex_reprice_dedup_migration",
             }
-            sm_updates.append({
-                "pid": p_id,
-                "price": price,
-                "total_shares": total_shares,
-                "circulating": total_shares,
-                "meta": json.dumps(meta),
-                "now": now
-            })
+            sm_updates.append(
+                {
+                    "pid": p_id,
+                    "price": price,
+                    "total_shares": total_shares,
+                    "circulating": total_shares,
+                    "meta": json.dumps(meta),
+                    "now": now,
+                }
+            )
 
         logger.info("Found %d active non-duplicate Sportmonks players to synchronize.", len(sm_updates))
         for i in range(0, len(sm_updates), batch_size):
             chunk = sm_updates[i : i + batch_size]
-            session.execute(text("""
+            session.execute(
+                text(
+                    """
                 INSERT INTO player_share_markets (
                     id, player_id, total_shares, circulating_shares, share_price_coin,
                     status, revenue_distributed_coin, metadata_json, created_at, updated_at
                 )
                 SELECT 
                     p.id, p.id, v.shares, v.circ, v.price, 'active', 0.0, v.meta::json, v.now, v.now
-                FROM (VALUES """ + ", ".join(f"('{r['pid']}', {r['price']}, {r['total_shares']}, {r['circulating']}, '{r['meta']}', '{r['now'].isoformat()}'::timestamptz)" for r in chunk) + """) 
+                FROM (VALUES """
+                    + ", ".join(
+                        f"('{r['pid']}', {r['price']}, {r['total_shares']}, {r['circulating']}, '{r['meta']}', '{r['now'].isoformat()}'::timestamptz)"
+                        for r in chunk
+                    )
+                    + """) 
                     AS v(pid, price, shares, circ, meta, now)
                 JOIN ingestion_players p ON p.id = v.pid
                 ON CONFLICT (player_id) DO UPDATE SET
@@ -357,10 +385,14 @@ def run_migration():
                     status = 'active',
                     metadata_json = EXCLUDED.metadata_json,
                     updated_at = EXCLUDED.updated_at
-            """))
+            """
+                )
+            )
             session.commit()
             if (i + batch_size) % 5000 == 0 or (i + len(chunk)) == len(sm_updates):
-                logger.info("  Processed %d / %d sportmonks players", min(i + batch_size, len(sm_updates)), len(sm_updates))
+                logger.info(
+                    "  Processed %d / %d sportmonks players", min(i + batch_size, len(sm_updates)), len(sm_updates)
+                )
 
         # =========================================================================
         # STEP 5: REPRICE SOFIFA_FC25 (Active Real Players - Non-Duplicates)
@@ -393,26 +425,35 @@ def run_migration():
                 "current_gsi": cur,
                 "potential_gsi": pot,
                 "pricing_tier": "gsi_sofifa_fc25",
-                "updated_by": "gtex_reprice_dedup_migration"
+                "updated_by": "gtex_reprice_dedup_migration",
             }
-            fc_updates.append({
-                "pid": p_id,
-                "price": price,
-                "total_shares": total_shares,
-                "circulating": total_shares,
-                "meta": json.dumps(meta),
-                "now": now
-            })
+            fc_updates.append(
+                {
+                    "pid": p_id,
+                    "price": price,
+                    "total_shares": total_shares,
+                    "circulating": total_shares,
+                    "meta": json.dumps(meta),
+                    "now": now,
+                }
+            )
 
         if fc_updates:
-            session.execute(text("""
+            session.execute(
+                text(
+                    """
                 INSERT INTO player_share_markets (
                     id, player_id, total_shares, circulating_shares, share_price_coin,
                     status, revenue_distributed_coin, metadata_json, created_at, updated_at
                 )
                 SELECT 
                     p.id, p.id, v.shares, v.circ, v.price, 'active', 0.0, v.meta::json, v.now, v.now
-                FROM (VALUES """ + ", ".join(f"('{r['pid']}', {r['price']}, {r['total_shares']}, {r['circulating']}, '{r['meta']}', '{r['now'].isoformat()}'::timestamptz)" for r in fc_updates) + """) 
+                FROM (VALUES """
+                    + ", ".join(
+                        f"('{r['pid']}', {r['price']}, {r['total_shares']}, {r['circulating']}, '{r['meta']}', '{r['now'].isoformat()}'::timestamptz)"
+                        for r in fc_updates
+                    )
+                    + """) 
                     AS v(pid, price, shares, circ, meta, now)
                 JOIN ingestion_players p ON p.id = v.pid
                 ON CONFLICT (player_id) DO UPDATE SET
@@ -422,11 +463,14 @@ def run_migration():
                     status = 'active',
                     metadata_json = EXCLUDED.metadata_json,
                     updated_at = EXCLUDED.updated_at
-            """))
+            """
+                )
+            )
             session.commit()
             logger.info("  Processed %d sofifa_fc25 players", len(fc_updates))
 
         logger.info("=== GTEX UNIVERSE MIGRATION COMPLETED SUCCESSFULLY ===")
+
 
 if __name__ == "__main__":
     t0 = time.time()

@@ -846,6 +846,7 @@ def get_club_showroom(session: Session, user_id: str, club_id: str) -> dict[str,
         )
     club_prestige = int(getattr(state, "prestige", 45))
     from app.owner_console import engine
+
     return {
         "catalog": items,
         "owned_assets": owned,
@@ -1183,7 +1184,9 @@ def gift_asset_to_squad_player(
     )
 
     if is_staff:
-        role = staff_role or (str(player_id).split("staff:")[-1] if str(player_id).startswith("staff:") else str(player_id))
+        role = staff_role or (
+            str(player_id).split("staff:")[-1] if str(player_id).startswith("staff:") else str(player_id)
+        )
         if role == "manager":
             role = "first_team_manager"
         item_key = catalog_key or "chronos_tourbillon_watch"
@@ -1195,7 +1198,9 @@ def gift_asset_to_squad_player(
         club_acct = ledger.club_account(club_id)
         bal = ledger.balance(session, club_acct, ledger.GTEX)
         if bal < price:
-            raise OwnerError("insufficient_club_cash", 400, f"Club cash {bal} GTX is insufficient for {price} GTX gift.")
+            raise OwnerError(
+                "insufficient_club_cash", 400, f"Club cash {bal} GTX is insufficient for {price} GTX gift."
+            )
 
         facs = dict(state.facilities_json or {})
         exec_staff = dict(facs.get("_executive_staff") or {})
@@ -1205,7 +1210,11 @@ def gift_asset_to_squad_player(
                 target_staff = dict(state.manager_json or engine.manager_profile(engine.DEFAULT_MANAGER))
             else:
                 candidate = next((c for c in engine.EXECUTIVE_STAFF_CATALOG if c["role"] == role), None)
-                target_staff = dict(candidate) if candidate else {"id": f"staff_{role}", "name": role.replace("_", " ").title(), "role": role}
+                target_staff = (
+                    dict(candidate)
+                    if candidate
+                    else {"id": f"staff_{role}", "name": role.replace("_", " ").title(), "role": role}
+                )
 
         mood_boost = int(item.get("staff_mood_boost", 15))
         loyalty_boost = int(item.get("staff_loyalty_boost", 3))
@@ -1874,9 +1883,11 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
 
 # ---------- Daily AI Briefing & Boardroom Conversations ----------
 
+
 def get_daily_briefing(session: Session, user_id: str, club_id: str, force_refresh: bool = False) -> dict[str, Any]:
     from sqlalchemy import func
     from app.owner_console import engine, ledger
+
     state = require_state(session, club_id, user_id)
     world_day = state.world_day
     cash_bal = float(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX))
@@ -1884,9 +1895,14 @@ def get_daily_briefing(session: Session, user_id: str, club_id: str, force_refre
     squad_size = len(squad_players)
     avg_morale = int(sum(p.morale for p in squad_players) / max(1, squad_size))
     ready_prospects = sum(1 for p in squad_players if p.is_regen and p.rating >= 58)
-    open_decisions = session.scalar(
-        select(func.count(OwnerInboxItem.id)).where(OwnerInboxItem.club_id == club_id, OwnerInboxItem.status == "open")
-    ) or 0
+    open_decisions = (
+        session.scalar(
+            select(func.count(OwnerInboxItem.id)).where(
+                OwnerInboxItem.club_id == club_id, OwnerInboxItem.status == "open"
+            )
+        )
+        or 0
+    )
     tier_label = engine.prestige_tier_label(state.prestige)
 
     facs = dict(state.facilities_json or {})
@@ -1895,11 +1911,13 @@ def get_daily_briefing(session: Session, user_id: str, club_id: str, force_refre
         return cached
 
     gm = (facs.get("_executive_staff") or {}).get("general_manager") or {
-        "name": "Dayo Adeleke", "role_label": "General Manager"
+        "name": "Dayo Adeleke",
+        "role_label": "General Manager",
     }
     mgr = state.manager_json or engine.manager_profile(engine.DEFAULT_MANAGER)
     hoyd = (facs.get("_executive_staff") or {}).get("head_of_youth_development") or {
-        "name": "Femi Ogunleye", "role_label": "Head of Youth Development"
+        "name": "Femi Ogunleye",
+        "role_label": "Head of Youth Development",
     }
 
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -1972,9 +1990,12 @@ def get_staff_chat_history(session: Session, user_id: str, club_id: str, role: s
     }
 
 
-def converse_with_staff(session: Session, user_id: str, club_id: str, role: str, message: str, topic: str = "general") -> dict[str, Any]:
+def converse_with_staff(
+    session: Session, user_id: str, club_id: str, role: str, message: str, topic: str = "general"
+) -> dict[str, Any]:
     import secrets
     from app.owner_console import engine, ledger
+
     state = require_state(session, club_id, user_id)
     facs = dict(state.facilities_json or {})
     exec_staff = dict(facs.get("_executive_staff") or {})
@@ -1986,7 +2007,16 @@ def converse_with_staff(session: Session, user_id: str, club_id: str, role: str,
             target_staff = dict(state.manager_json or engine.manager_profile(engine.DEFAULT_MANAGER))
         else:
             cand = next((c for c in engine.EXECUTIVE_STAFF_CATALOG if c["role"] == role), None)
-            target_staff = dict(cand) if cand else {"name": role.replace("_", " ").title(), "role": role, "style": "Pragmatic Professional", "mood": 75}
+            target_staff = (
+                dict(cand)
+                if cand
+                else {
+                    "name": role.replace("_", " ").title(),
+                    "role": role,
+                    "style": "Pragmatic Professional",
+                    "mood": 75,
+                }
+            )
 
     staff_name = target_staff.get("name", "Staff Member")
     cash_bal = float(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX))
@@ -2010,7 +2040,9 @@ def converse_with_staff(session: Session, user_id: str, club_id: str, role: str,
         elif "morale" in msg_lower or "mood" in msg_lower:
             reply_text = "The boys are hungry. Mood in the dressing room is focused, and we're ready to put everything on the line in our next match."
         else:
-            reply_text = "Message received, Boss. My staff and I are entirely committed to delivering three points on matchday."
+            reply_text = (
+                "Message received, Boss. My staff and I are entirely committed to delivering three points on matchday."
+            )
     elif role == "head_of_youth_development":
         reply_text = "The academy pipeline is advancing nicely. We've got raw talent grinding in daily drills, and with our facilities, we'll see several breakout stars ready for senior promotion."
     elif role == "chief_scout":
@@ -2100,13 +2132,17 @@ def resolve_briefing_dilemma(session: Session, user_id: str, club_id: str, choic
         )
         _shift_exec_mood("general_manager", 8)
         mgr["mood"] = int(engine.clamp(int(mgr.get("mood", 70)) - 4, 0, 100))
-        outcome_notes.append("Enforced GM's wage discipline (+500 GTEX treasury efficiency, +8 GM mood, -4 Manager mood).")
+        outcome_notes.append(
+            "Enforced GM's wage discipline (+500 GTEX treasury efficiency, +8 GM mood, -4 Manager mood)."
+        )
     elif choice_id == "back_manager_target":
         for p in squad_players:
             p.morale = int(engine.clamp(p.morale + 6, 0, 100))
         mgr["mood"] = int(engine.clamp(int(mgr.get("mood", 70)) + 10, 0, 100))
         _shift_exec_mood("general_manager", -4)
-        outcome_notes.append("Backed First-Team Manager's squad priority (+6 Squad Morale, +10 Manager mood, -4 GM mood).")
+        outcome_notes.append(
+            "Backed First-Team Manager's squad priority (+6 Squad Morale, +10 Manager mood, -4 GM mood)."
+        )
     elif choice_id == "owner_performance_compromise":
         bal = ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)
         if bal >= 400:
@@ -2157,7 +2193,9 @@ def resolve_briefing_dilemma(session: Session, user_id: str, club_id: str, choic
             p.morale = int(engine.clamp(p.morale + 4, 0, 100))
         state.prestige = int(engine.clamp(state.prestige + 1, 0, 100))
         service.sync_club_prestige_to_reputation(session, club_id, state.prestige)
-        outcome_notes.append("Established structured rotation & alignment policy (+5 Staff mood, +4 Squad Morale, +1 Prestige).")
+        outcome_notes.append(
+            "Established structured rotation & alignment policy (+5 Staff mood, +4 Squad Morale, +1 Prestige)."
+        )
 
     dilemma["status"] = "resolved"
     dilemma["selected_choice_id"] = choice_id
@@ -2178,6 +2216,4 @@ def resolve_briefing_dilemma(session: Session, user_id: str, club_id: str, choic
 
 
 def _unused_storytelling_tail():
-    return {
-        "messages": []
-    }
+    return {"messages": []}

@@ -421,14 +421,18 @@ def execute_dry_run():
     for rat in [65, 75, 85, 95]:
         fee = round(80.0 + (rat - 65) * ((800.0 - 80.0) / 30.0), 1)
         sal = round(150.0 + (rat - 65) * ((2000.0 - 150.0) / 30.0), 1)
-        print(f"  Rating {rat}: Signing Fee = {fee} GTEX Coins (₦{int(fee*100):,}) | Salary = {sal} FC/yr (₦{int(sal*10):,}) | 3-yr = {sal*3} FC (₦{int(sal*30):,})")
+        print(
+            f"  Rating {rat}: Signing Fee = {fee} GTEX Coins (₦{int(fee*100):,}) | Salary = {sal} FC/yr (₦{int(sal*10):,}) | 3-yr = {sal*3} FC (₦{int(sal*30):,})"
+        )
 
     print("\n[SAMPLE GSI PLAYER VALUATIONS (POTENTIAL-WEIGHTED 60/40, -60% <= 70 GSI)]")
     for gsi_val in [55, 65, 70, 75, 80, 85, 90, 95]:
         p_real = calculate_gsi_player_price(gsi_val, gsi_val, is_real=True, is_legend=False)
         p_regen = calculate_gsi_player_price(gsi_val, gsi_val, is_real=False, is_legend=False)
         p_leg = calculate_gsi_player_price(gsi_val, gsi_val, is_real=True, is_legend=True)
-        print(f"  GSI {gsi_val}: Real = {p_real} Coins (₦{int(p_real*100):,}) | Regen (1-of-1) = {p_regen} Coins (₦{int(p_regen*100):,}) | Legend (1-of-1) = {p_leg} Coins (₦{int(p_leg*100):,})")
+        print(
+            f"  GSI {gsi_val}: Real = {p_real} Coins (₦{int(p_real*100):,}) | Regen (1-of-1) = {p_regen} Coins (₦{int(p_regen*100):,}) | Legend (1-of-1) = {p_leg} Coins (₦{int(p_leg*100):,})"
+        )
 
     print("\nDry run complete! All data validated and certified ready for live execution.")
 
@@ -481,6 +485,7 @@ def execute_ingestion(batch_size: int = 500):
     raw_url = os.getenv("DATABASE_URL") or os.getenv("GTE_DATABASE_URL")
     if not raw_url:
         from dotenv import dotenv_values
+
         env_dict = dotenv_values(BACKEND_ROOT / ".env")
         raw_url = env_dict.get("DATABASE_URL") or env_dict.get("GTE_DATABASE_URL")
     if not raw_url:
@@ -532,13 +537,14 @@ def execute_ingestion(batch_size: int = 500):
 
         # 1.2 Pre-cache existing records to allow high-speed batch execution without remote N+1 roundtrips
         existing_leg_slugs = {
-            row[0]: row[1]
-            for row in session.execute(text("SELECT slug, id FROM legendary_player_profiles")).fetchall()
+            row[0]: row[1] for row in session.execute(text("SELECT slug, id FROM legendary_player_profiles")).fetchall()
         }
         existing_players = {
             row[0]: row[1]
             for row in session.execute(
-                text("SELECT provider_external_id, id FROM ingestion_players WHERE source_provider = 'fm23_genie_scout'")
+                text(
+                    "SELECT provider_external_id, id FROM ingestion_players WHERE source_provider = 'fm23_genie_scout'"
+                )
             ).fetchall()
         }
         logger.info(
@@ -664,101 +670,113 @@ def execute_ingestion(batch_size: int = 500):
             is_marquee = any(re.sub(r"[^a-z0-9]", "", k) == norm_leg for k in MARQUEE_LEGEND_PHOTOS)
             is_sportmonks = norm_leg in photo_db
             source_prov = (
-                "verified_curated"
-                if is_marquee
-                else ("sportmonks" if is_sportmonks else "cloudinary_facebank")
+                "verified_curated" if is_marquee else ("sportmonks" if is_sportmonks else "cloudinary_facebank")
             )
-            portrait_meta = json.dumps({
-                "source_provider": source_prov,
-                "portrait_url": pic_url,
-                "moderation_status": "approved",
-                "rights_cleared": True,
-            })
-            dna_json = json.dumps({
-                "portraitUrl": pic_url,
-                "portraitStatus": "ready",
-                "current_rating": rating,
-                "potential_rating": rating,
-            })
+            portrait_meta = json.dumps(
+                {
+                    "source_provider": source_prov,
+                    "portrait_url": pic_url,
+                    "moderation_status": "approved",
+                    "rights_cleared": True,
+                }
+            )
+            dna_json = json.dumps(
+                {
+                    "portraitUrl": pic_url,
+                    "portraitStatus": "ready",
+                    "current_rating": rating,
+                    "potential_rating": rating,
+                }
+            )
 
             if slug in existing_leg_slugs:
                 leg_id = existing_leg_slugs[slug]
-                leg_updates.append({
-                    "id": leg_id,
-                    "full_name": name,
-                    "primary_position": prim_pos,
-                    "portrait_meta": portrait_meta,
-                    "now": now,
-                })
+                leg_updates.append(
+                    {
+                        "id": leg_id,
+                        "full_name": name,
+                        "primary_position": prim_pos,
+                        "portrait_meta": portrait_meta,
+                        "now": now,
+                    }
+                )
             else:
                 leg_id = str(uuid.uuid4())
                 existing_leg_slugs[slug] = leg_id
-                leg_inserts.append({
-                    "id": leg_id,
-                    "slug": slug,
-                    "full_name": name,
-                    "country_code": nation[:3].upper(),
-                    "date_of_birth": dob,
-                    "primary_position": prim_pos,
-                    "secondary_positions_json": json.dumps(sec_pos),
-                    "preferred_foot": "right",
-                    "historical_height_cm": 180,
-                    "gtex_height_cm": 180,
-                    "signature_traits_json": json.dumps(
-                        ["Prime Masterclass" if "M" in prim_pos else "Lethal Finisher"]
-                    ),
-                    "signature_role": "Iconic Legend",
-                    "era": "Prime Era",
-                    "legendary_classification": "icon",
-                    "portrait_meta": portrait_meta,
-                    "created_at": now,
-                    "updated_at": now,
-                })
+                leg_inserts.append(
+                    {
+                        "id": leg_id,
+                        "slug": slug,
+                        "full_name": name,
+                        "country_code": nation[:3].upper(),
+                        "date_of_birth": dob,
+                        "primary_position": prim_pos,
+                        "secondary_positions_json": json.dumps(sec_pos),
+                        "preferred_foot": "right",
+                        "historical_height_cm": 180,
+                        "gtex_height_cm": 180,
+                        "signature_traits_json": json.dumps(
+                            ["Prime Masterclass" if "M" in prim_pos else "Lethal Finisher"]
+                        ),
+                        "signature_role": "Iconic Legend",
+                        "era": "Prime Era",
+                        "legendary_classification": "icon",
+                        "portrait_meta": portrait_meta,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
+                )
             legend_profile_map[uid] = leg_id
 
             if uid in existing_players:
                 p_id = existing_players[uid]
-                leg_player_updates.append({
-                    "id": p_id,
-                    "full_name": name,
-                    "position": prim_pos,
-                    "secondary_positions_json": json.dumps(sec_pos),
-                    "market_value_eur": val_eur,
-                    "potential": rating,
-                    "legendary_profile_id": leg_id,
-                    "dna_profile": dna_json,
-                    "now": now,
-                })
+                leg_player_updates.append(
+                    {
+                        "id": p_id,
+                        "full_name": name,
+                        "position": prim_pos,
+                        "secondary_positions_json": json.dumps(sec_pos),
+                        "market_value_eur": val_eur,
+                        "potential": rating,
+                        "legendary_profile_id": leg_id,
+                        "dna_profile": dna_json,
+                        "now": now,
+                    }
+                )
             else:
                 p_id = str(uuid.uuid4())
                 existing_players[uid] = p_id
-                leg_player_inserts.append({
-                    "id": p_id,
-                    "uid": uid,
-                    "country_id": cid,
-                    "full_name": name,
-                    "position": prim_pos,
-                    "normalized_position": prim_pos,
-                    "secondary_positions_json": json.dumps(sec_pos),
-                    "date_of_birth": dob,
-                    "market_value_eur": val_eur,
-                    "is_real": True,
-                    "tier": "legend",
-                    "canonical_display_name": name,
-                    "real_world_club_name": r.get("Club") or "GTEX Legends XI",
-                    "potential": rating,
-                    "legendary_profile_id": leg_id,
-                    "dna_profile": dna_json,
-                    "now": now,
-                })
+                leg_player_inserts.append(
+                    {
+                        "id": p_id,
+                        "uid": uid,
+                        "country_id": cid,
+                        "full_name": name,
+                        "position": prim_pos,
+                        "normalized_position": prim_pos,
+                        "secondary_positions_json": json.dumps(sec_pos),
+                        "date_of_birth": dob,
+                        "market_value_eur": val_eur,
+                        "is_real": True,
+                        "tier": "legend",
+                        "canonical_display_name": name,
+                        "real_world_club_name": r.get("Club") or "GTEX Legends XI",
+                        "potential": rating,
+                        "legendary_profile_id": leg_id,
+                        "dna_profile": dna_json,
+                        "now": now,
+                    }
+                )
 
-            leg_image_upserts.append({
-                "id": str(uuid.uuid4()),
-                "uid": uid,
-                "pid": p_id,
-                "pic_url": pic_url,
-                "now": now,
-            })
+            leg_image_upserts.append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "uid": uid,
+                    "pid": p_id,
+                    "pic_url": pic_url,
+                    "now": now,
+                }
+            )
 
         for i in range(0, len(leg_inserts), batch_size):
             session.execute(sql_insert_legend, leg_inserts[i : i + batch_size])
@@ -785,12 +803,14 @@ def execute_ingestion(batch_size: int = 500):
             opot = parse_rating(osimhen.get("Best Pot Rating")) or 87
             ocid = resolve_country_id("Nigeria", country_map)
             opic_url = "https://cdn.sportmonks.com/images/soccer/players/29/455805.png"
-            odna_json = json.dumps({
-                "portraitUrl": opic_url,
-                "portraitStatus": "ready",
-                "current_rating": 86,
-                "potential_rating": opot,
-            })
+            odna_json = json.dumps(
+                {
+                    "portraitUrl": opic_url,
+                    "portraitStatus": "ready",
+                    "current_rating": 86,
+                    "potential_rating": opot,
+                }
+            )
 
             if ouid in existing_players:
                 op_id = existing_players[ouid]
@@ -811,25 +831,27 @@ def execute_ingestion(batch_size: int = 500):
                 existing_players[ouid] = op_id
                 session.execute(
                     sql_insert_player,
-                    [{
-                        "id": op_id,
-                        "uid": ouid,
-                        "country_id": ocid,
-                        "full_name": oname,
-                        "position": opos,
-                        "normalized_position": opos,
-                        "secondary_positions_json": json.dumps(osec),
-                        "date_of_birth": odob,
-                        "market_value_eur": oval,
-                        "is_real": True,
-                        "tier": "marquee",
-                        "canonical_display_name": oname,
-                        "real_world_club_name": "Galatasaray",
-                        "potential": opot,
-                        "legendary_profile_id": None,
-                        "dna_profile": odna_json,
-                        "now": now,
-                    }],
+                    [
+                        {
+                            "id": op_id,
+                            "uid": ouid,
+                            "country_id": ocid,
+                            "full_name": oname,
+                            "position": opos,
+                            "normalized_position": opos,
+                            "secondary_positions_json": json.dumps(osec),
+                            "date_of_birth": odob,
+                            "market_value_eur": oval,
+                            "is_real": True,
+                            "tier": "marquee",
+                            "canonical_display_name": oname,
+                            "real_world_club_name": "Galatasaray",
+                            "potential": opot,
+                            "legendary_profile_id": None,
+                            "dna_profile": odna_json,
+                            "now": now,
+                        }
+                    ],
                 )
 
             session.execute(
@@ -850,38 +872,40 @@ def execute_ingestion(batch_size: int = 500):
         z_cur = 74
         z_cid = resolve_country_id("Nigeria", country_map)
         z_pic_url = "https://img.a.transfermarkt.technology/portrait/original/1421433-1774883072.jpg?lm=4711"
-        z_dna_json = json.dumps({
-            "portraitUrl": z_pic_url,
-            "portraitStatus": "ready",
-            "current_rating": z_cur,
-            "potential_rating": z_pot,
-            "attributes": {
-                "pace": 18,
-                "acceleration": 18,
-                "sprint_speed": 17,
-                "dribbling": 17,
-                "agility": 16,
-                "flair": 16,
-                "technique": 15,
-                "first_touch": 15,
-                "finishing": 13,
-                "passing": 13,
-                "vision": 13,
-                "stamina": 14,
-                "work_rate": 14,
-                "determination": 15,
-                "composure": 13,
-            },
-            "playstyle": "Explosive Inverted Winger (Nigerian Neymar)",
-            "preferred_foot": "Left",
-            "height_cm": 184,
-            "weight_kg": 76,
-            "shirt_number": 36,
-            "agency": "001 United Sports",
-            "birth_place": "Bauchi State, Nigeria",
-            "former_club": "AIK Stockholm",
-            "record_transfer_fee_eur": z_val,
-        })
+        z_dna_json = json.dumps(
+            {
+                "portraitUrl": z_pic_url,
+                "portraitStatus": "ready",
+                "current_rating": z_cur,
+                "potential_rating": z_pot,
+                "attributes": {
+                    "pace": 18,
+                    "acceleration": 18,
+                    "sprint_speed": 17,
+                    "dribbling": 17,
+                    "agility": 16,
+                    "flair": 16,
+                    "technique": 15,
+                    "first_touch": 15,
+                    "finishing": 13,
+                    "passing": 13,
+                    "vision": 13,
+                    "stamina": 14,
+                    "work_rate": 14,
+                    "determination": 15,
+                    "composure": 13,
+                },
+                "playstyle": "Explosive Inverted Winger (Nigerian Neymar)",
+                "preferred_foot": "Left",
+                "height_cm": 184,
+                "weight_kg": 76,
+                "shirt_number": 36,
+                "agency": "001 United Sports",
+                "birth_place": "Bauchi State, Nigeria",
+                "former_club": "AIK Stockholm",
+                "record_transfer_fee_eur": z_val,
+            }
+        )
 
         if z_uid in existing_players:
             zp_id = existing_players[z_uid]
@@ -897,32 +921,43 @@ def execute_ingestion(batch_size: int = 500):
                         dna_profile = :dna, updated_at = :now
                     WHERE id = :id
                 """),
-                {"id": zp_id, "name": z_name, "pos": z_pos, "sec": json.dumps(z_sec), "val": z_val, "pot": z_pot, "dna": z_dna_json, "now": now},
+                {
+                    "id": zp_id,
+                    "name": z_name,
+                    "pos": z_pos,
+                    "sec": json.dumps(z_sec),
+                    "val": z_val,
+                    "pot": z_pot,
+                    "dna": z_dna_json,
+                    "now": now,
+                },
             )
         else:
             zp_id = str(uuid.uuid4())
             existing_players[z_uid] = zp_id
             session.execute(
                 sql_insert_player,
-                [{
-                    "id": zp_id,
-                    "uid": z_uid,
-                    "country_id": z_cid,
-                    "full_name": z_name,
-                    "position": z_pos,
-                    "normalized_position": z_pos,
-                    "secondary_positions_json": json.dumps(z_sec),
-                    "date_of_birth": z_dob,
-                    "market_value_eur": z_val,
-                    "is_real": True,
-                    "tier": "wonderkid",
-                    "canonical_display_name": z_name,
-                    "real_world_club_name": "Brighton & Hove Albion",
-                    "potential": z_pot,
-                    "legendary_profile_id": None,
-                    "dna_profile": z_dna_json,
-                    "now": now,
-                }],
+                [
+                    {
+                        "id": zp_id,
+                        "uid": z_uid,
+                        "country_id": z_cid,
+                        "full_name": z_name,
+                        "position": z_pos,
+                        "normalized_position": z_pos,
+                        "secondary_positions_json": json.dumps(z_sec),
+                        "date_of_birth": z_dob,
+                        "market_value_eur": z_val,
+                        "is_real": True,
+                        "tier": "wonderkid",
+                        "canonical_display_name": z_name,
+                        "real_world_club_name": "Brighton & Hove Albion",
+                        "potential": z_pot,
+                        "legendary_profile_id": None,
+                        "dna_profile": z_dna_json,
+                        "now": now,
+                    }
+                ],
             )
 
         session.execute(
@@ -943,39 +978,41 @@ def execute_ingestion(batch_size: int = 500):
         my_cur = 74
         my_cid = resolve_country_id("Cote d'Ivoire", country_map) or "ffe28ba6-133a-4b77-b500-bebb685b0b10"
         my_pic_url = "https://img.a.transfermarkt.technology/portrait/original/1178758-1714124381.jpg?lm=4711"
-        my_dna_json = json.dumps({
-            "portraitUrl": my_pic_url,
-            "portraitStatus": "ready",
-            "current_rating": my_cur,
-            "potential_rating": my_pot,
-            "attributes": {
-                "work_rate": 18,
-                "stamina": 18,
-                "acceleration": 16,
-                "agility": 16,
-                "pace": 15,
-                "tackling": 15,
-                "interceptions": 15,
-                "dribbling": 15,
-                "ball_carrying": 16,
-                "technique": 14,
-                "short_passing": 14,
-                "vision": 13,
-                "determination": 16,
-                "bravery": 16,
-                "natural_fitness": 17,
-                "composure": 13,
-            },
-            "playstyle": "Dynamic Disruptor & Progressive Carrier (Ivorian Kanté)",
-            "preferred_foot": "Right",
-            "height_cm": 169,
-            "weight_kg": 65,
-            "shirt_number": 35,
-            "agency": "Universal Football",
-            "birth_place": "Mali / Ivory Coast",
-            "former_clubs": ["ASEC Mimosas", "IFK Göteborg", "Sturm Graz (loan)"],
-            "market_value_eur": my_val,
-        })
+        my_dna_json = json.dumps(
+            {
+                "portraitUrl": my_pic_url,
+                "portraitStatus": "ready",
+                "current_rating": my_cur,
+                "potential_rating": my_pot,
+                "attributes": {
+                    "work_rate": 18,
+                    "stamina": 18,
+                    "acceleration": 16,
+                    "agility": 16,
+                    "pace": 15,
+                    "tackling": 15,
+                    "interceptions": 15,
+                    "dribbling": 15,
+                    "ball_carrying": 16,
+                    "technique": 14,
+                    "short_passing": 14,
+                    "vision": 13,
+                    "determination": 16,
+                    "bravery": 16,
+                    "natural_fitness": 17,
+                    "composure": 13,
+                },
+                "playstyle": "Dynamic Disruptor & Progressive Carrier (Ivorian Kanté)",
+                "preferred_foot": "Right",
+                "height_cm": 169,
+                "weight_kg": 65,
+                "shirt_number": 35,
+                "agency": "Universal Football",
+                "birth_place": "Mali / Ivory Coast",
+                "former_clubs": ["ASEC Mimosas", "IFK Göteborg", "Sturm Graz (loan)"],
+                "market_value_eur": my_val,
+            }
+        )
 
         if my_uid in existing_players:
             myp_id = existing_players[my_uid]
@@ -991,32 +1028,43 @@ def execute_ingestion(batch_size: int = 500):
                         dna_profile = :dna, updated_at = :now
                     WHERE id = :id
                 """),
-                {"id": myp_id, "name": my_name, "pos": my_pos, "sec": json.dumps(my_sec), "val": my_val, "pot": my_pot, "dna": my_dna_json, "now": now},
+                {
+                    "id": myp_id,
+                    "name": my_name,
+                    "pos": my_pos,
+                    "sec": json.dumps(my_sec),
+                    "val": my_val,
+                    "pot": my_pot,
+                    "dna": my_dna_json,
+                    "now": now,
+                },
             )
         else:
             myp_id = str(uuid.uuid4())
             existing_players[my_uid] = myp_id
             session.execute(
                 sql_insert_player,
-                [{
-                    "id": myp_id,
-                    "uid": my_uid,
-                    "country_id": my_cid,
-                    "full_name": my_name,
-                    "position": my_pos,
-                    "normalized_position": my_pos,
-                    "secondary_positions_json": json.dumps(my_sec),
-                    "date_of_birth": my_dob,
-                    "market_value_eur": my_val,
-                    "is_real": True,
-                    "tier": "wonderkid",
-                    "canonical_display_name": my_name,
-                    "real_world_club_name": "Brighton & Hove Albion",
-                    "potential": my_pot,
-                    "legendary_profile_id": None,
-                    "dna_profile": my_dna_json,
-                    "now": now,
-                }],
+                [
+                    {
+                        "id": myp_id,
+                        "uid": my_uid,
+                        "country_id": my_cid,
+                        "full_name": my_name,
+                        "position": my_pos,
+                        "normalized_position": my_pos,
+                        "secondary_positions_json": json.dumps(my_sec),
+                        "date_of_birth": my_dob,
+                        "market_value_eur": my_val,
+                        "is_real": True,
+                        "tier": "wonderkid",
+                        "canonical_display_name": my_name,
+                        "real_world_club_name": "Brighton & Hove Albion",
+                        "potential": my_pot,
+                        "legendary_profile_id": None,
+                        "dna_profile": my_dna_json,
+                        "now": now,
+                    }
+                ],
             )
 
         session.execute(
@@ -1032,18 +1080,31 @@ def execute_ingestion(batch_size: int = 500):
         fa_pot = 84
         fa_cur = 75
         fa_photo = "https://cdn.sportmonks.com/images/soccer/players/28/26715260.png"
-        fa_dna = json.dumps({
-            "portraitUrl": fa_photo,
-            "portraitStatus": "ready",
-            "current_rating": fa_cur,
-            "potential_rating": fa_pot,
-            "attributes": {"pace": 17, "acceleration": 17, "dribbling": 15, "shot_power": 15, "finishing": 14, "crossing": 14, "agility": 15, "flair": 15, "stamina": 15, "work_rate": 15},
-            "playstyle": "Explosive Direct Premier League Inverted Winger",
-            "preferred_foot": "Left",
-            "height_cm": 178,
-            "weight_kg": 72,
-            "shirt_number": 19
-        })
+        fa_dna = json.dumps(
+            {
+                "portraitUrl": fa_photo,
+                "portraitStatus": "ready",
+                "current_rating": fa_cur,
+                "potential_rating": fa_pot,
+                "attributes": {
+                    "pace": 17,
+                    "acceleration": 17,
+                    "dribbling": 15,
+                    "shot_power": 15,
+                    "finishing": 14,
+                    "crossing": 14,
+                    "agility": 15,
+                    "flair": 15,
+                    "stamina": 15,
+                    "work_rate": 15,
+                },
+                "playstyle": "Explosive Direct Premier League Inverted Winger",
+                "preferred_foot": "Left",
+                "height_cm": 178,
+                "weight_kg": 72,
+                "shirt_number": 19,
+            }
+        )
         session.execute(
             text("""
                 UPDATE ingestion_players SET
@@ -1053,7 +1114,7 @@ def execute_ingestion(batch_size: int = 500):
                     real_player_tier = 'wonderkid', updated_at = :now
                 WHERE full_name ILIKE '%Femi Azeez%'
             """),
-            {"val": fa_val, "pot": fa_pot, "dna": fa_dna, "now": now}
+            {"val": fa_val, "pot": fa_pot, "dna": fa_dna, "now": now},
         )
 
         # 3.4 Ingest Chibuike Nwaiwu Upgrade (Trabzonspor Core Titan)
@@ -1062,18 +1123,33 @@ def execute_ingestion(batch_size: int = 500):
         cn_pot = 87
         cn_cur = 77
         cn_photo = "https://img.a.transfermarkt.technology/portrait/original/985825-1789399837.jpg?lm=4711"
-        cn_dna = json.dumps({
-            "portraitUrl": cn_photo,
-            "portraitStatus": "ready",
-            "current_rating": cn_cur,
-            "potential_rating": cn_pot,
-            "attributes": {"strength": 18, "jumping": 18, "heading": 16, "tackling": 16, "marking": 16, "interceptions": 15, "positioning": 15, "composure": 15, "passing": 15, "pace": 14, "bravery": 17, "leadership": 15},
-            "playstyle": "Dominant Aerial Colossus & High-Accuracy Ball-Playing CB",
-            "preferred_foot": "Right",
-            "height_cm": 193,
-            "weight_kg": 86,
-            "shirt_number": 4
-        })
+        cn_dna = json.dumps(
+            {
+                "portraitUrl": cn_photo,
+                "portraitStatus": "ready",
+                "current_rating": cn_cur,
+                "potential_rating": cn_pot,
+                "attributes": {
+                    "strength": 18,
+                    "jumping": 18,
+                    "heading": 16,
+                    "tackling": 16,
+                    "marking": 16,
+                    "interceptions": 15,
+                    "positioning": 15,
+                    "composure": 15,
+                    "passing": 15,
+                    "pace": 14,
+                    "bravery": 17,
+                    "leadership": 15,
+                },
+                "playstyle": "Dominant Aerial Colossus & High-Accuracy Ball-Playing CB",
+                "preferred_foot": "Right",
+                "height_cm": 193,
+                "weight_kg": 86,
+                "shirt_number": 4,
+            }
+        )
         session.execute(
             text("""
                 UPDATE ingestion_players SET
@@ -1084,7 +1160,7 @@ def execute_ingestion(batch_size: int = 500):
                     preferred_foot = 'Right', shirt_number = 4, updated_at = :now
                 WHERE full_name ILIKE '%Chibuike Nwaiwu%'
             """),
-            {"val": cn_val, "pot": cn_pot, "dna": cn_dna, "now": now}
+            {"val": cn_val, "pot": cn_pot, "dna": cn_dna, "now": now},
         )
         session.commit()
 
@@ -1121,56 +1197,64 @@ def execute_ingestion(batch_size: int = 500):
                     club = r.get("Club")
 
                     pic_url = resolve_player_picture(name, nation, uid, photo_db, faces)
-                    dna_json = json.dumps({
-                        "portraitUrl": pic_url,
-                        "portraitStatus": "ready",
-                        "current_rating": cur,
-                        "potential_rating": pot,
-                    })
+                    dna_json = json.dumps(
+                        {
+                            "portraitUrl": pic_url,
+                            "portraitStatus": "ready",
+                            "current_rating": cur,
+                            "potential_rating": pot,
+                        }
+                    )
 
                     if uid in existing_players:
                         p_id = existing_players[uid]
-                        b_updates.append({
-                            "id": p_id,
-                            "full_name": name,
-                            "position": pos,
-                            "secondary_positions_json": json.dumps(sec),
-                            "market_value_eur": val,
-                            "potential": pot,
-                            "legendary_profile_id": None,
-                            "dna_profile": dna_json,
-                            "now": now,
-                        })
+                        b_updates.append(
+                            {
+                                "id": p_id,
+                                "full_name": name,
+                                "position": pos,
+                                "secondary_positions_json": json.dumps(sec),
+                                "market_value_eur": val,
+                                "potential": pot,
+                                "legendary_profile_id": None,
+                                "dna_profile": dna_json,
+                                "now": now,
+                            }
+                        )
                     else:
                         p_id = str(uuid.uuid4())
                         existing_players[uid] = p_id
-                        b_inserts.append({
-                            "id": p_id,
-                            "uid": uid,
-                            "country_id": cid,
-                            "full_name": name,
-                            "position": pos,
-                            "normalized_position": pos,
-                            "secondary_positions_json": json.dumps(sec),
-                            "date_of_birth": dob,
-                            "market_value_eur": val,
-                            "is_real": True,
-                            "tier": tier_label,
-                            "canonical_display_name": name,
-                            "real_world_club_name": club,
-                            "potential": pot,
-                            "legendary_profile_id": None,
-                            "dna_profile": dna_json,
-                            "now": now,
-                        })
+                        b_inserts.append(
+                            {
+                                "id": p_id,
+                                "uid": uid,
+                                "country_id": cid,
+                                "full_name": name,
+                                "position": pos,
+                                "normalized_position": pos,
+                                "secondary_positions_json": json.dumps(sec),
+                                "date_of_birth": dob,
+                                "market_value_eur": val,
+                                "is_real": True,
+                                "tier": tier_label,
+                                "canonical_display_name": name,
+                                "real_world_club_name": club,
+                                "potential": pot,
+                                "legendary_profile_id": None,
+                                "dna_profile": dna_json,
+                                "now": now,
+                            }
+                        )
 
-                    b_images.append({
-                        "id": str(uuid.uuid4()),
-                        "uid": uid,
-                        "pid": p_id,
-                        "pic_url": pic_url,
-                        "now": now,
-                    })
+                    b_images.append(
+                        {
+                            "id": str(uuid.uuid4()),
+                            "uid": uid,
+                            "pid": p_id,
+                            "pic_url": pic_url,
+                            "now": now,
+                        }
+                    )
 
                 if b_inserts:
                     session.execute(sql_insert_player, b_inserts)
@@ -1224,47 +1308,53 @@ def execute_ingestion(batch_size: int = 500):
 
                 if uid in existing_players:
                     p_id = existing_players[uid]
-                    b_updates.append({
-                        "id": p_id,
-                        "full_name": name,
-                        "position": pos,
-                        "secondary_positions_json": json.dumps(sec),
-                        "market_value_eur": val,
-                        "potential": pot,
-                        "legendary_profile_id": None,
-                        "dna_profile": dna_json,
-                        "now": now,
-                    })
+                    b_updates.append(
+                        {
+                            "id": p_id,
+                            "full_name": name,
+                            "position": pos,
+                            "secondary_positions_json": json.dumps(sec),
+                            "market_value_eur": val,
+                            "potential": pot,
+                            "legendary_profile_id": None,
+                            "dna_profile": dna_json,
+                            "now": now,
+                        }
+                    )
                 else:
                     p_id = str(uuid.uuid4())
                     existing_players[uid] = p_id
-                    b_inserts.append({
-                        "id": p_id,
-                        "uid": uid,
-                        "country_id": cid,
-                        "full_name": name,
-                        "position": pos,
-                        "normalized_position": pos,
-                        "secondary_positions_json": json.dumps(sec),
-                        "date_of_birth": dob,
-                        "market_value_eur": val,
-                        "is_real": False,
-                        "tier": "regen",
-                        "canonical_display_name": name,
-                        "real_world_club_name": club,
-                        "potential": pot,
-                        "legendary_profile_id": None,
-                        "dna_profile": dna_json,
-                        "now": now,
-                    })
+                    b_inserts.append(
+                        {
+                            "id": p_id,
+                            "uid": uid,
+                            "country_id": cid,
+                            "full_name": name,
+                            "position": pos,
+                            "normalized_position": pos,
+                            "secondary_positions_json": json.dumps(sec),
+                            "date_of_birth": dob,
+                            "market_value_eur": val,
+                            "is_real": False,
+                            "tier": "regen",
+                            "canonical_display_name": name,
+                            "real_world_club_name": club,
+                            "potential": pot,
+                            "legendary_profile_id": None,
+                            "dna_profile": dna_json,
+                            "now": now,
+                        }
+                    )
 
-                b_images.append({
-                    "id": str(uuid.uuid4()),
-                    "uid": uid,
-                    "pid": p_id,
-                    "pic_url": face_url,
-                    "now": now,
-                })
+                b_images.append(
+                    {
+                        "id": str(uuid.uuid4()),
+                        "uid": uid,
+                        "pid": p_id,
+                        "pic_url": face_url,
+                        "now": now,
+                    }
+                )
 
             if b_inserts:
                 session.execute(sql_insert_player, b_inserts)
@@ -1273,7 +1363,9 @@ def execute_ingestion(batch_size: int = 500):
             if b_images:
                 session.execute(sql_upsert_image, b_images)
             session.commit()
-            logger.info("  Processed %d/%d regens with portraits", min(i + batch_size, len(pure_regens)), len(pure_regens))
+            logger.info(
+                "  Processed %d/%d regens with portraits", min(i + batch_size, len(pure_regens)), len(pure_regens)
+            )
 
         # 6. Issue Share Markets in player_share_markets (Batched)
         logger.info("--- Issuing / Synchronizing Share Markets for FM23 Universe (Regen 1-of-1 vs Real Fractional) ---")
@@ -1351,21 +1443,25 @@ def execute_ingestion(batch_size: int = 500):
                         "scarcity": "standard_float_20pct",
                     }
 
-                sm_rows.append({
-                    "id": str(uuid.uuid4()),
-                    "player_id": p_id,
-                    "total_shares": total_shares,
-                    "circulating_shares": circulating,
-                    "share_price": share_price,
-                    "meta": json.dumps(meta),
-                    "now": now,
-                })
+                sm_rows.append(
+                    {
+                        "id": str(uuid.uuid4()),
+                        "player_id": p_id,
+                        "total_shares": total_shares,
+                        "circulating_shares": circulating,
+                        "share_price": share_price,
+                        "meta": json.dumps(meta),
+                        "now": now,
+                    }
+                )
 
             if sm_rows:
                 session.execute(sql_upsert_share_market, sm_rows)
             session.commit()
             logger.info(
-                "  Issued / Synchronized %d/%d share markets", min(i + sm_batch_size, len(unissued_players)), len(unissued_players)
+                "  Issued / Synchronized %d/%d share markets",
+                min(i + sm_batch_size, len(unissued_players)),
+                len(unissued_players),
             )
 
         # 7. Generate Executive Staff Catalog
