@@ -24,6 +24,18 @@ fi
 # Render's IPv4-only egress cannot reach ("Network is unreachable"). Require the
 # IPv4 connection pooler host instead.
 _gte_db_url="${DATABASE_URL:-${GTE_DATABASE_URL:-}}"
+if [[ "${_gte_db_url}" == export\ * ]]; then
+  _gte_db_url="${_gte_db_url#export }"
+fi
+if [[ "${_gte_db_url}" == DATABASE_URL=* ]]; then
+  _gte_db_url="${_gte_db_url#DATABASE_URL=}"
+fi
+if [[ "${_gte_db_url}" == GTE_DATABASE_URL=* ]]; then
+  _gte_db_url="${_gte_db_url#GTE_DATABASE_URL=}"
+fi
+while [[ "${_gte_db_url}" == \"*\" || "${_gte_db_url}" == \'*\' ]]; do
+  _gte_db_url="${_gte_db_url:1:-1}"
+done
 if [[ "${_gte_db_url}" == *"db."*".supabase.co"* ]]; then
   echo "DATABASE_URL points at the Supabase DIRECT host (db.<ref>.supabase.co), which is" >&2
   echo "IPv6-only and unreachable from Render. Use the Supabase connection pooler instead:" >&2

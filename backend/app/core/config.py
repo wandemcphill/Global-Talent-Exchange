@@ -357,6 +357,15 @@ def _get_csv(environ: Mapping[str, str], name: str) -> tuple[str, ...]:
 
 def normalize_database_url(database_url: str) -> str:
     normalized = database_url.strip()
+    if normalized.startswith("export "):
+        normalized = normalized[len("export ") :].strip()
+    for prefix in ("DATABASE_URL=", "GTE_DATABASE_URL="):
+        if normalized.startswith(prefix):
+            normalized = normalized[len(prefix) :].strip()
+    while (normalized.startswith('"') and normalized.endswith('"')) or (
+        normalized.startswith("'") and normalized.endswith("'")
+    ):
+        normalized = normalized[1:-1].strip()
     if not normalized:
         raise ValueError("DATABASE_URL must not be empty.")
     if normalized.startswith("postgres://"):
