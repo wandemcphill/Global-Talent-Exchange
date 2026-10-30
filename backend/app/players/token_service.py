@@ -25,6 +25,8 @@ _original_generate_uuid = _legacy.generate_uuid
 def _ledger_reference_token() -> str:
     reference = _trade_reference.get()
     if reference:
+        if len(reference) > 60:
+            return sha256(reference.encode("utf-8")).hexdigest()[:32]
         return reference
     return _original_generate_uuid()
 

@@ -885,8 +885,6 @@ class PlayerTokenMarketService:
             int(market.total_shares or 0) > 0
             and self._amount(market.share_price_coin) > Decimal("0.0000")
             and bool(market.status)
-            and metadata.get("liquidity_coin") is not None
-            and bool(metadata.get("market_issued"))
         )
         if already_materialized:
             return market

@@ -60,7 +60,7 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "name": "GTEX Sovereign 900X Private Jet",
         "category": "jet",
         "model": "Sovereign 900X Long-Range VIP",
-        "price_gtex": 4800.0,
+        "price_gtex": 5000.0,
         "prestige_bonus": 8,
         "broadcast_on_purchase": True,
         "image_file": "sovereign_900x_jet.webp",
@@ -78,7 +78,7 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "name": "Gulfstream G700 Executive Jet",
         "category": "jet",
         "model": "G700 Flagship Club Aviation",
-        "price_gtex": 6200.0,
+        "price_gtex": 7500.0,
         "prestige_bonus": 10,
         "broadcast_on_purchase": True,
         "image_file": "sovereign_900x_jet.webp",
@@ -96,7 +96,7 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "name": "Vanguard XII Luxury Team Coach",
         "category": "coach",
         "model": "Vanguard XII Armored First-Team Bus",
-        "price_gtex": 320.0,
+        "price_gtex": 750.0,
         "prestige_bonus": 2,
         "broadcast_on_purchase": False,
         "image_file": "vanguard_xii_coach.webp",
@@ -114,7 +114,7 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "name": "Veloce GT9 Hypercar",
         "category": "vehicle",
         "model": "GT9 Twin-Turbo V12",
-        "price_gtex": 850.0,
+        "price_gtex": 1500.0,
         "prestige_bonus": 4,
         "broadcast_on_purchase": False,
         "image_file": "veloce_gt9_hypercar.webp",
@@ -132,7 +132,7 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "name": "Chronos Tourbillon Piece Unique",
         "category": "watch",
         "model": "Piece Unique Sapphire-Carbon",
-        "price_gtex": 220.0,
+        "price_gtex": 400.0,
         "prestige_bonus": 2,
         "broadcast_on_purchase": False,
         "image_file": "chronos_tourbillon_watch.webp",
@@ -150,7 +150,7 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "name": "Royal Penthouse Hospitality Box",
         "category": "suite",
         "model": "Directorate VIP Skybox",
-        "price_gtex": 500.0,
+        "price_gtex": 1000.0,
         "prestige_bonus": 3,
         "broadcast_on_purchase": False,
         "image_file": "arena_imperiale_stadium.webp",
@@ -2003,22 +2003,22 @@ def converse_with_staff(session: Session, user_id: str, club_id: str, role: str,
         elif "transfer" in msg_lower or "sign" in msg_lower:
             reply_text = f"Our recruitment desk has flagged several intriguing market opportunities. Given our {tier} status, we can target high-ceiling players without overpaying on fees."
         else:
-            reply_text = f"Understood, Director. As General Manager, I'm aligning our commercial and sporting operations to ensure long-term stability and success."
+            reply_text = "Understood, Director. As General Manager, I'm aligning our commercial and sporting operations to ensure long-term stability and success."
     elif role in ("first_team_manager", "manager"):
         if "tactics" in msg_lower or "formation" in msg_lower:
             reply_text = f"Tactically, I'm tailoring our shape to match our squad's strengths. Leaders like {player_names[0] if player_names else 'our key players'} set the tempo in training."
         elif "morale" in msg_lower or "mood" in msg_lower:
-            reply_text = f"The boys are hungry. Mood in the dressing room is focused, and we're ready to put everything on the line in our next match."
+            reply_text = "The boys are hungry. Mood in the dressing room is focused, and we're ready to put everything on the line in our next match."
         else:
-            reply_text = f"Message received, Boss. My staff and I are entirely committed to delivering three points on matchday."
+            reply_text = "Message received, Boss. My staff and I are entirely committed to delivering three points on matchday."
     elif role == "head_of_youth_development":
-        reply_text = f"The academy pipeline is advancing nicely. We've got raw talent grinding in daily drills, and with our facilities, we'll see several breakout stars ready for senior promotion."
+        reply_text = "The academy pipeline is advancing nicely. We've got raw talent grinding in daily drills, and with our facilities, we'll see several breakout stars ready for senior promotion."
     elif role == "chief_scout":
-        reply_text = f"Our scouting network is constantly updating player performance dossiers across the region. We're prioritizing gems with high development headroom and sound temperament."
+        reply_text = "Our scouting network is constantly updating player performance dossiers across the region. We're prioritizing gems with high development headroom and sound temperament."
     elif role == "medical_director":
-        reply_text = f"Medical room report: player workloads and recovery protocols are being strictly monitored to minimize muscular injuries and maximize match availability."
+        reply_text = "Medical room report: player workloads and recovery protocols are being strictly monitored to minimize muscular injuries and maximize match availability."
     else:
-        reply_text = f"Thank you for the guidance, Director. I am completely focused on executing our club's strategy."
+        reply_text = "Thank you for the guidance, Director. I am completely focused on executing our club's strategy."
 
     now_iso = datetime.now(timezone.utc).isoformat()
     user_entry = {

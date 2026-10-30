@@ -48,29 +48,34 @@ class GTEXNewsScheduler:
                 from app.story_feed_engine.bridges import publish_news_engine_payload
 
                 bridge_stats = publish_news_engine_payload(session, payload)
-                try:
-                    from app.regen_universe.service import RegenUniverseService
-
-                    rising_stats = RegenUniverseService(session).announce_rising_stars_to_story_feed(
-                        limit=5 if scope == "light" else 8
-                    )
-                except Exception:
-                    rising_stats = {"created": 0, "skipped": 0}
-                    logger.exception(
-                        "gtex_news.scheduler.rising_star_announce_failed scope=%s",
-                        scope,
-                    )
                 session.commit()
-                logger.info(
-                    "gtex_news.scheduler.published_to_story_feed scope=%s created=%s skipped=%s rising=%s",
-                    scope,
-                    bridge_stats.get("created"),
-                    bridge_stats.get("skipped"),
-                    rising_stats.get("created"),
-                )
             except Exception:
                 session.rollback()
-                logger.exception("gtex_news.scheduler.run_failed scope=%s", scope)
+                logger.exception("gtex_news.scheduler.daily_news_failed scope=%s", scope)
+                return
+
+            rising_stats = {"created": 0, "skipped": 0}
+            try:
+                from app.regen_universe.service import RegenUniverseService
+
+                rising_stats = RegenUniverseService(session).announce_rising_stars_to_story_feed(
+                    limit=5 if scope == "light" else 8
+                )
+                session.commit()
+            except Exception:
+                session.rollback()
+                logger.exception(
+                    "gtex_news.scheduler.rising_star_announce_failed scope=%s",
+                    scope,
+                )
+
+            logger.info(
+                "gtex_news.scheduler.published_to_story_feed scope=%s created=%s skipped=%s rising=%s",
+                scope,
+                bridge_stats.get("created"),
+                bridge_stats.get("skipped"),
+                rising_stats.get("created"),
+            )
 
     def _run_loop(self) -> None:
         while not self._stop_event.is_set():

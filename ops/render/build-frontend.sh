@@ -9,7 +9,26 @@ FLUTTER_REVISION="ff37bef603469fb030f2b72995ab929ccfc227f0"
 
 : "${GTE_API_BASE_URL:?GTE_API_BASE_URL must be set for the frontend build.}"
 GTE_BACKEND_MODE="${GTE_BACKEND_MODE:-live}"
-# P9-SHELL is the canonical production shell. Default it on; allow an explicit false for rollback.
+
+# When launching React on Web first (bypassing Flutter Web / mobile apps), build React directly to site root
+BUILD_REACT_ONLY="${BUILD_REACT_ONLY:-true}"
+if [[ "${BUILD_REACT_ONLY}" == "true" ]]; then
+  echo ">>> Building React Web Application as primary web root..."
+  cd "${FRONTEND_DIR}/react-shell"
+  export PUBLIC_URL=""
+  export REACT_APP_BACKEND_URL="${GTE_API_BASE_URL}"
+  export CI=false
+  export NODE_OPTIONS="${NODE_OPTIONS:---openssl-legacy-provider}"
+  npm ci --legacy-peer-deps --include=dev || npm install --legacy-peer-deps --include=dev
+  npm run build
+  mkdir -p "${FRONTEND_DIR}/build"
+  rm -rf "${FRONTEND_DIR}/build/web"
+  cp -r "${FRONTEND_DIR}/react-shell/build" "${FRONTEND_DIR}/build/web"
+  echo ">>> React Web Application built and deployed to frontend/build/web successfully."
+  exit 0
+fi
+
+# Fallback: legacy dual-host build
 GTEX_SHELL_V3="${GTEX_SHELL_V3:-true}"
 case "${GTEX_SHELL_V3}" in
   true|false) ;;
@@ -20,9 +39,6 @@ case "${GTEX_SHELL_V3}" in
 esac
 
 if ! git -C "${FLUTTER_ROOT}" rev-parse --git-dir >/dev/null 2>&1; then
-  # A cached FLUTTER_ROOT can exist with a partial/corrupt .git (e.g. an
-  # interrupted clone left in Render's persistent build cache), which a bare
-  # `-d .git` directory check would miss. Verify it's actually a working repo.
   rm -rf "${FLUTTER_ROOT}"
   git clone https://github.com/flutter/flutter.git "${FLUTTER_ROOT}"
 fi
@@ -43,6 +59,4 @@ flutter build web --release \
   --dart-define="GTE_TURNSTILE_SITE_KEY=${GTE_TURNSTILE_SITE_KEY:-}" \
   --dart-define="GTEX_SHELL_V3=${GTEX_SHELL_V3}"
 
-# Flutter remains the site root. The React shell is published only under console/.
-# set -e above fails the Render build if this step fails.
 bash "${SCRIPT_DIR}/publish-react-shell.sh"

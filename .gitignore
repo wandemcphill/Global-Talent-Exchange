@@ -66,3 +66,6 @@ backend/admin_god_mode.json
 frontend/.codex-bin/
 ops/tmp/
 GTEX_*_PACK.zip
+
+# Agent scratch workspace
+scratch/

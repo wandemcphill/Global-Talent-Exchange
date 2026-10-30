@@ -391,13 +391,12 @@ def _start_deferred_startup(app: FastAPI, *, context: ApplicationContext, module
 def _run_deferred_startup(*, app: FastAPI, context: ApplicationContext, modules: tuple[DomainModule, ...]) -> None:
     try:
         module_loader_lock = getattr(app.state, "module_loader_lock", None)
-        if module_loader_lock is None:
-            _ensure_initial_admin(context.settings, context.database.session_factory)
-            run_module_hooks(app, context, modules, phase="startup")
-        else:
+        if module_loader_lock is not None:
             with module_loader_lock:
-                _ensure_initial_admin(context.settings, context.database.session_factory)
-                run_module_hooks(app, context, modules, phase="startup")
+                from app.modules import ensure_modules_loaded
+                ensure_modules_loaded(app)
+        _ensure_initial_admin(context.settings, context.database.session_factory)
+        run_module_hooks(app, context, modules, phase="startup")
     except Exception:
         logger.exception("app.startup.bootstrap_failed")
 

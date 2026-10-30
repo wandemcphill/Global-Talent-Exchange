@@ -1199,22 +1199,25 @@ class RegenUniverseService:
     def _discovery_pool(self, *, limit: int, age_min: int = 15, age_max: int = 21) -> list[_UniverseProspect]:
         market_service = RegenMarketService(self.session)
         prospects: list[_UniverseProspect] = []
-        for regen in self.session.scalars(select(RegenProfile).order_by(RegenProfile.generated_at.desc())):
+        fetch_limit = max(limit * 3, 60)
+        for regen in self.session.scalars(
+            select(RegenProfile).order_by(RegenProfile.generated_at.desc()).limit(fetch_limit)
+        ):
             prospect = self._prospect_from_regen(regen=regen, market_service=market_service)
             if prospect is None or prospect.age < age_min or prospect.age > age_max:
                 continue
             prospects.append(prospect)
-        seeds = list(
-            self.session.scalars(
-                select(NationalRegenSeed)
-                .where(NationalRegenSeed.status.in_(("active", "available")))
-                .order_by(
-                    NationalRegenSeed.potential_rating.desc(),
-                    NationalRegenSeed.current_rating.desc(),
-                    NationalRegenSeed.created_at.desc(),
-                )
-            ).all()
+        seed_query = (
+            select(NationalRegenSeed)
+            .where(NationalRegenSeed.status.in_(("active", "available")))
+            .order_by(
+                NationalRegenSeed.potential_rating.desc(),
+                NationalRegenSeed.current_rating.desc(),
+                NationalRegenSeed.created_at.desc(),
+            )
+            .limit(fetch_limit)
         )
+        seeds = list(self.session.scalars(seed_query).all())
         for seed in seeds:
             age = self._seed_age(seed)
             if age < age_min or age > age_max:

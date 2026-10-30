@@ -138,6 +138,7 @@ def create_database_engine(database_url: str | None = None) -> Engine:
         connect_args.setdefault("keepalives_interval", _get_int_env("GTE_DATABASE_KEEPALIVES_INTERVAL", 10, minimum=1))
         connect_args.setdefault("keepalives_count", _get_int_env("GTE_DATABASE_KEEPALIVES_COUNT", 3, minimum=1))
         engine_kwargs["pool_pre_ping"] = True
+        engine_kwargs["pool_recycle"] = _get_int_env("GTE_DB_POOL_RECYCLE", 300, minimum=30)
         # Cap pool size to avoid exhausting the Supabase session-mode pooler
         # (limit: 30 connections shared across all workers).  With WEB_CONCURRENCY=2
         # and two engines per worker: 3 × 2 engines × 2 workers = 12 base + 4 overflow
@@ -335,7 +336,8 @@ def check_runtime_schema_smoke(
 ) -> tuple[str, ...]:
     database_engine = engine or get_engine()
     inspector = inspect(database_engine)
-    missing_tables = tuple(table_name for table_name in required_tables if not inspector.has_table(table_name))
+    existing_tables = set(inspector.get_table_names())
+    missing_tables = tuple(table_name for table_name in required_tables if table_name not in existing_tables)
     if missing_tables:
         raise RuntimeError("Database schema smoke check failed. Missing tables: " + ", ".join(missing_tables) + ".")
     return required_tables

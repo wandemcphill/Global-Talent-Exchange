@@ -84,7 +84,7 @@ class GtexHandler(SimpleHTTPRequestHandler):
             return str(SHOWCASE_ROOT / "index.html")
 
         # Otherwise serve from Flutter Web root (or React fallback if not built)
-        default_root = FLUTTER_WEB_ROOT if (FLUTTER_WEB_ROOT / "index.html").exists() else REACT_WEB_ROOT
+        default_root = REACT_WEB_ROOT if (REACT_WEB_ROOT / "index.html").exists() else FLUTTER_WEB_ROOT
         rel = decoded_path.lstrip("/")
         if not rel:
             return str(default_root / "index.html")
