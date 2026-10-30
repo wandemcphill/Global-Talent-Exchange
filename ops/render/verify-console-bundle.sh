@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Verify a production React shell bundle built for /console.
+# Verify a production React shell bundle.
 # Usage: verify-console-bundle.sh <bundle-dir>
 set -euo pipefail
 
@@ -12,8 +12,8 @@ if [[ ! -f "${BUNDLE_DIR}/index.html" ]]; then
   exit 1
 fi
 
-if ! grep -q '/console/static/' "${BUNDLE_DIR}/index.html"; then
-  echo "React index.html does not reference /console/static assets. Rebuild with PUBLIC_URL=/console." >&2
+if ! grep -q -E '(/console)?/static/' "${BUNDLE_DIR}/index.html"; then
+  echo "React index.html does not reference static assets." >&2
   exit 1
 fi
 

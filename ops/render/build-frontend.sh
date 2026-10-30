@@ -1,48 +1,53 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Build the GTEX React Web Application for Render static hosting.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 FRONTEND_DIR="${REPO_ROOT}/frontend"
-FLUTTER_ROOT="${FLUTTER_ROOT:-${HOME}/flutter}"
-FLUTTER_REVISION="ff37bef603469fb030f2b72995ab929ccfc227f0"
+REACT_DIR="${FRONTEND_DIR}/react-shell"
 
 : "${GTE_API_BASE_URL:?GTE_API_BASE_URL must be set for the frontend build.}"
 GTE_BACKEND_MODE="${GTE_BACKEND_MODE:-live}"
-# P9-SHELL is the canonical production shell. Default it on; allow an explicit false for rollback.
-GTEX_SHELL_V3="${GTEX_SHELL_V3:-true}"
-case "${GTEX_SHELL_V3}" in
-  true|false) ;;
-  *)
-    echo "GTEX_SHELL_V3 must be 'true' or 'false'." >&2
+
+# Prevent API origins ending in /api from causing /api/api
+case "${GTE_API_BASE_URL}" in
+  */api|*/api/)
+    echo "GTE_API_BASE_URL must be the API origin without a /api suffix (got ${GTE_API_BASE_URL})." >&2
     exit 1
     ;;
 esac
 
-if ! git -C "${FLUTTER_ROOT}" rev-parse --git-dir >/dev/null 2>&1; then
-  # A cached FLUTTER_ROOT can exist with a partial/corrupt .git (e.g. an
-  # interrupted clone left in Render's persistent build cache), which a bare
-  # `-d .git` directory check would miss. Verify it's actually a working repo.
-  rm -rf "${FLUTTER_ROOT}"
-  git clone https://github.com/flutter/flutter.git "${FLUTTER_ROOT}"
+echo ">>> Building GTEX React Web Application as primary web build..."
+cd "${REACT_DIR}"
+
+if [[ ! -f "package-lock.json" ]]; then
+  echo "frontend/react-shell/package-lock.json is required for a deterministic Render build." >&2
+  exit 1
 fi
 
-git -C "${FLUTTER_ROOT}" fetch origin "${FLUTTER_REVISION}" --depth 1
-git -C "${FLUTTER_ROOT}" checkout "${FLUTTER_REVISION}"
+npm ci --legacy-peer-deps --include=dev
 
-export PATH="${FLUTTER_ROOT}/bin:${PATH}"
+# React Web build at the root of the domain
+export PUBLIC_URL=""
+export REACT_APP_BACKEND_URL="${GTE_API_BASE_URL}"
+export REACT_APP_GTE_TURNSTILE_SITE_KEY="${GTE_TURNSTILE_SITE_KEY:-${REACT_APP_GTE_TURNSTILE_SITE_KEY:-}}"
+export CI=false
+export NODE_OPTIONS="${NODE_OPTIONS:---openssl-legacy-provider}"
 
-flutter config --enable-web
-flutter precache --web
+npm run build
 
-cd "${FRONTEND_DIR}"
-flutter pub get
-flutter build web --release \
-  --dart-define="GTE_API_BASE_URL=${GTE_API_BASE_URL}" \
-  --dart-define="GTE_BACKEND_MODE=${GTE_BACKEND_MODE}" \
-  --dart-define="GTE_TURNSTILE_SITE_KEY=${GTE_TURNSTILE_SITE_KEY:-}" \
-  --dart-define="GTEX_SHELL_V3=${GTEX_SHELL_V3}"
+if [[ ! -f "build/index.html" ]]; then
+  echo "React build did not produce build/index.html." >&2
+  exit 1
+fi
 
-# Flutter remains the site root. The React shell is published only under console/.
-# set -e above fails the Render build if this step fails.
-bash "${SCRIPT_DIR}/publish-react-shell.sh"
+mkdir -p "${FRONTEND_DIR}/build"
+rm -rf "${FRONTEND_DIR}/build/web"
+cp -a "${REACT_DIR}/build" "${FRONTEND_DIR}/build/web"
+
+# Also maintain console/ directory so /console routes and assets resolve seamlessly
+mkdir -p "${FRONTEND_DIR}/build/web/console"
+cp -a "${REACT_DIR}/build/." "${FRONTEND_DIR}/build/web/console/"
+
+echo ">>> GTEX React Web Application deployed to frontend/build/web successfully."

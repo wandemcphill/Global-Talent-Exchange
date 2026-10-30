@@ -109,20 +109,21 @@ services:
     runtime: static
     buildCommand: "bash ops/render/build-frontend.sh"
     staticPublishPath: "frontend/build/web"
-    # Render serves a real file before any rewrite. These rules only cover
-    # React client routes under /console that have no file of their own.
-    # There is no site-wide /* rewrite: that would change Flutter deep links.
-    # /console/static and /console/img stay files and are not rewritten.
+    # Render serves existing static files (JS bundles, CSS, images) before rewrites.
+    # All client-side SPA routes rewrite to /index.html.
     routes:
       - type: rewrite
         source: /console
-        destination: /console/index.html
+        destination: /index.html
       - type: rewrite
         source: /console/
-        destination: /console/index.html
+        destination: /index.html
       - type: rewrite
         source: /console/*
-        destination: /console/index.html
+        destination: /index.html
+      - type: rewrite
+        source: /*
+        destination: /index.html
     envVars:
       - key: GTE_API_BASE_URL
         value: https://gtex-api-opea.onrender.com

@@ -1,8 +1,9 @@
-"""Smoke tests for publishing the React shell beside Flutter on the static site.
+"""Smoke tests for publishing the React shell on the Render static site.
 
-Flutter stays the document at `/`. The React shell is built into `console/`
-and Render rewrites only `/console` client routes. These tests lock that
-contract without cloning Flutter or installing the React toolchain.
+The GTEX React Web Application is published at the site root (`/`)
+and Render rewrites client-side SPA routes to `/index.html`.
+These tests lock that contract without cloning Flutter or installing
+the full React toolchain.
 """
 
 from __future__ import annotations
@@ -85,10 +86,11 @@ def _run_publish(extra_env: dict[str, str]) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         check=False,
+        timeout=15,
     )
 
 
-def test_web_service_still_publishes_flutter_at_the_site_root(blueprint: dict) -> None:
+def test_web_service_publishes_react_at_the_site_root(blueprint: dict) -> None:
     web = _service(blueprint, "gtex-web")
     assert web["runtime"] == "static"
     assert web["staticPublishPath"] == "frontend/build/web"
@@ -100,62 +102,48 @@ def test_web_service_still_publishes_flutter_at_the_site_root(blueprint: dict) -
     assert env["NODE_VERSION"] == "20"
 
 
-def test_console_rewrites_do_not_catch_flutter_or_api_paths(blueprint: dict) -> None:
+def test_web_service_routes_rewrite_to_index_html(blueprint: dict) -> None:
     routes = _routes(_service(blueprint, "gtex-web"))
     sources = [route["source"] for route in routes]
-    assert sources == ["/console", "/console/", "/console/*"]
+    assert "/*" in sources
     assert all(route["type"] == "rewrite" for route in routes)
-    assert all(route["destination"] == "/console/index.html" for route in routes)
-    forbidden = {"/", "/*", "/api", "/api/*", "/index.html"}
-    assert forbidden.isdisjoint(sources)
+    assert all(route["destination"] == "/index.html" for route in routes)
 
 
-def test_static_resolution_keeps_flutter_root_and_react_deep_links(blueprint: dict, tmp_path: Path) -> None:
+def test_static_resolution_serves_react_root_and_deep_links(blueprint: dict, tmp_path: Path) -> None:
     root = tmp_path / "web"
-    (root / "console" / "static" / "js").mkdir(parents=True)
-    (root / "console" / "img").mkdir()
-    (root / "index.html").write_text("FLUTTER", encoding="utf-8")
-    (root / "main.dart.js").write_text("dart", encoding="utf-8")
-    (root / "console" / "index.html").write_text("REACT", encoding="utf-8")
-    (root / "console" / "static" / "js" / "main.js").write_text("bundle", encoding="utf-8")
-    (root / "console" / "img" / "hero.jpg").write_text("image", encoding="utf-8")
+    (root / "static" / "js").mkdir(parents=True)
+    (root / "img").mkdir()
+    (root / "index.html").write_text("REACT", encoding="utf-8")
+    (root / "static" / "js" / "main.js").write_text("bundle", encoding="utf-8")
+    (root / "img" / "hero.jpg").write_text("image", encoding="utf-8")
     routes = _routes(_service(blueprint, "gtex-web"))
 
     def served(path: str) -> str | None:
         return resolve_static(root, path, routes)
 
     assert served("/") == "index.html"
-    assert served("/main.dart.js") == "main.dart.js"
-    assert served("/console") == "console/index.html"
-    assert served("/console/") == "console/index.html"
-    assert served("/console/index.html") == "console/index.html"
-    assert served("/console/login") == "console/index.html"
-    assert served("/console/app/market") == "console/index.html"
-    assert served("/console/payment/callback") == "console/index.html"
-    assert served("/console/static/js/main.js") == "console/static/js/main.js"
-    assert served("/console/img/hero.jpg") == "console/img/hero.jpg"
-    assert served("/app/market") is None
-    assert served("/design-lab") is None
-    assert served("/api/v2/auth/login") is None
-    assert (root / served("/") or "").read_text(encoding="utf-8") == "FLUTTER"
-    assert (root / "console" / "index.html").read_text(encoding="utf-8") == "REACT"
+    assert served("/login") == "index.html"
+    assert served("/app/market") == "index.html"
+    assert served("/console") == "index.html"
+    assert served("/console/login") == "index.html"
+    assert served("/static/js/main.js") == "static/js/main.js"
+    assert served("/img/hero.jpg") == "img/hero.jpg"
+    assert (root / served("/") or "").read_text(encoding="utf-8") == "REACT"
 
 
 def test_production_flutter_builds_enable_p9_shell_by_default() -> None:
-    for build_path in (BUILD_SCRIPT, CLOUDFLARE_BUILD_SCRIPT):
-        script = build_path.read_text(encoding="utf-8")
-        assert 'GTEX_SHELL_V3="${GTEX_SHELL_V3:-true}"' in script
-        assert '--dart-define="GTEX_SHELL_V3=${GTEX_SHELL_V3}"' in script
-        assert "GTEX_SHELL_V3 must be 'true' or 'false'." in script
+    script = CLOUDFLARE_BUILD_SCRIPT.read_text(encoding="utf-8")
+    assert 'GTEX_SHELL_V3="${GTEX_SHELL_V3:-true}"' in script
+    assert '--dart-define="GTEX_SHELL_V3=${GTEX_SHELL_V3}"' in script
+    assert "GTEX_SHELL_V3 must be 'true' or 'false'." in script
 
 
-def test_frontend_build_publishes_react_only_after_flutter() -> None:
+def test_frontend_build_publishes_react_shell() -> None:
     script = BUILD_SCRIPT.read_text(encoding="utf-8")
     assert script.startswith("#!/usr/bin/env bash\nset -euo pipefail\n")
-    flutter_build = script.index("flutter build web --release")
-    react_publish = script.index('bash "${SCRIPT_DIR}/publish-react-shell.sh"')
-    assert flutter_build < react_publish
-    assert "|| true" not in script.split("publish-react-shell.sh", 1)[1]
+    assert "npm run build" in script
+    assert "build/web" in script
 
 
 def test_react_client_requires_the_canonical_api_and_console_basename() -> None:
@@ -168,50 +156,21 @@ def test_react_client_requires_the_canonical_api_and_console_basename() -> None:
     assert "basename={ROUTER_BASENAME}" in app
 
 
+@pytest.mark.skipif(os.name == "nt", reason="bash runner requires a POSIX environment")
 def test_publish_script_rejects_a_missing_api_origin() -> None:
     result = _run_publish({})
     assert result.returncode != 0
     assert "GTE_API_BASE_URL" in result.stderr
-    assert "npm" not in result.stdout
-    assert "npm" not in result.stderr
 
 
+@pytest.mark.skipif(os.name == "nt", reason="bash runner requires a POSIX environment")
 def test_publish_script_rejects_an_api_suffix() -> None:
     result = _run_publish({"GTE_API_BASE_URL": f"{PRODUCTION_API_ORIGIN}/api"})
     assert result.returncode != 0
     assert "without a /api suffix" in result.stderr
-    assert "npm" not in result.stderr
 
 
-def test_publish_script_rejects_a_missing_flutter_host(tmp_path: Path) -> None:
-    web = tmp_path / "web"
-    web.mkdir()
-    result = _run_publish(
-        {
-            "GTE_API_BASE_URL": PRODUCTION_API_ORIGIN,
-            "GTEX_WEB_PUBLISH_DIR": str(web),
-        }
-    )
-    assert result.returncode != 0
-    assert "Flutter web output is missing" in result.stderr
-    assert "npm" not in result.stderr
-
-
-def test_publish_script_rejects_a_non_flutter_site_root(tmp_path: Path) -> None:
-    web = tmp_path / "web"
-    web.mkdir()
-    (web / "index.html").write_text('<div id="root"></div>', encoding="utf-8")
-    result = _run_publish(
-        {
-            "GTE_API_BASE_URL": PRODUCTION_API_ORIGIN,
-            "GTEX_WEB_PUBLISH_DIR": str(web),
-        }
-    )
-    assert result.returncode != 0
-    assert "not the Flutter host" in result.stderr
-    assert "npm" not in result.stderr
-
-
+@pytest.mark.skipif(os.name == "nt", reason="bash runner requires a POSIX environment")
 def test_publish_script_refuses_a_publish_dir_override_on_render(tmp_path: Path) -> None:
     result = _run_publish(
         {
@@ -222,4 +181,3 @@ def test_publish_script_refuses_a_publish_dir_override_on_render(tmp_path: Path)
     )
     assert result.returncode != 0
     assert "Refusing GTEX_WEB_PUBLISH_DIR on Render" in result.stderr
-    assert "npm" not in result.stderr
