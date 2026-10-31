@@ -132,3 +132,22 @@ class SponsoredFeedResponse(CommonSchema):
     organic_count: int = Field(default=0, ge=0)
     sponsored_count: int = Field(default=0, ge=0)
     personalization: dict[str, Any] = Field(default_factory=dict)
+
+
+class PublicBrandAdCampaignView(CommonSchema):
+    """Public-safe projection; advertiser and billing internals stay private."""
+
+    id: str
+    brand_name: str
+    headline: str
+    description: str = ""
+    placement: Literal["homepage_rail", "homepage_hero", "partner_showcase", "auth_canvas"]
+    destination_url: str
+    logo_url: str | None = None
+    creative_url: str | None = None
+    priority: int = 100
+
+
+class PublicBrandAdCampaignsResponse(CommonSchema):
+    campaigns: list[PublicBrandAdCampaignView] = Field(default_factory=list)
+    generated_at: datetime
