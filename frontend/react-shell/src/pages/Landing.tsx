@@ -16,6 +16,7 @@ import { ClubValuationSection } from "@/components/landing/ClubValuationSection"
 import { HowItWorksSection } from "@/components/landing/HowItWorksSection";
 import { TrustAndIntegritySection } from "@/components/landing/TrustAndIntegritySection";
 import { ConversionAndFooterSection } from "@/components/landing/ConversionAndFooterSection";
+import { GtexTopAdvertisingRail, GtexHomepageAdvertising } from "@/components/advertising/GtexAdvertising";
 
 export default function Landing() {
   const [pulse, setPulse] = useState<GtexLiveWorldPulse | null>(null);
@@ -135,6 +136,8 @@ export default function Landing() {
         jackpotLabel={jackpotLabel}
         onScrollToSection={scrollToSection}
       />
+      <GtexTopAdvertisingRail />
+      <div aria-hidden="true" className="h-[148px] md:h-[158px]" />
 
       {/* 2. Cinematic Hero & Live Pulse */}
       <HeroSection
@@ -142,7 +145,10 @@ export default function Landing() {
         onExplore={() => scrollToSection("platform")}
       />
 
-      {/* 3. Clarity Strip */}
+      {/* 3. Premium brand placement */}
+      <GtexHomepageAdvertising />
+
+      {/* 4. Clarity Strip */}
       <ClarityStrip />
 
       {/* 4. Platform Map Section */}
