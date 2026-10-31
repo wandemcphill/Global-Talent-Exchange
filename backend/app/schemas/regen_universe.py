@@ -251,6 +251,7 @@ class RegenPlayerView(CommonSchema):
     growth_curve: float
     club_id: str | None = None
     source_type: str = "regen"
+    market_value_coin: int | None = None
     market_access: RegenPlayerMarketAccessView = Field(default_factory=RegenPlayerMarketAccessView)
 
 

@@ -332,6 +332,7 @@ class RegenUniverseService:
     session: Session
     ranking_engine: RankingEngine = field(default_factory=RankingEngine)
     awards_engine: AwardsEngine = field(default_factory=AwardsEngine)
+    _country_name_cache: dict[str, str] = field(default_factory=dict, init=False, repr=False)
 
     def seed_defaults(self) -> None:
         existing_awards = {award.code: award for award in self.session.scalars(select(RegenAward))}
@@ -831,6 +832,9 @@ class RegenUniverseService:
         normalized = (country_code or "").strip().upper()
         if not normalized:
             return "Unknown"
+        cache = self._country_name_cache
+        if normalized in cache:
+            return cache[normalized]
         country = self.session.scalar(
             select(Country).where(
                 or_(
@@ -840,7 +844,9 @@ class RegenUniverseService:
                 )
             )
         )
-        return country.name if country is not None else normalized
+        resolved = country.name if country is not None else normalized
+        cache[normalized] = resolved
+        return resolved
 
     @staticmethod
     def _seed_age(seed: NationalRegenSeed) -> int:
@@ -1106,8 +1112,11 @@ class RegenUniverseService:
 
     def _prospect_from_seed(self, seed: NationalRegenSeed) -> _UniverseProspect:
         story_seed = dict((seed.personality_seed_json or {}).get("story_seed") or {})
-        metadata = RegenPortraitService(self.session).ensure_national_seed_portrait(seed)
+        metadata = dict(seed.metadata_json or {})
         image_url = self._image_url_from_metadata(metadata)
+        if not image_url or RegenPortraitService._is_legacy_procedural_portrait(image_url):
+            metadata = RegenPortraitService(self.session).ensure_national_seed_portrait(seed)
+            image_url = self._image_url_from_metadata(metadata)
         lookup_id = f"seed:{seed.id}"
         prospect = _UniverseProspect(
             lookup_id=lookup_id,
@@ -1221,9 +1230,10 @@ class RegenUniverseService:
     def _discovery_pool(self, *, limit: int, age_min: int = 15, age_max: int = 21) -> list[_UniverseProspect]:
         market_service = RegenMarketService(self.session)
         prospects: list[_UniverseProspect] = []
-        fetch_limit = max(limit * 5, 100)
+        regen_fetch_limit = min(max(limit, 8), 16)
+        seed_fetch_limit = min(max(limit * 3, 100), 240)
         for regen in self.session.scalars(
-            select(RegenProfile).order_by(RegenProfile.generated_at.desc()).limit(fetch_limit)
+            select(RegenProfile).order_by(RegenProfile.generated_at.desc()).limit(regen_fetch_limit)
         ):
             prospect = self._prospect_from_regen(regen=regen, market_service=market_service)
             if prospect is None or prospect.age < age_min or prospect.age > age_max:
@@ -1237,7 +1247,7 @@ class RegenUniverseService:
                 NationalRegenSeed.current_rating.desc(),
                 NationalRegenSeed.created_at.desc(),
             )
-            .limit(fetch_limit)
+            .limit(seed_fetch_limit)
         )
         seeds = list(self.session.scalars(seed_query).all())
         for seed in seeds:
@@ -1413,8 +1423,11 @@ class RegenUniverseService:
         from app.regen_universe.seed_profile_service import RegenSeedProfileService
 
         profile = RegenSeedProfileService(self.session).ensure_profile(seed)
-        metadata = RegenPortraitService(self.session).ensure_national_seed_portrait(seed)
-        portrait_url = metadata.get("portraitUrl")
+        metadata = dict(seed.metadata_json or {})
+        portrait_url = self._image_url_from_metadata(metadata)
+        if not portrait_url or RegenPortraitService._is_legacy_procedural_portrait(portrait_url):
+            metadata = RegenPortraitService(self.session).ensure_national_seed_portrait(seed)
+            portrait_url = self._image_url_from_metadata(metadata)
         card_payload: dict[str, object] = {
             "name": seed.display_name,
             "image_url": portrait_url,
@@ -2008,7 +2021,9 @@ class RegenUniverseService:
         market_service = RegenMarketService(self.session)
         recent_reports = list(
             self.session.scalars(
-                select(RegenScoutReport).order_by(RegenScoutReport.created_at.desc(), RegenScoutReport.id.asc())
+                select(RegenScoutReport)
+                .order_by(RegenScoutReport.created_at.desc(), RegenScoutReport.id.asc())
+                .limit(max(limit * 2, 20))
             )
         )
         for report in recent_reports[: max(limit, 10)]:
