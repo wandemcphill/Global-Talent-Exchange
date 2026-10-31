@@ -79,11 +79,21 @@ export function GtexAdvertisingProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      const response = await axios.get(API + "/public/ads/campaigns?limit=100", {
-        timeout: 4500,
-        headers: { Accept: "application/json" },
-      });
-      setCampaigns(parseCampaigns(response.data));
+      const placements: GtexAdPlacement[] = [
+        "homepage_rail",
+        "homepage_hero",
+        "partner_showcase",
+        "auth_canvas",
+      ];
+      const responses = await Promise.all(
+        placements.map((placement) =>
+          axios.get(
+            API + "/public/ads/campaigns?placement=" + placement + "&limit=100",
+            { timeout: 4500, headers: { Accept: "application/json" } },
+          ),
+        ),
+      );
+      setCampaigns(responses.flatMap((response) => parseCampaigns(response.data)));
     } catch {
       // Advertising must never block sign-in or page rendering.
       // Keep previously loaded campaigns if a transient refresh fails.
