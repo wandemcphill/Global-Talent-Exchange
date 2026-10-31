@@ -49,6 +49,9 @@ LAZY_HYDRATION_BYPASS_PREFIXES = (
     "/talent",
     "/api/talent",
     "/api/v2/talent",
+    "/public/ads",
+    "/api/public/ads",
+    "/api/v2/public/ads",
 )
 EAGER_MODULE_NAMES = frozenset(
     {
@@ -68,6 +71,7 @@ EAGER_MODULE_NAMES = frozenset(
         "world_simulation",
         "talent_exchange",
         "player_lifecycle",
+        "public_ads_engine",
     }
 )
 
@@ -703,6 +707,7 @@ DOMAIN_MODULES = (
         api_only=True,
     ),
     _module("ads_engine", router_path="app.ads_engine.router:router"),
+    _module("public_ads_engine", router_path="app.ads_engine.router:public_router", with_api_alias=True),
     _module(
         "club_finance",
         router_path="app.club_finance.router:router",
