@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { Navigate } from "react-router-dom";
+import { useAuth } from "@/lib/auth";
 import { api, errMsg } from "@/lib/api";
 
 type Campaign = {
@@ -34,6 +36,8 @@ type Report = {
 const filters = ["pending","approved","rejected","paused","archived","draft"];
 
 export default function AdminAdvertising() {
+  const { user } = useAuth();
+  const isAdmin = ["admin", "super_admin"].includes(String(user?.role || "").toLowerCase());
   const [campaigns,setCampaigns]=useState<Campaign[]>([]);
   const [reports,setReports]=useState<Report[]>([]);
   const [filter,setFilter]=useState("pending");
@@ -54,7 +58,9 @@ export default function AdminAdvertising() {
     finally { setLoading(false); }
   },[filter]);
 
-  useEffect(()=>{void refresh();},[refresh]);
+  useEffect(()=>{if(isAdmin) void refresh();},[isAdmin,refresh]);
+
+  if (!isAdmin) return <Navigate to="/app" replace />;
 
   const review=async(id:string,action:"approve"|"reject"|"pause"|"archive")=>{
     setBusy(id+action);
