@@ -79,13 +79,39 @@ export function tierOf(rating: number, regen?: boolean): TierConfig {
   return TIERS.standard;
 }
 
-export function resolvePlayerFallback(position?: string): string {
-  const p = (position || "").toLowerCase();
-  if (p.includes("gk") || p.includes("keeper")) return "/img/players/keeper.png";
-  if (p.includes("def") || p.includes("cb") || p.includes("back")) return "/img/players/defender.png";
-  if (p.includes("mid") || p.includes("cm") || p.includes("dm") || p.includes("am")) return "/img/players/midfielder.png";
-  if (p.includes("fwd") || p.includes("st") || p.includes("wing") || p.includes("att")) return "/img/players/striker.png";
-  return "/img/players/striker.png";
+const FAKE_REAL_PLAYER_IMAGE_TOKENS = [
+  "regen_newgen_faces",
+  "generated-media",
+  "regen_portraits",
+  "national_regen_portraits",
+  "sportmonks.com/images/soccer/placeholder",
+  "/img/players/",
+];
+
+export function sanitizeRealPlayerImage(image?: string | null, isRegen?: boolean): string | null {
+  if (!image || typeof image !== "string") return null;
+  const trimmed = image.trim();
+  if (!trimmed) return null;
+  if (!isRegen) {
+    const lower = trimmed.toLowerCase();
+    if (FAKE_REAL_PLAYER_IMAGE_TOKENS.some((tok) => lower.includes(tok))) {
+      return null;
+    }
+  }
+  return trimmed;
+}
+
+export function buildSilhouetteDataUri(position?: string, isLegendary?: boolean): string {
+  const posLabel = posShort(position);
+  const accent = isLegendary ? "#F59E0B" : "#10B981";
+  const bgTop = isLegendary ? "#291D09" : "#0F1E2E";
+  const bgBot = isLegendary ? "#120C03" : "#060B13";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 260" fill="none"><defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${bgTop}" stop-opacity="0.4"/><stop offset="100%" stop-color="${bgBot}" stop-opacity="0.06"/></linearGradient><linearGradient id="sil" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#64748B"/><stop offset="65%" stop-color="#334155"/><stop offset="100%" stop-color="#0F172A"/></linearGradient></defs><circle cx="120" cy="118" r="88" fill="url(#bg)" stroke="${accent}" stroke-opacity="0.28" stroke-width="1.5"/><path d="M120 52c21 0 37 17 37 39 0 18-10 33-24 39l1 9c33 9 57 32 64 68H42c7-36 31-59 64-68l1-9c-14-6-24-21-24-39 0-22 16-39 37-39Z" fill="url(#sil)" stroke="rgba(255,255,255,0.22)" stroke-width="1.6"/><path d="M97 143l23 18 23-18" stroke="${accent}" stroke-opacity="0.7" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><rect x="96" y="176" width="48" height="20" rx="10" fill="rgba(6,10,18,0.82)" stroke="${accent}" stroke-opacity="0.55" stroke-width="1.2"/><text x="120" y="190" text-anchor="middle" fill="#E2E8F0" font-family="monospace" font-weight="800" font-size="11" letter-spacing="1">${posLabel}</text></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+export function resolvePlayerFallback(position?: string, isLegendary?: boolean): string {
+  return buildSilhouetteDataUri(position, isLegendary);
 }
 
 function buildRadarPolygon(rating: number, position?: string): string {
@@ -176,8 +202,13 @@ export function PlayerCard(props: PlayerCardProps) {
     active: false,
   });
 
-  const fallbackSrc = resolvePlayerFallback(position);
-  const imageSrc = !imgError && image ? image : fallbackSrc;
+  const isLegendaryTier = props.tier === "legendary" || numRating >= 85;
+  const fallbackSrc = useMemo(
+    () => resolvePlayerFallback(position, isLegendaryTier),
+    [position, isLegendaryTier],
+  );
+  const cleanImage = useMemo(() => sanitizeRealPlayerImage(image, props.regen), [image, props.regen]);
+  const imageSrc = !imgError && cleanImage ? cleanImage : fallbackSrc;
   const radarPts = useMemo(() => buildRadarPolygon(numRating, position), [numRating, position]);
 
   const handleMove = (e: React.PointerEvent<HTMLElement>) => {

@@ -561,7 +561,7 @@ class PlayerImageMetadata(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
     )
     image_role: Mapped[str] = mapped_column(String(32), nullable=False, default="portrait", server_default="portrait")
-    source_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     storage_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
     width: Mapped[int | None] = mapped_column(Integer, nullable=True)
     height: Mapped[int | None] = mapped_column(Integer, nullable=True)

@@ -1136,11 +1136,25 @@ class NationalTeamTournamentService:
                 if isinstance(storage_key, str) and storage_key.strip():
                     image_url = storage_key.strip()
                     break
+        is_real_or_legend = bool(player.is_real_player) or bool(getattr(player, "real_player_tier", None))
+        if image_url and is_real_or_legend:
+            lowered_url = image_url.lower()
+            if any(
+                bad_tok in lowered_url
+                for bad_tok in (
+                    "regen_newgen_faces",
+                    "generated-media",
+                    "regen_portraits",
+                    "national_regen_portraits",
+                    "sportmonks.com/images/soccer/placeholder",
+                )
+            ):
+                image_url = None
         return {
             "image_url": image_url,
             "portrait_url": image_url,
             "portrait_status": "ready" if image_url else "portrait_missing",
-            "portrait_source": "real_player_provider" if bool(player.is_real_player) else "player_asset_registry",
+            "portrait_source": "real_player_provider" if is_real_or_legend else "player_asset_registry",
             "portrait_missing_reason": None if image_url else "player_image_not_available",
         }
 

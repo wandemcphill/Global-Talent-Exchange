@@ -37,6 +37,37 @@ webhook_router = APIRouter(prefix="/integrations/payments", tags=["payments"])
 webhook_alias_router = APIRouter(prefix="/api/webhooks", tags=["payments"])
 
 
+@router.get("/users")
+def search_users(
+    search: str = Query(default="", max_length=120),
+    limit: int = Query(default=20, ge=1, le=50),
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_admin),
+) -> list[dict]:
+    from sqlalchemy import or_, select
+
+    stmt = select(User)
+    term = search.strip().lower()
+    if term:
+        like = f"%{term}%"
+        stmt = stmt.where(
+            or_(User.email.ilike(like), User.username.ilike(like), User.display_name.ilike(like), User.id == search.strip())
+        )
+    rows = session.scalars(stmt.order_by(User.created_at.desc()).limit(limit)).all()
+    return [
+        {
+            "id": u.id,
+            "email": u.email,
+            "username": u.username,
+            "display_name": getattr(u, "display_name", None),
+            "role": getattr(u.role, "value", str(u.role)),
+            "is_active": bool(u.is_active),
+            "kyc_status": str(getattr(getattr(u, "kyc_status", None), "value", getattr(u, "kyc_status", "")) or ""),
+        }
+        for u in rows
+    ]
+
+
 @router.get("/control-tower", response_model=AdminFinanceControlTowerView)
 def get_control_tower(
     request: Request,

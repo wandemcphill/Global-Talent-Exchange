@@ -17,6 +17,21 @@ def get_service() -> AdminPlayerService:
     return AdminPlayerService()
 
 
+@router.get("", response_model=list[PlayerAdminView])
+def search_players(
+    request: Request,
+    search: str | None = None,
+    tier: str | None = None,
+    source: str | None = None,
+    limit: int = 24,
+    session: Session = Depends(get_session),
+    actor: User = Depends(require_admin_capability(AdminCapability.MANAGE_PLAYERS)),
+    service: AdminPlayerService = Depends(get_service),
+) -> list[PlayerAdminView]:
+    note_admin_read(request, "admin.players.search", search=search, tier=tier, source=source)
+    return service.list_players(session, search=search, tier=tier, source=source, limit=limit)
+
+
 @router.get("/{player_id}", response_model=PlayerAdminView)
 def read_player(
     player_id: str,

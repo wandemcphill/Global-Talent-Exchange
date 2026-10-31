@@ -511,9 +511,10 @@ DOMAIN_MODULES = (
     _module(
         "admin_engine",
         router_path="app.admin_engine.router:router",
+        with_api_alias=True,
         on_startup=(_seed_admin_engine_defaults,),
     ),
-    _module("admin_engine_admin", router_path="app.admin_engine.router:admin_router"),
+    _module("admin_engine_admin", router_path="app.admin_engine.router:admin_router", with_api_alias=True),
     _module("launch_control", router_path="app.launch_control.router:router", api_only=True),
     _module("runtime_config", router_path="app.runtime_config.router:router"),
     _module("ai_manager", router_path="app.ai_manager.router:router"),

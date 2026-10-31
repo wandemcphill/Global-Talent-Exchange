@@ -92,6 +92,10 @@ function RentCard({ p, entry, onRented, inBasket, onToggleBasket }: any) {
       setBusy(false);
     }
   };
+  const isLegend =
+    !p.is_regen &&
+    (String(p.real_player_tier || "").toLowerCase() === "legend" ||
+      String(p.tier_label || "").toLowerCase().includes("legend"));
   return (
     <PlayerCard
       testid={`rental-card-${p.player_id}`}
@@ -103,7 +107,8 @@ function RentCard({ p, entry, onRented, inBasket, onToggleBasket }: any) {
       club={p.current_club_name}
       image={p.image_url || p.portrait_url}
       regen={p.is_regen}
-      badge={p.tier_label}
+      tier={isLegend ? "legendary" : undefined}
+      badge={isLegend ? "ICON · LEGEND" : p.tier_label}
       stats={[
         { k: "Loan", v: fmt(p.loan_price_coin, 1) },
         { k: "GSI", v: p.gsi },

@@ -4,17 +4,18 @@ import { Crown, Search, Sparkles, Star } from "lucide-react";
 import { api } from "@/lib/api";
 import { fmt } from "@/lib/owner";
 import { Btn, Loading } from "@/components/gtex/ui";
-import { posShort } from "@/components/gtex/PlayerCard";
+import { posShort, sanitizeRealPlayerImage } from "@/components/gtex/PlayerCard";
 import { PlayerDrawer } from "@/components/gtex/PlayerDrawer";
 
 function Thumb({ src, name, regen, legend }: { src?: string | null; name: string; regen?: boolean; legend?: boolean }) {
   const [broken, setBroken] = useState(false);
+  const cleanSrc = sanitizeRealPlayerImage(src, regen);
   const ring = legend
     ? "border-amber-400/70 bg-amber-950/60"
     : regen
     ? "border-emerald-400/60 bg-emerald-950/60"
     : "border-white/15 bg-slate-900";
-  if (src && !broken) return <img src={src} alt="" loading="lazy" onError={() => setBroken(true)} className={`h-10 w-10 shrink-0 rounded-sm border object-cover ${ring}`} />;
+  if (cleanSrc && !broken) return <img src={cleanSrc} alt="" loading="lazy" onError={() => setBroken(true)} className={`h-10 w-10 shrink-0 rounded-sm border object-cover ${ring}`} />;
   return <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border text-xs font-bold text-white/60 ${ring}`}>{name.split(" ").map((s) => s[0]).slice(0, 2).join("")}</span>;
 }
 

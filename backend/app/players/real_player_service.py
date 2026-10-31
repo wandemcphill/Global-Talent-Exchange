@@ -1309,22 +1309,43 @@ class RealPlayerUniverseQueryService:
         return values
 
     @staticmethod
-    def _profile_image_url(profile: RealPlayerProfile | None, player: Player | None = None) -> str | None:
+    def _clean_real_image_url(url: str | None) -> str | None:
+        if not isinstance(url, str):
+            return None
+        cleaned = url.strip()
+        if not cleaned:
+            return None
+        lowered = cleaned.lower()
+        if any(
+            tok in lowered
+            for tok in (
+                "regen_newgen_faces",
+                "generated-media",
+                "regen_portraits",
+                "national_regen_portraits",
+                "sportmonks.com/images/soccer/placeholder",
+            )
+        ):
+            return None
+        return cleaned
+
+    @classmethod
+    def _profile_image_url(cls, profile: RealPlayerProfile | None, player: Player | None = None) -> str | None:
         if profile is not None:
             metadata = dict(profile.metadata_json or {})
-            photo_url = metadata.get("photo_url")
-            if isinstance(photo_url, str) and photo_url.strip():
-                return photo_url.strip()
+            photo_url = cls._clean_real_image_url(metadata.get("photo_url"))
+            if photo_url:
+                return photo_url
             image_payload = metadata.get("image")
             if isinstance(image_payload, dict):
-                source_url = image_payload.get("source_url")
-                if isinstance(source_url, str) and source_url.strip():
-                    return source_url.strip()
+                source_url = cls._clean_real_image_url(image_payload.get("source_url"))
+                if source_url:
+                    return source_url
         if player is not None and isinstance(player.dna_profile, dict):
             for key in ("portraitUrl", "photo_url", "image_url"):
-                val = player.dna_profile.get(key)
-                if isinstance(val, str) and val.strip():
-                    return val.strip()
+                val = cls._clean_real_image_url(player.dna_profile.get(key))
+                if val:
+                    return val
         return None
 
     def _position_codes_for_values(self, *values: str | None) -> set[str]:

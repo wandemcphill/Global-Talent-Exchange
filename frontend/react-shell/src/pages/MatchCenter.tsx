@@ -26,6 +26,7 @@ import {
   Sparkles,
   Target,
   Tv,
+  Users,
   Volume2,
   VolumeX,
   Zap,
@@ -35,6 +36,7 @@ import { useActiveClub, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Loading, Panel } from "@/components/gtex/ui";
 import { Cinema3DStage, Cinema3DSceneType } from "@/components/gtex/Cinema3DStage";
 import { HolographicPlayerCard } from "@/components/gtex/ApexWidgets";
+import { MatchdayLineupBroadcast, useClubMatchdaySheet, type MatchdaySquadMember } from "@/components/gtex/MatchdayLineupBroadcast";
 
 const GIFTS = [
   { code: "stadium_roar", name: "Stadium Roar", cost: 10 },
@@ -312,6 +314,8 @@ function Pitch2DView({
   show3DCutIn = false,
   cutInScene = "signing_walkout",
   onClose3DCutIn,
+  homeRoster,
+  awayRoster,
 }: {
   selectedPlayer: number | null;
   onSelectPlayer: (num: number | null) => void;
@@ -343,6 +347,8 @@ function Pitch2DView({
   show3DCutIn?: boolean;
   cutInScene?: Cinema3DSceneType;
   onClose3DCutIn?: () => void;
+  homeRoster?: MatchdaySquadMember[];
+  awayRoster?: MatchdaySquadMember[];
 }) {
   // Autonomous 60fps Spatial Phase Ticker for live tactical fluid motion
   const [phaseTick, setPhaseTick] = useState(0);
@@ -421,13 +427,14 @@ function Pitch2DView({
         : Math.cos(t * 0.85 + idx * 1.3) * 0.032;
       const x = Math.min(0.91, Math.max(0.06, tpl.bx + dx));
       const y = Math.min(0.9, Math.max(0.1, tpl.by + dy));
+      const homeMember = homeRoster?.[idx];
       return {
         x,
         y,
-        num: tpl.num,
-        role: tpl.role,
+        num: homeMember?.shirt_number || tpl.num,
+        role: homeMember?.position || tpl.role,
         hasBall: homePossession && idx === activeCarrierIdx,
-        name: tpl.name,
+        name: (homeMember?.short_name || tpl.name).toUpperCase(),
         stamina: Math.max(45, 99 - Math.floor(minute * 0.42) - (idx > 5 ? 6 : 2)),
         speedKmh: (22.4 + Math.abs(Math.sin(t + idx)) * 10.8).toFixed(1),
         vx: Math.cos(t + idx * 0.9) * 16,
@@ -447,13 +454,14 @@ function Pitch2DView({
         : Math.sin(t * 0.75 + idx * 1.1) * 0.03;
       const x = Math.min(0.94, Math.max(0.09, baseAx + dx));
       const y = Math.min(0.9, Math.max(0.1, baseAy + dy));
+      const awayMember = awayRoster?.[idx];
       return {
         x,
         y,
-        num: tpl.num,
-        role: tpl.role,
+        num: awayMember?.shirt_number || tpl.num,
+        role: awayMember?.position || tpl.role,
         hasBall: !homePossession && idx === activeCarrierIdx,
-        name: AWAY_NAMES[idx] || tpl.name,
+        name: (awayMember?.short_name || AWAY_NAMES[idx] || tpl.name).toUpperCase(),
         stamina: Math.max(44, 98 - Math.floor(minute * 0.44) - (idx > 5 ? 5 : 2)),
         speedKmh: (21.8 + Math.abs(Math.cos(t + idx)) * 10.2).toFixed(1),
         vx: -Math.sin(t * 0.9 + idx) * 15,
@@ -479,7 +487,7 @@ function Pitch2DView({
       passTarget: { x: receiver.x, y: receiver.y },
       carrierInfo: { ...carrier, isHome: homePossession },
     };
-  }, [hasLiveCoords, pitchPlayers, phaseTick, formation, press, line, tempo, minute, ball, template, awayTemplate]);
+  }, [hasLiveCoords, pitchPlayers, phaseTick, formation, press, line, tempo, minute, ball, template, awayTemplate, homeRoster, awayRoster]);
 
   const selectedObj =
     homeCoords.find((p) => p.num === selectedPlayer) ||
@@ -1404,6 +1412,23 @@ function PreMatchBriefing({ match, preMatch, matchId }: { match: any; preMatch?:
 
   return (
     <div className="space-y-6">
+      {/* Official Broadcast Starting XIs (Tunnel Graphic + Editorial Matchday Poster) */}
+      <Panel
+        eyebrow="Official Matchday Team Sheets"
+        title="Confirmed Starting XIs & Lineup Suggestion"
+        testid="pre-match-lineups-panel"
+      >
+        <MatchdayLineupBroadcast
+          homeClubId={match.home_club_id}
+          homeClubName={match.home_name}
+          awayClubId={match.away_club_id}
+          awayClubName={match.away_name}
+          competitionName="GTEX MATCHDAY LIVE"
+          matchdayNumber={match.round || 1}
+          defaultView="dual"
+        />
+      </Panel>
+
       {/* Strategic Pre-Match 3D Broadcast Showcase: Stadium Flyover / Walkout Tunnel / Trophy Plinth */}
       <Panel eyebrow="3D Broadcast Pre-Match Show" title="Stadium Cathedral & Tunnel Walkout Stage">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -1963,7 +1988,8 @@ export default function MatchCenter() {
   const [audioAtmosphere, setAudioAtmosphere] = useState(false);
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<"pitch" | "tactics" | "pre_match" | "post_match" | "commentary">("pitch");
+  const [activeTab, setActiveTab] = useState<"pitch" | "lineups" | "tactics" | "pre_match" | "post_match" | "commentary">("pitch");
+  const [showKickoffLineups, setShowKickoffLineups] = useState<boolean>(Boolean(params.get("live")));
 
   // Pitch Overlay & Camera Perspective Toggles
   const [showHeatmap, setShowHeatmap] = useState(false);
@@ -2011,6 +2037,26 @@ export default function MatchCenter() {
     const t = setTimeout(() => setLocalMinute((x) => x + 2), intervalMs);
     return () => clearTimeout(t);
   }, [localMinute, isPaused, speed, liveState]);
+
+  const homeLivePitch = useMemo(
+    () => (liveState?.pitch_players || []).filter((p: any) => p.is_home),
+    [liveState?.pitch_players],
+  );
+  const awayLivePitch = useMemo(
+    () => (liveState?.pitch_players || []).filter((p: any) => !p.is_home),
+    [liveState?.pitch_players],
+  );
+  const homeSheetState = useClubMatchdaySheet({
+    clubId: m?.home_club_id,
+    clubName: m?.home_name || "Home XI",
+    formationOverride: formation,
+    pitchPlayers: homeLivePitch,
+  });
+  const awaySheetState = useClubMatchdaySheet({
+    clubId: m?.away_club_id,
+    clubName: m?.away_name || "Away XI",
+    pitchPlayers: awayLivePitch,
+  });
 
   const minute = liveState ? liveState.minute : localMinute;
   const shown = useMemo(() => {
@@ -2140,6 +2186,7 @@ export default function MatchCenter() {
         <div className="flex flex-wrap gap-2 border-b border-white/10 pb-3">
           {[
             { id: "pitch", label: "2D / 2.5D MATCH PITCH", icon: Tv },
+            { id: "lineups", label: "MATCHDAY LINEUPS", icon: Users },
             { id: "tactics", label: "TACTICS & ADVISOR", icon: Sliders },
             { id: "pre_match", label: "PRE-MATCH + 3D STAGE", icon: Target },
             { id: "post_match", label: "POST-MATCH + 3D GALA", icon: Award },
@@ -2241,6 +2288,38 @@ export default function MatchCenter() {
               </div>
             </div>
 
+            {/* Kickoff Broadcast Lineup Walkout Sheet (Auto-shown on Kickoff) */}
+            {showKickoffLineups && minute <= 10 && (
+              <div className="rounded-xl border border-sky-400/25 bg-slate-950/90 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-sky-300">
+                    Official Kickoff Broadcast Team Sheets · {m.home_name} vs {m.away_name}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowKickoffLineups(false)}
+                    className="rounded border border-white/15 bg-white/5 px-2.5 py-0.5 text-[10px] font-bold uppercase text-slate-300 hover:text-white"
+                  >
+                    Dismiss Walkout Graphics
+                  </button>
+                </div>
+                <MatchdayLineupBroadcast
+                  homeClubId={m.home_club_id}
+                  homeClubName={m.home_name}
+                  awayClubId={m.away_club_id}
+                  awayClubName={m.away_name}
+                  editableClubId={clubId}
+                  competitionName="GTEX MATCHDAY LIVE"
+                  matchdayNumber={m.round || 1}
+                  formationOverride={formation}
+                  onFormationChange={setFormation}
+                  homePitchPlayers={homeLivePitch}
+                  awayPitchPlayers={awayLivePitch}
+                  defaultView="dual"
+                />
+              </div>
+            )}
+
             {/* Pitch View */}
             <Pitch2DView
               selectedPlayer={selectedPlayer}
@@ -2264,8 +2343,34 @@ export default function MatchCenter() {
               show3DCutIn={show3DCutIn}
               cutInScene={cutInScene}
               onClose3DCutIn={() => setShow3DCutIn(false)}
+              homeRoster={homeSheetState.sheet.starters}
+              awayRoster={awaySheetState.sheet.starters}
             />
           </div>
+        )}
+
+        {/* Tab 1B: Official Broadcast Matchday Lineups */}
+        {activeTab === "lineups" && (
+          <Panel
+            eyebrow="Official Matchday Team Sheets"
+            title={`${m.home_name} vs ${m.away_name} · Starting XIs`}
+            testid="match-center-lineups-tab"
+          >
+            <MatchdayLineupBroadcast
+              homeClubId={m.home_club_id}
+              homeClubName={m.home_name}
+              awayClubId={m.away_club_id}
+              awayClubName={m.away_name}
+              editableClubId={clubId}
+              competitionName="GTEX MATCHDAY LIVE"
+              matchdayNumber={m.round || 1}
+              formationOverride={formation}
+              onFormationChange={setFormation}
+              homePitchPlayers={homeLivePitch}
+              awayPitchPlayers={awayLivePitch}
+              defaultView="dual"
+            />
+          </Panel>
         )}
 
         {/* Tab 2: Tactics & In-Match Advisor */}

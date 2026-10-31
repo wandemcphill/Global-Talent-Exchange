@@ -1120,6 +1120,19 @@ class PlayerTokenMarketService:
                 if isinstance(val, str) and val.strip():
                     portrait = val.strip()
                     break
+        if portrait and (not is_regen or is_legend):
+            low_p = portrait.lower()
+            if any(
+                tok in low_p
+                for tok in (
+                    "regen_newgen_faces",
+                    "generated-media",
+                    "regen_portraits",
+                    "national_regen_portraits",
+                    "sportmonks.com/images/soccer/placeholder",
+                )
+            ):
+                portrait = None
         cur_rating = self._dna_int(dna, "overall", "current_rating", "sofifa_overall") or self._dna_int(
             m_meta, "current_gsi", "gsi"
         )

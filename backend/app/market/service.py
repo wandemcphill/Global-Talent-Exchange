@@ -2490,12 +2490,34 @@ class MarketPlayerQueryService:
                 image.id,
             ),
         )
+        chosen: str | None = None
         for image in candidates:
             if image.source_url:
-                return image.source_url
+                chosen = image.source_url
+                break
             if image.storage_key:
-                return image.storage_key
-        return None
+                chosen = image.storage_key
+                break
+        if not chosen and isinstance(record.player.dna_profile, dict):
+            for key in ("portraitUrl", "photo_url", "image_url"):
+                val = record.player.dna_profile.get(key)
+                if isinstance(val, str) and val.strip():
+                    chosen = val.strip()
+                    break
+        if chosen and (bool(record.player.is_real_player) or bool(record.player.real_player_tier)):
+            low_c = chosen.lower()
+            if any(
+                tok in low_c
+                for tok in (
+                    "regen_newgen_faces",
+                    "generated-media",
+                    "regen_portraits",
+                    "national_regen_portraits",
+                    "sportmonks.com/images/soccer/placeholder",
+                )
+            ):
+                return None
+        return chosen
 
     def _country_code(self, country: Any | None) -> str | None:
         if country is None:

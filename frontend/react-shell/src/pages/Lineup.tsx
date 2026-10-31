@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
 import { useActiveClub } from "@/lib/owner";
 import { Btn, Chip, Empty, Loading, PageHeader, Panel } from "@/components/gtex/ui";
+import { MatchdayLineupBroadcast } from "@/components/gtex/MatchdayLineupBroadcast";
 import {
   buildLineupPayload,
   LINEUP_FORMATIONS,
@@ -291,6 +292,21 @@ export default function Lineup() {
             )}
           </>
         )}
+      </Panel>
+
+      <Panel
+        title="Official Matchday Broadcast Team Sheet"
+        eyebrow="Live TV & Editorial Preview"
+        testid="lineup-broadcast-preview-panel"
+      >
+        <MatchdayLineupBroadcast
+          homeClubId={clubId}
+          homeClubName={club?.club_name || "Your Club"}
+          editableClubId={clubId}
+          formationOverride={formation}
+          onFormationChange={setFormation}
+          defaultView="tunnel"
+        />
       </Panel>
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-white/10 p-4">

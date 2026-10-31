@@ -7,6 +7,7 @@ import { api, errMsg } from "@/lib/api";
 import { fmt, label, useControlCenter, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Coin, Loading, PageHeader, Panel } from "@/components/gtex/ui";
 import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
+import { MatchdayLineupBroadcast } from "@/components/gtex/MatchdayLineupBroadcast";
 
 function Standings({ rows, myIds }: any) {
   return (
@@ -28,11 +29,10 @@ function Standings({ rows, myIds }: any) {
   );
 }
 
-function PlayPanel({ comp, clubId }: any) {
+function PlayPanel({ comp, clubId, lineup, setLineup }: any) {
   const navigate = useNavigate();
   const refresh = useRefreshOwner();
   const [mentality, setMentality] = useState("balanced");
-  const [lineup, setLineup] = useState("strongest");
   const [busy, setBusy] = useState(false);
   const next = comp.fixtures.find((m: any) => m.status === "scheduled" && [m.home_club_id, m.away_club_id].includes(clubId));
   const play = async () => {
@@ -96,10 +96,19 @@ export default function CompetitionDetail() {
     enabled: Boolean(id),
   });
   const [settling, setSettling] = useState(false);
+  const [lineupMode, setLineupMode] = useState<"strongest" | "rotate">("strongest");
 
   if (isLoading || !comp) return <Loading />;
   const myIds = comp.my_club_ids || [];
   const myClub = myIds[0] || cc?.clubs?.[0]?.club_id;
+  const myClubName =
+    comp.standings?.find((r: any) => r.club_id === myClub)?.club_name ||
+    cc?.clubs?.find((c: any) => c.club_id === myClub)?.club_name ||
+    "Your Club";
+  const nextFixture =
+    comp.fixtures.find(
+      (m: any) => m.status === "scheduled" && [m.home_club_id, m.away_club_id].includes(myClub),
+    ) || comp.fixtures.find((m: any) => m.status === "scheduled");
   const rounds: Record<string, any[]> = {};
   comp.fixtures.forEach((m: any) => { (rounds[m.round] = rounds[m.round] || []).push(m); });
 
@@ -153,8 +162,33 @@ export default function CompetitionDetail() {
       <div className="grid gap-6 lg:grid-cols-12">
         <Panel eyebrow="Table" title="Standings" className="lg:col-span-7" testid="standings-panel"><Standings rows={comp.standings} myIds={myIds} /></Panel>
         <Panel eyebrow="Pre-match" title="Owner decisions" className="lg:col-span-5" live testid="owner-match-panel">
-          {myIds.length ? <PlayPanel comp={comp} clubId={myClub} /> : <p className="text-sm text-slate-400">You haven't entered this competition.</p>}
+          {myIds.length ? (
+            <PlayPanel comp={comp} clubId={myClub} lineup={lineupMode} setLineup={setLineupMode} />
+          ) : (
+            <p className="text-sm text-slate-400">You haven't entered this competition.</p>
+          )}
         </Panel>
+        {comp.status !== "finished" && (myIds.length > 0 || Boolean(nextFixture)) && (
+          <Panel
+            eyebrow="Matchday Broadcast · Official Team Sheet"
+            title="Pre-Match Starting XI & Lineup Suggestion"
+            className="lg:col-span-12"
+            live
+            testid="competition-matchday-lineup-panel"
+          >
+            <MatchdayLineupBroadcast
+              homeClubId={nextFixture ? nextFixture.home_club_id : myClub}
+              homeClubName={nextFixture ? nextFixture.home_name : myClubName}
+              awayClubId={nextFixture ? nextFixture.away_club_id : comp.standings?.find((r: any) => r.club_id !== myClub)?.club_id}
+              awayClubName={nextFixture ? nextFixture.away_name : comp.standings?.find((r: any) => r.club_id !== myClub)?.club_name}
+              editableClubId={myIds.length ? myClub : undefined}
+              competitionName={comp.name}
+              roundLabel={nextFixture ? `ROUND ${nextFixture.round}` : "OPENING MATCHDAY"}
+              matchdayNumber={nextFixture?.round || comp.current_round || 1}
+              lineupMode={lineupMode}
+            />
+          </Panel>
+        )}
         {/* Ecosystem Waterfall & Prize Settlement Desk */}
         <Panel eyebrow="Ecosystem Economics & Prize Settlement" title="TV Rights, Podium Payouts & Settlement Waterfall" className="lg:col-span-12" testid="competition-waterfall-panel">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

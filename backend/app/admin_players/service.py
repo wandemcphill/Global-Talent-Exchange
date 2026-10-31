@@ -3,10 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
-from app.ingestion.models import Club, Player
+from app.ingestion.models import Club, Player, PlayerImageMetadata
+from app.models.player_token_market import PlayerShareMarket
 from app.market.lifecycle_status import sync_player_lifecycle_and_market_status
 from app.players.read_models import PlayerSummaryReadModel
 from app.value_engine.banded_pricing import (
@@ -63,6 +65,79 @@ class AdminPlayerService:
             raise PlayerNotFoundError(f"Player '{player_id}' not found.")
         return self._view(session, player)
 
+    def list_players(
+        self,
+        session: Session,
+        *,
+        search: str | None = None,
+        tier: str | None = None,
+        source: str | None = None,
+        limit: int = 24,
+    ) -> list[PlayerAdminView]:
+        stmt = select(Player)
+        if search and search.strip():
+            like = f"%{search.strip().lower()}%"
+            stmt = stmt.where(
+                or_(
+                    Player.full_name.ilike(like),
+                    Player.canonical_display_name.ilike(like),
+                    Player.id == search.strip(),
+                )
+            )
+        if tier:
+            if tier == "regen":
+                stmt = stmt.where(Player.source_provider == REGEN_SOURCE)
+            else:
+                stmt = stmt.where(Player.real_player_tier == tier)
+        if source:
+            stmt = stmt.where(Player.source_provider == source)
+        stmt = stmt.order_by(Player.potential.desc().nullslast(), Player.full_name).limit(max(1, min(limit, 100)))
+        return [self._view(session, p) for p in session.scalars(stmt).all()]
+
+    def _apply_image(self, session: Session, player: Player, url: str) -> None:
+        url = url.strip()
+        dna = self._dna(player)
+        dna["portraitUrl"] = url or None
+        player.dna_profile = dna
+        flag_modified(player, "dna_profile")
+        existing = session.scalars(
+            select(PlayerImageMetadata).where(
+                PlayerImageMetadata.player_id == player.id, PlayerImageMetadata.image_role == "portrait"
+            )
+        ).first()
+        if not url:
+            if existing is not None:
+                session.delete(existing)
+        elif existing is not None:
+            existing.source_url = url[:1024]
+            existing.source_provider = "admin_override"
+            existing.moderation_status = "approved"
+            existing.rights_cleared = True
+        else:
+            session.add(
+                PlayerImageMetadata(
+                    source_provider="admin_override",
+                    provider_external_id=f"admin-{player.id}",
+                    player_id=player.id,
+                    image_role="portrait",
+                    source_url=url[:1024],
+                    moderation_status="approved",
+                    rights_cleared=True,
+                    is_primary=True,
+                )
+            )
+        summary = session.get(PlayerSummaryReadModel, player.id)
+        if summary is not None:
+            data = dict(summary.summary_json or {})
+            if url:
+                data["image_url"] = url
+                data["portrait_url"] = url
+            else:
+                data.pop("image_url", None)
+                data.pop("portrait_url", None)
+            summary.summary_json = data
+            flag_modified(summary, "summary_json")
+
     def edit_player(
         self,
         session: Session,
@@ -79,11 +154,13 @@ class AdminPlayerService:
 
         if edits.overall is not None:
             dna[self._overall_key(player)] = edits.overall
+            dna["current_rating"] = edits.overall
             gsi_touched = True
             changed.append("overall")
         if edits.potential is not None:
             player.potential = edits.potential
             dna[self._potential_key(player)] = edits.potential
+            dna["potential_rating"] = edits.potential
             gsi_touched = True
             changed.append("potential")
         if edits.club_rating is not None:
@@ -93,6 +170,16 @@ class AdminPlayerService:
         if gsi_touched:
             player.dna_profile = dna
             flag_modified(player, "dna_profile")
+
+        if edits.real_player_tier is not None:
+            player.real_player_tier = edits.real_player_tier or None
+            changed.append("real_player_tier")
+        if edits.real_world_club_name is not None:
+            player.real_world_club_name = edits.real_world_club_name or None
+            changed.append("real_world_club_name")
+        if edits.image_url is not None:
+            self._apply_image(session, player, edits.image_url)
+            changed.append("image_url")
 
         # Move club (or clear to free agent).
         if edits.current_club_id is not None:
@@ -118,6 +205,11 @@ class AdminPlayerService:
                 summary.previous_value_credits = summary.current_value_credits
                 summary.current_value_credits = round(float(edits.market_value_credits), 4)
                 summary.movement_pct = self._movement(summary.previous_value_credits, summary.current_value_credits)
+            market = session.scalars(
+                select(PlayerShareMarket).where(PlayerShareMarket.player_id == player.id)
+            ).first()
+            if market is not None:
+                market.share_price_coin = round(float(edits.market_value_credits), 4)
             changed.append("market_value_credits")
         elif gsi_touched and summary is not None:
             new_price = self._recompute_price(player)
@@ -172,8 +264,8 @@ class AdminPlayerService:
 
     def _view(self, session: Session, player: Player) -> PlayerAdminView:
         dna = self._dna(player)
-        overall = self._read_int(dna, "sofifa_overall", "overall")
-        potential = self._read_int(dna, "sofifa_potential", "potential") or player.potential
+        overall = self._read_int(dna, "sofifa_overall", "overall", "current_rating")
+        potential = self._read_int(dna, "sofifa_potential", "potential", "potential_rating") or player.potential
         club_rating = self._read_int(dna, "sofifa_club_rating")
         summary = session.get(PlayerSummaryReadModel, player.id)
         current_value = float(summary.current_value_credits) if summary is not None else None
@@ -198,4 +290,8 @@ class AdminPlayerService:
             current_value_credits=current_value,
             current_value_naira=credits_to_naira(current_value) if current_value is not None else None,
             price_tier=resolve_price_tier(overall).code if overall is not None else None,
+            real_player_tier=player.real_player_tier,
+            real_world_club_name=player.real_world_club_name,
+            position=player.normalized_position or player.position,
+            image_url=dna.get("portraitUrl") or None,
         )

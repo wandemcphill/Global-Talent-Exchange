@@ -1,0 +1,508 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { api, errMsg } from "@/lib/api";
+import { fmt, label } from "@/lib/owner";
+import { Btn, Chip, Empty, Loading, Panel, Stat } from "@/components/gtex/ui";
+import { PlayerCard } from "@/components/gtex/PlayerCard";
+
+/* ---------- helpers ---------- */
+export function useAdminGet<T = any>(key: string, path: string, enabled = true) {
+  return useQuery<T | null>({
+    queryKey: ["admin", key, path],
+    queryFn: async () => {
+      try {
+        return (await api.get(path)).data as T;
+      } catch {
+        return null;
+      }
+    },
+    enabled,
+  });
+}
+
+function useAct() {
+  const qc = useQueryClient();
+  return async (fn: () => Promise<any>, ok: string, invalidate: string[] = []) => {
+    try {
+      const res = await fn();
+      toast.success(ok);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["admin"] }),
+        qc.invalidateQueries({ queryKey: ["admin-god-mode-bootstrap"] }),
+        ...invalidate.map((k) => qc.invalidateQueries({ queryKey: [k] })),
+      ]);
+      return res;
+    } catch (e) {
+      toast.error(errMsg(e));
+      return null;
+    }
+  };
+}
+
+function Toggle({ on, onChange, text, testid }: { on: boolean; onChange: (v: boolean) => void; text: string; testid?: string }) {
+  return (
+    <button
+      type="button"
+      data-testid={testid}
+      onClick={() => onChange(!on)}
+      className={`flex items-center justify-between gap-2 rounded-md border px-3 py-1.5 text-xs font-bold transition-colors ${
+        on ? "border-emerald-400/50 bg-emerald-500/15 text-emerald-200" : "border-red-400/40 bg-red-500/10 text-red-200"
+      }`}
+    >
+      <span>{text}</span>
+      <span className="gx-mono">{on ? "ON" : "OFF"}</span>
+    </button>
+  );
+}
+
+function Field({ name, value, onChange, type = "text", testid }: { name: string; value: any; onChange: (v: string) => void; type?: string; testid?: string }) {
+  return (
+    <div>
+      <label className="gx-label">{name}</label>
+      <input className="gx-input" type={type} value={value ?? ""} onChange={(e) => onChange(e.target.value)} data-testid={testid} />
+    </div>
+  );
+}
+
+const READONLY_KEYS = new Set(["id", "created_at", "updated_at", "updated_by", "updated_by_user_id", "active_bank_account", "reason"]);
+
+/** Generic editor for flat settings objects (primitive fields only). Sends only changed fields. */
+function SettingsEditor({ title, path, method = "put", extra = {}, wrap }: { title: string; path: string; method?: "put" | "post"; extra?: Record<string, any>; wrap?: (d: any) => any }) {
+  const { data, isLoading } = useAdminGet("settings", path);
+  const act = useAct();
+  const [draft, setDraft] = useState<Record<string, any>>({});
+  useEffect(() => setDraft({}), [data]);
+  if (isLoading) return <Loading />;
+  if (!data) return <p className="text-xs text-slate-500">{title}: unavailable for your role.</p>;
+  const keys = Object.keys(data).filter((k) => !READONLY_KEYS.has(k) && ["string", "number", "boolean"].includes(typeof data[k]));
+  const save = () => {
+    const body: Record<string, any> = {};
+    Object.entries(draft).forEach(([k, v]) => {
+      body[k] = typeof data[k] === "number" ? Number(v) : v;
+    });
+    if (!Object.keys(body).length) return toast.info("No changes");
+    return act(() => api[method](path, wrap ? wrap({ ...body, ...extra }) : { ...body, ...extra }), `${title} saved`);
+  };
+  return (
+    <div className="space-y-3 rounded-xl border border-white/10 bg-slate-950/60 p-4">
+      <p className="text-xs font-bold uppercase tracking-wider text-emerald-300">{title}</p>
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+        {keys.map((k) =>
+          typeof data[k] === "boolean" ? (
+            <Toggle key={k} text={label(k)} on={Boolean(draft[k] ?? data[k])} onChange={(v) => setDraft({ ...draft, [k]: v })} />
+          ) : (
+            <Field key={k} name={label(k)} type={typeof data[k] === "number" ? "number" : "text"} value={draft[k] ?? data[k]} onChange={(v) => setDraft({ ...draft, [k]: v })} />
+          ),
+        )}
+      </div>
+      <Btn onClick={save}>Save {title}</Btn>
+    </div>
+  );
+}
+
+/* ---------- Tab 1: rails ---------- */
+export function RailsAndTreasuryTab() {
+  const act = useAct();
+  const { data: rails } = useAdminGet("rails", "/admin/god-mode/payment-rails");
+  const { data: wc } = useAdminGet("wc", "/admin/god-mode/withdrawal-controls");
+  const { data: td } = useAdminGet("td", "/admin/treasury/dashboard");
+  const [railDraft, setRailDraft] = useState<any[]>([]);
+  const [wcDraft, setWcDraft] = useState<any>(null);
+  const [reason, setReason] = useState("Admin console adjustment");
+  useEffect(() => setRailDraft(rails?.rails || []), [rails]);
+  useEffect(() => setWcDraft(wc ? { ...wc } : null), [wc]);
+  const [iv, setIv] = useState({ action: "buy_from_user", user_id: "", player_id: "", quantity: "1", unit_price_credits: "", confirmation_text: "" });
+  const [wd, setWd] = useState<any>({ amount_credits: "", bank_name: "", account_number: "", account_name: "" });
+
+  return (
+    <div className="space-y-6" data-testid="admin-tab-rails">
+      <Panel eyebrow="Treasury" title="Treasury exposure & liability">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <Stat label="Users" value={fmt(td?.total_users ?? 0)} />
+          <Stat label="Wallet liability" value={fmt(td?.wallet_liability ?? 0)} />
+          <Stat label="Pending payout exposure" value={fmt(td?.pending_treasury_exposure ?? 0)} tone="warn" />
+          <Stat label="Pending dep / wd / KYC" value={`${td?.pending_deposits ?? 0} / ${td?.pending_withdrawals ?? 0} / ${td?.pending_kyc ?? 0}`} />
+        </div>
+      </Panel>
+      <Panel eyebrow="Payment rails" title="Rails, maintenance & withdrawal processor">
+        <input className="gx-input mb-3" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Audit reason (min 4 chars)" />
+        <div className="grid gap-3 lg:grid-cols-2">
+          <div className="space-y-2">
+            {railDraft.length === 0 && <Empty title="No rails configured" />}
+            {railDraft.map((r, i) => (
+              <div key={r.provider} className="space-y-2 rounded-md border border-white/10 p-3">
+                <p className="text-sm font-bold uppercase text-white">{r.provider}</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {(["deposits_enabled", "withdrawals_enabled", "is_live"] as const).map((k) => (
+                    <Toggle key={k} text={label(k)} on={Boolean(r[k])} onChange={(v) => setRailDraft(railDraft.map((x, j) => (j === i ? { ...x, [k]: v } : x)))} />
+                  ))}
+                </div>
+                <input className="gx-input" placeholder="Maintenance message" value={r.maintenance_message ?? ""} onChange={(e) => setRailDraft(railDraft.map((x, j) => (j === i ? { ...x, maintenance_message: e.target.value } : x)))} />
+              </div>
+            ))}
+            {railDraft.length > 0 && (
+              <Btn onClick={() => act(() => api.put("/admin/god-mode/payment-rails", { reason, rails: railDraft.map(({ provider, deposits_enabled, withdrawals_enabled, is_live, maintenance_message }) => ({ provider, deposits_enabled, withdrawals_enabled, is_live, maintenance_message })) }), "Payment rails updated")}>Save rails</Btn>
+            )}
+          </div>
+          {wcDraft && (
+            <div className="space-y-2 rounded-md border border-white/10 p-3">
+              <p className="text-xs font-bold uppercase text-emerald-300">Withdrawal controls</p>
+              <select className="gx-input" value={wcDraft.processor_mode} onChange={(e) => setWcDraft({ ...wcDraft, processor_mode: e.target.value })}>
+                <option value="manual_bank_transfer">Manual bank transfer</option>
+                <option value="automatic_gateway">Automatic gateway</option>
+              </select>
+              {(["egame_withdrawals_enabled", "trade_withdrawals_enabled", "deposits_via_bank_transfer", "payouts_via_bank_transfer"] as const).map((k) => (
+                <Toggle key={k} text={label(k)} on={Boolean(wcDraft[k])} onChange={(v) => setWcDraft({ ...wcDraft, [k]: v })} />
+              ))}
+              <Btn onClick={() => act(() => api.put("/admin/god-mode/withdrawal-controls", { egame_withdrawals_enabled: wcDraft.egame_withdrawals_enabled, trade_withdrawals_enabled: wcDraft.trade_withdrawals_enabled, processor_mode: wcDraft.processor_mode, deposits_via_bank_transfer: wcDraft.deposits_via_bank_transfer, payouts_via_bank_transfer: wcDraft.payouts_via_bank_transfer, reason }), "Withdrawal controls updated")}>Save withdrawal controls</Btn>
+            </div>
+          )}
+        </div>
+      </Panel>
+      <Panel eyebrow="FX & guardrails" title="Fiat rates, modes & coin-trader guardrails">
+        <SettingsEditor title="Treasury settings" path="/admin/treasury/settings" />
+      </Panel>
+      <BankAccounts />
+      <Panel eyebrow="Liquidity desk" title="Liquidity intervention (buy from / sell to user)">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+          <div>
+            <label className="gx-label">Action</label>
+            <select className="gx-input" value={iv.action} onChange={(e) => setIv({ ...iv, action: e.target.value })}>
+              <option value="buy_from_user">Buy from user</option>
+              <option value="sell_to_user">Sell to user</option>
+            </select>
+          </div>
+          <Field name="User ID" value={iv.user_id} onChange={(v) => setIv({ ...iv, user_id: v })} />
+          <Field name="Player ID" value={iv.player_id} onChange={(v) => setIv({ ...iv, player_id: v })} />
+          <Field name="Quantity" type="number" value={iv.quantity} onChange={(v) => setIv({ ...iv, quantity: v })} />
+          <Field name="Unit price (GTX)" type="number" value={iv.unit_price_credits} onChange={(v) => setIv({ ...iv, unit_price_credits: v })} />
+          <Field name="Type CONFIRM-LIQUIDITY" value={iv.confirmation_text} onChange={(v) => setIv({ ...iv, confirmation_text: v })} />
+        </div>
+        <Btn className="mt-3" variant="danger" onClick={() => act(() => api.post("/admin/god-mode/liquidity/interventions", { ...iv, quantity: Number(iv.quantity), unit_price_credits: Number(iv.unit_price_credits), reason }), "Liquidity intervention executed")}>Execute intervention</Btn>
+      </Panel>
+      <Panel eyebrow="Treasury payout" title="Treasury withdrawal (platform wallet → bank)">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          {Object.keys(wd).map((k) => (
+            <Field key={k} name={label(k)} value={wd[k]} type={k.startsWith("amount") ? "number" : "text"} onChange={(v) => setWd({ ...wd, [k]: v })} />
+          ))}
+        </div>
+        <Btn className="mt-3" variant="danger" onClick={() => act(() => api.post("/admin/god-mode/treasury/withdrawals", { ...wd, amount_credits: Number(wd.amount_credits), reason }), "Treasury withdrawal created")}>Create treasury withdrawal</Btn>
+      </Panel>
+    </div>
+  );
+}
+
+function BankAccounts() {
+  const act = useAct();
+  const { data } = useAdminGet("banks", "/admin/treasury/bank-accounts");
+  const [f, setF] = useState({ bank_name: "", account_number: "", account_name: "", bank_code: "", currency_code: "NGN" });
+  return (
+    <Panel eyebrow="Deposits" title="Platform treasury bank accounts">
+      <div className="space-y-2">
+        {(data || []).map((a: any) => (
+          <div key={a.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-white/10 p-2 text-sm">
+            <span>{a.bank_name} · {a.account_number} · {a.account_name} <Chip tone={a.is_active ? "emerald" : "slate"}>{a.is_active ? "active" : "inactive"}</Chip></span>
+            <Btn variant="secondary" onClick={() => act(() => api.put(`/admin/treasury/bank-accounts/${a.id}`, { is_active: !a.is_active }), "Bank account updated")}>{a.is_active ? "Deactivate" : "Activate"}</Btn>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-5">
+        {Object.keys(f).map((k) => <Field key={k} name={label(k)} value={(f as any)[k]} onChange={(v) => setF({ ...f, [k]: v })} />)}
+      </div>
+      <Btn className="mt-3" onClick={() => act(() => api.post("/admin/treasury/bank-accounts", { ...f, bank_code: f.bank_code || null, is_active: true }), "Bank account added")}>Add bank account</Btn>
+    </Panel>
+  );
+}
+
+/* ---------- Tab 2: queues ---------- */
+function Queue({ title, path, render }: { title: string; path: string; render: (item: any, act: ReturnType<typeof useAct>) => React.ReactNode }) {
+  const { data } = useAdminGet("queue", path);
+  const act = useAct();
+  const items: any[] = data?.items || [];
+  return (
+    <Panel eyebrow="Queue" title={`${title} (${data?.total ?? items.length})`}>
+      {items.length === 0 ? <Empty title="Queue clear" /> : items.map((it) => <div key={it.id} className="mb-2 flex flex-wrap items-center justify-between gap-3 rounded-md border border-white/10 p-3 text-sm">{render(it, act)}</div>)}
+    </Panel>
+  );
+}
+
+export function QueuesTab() {
+  return (
+    <div className="space-y-6" data-testid="admin-tab-queues">
+      <Queue title="Pending fiat deposits" path="/admin/treasury/deposits?status=payment_submitted" render={(d, act) => (
+        <>
+          <span>{d.user_email} · {fmt(d.amount_fiat)} {d.currency_code} → {fmt(d.amount_coin)} GTX · {d.payer_name || "—"} · ref {d.reference}</span>
+          <div className="flex gap-2">
+            <Btn onClick={() => act(() => api.post(`/admin/treasury/deposits/${d.id}/confirm`, {}), "Deposit confirmed & credited")}>Confirm</Btn>
+            <Btn variant="danger" onClick={() => act(() => api.post(`/admin/treasury/deposits/${d.id}/reject`, {}), "Deposit rejected")}>Reject</Btn>
+          </div>
+        </>
+      )} />
+      <Queue title="Treasury withdrawals" path="/admin/treasury/withdrawals?status=pending_review" render={(w, act) => (
+        <>
+          <span>{w.user_email} · {fmt(w.amount_coin)} GTX → {w.bank_name} {w.bank_account_number} · {w.status}</span>
+          <div className="flex gap-2">
+            {["approved", "processing", "paid", "rejected"].map((s) => (
+              <Btn key={s} variant={s === "rejected" ? "danger" : "secondary"} onClick={() => act(() => api.post(`/admin/treasury/withdrawals/${w.id}/status`, { status: s }), `Withdrawal ${s}`)}>{label(s)}</Btn>
+            ))}
+          </div>
+        </>
+      )} />
+      <Queue title="KYC review" path="/admin/treasury/kyc?status=under_review" render={(k, act) => (
+        <>
+          <span>{k.user_email} · {k.user_full_name || "—"} · {k.country} · {k.status}</span>
+          <div className="flex gap-2">
+            <Btn onClick={() => act(() => api.post(`/admin/treasury/kyc/${k.id}/review`, { status: "approved" }), "KYC approved")}>Approve</Btn>
+            <Btn variant="danger" onClick={() => act(() => api.post(`/admin/treasury/kyc/${k.id}/review`, { status: "rejected", rejection_reason: "Documents unclear" }), "KYC rejected")}>Reject</Btn>
+          </div>
+        </>
+      )} />
+      <Queue title="Open disputes" path="/admin/treasury/disputes" render={(d) => <span>{d.reference} · {d.subject} · {d.user_email} · <Chip>{label(d.status)}</Chip></span>} />
+    </div>
+  );
+}
+
+/* ---------- Tab 3: players ---------- */
+export function PlayersTab() {
+  const act = useAct();
+  const [q, setQ] = useState("");
+  const [tier, setTier] = useState("");
+  const [sel, setSel] = useState<any>(null);
+  const [edit, setEdit] = useState<Record<string, any>>({});
+  const path = `/admin/players?limit=24${q ? `&search=${encodeURIComponent(q)}` : ""}${tier ? `&tier=${tier}` : ""}`;
+  const { data, refetch } = useAdminGet("players", path);
+  useEffect(() => setEdit({}), [sel?.player_id]);
+  const val = (k: string) => edit[k] ?? sel?.[k] ?? "";
+  const save = async () => {
+    const body: Record<string, any> = {};
+    ["overall", "potential"].forEach((k) => edit[k] !== undefined && (body[k] = Number(edit[k])));
+    if (edit.market_value_credits !== undefined) body.market_value_credits = Number(edit.market_value_credits);
+    ["real_player_tier", "real_world_club_name", "image_url"].forEach((k) => edit[k] !== undefined && (body[k] = edit[k]));
+    if (edit.is_tradable !== undefined) body.is_tradable = edit.is_tradable;
+    if (!Object.keys(body).length) return toast.info("No changes");
+    const res = await act(() => api.patch(`/admin/players/${sel.player_id}`, { ...body, reason: "Admin console edit" }), "Player updated");
+    if (res?.data?.player) setSel(res.data.player);
+    refetch();
+  };
+  return (
+    <div className="grid gap-6 lg:grid-cols-2" data-testid="admin-tab-players">
+      <Panel eyebrow="Search" title="Legends, real players & regens">
+        <div className="flex gap-2">
+          <input className="gx-input flex-1" placeholder="Search name or player id" value={q} onChange={(e) => setQ(e.target.value)} />
+          <select className="gx-input w-40" value={tier} onChange={(e) => setTier(e.target.value)}>
+            <option value="">All tiers</option>
+            {["legend", "marquee", "established", "wonderkid", "regen"].map((t) => <option key={t} value={t}>{label(t)}</option>)}
+          </select>
+        </div>
+        <div className="mt-3 max-h-[520px] space-y-1 overflow-y-auto">
+          {(data || []).map((p: any) => (
+            <button key={p.player_id} onClick={() => setSel(p)} className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm ${sel?.player_id === p.player_id ? "border-emerald-400/60 bg-emerald-500/10" : "border-white/10 hover:border-white/30"}`}>
+              <span className="truncate text-white">{p.full_name} <span className="text-slate-500">· {p.real_world_club_name || p.current_club_name || "—"}</span></span>
+              <span className="gx-mono text-xs text-emerald-300">{p.overall ?? "–"} · {p.real_player_tier || (p.is_regen ? "regen" : "—")}</span>
+            </button>
+          ))}
+          {data?.length === 0 && <Empty title="No players match" />}
+        </div>
+      </Panel>
+      <Panel eyebrow="Editor" title={sel ? sel.full_name : "Select a player"}>
+        {!sel ? <Empty title="Pick a player to edit GSI, tier, price or portrait" /> : (
+          <div className="space-y-3">
+            <div className="mx-auto w-48">
+              <PlayerCard name={sel.full_name} rating={Number(val("overall")) || 60} position={sel.position} club={sel.real_world_club_name || sel.current_club_name} image={val("image_url") || null} regen={sel.is_regen} tier={sel.real_player_tier === "legend" ? "legendary" : undefined} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Field name="Overall GSI" type="number" value={val("overall")} onChange={(v) => setEdit({ ...edit, overall: v })} />
+              <Field name="Potential GSI" type="number" value={val("potential")} onChange={(v) => setEdit({ ...edit, potential: v })} />
+              <div>
+                <label className="gx-label">Tier</label>
+                <select className="gx-input" value={val("real_player_tier")} onChange={(e) => setEdit({ ...edit, real_player_tier: e.target.value })}>
+                  <option value="">None</option>
+                  {["legend", "marquee", "established", "wonderkid"].map((t) => <option key={t} value={t}>{label(t)}</option>)}
+                </select>
+              </div>
+              <Field name="Real-world club" value={val("real_world_club_name")} onChange={(v) => setEdit({ ...edit, real_world_club_name: v })} />
+              <Field name="Price override (GTX)" type="number" value={edit.market_value_credits ?? sel.current_value_credits ?? ""} onChange={(v) => setEdit({ ...edit, market_value_credits: v })} />
+              <Toggle text="Tradable" on={Boolean(edit.is_tradable ?? sel.is_tradable)} onChange={(v) => setEdit({ ...edit, is_tradable: v })} />
+            </div>
+            <Field name="Headshot URL (empty = clean silhouette)" value={val("image_url")} onChange={(v) => setEdit({ ...edit, image_url: v })} />
+            <div className="flex gap-2">
+              <Btn onClick={save}>Save player</Btn>
+              <Btn variant="ghost" onClick={() => setEdit({ ...edit, image_url: "" })}>Clear portrait</Btn>
+            </div>
+          </div>
+        )}
+      </Panel>
+    </div>
+  );
+}
+
+/* ---------- Tab 4: competitions / jackpot / kill-switch ---------- */
+const JACKPOT_KEYS = ["threshold_amount", "contribution_rate", "distribution_mode", "failsafe_hours", "probability_limit", "probability_cap", "top_split_percent", "min_activity_score"];
+
+export function CompetitionsTab({ children }: { children?: React.ReactNode }) {
+  const act = useAct();
+  const { data: rt } = useAdminGet("jackpot", "/admin/jackpot/runtime");
+  const { data: ks } = useAdminGet("ks", "/admin/finance/match-kill-switches");
+  const [jd, setJd] = useState<Record<string, any>>({});
+  const [bal, setBal] = useState("");
+  const [m, setM] = useState({ match_id: "", reason: "" });
+  const src = useMemo(() => ({ ...(rt?.settings || {}), ...(rt || {}) }), [rt]);
+  const jv = (k: string) => jd[k] ?? src[k] ?? "";
+  return (
+    <div className="space-y-6" data-testid="admin-tab-competitions">
+      {children}
+      <Panel eyebrow="Global jackpot" title="Runtime controls (platform-funded only; users cannot contribute)">
+        <div className="mb-3 grid grid-cols-2 gap-4 md:grid-cols-3">
+          <Stat label="Current pool" value={fmt(src.current_balance ?? src.balance ?? 0)} />
+          <Stat label="Round" value={String(src.round_number ?? src.current_round ?? "—")} />
+          <Stat label="Threshold" value={fmt(src.threshold_amount ?? 0)} />
+        </div>
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          {JACKPOT_KEYS.map((k) => <Field key={k} name={label(k)} value={jv(k)} onChange={(v) => setJd({ ...jd, [k]: v })} />)}
+        </div>
+        <div className="mt-3 flex flex-wrap items-end gap-2">
+          <Btn onClick={() => {
+            const body: any = {};
+            Object.entries(jd).forEach(([k, v]) => (body[k] = k === "distribution_mode" ? v : Number(v)));
+            return act(() => api.post("/admin/jackpot/runtime", body), "Jackpot runtime updated");
+          }}>Save runtime</Btn>
+          <input className="gx-input w-40" type="number" placeholder="Set balance" value={bal} onChange={(e) => setBal(e.target.value)} />
+          <Btn variant="secondary" onClick={() => act(() => api.patch("/admin/jackpot/balance", { balance: Number(bal), reason: "Admin balance adjustment" }), "Jackpot balance set")}>Set balance</Btn>
+          <Btn variant="gold" onClick={() => window.confirm("Trigger the current jackpot round now?") && act(() => api.post("/admin/jackpot/trigger"), "Jackpot round triggered")}>Trigger round</Btn>
+        </div>
+      </Panel>
+      <Panel eyebrow="Emergency" title="Live match kill-switch">
+        <div className="flex flex-wrap gap-2">
+          <input className="gx-input w-64" placeholder="Match ID" value={m.match_id} onChange={(e) => setM({ ...m, match_id: e.target.value })} />
+          <input className="gx-input flex-1" placeholder="Reason" value={m.reason} onChange={(e) => setM({ ...m, reason: e.target.value })} />
+          <Btn variant="danger" onClick={() => act(() => api.post("/admin/finance/match-kill-switches", { match_id: m.match_id, enabled: true, reason: m.reason || "Emergency stop" }), "Match halted")}>Halt match</Btn>
+        </div>
+        <div className="mt-3 space-y-1">
+          {(ks || []).map((k: any) => (
+            <div key={k.match_id} className="flex items-center justify-between rounded-md border border-white/10 p-2 text-sm">
+              <span>{k.match_id} · {k.reason || "—"} <Chip tone={k.enabled ? "red" : "slate"}>{k.enabled ? "halted" : "released"}</Chip></span>
+              <Btn variant="secondary" onClick={() => act(() => api.post("/admin/finance/match-kill-switches", { match_id: k.match_id, enabled: !k.enabled, reason: k.reason }), "Kill-switch toggled")}>{k.enabled ? "Release" : "Re-halt"}</Btn>
+            </div>
+          ))}
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+/* ---------- Tab 5: economy ---------- */
+export function EconomyTab() {
+  const act = useAct();
+  const { data: ct } = useAdminGet("ct", "/admin/finance/control-tower");
+  const { data: wp } = useAdminGet("wp", "/admin/finance/wallet-protection");
+  const { data: rec } = useAdminGet("rec", "/admin/finance/reconciliation");
+  const { data: flags } = useAdminGet("flags", "/admin/admin-engine/feature-flags");
+  const { data: rewards } = useAdminGet("rewards", "/admin/admin-engine/reward-rules");
+  const [sim, setSim] = useState<any>({ daily_active_users: 100000, avg_matches_per_user: 5, fan_spend_per_match: 10, gtex_purchase_rate: 0.02, gtex_purchase_amount: 1 });
+  const [simRes, setSimRes] = useState<any>(null);
+  return (
+    <div className="space-y-6" data-testid="admin-tab-economy">
+      <Panel eyebrow="Control tower" title="Economy health">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <Stat label="GTX supply" value={fmt(ct?.gtex_supply ?? 0)} />
+          <Stat label="Fan supply" value={fmt(ct?.fan_supply ?? 0)} />
+          <Stat label="Inflation risk" value={String(ct?.inflation_risk ?? "—")} tone={ct?.inflation_risk === "high" ? "bad" : "good"} />
+          <Stat label="Liquidity" value={String(ct?.liquidity_status ?? "—")} />
+          <Stat label="Frozen / banned" value={`${ct?.frozen_account_count ?? 0} / ${ct?.banned_account_count ?? 0}`} />
+          <Stat label="Price overrides" value={String(ct?.manual_price_override_count ?? 0)} />
+          <Stat label="Kill-switches" value={String(ct?.match_kill_switch_count ?? 0)} />
+          <Stat label="Wallet locks" value={String(wp?.active_wallet_transaction_lock_count ?? 0)} />
+        </div>
+        {(ct?.alerts || []).map((a: any, i: number) => <p key={i} className="mt-2 text-xs text-amber-300">⚠ {a.title}: {a.message}</p>)}
+        <p className="mt-3 text-xs text-slate-400">Reconciliation: {rec?.issues?.length ?? 0} open issues · {rec?.duplicate_provider_references ?? 0} duplicate refs · {rec?.confirmed_deposits_missing_ledger ?? 0} deposits missing ledger</p>
+      </Panel>
+      <Panel eyebrow="Simulator" title="30-day economy simulation">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+          {Object.keys(sim).map((k) => <Field key={k} name={label(k)} type="number" value={sim[k]} onChange={(v) => setSim({ ...sim, [k]: Number(v) })} />)}
+        </div>
+        <Btn className="mt-3" onClick={async () => { const r = await act(() => api.post("/admin/finance/simulate", sim), "Simulation complete"); if (r) setSimRes(r.data); }}>Run simulation</Btn>
+        {simRes && <p className="mt-3 text-sm text-slate-200">Ending GTX supply {fmt(simRes.summary?.ending_gtex_supply)} · risk <b>{simRes.summary?.inflation_risk}</b> · {(simRes.summary?.recommendations || []).join(" ")}</p>}
+      </Panel>
+      <Panel eyebrow="Feature flags" title="Live feature flags">
+        {(flags || []).length === 0 && <Empty title="No flags" />}
+        <div className="grid gap-2 md:grid-cols-2">
+          {(flags || []).map((f: any) => (
+            <Toggle key={f.id || f.flag_key} text={f.flag_key || f.key || f.name} on={Boolean(f.enabled ?? f.is_enabled ?? f.active)} onChange={(v) => act(() => api.post("/admin/admin-engine/feature-flags", { ...f, enabled: v, is_enabled: v, active: v }), "Flag updated")} />
+          ))}
+        </div>
+      </Panel>
+      <Panel eyebrow="Reward rules" title="Fees & stability rules">
+        {(rewards || []).map((r: any) => (
+          <div key={r.id} className="mb-2 rounded-md border border-white/10 p-3 text-sm">
+            <b className="text-white">{r.title}</b> <Chip tone={r.active ? "emerald" : "slate"}>{r.active ? "active" : "inactive"}</Chip>
+            <p className="gx-mono text-xs text-slate-400">trade {r.trading_fee_bps} bps · gift rake {r.gift_platform_rake_bps} · withdrawal {r.withdrawal_fee_bps} · competition {r.competition_platform_fee_bps}</p>
+          </div>
+        ))}
+      </Panel>
+    </div>
+  );
+}
+
+/* ---------- Tab 6: users / admins / audit ---------- */
+export function UsersTab() {
+  const act = useAct();
+  const [q, setQ] = useState("");
+  const [sel, setSel] = useState<any>(null);
+  const [ctl, setCtl] = useState<any>({ freeze_login: false, freeze_wallet: false, freeze_matches: false, freeze_social: false, ban_account: false, reason: "" });
+  const { data: users } = useAdminGet("users", `/admin/finance/users?search=${encodeURIComponent(q)}&limit=20`);
+  const { data: admins } = useAdminGet("admins", "/admin/access");
+  const { data: perms } = useAdminGet("perms", "/admin/access/permissions");
+  const [auditQ, setAuditQ] = useState("");
+  const { data: audit } = useAdminGet("audit", `/admin/god-mode/audit-events?limit=40${auditQ ? `&query=${encodeURIComponent(auditQ)}` : ""}`);
+  const [na, setNa] = useState({ email: "", username: "", password: "" });
+  return (
+    <div className="space-y-6" data-testid="admin-tab-users">
+      <Panel eyebrow="Accounts" title="Find user & apply controls">
+        <input className="gx-input" placeholder="Search email, username or ID" value={q} onChange={(e) => setQ(e.target.value)} />
+        <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+          {(users || []).map((u: any) => (
+            <button key={u.id} onClick={() => setSel(u)} className={`flex w-full justify-between rounded-md border px-3 py-1.5 text-left text-sm ${sel?.id === u.id ? "border-emerald-400/60" : "border-white/10"}`}>
+              <span>{u.display_name || u.username} · {u.email}</span>
+              <span className="text-xs text-slate-400">{u.role} · KYC {u.kyc_status || "—"} {!u.is_active && <Chip tone="red">banned</Chip>}</span>
+            </button>
+          ))}
+        </div>
+        {sel && (
+          <div className="mt-3 space-y-2">
+            <p className="text-sm text-white">Target: <b>{sel.email}</b> <span className="gx-mono text-xs text-slate-500">{sel.id}</span></p>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+              {(["freeze_login", "freeze_wallet", "freeze_matches", "freeze_social", "ban_account"] as const).map((k) => <Toggle key={k} text={label(k)} on={Boolean(ctl[k])} onChange={(v) => setCtl({ ...ctl, [k]: v })} />)}
+            </div>
+            <input className="gx-input" placeholder="Reason" value={ctl.reason} onChange={(e) => setCtl({ ...ctl, reason: e.target.value })} />
+            <Btn variant="danger" onClick={() => act(() => api.post("/admin/finance/account-controls", { ...ctl, user_id: sel.id }), "Account controls applied")}>Apply controls</Btn>
+          </div>
+        )}
+      </Panel>
+      <Panel eyebrow="Admin roles" title="Scoped admin accounts">
+        {(admins || []).map((a: any) => (
+          <div key={a.id} className="mb-2 rounded-md border border-white/10 p-3 text-sm">
+            <b className="text-white">{a.email}</b> · {a.admin_role_name} {a.role === "super_admin" && <Chip tone="gold">super</Chip>}
+            <p className="gx-mono text-[11px] text-slate-400">{(a.permissions || []).join(", ")}</p>
+          </div>
+        ))}
+        <div className="grid grid-cols-3 gap-2">
+          {Object.keys(na).map((k) => <Field key={k} name={label(k)} type={k === "password" ? "password" : "text"} value={(na as any)[k]} onChange={(v) => setNa({ ...na, [k]: v })} />)}
+        </div>
+        <Btn className="mt-3" onClick={() => act(() => api.post("/admin/access", { ...na, permissions: (perms?.permissions || []).slice(0, 0) }), "Admin created (assign permissions after)")}>Create scoped admin</Btn>
+      </Panel>
+      <Panel eyebrow="Audit" title="God-mode audit trail">
+        <input className="gx-input mb-2" placeholder="Search audit events" value={auditQ} onChange={(e) => setAuditQ(e.target.value)} />
+        <div className="max-h-80 space-y-1 overflow-y-auto text-xs">
+          {(audit || []).map((ev: any, i: number) => (
+            <div key={ev.event_id || i} className="border-b border-white/5 pb-1">
+              <span className="font-semibold text-emerald-300">{label(ev.event_type || ev.action_key || "event")}</span>
+              <span className="ml-2 text-slate-400">{ev.summary || ev.reason || ev.detail || ""}</span>
+            </div>
+          ))}
+          {(audit || []).length === 0 && <Empty title="No events" />}
+        </div>
+      </Panel>
+    </div>
+  );
+}

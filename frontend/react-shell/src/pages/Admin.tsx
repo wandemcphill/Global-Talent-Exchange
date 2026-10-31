@@ -7,6 +7,7 @@ import { api, errMsg } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { fmt, label } from "@/lib/owner";
 import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, Stat } from "@/components/gtex/ui";
+import { CompetitionsTab, EconomyTab, PlayersTab, QueuesTab, RailsAndTreasuryTab, UsersTab } from "./AdminControls";
 
 function GodModeControlDesk() {
   const qc = useQueryClient();
@@ -102,8 +103,8 @@ function GodModeControlDesk() {
       >
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <Stat
-            label="Platform Coin Balance"
-            value={<Coin amount={Number(td?.platform_coin_balance ?? 0)} />}
+            label={Number(td?.platform_coin_balance ?? 0) < 0 ? "Circulating GTX Minted (issuance)" : "Treasury Reserve Balance"}
+            value={<Coin amount={Math.abs(Number(td?.platform_coin_balance ?? 0))} />}
             tone="good"
           />
           <Stat
@@ -269,7 +270,18 @@ function GodModeControlDesk() {
   );
 }
 
+const ADMIN_TABS = [
+  { id: "overview", label: "Overview & Commissions" },
+  { id: "rails", label: "Rails & Treasury" },
+  { id: "queues", label: "Deposits, KYC & Disputes" },
+  { id: "players", label: "Players & Portraits" },
+  { id: "competitions", label: "Competitions & Jackpot" },
+  { id: "economy", label: "Economy & Flags" },
+  { id: "users", label: "Users, Admins & Audit" },
+] as const;
+
 export default function Admin() {
+  const [tab, setTab] = useState<(typeof ADMIN_TABS)[number]["id"]>("overview");
   const { user } = useAuth();
   const qc = useQueryClient();
   const isAdmin = ["admin", "super_admin"].includes(String(user?.role).toLowerCase());
@@ -288,6 +300,27 @@ export default function Admin() {
   return (
     <div data-testid="admin-page" className="space-y-6">
       <PageHeader eyebrow="Admin review & God-Mode" title="Trust, payouts & platform controls" sub="Manual review path for withdrawals, integrity flags, held competition payouts, and canonical God-Mode treasury/commission controls." />
+      <div className="flex flex-wrap gap-2 border-b border-white/10 pb-3" data-testid="admin-tabs">
+        {ADMIN_TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            data-testid={`admin-tab-${t.id}-btn`}
+            className={`rounded-sm px-3 py-1.5 text-xs font-bold transition-all ${
+              tab === t.id ? "border border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border border-transparent text-slate-400 hover:border-white/10 hover:text-white"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {tab === "rails" && <RailsAndTreasuryTab />}
+      {tab === "queues" && <QueuesTab />}
+      {tab === "players" && <PlayersTab />}
+      {tab === "competitions" && <CompetitionsTab />}
+      {tab === "economy" && <EconomyTab />}
+      {tab === "users" && <UsersTab />}
+      {tab === "overview" && <>
       <GodModeControlDesk />
       <Panel eyebrow="Fraud review" title={`Withdrawals (${data.withdrawals.length})`} testid="admin-withdrawals">
         {data.withdrawals.length === 0 ? <Empty title="Queue clear" /> : data.withdrawals.map((w: any) => (
@@ -320,6 +353,7 @@ export default function Admin() {
           </div>
         ))}
       </Panel>
+      </>}
     </div>
   );
 }

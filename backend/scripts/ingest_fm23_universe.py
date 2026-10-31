@@ -216,26 +216,33 @@ MARQUEE_LEGEND_PHOTOS: dict[str, str] = {
 
 
 def resolve_player_picture(
-    name: str, nation: str, uid: str, photo_db: dict[str, str], faces: list[dict[str, Any]]
-) -> str:
+    name: str,
+    nation: str,
+    uid: str,
+    photo_db: dict[str, str],
+    faces: list[dict[str, Any]],
+    *,
+    is_real: bool = True,
+) -> str | None:
     norm = re.sub(r"[^a-z0-9]", "", name.lower())
     # 1. Marquee curated photo
     for k, v in MARQUEE_LEGEND_PHOTOS.items():
         if re.sub(r"[^a-z0-9]", "", k) == norm:
             return v
-    # 2. Database real photo match from Sportmonks/Sofifa
+    # 2. Verified full-name real photo match (never single-surname collision, never regen facebank for real/legend players)
     if norm in photo_db:
-        return photo_db[norm]
-    parts = name.lower().split()
-    if len(parts) >= 2 and parts[-1] in photo_db:
-        return photo_db[parts[-1]]
-    # 3. Deterministic Cloudinary facebank fallback
+        candidate = photo_db[norm]
+        if not any(tok in candidate.lower() for tok in ("regen_newgen_faces", "generated-media", "placeholder.png")):
+            return candidate
+    if is_real:
+        return None
+    # 3. Deterministic Cloudinary facebank fallback (ONLY for pure regens!)
     if faces:
         idx = hash(f"{uid}-{name}") % len(faces)
         face_url = faces[idx].get("cloudinary_secure_url")
         if face_url:
             return face_url
-    return "https://cdn.sportmonks.com/images/soccer/placeholder.png"
+    return None
 
 
 def analyze_universe() -> dict[str, Any]:
@@ -774,15 +781,16 @@ def execute_ingestion(batch_size: int = 500):
                     }
                 )
 
-            leg_image_upserts.append(
-                {
-                    "id": str(uuid.uuid4()),
-                    "uid": uid,
-                    "pid": p_id,
-                    "pic_url": pic_url,
-                    "now": now,
-                }
-            )
+            if pic_url:
+                leg_image_upserts.append(
+                    {
+                        "id": str(uuid.uuid4()),
+                        "uid": uid,
+                        "pid": p_id,
+                        "pic_url": pic_url,
+                        "now": now,
+                    }
+                )
 
         for i in range(0, len(leg_inserts), batch_size):
             session.execute(sql_insert_legend, leg_inserts[i : i + batch_size])
@@ -1252,15 +1260,16 @@ def execute_ingestion(batch_size: int = 500):
                             }
                         )
 
-                    b_images.append(
-                        {
-                            "id": str(uuid.uuid4()),
-                            "uid": uid,
-                            "pid": p_id,
-                            "pic_url": pic_url,
-                            "now": now,
-                        }
-                    )
+                    if pic_url:
+                        b_images.append(
+                            {
+                                "id": str(uuid.uuid4()),
+                                "uid": uid,
+                                "pid": p_id,
+                                "pic_url": pic_url,
+                                "now": now,
+                            }
+                        )
 
                 if b_inserts:
                     session.execute(sql_insert_player, b_inserts)

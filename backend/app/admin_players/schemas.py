@@ -24,6 +24,10 @@ class PlayerAdminView(BaseModel):
     current_value_credits: float | None = None
     current_value_naira: float | None = None
     price_tier: str | None = None
+    real_player_tier: str | None = None
+    real_world_club_name: str | None = None
+    position: str | None = None
+    image_url: str | None = None
 
 
 class PlayerAdminEditRequest(BaseModel):
@@ -41,6 +45,11 @@ class PlayerAdminEditRequest(BaseModel):
     # clears the club (free agent).
     current_club_id: str | None = None
     is_tradable: bool | None = None
+    # Real-player tier: legend | marquee | established | wonderkid.
+    real_player_tier: str | None = Field(default=None, max_length=32)
+    real_world_club_name: str | None = Field(default=None, max_length=160)
+    # Headshot override. Empty string clears the portrait (clean silhouette).
+    image_url: str | None = Field(default=None, max_length=1024)
     # Convenience: retire = mark untradable + free agent.
     retire: bool | None = None
     reason: str | None = Field(default=None, max_length=500)
