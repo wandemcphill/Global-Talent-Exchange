@@ -304,3 +304,41 @@ def test_fetch_player_stats_maps_sportmonks_stat_details(monkeypatch) -> None:
         },
         "matches": [],
     }
+
+
+def test_sportmonks_adapter_retries_on_429(monkeypatch) -> None:
+    adapter = _adapter()
+    call_count = 0
+
+    class Mock429Response:
+        status_code = 429
+        headers = {"Retry-After": "0.01"}
+
+        def raise_for_status(self):
+            import requests
+
+            raise requests.HTTPError(response=self)
+
+    class Mock200Response:
+        status_code = 200
+        headers = {}
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"data": [{"id": 1, "name": "Success"}]}
+
+    def mock_get(url, params=None, timeout=None):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return Mock429Response()
+        return Mock200Response()
+
+    monkeypatch.setattr(adapter.session, "get", mock_get)
+    monkeypatch.setattr("time.sleep", lambda s: None)
+
+    result = adapter._get("/test")
+    assert call_count == 2
+    assert result == {"data": [{"id": 1, "name": "Success"}]}

@@ -23,7 +23,7 @@ for candidate in (REPO_ROOT, BACKEND_ROOT):
     if candidate_str not in sys.path:
         sys.path.insert(0, candidate_str)
 
-from app.core.config import load_settings
+from app.core.config import load_settings, normalize_database_url
 from app.core.database import create_database_engine, create_session_factory, ensure_database_schema_current
 from app.ingestion.real_player_ingestion_service import (
     RealPlayerBatchBlockedError,
@@ -228,6 +228,9 @@ _TARGET_LEAGUES: tuple[LeagueSpec, ...] = (
         name="Super Lig",
         competition_level="top_flight",
         desired_names=("Super Lig", "Süper Lig"),
+        competition_id="600",
+        fallback_competition_id="600",
+        fallback_season_id="25595",
         country_id=_TURKEY_COUNTRY_ID,
         target_club_names=(
             "Alanyaspor",
@@ -434,6 +437,7 @@ def main() -> int:
     args = build_parser().parse_args()
     if not args.database_url:
         raise SystemExit("--database-url or GTE_DATABASE_URL is required.")
+    args.database_url = normalize_database_url(args.database_url)
 
     _configure_logging()
     _ensure_required_secrets()
@@ -1027,7 +1031,18 @@ def _provider_call(description: str, func, *args, **kwargs):
             last_error = exc
             if attempt >= _PROVIDER_RETRY_ATTEMPTS:
                 break
+            is_429 = "429" in str(exc)
             delay_seconds = min(_PROVIDER_RETRY_BASE_SECONDS * (2 ** (attempt - 1)), 60.0)
+            if is_429:
+                retry_after = None
+                resp = getattr(exc, "response", None)
+                if resp is not None and hasattr(resp, "headers"):
+                    retry_after = resp.headers.get("Retry-After")
+                try:
+                    delay_seconds = max(float(retry_after), 65.0) if retry_after else 65.0
+                except (ValueError, TypeError):
+                    delay_seconds = 65.0
+
             logger.warning(
                 "provider call failed description=%s attempt=%s/%s delay_seconds=%s error=%s",
                 description,
@@ -1082,8 +1097,18 @@ def _resolve_league_targets(adapter: SportMonksAdapter, specs: tuple[LeagueSpec,
     resolved: list[dict[str, Any]] = []
     for spec in specs:
         if spec.country_id:
-            resolved.append(_resolve_manual_country_league(adapter, spec))
-            continue
+            try:
+                manual_league = _resolve_manual_country_league(adapter, spec)
+                if manual_league.get("clubs"):
+                    resolved.append(manual_league)
+                    continue
+            except Exception as exc:
+                logger.warning(
+                    "Manual country league resolution failed for %s (country_id=%s): %s; falling back to competition match",
+                    spec.name,
+                    spec.country_id,
+                    exc,
+                )
 
         competition = None
         if spec.competition_id:
@@ -1144,10 +1169,21 @@ def _resolve_manual_country_league(adapter: SportMonksAdapter, spec: LeagueSpec)
             continue
         matched_clubs.append(matched)
     if not matched_clubs:
-        raise RuntimeError("Could not match any SportMonks Turkey teams for the manual Super Lig refresh.")
+        logger.warning(
+            "Could not match any SportMonks teams for manual league %s (country_id=%s).",
+            spec.name,
+            spec.country_id,
+        )
+        return {
+            "league_name": spec.name,
+            "league_key": _required_text(spec.manual_league_key or spec.competition_id or spec.fallback_competition_id),
+            "competition_level": spec.competition_level,
+            "clubs": [],
+            "missing_target_club_names": sorted(missing_targets),
+        }
     return {
         "league_name": spec.name,
-        "league_key": _required_text(spec.manual_league_key),
+        "league_key": _required_text(spec.manual_league_key or spec.competition_id or spec.fallback_competition_id),
         "competition_level": spec.competition_level,
         "clubs": _dedupe_clubs(matched_clubs),
         "missing_target_club_names": sorted(missing_targets),

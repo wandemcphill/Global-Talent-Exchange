@@ -55,6 +55,7 @@ class SportMonksAdapter(BaseFootballProvider):
         self.api_token = settings.sportmonks_api_token if settings is not None else os.getenv(ENV_SPORTMONKS_API_TOKEN)
         self.default_timeout_seconds = settings.provider_timeout_seconds if settings is not None else 30
         self.session = requests.Session()
+        self.default_rate_limit_per_minute = int(os.getenv("SPORTMONKS_RATE_LIMIT_PER_MINUTE", "50"))
         self._last_request_started_at = 0.0
         self._request_timeout_override: int | None = None
         self._request_rate_limit_override: int | None = None
@@ -293,19 +294,33 @@ class SportMonksAdapter(BaseFootballProvider):
         request_params = dict(params or {})
         request_params["api_token"] = self.api_token
         resolved_rate_limit = (
-            rate_limit_per_minute if rate_limit_per_minute is not None else self._request_rate_limit_override
+            rate_limit_per_minute
+            if rate_limit_per_minute is not None
+            else (self._request_rate_limit_override or self.default_rate_limit_per_minute)
         )
         self._throttle(resolved_rate_limit)
-        response = self.session.get(
-            f"{self.base_url}{path}",
-            params=request_params,
-            timeout=timeout_seconds or self._request_timeout_override or self.default_timeout_seconds,
-        )
-        response.raise_for_status()
-        payload = response.json()
-        if payload.get("message") and response.status_code >= 400:
-            raise ProviderConfigurationError(str(payload["message"]))
-        return payload
+
+        max_429_retries = 2
+        for attempt in range(max_429_retries + 1):
+            response = self.session.get(
+                f"{self.base_url}{path}",
+                params=request_params,
+                timeout=timeout_seconds or self._request_timeout_override or self.default_timeout_seconds,
+            )
+            if response.status_code == 429 and attempt < max_429_retries:
+                retry_after = response.headers.get("Retry-After")
+                try:
+                    wait_seconds = float(retry_after) if retry_after else 65.0
+                except (ValueError, TypeError):
+                    wait_seconds = 65.0
+                time.sleep(max(wait_seconds, 60.0))
+                continue
+            response.raise_for_status()
+            payload = response.json()
+            if payload.get("message") and response.status_code >= 400:
+                raise ProviderConfigurationError(str(payload["message"]))
+            return payload
+        raise ProviderConfigurationError(f"Exceeded max retries for {path}")
 
     def _throttle(self, rate_limit_per_minute: int | None) -> None:
         if rate_limit_per_minute is None or rate_limit_per_minute <= 0:
