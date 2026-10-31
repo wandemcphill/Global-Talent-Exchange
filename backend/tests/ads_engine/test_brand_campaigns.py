@@ -20,7 +20,7 @@ from app.models.user import User, UserRole
 def _client() -> tuple[TestClient, sessionmaker[Session], User, User]:
     app = FastAPI()
     app.include_router(router)
-    app.include_router(public_router)
+    app.include_router(public_router, prefix="/public/ads")
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},

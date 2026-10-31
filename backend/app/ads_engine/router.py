@@ -12,7 +12,10 @@ from app.ads_engine.schemas import (
     PublicBrandAdCampaignsResponse,
 )
 from app.ads_engine.service import SponsoredClipService, SponsoredClipServiceError
-from app.ads_engine.brand_campaigns import router as brand_campaigns_router, public_router as brand_campaigns_public_router
+from app.ads_engine.brand_campaigns import (
+    router as brand_campaigns_router,
+    public_router as brand_campaigns_public_router,
+)
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.models.user import User
 
@@ -156,11 +159,7 @@ def get_public_brand_ad_campaigns(
                 placement=campaign.placement,
                 destination_url=campaign.destination_url,
                 logo_url=campaign.logo_url if _is_safe_public_http_url(campaign.logo_url) else None,
-                creative_url=(
-                    campaign.creative_url
-                    if _is_safe_public_http_url(campaign.creative_url)
-                    else None
-                ),
+                creative_url=(campaign.creative_url if _is_safe_public_http_url(campaign.creative_url) else None),
                 priority=campaign.priority,
             )
         )

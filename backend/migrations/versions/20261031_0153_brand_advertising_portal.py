@@ -28,11 +28,21 @@ def upgrade() -> None:
         "placement IN ('homepage_rail', 'homepage_hero', 'partner_showcase', 'auth_canvas', "
         "'music_track', 'music_artist', 'music_playlist')",
     )
-    op.add_column("brand_ad_campaigns", sa.Column("campaign_type", sa.String(length=16), server_default="brand", nullable=False))
-    op.add_column("brand_ad_campaigns", sa.Column("status", sa.String(length=16), server_default="draft", nullable=False))
-    op.add_column("brand_ad_campaigns", sa.Column("budget_amount", sa.Numeric(18, 2), server_default="0", nullable=False))
-    op.add_column("brand_ad_campaigns", sa.Column("currency", sa.String(length=3), server_default="USD", nullable=False))
-    op.add_column("brand_ad_campaigns", sa.Column("pricing_model", sa.String(length=8), server_default="CPM", nullable=False))
+    op.add_column(
+        "brand_ad_campaigns", sa.Column("campaign_type", sa.String(length=16), server_default="brand", nullable=False)
+    )
+    op.add_column(
+        "brand_ad_campaigns", sa.Column("status", sa.String(length=16), server_default="draft", nullable=False)
+    )
+    op.add_column(
+        "brand_ad_campaigns", sa.Column("budget_amount", sa.Numeric(18, 2), server_default="0", nullable=False)
+    )
+    op.add_column(
+        "brand_ad_campaigns", sa.Column("currency", sa.String(length=3), server_default="USD", nullable=False)
+    )
+    op.add_column(
+        "brand_ad_campaigns", sa.Column("pricing_model", sa.String(length=8), server_default="CPM", nullable=False)
+    )
     op.add_column("brand_ad_campaigns", sa.Column("unit_price", sa.Numeric(18, 4), server_default="0", nullable=False))
     op.add_column("brand_ad_campaigns", sa.Column("submitted_at", sa.DateTime(timezone=True), nullable=True))
     op.add_column("brand_ad_campaigns", sa.Column("reviewed_at", sa.DateTime(timezone=True), nullable=True))
@@ -68,9 +78,7 @@ def upgrade() -> None:
         "brand_ad_campaigns",
         "pricing_model IN ('CPM', 'CPC')",
     )
-    op.execute(
-        "UPDATE brand_ad_campaigns SET status = CASE WHEN is_approved = TRUE THEN 'approved' ELSE 'draft' END"
-    )
+    op.execute("UPDATE brand_ad_campaigns SET status = CASE WHEN is_approved = TRUE THEN 'approved' ELSE 'draft' END")
     op.drop_index("ix_brand_ad_campaigns_delivery", table_name="brand_ad_campaigns")
     op.create_index(
         "ix_brand_ad_campaigns_delivery",
@@ -90,7 +98,9 @@ def upgrade() -> None:
         sa.Column("billing_email", sa.String(length=320), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], name="fk_brand_advertiser_profiles_user_id_users", ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["user_id"], ["users.id"], name="fk_brand_advertiser_profiles_user_id_users", ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id", name="pk_brand_advertiser_profiles"),
         sa.UniqueConstraint("user_id", name="uq_brand_advertiser_profiles_user"),
     )
@@ -106,8 +116,15 @@ def upgrade() -> None:
         sa.Column("event_source", sa.String(length=16), server_default="client", nullable=False),
         sa.Column("metadata_json", sa.JSON(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.ForeignKeyConstraint(["campaign_id"], ["brand_ad_campaigns.id"], name="fk_brand_ad_events_campaign_id_brand_ad_campaigns", ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], name="fk_brand_ad_events_user_id_users", ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(
+            ["campaign_id"],
+            ["brand_ad_campaigns.id"],
+            name="fk_brand_ad_events_campaign_id_brand_ad_campaigns",
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["user_id"], ["users.id"], name="fk_brand_ad_events_user_id_users", ondelete="SET NULL"
+        ),
         sa.PrimaryKeyConstraint("id", name="pk_brand_ad_events"),
         sa.UniqueConstraint("idempotency_key", name="uq_brand_ad_events_idempotency_key"),
     )
@@ -124,11 +141,20 @@ def upgrade() -> None:
         sa.Column("from_status", sa.String(length=16), nullable=False),
         sa.Column("to_status", sa.String(length=16), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.ForeignKeyConstraint(["campaign_id"], ["brand_ad_campaigns.id"], name="fk_brand_ad_review_events_campaign_id_brand_ad_campaigns", ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["actor_user_id"], ["users.id"], name="fk_brand_ad_review_events_actor_user_id_users", ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["campaign_id"],
+            ["brand_ad_campaigns.id"],
+            name="fk_brand_ad_review_events_campaign_id_brand_ad_campaigns",
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["actor_user_id"], ["users.id"], name="fk_brand_ad_review_events_actor_user_id_users", ondelete="RESTRICT"
+        ),
         sa.PrimaryKeyConstraint("id", name="pk_brand_ad_review_events"),
     )
-    op.create_index("ix_brand_ad_review_events_campaign", "brand_ad_review_events", ["campaign_id", "created_at"], unique=False)
+    op.create_index(
+        "ix_brand_ad_review_events_campaign", "brand_ad_review_events", ["campaign_id", "created_at"], unique=False
+    )
 
 
 def downgrade() -> None:
@@ -152,9 +178,23 @@ def downgrade() -> None:
     op.drop_constraint("ck_brand_ad_campaigns_valid_campaign_type", "brand_ad_campaigns", type_="check")
     op.drop_constraint("fk_brand_ad_campaigns_reviewed_by_user_id_users", "brand_ad_campaigns", type_="foreignkey")
     for column in (
-        "music_genre", "music_playlist_name", "music_artist_name", "music_title", "music_target_id",
-        "music_target_type", "archived_at", "review_note", "reviewed_by_user_id", "reviewed_at",
-        "submitted_at", "unit_price", "pricing_model", "currency", "budget_amount", "status", "campaign_type",
+        "music_genre",
+        "music_playlist_name",
+        "music_artist_name",
+        "music_title",
+        "music_target_id",
+        "music_target_type",
+        "archived_at",
+        "review_note",
+        "reviewed_by_user_id",
+        "reviewed_at",
+        "submitted_at",
+        "unit_price",
+        "pricing_model",
+        "currency",
+        "budget_amount",
+        "status",
+        "campaign_type",
     ):
         op.drop_column("brand_ad_campaigns", column)
     op.drop_constraint("ck_brand_ad_campaigns_valid_placement", "brand_ad_campaigns", type_="check")

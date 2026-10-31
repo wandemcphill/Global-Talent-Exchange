@@ -57,10 +57,14 @@ class BrandAdCampaign(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     campaign_type: Mapped[str] = mapped_column(String(16), nullable=False, default="brand", server_default="brand")
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="draft", server_default="draft")
-    budget_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=Decimal("0"), server_default="0")
+    budget_amount: Mapped[Decimal] = mapped_column(
+        Numeric(18, 2), nullable=False, default=Decimal("0"), server_default="0"
+    )
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD", server_default="USD")
     pricing_model: Mapped[str] = mapped_column(String(8), nullable=False, default="CPM", server_default="CPM")
-    unit_price: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    unit_price: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
 
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

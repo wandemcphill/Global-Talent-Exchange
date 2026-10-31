@@ -8,7 +8,6 @@ from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from app.common.schemas.base import CommonSchema
 
-
 BrandPlacement = Literal["homepage_rail", "homepage_hero", "partner_showcase", "auth_canvas"]
 MusicPlacement = Literal["music_track", "music_artist", "music_playlist"]
 
@@ -33,8 +32,14 @@ class BrandAdvertiserProfileUpsertRequest(CommonSchema):
         if value is None or not value.strip():
             return None
         from urllib.parse import urlsplit
+
         parsed = urlsplit(value.strip())
-        if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc or parsed.username is not None or parsed.password is not None:
+        if (
+            parsed.scheme.lower() not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.username is not None
+            or parsed.password is not None
+        ):
             raise ValueError("Website URL must be an HTTP(S) URL without embedded credentials.")
         return value.strip()
 
@@ -54,8 +59,13 @@ class BrandCampaignUpsertRequest(CommonSchema):
     headline: str = Field(min_length=3, max_length=180)
     description: str = Field(default="", max_length=360)
     placement: Literal[
-        "homepage_rail", "homepage_hero", "partner_showcase", "auth_canvas",
-        "music_track", "music_artist", "music_playlist"
+        "homepage_rail",
+        "homepage_hero",
+        "partner_showcase",
+        "auth_canvas",
+        "music_track",
+        "music_artist",
+        "music_playlist",
     ]
     destination_url: str = Field(min_length=8, max_length=2048)
     logo_url: str | None = Field(default=None, max_length=2048)
@@ -87,8 +97,14 @@ class BrandCampaignUpsertRequest(CommonSchema):
         if value is None:
             return None
         from urllib.parse import urlsplit
+
         parsed = urlsplit(value.strip())
-        if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc or parsed.username is not None or parsed.password is not None:
+        if (
+            parsed.scheme.lower() not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.username is not None
+            or parsed.password is not None
+        ):
             raise ValueError("Campaign URLs must use HTTP(S) and must not contain embedded credentials.")
         return value.strip()
 

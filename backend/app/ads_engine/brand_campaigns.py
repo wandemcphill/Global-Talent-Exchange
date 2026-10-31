@@ -33,7 +33,6 @@ router = APIRouter(prefix="/ads/brand", tags=["brand-advertiser"])
 public_router = APIRouter(tags=["public-ads"])
 
 
-
 def _now() -> datetime:
     return datetime.now(UTC)
 
@@ -168,7 +167,9 @@ def create_advertiser_campaign(
     session: Session = Depends(get_session),
 ):
     if _profile_for(session, current_user.id) is None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Complete your advertiser profile before creating a campaign.")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Complete your advertiser profile before creating a campaign."
+        )
     values = payload.model_dump()
     campaign = BrandAdCampaign(
         advertiser_id=current_user.id,
@@ -193,7 +194,9 @@ def update_advertiser_campaign(
 ):
     campaign = _campaign_for_owner(session, campaign_id, current_user.id)
     if campaign.status not in {"draft", "rejected"}:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only draft or rejected campaigns can be edited.")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Only draft or rejected campaigns can be edited."
+        )
     for key, value in payload.model_dump().items():
         setattr(campaign, key, value)
     campaign.is_approved = False
@@ -215,7 +218,9 @@ def submit_advertiser_campaign(
 ):
     campaign = _campaign_for_owner(session, campaign_id, current_user.id)
     if campaign.status not in {"draft", "rejected"}:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only draft or rejected campaigns can be submitted.")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Only draft or rejected campaigns can be submitted."
+        )
     if _as_utc(campaign.end_at) <= _now() or _as_utc(campaign.start_at) >= _as_utc(campaign.end_at):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Campaign schedule is not valid.")
     previous = campaign.status
@@ -237,7 +242,6 @@ def submit_advertiser_campaign(
     session.commit()
     session.refresh(campaign)
     return campaign
-
 
 
 @router.get("/campaigns/{campaign_id}/history", response_model=list[BrandCampaignHistoryView])
@@ -274,9 +278,7 @@ def advertiser_campaign_reports(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    campaigns = session.scalars(
-        select(BrandAdCampaign).where(BrandAdCampaign.advertiser_id == current_user.id)
-    ).all()
+    campaigns = session.scalars(select(BrandAdCampaign).where(BrandAdCampaign.advertiser_id == current_user.id)).all()
     counts = _event_counts(session, [campaign.id for campaign in campaigns])
     return CampaignReportsResponse(
         reports=[_report(campaign, counts.get(campaign.id, {})) for campaign in campaigns],
@@ -286,7 +288,9 @@ def advertiser_campaign_reports(
 
 @router.get("/admin/campaigns", response_model=list[BrandCampaignView])
 def admin_list_brand_campaigns(
-    status_filter: Literal["draft", "pending", "approved", "rejected", "paused", "archived"] | None = Query(default=None, alias="status"),
+    status_filter: Literal["draft", "pending", "approved", "rejected", "paused", "archived"] | None = Query(
+        default=None, alias="status"
+    ),
     _: User = Depends(get_current_admin),
     session: Session = Depends(get_session),
 ):
@@ -294,7 +298,6 @@ def admin_list_brand_campaigns(
     if status_filter:
         statement = statement.where(BrandAdCampaign.status == status_filter)
     return session.scalars(statement).all()
-
 
 
 @router.get("/admin/reports", response_model=CampaignReportsResponse)
@@ -324,7 +327,9 @@ def admin_review_brand_campaign(
     now = _now()
     if payload.action == "approve":
         if previous not in {"pending", "paused"}:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only pending or paused campaigns can be approved.")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="Only pending or paused campaigns can be approved."
+            )
         if _as_utc(campaign.end_at) <= now:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Expired campaigns cannot be approved.")
         campaign.status = "approved"
@@ -387,11 +392,11 @@ def admin_record_conversion(
         session.commit()
     except IntegrityError:
         session.rollback()
-        existing = session.scalar(
-            select(BrandAdEvent).where(BrandAdEvent.idempotency_key == payload.idempotency_key)
-        )
+        existing = session.scalar(select(BrandAdEvent).where(BrandAdEvent.idempotency_key == payload.idempotency_key))
         if existing is None or existing.campaign_id != campaign.id or existing.event_type != "conversion":
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Idempotency key already belongs to another event.")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="Idempotency key already belongs to another event."
+            )
         return BrandAdEventResponse(accepted=True, duplicate=True)
     return BrandAdEventResponse(accepted=True, duplicate=False)
 
@@ -429,11 +434,17 @@ def get_public_music_promotions(
 
 def _safe_http_url(value: str | None) -> bool:
     from urllib.parse import urlsplit
+
     if not isinstance(value, str) or not value.strip():
         return False
     try:
         parsed = urlsplit(value.strip())
-        return parsed.scheme.lower() in {"http", "https"} and bool(parsed.netloc) and not parsed.username and not parsed.password
+        return (
+            parsed.scheme.lower() in {"http", "https"}
+            and bool(parsed.netloc)
+            and not parsed.username
+            and not parsed.password
+        )
     except ValueError:
         return False
 
@@ -470,10 +481,10 @@ def record_public_brand_ad_event(
         session.commit()
     except IntegrityError:
         session.rollback()
-        existing = session.scalar(
-            select(BrandAdEvent).where(BrandAdEvent.idempotency_key == payload.idempotency_key)
-        )
+        existing = session.scalar(select(BrandAdEvent).where(BrandAdEvent.idempotency_key == payload.idempotency_key))
         if existing is None or existing.campaign_id != campaign.id or existing.event_type != payload.event_type:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Idempotency key already belongs to another event.")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="Idempotency key already belongs to another event."
+            )
         return BrandAdEventResponse(accepted=True, duplicate=True)
     return BrandAdEventResponse(accepted=True, duplicate=False)
