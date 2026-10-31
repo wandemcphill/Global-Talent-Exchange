@@ -31,15 +31,16 @@ import { Newsroom } from "@/pages/Newsroom";
 import { Showroom } from "@/pages/Showroom";
 import Jackpot from "@/pages/Jackpot";
 import { ROUTER_BASENAME } from "@/lib/publicPath";
+import { GtexAdvertisingProvider } from "@/components/advertising/GtexAdvertising";
 
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter basename={ROUTER_BASENAME}>
         <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/login" element={<AuthPage mode="login" />} />
-          <Route path="/signup" element={<AuthPage mode="signup" />} />
+          <Route path="/" element={<GtexAdvertisingProvider><Landing /></GtexAdvertisingProvider>} />
+          <Route path="/login" element={<GtexAdvertisingProvider><AuthPage mode="login" /></GtexAdvertisingProvider>} />
+          <Route path="/signup" element={<GtexAdvertisingProvider><AuthPage mode="signup" /></GtexAdvertisingProvider>} />
           <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/payment/callback" element={<PaymentCallback />} />
           <Route path="/club/:clubSlug" element={<PublicClubProfile />} />
