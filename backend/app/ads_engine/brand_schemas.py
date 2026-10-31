@@ -34,7 +34,7 @@ class BrandAdvertiserProfileUpsertRequest(CommonSchema):
             return None
         from urllib.parse import urlsplit
         parsed = urlsplit(value.strip())
-        if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password:
+        if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc or parsed.username is not None or parsed.password is not None:
             raise ValueError("Website URL must be an HTTP(S) URL without embedded credentials.")
         return value.strip()
 
@@ -88,7 +88,7 @@ class BrandCampaignUpsertRequest(CommonSchema):
             return None
         from urllib.parse import urlsplit
         parsed = urlsplit(value.strip())
-        if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password:
+        if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc or parsed.username is not None or parsed.password is not None:
             raise ValueError("Campaign URLs must use HTTP(S) and must not contain embedded credentials.")
         return value.strip()
 

@@ -410,7 +410,7 @@ def get_public_music_promotions(
             headline=row.headline,
             description=row.description or "",
             destination_url=row.destination_url,
-            creative_url=row.creative_url,
+            creative_url=row.creative_url if _safe_http_url(row.creative_url) else None,
             target_type=row.music_target_type,
             target_id=row.music_target_id,
             track_title=row.music_title,
@@ -452,8 +452,9 @@ def record_public_brand_ad_event(
         or campaign.status != "approved"
         or not campaign.is_approved
         or not campaign.is_active
-        or campaign.start_at > now
-        or campaign.end_at <= now
+        or _as_utc(campaign.start_at) > now
+        or _as_utc(campaign.end_at) <= now
+        or not _safe_http_url(campaign.destination_url)
     ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Live campaign not found.")
     event = BrandAdEvent(
