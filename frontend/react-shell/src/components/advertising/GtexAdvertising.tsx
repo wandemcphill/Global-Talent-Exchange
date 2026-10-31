@@ -12,6 +12,18 @@ import axios from "axios";
 import { ArrowLeft, ArrowRight, ExternalLink, Megaphone, RadioTower } from "lucide-react";
 import { API } from "@/lib/api";
 
+function reportAdEvent(campaignId: string, eventType: "impression" | "click") {
+  const id = typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  void axios.post(`${API}/public/ads/events`, {
+    campaign_id: campaignId,
+    event_type: eventType,
+    idempotency_key: `${eventType}-${id}`,
+    metadata_json: { placement: "public_brand" },
+  }, { timeout: 1800 }).catch(() => undefined);
+}
+
 export type GtexAdPlacement =
   | "homepage_rail"
   | "homepage_hero"
@@ -141,6 +153,7 @@ function CampaignCarousel({
 }: CampaignCarouselProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const touchStart = useRef<number | null>(null);
+  const impressionSent = useRef(new Set<string>());
   const total = campaigns.length;
   const active = total > 0 ? campaigns[activeIndex % total] : null;
   const isRail = variant === "rail";
@@ -156,6 +169,13 @@ function CampaignCarousel({
   useEffect(() => {
     setActiveIndex((current) => (total ? current % total : 0));
   }, [total]);
+
+  useEffect(() => {
+    if (active && !impressionSent.current.has(active.id)) {
+      impressionSent.current.add(active.id);
+      reportAdEvent(active.id, "impression");
+    }
+  }, [active?.id]);
 
   useEffect(() => {
     if (total < 2) return;
@@ -189,6 +209,7 @@ function CampaignCarousel({
           href={active.destination_url}
           target="_blank"
           rel="noopener noreferrer sponsored"
+          onClick={() => reportAdEvent(active.id, "click")}
           className="gx-ad-active-card gx-ad-slide-enter group"
           aria-label={active.brand_name + ": " + active.headline + ". Opens advertiser website in a new tab."}
         >
@@ -252,6 +273,15 @@ export function GtexTopAdvertisingRail() {
 }
 
 function PartnerShowcase({ campaigns }: { campaigns: GtexAdCampaign[] }) {
+  const impressionSent = useRef(new Set<string>());
+  useEffect(() => {
+    for (const campaign of campaigns) {
+      if (!impressionSent.current.has(campaign.id)) {
+        impressionSent.current.add(campaign.id);
+        reportAdEvent(campaign.id, "impression");
+      }
+    }
+  }, [campaigns]);
   if (campaigns.length === 0) return null;
   return (
     <section className="gx-ad-partner-showcase" aria-label="GTEX advertising partners">
@@ -263,6 +293,7 @@ function PartnerShowcase({ campaigns }: { campaigns: GtexAdCampaign[] }) {
             href={campaign.destination_url}
             target="_blank"
             rel="noopener noreferrer sponsored"
+            onClick={() => reportAdEvent(campaign.id, "click")}
             aria-label={campaign.brand_name + ": " + campaign.headline}
             className="gx-ad-partner-card"
           >

@@ -23,6 +23,8 @@ import Academy from "@/pages/Academy";
 import Finance from "@/pages/Finance";
 import InboxPage from "@/pages/Inbox";
 import Admin from "@/pages/Admin";
+import AdvertiserAds from "@/pages/AdvertiserAds";
+import AdminAdvertising from "@/pages/AdminAdvertising";
 import PaymentCallback from "@/pages/PaymentCallback";
 import NationalTeam from "@/pages/NationalTeam";
 import { ClubStory } from "@/pages/ClubStory";
@@ -67,9 +69,11 @@ export default function App() {
             <Route path="finance" element={<Finance />} />
             <Route path="jackpot" element={<Jackpot />} />
             <Route path="creator-access" element={<CreatorAccess />} />
+            <Route path="advertising" element={<AdvertiserAds />} />
             <Route path="coin-traders" element={<CoinTraders />} />
             <Route path="inbox" element={<InboxPage />} />
             <Route path="admin" element={<Admin />} />
+            <Route path="admin/advertising" element={<AdminAdvertising />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
