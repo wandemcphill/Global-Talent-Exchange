@@ -153,6 +153,12 @@ def load_csv(path: Path) -> list[dict[str, str]]:
     if not path.exists():
         logger.warning("Source file not found: %s", path)
         return []
+    for enc in ("utf-8-sig", "cp1252", "latin-1"):
+        try:
+            with open(path, "r", encoding=enc) as f:
+                return list(csv.DictReader(f, delimiter=";"))
+        except UnicodeDecodeError:
+            continue
     with open(path, "r", encoding="utf-8-sig", errors="replace") as f:
         return list(csv.DictReader(f, delimiter=";"))
 

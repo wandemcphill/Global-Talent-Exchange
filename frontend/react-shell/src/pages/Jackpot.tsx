@@ -1,16 +1,11 @@
-import React, { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
-import { Coins, Flame, Sparkles, Trophy, Tv, Users, Zap } from "lucide-react";
-import { api, errMsg } from "@/lib/api";
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Coins, Flame, ShieldCheck, Sparkles, Trophy, Tv } from "lucide-react";
+import { api } from "@/lib/api";
 import { fmt, label } from "@/lib/owner";
-import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, Stat } from "@/components/gtex/ui";
+import { Chip, Coin, Empty, Loading, PageHeader, Panel, Stat } from "@/components/gtex/ui";
 
 export default function Jackpot() {
-  const qc = useQueryClient();
-  const [contribution, setContribution] = useState("250");
-  const [submitting, setSubmitting] = useState(false);
-
   const { data: status, isLoading: statusLoading } = useQuery({
     queryKey: ["jackpot-status"],
     queryFn: async () => {
@@ -45,43 +40,18 @@ export default function Jackpot() {
     },
   });
 
-  const contribute = async () => {
-    const amount = Number(contribution || 0);
-    if (!amount || amount <= 0) {
-      toast.error("Enter a valid GTEX Coin contribution amount.");
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await api.post("/jackpot/contribute", {
-        amount: String(amount),
-        source_type: "owner_console_contribution",
-        source_id: `manual-${Date.now()}`,
-      });
-      toast.success(`Contributed ${fmt(amount)} GTX into the Global Jackpot Pool!`);
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["jackpot-status"] }),
-        qc.invalidateQueries({ queryKey: ["jackpot-history"] }),
-        qc.invalidateQueries({ queryKey: ["economy-waterfall"] }),
-      ]);
-    } catch (e) {
-      toast.error(errMsg(e));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   if (statusLoading && !waterfall) {
     return <Loading label="Loading GTEX Global Jackpot & Ecosystem Pool" />;
   }
 
   const jackpotBalance = Number(
-    (status?.balance ?? status?.current_balance) ?? waterfall?.jackpot_ecosystem_pool_gtex ?? 25000
+    (status?.balance ?? status?.current_balance) ?? waterfall?.jackpot_ecosystem_pool_gtex ?? 0
   );
-  const thresholdAmount = Number(status?.threshold_amount ?? 100000);
+  const thresholdAmount = Number(status?.threshold_amount ?? 500);
   const progressPct = Math.min(100, Math.round((jackpotBalance / Math.max(1, thresholdAmount)) * 100));
   const roundNumber = status?.round_number ?? 1;
-  const distributionMode = status?.distribution_mode ?? "top_split";
+  const distributionMode = status?.distribution_mode ?? "single_winner";
+  const contributionRatePct = Math.round(Number(status?.contribution_rate ?? 0.25) * 100);
 
   return (
     <div className="space-y-6" data-testid="jackpot-page">
@@ -137,33 +107,27 @@ export default function Jackpot() {
         </Panel>
 
         <Panel
-          eyebrow="Participate & Boost"
-          title="Enter / Boost Jackpot Pool"
-          testid="jackpot-contribute-panel"
+          eyebrow="Platform-Funded Only"
+          title="Automatic Fee Recycling"
+          testid="jackpot-funding-policy-panel"
           className="lg:col-span-4"
         >
-          <p className="text-xs text-slate-300 mb-3">
-            Club owners can directly boost the active round to accelerate the threshold trigger and register participation weight.
-          </p>
-          <label className="gx-label">Contribution Amount (GTX)</label>
-          <input
-            type="number"
-            min={10}
-            value={contribution}
-            onChange={(e) => setContribution(e.target.value)}
-            className="gx-input mt-1"
-            data-testid="jackpot-contribute-input"
-          />
-          <Btn
-            variant="gold"
-            className="mt-4 w-full"
-            disabled={submitting}
-            onClick={contribute}
-            data-testid="jackpot-contribute-button"
-          >
-            <Zap size={14} className="mr-1.5 inline" />
-            {submitting ? "Contributing..." : `Contribute ${fmt(Number(contribution || 0))} GTX`}
-          </Btn>
+          <div className="rounded-xl border border-emerald-500/25 bg-emerald-950/20 p-3.5 mb-3">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-300">
+              <ShieldCheck size={15} /> Zero Direct User Contributions
+            </div>
+            <p className="mt-1.5 text-xs leading-relaxed text-slate-300">
+              Users and club owners cannot manually deposit or contribute into the Global Jackpot. The pool is funded exclusively by automated platform fee recycling ({contributionRatePct}% jackpot share).
+            </p>
+          </div>
+          <div className="space-y-2 text-xs text-slate-400">
+            <p>
+              <span className="font-semibold text-white">Automatic Eligibility:</span> Active matchdays, transfers, player-share trades, and sanctioned competitions register participation weight automatically.
+            </p>
+            <p>
+              <span className="font-semibold text-white">Scheduled Settlement:</span> Payouts trigger automatically on threshold crossing, dynamic probability roll, or the 6-hour scheduled failsafe drop.
+            </p>
+          </div>
         </Panel>
 
         <Panel

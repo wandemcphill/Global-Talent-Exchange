@@ -140,24 +140,52 @@ export function RegenWorld() {
     },
   });
 
-  // Current active prospect list
+  const availableNations = useMemo(() => {
+    const rawList = [...(scoutingData || []), ...(risingData || [])];
+    const set = new Set<string>();
+    for (const item of rawList) {
+      const p = item.player || item;
+      const nat = String(p.nationality || "").trim();
+      if (nat) set.add(nat);
+    }
+    if (set.size === 0) {
+      ["Nigeria", "Ghana", "Senegal", "England", "Brazil"].forEach((n) => set.add(n));
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [scoutingData, risingData]);
+
+  // Current active prospect list (strictly deduplicated by player ID and normalized identity)
   const activeItems = useMemo(() => {
     let list: any[] = [];
     if (tab === "feed") list = scoutingData || [];
     else if (tab === "rising") list = risingData || [];
     else return [];
 
-    return list.filter((item) => {
+    const seenIds = new Set<string>();
+    const seenNames = new Set<string>();
+    const deduped: any[] = [];
+
+    for (const item of list) {
       const p = item.player || item;
-      const name = p.name || p.player_name || "";
+      const rawId = String(p.id || p.player_id || item.player_id || "").trim();
+      const cleanName = String(p.name || p.player_name || "").replace(/\s+\d+$/, "").trim();
+      const normName = cleanName.toLowerCase();
+
+      if (rawId && seenIds.has(rawId)) continue;
+      if (normName && seenNames.has(normName)) continue;
+
       const pos = (p.position || p.primary_position || "").toUpperCase();
       const nation = (p.nationality || "").toUpperCase();
 
-      if (search && !name.toLowerCase().includes(search.toLowerCase())) return false;
-      if (positionFilter !== "ALL" && !pos.includes(positionFilter)) return false;
-      if (originFilter !== "ALL" && !nation.includes(originFilter)) return false;
-      return true;
-    });
+      if (search && !cleanName.toLowerCase().includes(search.toLowerCase())) continue;
+      if (positionFilter !== "ALL" && !pos.includes(positionFilter)) continue;
+      if (originFilter !== "ALL" && !nation.includes(originFilter)) continue;
+
+      if (rawId) seenIds.add(rawId);
+      if (normName) seenNames.add(normName);
+      deduped.push(item);
+    }
+    return deduped;
   }, [tab, scoutingData, risingData, search, positionFilter, originFilter]);
 
   const handleAddToWatchlist = async (id: string) => {
@@ -286,11 +314,11 @@ export function RegenWorld() {
               data-testid="regen-origin-filter"
             >
               <option value="ALL">All Nations</option>
-              <option value="NIGERIA">Nigeria</option>
-              <option value="GHANA">Ghana</option>
-              <option value="SENEGAL">Senegal</option>
-              <option value="ENGLAND">England</option>
-              <option value="BRAZIL">Brazil</option>
+              {availableNations.map((nat) => (
+                <option key={nat} value={nat.toUpperCase()}>
+                  {nat}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -318,12 +346,15 @@ export function RegenWorld() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 place-items-center" data-testid="regen-grid">
               {activeItems.map((item: any, idx: number) => {
                 const p = item.player || item;
-                const id = p.id || p.player_id || `prospect-${idx}`;
+                const id = p.id || p.player_id || item.player_id || `prospect-${idx}`;
+                const cleanName = String(p.name || p.player_name || `Prospect #${idx + 1}`)
+                  .replace(/\s+\d+$/, "")
+                  .trim();
                 return (
                   <RegenCard
-                    key={id}
+                    key={item.feed_id || id}
                     testid={`regen-card-${id}`}
-                    name={p.name || p.player_name || `Prospect #${idx + 1}`}
+                    name={cleanName}
                     rating={p.current_rating || p.rating || 71}
                     potential={p.potential || 88}
                     position={p.position || p.primary_position || "MID"}
@@ -334,7 +365,7 @@ export function RegenWorld() {
                     generation={p.generation ?? 1}
                     archetype={p.archetype || "Tactical Prodigy"}
                     serial={p.serial_number}
-                    price={p.market_value_coin || 12000}
+                    price={p.market_value_coin ?? item.market_value_coin ?? 350}
                     variant="full"
                     onClick={() => updateSelectedPlayer(id)}
                   />

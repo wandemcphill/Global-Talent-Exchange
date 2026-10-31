@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:gte_frontend/core/app_feedback.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
-import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 import 'package:gte_frontend/widgets/gte_formatters.dart';
 import 'package:gte_frontend/widgets/gte_metric_chip.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
@@ -24,8 +23,6 @@ class GtexJackpotRouteScreen extends StatefulWidget {
 }
 
 class _GtexJackpotRouteScreenState extends State<GtexJackpotRouteScreen> {
-  final TextEditingController _contributionAmountController =
-      TextEditingController(text: '50');
   final TextEditingController _thresholdController = TextEditingController();
   final TextEditingController _probabilityLimitController =
       TextEditingController();
@@ -46,7 +43,6 @@ class _GtexJackpotRouteScreenState extends State<GtexJackpotRouteScreen> {
   double? _walletBalance;
   String? _error;
   bool _loading = true;
-  bool _submittingContribution = false;
   bool _savingRuntime = false;
   bool _triggeringRound = false;
   bool _adminFieldsHydrated = false;
@@ -63,7 +59,6 @@ class _GtexJackpotRouteScreenState extends State<GtexJackpotRouteScreen> {
 
   @override
   void dispose() {
-    _contributionAmountController.dispose();
     _thresholdController.dispose();
     _probabilityLimitController.dispose();
     _probabilityCapController.dispose();
@@ -166,84 +161,6 @@ class _GtexJackpotRouteScreenState extends State<GtexJackpotRouteScreen> {
 
   Future<void> _openLogin() async {
     widget.onOpenLogin?.call();
-  }
-
-  Future<void> _submitContribution() async {
-    final double? amount = _parsePositiveDouble(
-      _contributionAmountController.text,
-    );
-    if (amount == null) {
-      AppFeedback.showError(context, 'Enter a valid GTEX Coin amount.');
-      return;
-    }
-    if (!_isAuthenticated) {
-      await _openLogin();
-      return;
-    }
-    final String idempotencyKey =
-        'jackpot-contrib-${DateTime.now().microsecondsSinceEpoch}';
-    final bool confirmed =
-        (await GtexConfirmSheet.show(
-          context,
-          title: 'Confirm Jackpot Contribution',
-          summary:
-              'Direct GTEX Coin contribution settles into the live jackpot pool.',
-          variant: GtexConfirmVariant.financial,
-          confirmLabel: 'Confirm Contribution',
-          idempotencyKey: idempotencyKey,
-          financialDetails: GtexConfirmFinancialDetails(
-            amountLabel: gteFormatCredits(amount),
-            currencyCode: 'GTC',
-            idempotencyKey: idempotencyKey,
-          ),
-          onConfirm: (String _) async {},
-        )) ??
-        false;
-    if (!confirmed || !mounted) {
-      return;
-    }
-    setState(() {
-      _submittingContribution = true;
-    });
-    try {
-      final GteAuthedApi api = widget.dependencies.createAuthedApi();
-      await api.post(
-        '/jackpot/contribute',
-        auth: true,
-        body: <String, Object?>{
-          'source_type': 'platform_activity',
-          'source_id': 'jackpot-ui-${DateTime.now().millisecondsSinceEpoch}',
-          'idempotency_key': idempotencyKey,
-          'entry_fee': _decimalString(amount),
-          'contribution_amount': _decimalString(amount),
-          'eligibility_score': '1.0000',
-          'metadata': <String, Object?>{
-            'source': 'gtex_jackpot_route_screen',
-            'manual': true,
-            'idempotency_key': idempotencyKey,
-          },
-        },
-      );
-      if (!mounted) {
-        return;
-      }
-      AppFeedback.showSuccess(
-        context,
-        'Jackpot contribution submitted from wallet.',
-      );
-      await _load();
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      AppFeedback.showError(context, AppFeedback.messageFor(error));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _submittingContribution = false;
-        });
-      }
-    }
   }
 
   Future<void> _saveRuntime() async {
@@ -528,66 +445,33 @@ class _GtexJackpotRouteScreenState extends State<GtexJackpotRouteScreen> {
   }
 
   Widget _buildContributionPanel(BuildContext context, _JackpotState state) {
-    if (!_isAuthenticated) {
-      return GteSurfacePanel(
-        accentColor: GteShellTheme.accentCapital,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              'Join the pool',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'Sign in to contribute GTEX Coin directly from your wallet and appear in the current jackpot participant set.',
-            ),
-            const SizedBox(height: 14),
-            FilledButton.icon(
-              onPressed: _openLogin,
-              icon: const Icon(Icons.login_outlined),
-              label: const Text('Sign in to contribute'),
-            ),
-          ],
-        ),
-      );
-    }
     return GteSurfacePanel(
       accentColor: GteShellTheme.accentCapital,
-      emphasized: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'Contribute from wallet',
+            'Automatic ecosystem funding',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 10),
           Text(
-            'Wallet available: ${gteFormatCredits(_walletBalance ?? 0)}. Direct contributions use the exact GTEX Coin amount you enter and settle immediately into the live jackpot pool.',
+            'Users and club owners do not contribute directly to the Global Jackpot. ${_percentLabel(state.contributionRate)} of eligible platform fees automatically fund the live pool (threshold: ${gteFormatCredits(state.thresholdAmount)}).',
           ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _contributionAmountController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              labelText: 'Contribution amount (GTEX Coin)',
-              hintText: '50',
+          if (_isAuthenticated && _walletBalance != null) ...<Widget>[
+            const SizedBox(height: 10),
+            Text(
+              'Active participation across matches, transfers, and competitions qualifies your account automatically. Wallet balance: ${gteFormatCredits(_walletBalance!)}.',
+              style: Theme.of(context).textTheme.bodySmall,
             ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Current round threshold: ${gteFormatCredits(state.thresholdAmount)}. Contribution rate remains visible for system-driven activity, but direct wallet contributions are now explicit.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 14),
-          FilledButton.icon(
-            onPressed: _submittingContribution ? null : _submitContribution,
-            icon: const Icon(Icons.account_balance_wallet_outlined),
-            label: Text(
-              _submittingContribution ? 'Submitting...' : 'Contribute now',
+          ] else if (!_isAuthenticated && widget.onOpenLogin != null) ...<Widget>[
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: _openLogin,
+              icon: const Icon(Icons.login_outlined),
+              label: const Text('Sign in to track eligibility'),
             ),
-          ),
+          ],
         ],
       ),
     );

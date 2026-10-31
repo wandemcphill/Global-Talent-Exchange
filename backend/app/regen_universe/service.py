@@ -5,6 +5,26 @@ from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta, timezone
 import os
 from random import Random
+import re
+
+
+def _clean_regen_display_name(raw_name: str | None) -> str:
+    cleaned = re.sub(r"\s+\d+$", "", str(raw_name or "").strip()).strip()
+    return cleaned or str(raw_name or "").strip()
+
+
+def _calculate_regen_gsi_price(current_gsi: int, potential_gsi: int, *, is_legend: bool = False) -> int:
+    cur = max(40, min(99, int(current_gsi)))
+    pot = max(cur, min(99, int(potential_gsi)))
+    eval_gsi = float(pot) if is_legend else (0.40 * cur + 0.60 * pot)
+    base_price = 250.0 * ((eval_gsi / 90.0) ** 3.2)
+    if eval_gsi <= 70.0:
+        base_price *= 0.40
+    elif eval_gsi < 75.0:
+        base_price *= 0.40 + 0.60 * ((eval_gsi - 70.0) / 5.0)
+    multiplier = 3.6 if is_legend else 2.0
+    return max(10, int(round(base_price * multiplier)))
+
 
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
@@ -843,7 +863,8 @@ class RegenUniverseService:
 
     @staticmethod
     def _seed_market_value(seed: NationalRegenSeed) -> int:
-        return max(75_000, (seed.current_rating * 1_800) + (seed.potential_rating * 2_400))
+        is_leg = seed.seed_type == "legendary_regen" or seed.rarity_tier == "legendary"
+        return _calculate_regen_gsi_price(seed.current_rating, seed.potential_rating, is_legend=is_leg)
 
     @staticmethod
     def _weighted_potential_roll(rng: Random) -> int:
@@ -999,6 +1020,7 @@ class RegenUniverseService:
             "growth_curve": round(prospect.growth_curve, 4),
             "club_id": prospect.club_id,
             "source_type": prospect.source_type,
+            "market_value_coin": prospect.market_value_coin,
             "market_access": self._prospect_market_access_payload(prospect),
         }
 
@@ -1091,7 +1113,7 @@ class RegenUniverseService:
             lookup_id=lookup_id,
             player_id=None,
             regen_id=lookup_id,
-            name=seed.display_name,
+            name=_clean_regen_display_name(seed.display_name),
             age=self._seed_age(seed),
             nationality=self._resolve_country_name(seed.country_code, fallback_name=seed.country_name),
             nationality_code=seed.country_code,
@@ -1189,7 +1211,7 @@ class RegenUniverseService:
                 uniqueness_score=round(0.58 + (rng.random() * 0.28), 4),
                 story_snippet=f"{_position_story_label(position).title()} prospect climbing out of the {country['name']} youth stream.",
                 discovery_badges=("Generated", "Scout Watch"),
-                market_value_coin=max(50_000, (current_rating * 1_550) + (potential * 2_100)),
+                market_value_coin=_calculate_regen_gsi_price(current_rating, potential),
                 metadata={"generated": True},
             )
             profile = self._synthetic_profile_from_prospect(prospect)
@@ -1199,7 +1221,7 @@ class RegenUniverseService:
     def _discovery_pool(self, *, limit: int, age_min: int = 15, age_max: int = 21) -> list[_UniverseProspect]:
         market_service = RegenMarketService(self.session)
         prospects: list[_UniverseProspect] = []
-        fetch_limit = max(limit * 3, 60)
+        fetch_limit = max(limit * 5, 100)
         for regen in self.session.scalars(
             select(RegenProfile).order_by(RegenProfile.generated_at.desc()).limit(fetch_limit)
         ):
@@ -1225,10 +1247,18 @@ class RegenUniverseService:
             prospects.append(self._prospect_from_seed(seed))
         if not prospects and not _protected_runtime_enabled():
             prospects.extend(self._generate_fallback_prospects(limit=max(limit, 12), age_min=age_min, age_max=age_max))
-        unique: dict[str, _UniverseProspect] = {}
+        unique: list[_UniverseProspect] = []
+        seen_ids: set[str] = set()
+        seen_names: set[str] = set()
         for prospect in prospects:
-            unique.setdefault(prospect.lookup_id, prospect)
-        return list(unique.values())
+            norm_name = _clean_regen_display_name(prospect.name).lower()
+            if prospect.lookup_id in seen_ids or (norm_name and norm_name in seen_names):
+                continue
+            seen_ids.add(prospect.lookup_id)
+            if norm_name:
+                seen_names.add(norm_name)
+            unique.append(prospect)
+        return unique
 
     def _prospect_lookup(self, player_id: str) -> _UniverseProspect | None:
         normalized = (player_id or "").strip()
@@ -1967,51 +1997,13 @@ class RegenUniverseService:
 
     def list_scouting_feed(self, *, limit: int = 20, offset: int = 0) -> dict[str, object]:
         items: list[dict[str, object]] = []
-        for prospect in self._discovery_pool(limit=max((offset + limit) * 2, 20), age_min=15, age_max=21):
-            items.append(
-                {
-                    "feed_id": f"discover:{prospect.lookup_id}",
-                    "feed_type": "new_regen_discovered",
-                    "player_id": prospect.lookup_id,
-                    "regen_id": prospect.regen_id,
-                    "player": self._player_summary_payload(prospect),
-                    "title": f"{prospect.age}-year-old {_position_story_label(prospect.position)} from {prospect.nationality} discovered",
-                    "summary": prospect.story_snippet or self._scouting_note_for_prospect(prospect),
-                    "occurred_at": prospect.generated_at,
-                    "importance": round(0.48 + (prospect.uniqueness_score * 0.45), 4),
-                    "badges": list(dict.fromkeys([prospect.source_type, *prospect.discovery_badges])),
-                }
-            )
-            if (prospect.potential - prospect.current_rating) >= 14:
-                items.append(
-                    {
-                        "feed_id": f"spike:{prospect.lookup_id}",
-                        "feed_type": "potential_spike",
-                        "player_id": prospect.lookup_id,
-                        "regen_id": prospect.regen_id,
-                        "player": self._player_summary_payload(prospect),
-                        "title": f"{_position_story_label(prospect.position).title()} potential spike tracked",
-                        "summary": f"{prospect.name} is carrying a {prospect.current_rating} to {prospect.potential} development window.",
-                        "occurred_at": prospect.generated_at,
-                        "importance": round(0.54 + ((prospect.potential - prospect.current_rating) / 100.0), 4),
-                        "badges": ["potential_spike", _growth_curve_label(prospect.growth_curve)],
-                    }
-                )
-            if prospect.potential >= 90 or prospect.uniqueness_score >= 0.82:
-                items.append(
-                    {
-                        "feed_id": f"hidden:{prospect.lookup_id}",
-                        "feed_type": "hidden_gem",
-                        "player_id": prospect.lookup_id,
-                        "regen_id": prospect.regen_id,
-                        "player": self._player_summary_payload(prospect),
-                        "title": f"{prospect.name} is rising as a hidden gem",
-                        "summary": "Scouts are flagging rare upside, quick development potential, and immediate national-team intrigue.",
-                        "occurred_at": prospect.generated_at,
-                        "importance": round(0.58 + (prospect.uniqueness_score * 0.4), 4),
-                        "badges": ["hidden_gem", prospect.source_type],
-                    }
-                )
+        seen_prospect_ids: set[str] = set()
+        seen_prospect_names: set[str] = set()
+        type_counts: dict[str, int] = {
+            "hidden_gem": 0,
+            "potential_spike": 0,
+            "new_regen_discovered": 0,
+        }
 
         market_service = RegenMarketService(self.session)
         recent_reports = list(
@@ -2026,6 +2018,14 @@ class RegenUniverseService:
             if regen is None:
                 continue
             profile = market_service.get_profile_view(regen.id)
+            norm_name = _clean_regen_display_name(profile.display_name).lower()
+            if profile.player_id in seen_prospect_ids or (norm_name and norm_name in seen_prospect_names):
+                continue
+            if profile.player_id:
+                seen_prospect_ids.add(profile.player_id)
+            if norm_name:
+                seen_prospect_names.add(norm_name)
+            type_counts["hidden_gem"] += 1
             items.append(
                 {
                     "feed_id": f"scout:{report.id}",
@@ -2044,6 +2044,10 @@ class RegenUniverseService:
                         "growth_curve": round(profile.growth_curve, 4),
                         "club_id": profile.club_id,
                         "source_type": "regen",
+                        "market_value_coin": _calculate_regen_gsi_price(
+                            profile.current_rating or profile.current_gsi,
+                            profile.potential or profile.current_rating or profile.current_gsi,
+                        ),
                     },
                     "title": f"Scouting alert on {profile.display_name}",
                     "summary": report.summary_text,
@@ -2052,6 +2056,77 @@ class RegenUniverseService:
                     "badges": list(report.tags_json),
                 }
             )
+
+        for prospect in self._discovery_pool(limit=max((offset + limit) * 2, 24), age_min=15, age_max=21):
+            norm_name = _clean_regen_display_name(prospect.name).lower()
+            if (
+                prospect.lookup_id in seen_prospect_ids
+                or (prospect.player_id and prospect.player_id in seen_prospect_ids)
+                or (norm_name and norm_name in seen_prospect_names)
+            ):
+                continue
+            player_payload = self._player_summary_payload(prospect)
+            candidate_entries: list[dict[str, object]] = [
+                {
+                    "feed_id": f"discover:{prospect.lookup_id}",
+                    "feed_type": "new_regen_discovered",
+                    "player_id": prospect.lookup_id,
+                    "regen_id": prospect.regen_id,
+                    "player": player_payload,
+                    "title": f"{prospect.age}-year-old {_position_story_label(prospect.position)} from {prospect.nationality} discovered",
+                    "summary": prospect.story_snippet or self._scouting_note_for_prospect(prospect),
+                    "occurred_at": prospect.generated_at,
+                    "importance": round(0.48 + (prospect.uniqueness_score * 0.45), 4),
+                    "badges": list(dict.fromkeys([prospect.source_type, *prospect.discovery_badges])),
+                }
+            ]
+            if (prospect.potential - prospect.current_rating) >= 14:
+                candidate_entries.append(
+                    {
+                        "feed_id": f"spike:{prospect.lookup_id}",
+                        "feed_type": "potential_spike",
+                        "player_id": prospect.lookup_id,
+                        "regen_id": prospect.regen_id,
+                        "player": player_payload,
+                        "title": f"{_position_story_label(prospect.position).title()} potential spike tracked",
+                        "summary": f"{prospect.name} is carrying a {prospect.current_rating} to {prospect.potential} development window.",
+                        "occurred_at": prospect.generated_at,
+                        "importance": round(0.54 + ((prospect.potential - prospect.current_rating) / 100.0), 4),
+                        "badges": ["potential_spike", _growth_curve_label(prospect.growth_curve)],
+                    }
+                )
+            if prospect.potential >= 90 or prospect.uniqueness_score >= 0.82:
+                candidate_entries.append(
+                    {
+                        "feed_id": f"hidden:{prospect.lookup_id}",
+                        "feed_type": "hidden_gem",
+                        "player_id": prospect.lookup_id,
+                        "regen_id": prospect.regen_id,
+                        "player": player_payload,
+                        "title": f"{prospect.name} is rising as a hidden gem",
+                        "summary": "Scouts are flagging rare upside, quick development potential, and immediate national-team intrigue.",
+                        "occurred_at": prospect.generated_at,
+                        "importance": round(0.58 + (prospect.uniqueness_score * 0.4), 4),
+                        "badges": ["hidden_gem", prospect.source_type],
+                    }
+                )
+            merged_badges: list[str] = []
+            for cand in candidate_entries:
+                for badge in cand["badges"]:  # type: ignore[union-attr]
+                    if badge not in merged_badges:
+                        merged_badges.append(str(badge))
+            chosen = min(
+                candidate_entries,
+                key=lambda cand: (type_counts.get(str(cand["feed_type"]), 0), -float(cand["importance"])),  # type: ignore[arg-type]
+            )
+            chosen["badges"] = merged_badges
+            type_counts[str(chosen["feed_type"])] = type_counts.get(str(chosen["feed_type"]), 0) + 1
+            seen_prospect_ids.add(prospect.lookup_id)
+            if prospect.player_id:
+                seen_prospect_ids.add(prospect.player_id)
+            if norm_name:
+                seen_prospect_names.add(norm_name)
+            items.append(chosen)
 
         recent_awards = self.session.execute(
             select(RegenAwardWinner, RegenAward)

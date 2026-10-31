@@ -22,7 +22,7 @@ services:
       # i.e. 24 connections at full stretch, under the 30-connection Supabase
       # session-pooler limit.  Raise these together or not at all.
       - key: WEB_CONCURRENCY
-        value: "2"
+        value: "1"
       - key: GTE_DB_POOL_SIZE
         value: "4"
       - key: GTE_DB_MAX_OVERFLOW

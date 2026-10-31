@@ -447,21 +447,88 @@ def snapshot_value(session: Session, state: OwnerClubState) -> None:
 
 
 def player_quotes(session: Session, players: list) -> dict[str, tuple[int, int]]:
+    from app.models.player_token_market import PlayerShareMarket
     from app.players.read_models import PlayerSummaryReadModel
 
     ids = [p.id for p in players]
-    credits = (
-        dict(
-            session.execute(
-                select(PlayerSummaryReadModel.player_id, PlayerSummaryReadModel.current_value_credits).where(
-                    PlayerSummaryReadModel.player_id.in_(ids)
-                )
-            ).all()
-        )
-        if ids
-        else {}
+    if not ids:
+        return {}
+    credits = dict(
+        session.execute(
+            select(PlayerSummaryReadModel.player_id, PlayerSummaryReadModel.current_value_credits).where(
+                PlayerSummaryReadModel.player_id.in_(ids)
+            )
+        ).all()
     )
-    return {p.id: engine.market_quote(p.market_value_eur, credits.get(p.id)) for p in players}
+    markets = {
+        m.player_id: m
+        for m in session.scalars(select(PlayerShareMarket).where(PlayerShareMarket.player_id.in_(ids))).all()
+    }
+    quotes: dict[str, tuple[int, int]] = {}
+    for p in players:
+        dna = dict(p.dna_profile or {}) if isinstance(getattr(p, "dna_profile", None), dict) else {}
+        market = markets.get(p.id)
+        m_meta = (
+            dict(market.metadata_json or {}) if market is not None and isinstance(market.metadata_json, dict) else {}
+        )
+        is_legend = (
+            str(getattr(p, "real_player_tier", "") or "").strip().lower() == "legend"
+            or str(getattr(p, "source_provider", "") or "").strip().lower() == "gtex_legend_prime"
+        )
+        cur_candidates = [
+            dna.get("overall"),
+            dna.get("current_rating"),
+            dna.get("sofifa_overall"),
+            m_meta.get("current_gsi"),
+            m_meta.get("gsi"),
+        ]
+        pot_candidates = [
+            dna.get("potential"),
+            dna.get("potential_rating"),
+            dna.get("sofifa_potential"),
+            getattr(p, "potential", None),
+            m_meta.get("potential_gsi"),
+        ]
+        cur_gsi = max(
+            (int(float(v)) for v in cur_candidates if isinstance(v, (int, float)) and float(v) > 0), default=0
+        )
+        pot_gsi = max(
+            (int(float(v)) for v in pot_candidates if isinstance(v, (int, float)) and float(v) > 0), default=0
+        )
+        if is_legend and max(cur_gsi, pot_gsi) > 0:
+            rating = int(engine.clamp(max(cur_gsi, pot_gsi), 40, 99))
+            pot_gsi = rating
+        elif cur_gsi > 0:
+            rating = int(engine.clamp(cur_gsi, 40, 99))
+            pot_gsi = max(rating, pot_gsi)
+        else:
+            _, rating = engine.market_quote(getattr(p, "market_value_eur", None), credits.get(p.id))
+            pot_gsi = rating
+
+        if (
+            market is not None
+            and getattr(market, "status", "active") == "active"
+            and float(market.share_price_coin or 0) > 0
+        ):
+            price = max(15, int(round(float(market.share_price_coin))))
+        elif cur_gsi > 0 or pot_gsi > 0:
+            price = max(
+                15,
+                int(
+                    round(
+                        engine.calculate_gsi_price(
+                            rating,
+                            max(rating, pot_gsi),
+                            is_real=bool(getattr(p, "is_real_player", True)),
+                            is_legend=is_legend,
+                        )
+                    )
+                ),
+            )
+        else:
+            price, _ = engine.market_quote(getattr(p, "market_value_eur", None), credits.get(p.id))
+        quotes[p.id] = (price, rating)
+    return quotes
 
 
 def sign_market_player(session: Session, user_id: str, club_id: str, player_id: str) -> OwnerSquadPlayer:
@@ -485,6 +552,8 @@ def sign_market_player(session: Session, user_id: str, club_id: str, player_id: 
     player = session.get(Player, player_id)
     if player is None:
         raise OwnerError("player_not_found", 404)
+    if not bool(getattr(player, "is_tradable", True)):
+        raise OwnerError("player_retired", 409)
     price, rating = player_quotes(session, [player])[player_id]
     try:
         ledger.record(
@@ -652,6 +721,7 @@ def autopick_squad(
     query = (
         select(Player)
         .join(PlayerSummaryReadModel, Player.id == PlayerSummaryReadModel.player_id)
+        .where(Player.is_tradable.is_(True))
         .order_by(PlayerSummaryReadModel.current_value_credits.asc())
     )
     if signed_refs:

@@ -225,6 +225,7 @@ def _seed_real_player(
                 },
             )
         )
+    session.flush()
 
 
 def _seed_non_real_player(session: Session) -> None:
@@ -1253,6 +1254,159 @@ def test_admin_player_matching_summary_and_weight_refresh() -> None:
         refreshed_weights = {item["factor"]: item["weight"] for item in refresh_payload["weights"]}
         assert refreshed_weights["history_position_bonus"] > 0.1
         assert refreshed_weights["history_country_bonus"] > 0.05
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_real_player_universe_supports_profileless_fm23_legends_excludes_retired_and_quotes_gsi() -> None:
+    from decimal import Decimal
+    from app.models.player_token_market import PlayerShareMarket
+    from app.owner_console import service as owner_service
+
+    engine, session = _build_session()
+    try:
+        ng = Country(
+            id="country-ng",
+            source_provider="fm23_genie_scout",
+            provider_external_id="NG",
+            name="Nigeria",
+            alpha2_code="NG",
+        )
+        ar = Country(
+            id="country-ar",
+            source_provider="fm23_genie_scout",
+            provider_external_id="AR",
+            name="Argentina",
+            alpha2_code="AR",
+        )
+        session.add_all([ng, ar])
+        session.flush()
+
+        osimhen_fm = Player(
+            id="player-osimhen-fm23",
+            source_provider="fm23_genie_scout",
+            provider_external_id="fm23-osimhen",
+            country_id=ng.id,
+            full_name="Victor Osimhen",
+            canonical_display_name="Victor Osimhen",
+            position="ST",
+            normalized_position="ST",
+            date_of_birth=date(1998, 12, 29),
+            potential=94,
+            is_real_player=True,
+            is_tradable=True,
+            real_player_tier="marquee",
+            real_world_club_name="Galatasaray SK",
+            real_world_league_name="Süper Lig",
+            current_market_reference_value=100_000_000.0,
+            dna_profile={
+                "overall": 90,
+                "potential": 94,
+                "current_rating": 90,
+                "potential_rating": 94,
+                "portraitUrl": "https://cdn.sportmonks.com/images/soccer/players/29/455805.png",
+            },
+        )
+        osimhen_retired = Player(
+            id="player-osimhen-retired",
+            source_provider="sportmonks",
+            provider_external_id="sm-osimhen",
+            country_id=ng.id,
+            full_name="Victor James Osimhen",
+            canonical_display_name="Victor James Osimhen",
+            position="ST",
+            normalized_position="ST",
+            date_of_birth=date(1998, 12, 29),
+            is_real_player=True,
+            is_tradable=False,
+            real_player_tier="watchlist",
+            real_world_club_name="Galatasaray",
+            dna_profile={"overall": 65},
+        )
+        messi_legend = Player(
+            id="player-messi-legend",
+            source_provider="fm23_genie_scout",
+            provider_external_id="fm23-messi-legend",
+            country_id=ar.id,
+            full_name="Lionel Messi",
+            canonical_display_name="Lionel Messi",
+            position="RW",
+            normalized_position="RW",
+            date_of_birth=date(1987, 6, 24),
+            potential=99,
+            is_real_player=True,
+            is_tradable=True,
+            real_player_tier="legend",
+            real_world_club_name="GTEX Icons",
+            dna_profile={
+                "current_rating": 99,
+                "potential_rating": 99,
+                "portraitUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c8/Lionel_Messi_WC2022.jpg/330px-Lionel_Messi_WC2022.jpg",
+            },
+        )
+        session.add_all([osimhen_fm, osimhen_retired, messi_legend])
+        session.flush()
+
+        session.add_all(
+            [
+                PlayerShareMarket(
+                    id="mkt-osimhen-fm23",
+                    player_id=osimhen_fm.id,
+                    total_shares=200,
+                    circulating_shares=40,
+                    share_price_coin=Decimal("271.9700"),
+                    status="active",
+                    metadata_json={"current_gsi": 90, "potential_gsi": 94},
+                ),
+                PlayerShareMarket(
+                    id="mkt-messi-legend",
+                    player_id=messi_legend.id,
+                    total_shares=1,
+                    circulating_shares=1,
+                    share_price_coin=Decimal("1220.9500"),
+                    status="active",
+                    metadata_json={"gsi": 99},
+                ),
+            ]
+        )
+        session.commit()
+
+        def _session_override():
+            yield session
+
+        app = FastAPI()
+        app.include_router(players_router)
+        app.dependency_overrides[get_session] = _session_override
+
+        with TestClient(app) as client:
+            osimhen_resp = client.get("/players", params={"search": "Osimhen"})
+            legend_resp = client.get("/players", params={"tier": "legend"})
+            fwd_resp = client.get("/players", params={"position": "forward"})
+            detail_resp = client.get(f"/players/real-universe/{osimhen_fm.id}")
+
+        assert osimhen_resp.status_code == 200
+        osimhen_items = osimhen_resp.json()["players"]
+        assert [item["player_id"] for item in osimhen_items] == ["player-osimhen-fm23"]
+
+        assert legend_resp.status_code == 200
+        legend_items = legend_resp.json()["players"]
+        assert [item["player_id"] for item in legend_items] == ["player-messi-legend"]
+
+        assert fwd_resp.status_code == 200
+        assert {item["player_id"] for item in fwd_resp.json()["players"]} == {
+            "player-osimhen-fm23",
+            "player-messi-legend",
+        }
+
+        assert detail_resp.status_code == 200
+        assert detail_resp.json()["image_url"] == "https://cdn.sportmonks.com/images/soccer/players/29/455805.png"
+
+        quotes = owner_service.player_quotes(session, [osimhen_fm, messi_legend])
+        o_price, o_rating = quotes[osimhen_fm.id]
+        m_price, m_rating = quotes[messi_legend.id]
+        assert (int(o_price), o_rating) == (272, 90)
+        assert (int(m_price), m_rating) == (1221, 99)
     finally:
         session.close()
         engine.dispose()

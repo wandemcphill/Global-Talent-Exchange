@@ -190,7 +190,6 @@ EXECUTIVE_STAFF_CATALOG: list[dict[str, Any]] = [
         "bio": "Legendary sporting executive who engineered Liverpool's domestic and European resurgence through data-driven mastery.",
         "specialty": "Elite Negotiation & Analytics Architecture",
     },
-
     # --- First-Team Managers ---
     {
         "id": "gtex-staff-coach",
@@ -261,7 +260,6 @@ EXECUTIVE_STAFF_CATALOG: list[dict[str, Any]] = [
         "bio": "Multi-time European champion with an eyebrow of steel, master of dressing-room harmony and tactical adjustments in big finals.",
         "specialty": "Champions League Pedigree & Star Management",
     },
-
     # --- Head of Youth Development ---
     {
         "id": "hoyd_femi_ogunleye",
@@ -332,7 +330,6 @@ EXECUTIVE_STAFF_CATALOG: list[dict[str, Any]] = [
         "bio": "Architect of golden generations who instills elite tactical maturity into prospects before their 18th birthday.",
         "specialty": "Generational Wonderkid Incubation",
     },
-
     # --- Chief Scout ---
     {
         "id": "scout_kelechi_nwosu",
@@ -403,7 +400,6 @@ EXECUTIVE_STAFF_CATALOG: list[dict[str, Any]] = [
         "bio": "Built Monaco and Lille championship squads; holds an unmatched global scouting network spanning South America to Asia.",
         "specialty": "Billion-Dollar Scouting Pipeline",
     },
-
     # --- Medical Director ---
     {
         "id": "med_dr_amaka_eze",
@@ -589,12 +585,38 @@ def price_from_value(value_eur: float | None) -> int:
     return int(clamp(float(value_eur or 0) / 10_000, 800, 25_000))
 
 
+def calculate_gsi_price(
+    current_gsi: int,
+    potential_gsi: int,
+    *,
+    is_real: bool = True,
+    is_legend: bool = False,
+) -> float:
+    """Official GTEX GSI pricing curve (250 GTX @ 90 Real, 500 @ 90 Regen, 900 @ 90 Legend, 60% discount <=70 GSI)."""
+    cur = max(40, min(99, int(current_gsi)))
+    pot = max(cur, min(99, int(potential_gsi)))
+    eval_gsi = float(pot) if is_legend else (0.40 * cur + 0.60 * pot)
+    base_price = 250.0 * ((eval_gsi / 90.0) ** 3.2)
+    if eval_gsi <= 70.0:
+        base_price *= 0.40
+    elif eval_gsi < 75.0:
+        base_price *= 0.40 + 0.60 * ((eval_gsi - 70.0) / 5.0)
+    if is_legend:
+        return round(base_price * 3.6, 2)
+    if not is_real:
+        return round(base_price * 2.0, 2)
+    return round(base_price, 2)
+
+
 def market_quote(value_eur: float | None, value_credits: float | None) -> tuple[int, int]:
-    """(price, rating) from EUR value, else from the repo's GTEX credit valuation."""
+    """Fallback (price, rating) when explicit GSI / share_price_coin is absent."""
     if value_eur:
-        return price_from_value(value_eur), rating_from_value(value_eur)
+        rating = rating_from_value(value_eur)
+        return max(15, int(round(calculate_gsi_price(rating, rating)))), rating
     credits = max(float(value_credits or 0), 0.0)
-    return int(clamp(credits * 120, 800, 25_000)), int(clamp(45 + 8.5 * math.log(credits + 1), 50, 88))
+    rating = int(clamp(45 + 8.5 * math.log(credits + 1), 50, 92))
+    price = int(round(credits)) if credits >= 15 else int(round(calculate_gsi_price(rating, rating)))
+    return max(15, price), rating
 
 
 def normalize_position(raw: str | None) -> str:

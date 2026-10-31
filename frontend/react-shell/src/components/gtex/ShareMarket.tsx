@@ -1,32 +1,58 @@
 import React, { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Sparkles, Star } from "lucide-react";
+import { Crown, Search, Sparkles, Star } from "lucide-react";
 import { api } from "@/lib/api";
 import { fmt } from "@/lib/owner";
 import { Btn, Loading } from "@/components/gtex/ui";
 import { posShort } from "@/components/gtex/PlayerCard";
 import { PlayerDrawer } from "@/components/gtex/PlayerDrawer";
 
-function Thumb({ src, name, regen }: { src?: string | null; name: string; regen?: boolean }) {
+function Thumb({ src, name, regen, legend }: { src?: string | null; name: string; regen?: boolean; legend?: boolean }) {
   const [broken, setBroken] = useState(false);
-  const ring = regen ? "border-emerald-400/60 bg-emerald-950/60" : "border-white/15 bg-slate-900";
+  const ring = legend
+    ? "border-amber-400/70 bg-amber-950/60"
+    : regen
+    ? "border-emerald-400/60 bg-emerald-950/60"
+    : "border-white/15 bg-slate-900";
   if (src && !broken) return <img src={src} alt="" loading="lazy" onError={() => setBroken(true)} className={`h-10 w-10 shrink-0 rounded-sm border object-cover ${ring}`} />;
   return <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border text-xs font-bold text-white/60 ${ring}`}>{name.split(" ").map((s) => s[0]).slice(0, 2).join("")}</span>;
 }
 
-function Filters({ regenOnly, setRegenOnly, nation, setNation, sort, setSort }: any) {
-  const source = regenOnly ? "regen" : undefined;
-  const { data: nations } = useQuery({ queryKey: ["share-market-nations", source], queryFn: async () => (await api.get("/v2/players/markets/nations", { params: source ? { source } : {} })).data, staleTime: 300_000 });
+function Filters({ sourceMode, setSourceMode, nation, setNation, sort, setSort }: any) {
+  const source = sourceMode || undefined;
+  const { data: nations } = useQuery({
+    queryKey: ["share-market-nations", source],
+    queryFn: async () => (await api.get("/v2/players/markets/nations", { params: source ? { source } : {} })).data,
+    staleTime: 300_000,
+  });
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <button type="button" data-testid="share-market-regen-toggle" onClick={() => setRegenOnly(!regenOnly)} className={`gx-btn ${regenOnly ? "gx-btn-primary" : "gx-btn-secondary"}`}>
+      <button
+        type="button"
+        data-testid="share-market-legend-toggle"
+        onClick={() => setSourceMode(sourceMode === "legend" ? "" : "legend")}
+        className={`gx-btn ${
+          sourceMode === "legend"
+            ? "border-amber-400 bg-amber-500 text-black font-bold"
+            : "border-amber-400/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
+        }`}
+      >
+        <Crown size={13} />Legends
+      </button>
+      <button
+        type="button"
+        data-testid="share-market-regen-toggle"
+        onClick={() => setSourceMode(sourceMode === "regen" ? "" : "regen")}
+        className={`gx-btn ${sourceMode === "regen" ? "gx-btn-primary" : "gx-btn-secondary"}`}
+      >
         <Sparkles size={13} />Regens only
       </button>
       <select data-testid="share-market-nation-select" className="gx-input w-56" value={nation} onChange={(e) => setNation(e.target.value)}>
         <option value="">All nations</option>
         {(nations || []).map((n: any) => <option key={n.name} value={n.name}>{`${n.name} (${fmt(n.count)})`}</option>)}
       </select>
-      <select data-testid="share-market-sort-select" className="gx-input w-44" value={sort} onChange={(e) => setSort(e.target.value)}>
+      <select data-testid="share-market-sort-select" className="gx-input w-48" value={sort} onChange={(e) => setSort(e.target.value)}>
+        <option value="value">Sort: Value / GSI</option>
         <option value="name">Sort: Name</option>
         <option value="wonderkid">Sort: Wonderkid</option>
       </select>
@@ -63,12 +89,13 @@ export function ShareMarket() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [q, setQ] = useState("");
-  const [regenOnly, setRegenOnly] = useState(false);
+  const [sourceMode, setSourceMode] = useState<"" | "regen" | "legend">("");
   const [nation, setNation] = useState("");
-  const [sort, setSort] = useState("name");
+  const [sort, setSort] = useState("value");
   const [open, setOpen] = useState<string | null>(null);
   const wonder = sort === "wonderkid";
-  const regenView = regenOnly || wonder;
+  const effectiveSource = wonder ? "regen" : sourceMode;
+
   useEffect(() => {
     const t = setTimeout(() => {
       setPage(1);
@@ -76,12 +103,26 @@ export function ShareMarket() {
     }, 450);
     return () => clearTimeout(t);
   }, [search]);
+
   useEffect(() => {
     setPage(1);
-  }, [regenOnly, nation, sort]);
+  }, [sourceMode, nation, sort]);
+
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["share-markets", page, q, regenView, nation, sort],
-    queryFn: async () => (await api.get("/v2/players/markets", { params: { page, per_page: 15, ...(q ? { search: q } : {}), ...(regenView ? { source: "regen" } : {}), ...(nation ? { nation } : {}), ...(wonder ? { sort } : {}) } })).data,
+    queryKey: ["share-markets", page, q, effectiveSource, nation, sort],
+    queryFn: async () =>
+      (
+        await api.get("/v2/players/markets", {
+          params: {
+            page,
+            per_page: 15,
+            ...(q ? { search: q } : {}),
+            ...(effectiveSource ? { source: effectiveSource } : {}),
+            ...(nation ? { nation } : {}),
+            ...(sort ? { sort } : {}),
+          },
+        })
+      ).data,
     placeholderData: (prev: any) => prev,
   });
   const pg = data?.pagination;
@@ -92,33 +133,51 @@ export function ShareMarket() {
           <Search size={14} className="absolute left-3 top-3 text-slate-500" />
           <input data-testid="share-market-search" className="gx-input pl-9" placeholder="Search issued player markets" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <Filters regenOnly={regenView} setRegenOnly={setRegenOnly} nation={nation} setNation={setNation} sort={sort} setSort={setSort} />
+        <Filters sourceMode={effectiveSource} setSourceMode={setSourceMode} nation={nation} setNation={setNation} sort={sort} setSort={setSort} />
       </div>
       {nation && <WonderkidSpotlight nation={nation} onOpen={setOpen} />}
       {isLoading ? <Loading label={q ? `Searching “${q}”…` : "Loading share markets"} /> : (
         <div className={`gx-scroll overflow-x-auto transition-opacity ${isFetching ? "opacity-50" : ""}`} data-testid="share-market-results">
-          <table className="gx-table w-full min-w-[680px]">
-            <thead><tr><th>Player</th><th>Pos</th>{regenView && <th>OVR / POT</th>}<th>Club</th><th>Share price</th><th>Circulating</th><th>Liquidity</th></tr></thead>
+          <table className="gx-table w-full min-w-[700px]">
+            <thead><tr><th>Player</th><th>Pos</th><th>OVR / POT</th><th>Club</th><th>Share price</th><th>Circulating</th><th>Liquidity</th></tr></thead>
             <tbody>
-              {(data?.items || []).map((m: any) => (
-                <tr key={m.player_id} data-testid={`share-row-${m.player_id}`} onClick={() => setOpen(m.player_id)} className="cursor-pointer transition-colors hover:bg-white/[0.03]">
-                  <td>
-                    <div className="flex items-center gap-3">
-                      <Thumb src={m.image_url} name={m.player_name} regen={m.is_regen} />
-                      <div className="min-w-0">
-                        <p className="truncate font-medium text-white">{m.player_name}{m.is_regen && <span className="ml-2 rounded-sm bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-300" data-testid={`share-row-regen-${m.player_id}`}>Regen</span>}</p>
-                        <p className="truncate text-xs text-slate-500">{m.nationality}</p>
+              {(data?.items || []).map((m: any) => {
+                const isLegend = Boolean(m.is_legend) || String(m.real_player_tier || "").toLowerCase() === "legend";
+                return (
+                  <tr key={m.player_id} data-testid={`share-row-${m.player_id}`} onClick={() => setOpen(m.player_id)} className="cursor-pointer transition-colors hover:bg-white/[0.03]">
+                    <td>
+                      <div className="flex items-center gap-3">
+                        <Thumb src={m.image_url} name={m.player_name} regen={m.is_regen} legend={isLegend} />
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-white">
+                            {m.player_name}
+                            {isLegend && (
+                              <span className="ml-2 rounded-sm bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-300" data-testid={`share-row-legend-${m.player_id}`}>
+                                Legend
+                              </span>
+                            )}
+                            {!isLegend && m.is_regen && (
+                              <span className="ml-2 rounded-sm bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-300" data-testid={`share-row-regen-${m.player_id}`}>
+                                Regen
+                              </span>
+                            )}
+                          </p>
+                          <p className="truncate text-xs text-slate-500">{m.nationality}</p>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="gx-mono">{posShort(m.position)}</td>
-                  {regenView && <td className="gx-mono text-xs" data-testid={`share-row-potential-${m.player_id}`}>{m.rating ?? "-"} <span className="text-amber-300">→ {m.potential ?? "-"}</span>{m.age != null && <span className="ml-1 text-slate-500">· {m.age}y</span>}</td>}
-                  <td className="text-xs text-slate-400">{m.current_club_name}</td>
-                  <td className="gx-mono text-emerald-300">{fmt(m.share_price_coin, 4)}</td>
-                  <td className="gx-mono">{m.circulating_shares}/{m.total_shares}</td>
-                  <td className="gx-mono">{fmt(m.liquidity_coin, 2)}</td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="gx-mono">{posShort(m.position)}</td>
+                    <td className="gx-mono text-xs" data-testid={`share-row-potential-${m.player_id}`}>
+                      {m.rating ?? "-"} <span className="text-amber-300">→ {m.potential ?? m.rating ?? "-"}</span>
+                      {m.age != null && <span className="ml-1 text-slate-500">· {m.age}y</span>}
+                    </td>
+                    <td className="text-xs text-slate-400">{m.current_club_name}</td>
+                    <td className="gx-mono text-emerald-300">{fmt(m.share_price_coin, 2)}</td>
+                    <td className="gx-mono">{m.circulating_shares}/{m.total_shares}</td>
+                    <td className="gx-mono">{fmt(m.liquidity_coin, 2)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {data?.items?.length === 0 && <p className="py-6 text-center text-sm text-slate-500" data-testid="share-market-empty">No markets match these filters.</p>}

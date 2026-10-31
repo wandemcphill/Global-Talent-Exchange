@@ -87,7 +87,7 @@ def test_jackpot_trigger_under_worker_load(client, app, app_session_factory):
         current_round = runtime.jackpot.ensure_open_round(session)
         current_round.threshold_amount = Decimal("50.0000")
         session.commit()
-    response = client.post(
+    forbidden = client.post(
         "/jackpot/contribute",
         headers=headers,
         json={
@@ -98,7 +98,18 @@ def test_jackpot_trigger_under_worker_load(client, app, app_session_factory):
             "metadata": {"scenario": "jackpot_trigger_under_worker_load"},
         },
     )
-    assert response.status_code == 201, response.text
+    assert forbidden.status_code == 403, forbidden.text
+    with app_session_factory() as session:
+        runtime.jackpot.record_contribution(
+            session,
+            participant_user_id=user.id,
+            source_type="platform_activity",
+            source_id="test-jackpot-load",
+            entry_fee=Decimal("600.0000"),
+            eligibility_score=Decimal("1.0000"),
+            metadata={"scenario": "jackpot_trigger_under_worker_load"},
+        )
+        session.commit()
     worker = JackpotWorker(context=_worker_context(app))
     assert worker.run_once() is True
     history = client.get("/jackpot/history").json()
@@ -163,7 +174,7 @@ def test_admin_jackpot_runtime_update_and_manual_trigger(
     assert reset_balance_response.status_code == 200, reset_balance_response.text
     assert reset_balance_response.json()["balance"] == "0.0000"
 
-    contribution_response = client.post(
+    forbidden_response = client.post(
         "/jackpot/contribute",
         headers=headers,
         json={
@@ -175,10 +186,21 @@ def test_admin_jackpot_runtime_update_and_manual_trigger(
             "metadata": {"scenario": "admin_jackpot_runtime_update"},
         },
     )
+    assert forbidden_response.status_code == 403, forbidden_response.text
 
-    assert contribution_response.status_code == 201, contribution_response.text
-    contribution_payload = contribution_response.json()
-    assert contribution_payload["contribution_amount"] == "50.0000"
+    with app_session_factory() as session:
+        contribution = runtime.jackpot.record_contribution(
+            session,
+            participant_user_id=user.id,
+            source_type="platform_activity",
+            source_id="jackpot-platform-fee",
+            entry_fee=Decimal("50.0000"),
+            contribution_amount=Decimal("50.0000"),
+            eligibility_score=Decimal("2.0000"),
+            metadata={"scenario": "admin_jackpot_runtime_update"},
+        )
+        session.commit()
+        assert contribution.contribution_amount == Decimal("50.0000")
 
     trigger_response = client.post(
         "/admin/jackpot/trigger",

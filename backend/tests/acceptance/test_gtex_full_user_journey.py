@@ -609,22 +609,36 @@ def test_gtex_full_user_journey(client, app_session_factory, auth_user_factory, 
             },
         )
     )
-    contribution = _ok(
-        client.post(
-            "/api/jackpot/contribute",
-            headers=owner["headers"],
-            json={
-                "source_type": "platform_activity",
-                "source_id": f"{PREFIX}-jackpot-source",
-                "entry_fee": "10.0000",
-                "contribution_amount": "10.0000",
-                "eligibility_score": "2.0000",
-                "metadata": {"journey": PREFIX},
-            },
-        ),
-        201,
+    forbidden_contribution = client.post(
+        "/api/jackpot/contribute",
+        headers=owner["headers"],
+        json={
+            "source_type": "platform_activity",
+            "source_id": f"{PREFIX}-jackpot-source",
+            "entry_fee": "10.0000",
+            "contribution_amount": "10.0000",
+            "eligibility_score": "2.0000",
+            "metadata": {"journey": PREFIX},
+        },
     )
-    assert contribution["contribution_amount"] == "10.0000"
+    assert forbidden_contribution.status_code == 403, forbidden_contribution.text
+
+    from app.gtex.runtime import ensure_gtex_runtime
+
+    runtime = ensure_gtex_runtime(client.app)
+    with app_session_factory() as session:
+        contribution = runtime.jackpot.record_contribution(
+            session,
+            participant_user_id=owner["user_id"],
+            source_type="platform_activity",
+            source_id=f"{PREFIX}-jackpot-source",
+            entry_fee=Decimal("10.0000"),
+            contribution_amount=Decimal("10.0000"),
+            eligibility_score=Decimal("2.0000"),
+            metadata={"journey": PREFIX},
+        )
+        session.commit()
+        assert contribution.contribution_amount == Decimal("10.0000")
     trigger = _ok(client.post("/api/admin/jackpot/trigger", headers=bootstrap_admin_headers))
     history = _ok(client.get("/api/jackpot/history"))
     settled = next(item for item in history if item["round_number"] == trigger["triggered_round_number"])

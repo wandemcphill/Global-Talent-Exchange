@@ -182,7 +182,7 @@ def list_recent_player_summaries(
 
 @router.get("/markets/nations", response_model=list[PlayerShareMarketNationView])
 def list_player_share_market_nations(
-    source: Literal["regen", "real"] | None = Query(default=None),
+    source: Literal["regen", "real", "legend"] | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> list[PlayerShareMarketNationView]:
     return [
@@ -224,9 +224,9 @@ def list_player_share_markets(
     limit: int | None = Query(default=None, ge=1, deprecated=True),
     offset: int | None = Query(default=None, ge=0, deprecated=True),
     search: str | None = Query(default=None),
-    source: Literal["regen", "real"] | None = Query(default=None),
+    source: Literal["regen", "real", "legend"] | None = Query(default=None),
     nation: str | None = Query(default=None, max_length=80),
-    sort: Literal["name", "wonderkid"] | None = Query(default=None),
+    sort: Literal["name", "wonderkid", "value", "gsi", "price"] | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> PlayerShareMarketListView:
     params = resolve_pagination(page=page, per_page=per_page, limit=limit, offset=offset)
@@ -599,6 +599,7 @@ def list_players(
     country: str | None = Query(default=None),
     nationality: str | None = Query(default=None),
     club: str | None = Query(default=None),
+    tier: str | None = Query(default=None),
     min_age: int | None = Query(default=None, ge=0),
     max_age: int | None = Query(default=None, ge=0),
     min_value: float | None = Query(default=None, ge=0),
@@ -617,6 +618,7 @@ def list_players(
             country=country,
             nationality=nationality,
             club=club,
+            tier=tier,
             min_age=min_age,
             max_age=max_age,
             min_value=min_value,
@@ -639,6 +641,7 @@ def list_real_player_universe(
     country: str | None = Query(default=None),
     nationality: str | None = Query(default=None),
     club: str | None = Query(default=None),
+    tier: str | None = Query(default=None),
     min_age: int | None = Query(default=None, ge=0),
     max_age: int | None = Query(default=None, ge=0),
     min_value: float | None = Query(default=None, ge=0),
@@ -657,6 +660,7 @@ def list_real_player_universe(
             country=country,
             nationality=nationality,
             club=club,
+            tier=tier,
             min_age=min_age,
             max_age=max_age,
             min_value=min_value,

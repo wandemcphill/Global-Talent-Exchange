@@ -160,7 +160,9 @@ class PlayerTokenMarketService:
         normalized_search = (search or "").strip()
         filters = [Player.is_tradable.is_(True), *self._source_nation_filters(source=source, nation=nation)]
         order_by: tuple[Any, ...] = (Player.full_name.asc(), Player.id.asc())
-        if sort == "wonderkid":
+        if sort in {"value", "price"}:
+            order_by = (PlayerShareMarket.share_price_coin.desc(), Player.full_name.asc(), Player.id.asc())
+        elif sort == "wonderkid":
             rating, potential = self._regen_rating_expr(), self._regen_potential_expr()
             filters += [
                 Player.source_provider.in_(self.REGEN_PROVIDERS),
@@ -1026,9 +1028,16 @@ class PlayerTokenMarketService:
     def _source_nation_filters(self, *, source: str | None, nation: str | None) -> list[Any]:
         filters: list[Any] = []
         if source == "regen":
-            filters.append(Player.source_provider.in_(self.REGEN_PROVIDERS))
+            filters.append(or_(Player.source_provider.in_(self.REGEN_PROVIDERS), Player.is_real_player.is_(False)))
+        elif source in {"legend", "legends"}:
+            filters.append(
+                or_(
+                    func.lower(func.coalesce(Player.real_player_tier, "")) == "legend",
+                    Player.source_provider == "gtex_legend_prime",
+                )
+            )
         elif source == "real":
-            filters.append(Player.source_provider.not_in(self.REGEN_PROVIDERS))
+            filters.append(Player.is_real_player.is_(True))
         if nation and nation.strip():
             value = nation.strip()
             filters.append(or_(func.lower(Country.name) == value.lower(), Country.alpha2_code == value.upper()))
@@ -1098,8 +1107,30 @@ class PlayerTokenMarketService:
             current_club_name = player.current_club.name
         else:
             current_club_name = player.real_world_club_name
-        is_regen = player.source_provider in self.REGEN_PROVIDERS
-        dna = (player.dna_profile or {}) if is_regen else {}
+        is_regen = player.source_provider in self.REGEN_PROVIDERS or not bool(player.is_real_player)
+        is_legend = (
+            str(player.real_player_tier or "").strip().lower() == "legend"
+            or player.source_provider == "gtex_legend_prime"
+        )
+        dna = dict(player.dna_profile or {}) if isinstance(player.dna_profile, dict) else {}
+        m_meta = dict(market.metadata_json or {}) if isinstance(market.metadata_json, dict) else {}
+        if not portrait:
+            for key in ("portraitUrl", "photo_url", "image_url"):
+                val = dna.get(key)
+                if isinstance(val, str) and val.strip():
+                    portrait = val.strip()
+                    break
+        cur_rating = self._dna_int(dna, "overall", "current_rating", "sofifa_overall") or self._dna_int(
+            m_meta, "current_gsi", "gsi"
+        )
+        pot_rating = (
+            self._dna_int(dna, "potential", "potential_rating", "sofifa_potential")
+            or (int(player.potential) if player.potential else None)
+            or self._dna_int(m_meta, "potential_gsi")
+            or cur_rating
+        )
+        if is_legend and pot_rating:
+            cur_rating = max(cur_rating or 0, pot_rating)
         return {
             "player_id": player.id,
             "player_name": player.canonical_display_name or player.full_name,
@@ -1108,10 +1139,12 @@ class PlayerTokenMarketService:
             "nationality_code": player.country.alpha2_code if player.country is not None else None,
             "image_url": portrait,
             "is_regen": is_regen,
+            "is_legend": is_legend,
+            "real_player_tier": player.real_player_tier,
             "current_club_name": current_club_name,
             "age": self._player_age(player),
-            "rating": self._dna_int(dna, "current_rating", "overall"),
-            "potential": self._dna_int(dna, "potential_rating", "potential"),
+            "rating": cur_rating,
+            "potential": pot_rating,
             "share_price_coin": self._amount(market.share_price_coin),
             "liquidity_coin": self._amount((market.metadata_json or {}).get("liquidity_coin")),
             "total_shares": int(market.total_shares or 0),

@@ -144,6 +144,8 @@ class PlayerShareMarketListItemView(BaseModel):
     nationality_code: str | None = None
     image_url: str | None = None
     is_regen: bool = False
+    is_legend: bool = False
+    real_player_tier: str | None = None
     current_club_name: str | None = None
     age: int | None = None
     rating: int | None = None

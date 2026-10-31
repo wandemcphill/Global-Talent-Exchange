@@ -29,7 +29,7 @@ function ShareBox({ playerId }: { playerId: string }) {
     <div className="rounded-sm border border-white/10 p-4" data-testid="drawer-share-market">
       <p className="gx-eyebrow mb-2">Player share market</p>
       <div className="grid grid-cols-3 gap-3 text-sm">
-        <div><p className="gx-label">Price</p><p className="gx-mono text-white">{fmt(data.share_price_coin, 4)}</p></div>
+        <div><p className="gx-label">Price</p><p className="gx-mono text-white">{fmt(data.share_price_coin, 2)}</p></div>
         <div><p className="gx-label">Circulating</p><p className="gx-mono text-white">{data.circulating_shares}/{data.total_shares}</p></div>
         <div><p className="gx-label">Liquidity</p><p className="gx-mono text-white">{fmt(data.liquidity_coin, 2)}</p></div>
       </div>
@@ -68,6 +68,8 @@ export function PlayerDrawer({ playerId, onClose, extra }: { playerId: string | 
   const { data: quote } = useQuery({ queryKey: ["player-quote", playerId], queryFn: async () => (await api.get("/owner/market/quote", { params: { player_ids: playerId } })).data.quotes[playerId as string], enabled: !!playerId });
   if (!playerId) return null;
   const signals = p?.normalized_signals || {};
+  const isLegend = String(p?.real_player_tier || "").toLowerCase() === "legend";
+  const honors: string[] = Array.isArray(p?.metadata_json?.honors) ? p.metadata_json.honors : [];
   return createPortal(
     <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm" onClick={onClose} data-testid="player-drawer">
       <aside className="gx-scroll h-full w-full max-w-md overflow-y-auto border-l border-white/10 bg-[#070B11] p-6" onClick={(e) => e.stopPropagation()}>
@@ -78,8 +80,22 @@ export function PlayerDrawer({ playerId, onClose, extra }: { playerId: string | 
         {isError ? <RegenDossier playerId={playerId} /> : isLoading || !p ? <Loading label="Pulling the dossier" /> : (
           <div className="space-y-5">
             <div className="mx-auto max-w-[240px]">
-              <PlayerCard name={p.player_name} rating={quote?.rating} position={p.position} age={p.age} nationality={p.nationality} club={p.current_club_name} image={p.image_url}
-                stats={[{ k: "Fee", v: fmt(quote?.price) }, { k: "Value", v: fmt(p.current_value_credits, 1) }, { k: "Interest", v: p.market_interest_score ?? "-" }]} />
+              <PlayerCard
+                name={p.canonical_display_name || p.player_name}
+                rating={quote?.rating}
+                position={p.position}
+                age={p.age}
+                nationality={p.nationality}
+                club={p.current_club_name}
+                image={p.image_url}
+                tier={isLegend ? "legendary" : undefined}
+                badge={isLegend ? "ICON · 1 OF 1" : undefined}
+                stats={[
+                  { k: "Fee", v: fmt(quote?.price) },
+                  { k: "Value", v: p.current_value_credits != null ? fmt(p.current_value_credits, 1) : fmt(quote?.price, 1) },
+                  { k: "Interest", v: p.market_interest_score ?? "-" },
+                ]}
+              />
             </div>
             <div className="flex flex-wrap gap-2">
               <Chip tone="cyan">{p.primary_position || p.position}</Chip>
@@ -88,8 +104,20 @@ export function PlayerDrawer({ playerId, onClose, extra }: { playerId: string | 
               {p.lifecycle_status_label && <Chip tone="emerald">{p.lifecycle_status_label}</Chip>}
               {p.height_cm && <Chip>{p.height_cm} cm</Chip>}
             </div>
+            {honors.length > 0 && (
+              <div className="rounded-sm border border-amber-400/20 bg-amber-500/[0.04] p-3.5 text-xs space-y-1">
+                <p className="gx-eyebrow text-amber-300 mb-1">Career Honors</p>
+                {honors.map((h, i) => (
+                  <p key={i} className="text-slate-300">• {h}</p>
+                ))}
+              </div>
+            )}
             <div className="space-y-2.5" data-testid="drawer-signals">
-              {Object.entries(signals).map(([k, v]: any) => <TraitBar key={k} label={label(k.replace(/_(score|signal)$/, ""))} value={Math.round(Number(v))} max={100} />)}
+              {Object.entries(signals)
+                .filter(([, v]) => !Number.isNaN(Number(v)))
+                .map(([k, v]: any) => (
+                  <TraitBar key={k} label={label(k.replace(/_(score|signal)$/, ""))} value={Math.round(Number(v))} max={100} />
+                ))}
             </div>
             <div className="rounded-sm border border-white/10 p-4 text-sm" data-testid="drawer-form">
               <p className="gx-eyebrow mb-2">GTEX form</p>

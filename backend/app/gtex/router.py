@@ -42,7 +42,7 @@ from app.gtex.schemas import (
 from app.gtex.service import GtexConflictError, GtexError, GtexNotFoundError, GtexValidationError
 from app.models.gtex_economy import GtexRiskFlag, GtexRiskFlagStatus
 from app.models.risk_ops import RiskActionType
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.risk_ops_engine.service import RiskOpsService
 
 router = APIRouter(tags=["gtex"])
@@ -81,6 +81,11 @@ def create_jackpot_contribution(
     current_user: User = Depends(get_current_wallet_user),
     runtime=Depends(get_runtime),
 ) -> JackpotContributionView:
+    if current_user.role not in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Direct user and club owner jackpot contributions are disabled. The Global Jackpot is funded automatically from platform fees.",
+        )
     try:
         contribution = runtime.jackpot.contribute_from_wallet(
             session,

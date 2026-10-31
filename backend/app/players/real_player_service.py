@@ -119,6 +119,7 @@ class RealPlayerUniverseQueryService:
         country: str | None = None,
         nationality: str | None = None,
         club: str | None = None,
+        tier: str | None = None,
         min_age: int | None = None,
         max_age: int | None = None,
         min_value: float | None = None,
@@ -129,10 +130,12 @@ class RealPlayerUniverseQueryService:
     ) -> RealPlayerUniversePageResult:
         normalized_country = self._clean_filter_value(country) or self._clean_filter_value(nationality)
         normalized_availability = self._clean_filter_value(availability)
+        normalized_tier = self._clean_filter_value(tier)
         query_signature = self._query_signature(
             position=position,
             country=normalized_country,
             club=club,
+            tier=normalized_tier,
             min_age=min_age,
             max_age=max_age,
             min_value=min_value,
@@ -160,6 +163,7 @@ class RealPlayerUniverseQueryService:
             position=position,
             nationality=normalized_country,
             club=club,
+            tier=normalized_tier,
             min_age=min_age,
             max_age=max_age,
             min_value=min_value,
@@ -283,9 +287,9 @@ class RealPlayerUniverseQueryService:
         selected_profiles = self._selected_profiles_subquery()
         return (
             select(Player, RealPlayerProfile, RealPlayerSourceLink, Country, PlayerSummaryReadModel)
-            .join(selected_profiles, selected_profiles.c.gtex_player_id == Player.id)
-            .join(RealPlayerProfile, RealPlayerProfile.id == selected_profiles.c.profile_id)
-            .join(RealPlayerSourceLink, RealPlayerSourceLink.id == RealPlayerProfile.source_link_id)
+            .outerjoin(selected_profiles, selected_profiles.c.gtex_player_id == Player.id)
+            .outerjoin(RealPlayerProfile, RealPlayerProfile.id == selected_profiles.c.profile_id)
+            .outerjoin(RealPlayerSourceLink, RealPlayerSourceLink.id == RealPlayerProfile.source_link_id)
             .outerjoin(Country, Country.id == Player.country_id)
             .outerjoin(PlayerSummaryReadModel, PlayerSummaryReadModel.player_id == Player.id)
             .where(Player.is_real_player.is_(True))
@@ -319,6 +323,7 @@ class RealPlayerUniverseQueryService:
         position: str | None,
         nationality: str | None,
         club: str | None,
+        tier: str | None = None,
         min_age: int | None,
         max_age: int | None,
         min_value: float | None,
@@ -326,19 +331,57 @@ class RealPlayerUniverseQueryService:
         availability: str | None,
         search: str | None,
     ):
-        statement = self._base_statement()
+        statement = self._base_statement().where(Player.is_tradable.is_(True))
         if position:
-            term = f"%{position.strip()}%"
-            statement = statement.where(
-                or_(
-                    self._position_expr().ilike(term),
-                    cast(RealPlayerProfile.secondary_positions_json, String).ilike(term),
+            pos_raw = position.strip().lower()
+            pos_codes = self._position_codes(pos_raw)
+            if pos_raw in {"goalkeeper", "gk"}:
+                pos_codes = {"GK"}
+            elif pos_raw in {"defender", "def", "df"}:
+                pos_codes = {"CB", "LB", "RB", "LWB", "RWB"}
+            elif pos_raw in {"midfielder", "mid", "mf"}:
+                pos_codes = {"DM", "CM", "AM"}
+            elif pos_raw in {"forward", "fwd", "fw", "attacker"}:
+                pos_codes = {"ST", "LW", "RW"}
+            if pos_codes:
+                pos_clauses = [self._lower_trimmed_expr(self._position_expr()) == pos_raw]
+                for code in pos_codes:
+                    pos_clauses.append(self._lower_trimmed_expr(self._position_expr()) == code.lower())
+                    for st in REAL_PLAYER_POSITION_SEARCH_TERMS.get(code, frozenset()):
+                        pos_clauses.append(self._lower_trimmed_expr(self._position_expr()) == st)
+                pos_clauses.append(
+                    cast(RealPlayerProfile.secondary_positions_json, String).ilike(f"%{position.strip()}%")
                 )
-            )
+                statement = statement.where(or_(*pos_clauses))
+            else:
+                term = f"%{position.strip()}%"
+                statement = statement.where(
+                    or_(
+                        self._position_expr().ilike(term),
+                        cast(RealPlayerProfile.secondary_positions_json, String).ilike(term),
+                    )
+                )
         if nationality:
             statement = statement.where(self._nationality_expr().ilike(f"%{nationality.strip()}%"))
         if club:
             statement = statement.where(self._club_expr().ilike(f"%{club.strip()}%"))
+        if tier:
+            tier_norm = tier.strip().lower()
+            if tier_norm in {"legend", "legends", "legendary", "icon"}:
+                statement = statement.where(
+                    or_(
+                        func.lower(func.coalesce(Player.real_player_tier, "")) == "legend",
+                        Player.source_provider == "gtex_legend_prime",
+                    )
+                )
+            elif tier_norm in {"wonderkid", "wonderkids"}:
+                statement = statement.where(func.lower(func.coalesce(Player.real_player_tier, "")) == "wonderkid")
+            elif tier_norm in {"marquee", "elite", "stars"}:
+                statement = statement.where(
+                    func.lower(func.coalesce(Player.real_player_tier, "")).in_(("marquee", "featured", "elite"))
+                )
+            else:
+                statement = statement.where(func.lower(func.coalesce(Player.real_player_tier, "")) == tier_norm)
         if min_age is not None:
             statement = statement.where(self._age_expr() >= min_age)
         if max_age is not None:
@@ -357,6 +400,7 @@ class RealPlayerUniverseQueryService:
                     Player.canonical_display_name.ilike(term),
                     RealPlayerProfile.canonical_name.ilike(term),
                     cast(RealPlayerProfile.known_aliases_json, String).ilike(term),
+                    func.coalesce(Player.real_player_tier, "").ilike(term),
                     self._club_expr().ilike(term),
                     self._league_expr().ilike(term),
                     self._nationality_expr().ilike(term),
@@ -370,7 +414,7 @@ class RealPlayerUniverseQueryService:
         *,
         payload: RealPlayerMatchRequest,
     ):
-        statement = self._base_statement()
+        statement = self._base_statement().where(Player.is_tradable.is_(True))
         requested_positions = self._requested_position_codes(payload)
         if payload.constraints.strict_position and requested_positions:
             statement = statement.where(self._position_match_clause(requested_positions))
@@ -426,147 +470,206 @@ class RealPlayerUniverseQueryService:
     def _build_list_item(
         self,
         player: Player,
-        profile: RealPlayerProfile,
-        source_link: RealPlayerSourceLink,
+        profile: RealPlayerProfile | None,
+        source_link: RealPlayerSourceLink | None,
         country: Country | None,
         summary: PlayerSummaryReadModel | None,
     ) -> RealPlayerUniverseListItem:
+        prof_canon = profile.canonical_name if profile is not None else None
+        prof_nat = profile.nationality if profile is not None else None
+        prof_pos = profile.primary_position if profile is not None else None
+        prof_sec = tuple(profile.secondary_positions_json or ()) if profile is not None else ()
+        prof_dob = profile.date_of_birth if profile is not None else None
+        prof_club = profile.current_club_name if profile is not None else None
+        prof_league = profile.current_league_name if profile is not None else None
+        prof_level = profile.competition_level if profile is not None else player.real_player_tier
+        prof_mkt_val = profile.current_market_reference_value if profile is not None else None
+        prof_mkt_cur = profile.market_reference_currency if profile is not None else None
+        prof_src = profile.source_name if profile is not None else player.source_provider
+        prof_ref = profile.source_last_refreshed_at if profile is not None else None
+        prof_upd = profile.updated_at if profile is not None else player.updated_at
+        is_ver = bool(source_link.is_verified_real_player) if source_link is not None else True
+
         return RealPlayerUniverseListItem(
             player_id=player.id,
             player_name=player.full_name,
             identity_rail=REAL_PLAYER_IDENTITY_RAIL,
-            canonical_display_name=player.canonical_display_name or profile.canonical_name or player.full_name,
+            canonical_display_name=player.canonical_display_name or prof_canon or player.full_name,
             real_player_tier=player.real_player_tier,
-            nationality=country.name if country is not None else profile.nationality,
+            nationality=country.name if country is not None else prof_nat,
             nationality_code=getattr(country, "alpha2_code", None),
-            position=profile.primary_position or player.normalized_position or player.position,
-            secondary_positions=tuple(profile.secondary_positions_json or ()),
-            age=self._player_age(player.date_of_birth or profile.date_of_birth),
-            current_club_name=profile.current_club_name or player.real_world_club_name,
-            current_league_name=profile.current_league_name or player.real_world_league_name,
-            competition_level=profile.competition_level,
+            position=prof_pos or player.normalized_position or player.position,
+            secondary_positions=prof_sec,
+            age=self._player_age(player.date_of_birth or prof_dob),
+            current_club_name=prof_club or player.real_world_club_name,
+            current_league_name=prof_league or player.real_world_league_name,
+            competition_level=prof_level,
             current_value_credits=summary.current_value_credits if summary is not None else None,
             previous_value_credits=summary.previous_value_credits if summary is not None else None,
             movement_pct=summary.movement_pct if summary is not None else None,
             market_interest_score=summary.market_interest_score if summary is not None else None,
             average_rating=summary.average_rating if summary is not None else None,
-            current_market_reference_value=profile.current_market_reference_value
-            or player.current_market_reference_value,
-            market_reference_currency=profile.market_reference_currency or player.market_reference_currency,
-            image_url=self._profile_image_url(profile),
-            source_name=profile.source_name,
-            source_last_refreshed_at=profile.source_last_refreshed_at or player.source_last_refreshed_at,
-            is_verified_real_player=bool(source_link.is_verified_real_player),
-            updated_at=profile.updated_at,
+            current_market_reference_value=prof_mkt_val or player.current_market_reference_value,
+            market_reference_currency=prof_mkt_cur or player.market_reference_currency,
+            image_url=self._profile_image_url(profile, player),
+            source_name=prof_src,
+            source_last_refreshed_at=prof_ref or player.source_last_refreshed_at,
+            is_verified_real_player=is_ver,
+            updated_at=prof_upd,
         )
 
     def _build_detail(
         self,
         player: Player,
-        profile: RealPlayerProfile,
-        source_link: RealPlayerSourceLink,
+        profile: RealPlayerProfile | None,
+        source_link: RealPlayerSourceLink | None,
         country: Country | None,
         summary: PlayerSummaryReadModel | None,
     ) -> RealPlayerUniverseDetail:
+        dna = dict(player.dna_profile or {}) if isinstance(player.dna_profile, dict) else {}
+        raw_signals = dict(profile.normalized_signals_json or {}) if profile is not None else {}
+        if not raw_signals and isinstance(dna.get("attributes"), dict):
+            raw_signals = {
+                str(k): min(99, int(float(v) * 5)) if float(v) <= 20 else int(float(v))
+                for k, v in dict(dna["attributes"]).items()
+                if isinstance(v, (int, float))
+            }
         return RealPlayerUniverseDetail(
             player_id=player.id,
             player_name=player.full_name,
             identity_rail=REAL_PLAYER_IDENTITY_RAIL,
-            canonical_display_name=player.canonical_display_name or profile.canonical_name or player.full_name,
+            canonical_display_name=(
+                player.canonical_display_name
+                or (profile.canonical_name if profile is not None else None)
+                or player.full_name
+            ),
             first_name=player.first_name,
             last_name=player.last_name,
             short_name=player.short_name,
-            nationality=country.name if country is not None else profile.nationality,
+            nationality=country.name if country is not None else (profile.nationality if profile is not None else None),
             nationality_code=getattr(country, "alpha2_code", None),
-            position=player.position or profile.primary_position,
+            position=player.position or (profile.primary_position if profile is not None else None),
             normalized_position=player.normalized_position,
-            primary_position=profile.primary_position or player.normalized_position or player.position,
-            secondary_positions=tuple(profile.secondary_positions_json or ()),
-            age=self._player_age(player.date_of_birth or profile.date_of_birth),
-            date_of_birth=player.date_of_birth or profile.date_of_birth,
-            dominant_foot=profile.dominant_foot or player.preferred_foot,
-            height_cm=profile.height_cm or player.height_cm,
-            weight_kg=profile.weight_kg or player.weight_kg,
-            current_club_name=profile.current_club_name or player.real_world_club_name,
-            current_league_name=profile.current_league_name or player.real_world_league_name,
-            competition_level=profile.competition_level,
+            primary_position=(
+                (profile.primary_position if profile is not None else None)
+                or player.normalized_position
+                or player.position
+            ),
+            secondary_positions=tuple((profile.secondary_positions_json if profile is not None else None) or ()),
+            age=self._player_age(player.date_of_birth or (profile.date_of_birth if profile is not None else None)),
+            date_of_birth=player.date_of_birth or (profile.date_of_birth if profile is not None else None),
+            dominant_foot=(profile.dominant_foot if profile is not None else None) or player.preferred_foot,
+            height_cm=(profile.height_cm if profile is not None else None) or player.height_cm,
+            weight_kg=(profile.weight_kg if profile is not None else None) or player.weight_kg,
+            current_club_name=(profile.current_club_name if profile is not None else None)
+            or player.real_world_club_name,
+            current_league_name=(
+                (profile.current_league_name if profile is not None else None) or player.real_world_league_name
+            ),
+            competition_level=(profile.competition_level if profile is not None else player.real_player_tier),
             current_value_credits=summary.current_value_credits if summary is not None else None,
             previous_value_credits=summary.previous_value_credits if summary is not None else None,
             movement_pct=summary.movement_pct if summary is not None else None,
             market_interest_score=summary.market_interest_score if summary is not None else None,
             average_rating=summary.average_rating if summary is not None else None,
-            current_market_reference_value=profile.current_market_reference_value
-            or player.current_market_reference_value,
-            market_reference_currency=profile.market_reference_currency or player.market_reference_currency,
-            appearances=profile.appearances,
-            minutes_played=profile.minutes_played,
-            goals=profile.goals,
-            assists=profile.assists,
-            clean_sheets=profile.clean_sheets,
-            injury_status=profile.injury_status,
+            current_market_reference_value=(
+                (profile.current_market_reference_value if profile is not None else None)
+                or player.current_market_reference_value
+            ),
+            market_reference_currency=(
+                (profile.market_reference_currency if profile is not None else None) or player.market_reference_currency
+            ),
+            appearances=profile.appearances if profile is not None else None,
+            minutes_played=profile.minutes_played if profile is not None else None,
+            goals=profile.goals if profile is not None else None,
+            assists=profile.assists if profile is not None else None,
+            clean_sheets=profile.clean_sheets if profile is not None else None,
+            injury_status=profile.injury_status if profile is not None else None,
             is_tradable=bool(player.is_tradable),
             lifecycle_status=resolve_player_lifecycle_status(player, getattr(player, "share_market", None))[0],
             lifecycle_status_label=resolve_player_lifecycle_status(player, getattr(player, "share_market", None))[1],
             real_player_tier=player.real_player_tier,
             identity_confidence_score=player.identity_confidence_score,
-            image_url=self._profile_image_url(profile),
-            source_name=profile.source_name,
-            source_player_key=profile.source_player_key,
-            source_last_refreshed_at=profile.source_last_refreshed_at or player.source_last_refreshed_at,
-            is_verified_real_player=bool(source_link.is_verified_real_player),
-            verification_state=source_link.verification_state,
-            known_aliases=tuple(profile.known_aliases_json or ()),
-            normalized_signals=dict(profile.normalized_signals_json or {}),
-            ingestion_batch_id=profile.ingestion_batch_id,
-            ingestion_source_version=profile.ingestion_source_version,
-            pricing_snapshot_id=profile.pricing_snapshot_id,
-            normalization_profile_version=profile.normalization_profile_version or player.normalization_profile_version,
-            metadata_json=dict(profile.metadata_json or {}),
+            image_url=self._profile_image_url(profile, player),
+            source_name=profile.source_name if profile is not None else player.source_provider,
+            source_player_key=profile.source_player_key if profile is not None else player.provider_external_id,
+            source_last_refreshed_at=(
+                (profile.source_last_refreshed_at if profile is not None else None) or player.source_last_refreshed_at
+            ),
+            is_verified_real_player=(bool(source_link.is_verified_real_player) if source_link is not None else True),
+            verification_state=source_link.verification_state if source_link is not None else "verified",
+            known_aliases=tuple((profile.known_aliases_json if profile is not None else None) or ()),
+            normalized_signals=raw_signals,
+            ingestion_batch_id=profile.ingestion_batch_id if profile is not None else None,
+            ingestion_source_version=profile.ingestion_source_version if profile is not None else None,
+            pricing_snapshot_id=profile.pricing_snapshot_id if profile is not None else None,
+            normalization_profile_version=(
+                (profile.normalization_profile_version if profile is not None else None)
+                or player.normalization_profile_version
+            ),
+            metadata_json=dict((profile.metadata_json if profile is not None else None) or dna),
             summary_json=self._summary_payload(summary),
-            updated_at=profile.updated_at,
+            updated_at=profile.updated_at if profile is not None else player.updated_at,
         )
 
     def _build_match_candidate_snapshot(
         self,
         player: Player,
-        profile: RealPlayerProfile,
-        source_link: RealPlayerSourceLink,
+        profile: RealPlayerProfile | None,
+        source_link: RealPlayerSourceLink | None,
         country: Country | None,
         summary: PlayerSummaryReadModel | None,
     ) -> _MatchCandidateSnapshot:
-        club_name = profile.current_club_name or player.real_world_club_name
-        primary_position_label = profile.primary_position or player.normalized_position or player.position
+        club_name = (profile.current_club_name if profile is not None else None) or player.real_world_club_name
+        prof_pos = profile.primary_position if profile is not None else None
+        primary_position_label = prof_pos or player.normalized_position or player.position
         return _MatchCandidateSnapshot(
             player_id=player.id,
             player_name=player.full_name,
-            canonical_display_name=player.canonical_display_name or profile.canonical_name or player.full_name,
+            canonical_display_name=(
+                player.canonical_display_name
+                or (profile.canonical_name if profile is not None else None)
+                or player.full_name
+            ),
             real_player_tier=player.real_player_tier,
-            country=country.name if country is not None else profile.nationality,
+            country=country.name if country is not None else (profile.nationality if profile is not None else None),
             country_code=(getattr(country, "alpha2_code", None) or None),
             country_tokens=frozenset(self._country_tokens(country, profile)),
             primary_position_label=primary_position_label,
             primary_position_codes=frozenset(
-                self._position_codes_for_values(profile.primary_position, player.normalized_position, player.position)
+                self._position_codes_for_values(prof_pos, player.normalized_position, player.position)
             ),
             secondary_position_codes=frozenset(
-                self._position_codes_for_values(*(profile.secondary_positions_json or ()))
+                self._position_codes_for_values(
+                    *((profile.secondary_positions_json if profile is not None else None) or ())
+                )
             ),
-            age=self._player_age(player.date_of_birth or profile.date_of_birth),
-            height_cm=profile.height_cm or player.height_cm,
-            preferred_foot=self._normalize_match_value(profile.dominant_foot or player.preferred_foot),
+            age=self._player_age(player.date_of_birth or (profile.date_of_birth if profile is not None else None)),
+            height_cm=(profile.height_cm if profile is not None else None) or player.height_cm,
+            preferred_foot=self._normalize_match_value(
+                (profile.dominant_foot if profile is not None else None) or player.preferred_foot
+            ),
             club_name=club_name,
-            current_league_name=profile.current_league_name or player.real_world_league_name,
-            competition_level=profile.competition_level,
+            current_league_name=(
+                (profile.current_league_name if profile is not None else None) or player.real_world_league_name
+            ),
+            competition_level=profile.competition_level if profile is not None else player.real_player_tier,
             current_value_credits=summary.current_value_credits if summary is not None else None,
-            current_market_reference_value=profile.current_market_reference_value
-            or player.current_market_reference_value,
-            market_reference_currency=profile.market_reference_currency or player.market_reference_currency,
-            source_name=profile.source_name,
-            source_last_refreshed_at=profile.source_last_refreshed_at or player.source_last_refreshed_at,
-            is_verified_real_player=bool(source_link.is_verified_real_player),
+            current_market_reference_value=(
+                (profile.current_market_reference_value if profile is not None else None)
+                or player.current_market_reference_value
+            ),
+            market_reference_currency=(
+                (profile.market_reference_currency if profile is not None else None) or player.market_reference_currency
+            ),
+            source_name=profile.source_name if profile is not None else player.source_provider,
+            source_last_refreshed_at=(
+                (profile.source_last_refreshed_at if profile is not None else None) or player.source_last_refreshed_at
+            ),
+            is_verified_real_player=(bool(source_link.is_verified_real_player) if source_link is not None else True),
             is_free_agent=self._is_free_agent_club(club_name),
-            is_injured=self._is_injured(profile.injury_status),
-            updated_at=profile.updated_at,
+            is_injured=self._is_injured(profile.injury_status if profile is not None else None),
+            updated_at=profile.updated_at if profile is not None else player.updated_at,
         )
 
     def _validate_query(
@@ -619,6 +722,7 @@ class RealPlayerUniverseQueryService:
         position: str | None,
         country: str | None,
         club: str | None,
+        tier: str | None = None,
         min_age: int | None,
         max_age: int | None,
         min_value: float | None,
@@ -627,7 +731,7 @@ class RealPlayerUniverseQueryService:
         search: str | None,
         sort: str,
     ) -> dict[str, object | None]:
-        return {
+        sig: dict[str, object | None] = {
             "position": self._clean_filter_value(position),
             "country": country,
             "club": self._clean_filter_value(club),
@@ -639,6 +743,9 @@ class RealPlayerUniverseQueryService:
             "search": self._clean_filter_value(search),
             "sort": sort,
         }
+        if tier is not None:
+            sig["tier"] = tier
+        return sig
 
     def _resolve_offset(
         self,
@@ -1185,9 +1292,9 @@ class RealPlayerUniverseQueryService:
             return False
         return normalized_status not in REAL_PLAYER_HEALTHY_INJURY_STATUSES
 
-    def _country_tokens(self, country_record: Country | None, profile: RealPlayerProfile) -> set[str]:
+    def _country_tokens(self, country_record: Country | None, profile: RealPlayerProfile | None) -> set[str]:
         values = {
-            self._normalize_match_value(profile.nationality),
+            self._normalize_match_value(profile.nationality if profile is not None else None),
         }
         if country_record is not None:
             values.update(
@@ -1202,16 +1309,22 @@ class RealPlayerUniverseQueryService:
         return values
 
     @staticmethod
-    def _profile_image_url(profile: RealPlayerProfile) -> str | None:
-        metadata = dict(profile.metadata_json or {})
-        photo_url = metadata.get("photo_url")
-        if isinstance(photo_url, str) and photo_url.strip():
-            return photo_url.strip()
-        image_payload = metadata.get("image")
-        if isinstance(image_payload, dict):
-            source_url = image_payload.get("source_url")
-            if isinstance(source_url, str) and source_url.strip():
-                return source_url.strip()
+    def _profile_image_url(profile: RealPlayerProfile | None, player: Player | None = None) -> str | None:
+        if profile is not None:
+            metadata = dict(profile.metadata_json or {})
+            photo_url = metadata.get("photo_url")
+            if isinstance(photo_url, str) and photo_url.strip():
+                return photo_url.strip()
+            image_payload = metadata.get("image")
+            if isinstance(image_payload, dict):
+                source_url = image_payload.get("source_url")
+                if isinstance(source_url, str) and source_url.strip():
+                    return source_url.strip()
+        if player is not None and isinstance(player.dna_profile, dict):
+            for key in ("portraitUrl", "photo_url", "image_url"):
+                val = player.dna_profile.get(key)
+                if isinstance(val, str) and val.strip():
+                    return val.strip()
         return None
 
     def _position_codes_for_values(self, *values: str | None) -> set[str]:
@@ -1275,6 +1388,9 @@ class RealPlayerUniverseQueryService:
 
     def _age_expr(self):
         birth_date = func.coalesce(Player.date_of_birth, RealPlayerProfile.date_of_birth)
+        bind = self.session.get_bind()
+        if bind is not None and bind.dialect.name == "postgresql":
+            return cast(func.extract("year", func.age(literal(self.today), birth_date)), Integer)
         return cast(
             (func.julianday(literal(self.today.isoformat())) - func.julianday(birth_date)) / 365.2425,
             Integer,

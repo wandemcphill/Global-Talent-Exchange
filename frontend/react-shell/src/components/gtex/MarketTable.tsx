@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowUpDown, DollarSign, Filter, Search } from "lucide-react";
+import { ArrowUpDown, Crown, DollarSign, Search, Sparkles } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmt, useRefreshOwner } from "@/lib/owner";
 import { Btn, Coin, Empty, Loading } from "@/components/gtex/ui";
@@ -10,17 +10,25 @@ import { PlayerDrawer } from "@/components/gtex/PlayerDrawer";
 
 const POSITIONS = ["", "goalkeeper", "defender", "midfielder", "forward"];
 
-const PRICE_PRESETS = [
-  { label: "All Prices", value: 0 },
-  { label: "≤ 1k GTX", value: 1000 },
-  { label: "≤ 2.5k GTX", value: 2500 },
-  { label: "≤ 5k GTX", value: 5000 },
-  { label: "≤ 11k GTX", value: 11000 },
+const TIER_FILTERS = [
+  { id: "", label: "All Tiers" },
+  { id: "legend", label: "★ Legends" },
+  { id: "marquee", label: "World Stars" },
+  { id: "wonderkid", label: "Wonderkids" },
 ];
 
-async function fetchPage(position: string, q: string, cursor?: string) {
+const PRICE_PRESETS = [
+  { label: "All Prices", value: 0 },
+  { label: "≤ 60 GTX", value: 60 },
+  { label: "≤ 180 GTX", value: 180 },
+  { label: "≤ 350 GTX", value: 350 },
+  { label: "≤ 1.5k GTX", value: 1500 },
+];
+
+async function fetchPage(position: string, tier: string, q: string, cursor?: string) {
   const params: any = { limit: 48 };
   if (position) params.position = position;
+  if (tier) params.tier = tier;
   if (q) params.search = q;
   if (cursor) params.cursor = cursor;
   const page = (await api.get("/v2/players", { params })).data;
@@ -31,17 +39,18 @@ async function fetchPage(position: string, q: string, cursor?: string) {
 
 export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs = [], clubCash }: any) {
   const [position, setPosition] = useState(initialPosition);
+  const [tier, setTier] = useState("");
   const [search, setSearch] = useState("");
   const [q, setQ] = useState("");
   const [maxPrice, setMaxPrice] = useState<number>(0);
-  const [sortBy, setSortBy] = useState<string>("price_asc");
+  const [sortBy, setSortBy] = useState<string>("default");
   const [busy, setBusy] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const refresh = useRefreshOwner();
 
   const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
-    queryKey: ["market", position, q],
-    queryFn: ({ pageParam }: any) => fetchPage(position, q, pageParam),
+    queryKey: ["market", position, tier, q],
+    queryFn: ({ pageParam }: any) => fetchPage(position, tier, q, pageParam),
     initialPageParam: undefined,
     getNextPageParam: (last: any) => (last.has_more ? last.next_cursor : undefined),
   } as any);
@@ -95,20 +104,46 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
           <input
             data-testid="market-search-input"
             className="gx-input pl-9"
-            placeholder="Search players, e.g. Osimhen"
+            placeholder="Search players or icons, e.g. Osimhen, Maradona, Messi"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </form>
         <div className="flex flex-wrap gap-1">
+          {TIER_FILTERS.map((t) => {
+            const active = tier === t.id;
+            const isLegendBtn = t.id === "legend";
+            return (
+              <button
+                key={t.id || "all-tiers"}
+                type="button"
+                data-testid={`market-tier-${t.id || "all"}`}
+                onClick={() => setTier(t.id)}
+                className={`gx-btn ${
+                  active
+                    ? isLegendBtn
+                      ? "border-amber-400 bg-amber-500 text-black font-bold"
+                      : "gx-btn-primary"
+                    : isLegendBtn
+                    ? "border-amber-400/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
+                    : "gx-btn-secondary"
+                }`}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex flex-wrap gap-1">
           {POSITIONS.map((p) => (
             <button
               key={p || "all"}
+              type="button"
               data-testid={`market-filter-${p || "all"}`}
               onClick={() => setPosition(p)}
               className={`gx-btn capitalize ${position === p ? "gx-btn-primary" : "gx-btn-secondary"}`}
             >
-              {p || "All"}
+              {p || "All Positions"}
             </button>
           ))}
         </div>
@@ -124,6 +159,7 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
             {PRICE_PRESETS.map((preset) => (
               <button
                 key={preset.value}
+                type="button"
                 onClick={() => setMaxPrice(preset.value)}
                 className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
                   maxPrice === preset.value
@@ -136,6 +172,7 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
             ))}
             {cashNum > 0 && (
               <button
+                type="button"
                 onClick={() => setMaxPrice(cashNum)}
                 className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
                   maxPrice === cashNum
@@ -157,12 +194,12 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="gx-input py-1 text-xs max-w-[170px]"
+            className="gx-input py-1 text-xs max-w-[190px]"
           >
+            <option value="default">Value / GSI: High to Low</option>
+            <option value="rating_desc">Rating: High to Low</option>
             <option value="price_asc">Price: Low to High</option>
             <option value="price_desc">Price: High to Low</option>
-            <option value="rating_desc">Rating: High to Low</option>
-            <option value="default">Default Discovery</option>
           </select>
         </div>
       </div>
@@ -178,8 +215,8 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
         <Loading label="Scouting the world market" />
       ) : filteredPlayers.length === 0 ? (
         <Empty
-          title="No players match the price / position filters"
-          body={maxPrice > 0 ? "Try selecting 'All Prices' or increasing your price filter." : "Try another name or position."}
+          title="No players match the current filters"
+          body={maxPrice > 0 ? "Try selecting 'All Prices' or increasing your price filter." : "Try another name, tier, or position."}
         />
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
@@ -187,22 +224,27 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
             const owned = signedRefs.includes(p.player_id);
             const price = p.quote?.price ?? 0;
             const unaffordable = cashNum > 0 && price > cashNum && !owned;
+            const tierNorm = String(p.real_player_tier || "").toLowerCase();
+            const isLegend = tierNorm === "legend";
+            const isWonderkid = tierNorm === "wonderkid";
 
             return (
               <PlayerCard
                 key={p.player_id}
                 testid={`market-card-${p.player_id}`}
-                name={p.player_name}
+                name={p.canonical_display_name || p.player_name}
                 rating={p.quote?.rating}
                 position={p.position}
                 age={p.age}
                 nationality={p.nationality}
                 club={p.current_club_name}
                 image={p.image_url}
+                tier={isLegend ? "legendary" : undefined}
+                badge={isLegend ? "ICON · 1 OF 1" : isWonderkid ? "WONDERKID" : undefined}
                 onClick={() => setOpen(p.player_id)}
                 stats={[
                   { k: "Fee", v: price ? `${fmt(price)}` : "-" },
-                  { k: "Value", v: fmt(p.current_value_credits, 1) },
+                  { k: "Value", v: p.current_value_credits != null ? fmt(p.current_value_credits, 1) : (price ? fmt(price, 1) : "-") },
                   { k: "Form", v: p.average_rating ?? "-" },
                 ]}
                 footer={
