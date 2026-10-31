@@ -13,10 +13,16 @@ from pathlib import Path
 import pytest
 import yaml
 
-PRODUCTION_API_ORIGIN = "https://gtex-api-opea.onrender.com"
-PRODUCTION_WEB_ORIGIN = "https://gtex-web-tw6c.onrender.com"
+PRODUCTION_API_ORIGIN = "https://gtex-api-2gtu.onrender.com"
+PRODUCTION_WEB_ORIGIN = "https://gtex-web-np2t.onrender.com"
 CANONICAL_KORAPAY_WEBHOOK = f"{PRODUCTION_API_ORIGIN}/integrations/payments/korapay/webhook"
-RETIRED_HOSTS = ("gtex-api-cijn.onrender.com", "gtex-web-5ivv.onrender.com", "gtex-web.onrender.com")
+RETIRED_HOSTS = (
+    "gtex-api-cijn.onrender.com",
+    "gtex-api-opea.onrender.com",
+    "gtex-web-5ivv.onrender.com",
+    "gtex-web.onrender.com",
+    "gtex-web-tw6c.onrender.com",
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 

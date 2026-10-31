@@ -10,6 +10,22 @@ if [ -z "${DATABASE_URL:-}" ]; then
   exit 1
 fi
 
+_clean_db_url="${DATABASE_URL}"
+if [[ "${_clean_db_url}" == export\ * ]]; then
+  _clean_db_url="${_clean_db_url#export }"
+fi
+if [[ "${_clean_db_url}" == DATABASE_URL=* ]]; then
+  _clean_db_url="${_clean_db_url#DATABASE_URL=}"
+fi
+if [[ "${_clean_db_url}" == GTE_DATABASE_URL=* ]]; then
+  _clean_db_url="${_clean_db_url#GTE_DATABASE_URL=}"
+fi
+while [[ "${_clean_db_url}" == \"*\" || "${_clean_db_url}" == \'*\' ]]; do
+  _clean_db_url="${_clean_db_url:1:-1}"
+done
+_clean_db_url="$(echo "${_clean_db_url}" | sed -e 's/^[[:space:]"\'\'\ ]*//' -e 's/[[:space:]"\'\'\ ]*$//')"
+DATABASE_URL="${_clean_db_url}"
+
 TARGET="${REGEN_TARGET:-12000}"
 
 echo "== Rebuilding regens (target=${TARGET}) =="

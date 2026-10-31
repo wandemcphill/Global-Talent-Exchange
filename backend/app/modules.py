@@ -11,7 +11,7 @@ from starlette.requests import Request
 from app.core.module import DomainModule, register_domain_modules
 
 logger = logging.getLogger(__name__)
-CORE_BOOT_PATHS = frozenset({"/health", "/ready", "/version", "/diagnostics", "/metrics"})
+CORE_BOOT_PATHS = frozenset({"/", "/health", "/ready", "/version", "/diagnostics", "/metrics"})
 LAZY_HYDRATION_BYPASS_PREFIXES = (
     "/auth",
     "/api/auth",

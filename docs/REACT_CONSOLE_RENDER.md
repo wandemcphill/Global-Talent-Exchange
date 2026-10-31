@@ -1,13 +1,13 @@
 # React shell on the Render static site
 
-The production web service is still `gtex-web` (`https://gtex-web-tw6c.onrender.com`). One static publish contains both frontends:
+The production web service is still `gtex-web` (`https://gtex-web-np2t.onrender.com`). One static publish contains both frontends:
 
 | URL | App |
 | --- | --- |
 | `/` and existing Flutter files | Flutter web (`frontend/build/web`) |
 | `/console/` and `/console/*` | Emergent React shell |
 
-Both apps call the existing API at `https://gtex-api-opea.onrender.com`. This deploy does not add a backend, database, or auth bypass.
+Both apps call the existing API at `https://gtex-api-2gtu.onrender.com`. This deploy does not add a backend, database, or auth bypass.
 
 The Cloudflare Pages script (`ops/cloudflare/build-frontend.sh`) is unchanged and still publishes Flutter only.
 
@@ -48,7 +48,7 @@ React Router's basename comes from `PUBLIC_URL` (`frontend/react-shell/src/lib/p
 
 | Variable | Value | Used by |
 | --- | --- | --- |
-| `GTE_API_BASE_URL` | `https://gtex-api-opea.onrender.com` | Flutter `--dart-define` and the React shell's `REACT_APP_BACKEND_URL` |
+| `GTE_API_BASE_URL` | `https://gtex-api-2gtu.onrender.com` | Flutter `--dart-define` and the React shell's `REACT_APP_BACKEND_URL` |
 | `GTE_BACKEND_MODE` | `live` | Flutter |
 | `GTEX_SHELL_V3` | `true` by default; set `false` only for rollback | Flutter P9-SHELL activation |
 | `NODE_VERSION` | `20` | React toolchain on the static-site build image |
@@ -59,7 +59,7 @@ Local React development uses `frontend/react-shell/.env.local` (copied from `.en
 
 ## CORS and authentication
 
-The React shell is served from the same origin as Flutter: `https://gtex-web-tw6c.onrender.com`. CORS is origin-based, so `GTE_CORS_ALLOW_ORIGINS` on `gtex-api` already covers `/console/`. No backend CORS change is required.
+The React shell is served from the same origin as Flutter: `https://gtex-web-np2t.onrender.com`. CORS is origin-based, so `GTE_CORS_ALLOW_ORIGINS` on `gtex-api` already covers `/console/`. No backend CORS change is required.
 
 The shell sends `Authorization: Bearer` to the canonical API. It does not add a cookie session, a second auth secret, or a mock API fallback. If `REACT_APP_BACKEND_URL` is missing at build time, the client throws instead of calling the static host.
 
@@ -73,11 +73,11 @@ React shell only (no Flutter SDK):
 cd frontend/react-shell
 npm ci --legacy-peer-deps --include=dev
 PUBLIC_URL=/console \
-REACT_APP_BACKEND_URL=https://gtex-api-opea.onrender.com \
+REACT_APP_BACKEND_URL=https://gtex-api-2gtu.onrender.com \
 CI=false \
 NODE_OPTIONS=--openssl-legacy-provider \
 npm run build
-GTE_API_BASE_URL=https://gtex-api-opea.onrender.com \
+GTE_API_BASE_URL=https://gtex-api-2gtu.onrender.com \
   bash ../../ops/render/verify-console-bundle.sh build
 ```
 
@@ -86,7 +86,7 @@ GTE_API_BASE_URL=https://gtex-api-opea.onrender.com \
 Both apps, the same command Render runs (requires git, a Flutter checkout, and Node 20):
 
 ```bash
-export GTE_API_BASE_URL=https://gtex-api-opea.onrender.com
+export GTE_API_BASE_URL=https://gtex-api-2gtu.onrender.com
 export GTE_BACKEND_MODE=live
 bash ops/render/build-frontend.sh
 ```
@@ -114,7 +114,7 @@ python -m pytest backend/tests/security/test_react_console_static_publish.py bac
 This repository cannot apply the live service settings from here.
 
 - Blueprint sync on `gtex-web` shows the three `/console` rewrites, and they sit above any pre-existing `/*` rewrite. A dashboard `/*` → `/index.html` rule that is evaluated first would send `/console/app/...` to the Flutter document. Render keeps redirect rules that are not listed in `render.yaml`.
-- `https://gtex-web-tw6c.onrender.com/` still loads Flutter.
-- `https://gtex-web-tw6c.onrender.com/console/` loads the React shell, and the document requests `/console/static/...` (not `/static/...`).
-- Refresh `https://gtex-web-tw6c.onrender.com/console/login` and it still loads the React shell.
-- A React API call goes to `https://gtex-api-opea.onrender.com` and not to the static host.
+- `https://gtex-web-np2t.onrender.com/` still loads Flutter.
+- `https://gtex-web-np2t.onrender.com/console/` loads the React shell, and the document requests `/console/static/...` (not `/static/...`).
+- Refresh `https://gtex-web-np2t.onrender.com/console/login` and it still loads the React shell.
+- A React API call goes to `https://gtex-api-2gtu.onrender.com` and not to the static host.

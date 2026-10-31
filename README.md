@@ -9,9 +9,9 @@ See also:
 ## Canonical production deployment
 
 The current Render Blueprint uses:
-- Web: `https://gtex-web-tw6c.onrender.com`
-- API: `https://gtex-api-opea.onrender.com`
-- KoraPay webhook: `https://gtex-api-opea.onrender.com/integrations/payments/korapay/webhook`
+- Web: `https://gtex-web-np2t.onrender.com`
+- API: `https://gtex-api-2gtu.onrender.com`
+- KoraPay webhook: `https://gtex-api-2gtu.onrender.com/integrations/payments/korapay/webhook`
 
 The production frontend is configured for the canonical API above. Flutter web remains the site at `/`. The Emergent React shell is published beside it at `/console/` from the same `gtex-web` static deploy. Build, rewrite, environment, and rollback steps are in `docs/REACT_CONSOLE_RENDER.md`. Local/demo instructions below remain explicitly local-only.
 

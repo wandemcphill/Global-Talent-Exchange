@@ -43,7 +43,7 @@ services:
       - key: GTE_INGESTION_PROVIDER
         value: sportmonks
       - key: GTE_CORS_ALLOW_ORIGINS
-        value: https://gtex-web-tw6c.onrender.com
+        value: https://gtex-web-np2t.onrender.com
       - key: GTE_CORS_ALLOW_ORIGIN_REGEX
         value: ""
       - key: GTE_TRUSTED_PROXY_HOPS
@@ -65,7 +65,7 @@ services:
       - key: GTE_KORAPAY_WEBHOOK_SECRET
         sync: false
       - key: GTE_KORAPAY_NOTIFICATION_URL
-        value: https://gtex-api-opea.onrender.com/integrations/payments/korapay/webhook
+        value: https://gtex-api-2gtu.onrender.com/integrations/payments/korapay/webhook
       - key: GTE_ENABLE_PAYSTACK
         value: "true"
       - key: GTE_PAYSTACK_SECRET_KEY
@@ -126,7 +126,7 @@ services:
         destination: /index.html
     envVars:
       - key: GTE_API_BASE_URL
-        value: https://gtex-api-opea.onrender.com
+        value: https://gtex-api-2gtu.onrender.com
       - key: GTE_TURNSTILE_SITE_KEY
         sync: false
       - key: GTE_BACKEND_MODE

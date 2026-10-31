@@ -29,7 +29,7 @@ MEDIA_STORAGE_FILE = "media_storage.toml"
 SPONSORSHIP_INVENTORY_FILE = "sponsorship_inventory.toml"
 REGEN_GENERATION_FILE = "regen_generation.toml"
 NON_ALPHANUMERIC_RE = re.compile(r"[^a-z0-9]+")
-DEFAULT_CORS_ALLOWED_ORIGINS = ("https://gtex-web-tw6c.onrender.com",)
+DEFAULT_CORS_ALLOWED_ORIGINS = ("https://gtex-web-np2t.onrender.com",)
 DEFAULT_CORS_ALLOW_ORIGIN_REGEX = r"https?://(?:localhost|127\.0\.0\.1)(?::\d+)?$"
 UNSAFE_SECRET_PLACEHOLDERS = frozenset(
     {
@@ -355,6 +355,23 @@ def _get_csv(environ: Mapping[str, str], name: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in value.split(",") if item.strip())
 
 
+def normalize_psycopg_url(database_url: str) -> str:
+    cleaned = (database_url or "").strip()
+    if cleaned.startswith("export "):
+        cleaned = cleaned[len("export ") :].strip()
+    for prefix in ("DATABASE_URL=", "GTE_DATABASE_URL="):
+        if cleaned.startswith(prefix):
+            cleaned = cleaned[len(prefix) :].strip()
+    while (cleaned.startswith('"') and cleaned.endswith('"')) or (cleaned.startswith("'") and cleaned.endswith("'")):
+        cleaned = cleaned[1:-1].strip()
+    cleaned = cleaned.strip("\"' \t\r\n")
+    if cleaned.startswith("postgresql+psycopg://"):
+        cleaned = "postgresql://" + cleaned[len("postgresql+psycopg://") :]
+    elif cleaned.startswith("postgres+psycopg://"):
+        cleaned = "postgresql://" + cleaned[len("postgres+psycopg://") :]
+    return cleaned
+
+
 def normalize_database_url(database_url: str) -> str:
     normalized = database_url.strip()
     if normalized.startswith("export "):
@@ -366,6 +383,7 @@ def normalize_database_url(database_url: str) -> str:
         normalized.startswith("'") and normalized.endswith("'")
     ):
         normalized = normalized[1:-1].strip()
+    normalized = normalized.strip("\"' \t\r\n")
     if not normalized:
         raise ValueError("DATABASE_URL must not be empty.")
     if normalized.startswith("postgres://"):

@@ -23,7 +23,7 @@ PUBLISH_SCRIPT = REPO_ROOT / "ops" / "render" / "publish-react-shell.sh"
 API_CLIENT = REPO_ROOT / "frontend" / "react-shell" / "src" / "lib" / "api.ts"
 APP_ENTRY = REPO_ROOT / "frontend" / "react-shell" / "src" / "App.tsx"
 
-PRODUCTION_API_ORIGIN = "https://gtex-api-opea.onrender.com"
+PRODUCTION_API_ORIGIN = "https://gtex-api-2gtu.onrender.com"
 
 
 @pytest.fixture(scope="module")

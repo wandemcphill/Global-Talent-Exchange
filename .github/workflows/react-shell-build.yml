@@ -29,8 +29,8 @@ jobs:
       CI: "false"
       NODE_OPTIONS: "--openssl-legacy-provider"
       PUBLIC_URL: "/console"
-      REACT_APP_BACKEND_URL: "https://gtex-api-opea.onrender.com"
-      GTE_API_BASE_URL: "https://gtex-api-opea.onrender.com"
+      REACT_APP_BACKEND_URL: "https://gtex-api-2gtu.onrender.com"
+      GTE_API_BASE_URL: "https://gtex-api-2gtu.onrender.com"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
