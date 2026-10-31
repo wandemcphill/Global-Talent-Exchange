@@ -19,7 +19,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ pulse, onExplore }) =>
   const clubsCount = pulse?.clubsOnGtex ? compactNumber(pulse.clubsOnGtex) : "1,240+";
 
   return (
-    <section id="hero" className="relative min-h-[92vh] overflow-hidden bg-[#0B1626] pt-[72px]">
+    <section id="hero" className="relative min-h-[92vh] overflow-hidden bg-[#0B1626] pt-0">
       {/* Stadium Background Poster */}
       <img
         src={publicUrl("/img/gtex_landing_single_poster.png")}
@@ -36,7 +36,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ pulse, onExplore }) =>
       <div className="gx-pitch-grid absolute inset-0 opacity-40" />
 
       {/* Editorial Content */}
-      <div className="relative mx-auto flex max-w-[1440px] flex-col justify-center px-6 py-16 sm:px-12 lg:min-h-[calc(92vh-72px)] lg:py-24">
+      <div className="relative mx-auto flex max-w-[1440px] flex-col justify-center px-6 py-16 sm:px-12 lg:min-h-[calc(92vh-158px)] lg:py-24">
         <div className="max-w-3xl">
           {/* Eyebrow with living green pulse */}
           <div className="flex items-center gap-2.5">
