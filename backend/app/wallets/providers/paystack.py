@@ -54,13 +54,8 @@ class PaystackProviderAdapter:
         return None
 
     def _webhook_secret(self) -> str | None:
-        for name in (
-            "GTE_PAYSTACK_WEBHOOK_SECRET",
-            "PAYSTACK_WEBHOOK_SECRET",
-        ):
-            val = os.getenv(name)
-            if val and val.strip():
-                return val.strip()
+        # Paystack's webhook HMAC uses the API secret key (sk_live_ / sk_test_).
+        # There is no separate webhook-signing secret in Paystack's contract.
         return self._secret_key()
 
     def is_configured(self) -> bool:
