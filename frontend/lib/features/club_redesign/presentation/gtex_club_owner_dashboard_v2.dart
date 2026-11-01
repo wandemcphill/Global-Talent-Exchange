@@ -921,7 +921,6 @@ class _StaffMarketplacePanel extends StatelessWidget {
   });
 
   final GtexClubGrowthDashboard? dashboard;
-  final VoidCallback? onOpenAcademy;
   final bool loading;
   final String? error;
   final VoidCallback? onRefresh;
@@ -1058,7 +1057,6 @@ class _AcademyPipelinePanel extends StatelessWidget {
   });
 
   final GtexClubGrowthDashboard? dashboard;
-  final VoidCallback? onOpenAcademy;
   final bool loading;
   final String? error;
   final VoidCallback? onRefresh;
@@ -1181,7 +1179,6 @@ class _SponsorshipGrowthPanel extends StatelessWidget {
   });
 
   final GtexClubGrowthDashboard? dashboard;
-  final VoidCallback? onOpenAcademy;
   final bool loading;
   final String? error;
   final VoidCallback? onRefresh;
