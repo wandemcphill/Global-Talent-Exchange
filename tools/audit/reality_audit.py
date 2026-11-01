@@ -23,7 +23,12 @@ def _paystack_failures() -> list[str]:
     registry = _read("backend/app/wallets/providers/registry.py")
     constants = _read("backend/app/wallets/constants.py")
     admin = _read("backend/app/admin_godmode/service.py")
-    runtime = "\n".join((_read("frontend/lib/core/runtime/gtex_runtime.dart"), _read("frontend/lib/core/runtime/gtex_runtime_graph.dart")))
+    runtime = "\n".join(
+        (
+            _read("frontend/lib/core/runtime/gtex_runtime.dart"),
+            _read("frontend/lib/core/runtime/gtex_runtime_graph.dart"),
+        )
+    )
     render = yaml.safe_load(_read("render.yaml")) or {}
     services = {s.get("name"): s for s in render.get("services", []) or [] if s.get("name")}
     api_env = {e.get("key"): e for e in services.get("gtex-api", {}).get("envVars", []) or [] if e.get("key")}
@@ -31,20 +36,26 @@ def _paystack_failures() -> list[str]:
     required_gate = "GTE_ENABLE_PAYSTACK"
     if required_gate not in main:
         failures.append("Backend strict-live startup gate does not check GTE_ENABLE_PAYSTACK.")
-    if '"paystack": ProviderRegistration(adapter=PaystackProviderAdapter(), is_live=True, status="live")' not in registry:
+    if (
+        '"paystack": ProviderRegistration(adapter=PaystackProviderAdapter(), is_live=True, status="live")'
+        not in registry
+    ):
         failures.append("Payment provider registry does not mark Paystack as a live provider.")
-    readiness = registry[registry.find("def paystack_enabled()"):registry.find("def provider_runtime_status(")]
+    readiness = registry[registry.find("def paystack_enabled()") : registry.find("def provider_runtime_status(")]
     if "GTE_PAYSTACK_SECRET_KEY" not in readiness or 'secret.startswith("sk_live_")' not in readiness:
         failures.append("Paystack readiness must require an API secret key and reject test keys in production.")
-    if 'SUPPORTED_TOP_UP_PROVIDER_KEYS' not in constants or '"paystack"' not in constants:
+    if "SUPPORTED_TOP_UP_PROVIDER_KEYS" not in constants or '"paystack"' not in constants:
         failures.append("Wallet top-up provider constants do not expose Paystack as a supported production rail.")
-    if 'SUPPORTED_ADMIN_PAYMENT_RAILS' not in admin or 'SUPPORTED_TOP_UP_PROVIDER_KEYS' not in admin:
+    if "SUPPORTED_ADMIN_PAYMENT_RAILS" not in admin or "SUPPORTED_TOP_UP_PROVIDER_KEYS" not in admin:
         failures.append("Admin payment rails are not derived from the supported production top-up rails.")
     value = str(api_env.get("GTE_ENABLE_PAYSTACK", {}).get("value", "")).strip().lower()
     if value != "true":
         failures.append("render.yaml does not explicitly enable Paystack for production.")
     web_env = {e.get("key"): e for e in services.get("gtex-web", {}).get("envVars", []) or [] if e.get("key")}
-    if "GTE_BACKEND_MODE" not in web_env or str(web_env["GTE_BACKEND_MODE"].get("value", "")).strip().lower() not in ("live", "strict_live"):
+    if "GTE_BACKEND_MODE" not in web_env or str(web_env["GTE_BACKEND_MODE"].get("value", "")).strip().lower() not in (
+        "live",
+        "strict_live",
+    ):
         failures.append("render.yaml gtex-web service does not force live backend mode.")
     if "paystack: true" not in runtime or "paystack_enabled_in_strict_live" not in runtime:
         failures.append("Frontend strict-live runtime does not enable Paystack as a production capability.")
