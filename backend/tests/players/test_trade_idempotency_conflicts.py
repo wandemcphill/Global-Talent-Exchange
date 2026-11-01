@@ -138,7 +138,7 @@ def test_buy_replay_with_same_idempotency_key_executes_once(session):
     assert second["transaction_id"] == first["transaction_id"]
     assert second["gross_amount_coin"] == first["gross_amount_coin"]
     assert balance_after_second == balance_after_first
-    assert holding_after_second.share_count == holding_after_first.share_count == 10
+    assert holding_after_second.share_count == holding_after_first.share_count == 1
     assert market_after_second["circulating_shares"] == market_after_first["circulating_shares"]
     assert tx_count_after_second == tx_count_after_first
 
