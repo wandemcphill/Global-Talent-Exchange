@@ -10,7 +10,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "20261101_0152_korapay_paystack_payout_and_order_fields"
-down_revision = "20261027_0151_owner_world_tick_date"
+down_revision = "20261031_0153_brand_advertising_portal"
 branch_labels = None
 depends_on = None
 
