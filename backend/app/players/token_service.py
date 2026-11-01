@@ -330,6 +330,20 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
             reason="player_acquisition_non_transferable",
         )
 
+    def distribute_dividend(
+        self,
+        *,
+        actor: User,
+        player_id: str,
+        gross_amount_coin,
+        note: str | None = None,
+    ) -> dict[str, Any]:
+        del actor, player_id, gross_amount_coin, note
+        raise PlayerTokenMarketError(
+            "Player acquisitions do not create dividend, yield or investment entitlements.",
+            reason="player_acquisition_non_investment",
+        )
+
     def release_shares(
         self,
         *,
