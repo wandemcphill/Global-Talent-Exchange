@@ -123,13 +123,13 @@ def test_buy_replay_with_same_idempotency_key_executes_once(session):
     _seed_coin_balance(session, wallet, user=fan, amount=Decimal("50.0000"))
     fan_account = wallet.get_user_account(session, fan, LedgerUnit.COIN)
 
-    first = service.buy_shares(actor=fan, player_id=player.id, share_count=10, idempotency_key="buy-key-1")
+    first = service.buy_shares(actor=fan, player_id=player.id, share_count=1, idempotency_key="buy-key-1")
     balance_after_first = wallet.get_balance(session, fan_account)
     holding_after_first = service.get_holding(user_id=fan.id, player_id=player.id)
     market_after_first = service.get_market_view(player_id=player.id)
     tx_count_after_first = _ledger_transaction_count(session)
 
-    second = service.buy_shares(actor=fan, player_id=player.id, share_count=10, idempotency_key="buy-key-1")
+    second = service.buy_shares(actor=fan, player_id=player.id, share_count=1, idempotency_key="buy-key-1")
     balance_after_second = wallet.get_balance(session, fan_account)
     holding_after_second = service.get_holding(user_id=fan.id, player_id=player.id)
     market_after_second = service.get_market_view(player_id=player.id)
@@ -143,32 +143,18 @@ def test_buy_replay_with_same_idempotency_key_executes_once(session):
     assert tx_count_after_second == tx_count_after_first
 
 
-def test_sell_replay_with_same_idempotency_key_executes_once(session):
+def test_sell_replay_is_disabled_for_non_transferable_acquisitions(session):
     service, wallet, admin = _setup_service(session, admin_id="admin-sell-replay")
     player = _issue_market(session, service, admin, player_id="p-sell-replay")
     fan = _create_user(session, user_id="fan-sell-replay")
     _seed_coin_balance(session, wallet, user=fan, amount=Decimal("50.0000"))
-    fan_account = wallet.get_user_account(session, fan, LedgerUnit.COIN)
-    service.buy_shares(actor=fan, player_id=player.id, share_count=10, idempotency_key="buy-before-sell")
+    service.buy_shares(actor=fan, player_id=player.id, share_count=1, idempotency_key="buy-before-sell")
 
-    first = service.sell_shares(actor=fan, player_id=player.id, share_count=4, idempotency_key="sell-key-1")
-    balance_after_first = wallet.get_balance(session, fan_account)
-    holding_after_first = service.get_holding(user_id=fan.id, player_id=player.id)
-    market_after_first = service.get_market_view(player_id=player.id)
-    tx_count_after_first = _ledger_transaction_count(session)
+    with pytest.raises(PlayerTokenMarketError) as error:
+        service.sell_shares(actor=fan, player_id=player.id, share_count=1, idempotency_key="sell-key-1")
+    assert error.value.reason == "player_acquisition_non_transferable"
+    assert service.get_holding(user_id=fan.id, player_id=player.id).share_count == 1
 
-    second = service.sell_shares(actor=fan, player_id=player.id, share_count=4, idempotency_key="sell-key-1")
-    balance_after_second = wallet.get_balance(session, fan_account)
-    holding_after_second = service.get_holding(user_id=fan.id, player_id=player.id)
-    market_after_second = service.get_market_view(player_id=player.id)
-    tx_count_after_second = _ledger_transaction_count(session)
-
-    assert second["transaction_id"] == first["transaction_id"]
-    assert second["gross_amount_coin"] == first["gross_amount_coin"]
-    assert balance_after_second == balance_after_first
-    assert holding_after_second.share_count == holding_after_first.share_count == 6
-    assert market_after_second["circulating_shares"] == market_after_first["circulating_shares"]
-    assert tx_count_after_second == tx_count_after_first
 
 
 def test_same_key_different_user_does_not_conflict(session):
@@ -179,12 +165,12 @@ def test_same_key_different_user_does_not_conflict(session):
     _seed_coin_balance(session, wallet, user=fan_a, amount=Decimal("50.0000"))
     _seed_coin_balance(session, wallet, user=fan_b, amount=Decimal("50.0000"))
 
-    result_a = service.buy_shares(actor=fan_a, player_id=player.id, share_count=5, idempotency_key="shared-key")
-    result_b = service.buy_shares(actor=fan_b, player_id=player.id, share_count=5, idempotency_key="shared-key")
+    result_a = service.buy_shares(actor=fan_a, player_id=player.id, share_count=1, idempotency_key="shared-key")
+    result_b = service.buy_shares(actor=fan_b, player_id=player.id, share_count=1, idempotency_key="shared-key")
 
     assert result_a["transaction_id"] != result_b["transaction_id"]
-    assert service.get_holding(user_id=fan_a.id, player_id=player.id).share_count == 5
-    assert service.get_holding(user_id=fan_b.id, player_id=player.id).share_count == 5
+    assert service.get_holding(user_id=fan_a.id, player_id=player.id).share_count == 1
+    assert service.get_holding(user_id=fan_b.id, player_id=player.id).share_count == 1
 
 
 def test_same_key_different_player_is_rejected_as_conflict(session):
@@ -194,10 +180,10 @@ def test_same_key_different_player_is_rejected_as_conflict(session):
     fan = _create_user(session, user_id="fan-player-conflict")
     _seed_coin_balance(session, wallet, user=fan, amount=Decimal("50.0000"))
 
-    service.buy_shares(actor=fan, player_id=player_one.id, share_count=5, idempotency_key="reused-key")
+    service.buy_shares(actor=fan, player_id=player_one.id, share_count=1, idempotency_key="reused-key")
 
     with pytest.raises(PlayerTokenMarketError, match="already used for a different player-share trade") as exc_info:
-        service.buy_shares(actor=fan, player_id=player_two.id, share_count=5, idempotency_key="reused-key")
+        service.buy_shares(actor=fan, player_id=player_two.id, share_count=1, idempotency_key="reused-key")
     assert exc_info.value.reason == "trade_idempotency_conflict"
     assert service.get_holding(user_id=fan.id, player_id=player_two.id) is None
 
@@ -208,26 +194,26 @@ def test_same_key_different_side_is_rejected_as_conflict(session):
     fan = _create_user(session, user_id="fan-side-conflict")
     _seed_coin_balance(session, wallet, user=fan, amount=Decimal("50.0000"))
 
-    service.buy_shares(actor=fan, player_id=player.id, share_count=5, idempotency_key="side-key")
+    service.buy_shares(actor=fan, player_id=player.id, share_count=1, idempotency_key="side-key")
 
-    with pytest.raises(PlayerTokenMarketError, match="already used for a different player-share trade") as exc_info:
-        service.sell_shares(actor=fan, player_id=player.id, share_count=5, idempotency_key="side-key")
-    assert exc_info.value.reason == "trade_idempotency_conflict"
-    assert service.get_holding(user_id=fan.id, player_id=player.id).share_count == 5
+    with pytest.raises(PlayerTokenMarketError) as exc_info:
+        service.sell_shares(actor=fan, player_id=player.id, share_count=1, idempotency_key="side-key")
+    assert exc_info.value.reason == "player_acquisition_non_transferable"
+    assert service.get_holding(user_id=fan.id, player_id=player.id).share_count == 1
 
 
-def test_same_key_different_share_count_is_rejected_as_conflict(session):
+def test_non_unit_quantity_is_rejected_and_cannot_change_existing_holding(session):
     service, wallet, admin = _setup_service(session, admin_id="admin-count-conflict")
     player = _issue_market(session, service, admin, player_id="p-count-conflict")
     fan = _create_user(session, user_id="fan-count-conflict")
     _seed_coin_balance(session, wallet, user=fan, amount=Decimal("50.0000"))
 
-    service.buy_shares(actor=fan, player_id=player.id, share_count=5, idempotency_key="count-key")
+    service.buy_shares(actor=fan, player_id=player.id, share_count=1, idempotency_key="count-key")
 
-    with pytest.raises(PlayerTokenMarketError, match="already used for a different player-share trade") as exc_info:
-        service.buy_shares(actor=fan, player_id=player.id, share_count=6, idempotency_key="count-key")
-    assert exc_info.value.reason == "trade_idempotency_conflict"
-    assert service.get_holding(user_id=fan.id, player_id=player.id).share_count == 5
+    with pytest.raises(PlayerTokenMarketError) as exc_info:
+        service.buy_shares(actor=fan, player_id=player.id, share_count=2, idempotency_key="count-key")
+    assert exc_info.value.reason == "acquisition_quantity_must_be_one"
+    assert service.get_holding(user_id=fan.id, player_id=player.id).share_count == 1
 
 
 def test_ledger_transaction_idempotency_key_has_database_unique_constraint(session):
@@ -248,13 +234,14 @@ def test_ledger_transaction_idempotency_key_has_database_unique_constraint(sessi
     fan = _create_user(session, user_id="fan-race-backstop")
     _seed_coin_balance(session, wallet, user=fan, amount=Decimal("50.0000"))
 
-    service.buy_shares(actor=fan, player_id=player.id, share_count=5, idempotency_key="race-key")
+    service.buy_shares(actor=fan, player_id=player.id, share_count=1, idempotency_key="race-key")
     session.commit()
 
-    # Simulate the loser of a race: an independent trade that already executed
-    # (e.g. because it read the market before the winner's commit was visible)
-    # and now tries to bind the SAME idempotency key the winner already holds.
-    loser = service.buy_shares(actor=fan, player_id=player.id, share_count=5, idempotency_key="throwaway-key")
+    # A second player purchase creates a distinct ledger transaction. Binding
+    # the first purchase's idempotency reference must still fail the DB unique
+    # constraint, proving that concurrent duplicate keys cannot both settle.
+    other_player = _issue_market(session, service, admin, player_id="p-race-backstop-other")
+    loser = service.buy_shares(actor=fan, player_id=other_player.id, share_count=1, idempotency_key="throwaway-key")
 
     with pytest.raises(IntegrityError):
         service._bind_trade_idempotency(
@@ -263,6 +250,6 @@ def test_ledger_transaction_idempotency_key_has_database_unique_constraint(sessi
             actor=fan,
             player_id=player.id,
             side="buy",
-            share_count=5,
+            share_count=1,
         )
     session.rollback()
