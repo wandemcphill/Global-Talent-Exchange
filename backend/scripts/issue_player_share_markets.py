@@ -140,12 +140,8 @@ def _build_plan(player: Player, policy: dict[str, Any]) -> IssuancePlan:
     return IssuancePlan(
         tier=tier,
         total_shares=total_shares,
-        initial_circulating_cap=1 if is_one_of_one else min(
-            int(tier_policy["initial_circulating_cap"]), total_shares
-        ),
-        initial_mm_inventory_target=1 if is_one_of_one else min(
-            initial_mm_inventory_target, total_shares
-        ),
+        initial_circulating_cap=1 if is_one_of_one else min(int(tier_policy["initial_circulating_cap"]), total_shares),
+        initial_mm_inventory_target=1 if is_one_of_one else min(initial_mm_inventory_target, total_shares),
         share_price_coin=_decimal(price),
         liquidity_coin=liquidity_coin,
         status=status,
