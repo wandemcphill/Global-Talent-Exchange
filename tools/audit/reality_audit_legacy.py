@@ -1308,7 +1308,13 @@ def _render_config_failures() -> list[str]:
 
     notification_entry = api_env.get("GTE_KORAPAY_NOTIFICATION_URL")
     notification_value = str(notification_entry.get("value", "")) if notification_entry else ""
-    if "https://gtex-api-opea.onrender.com/integrations/payments/korapay/webhook" not in notification_value:
+    if not any(
+        target in notification_value
+        for target in (
+            "https://gtex-api-2gtu.onrender.com/integrations/payments/korapay/webhook",
+            "https://gtex-api-opea.onrender.com/integrations/payments/korapay/webhook",
+        )
+    ):
         failures.append("render.yaml is missing the production KoraPay notification URL.")
 
     paystack_entry = api_env.get("GTE_ENABLE_PAYSTACK")
@@ -1323,7 +1329,10 @@ def _render_config_failures() -> list[str]:
 
     api_base_entry = web_env.get("GTE_API_BASE_URL")
     api_base_value = str(api_base_entry.get("value", "")) if api_base_entry else ""
-    if "https://gtex-api-opea.onrender.com" not in api_base_value:
+    if not any(
+        target in api_base_value
+        for target in ("https://gtex-api-2gtu.onrender.com", "https://gtex-api-opea.onrender.com")
+    ):
         failures.append("render.yaml gtex-web service does not point at the live API base URL.")
 
     backend_mode_entry = web_env.get("GTE_BACKEND_MODE")

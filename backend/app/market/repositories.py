@@ -590,7 +590,9 @@ class SqlAlchemyMarketPlayerRepository:
         # is available on the detail view.
         # For bulk catalog scans (> 100 players), only fetch snapshots for players missing a summary,
         # using distinct on PostgreSQL, to prevent loading millions of historical snapshots into RAM.
-        snapshot_target_ids = player_ids if len(player_ids) <= 100 else [pid for pid in player_ids if pid not in summaries]
+        snapshot_target_ids = (
+            player_ids if len(player_ids) <= 100 else [pid for pid in player_ids if pid not in summaries]
+        )
 
         latest_snapshots: dict[str, PlayerValueSnapshotRecord] = {}
         if snapshot_target_ids:

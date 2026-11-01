@@ -13,6 +13,7 @@ import {
   Globe,
   Inbox,
   LogOut,
+  Megaphone,
   Newspaper,
   Search,
   Shield,
@@ -51,6 +52,7 @@ const NAV = [
   { to: "/app/regen-world", label: "Regen World", icon: Globe, id: "regen-world", category: "WORLD & MEDIA" },
   { to: "/app/awards", label: "Regen Awards", icon: Award, id: "awards", category: "WORLD & MEDIA" },
   { to: "/app/creator-access", label: "Creator Access", icon: Video, id: "creator-access", category: "WORLD & MEDIA" },
+  { to: "/app/advertising", label: "Advertiser Studio", icon: Megaphone, id: "advertising", category: "WORLD & MEDIA" },
 
   { to: "/app/finance", label: "Finance & Ledger", icon: Wallet, id: "finance", category: "ECONOMY & VAULT" },
   { to: "/app/market", label: "Player Shares", icon: ShoppingBag, id: "market", category: "ECONOMY & VAULT" },
@@ -178,6 +180,7 @@ export default function AppShell() {
   const traderAllowed = ["/app/coin-traders", "/app/finance"];
   const creatorAllowed = [
     "/app/creator-access",
+    "/app/advertising",
     "/app/newsroom",
     "/app/transfer-hub",
     "/app/regen-world",
@@ -218,6 +221,7 @@ export default function AppShell() {
     "/app/creator-access",
     "/app/coin-traders",
     "/app/inbox",
+    "/app/advertising",
   ];
   if (
     !isAdmin &&
@@ -244,6 +248,7 @@ export default function AppShell() {
           "national",
           "finance",
           "creator-access",
+          "advertising",
           "coin-traders",
         ].includes(item.id)
       );
@@ -253,6 +258,7 @@ export default function AppShell() {
     ? NAV.filter((item) =>
         [
           "creator-access",
+          "advertising",
           "newsroom",
           "transfers",
           "regen-world",
@@ -331,6 +337,7 @@ export default function AppShell() {
           ))}
           {isAdmin && (
             <div className="pt-3 border-t border-white/[0.08]">
+              <NavItem item={{ to: "/app/admin/advertising", label: "Advertising Review", icon: Megaphone, id: "admin-advertising" }} />
               <NavItem item={{ to: "/app/admin", label: "Admin Godmode", icon: Shield, id: "admin" }} />
             </div>
           )}

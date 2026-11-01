@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
 import {
   Disc3,
   ExternalLink,
@@ -19,6 +20,33 @@ import {
   VolumeX,
   X,
 } from "lucide-react";
+
+type PublicMusicPromotion = {
+  campaign_id: string;
+  brand_name: string;
+  headline: string;
+  description: string;
+  destination_url: string;
+  creative_url?: string | null;
+  target_type: "track" | "artist" | "playlist";
+  target_id: string;
+  track_title?: string | null;
+  artist_name?: string | null;
+  playlist_name?: string | null;
+  genre?: string | null;
+};
+
+function reportMusicPromotionEvent(campaignId: string, eventType: "impression" | "click") {
+  const key = typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  void api.post("/public/ads/events", {
+    campaign_id: campaignId,
+    event_type: eventType,
+    idempotency_key: `trax-${eventType}-${key}`,
+    metadata_json: { placement: "gtex_trax" },
+  }).catch(() => undefined);
+}
 
 export type GtexAudioContextType =
   | "home"
@@ -69,7 +97,7 @@ export const GTEX_TRAX_CATALOGUE: GtexTraxItem[] = [
     region: "Lagos · West Africa",
     bpm: 118,
     duration: "3:16",
-    isPromoted: true,
+    isPromoted: false,
     sponsorTier: "Headliner",
     artistBio:
       "Lagos-born Afro-arena producer blending talking drums with stadium synth brass for matchday walkouts.",
@@ -98,7 +126,7 @@ export const GTEX_TRAX_CATALOGUE: GtexTraxItem[] = [
     region: "London · UK",
     bpm: 132,
     duration: "2:54",
-    isPromoted: true,
+    isPromoted: false,
     sponsorTier: "Spotlight",
     artistBio:
       "South London 2-step & grime vocalist crafting high-tempo football trading floor anthems.",
@@ -127,7 +155,7 @@ export const GTEX_TRAX_CATALOGUE: GtexTraxItem[] = [
     region: "São Paulo · LATAM",
     bpm: 128,
     duration: "2:42",
-    isPromoted: true,
+    isPromoted: false,
     sponsorTier: "Headliner",
     artistBio:
       "São Paulo electronic percussionist powering GTEX Regen World & Goal Celebrations.",
@@ -156,7 +184,7 @@ export const GTEX_TRAX_CATALOGUE: GtexTraxItem[] = [
     region: "Berlin · EU",
     bpm: 124,
     duration: "3:30",
-    isPromoted: true,
+    isPromoted: false,
     sponsorTier: "Rising Star",
     artistBio:
       "Berlin-based melodic synth duo scoring late-night player share trading and executive boardrooms.",
@@ -234,15 +262,47 @@ export function GtexTraxTopBarControl() {
   const [tipsByTrack, setTipsByTrack] = useState<Record<string, number>>({});
   const [clicksByTrack, setClicksByTrack] = useState<Record<string, number>>({});
   const [goalAnthemId, setGoalAnthemId] = useState<string>("gtex-trax-afro-01");
+  const [sponsoredPromotions, setSponsoredPromotions] = useState<PublicMusicPromotion[]>([]);
+  const reportedPromotionImpressions = useRef(new Set<string>());
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const stepRef = useRef(0);
 
   const currentTrack = GTEX_TRAX_CATALOGUE[currentTrackIndex] || GTEX_TRAX_CATALOGUE[0];
+  const currentTrackPromotion = sponsoredPromotions.find((promotion) =>
+    (promotion.target_type === "track" && promotion.target_id === currentTrack.id) ||
+    (promotion.target_type === "artist" && (promotion.artist_name || "").toLowerCase() === currentTrack.artist.toLowerCase()) ||
+    (promotion.target_type === "playlist" && (promotion.playlist_name || "").toLowerCase() === currentTrack.album.toLowerCase())
+  ) || null;
+
   const isMatchdayDucked = activeContext === "matchday";
   const effectiveGain = isMuted
     ? 0
     : masterVolume * musicVolume * (isMatchdayDucked ? 0.2 : 1.0);
+
+  // Load approved, in-window GTEX TRAX partner promotions. A promotion is a disclosure/link only;
+  // it never selects a track or starts playback.
+  useEffect(() => {
+    let cancelled = false;
+    api.get("/public/ads/music/promotions")
+      .then((response) => {
+        if (!cancelled) setSponsoredPromotions(Array.isArray(response.data?.promotions) ? response.data.promotions : []);
+      })
+      .catch(() => {
+        if (!cancelled) setSponsoredPromotions([]);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!modalOpen) return;
+    for (const promotion of sponsoredPromotions) {
+      if (!reportedPromotionImpressions.current.has(promotion.campaign_id)) {
+        reportedPromotionImpressions.current.add(promotion.campaign_id);
+        reportMusicPromotionEvent(promotion.campaign_id, "impression");
+      }
+    }
+  }, [modalOpen, sponsoredPromotions]);
 
   // Sync route context automatically
   useEffect(() => {
@@ -368,9 +428,9 @@ export function GtexTraxTopBarControl() {
           <span className="hidden max-w-[145px] truncate text-[11px] font-bold text-slate-200 md:inline">
             {currentTrack.artist.split(" ")[0]} · {currentTrack.title.split("(")[0]}
           </span>
-          {currentTrack.isPromoted && (
-            <span className="rounded bg-amber-400/20 px-1 py-0.2 text-[8px] font-black uppercase text-amber-300">
-              PROMO
+          {currentTrackPromotion && (
+            <span className="rounded bg-amber-400 px-1.5 py-0.5 text-[8px] font-black uppercase text-slate-950">
+              SPONSORED
             </span>
           )}
         </button>
@@ -378,14 +438,14 @@ export function GtexTraxTopBarControl() {
         <button
           type="button"
           onClick={nextTrack}
-          title="Next Promoted Track"
+          title="Next GTEX TRAX Track"
           className="text-slate-400 hover:text-white"
         >
           <SkipForward size={12} />
         </button>
       </div>
 
-      {/* EA Sports FC Trax-Style Floating "Now Playing · Promoted Artist" Broadcast Chyron */}
+      {/* EA Sports FC Trax-Style Floating "Now Playing · GTEX TRAX" Broadcast Chyron */}
       {showToastChyron && (
         <div className="fixed bottom-5 right-5 z-40 flex w-80 items-center gap-3 rounded-2xl border border-amber-400/50 bg-slate-950/95 p-3.5 shadow-[0_20px_50px_rgba(0,0,0,0.85)] backdrop-blur-xl">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-amber-400/40 bg-gradient-to-br from-emerald-500/25 to-amber-500/25">
@@ -394,7 +454,7 @@ export function GtexTraxTopBarControl() {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <span className="rounded bg-amber-400 px-1.5 py-0.2 text-[8px] font-black uppercase tracking-wider text-slate-950">
-                GTEX TRAX · {currentTrack.sponsorTier}
+                {currentTrackPromotion ? "SPONSORED PROMOTION" : "GTEX TRAX · NOW PLAYING"}
               </span>
               <span className="gx-mono text-[9px] text-emerald-300">{currentTrack.bpm} BPM</span>
             </div>
@@ -465,7 +525,7 @@ export function GtexTraxTopBarControl() {
             {showCredits ? (
               <div className="mt-5 space-y-3">
                 <p className="text-xs text-slate-400">
-                  Every track promoted or bundled in GTEX enforces verified provenance, commercial sync licensing, and artist attribution.
+                  GTEX TRAX catalogue entries retain their provenance, sync-licence and artist-attribution information.
                 </p>
                 {GTEX_TRAX_CATALOGUE.map((t) => (
                   <div
@@ -477,7 +537,7 @@ export function GtexTraxTopBarControl() {
                         {t.title} — {t.artist} ({t.artistHandle})
                       </span>
                       <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
-                        {t.sponsorTier}
+                        GTEX CATALOGUE
                       </span>
                     </div>
                     <p className="mt-1 text-slate-400">
@@ -502,9 +562,9 @@ export function GtexTraxTopBarControl() {
                       </div>
                       <div>
                         <div className="flex flex-wrap items-center gap-1.5">
-                          {currentTrack.isPromoted && (
+                          {currentTrackPromotion && (
                             <span className="rounded bg-amber-400 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-slate-950">
-                              ★ PROMOTED · {currentTrack.sponsorTier}
+                              ★ SPONSORED · {currentTrackPromotion.headline}
                             </span>
                           )}
                           <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[9px] font-bold text-emerald-300">
@@ -636,38 +696,73 @@ export function GtexTraxTopBarControl() {
                     </div>
                   </div>
 
-                  {/* Real-Time Artist Promotion Telemetry Bar */}
+                  {/* Local catalogue interaction metrics; not billable campaign telemetry. */}
                   <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl border border-white/10 bg-black/40 p-2.5 text-center text-[11px]">
                     <div>
                       <span className="block text-[9px] font-bold uppercase text-slate-400">
-                        VERIFIED GTEX STREAMS
+                        TRACK HYPE
                       </span>
                       <span className="gx-mono font-black text-white">
-                        {currentTrack.streamImpressions.toLocaleString()}
+                        {hypeTotal.toLocaleString()}
                       </span>
                     </div>
                     <div>
                       <span className="block text-[9px] font-bold uppercase text-slate-400">
-                        STREAM LINK CLICKS
+                        OUTBOUND LINK CLICKS
                       </span>
                       <span className="gx-mono font-black text-emerald-400">
-                        {(4820 + clickTotal).toLocaleString()} (15.3% CTR)
+                        {clickTotal.toLocaleString()}
                       </span>
                     </div>
                     <div>
                       <span className="block text-[9px] font-bold uppercase text-slate-400">
-                        MATCHDAY PLACEMENT
+                        CATALOGUE STATUS
                       </span>
                       <span className="gx-mono font-black text-amber-300">
-                        3D WALKOUT + STADIUM LED
+                        {currentTrackPromotion ? "Sponsored item · labelled" : "Organic GTEX TRAX catalogue"}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Promoted Artist Roster / Jukebox List */}
+                {sponsoredPromotions.length > 0 && (
+                  <section className="rounded-2xl border border-amber-400/30 bg-amber-400/[0.04] p-4">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="gx-label !text-amber-300">GTEX TRAX PARTNERS</p>
+                        <h3 className="text-sm font-black uppercase text-white">Sponsored promotions</h3>
+                      </div>
+                      <span className="rounded bg-amber-400 px-2 py-1 text-[9px] font-black uppercase text-slate-950">Paid placement</span>
+                    </div>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {sponsoredPromotions.map((promotion) => (
+                        <article key={promotion.campaign_id} className="rounded-xl border border-white/10 bg-slate-950/70 p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="rounded bg-amber-400/15 px-2 py-0.5 text-[9px] font-black uppercase text-amber-200">Sponsored</span>
+                            <span className="text-[9px] uppercase text-slate-500">{promotion.target_type}</span>
+                          </div>
+                          <p className="mt-2 text-sm font-black text-white">{promotion.headline}</p>
+                          <p className="text-[11px] text-emerald-300">{promotion.artist_name || promotion.playlist_name || promotion.brand_name}{promotion.track_title ? " · " + promotion.track_title : ""}</p>
+                          {promotion.description && <p className="mt-1 text-xs leading-relaxed text-slate-400">{promotion.description}</p>}
+                          <a
+                            href={promotion.destination_url}
+                            target="_blank"
+                            rel="noopener noreferrer sponsored"
+                            onClick={() => reportMusicPromotionEvent(promotion.campaign_id, "click")}
+                            className="mt-3 inline-flex rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-[10px] font-black uppercase text-amber-200 hover:bg-amber-400/20"
+                          >
+                            Visit sponsored partner ↗
+                          </a>
+                        </article>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-[9px] text-slate-500">Paid partner placements are labelled. GTEX TRAX playback and organic catalogue selection remain under your control.</p>
+                  </section>
+                )}
+
+                {/* GTEX TRAX Artist Roster / Jukebox List */}
                 <div>
-                  <p className="gx-label mb-2">GTEX TRAX · Promoted Artist Roster</p>
+                  <p className="gx-label mb-2">GTEX TRAX · Artist Roster</p>
                   <div className="space-y-2">
                     {GTEX_TRAX_CATALOGUE.map((item, idx) => {
                       const active = idx === currentTrackIndex;
@@ -708,7 +803,7 @@ export function GtexTraxTopBarControl() {
                                   : "bg-emerald-500/20 text-emerald-300"
                               }`}
                             >
-                              {item.sponsorTier}
+                              GTEX CATALOGUE
                             </span>
                           </div>
                         </div>
