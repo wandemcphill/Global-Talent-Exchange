@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -10,6 +11,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.database import load_model_modules
 from app.models.base import Base
 from app.models.player_token_market import PlayerShareMarket
+from app.ingestion.models import Player
 from app.models.user import User, UserRole
 from app.players.token_service import PlayerTokenMarketError, PlayerTokenMarketService
 from app.schemas.legendary_player import LegendaryPlayerProfileCreate
@@ -45,6 +47,65 @@ def _fund_coin(session, *, user: User, amount: Decimal) -> None:
         reference=f"legendary-launch-test-funding:{user.id}",
         actor=user,
     )
+
+
+def test_launch_rejects_active_under_31_real_player_as_legend(monkeypatch) -> None:
+    load_model_modules()
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+    with Session() as session:
+        admin = _user(session, user_id="legend-launch-guard-admin", role=UserRole.ADMIN)
+        active = Player(
+            id="active-mbappe",
+            source_provider="sportmonks",
+            provider_external_id="mbappe-active",
+            full_name="Kylian Mbappé",
+            canonical_display_name="Kylian Mbappé",
+            date_of_birth=date(1998, 12, 20),
+            real_player_tier="marquee",
+            is_real_player=True,
+            is_tradable=True,
+            dna_profile={"overall": 89, "current_rating": 89, "potential": 95},
+        )
+        session.add(active)
+        session.flush()
+
+        profile = LegendaryPlayerProfileCreate(
+            slug="legend-kylian-mbappe",
+            full_name="Kylian Mbappé",
+            country_code="FRA",
+            date_of_birth=date(1998, 12, 20),
+            primary_position="ST",
+            preferred_foot="right",
+            historical_height_cm=178,
+            signature_traits=[],
+            signature_role=None,
+            technical_profile={},
+            physical_profile={},
+            mental_profile={},
+            era="2017-present",
+            legendary_classification="icon",
+            is_active=True,
+            is_searchable=True,
+            is_tradable=True,
+            is_rentable=True,
+            is_national_team_eligible=True,
+            portrait_metadata={"is_fictional_non_replicative": True},
+            editorial_status="approved",
+            rights_status="approved",
+            catalogue_status="approved",
+        )
+
+        with pytest.raises(Exception, match="active under-31 real-player identity"):
+            LegendaryPlayerLaunchService(session).materialize(profile, actor=admin)
+
+        assert session.query(PlayerShareMarket).filter_by(player_id=active.id).one_or_none() is None
 
 
 def test_legendary_launch_materializes_active_market_and_uses_normal_share_trading() -> None:
