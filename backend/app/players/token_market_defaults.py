@@ -42,7 +42,18 @@ def resolve_player_share_market_config(
     liquidity_coin: Decimal | int | float | str | None = None,
     status: str | None = "active",
 ) -> ResolvedPlayerShareMarketConfig:
-    normalized_total_shares = int(total_shares or DEFAULT_TOTAL_SHARES)
+    # Legends and GTEX-generated regens are unique in-game assets, not
+    # fractionalized inventory. This invariant wins over caller-supplied legacy
+    # supply values so bulk/legacy issuers cannot accidentally mint duplicates.
+    source_provider = str(getattr(player, "source_provider", "") or "").strip().lower()
+    player_tier = str(getattr(player, "real_player_tier", "") or "").strip().lower()
+    is_one_of_one = (
+        getattr(player, "is_real_player", True) is False
+        or bool(getattr(player, "legendary_profile_id", None))
+        or source_provider in {"gtex_legend", "gtex_legend_prime"}
+        or player_tier in {"legend", "legendary"}
+    )
+    normalized_total_shares = 1 if is_one_of_one else int(total_shares or DEFAULT_TOTAL_SHARES)
     normalized_share_price = _resolve_share_price_coin(
         player, explicit_value=share_price_coin, total_shares=normalized_total_shares
     )
