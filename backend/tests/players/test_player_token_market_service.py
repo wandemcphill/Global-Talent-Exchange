@@ -124,7 +124,7 @@ def test_player_share_market_lifecycle(session) -> None:
     assert purchase["transaction_id"]
     assert purchase["market"]["share_price_coin"] == Decimal("0.0750")
     assert repriced.share_price_coin > Decimal("0.0750")
-        assert holding is not None
+    assert holding is not None
     assert holding.share_count == 1
     assert holding.average_cost_coin == Decimal("0.0900")
     assert holding.dividends_earned_coin == Decimal("0.0000")
