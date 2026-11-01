@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Award, Compass, Dna, Filter, Flame, Globe2, Search, ShieldAlert, Sparkles, Trophy, Users } from "lucide-react";
+import { ArrowRight, Award, Compass, Dna, Filter, Flame, Globe2, Search, ShieldAlert, Sparkles, Trophy, Users } from "lucide-react";
 import { api } from "@/lib/api";
 import { useActiveClub } from "@/lib/owner";
 import { journeyLinks, readJourneyParams } from "@/lib/playerJourney";
@@ -432,6 +432,17 @@ export function RegenWorld() {
                     </div>
                     <h3 className="gx-display text-lg font-bold uppercase text-white">{arch.name}</h3>
                     <p className="text-xs text-slate-300 leading-relaxed">{arch.desc}</p>
+                    {arch.name.includes("Build-A-Son") && (
+                      <button
+                        type="button"
+                        onClick={() => navigate("/app/academy#build-a-son")}
+                        className="mt-2 inline-flex items-center gap-1.5 rounded bg-emerald-500/20 px-2.5 py-1 text-xs font-bold text-emerald-300 hover:bg-emerald-500/30 transition-colors"
+                        data-testid="goto-build-a-son-btn"
+                      >
+                        <span>Build A Son in Academy</span>
+                        <ArrowRight size={12} />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

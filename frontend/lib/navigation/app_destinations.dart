@@ -36,6 +36,26 @@ class AppRoutes {
   static const String matchesSimulate = '/matches/simulate';
   static const String inbox = '/app/inbox';
   static const String ownerInbox = '/inbox';
+  static const String academy = '/academy';
+  static const String createSon = '/regens/create-son';
+  static const String playerCards = '/player-cards';
+  static const String playerCardsInventory = '/player-cards/inventory';
+  static const String clubSaleMarket = '/clubs/sale-market';
+  static const String clubIdentity = '/clubs/:clubId/identity';
+  static const String trophies = '/clubs/:clubId/identity/trophy-cabinet';
+  static const String dynasty = '/clubs/:clubId/identity/dynasty';
+
+  static String clubIdentityLocation(String clubId) =>
+      '/clubs/$clubId/identity';
+
+  static String clubSaleMarketDetailLocation(String clubId) =>
+      '/clubs/$clubId/sale-market';
+
+  static String trophyCabinetLocation(String clubId) =>
+      '/clubs/$clubId/identity/trophy-cabinet';
+
+  static String dynastyLocation(String clubId) =>
+      '/clubs/$clubId/identity/dynasty';
 
   static String matchesViewerLocation(String matchKey) =>
       '/matches/viewer/$matchKey';
@@ -172,9 +192,58 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
   AppRouteSurface(
     label: 'Regen Prospects',
     location: AppRoutes.regens,
-    state: AppRouteSurfaceState.hidden,
+    state: AppRouteSurfaceState.live,
     summary:
         'Dedicated live route for regen prospects, awards, and national-pool players.',
+    quickAction: true,
+  ),
+  AppRouteSurface(
+    label: 'Player Cards',
+    location: AppRoutes.playerCards,
+    state: AppRouteSurfaceState.live,
+    summary:
+        'Live player card marketplace, minting packs, and collectible card inventory.',
+    quickAction: true,
+  ),
+  AppRouteSurface(
+    label: 'Card Inventory',
+    location: AppRoutes.playerCardsInventory,
+    state: AppRouteSurfaceState.live,
+    summary:
+        'Owned player cards, minted items, and active rental/loan holdings.',
+    quickAction: true,
+  ),
+  AppRouteSurface(
+    label: 'Club Sale Market',
+    location: AppRoutes.clubSaleMarket,
+    state: AppRouteSurfaceState.live,
+    summary:
+        'Verified club valuation, marketplace listings, and club share acquisitions.',
+    quickAction: true,
+  ),
+  AppRouteSurface(
+    label: 'Club Identity',
+    location: AppRoutes.clubIdentity,
+    state: AppRouteSurfaceState.live,
+    summary:
+        'Custom kit and crest studio with live 3D preview and color styling.',
+    quickAction: true,
+  ),
+  AppRouteSurface(
+    label: 'Trophy Cabinet',
+    location: AppRoutes.trophies,
+    state: AppRouteSurfaceState.live,
+    summary:
+        '3D trophy shelves, championship honors, and historical silverware.',
+    quickAction: true,
+  ),
+  AppRouteSurface(
+    label: 'Dynasty & Eras',
+    location: AppRoutes.dynasty,
+    state: AppRouteSurfaceState.live,
+    summary:
+        'Generational club heritage, dynasty dominance index, and era milestones.',
+    quickAction: true,
   ),
   AppRouteSurface(
     label: 'Transfer Listings',
@@ -238,6 +307,20 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     location: AppRoutes.lineup,
     state: AppRouteSurfaceState.live,
     summary: 'Formation and starting-lineup editor for the active club.',
+  ),
+  AppRouteSurface(
+    label: 'Youth Academy',
+    location: AppRoutes.academy,
+    state: AppRouteSurfaceState.live,
+    summary: 'Academy campus, youth intake, player progression, and senior promotions.',
+    quickAction: true,
+  ),
+  AppRouteSurface(
+    label: 'Build-a-Son',
+    location: AppRoutes.createSon,
+    state: AppRouteSurfaceState.live,
+    summary: 'Second-generation dynasty scion generation passing DNA bloodline traits.',
+    quickAction: true,
   ),
   AppRouteSurface(
     label: 'Tasks',

@@ -1134,13 +1134,31 @@ export default function Squad() {
         title="Squad room"
         sub={club.club_name + " · " + club.squad.length + " registered players · Wage bill " + fmt(club.wage_bill) + " GTX / match"}
         action={
-          <Link
-            to={"/app/lineup?club_id=" + encodeURIComponent(club.club_id)}
-            data-testid="open-lineup-tactics-button"
-            className="gx-btn gx-btn-primary inline-flex items-center"
-          >
-            Open Lineup & Tactics <ArrowRight className="ml-2 h-4 w-4" />
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to="/app/academy"
+              data-testid="open-academy-button"
+              className="gx-btn gx-btn-secondary inline-flex items-center text-xs"
+            >
+              <Sprout className="mr-1.5 h-3.5 w-3.5 text-emerald-400" />
+              Youth Academy
+            </Link>
+            <Link
+              to="/app/build-a-son"
+              data-testid="open-build-a-son-button"
+              className="gx-btn gx-btn-secondary inline-flex items-center text-xs"
+            >
+              <Award className="mr-1.5 h-3.5 w-3.5 text-amber-400" />
+              Build-a-Son
+            </Link>
+            <Link
+              to={"/app/lineup?club_id=" + encodeURIComponent(club.club_id)}
+              data-testid="open-lineup-tactics-button"
+              className="gx-btn gx-btn-primary inline-flex items-center text-xs"
+            >
+              Lineup & Tactics <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+            </Link>
+          </div>
         }
       />
 

@@ -37,6 +37,7 @@ import 'package:gte_frontend/screens/gte_exchange_shell_screen.dart';
 import 'package:gte_frontend/screens/gtex_public_landing_screen_v2.dart';
 import 'package:gte_frontend/screens/gtex_national_team_rental_screen_v2.dart';
 import 'package:gte_frontend/screens/manager_market_screen.dart';
+import 'package:gte_frontend/features/regens/request_son_screen_v2.dart';
 import 'package:gte_frontend/features/player_detail/gtex_fm_player_profile_screen.dart';
 import 'package:gte_frontend/features/club/gtex_lineup_editor_screen.dart';
 import 'package:gte_frontend/screens/match/gtex_match_center_screen_v2.dart';
@@ -605,9 +606,31 @@ List<RouteBase> _buildLegacyAliasRoutes({
     ),
     GoRoute(
       path: '/player-cards',
-      redirect:
-          (BuildContext context, GoRouterState state) =>
-              const GteNavigationRoute.market().path,
+      pageBuilder: (BuildContext context, GoRouterState state) {
+        final GteNavigationDependencies dependencies =
+            dependenciesBuilder(context);
+        return NoTransitionPage<void>(
+          key: state.pageKey,
+          child: GteAppRouteRegistry(
+            dependencies: dependencies,
+          ).buildScreen(context, const PlayerCardsBrowseRouteData()),
+        );
+      },
+      routes: <RouteBase>[
+        GoRoute(
+          path: 'inventory',
+          pageBuilder: (BuildContext context, GoRouterState state) {
+            final GteNavigationDependencies dependencies =
+                dependenciesBuilder(context);
+            return NoTransitionPage<void>(
+              key: state.pageKey,
+              child: GteAppRouteRegistry(
+                dependencies: dependencies,
+              ).buildScreen(context, const PlayerCardsInventoryRouteData()),
+            );
+          },
+        ),
+      ],
     ),
     GoRoute(
       path: '/competitions',
@@ -729,6 +752,38 @@ List<RouteBase> _buildLegacyAliasRoutes({
       redirect:
           (BuildContext context, GoRouterState state) =>
               const WorldAwardsRouteData().toUri().toString(),
+    ),
+    GoRoute(
+      path: '/academy',
+      redirect:
+          (BuildContext context, GoRouterState state) =>
+              const GteNavigationRoute.club().path,
+    ),
+    GoRoute(
+      path: '/regens/create-son',
+      pageBuilder: (BuildContext context, GoRouterState state) {
+        final GteNavigationDependencies dependencies =
+            dependenciesBuilder(context);
+        return MaterialPage<void>(
+          key: state.pageKey,
+          child: Material(
+            type: MaterialType.transparency,
+            child: RequestSonScreenV2(
+              baseUrl: dependencies.apiBaseUrl,
+              backendMode: dependencies.backendMode,
+              accessToken: dependencies.accessToken,
+              isAuthenticated: dependencies.isAuthenticated,
+              allowFixtureData:
+                  dependencies.backendMode == GteBackendMode.fixture,
+            ),
+          ),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/regens/request-son',
+      redirect:
+          (BuildContext context, GoRouterState state) => '/regens/create-son',
     ),
     GoRoute(
       path: '/profile/login',
@@ -1366,6 +1421,7 @@ List<RouteBase> _buildFeatureRoutes({
   const Set<String> shellOwnedPaths = <String>{
     '/competitions',
     '/player-cards',
+    '/player-cards/inventory',
     '/world',
     '/world/awards',
     '/world/federations',

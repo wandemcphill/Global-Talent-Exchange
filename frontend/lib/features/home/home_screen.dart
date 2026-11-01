@@ -1942,6 +1942,21 @@ List<_QuickActionSpec> _actionsForPersona(_HomePersona persona) {
           icon: Icons.storefront_rounded,
         ),
         _QuickActionSpec(
+          location: AppRoutes.academy,
+          label: 'Youth academy',
+          icon: Icons.school_rounded,
+        ),
+        _QuickActionSpec(
+          location: AppRoutes.createSon,
+          label: 'Build-a-son',
+          icon: Icons.family_restroom_rounded,
+        ),
+        _QuickActionSpec(
+          location: AppRoutes.playerCards,
+          label: 'Player cards',
+          icon: Icons.style_rounded,
+        ),
+        _QuickActionSpec(
           location: AppRoutes.coaches,
           label: 'Hire coaches',
           icon: Icons.sports_rounded,

@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { useParams, Link, useLocation } from "react-router-dom";
 import { useClubStory, useActiveClub, useClub, fmt } from "@/lib/owner";
 import { api } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
@@ -33,9 +33,27 @@ export function ClubStory() {
 
   const { data, isLoading } = useClubStory(clubId);
   const { data: clubProfile } = useClub(clubId);
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const wantsLegacy =
+    location.pathname.includes("trophies") ||
+    location.pathname.includes("dynasty") ||
+    searchParams.get("tab") === "legacy" ||
+    location.hash === "#legacy";
   const [activeTab, setActiveTab] = useState<
     "timeline" | "issues" | "relationships" | "watchlist" | "schedule" | "dispatches" | "legacy"
-  >("timeline");
+  >(wantsLegacy ? "legacy" : "timeline");
+
+  useEffect(() => {
+    if (
+      location.pathname.includes("trophies") ||
+      location.pathname.includes("dynasty") ||
+      searchParams.get("tab") === "legacy" ||
+      location.hash === "#legacy"
+    ) {
+      setActiveTab("legacy");
+    }
+  }, [location.pathname, location.search, location.hash]);
 
   // Watchlist modal state
   const [isAddWatchlistOpen, setIsAddWatchlistOpen] = useState(false);

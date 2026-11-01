@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, Check, ShoppingCart, Sparkles, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, Dna, ShoppingCart, Sparkles, Sprout, Trash2 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { clubCreateErrorMessage } from "./clubLocationCatalog";
 import { ClubLocationFields, clubLocationPayload, useClubLocation } from "@/components/gtex/ClubLocationFields";
@@ -17,12 +17,13 @@ const STEPS = [
   { key: "identity", label: "Club identity" },
   { key: "squad", label: "Sign starting squad" },
   { key: "manager", label: "Appoint manager" },
+  { key: "academy", label: "Youth academy" },
   { key: "competition", label: "First competition" },
 ];
 
 function Stepper({ index }: any) {
   return (
-    <ol className="mb-10 grid grid-cols-2 gap-2 md:grid-cols-4" data-testid="onboarding-stepper">
+    <ol className="mb-10 grid grid-cols-2 gap-2 md:grid-cols-5" data-testid="onboarding-stepper">
       {STEPS.map((s, i) => (
         <li
           key={s.key}
@@ -522,6 +523,219 @@ function ManagerStep({ clubId, onDone }: any) {
   );
 }
 
+function AcademyStep({ clubId, onDone }: { clubId: string; onDone: () => void }) {
+  const { data: club, refetch } = useClub(clubId);
+  const [busyIntake, setBusyIntake] = useState(false);
+
+  const regens = (club?.squad || []).filter(
+    (p: any) => p.is_regen || p.squad_status === "academy" || p.acquired_via === "academy"
+  );
+
+  const handleManualIntake = async () => {
+    setBusyIntake(true);
+    try {
+      await api.post(`/owner/clubs/${clubId}/academy/intake`);
+      toast.success("Genesis academy intake scouted! New wonderkids signed.");
+      refetch();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusyIntake(false);
+    }
+  };
+
+  const hoydName = club?.staff?.head_of_youth_development?.name || "Marcus Vance";
+  const hoydRating = club?.staff?.head_of_youth_development?.rating || 78;
+
+  return (
+    <Panel
+      eyebrow="Step 4 · Youth Academy & Genesis Wonderkids"
+      title="Inaugural Academy Intake"
+      testid="onboarding-academy-step"
+      action={
+        <Btn onClick={onDone} className="flex items-center gap-2" data-testid="onboarding-proceed-competition">
+          <span>Proceed to First Competition</span>
+          <ArrowRight size={14} />
+        </Btn>
+      }
+    >
+      <div className="mb-6">
+        <Cinema3DStage
+          scene="academy_upgrade"
+          compact
+          title={`3D Youth Academy Campus · Genesis Intake`}
+          subtitle={`${club?.club_name || "GTEX Club"} · Inaugural Class of Homegrown Wonderkids`}
+          badgeText="3D GENESIS INTAKE"
+          clubName={club?.club_name}
+          facilityLevel={1}
+          stats={[
+            { label: "Genesis Regens", value: `${regens.length} Prospects`, accent: "#00E676" },
+            { label: "Campus Tier", value: "Level 1 Academy", accent: "#38BDF8" },
+            { label: "Ceilings", value: "85–95 POT", accent: "#F5B83D" },
+          ]}
+        />
+      </div>
+
+      {/* Head of Youth Development Briefing */}
+      <div className="mb-6 rounded-sm border border-purple-500/20 bg-purple-950/20 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-purple-500/20 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+              <Sprout size={18} />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-white uppercase tracking-wider">
+                {hoydName} <span className="text-[11px] font-normal text-purple-300">· Head of Youth Development (Rating: {hoydRating})</span>
+              </p>
+              <p className="text-[11px] text-slate-400">Youth Scouting & Development Briefing</p>
+            </div>
+          </div>
+          <Chip tone="cyan">HOYD Autonomy Active</Chip>
+        </div>
+        <p className="mt-3 text-xs leading-relaxed text-slate-300">
+          "Welcome to the training grounds, Boss. While the first-team squad was being finalized, our academy scouts canvassed local regional trials and secured our inaugural class of youth wonderkids. These regens are training on Pitch 3 and possess elite development ceilings. With proper match exposure, coaching, and facility upgrades, they will form the backbone of your dynasty."
+        </p>
+      </div>
+
+      {/* Genesis Wonderkids Grid */}
+      <div className="mb-6 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="gx-eyebrow text-emerald-400">Inaugural Academy Class</p>
+            <p className="text-xs text-slate-400">High-potential homegrown talents signed directly to your youth roster</p>
+          </div>
+          {regens.length === 0 && (
+            <Btn
+              variant="secondary"
+              disabled={busyIntake}
+              onClick={handleManualIntake}
+              className="flex items-center gap-1.5 text-xs"
+              data-testid="onboarding-scout-genesis-intake"
+            >
+              <Sparkles size={13} className="text-amber-300" />
+              <span>{busyIntake ? "Scouting Intake…" : "Scout Genesis Intake"}</span>
+            </Btn>
+          )}
+        </div>
+
+        {regens.length === 0 ? (
+          <div className="rounded border border-dashed border-white/10 p-6 text-center text-xs text-slate-400">
+            <p>Your genesis academy class is preparing for their medicals.</p>
+            <Btn
+              className="mt-3"
+              disabled={busyIntake}
+              onClick={handleManualIntake}
+            >
+              {busyIntake ? "Generating Wonderkids…" : "Trigger Inaugural Intake"}
+            </Btn>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3" data-testid="onboarding-genesis-regens">
+            {regens.map((p: any) => {
+              const pers = p.personality || p.personality_json || {};
+              const archetype = p.archetype || pers.archetype || "Ambitious Prodigy";
+              const mood = p.mood_state || pers.mood || "Thriving";
+              const monologue = p.inner_monologue || pers.inner_monologue || `Grinding daily with the academy coaches. When my call-up comes, I'll be 100% ready.`;
+              const ceiling = Math.max(0, (p.potential || 85) - (p.rating || 60));
+
+              return (
+                <div
+                  key={p.id || p.name}
+                  className="flex flex-col justify-between rounded-xl border border-white/10 bg-slate-900/60 p-4 shadow-lg hover:border-emerald-500/30 transition-colors"
+                  data-testid={`genesis-regen-${p.id}`}
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2 border-b border-white/10 pb-3">
+                      <div>
+                        <span className="rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-black uppercase">
+                          {archetype}
+                        </span>
+                        <h4 className="mt-1 text-sm font-bold text-white">{p.name}</h4>
+                        <p className="text-[11px] text-slate-400">Age {p.age || 17} · {posShort(p.position)}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="gx-mono text-lg font-black text-white">{p.rating}</span>
+                        <span className="text-[10px] text-slate-500"> OVR</span>
+                        <p className="gx-mono text-[11px] font-bold text-amber-300">POT {p.potential || 88}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 space-y-2">
+                      <div className="flex items-center justify-between text-[11px] text-slate-400">
+                        <span>Ceiling</span>
+                        <span className="gx-mono text-emerald-300 font-bold">+{ceiling} Growth</span>
+                      </div>
+                      <div className="h-1.5 rounded-sm bg-white/5">
+                        <div
+                          className="h-1.5 rounded-sm bg-gradient-to-r from-emerald-500 to-amber-400"
+                          style={{ width: `${Math.min(100, ((p.rating || 60) / Math.max(1, p.potential || 90)) * 100)}%` }}
+                        />
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        Mood: <b className="text-slate-200">{mood}</b>
+                      </p>
+                      <div className="rounded border border-white/5 bg-black/40 p-2 text-[11px] italic text-slate-300">
+                        "{monologue}"
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-[10px] text-slate-400">
+                    <span className="text-purple-300">HOYD Monitored</span>
+                    <span className="gx-mono text-emerald-300">{fmt(p.value_coin || 3500)} GTX</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Build-A-Son Legacy Program Educational Banner */}
+      <div
+        className="mb-6 rounded-xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-amber-950/20 to-black p-4"
+        data-testid="onboarding-build-a-son-banner"
+      >
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40">
+              <Dna size={22} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-black uppercase tracking-wider text-amber-300">
+                  Build-A-Son Legacy Program
+                </p>
+                <Chip tone="gold">Dynasty Feature</Chip>
+              </div>
+              <p className="mt-1 text-xs text-slate-300 leading-relaxed max-w-2xl">
+                As your senior players establish legendary status, you can pass on their genetic DNA bloodlines, mental composure, and fan devotion to custom dynasty scions right here in your Academy Command (<b>/app/academy</b>).
+              </p>
+            </div>
+          </div>
+          <div className="shrink-0">
+            <div className="text-right">
+              <p className="text-[10px] text-slate-500 uppercase">Bloodlines Engine</p>
+              <p className="text-xs font-bold text-amber-300">20/20 Loyalty Guarantee</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Primary Proceed Action */}
+      <div className="flex items-center justify-between border-t border-white/10 pt-4">
+        <p className="text-xs text-slate-400">
+          Your wonderkids will continue developing as competitive matchdays and training cycles progress.
+        </p>
+        <Btn onClick={onDone} className="flex items-center gap-2" data-testid="onboarding-proceed-competition-bottom">
+          <span>Proceed to First Competition</span>
+          <ArrowRight size={14} />
+        </Btn>
+      </div>
+    </Panel>
+  );
+}
+
 function CompetitionStep({ clubId, onDone }: any) {
   const { data } = useQuery({
     queryKey: ["competitions"],
@@ -681,7 +895,28 @@ export default function Onboarding() {
     return <CreateFirstClub onDone={() => refetch()} onCancel={() => navigate("/app")} />;
   }
   if (!club) return <Navigate to="/app" replace />;
-  const index = { not_started: 0, squad: 1, manager: 2, competition: 3 }[club.stage as string] ?? 3;
+  const [academyAcknowledged, setAcademyAcknowledged] = useState(() =>
+    Boolean(club?.club_id && localStorage.getItem(`gtex.onboarding.academy.${club.club_id}`) === "acknowledged")
+  );
+
+  useEffect(() => {
+    if (club?.club_id) {
+      setAcademyAcknowledged(
+        localStorage.getItem(`gtex.onboarding.academy.${club.club_id}`) === "acknowledged"
+      );
+    }
+  }, [club?.club_id]);
+
+  let index = 0;
+  if (club.stage === "squad") {
+    index = 1;
+  } else if (club.stage === "manager") {
+    index = 2;
+  } else if (club.stage === "competition") {
+    index = academyAcknowledged ? 4 : 3;
+  } else {
+    index = 4;
+  }
   const next = () => refetch();
   const done = async () => {
     await qc.invalidateQueries({ queryKey: ["cc"] });
@@ -696,7 +931,16 @@ export default function Onboarding() {
         {index === 0 && <IdentityStep club={club} onDone={next} />}
         {index === 1 && <SquadStep clubId={club.club_id} onDone={next} />}
         {index === 2 && <ManagerStep clubId={club.club_id} onDone={next} />}
-        {index === 3 && <CompetitionStep clubId={club.club_id} onDone={done} />}
+        {index === 3 && (
+          <AcademyStep
+            clubId={club.club_id}
+            onDone={() => {
+              localStorage.setItem(`gtex.onboarding.academy.${club.club_id}`, "acknowledged");
+              setAcademyAcknowledged(true);
+            }}
+          />
+        )}
+        {index === 4 && <CompetitionStep clubId={club.club_id} onDone={done} />}
         <p className="mt-6 text-xs text-slate-600">
           Club treasury: {fmt(club.cash)} GTX · Squad {club.squad_size}
         </p>

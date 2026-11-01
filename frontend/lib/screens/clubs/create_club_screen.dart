@@ -159,6 +159,89 @@ class _CreateClubScreenState extends State<CreateClubScreen> {
       }
       widget.onClubCreated?.call(created);
       AppFeedback.showSuccess(context, '${created.clubName} is live.');
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext dialogContext) {
+          return AlertDialog(
+            backgroundColor: GtexColors.surfaceRaised,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: GtexColors.accentPrimary, width: 1.5),
+            ),
+            title: Row(
+              children: <Widget>[
+                const Icon(Icons.school_outlined, color: GtexColors.accentPrimary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${created.clubName} Founded!',
+                    style: const TextStyle(
+                      color: GtexColors.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const Text(
+                  'Your club charter is active! Your Head of Youth Development (HOYD) has initiated your inaugural academy pipeline.',
+                  style: TextStyle(
+                    color: GtexColors.textSecondary,
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: GtexColors.surfaceOverlay,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: GtexColors.surfaceBorder),
+                  ),
+                  child: const Row(
+                    children: <Widget>[
+                      Icon(Icons.workspace_premium_outlined, color: GtexColors.gold, size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Inaugural Intake: 3 Genesis Regens training on Pitch 3 with 85–95 POT ceilings.',
+                          style: TextStyle(
+                            color: GtexColors.textPrimary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text(
+                  'Enter Club Workspace',
+                  style: TextStyle(
+                    color: GtexColors.accentPrimary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+      if (!mounted) {
+        return;
+      }
       Navigator.of(context).pop<GteCreatedClubProfile>(created);
     } catch (error) {
       if (mounted) {

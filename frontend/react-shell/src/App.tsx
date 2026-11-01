@@ -65,6 +65,13 @@ export default function App() {
             <Route path="squad" element={<Squad />} />
             <Route path="lineup" element={<Lineup />} />
             <Route path="academy" element={<Academy />} />
+            <Route path="build-a-son" element={<Academy />} />
+            <Route path="regens/create-son" element={<Academy />} />
+            <Route path="trophies" element={<ClubStory />} />
+            <Route path="dynasty" element={<ClubStory />} />
+            <Route path="player-cards" element={<Navigate to="/app/market" replace />} />
+            <Route path="club-sale-market" element={<Navigate to="/app/market?tab=club-sales" replace />} />
+            <Route path="clubs/sale-market" element={<Navigate to="/app/market?tab=club-sales" replace />} />
             <Route path="national" element={<NationalTeam />} />
             <Route path="finance" element={<Finance />} />
             <Route path="jackpot" element={<Jackpot />} />

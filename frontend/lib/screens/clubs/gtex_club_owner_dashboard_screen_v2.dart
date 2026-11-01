@@ -268,6 +268,7 @@ class _GtexClubOwnerDashboardScreenV2State
           onOpenLineup:
               () => context.push('/lineup?club_id=${widget.clubId}'),
           onOpenCoachMarket: () => context.push('/coaches'),
+          onOpenClubShareMarket: () => context.push('/clubs/sale-market'),
           confirmConsequentialLifecycleActions: true,
           initialSnapshot: snapshot,
           lifecycleDashboard: lifecycleController?.dashboard,

@@ -416,6 +416,7 @@ class _OwnerDetail extends StatelessWidget {
           ),
           const SizedBox(height: GtexSpacing.md),
           _GrowthOverviewPanel(
+            onOpenAcademy: () => onSelectSection(GtexClubOwnerSection.academy),
             dashboard: growthDashboard,
             loading: growthLoading,
             error: growthError,
@@ -525,6 +526,31 @@ class _OwnerDetail extends StatelessWidget {
           ),
           const SizedBox(height: GtexSpacing.md),
           GtexPanel(
+            title: 'Player Cards & Collectibles Marketplace',
+            subtitle:
+                'Explore tradeable player card assets, mint packs, and auction verifiable player cards on the live GTEX card market.',
+            accent: GtexColors.purple,
+            child: Wrap(
+              spacing: GtexSpacing.sm,
+              runSpacing: GtexSpacing.sm,
+              children: <Widget>[
+                ElevatedButton.icon(
+                  key: const Key('gtex-club-browse-player-cards-btn'),
+                  onPressed: () => context.push('/player-cards'),
+                  icon: const Icon(Icons.style, size: 16),
+                  label: const Text('Browse Player Cards Market'),
+                ),
+                OutlinedButton.icon(
+                  key: const Key('gtex-club-player-cards-inventory-btn'),
+                  onPressed: () => context.push('/player-cards/inventory'),
+                  icon: const Icon(Icons.inventory_2_outlined, size: 16),
+                  label: const Text('My Card Inventory'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: GtexSpacing.md),
+          GtexPanel(
             title: 'Shortlist basket',
             subtitle:
                 'Keep total cost visible while users pick players from league -> club lists.',
@@ -606,6 +632,53 @@ class _OwnerDetail extends StatelessWidget {
             title: 'Trophy cabinet',
             subtitle: 'Honors and dynasty history.',
             icon: Icons.workspace_premium_outlined,
+          ),
+          const SizedBox(height: GtexSpacing.md),
+          Wrap(
+            spacing: GtexSpacing.sm,
+            runSpacing: GtexSpacing.sm,
+            children: <Widget>[
+              ElevatedButton.icon(
+                key: const Key('gtex-club-open-trophy-cabinet-btn'),
+                onPressed: () => context.push(
+                  '/clubs/${Uri.encodeComponent(snapshot.clubId)}/identity/trophy-cabinet',
+                ),
+                icon: const Icon(Icons.workspace_premium, size: 16),
+                label: const Text('Interactive Trophy Cabinet'),
+              ),
+              OutlinedButton.icon(
+                key: const Key('gtex-club-open-honors-timeline-btn'),
+                onPressed: () => context.push(
+                  '/clubs/${Uri.encodeComponent(snapshot.clubId)}/identity/trophies/timeline',
+                ),
+                icon: const Icon(Icons.history_edu, size: 16),
+                label: const Text('Honors Timeline'),
+              ),
+              OutlinedButton.icon(
+                key: const Key('gtex-club-open-dynasty-btn'),
+                onPressed: () => context.push(
+                  '/clubs/${Uri.encodeComponent(snapshot.clubId)}/identity/dynasty',
+                ),
+                icon: const Icon(Icons.account_balance, size: 16),
+                label: const Text('Dynasty & Eras'),
+              ),
+              OutlinedButton.icon(
+                key: const Key('gtex-club-open-dynasty-leaderboard-btn'),
+                onPressed: () => context.push(
+                  '/clubs/${Uri.encodeComponent(snapshot.clubId)}/identity/dynasty/leaderboard',
+                ),
+                icon: const Icon(Icons.leaderboard, size: 16),
+                label: const Text('Dynasty Leaderboard'),
+              ),
+              OutlinedButton.icon(
+                key: const Key('gtex-club-open-trophy-leaderboard-btn'),
+                onPressed: () => context.push(
+                  '/clubs/${Uri.encodeComponent(snapshot.clubId)}/identity/trophies/leaderboard',
+                ),
+                icon: const Icon(Icons.military_tech, size: 16),
+                label: const Text('Trophy Leaderboard'),
+              ),
+            ],
           ),
           const SizedBox(height: GtexSpacing.md),
           GtexClubTrophyGrid(trophies: snapshot.trophies),
@@ -743,6 +816,7 @@ class _LifecycleOverviewPanel extends StatelessWidget {
 
 class _GrowthOverviewPanel extends StatelessWidget {
   const _GrowthOverviewPanel({
+    this.onOpenAcademy,
     required this.dashboard,
     required this.loading,
     required this.error,
@@ -750,6 +824,7 @@ class _GrowthOverviewPanel extends StatelessWidget {
   });
 
   final GtexClubGrowthDashboard? dashboard;
+  final VoidCallback? onOpenAcademy;
   final bool loading;
   final String? error;
   final VoidCallback? onRefresh;
@@ -810,7 +885,9 @@ class _GrowthOverviewPanel extends StatelessWidget {
           SizedBox(
             width: 210,
             child: GtexMetricTile(
-              label: 'Prospects',
+              label: 'Prospects (View Academy)',
+              helper: 'Tap to view youth pipeline',
+              onTap: onOpenAcademy,
               value: current.academyProspects.length.toString(),
               icon: Icons.school_outlined,
               accent: GtexColors.cyan,
@@ -844,6 +921,7 @@ class _StaffMarketplacePanel extends StatelessWidget {
   });
 
   final GtexClubGrowthDashboard? dashboard;
+  final VoidCallback? onOpenAcademy;
   final bool loading;
   final String? error;
   final VoidCallback? onRefresh;
@@ -875,18 +953,26 @@ class _StaffMarketplacePanel extends StatelessWidget {
               'Hire managers, agents, scouts, and coaches into Fan Coin payroll contracts.',
           icon: Icons.badge_outlined,
         ),
-        if (onOpenCoachMarket != null) ...<Widget>[
-          const SizedBox(height: GtexSpacing.sm),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              key: const Key('gtex-club-open-coaches-btn'),
-              onPressed: onOpenCoachMarket,
-              icon: const Icon(Icons.sports_rounded, size: 18),
-              label: const Text('Open Manager & Coach Market'),
+        const SizedBox(height: GtexSpacing.sm),
+        Wrap(
+          spacing: GtexSpacing.sm,
+          runSpacing: GtexSpacing.sm,
+          children: <Widget>[
+            if (onOpenCoachMarket != null)
+              OutlinedButton.icon(
+                key: const Key('gtex-club-open-coaches-btn'),
+                onPressed: onOpenCoachMarket,
+                icon: const Icon(Icons.sports_rounded, size: 18),
+                label: const Text('Open Manager & Coach Market'),
+              ),
+            OutlinedButton.icon(
+              key: const Key('gtex-club-staff-cards-btn'),
+              onPressed: () => context.push('/player-cards'),
+              icon: const Icon(Icons.style, size: 18),
+              label: const Text('Player Cards & Contracts'),
             ),
-          ),
-        ],
+          ],
+        ),
         const SizedBox(height: GtexSpacing.md),
         GtexPanel(
           title: 'Staff effects',
@@ -972,6 +1058,7 @@ class _AcademyPipelinePanel extends StatelessWidget {
   });
 
   final GtexClubGrowthDashboard? dashboard;
+  final VoidCallback? onOpenAcademy;
   final bool loading;
   final String? error;
   final VoidCallback? onRefresh;
@@ -1094,6 +1181,7 @@ class _SponsorshipGrowthPanel extends StatelessWidget {
   });
 
   final GtexClubGrowthDashboard? dashboard;
+  final VoidCallback? onOpenAcademy;
   final bool loading;
   final String? error;
   final VoidCallback? onRefresh;
@@ -2217,6 +2305,42 @@ class _BoardroomExecutivePanel extends StatelessWidget {
           loading: lifecycleLoading,
           error: lifecycleError,
           onRefresh: onRefreshLifecycle,
+        ),
+        const SizedBox(height: GtexSpacing.md),
+        GtexPanel(
+          key: const Key('gtex-boardroom-briefing-dilemmas'),
+          title: 'Daily Briefing & Boardroom Dilemmas',
+          subtitle:
+              'Review executive dispatches from the GM, Manager & HOYD, resolve boardroom dilemmas, or inspect dynasty status.',
+          accent: GtexColors.gold,
+          child: Wrap(
+            spacing: GtexSpacing.sm,
+            runSpacing: GtexSpacing.sm,
+            children: <Widget>[
+              ElevatedButton.icon(
+                key: const Key('gtex-boardroom-trophy-cabinet-btn'),
+                onPressed: () => context.push(
+                  '/clubs/${Uri.encodeComponent(snapshot.clubId)}/identity/trophy-cabinet',
+                ),
+                icon: const Icon(Icons.workspace_premium, size: 16),
+                label: const Text('Trophy Cabinet'),
+              ),
+              OutlinedButton.icon(
+                key: const Key('gtex-boardroom-dynasty-btn'),
+                onPressed: () => context.push(
+                  '/clubs/${Uri.encodeComponent(snapshot.clubId)}/identity/dynasty',
+                ),
+                icon: const Icon(Icons.account_balance, size: 16),
+                label: const Text('Club Dynasty & Eras'),
+              ),
+              OutlinedButton.icon(
+                key: const Key('gtex-boardroom-player-cards-btn'),
+                onPressed: () => context.push('/player-cards'),
+                icon: const Icon(Icons.style, size: 16),
+                label: const Text('Player Cards Marketplace'),
+              ),
+            ],
+          ),
         ),
         if (snapshot.trophies.isNotEmpty) ...<Widget>[
           const SizedBox(height: GtexSpacing.md),

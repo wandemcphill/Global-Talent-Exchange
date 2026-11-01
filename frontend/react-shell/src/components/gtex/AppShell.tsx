@@ -39,12 +39,14 @@ const NAV = [
   { to: "/app/clubs", label: "My Clubs", icon: Building2, id: "clubs", category: "CLUB HQ & DYNASTY" },
   { to: "/app/showroom", label: "Showroom", icon: Sparkles, id: "showroom", category: "CLUB HQ & DYNASTY" },
   { to: "/app/story", label: "Club Story", icon: BookOpen, id: "story", category: "CLUB HQ & DYNASTY" },
+  { to: "/app/trophies", label: "Trophy Cabinet", icon: Trophy, id: "trophies", category: "CLUB HQ & DYNASTY" },
   { to: "/app/inbox", label: "Inbox", icon: Inbox, id: "inbox", category: "CLUB HQ & DYNASTY" },
 
   { to: "/app/squad", label: "Manager & Squad", icon: Shirt, id: "squad", category: "FOOTBALL & TRANSFERS" },
   { to: "/app/lineup", label: "Lineup & Tactics", icon: Swords, id: "lineup", category: "FOOTBALL & TRANSFERS" },
   { to: "/app/transfer-hub", label: "Transfer Hub", icon: Compass, id: "transfers", category: "FOOTBALL & TRANSFERS" },
   { to: "/app/academy", label: "Academy", icon: Sprout, id: "academy", category: "FOOTBALL & TRANSFERS" },
+  { to: "/app/build-a-son", label: "Build-a-Son Scion", icon: Award, id: "build-a-son", category: "FOOTBALL & TRANSFERS" },
   { to: "/app/competitions", label: "Competitions", icon: Trophy, id: "competitions", category: "FOOTBALL & TRANSFERS" },
   { to: "/app/national", label: "National Team", icon: Flag, id: "national", category: "FOOTBALL & TRANSFERS" },
 
@@ -56,6 +58,7 @@ const NAV = [
 
   { to: "/app/finance", label: "Finance & Ledger", icon: Wallet, id: "finance", category: "ECONOMY & VAULT" },
   { to: "/app/market", label: "Player Shares", icon: ShoppingBag, id: "market", category: "ECONOMY & VAULT" },
+  { to: "/app/market?tab=club-sales", label: "Club Sale Market", icon: Building2, id: "club-sale-market", category: "ECONOMY & VAULT" },
   { to: "/app/jackpot", label: "Global Jackpot", icon: Flame, id: "jackpot", category: "ECONOMY & VAULT" },
   { to: "/app/coin-traders", label: "Coin Traders", icon: CandlestickChart, id: "coin-traders", category: "ECONOMY & VAULT" },
 ];
@@ -240,6 +243,7 @@ export default function AppShell() {
           "home",
           "clubs",
           "showroom",
+          "trophies",
           "jackpot",
           "regen-world",
           "awards",

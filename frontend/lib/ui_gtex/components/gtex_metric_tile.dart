@@ -12,6 +12,7 @@ class GtexMetricTile extends StatelessWidget {
     this.helper,
     this.icon,
     this.accent = GtexColors.pitch,
+    this.onTap,
   });
 
   final String label;
@@ -20,10 +21,11 @@ class GtexMetricTile extends StatelessWidget {
   final String? helper;
   final IconData? icon;
   final Color accent;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final Widget tile = Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -148,6 +150,17 @@ class GtexMetricTile extends StatelessWidget {
         ],
       ),
     );
+    if (onTap != null) {
+      return Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
+          child: tile,
+        ),
+      );
+    }
+    return tile;
   }
 }
 

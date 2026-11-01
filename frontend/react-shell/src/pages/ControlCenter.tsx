@@ -125,6 +125,32 @@ export function ControlCenter() {
   const [winBonusNote, setWinBonusNote] = useState("Victory performance bonus for the starting squad.");
   const [pledgingBonus, setPledgingBonus] = useState(false);
   const [active3DScene, setActive3DScene] = useState<Cinema3DSceneType>("manager_arrival");
+  const [pressConferenceOpen, setPressConferenceOpen] = useState(false);
+  const [pressTone, setPressTone] = useState<"ambitious" | "calm" | "assertive" | "defiant">("assertive");
+  const [pressStatement, setPressStatement] = useState("We are laser-focused on continental glory and tactical discipline.");
+  const [submittingPress, setSubmittingPress] = useState(false);
+
+  const handleHoldPressConference = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pressStatement.trim()) {
+      toast.error("Please enter a statement for the media.");
+      return;
+    }
+    setSubmittingPress(true);
+    try {
+      await api.post(`/owner/clubs/${activeClubProfile.club_id}/press-conference`, {
+        tone: pressTone,
+        statement: pressStatement.trim(),
+      });
+      toast.success("Press conference statement broadcast across GTEX newsroom!");
+      setPressConferenceOpen(false);
+      refresh();
+    } catch (err) {
+      toast.error(errMsg(err));
+    } finally {
+      setSubmittingPress(false);
+    }
+  };
 
   if (isLoading) return <Loading label="Loading your GTEX workspace..." />;
   if (isError || !data) return <Empty title="GTEX workspace unavailable" body="We could not load your account right now. Please refresh and try again." />;
@@ -254,6 +280,14 @@ export function ControlCenter() {
             >
               <Compass size={14} />
               <span>Transfer Workspace</span>
+            </Link>
+            <Link
+              to="/app/trophies"
+              className="gx-btn gx-btn-secondary text-xs flex items-center gap-2"
+              data-testid="trophy-dynasty-shortcut-btn"
+            >
+              <Trophy size={14} className="text-amber-300" />
+              <span>Honors & Dynasty</span>
             </Link>
           </div>
         </div>
@@ -471,15 +505,26 @@ export function ControlCenter() {
               TV broadcast allocation, participation grants, prize recycling, and squad win bonus incentives.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => setWinBonusOpen(true)}
-            className="gx-btn gx-btn-primary text-xs flex items-center gap-2 w-fit"
-            data-testid="pledge-win-bonus-btn"
-          >
-            <Flame size={14} className="text-amber-300" />
-            <span>Pledge Win Bonus</span>
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setPressConferenceOpen(true)}
+              className="gx-btn gx-btn-secondary text-xs flex items-center gap-2 w-fit"
+              data-testid="press-conference-btn"
+            >
+              <Radio size={14} className="text-sky-300" />
+              <span>Convene Press Conference</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setWinBonusOpen(true)}
+              className="gx-btn gx-btn-primary text-xs flex items-center gap-2 w-fit"
+              data-testid="pledge-win-bonus-btn"
+            >
+              <Flame size={14} className="text-amber-300" />
+              <span>Pledge Win Bonus</span>
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -679,6 +724,73 @@ export function ControlCenter() {
           })}
         </div>
       </section>
+
+      {/* Convene Press Conference Modal */}
+      {pressConferenceOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" data-testid="press-conference-modal">
+          <div className="w-full max-w-md rounded-2xl border border-sky-400/20 bg-[#070B11] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <Radio className="text-sky-300" size={18} />
+                <h3 className="gx-display text-lg font-black uppercase text-white">Convene Press Conference</h3>
+              </div>
+              <button onClick={() => setPressConferenceOpen(false)} className="text-slate-400 hover:text-white"><X size={16} /></button>
+            </div>
+            <form onSubmit={handleHoldPressConference} className="space-y-4">
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Address continental sports media and supporters. Your tone shapes squad pressure, fan expectations, and manager authority.
+              </p>
+              <div>
+                <label className="gx-label">Conference Posture & Tone</label>
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  {(["assertive", "ambitious", "calm", "defiant"] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setPressTone(t)}
+                      className={`rounded-lg border px-3 py-2 text-xs font-bold uppercase transition ${
+                        pressTone === t
+                          ? "border-sky-400 bg-sky-950/60 text-sky-200"
+                          : "border-white/10 bg-black/40 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="gx-label">Media Statement</label>
+                <textarea
+                  rows={3}
+                  value={pressStatement}
+                  onChange={(e) => setPressStatement(e.target.value)}
+                  className="gx-input w-full mt-1 resize-none text-xs"
+                  placeholder="Address the sports press..."
+                  required
+                />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setPressConferenceOpen(false)}
+                  className="gx-btn gx-btn-secondary flex-1 text-xs"
+                  disabled={submittingPress}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="gx-btn gx-btn-primary flex-1 text-xs"
+                  disabled={submittingPress}
+                >
+                  {submittingPress ? "Broadcasting…" : "Broadcast Statement"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Pledge Win Bonus Modal */}
       {winBonusOpen && (

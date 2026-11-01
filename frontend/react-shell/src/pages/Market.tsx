@@ -6,6 +6,7 @@ import { fmt, useActiveClub, useClub, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, PageHeader, Panel } from "@/components/gtex/ui";
 import { MarketTable } from "@/components/gtex/MarketTable";
 import { ShareMarket } from "@/components/gtex/ShareMarket";
+import { ClubSaleMarket } from "@/components/gtex/ClubSaleMarket";
 
 function SisterTransfer({ clubs, club }: any) {
   const refresh = useRefreshOwner();
@@ -76,6 +77,9 @@ export default function Market() {
       </Panel>
       <Panel eyebrow="Related-party · anti-collusion" title="Sister-club transfer" testid="sister-transfer-panel">
         <SisterTransfer clubs={clubs} club={club} />
+      </Panel>
+      <Panel eyebrow="Club equity market · verified ownership" title="Club Sale & Acquisition Market" testid="club-sale-market-panel">
+        <ClubSaleMarket />
       </Panel>
     </div>
   );

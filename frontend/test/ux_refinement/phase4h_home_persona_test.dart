@@ -155,13 +155,16 @@ void main() {
     // the failure mode became a silently missing button. This is what keeps
     // that from going unnoticed.
     const List<String> quickActionDestinations = <String>[
+      AppRoutes.academy,
       AppRoutes.clips,
       AppRoutes.coaches,
       AppRoutes.competitions,
+      AppRoutes.createSon,
       AppRoutes.lineup,
       AppRoutes.market,
       AppRoutes.matches,
       AppRoutes.nationalTeams,
+      AppRoutes.playerCards,
       AppRoutes.profile,
       AppRoutes.profileAdmin,
       AppRoutes.profileLogin,

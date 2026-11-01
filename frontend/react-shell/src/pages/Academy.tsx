@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -520,6 +521,22 @@ export default function Academy() {
   const [pack, setPack] = useState<any[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<any | null>(null);
   const [categoryTab, setCategoryTab] = useState<"all" | "prospects" | "promoted">("all");
+  const location = useLocation();
+
+  useEffect(() => {
+    if (
+      location.pathname.includes("build-a-son") ||
+      location.pathname.includes("create-son") ||
+      location.hash === "#build-a-son"
+    ) {
+      setTimeout(() => {
+        const el = document.querySelector('[data-testid="build-a-son-panel"]');
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 100);
+    }
+  }, [location.pathname, location.hash, club]);
 
   useEffect(() => {
     if (!club) return;
