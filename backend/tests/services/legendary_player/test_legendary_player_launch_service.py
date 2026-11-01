@@ -15,7 +15,7 @@ from app.ingestion.models import Player
 from app.models.user import User, UserRole
 from app.players.token_service import PlayerTokenMarketError, PlayerTokenMarketService
 from app.schemas.legendary_player import LegendaryPlayerProfileCreate
-from app.services.legendary_player_launch_service import LegendaryPlayerLaunchService
+from app.services.legendary_player_launch_service import LegendaryPlayerLaunchError, LegendaryPlayerLaunchService
 from app.wallets.service import LedgerPosting, WalletService
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
 
@@ -102,7 +102,7 @@ def test_launch_rejects_active_under_31_real_player_as_legend(monkeypatch) -> No
             catalogue_status="approved",
         )
 
-        with pytest.raises(Exception, match="active under-31 real-player identity"):
+        with pytest.raises(LegendaryPlayerLaunchError, match="active real-player identity"):
             LegendaryPlayerLaunchService(session).materialize(profile, actor=admin)
 
         assert session.query(PlayerShareMarket).filter_by(player_id=active.id).one_or_none() is None
