@@ -900,10 +900,6 @@ DOMAIN_MODULES = (
     ),
     _module("match_viewer", router_path="app.routes.match_viewer:router", api_only=True),
     _module("club_identity", router_path="app.club_identity.jerseys.router:router"),
-    _module("club_sale_market", router_path="app.club_sale_market.router:router"),
-    _module("dynasty", router_path="app.club_identity.dynasty.api.router:router"),
-    _module("trophies", router_path="app.club_identity.trophies.router:router"),
-    _module("reputation", router_path="app.club_identity.reputation.router:router", with_api_alias=True),
     _module("club_ops_admin", router_path="app.routes.admin_club_ops:router"),
     _module(
         "replay_archive",
