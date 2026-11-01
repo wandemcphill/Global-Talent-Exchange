@@ -106,10 +106,13 @@ def test_paystack_verifies_valid_hmac_with_the_api_secret_key(
     monkeypatch.delenv("GTE_PAYSTACK_WEBHOOK_SECRET", raising=False)
 
     service = AdminFinanceService(session=SimpleNamespace(), settings=SimpleNamespace(app_env="production"))
-    assert service._verify_paystack_webhook(
-        raw_body=raw_body,
-        headers={"x-paystack-signature": signature},
-    ) is True
+    assert (
+        service._verify_paystack_webhook(
+            raw_body=raw_body,
+            headers={"x-paystack-signature": signature},
+        )
+        is True
+    )
 
 
 def test_paystack_webhook_rejects_invalid_signature_when_secret_is_configured(
