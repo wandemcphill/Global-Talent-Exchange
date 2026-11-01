@@ -66,7 +66,8 @@ class PaystackProviderAdapter:
             return False
         env = (os.getenv("GTE_APP_ENV") or os.getenv("APP_ENV") or "development").strip().lower()
         if env in {"production", "prod", "release"}:
-            return bool(self._webhook_secret())
+            secret = self._secret_key() or ""
+            return secret.startswith("sk_live_")
         return True
 
     def _callback_url(self) -> str | None:
