@@ -159,14 +159,87 @@ TOP_EIGHT_PLAYERS: list[dict[str, object]] = [
         dominant_foot="left",
         height_cm=189,
         weight_kg=74,
-        overall_rating=86,
-        potential=90,
+        overall_rating=88,
+        potential=92,
         market_value_eur=90_000_000.0,
         appearances=33,
         minutes=2780,
         goals=22,
         assists=11,
         aliases=["Cole Jermaine Palmer", "C. Palmer"],
+    ),
+    player_entry(
+        key="rodri-001",
+        name="Rodri",
+        nationality="Spain",
+        nationality_code="ES",
+        dob="1996-06-22",
+        position="Defensive Midfielder",
+        secondary_positions=["Central Midfielder"],
+        club="Manchester City",
+        club_key="manchester-city",
+        league="Premier League",
+        league_key="premier-league",
+        dominant_foot="right",
+        height_cm=191,
+        weight_kg=82,
+        overall_rating=91,
+        potential=91,
+        market_value_eur=130_000_000.0,
+        appearances=34,
+        minutes=3100,
+        goals=8,
+        assists=9,
+        aliases=["Rodrigo Hernández Cascante", "Rodrigo"],
+    ),
+    player_entry(
+        key="de-bruyne-001",
+        name="Kevin De Bruyne",
+        nationality="Belgium",
+        nationality_code="BE",
+        dob="1991-06-28",
+        position="Central Midfielder",
+        secondary_positions=["Attacking Midfielder"],
+        club="Manchester City",
+        club_key="manchester-city",
+        league="Premier League",
+        league_key="premier-league",
+        dominant_foot="right",
+        height_cm=181,
+        weight_kg=75,
+        overall_rating=90,
+        potential=90,
+        market_value_eur=60_000_000.0,
+        appearances=26,
+        minutes=2100,
+        goals=6,
+        assists=18,
+        aliases=["Kevin De Bruyne", "K. De Bruyne"],
+    ),
+    player_entry(
+        key="van-dijk-001",
+        name="Virgil van Dijk",
+        nationality="Netherlands",
+        nationality_code="NL",
+        dob="1991-07-08",
+        position="Centre-Back",
+        secondary_positions=[],
+        club="Liverpool",
+        club_key="liverpool",
+        league="Premier League",
+        league_key="premier-league",
+        dominant_foot="right",
+        height_cm=195,
+        weight_kg=92,
+        overall_rating=89,
+        potential=89,
+        market_value_eur=35_000_000.0,
+        appearances=35,
+        minutes=3150,
+        goals=4,
+        assists=2,
+        clean_sheets=16,
+        aliases=["Virgil van Dijk", "V. van Dijk"],
     ),
     player_entry(
         key="declan-rice-001",
@@ -231,8 +304,8 @@ TOP_EIGHT_PLAYERS: list[dict[str, object]] = [
         dominant_foot="right",
         height_cm=192,
         weight_kg=85,
-        overall_rating=87,
-        potential=90,
+        overall_rating=88,
+        potential=91,
         market_value_eur=80_000_000.0,
         appearances=35,
         minutes=3150,
@@ -306,7 +379,7 @@ TOP_EIGHT_PLAYERS: list[dict[str, object]] = [
         height_cm=186,
         weight_kg=75,
         overall_rating=90,
-        potential=94,
+        potential=95,
         market_value_eur=180_000_000.0,
         appearances=33,
         minutes=2790,
@@ -353,8 +426,8 @@ TOP_EIGHT_PLAYERS: list[dict[str, object]] = [
         dominant_foot="left",
         height_cm=178,
         weight_kg=66,
-        overall_rating=84,
-        potential=93,
+        overall_rating=92,
+        potential=98,
         market_value_eur=150_000_000.0,
         appearances=34,
         minutes=2380,
@@ -449,8 +522,8 @@ TOP_EIGHT_PLAYERS: list[dict[str, object]] = [
         dominant_foot="right",
         height_cm=181,
         weight_kg=74,
-        overall_rating=85,
-        potential=89,
+        overall_rating=86,
+        potential=90,
         market_value_eur=70_000_000.0,
         appearances=31,
         minutes=2450,
@@ -475,7 +548,7 @@ TOP_EIGHT_PLAYERS: list[dict[str, object]] = [
         height_cm=174,
         weight_kg=72,
         overall_rating=89,
-        potential=90,
+        potential=91,
         market_value_eur=110_000_000.0,
         appearances=33,
         minutes=2750,
@@ -499,7 +572,7 @@ TOP_EIGHT_PLAYERS: list[dict[str, object]] = [
         height_cm=172,
         weight_kg=68,
         overall_rating=87,
-        potential=88,
+        potential=89,
         market_value_eur=80_000_000.0,
         appearances=34,
         minutes=2860,
@@ -596,8 +669,8 @@ TOP_EIGHT_PLAYERS: list[dict[str, object]] = [
         dominant_foot="right",
         height_cm=188,
         weight_kg=86,
-        overall_rating=90,
-        potential=90,
+        overall_rating=92,
+        potential=92,
         market_value_eur=100_000_000.0,
         appearances=32,
         minutes=2760,
@@ -620,8 +693,8 @@ TOP_EIGHT_PLAYERS: list[dict[str, object]] = [
         dominant_foot="right",
         height_cm=177,
         weight_kg=70,
-        overall_rating=88,
-        potential=92,
+        overall_rating=89,
+        potential=93,
         market_value_eur=130_000_000.0,
         appearances=31,
         minutes=2490,
@@ -644,14 +717,38 @@ TOP_EIGHT_PLAYERS: list[dict[str, object]] = [
         dominant_foot="right",
         height_cm=184,
         weight_kg=72,
-        overall_rating=87,
-        potential=92,
+        overall_rating=90,
+        potential=95,
         market_value_eur=130_000_000.0,
         appearances=30,
         minutes=2335,
         goals=12,
         assists=8,
         aliases=["J. Musiala"],
+    ),
+    player_entry(
+        key="olise-001",
+        name="Michael Olise",
+        nationality="France",
+        nationality_code="FR",
+        dob="2001-12-12",
+        position="Winger",
+        secondary_positions=["Attacking Midfielder"],
+        club="FC Bayern München",
+        club_key="fc-bayern-munchen",
+        league="Bundesliga",
+        league_key="bundesliga",
+        dominant_foot="left",
+        height_cm=184,
+        weight_kg=73,
+        overall_rating=90,
+        potential=95,
+        market_value_eur=90_000_000.0,
+        appearances=30,
+        minutes=2350,
+        goals=15,
+        assists=13,
+        aliases=["M. Olise", "Michael Akpovie Olise"],
     ),
     player_entry(
         key="granit-xhaka-001",
@@ -741,14 +838,38 @@ TOP_EIGHT_PLAYERS: list[dict[str, object]] = [
         dominant_foot="right",
         height_cm=186,
         weight_kg=72,
-        overall_rating=82,
-        potential=88,
+        overall_rating=88,
+        potential=93,
         market_value_eur=65_000_000.0,
         appearances=31,
         minutes=2180,
         goals=9,
         assists=8,
         aliases=["B. Barcola"],
+    ),
+    player_entry(
+        key="gift-orban-001",
+        name="Gift Orban",
+        nationality="Nigeria",
+        nationality_code="NG",
+        dob="2002-07-17",
+        position="Striker",
+        secondary_positions=["Winger"],
+        club="Olympique Lyonnais",
+        club_key="olympique-lyonnais",
+        league="Ligue 1",
+        league_key="ligue-1",
+        dominant_foot="right",
+        height_cm=178,
+        weight_kg=73,
+        overall_rating=81,
+        potential=89,
+        market_value_eur=20_000_000.0,
+        appearances=28,
+        minutes=1950,
+        goals=12,
+        assists=4,
+        aliases=["Gift Emmanuel Orban", "G. Orban"],
     ),
     player_entry(
         key="hakimi-001",
@@ -815,8 +936,8 @@ TOP_EIGHT_PLAYERS: list[dict[str, object]] = [
         dominant_foot="right",
         height_cm=187,
         weight_kg=86,
-        overall_rating=85,
-        potential=88,
+        overall_rating=86,
+        potential=89,
         market_value_eur=75_000_000.0,
         appearances=33,
         minutes=2890,
@@ -1069,17 +1190,37 @@ def main() -> None:
         f"Generated {len(TOP_EIGHT_PLAYERS)} players across {len(leagues_represented)} top leagues in {MANIFEST_PATH}"
     )
 
-    # Also update first_batch.json so running default run_real_player_batch includes Saka and top league players
+    # Also update first_batch.json so running default run_real_player_batch includes updated ratings & new players
     first_batch_data = json.loads(FIRST_BATCH_PATH.read_text(encoding="utf-8"))
-    existing_keys = {p["source_player_key"] for p in first_batch_data["players"]}
+    top_eight_by_key = {p["source_player_key"]: p for p in TOP_EIGHT_PLAYERS}
 
-    # Update Vinicius in first_batch if it had mojibake
+    # Update existing players with modern ratings & clean names
     for p in first_batch_data["players"]:
-        if p["source_player_key"] == "vinicius-001":
+        key = p.get("source_player_key")
+        if key == "vinicius-001":
             p["canonical_name"] = "Vinícius Júnior"
             p["known_aliases"] = ["Vinicius Jr", "Vinicius Junior"]
+            p["overall_rating"] = 90
+            p["potential"] = 94
+        elif key == "osimhen-001":
+            p["canonical_name"] = "Victor Osimhen"
+            p["overall_rating"] = 90
+            p["potential"] = 94
+            p["current_real_world_club"] = "Galatasaray SK"
+            p["current_real_world_club_key"] = "galatasaray-sk"
+            p["current_real_world_league"] = "Süper Lig"
+            p["current_real_world_league_key"] = "super-lig"
+        elif key in top_eight_by_key:
+            src = top_eight_by_key[key]
+            p["overall_rating"] = src["overall_rating"]
+            p["potential"] = src["potential"]
+            p["current_real_world_club"] = src["current_real_world_club"]
+            p["current_real_world_club_key"] = src["current_real_world_club_key"]
+            p["current_real_world_league"] = src["current_real_world_league"]
+            p["current_real_world_league_key"] = src["current_real_world_league_key"]
 
-    # Append Saka and top eight players that aren't already in first_batch
+    # Append new players that aren't already in first_batch
+    existing_keys = {p["source_player_key"] for p in first_batch_data["players"]}
     added_to_first_batch = 0
     for p in TOP_EIGHT_PLAYERS:
         if p["source_player_key"] not in existing_keys:

@@ -127,3 +127,33 @@ def test_first_controlled_batch_saka_has_adequate_ratings() -> None:
     assert saka["canonical_name"] == "Bukayo Saka"
     assert saka["overall_rating"] == 87
     assert saka["potential"] == 90
+
+
+def test_authoritative_active_player_ratings_and_potentials() -> None:
+    top_eight = json.loads(TOP_EIGHT_BATCH_PATH.read_text(encoding="utf-8"))
+    first_batch = json.loads(FIRST_BATCH_PATH.read_text(encoding="utf-8"))
+
+    top_eight_map = {p["source_player_key"]: p for p in top_eight["players"]}
+    first_batch_map = {p["source_player_key"]: p for p in first_batch["players"]}
+
+    expected_ratings = {
+        "olise-001": (90, 95),       # Michael Olise
+        "lamine-yamal-001": (92, 98), # Lamine Yamal
+        "gift-orban-001": (81, 89),   # Gift Orban
+        "barcola-001": (88, 93),      # Bradley Barcola
+        "jamal-musiala-001": (90, 95),# Jamal Musiala
+        "bellingham-001": (90, 95),   # Jude Bellingham
+        "harry-kane-001": (92, 92),   # Harry Kane
+        "cole-palmer-001": (88, 92),  # Cole Palmer
+        "osimhen-001": (90, 94),      # Victor Osimhen
+    }
+
+    for key, (exp_ovr, exp_pot) in expected_ratings.items():
+        assert key in top_eight_map, f"Missing {key} in top_eight_batch"
+        assert top_eight_map[key]["overall_rating"] == exp_ovr, f"Mismatch overall for {key}"
+        assert top_eight_map[key]["potential"] == exp_pot, f"Mismatch potential for {key}"
+
+        assert key in first_batch_map, f"Missing {key} in first_batch"
+        assert first_batch_map[key]["overall_rating"] == exp_ovr, f"Mismatch first_batch overall for {key}"
+        assert first_batch_map[key]["potential"] == exp_pot, f"Mismatch first_batch potential for {key}"
+
