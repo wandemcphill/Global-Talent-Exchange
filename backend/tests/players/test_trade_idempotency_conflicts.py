@@ -201,7 +201,7 @@ def test_same_key_different_side_is_rejected_as_conflict(session):
 
     with pytest.raises(PlayerTokenMarketError) as exc_info:
         service.sell_shares(actor=fan, player_id=player.id, share_count=1, idempotency_key="side-key")
-    assert exc_info.value.reason == "player_acquisition_non_transferable"
+    assert exc_info.value.reason == "trade_idempotency_conflict"
     assert service.get_holding(user_id=fan.id, player_id=player.id).share_count == 1
 
 
