@@ -78,7 +78,7 @@ function sanitizeDatabaseUrl(url) {
   if (!url) {
     return url;
   }
-  const unquoted = url.replace(/^[\"']|[\"']$/g, '').trim();
+  const unquoted = url.replace(/^[\"']|[\"']$/g, "").trim();
   try {
     url = unquoted;
     const parsed = new URL(url);
