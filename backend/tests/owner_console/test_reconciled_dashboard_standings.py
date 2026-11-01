@@ -50,7 +50,7 @@ def test_dashboard_surfaces_canonical_match_and_standings_projection(tmp_path):
             display_name="Club Owner 1",
             role=UserRole.USER,
             is_active=True,
-            password_hash="pw_mock",
+            password_hash="pw_mock",  # pragma: allowlist secret
         )
         session.add(user)
         session.flush()
