@@ -65,10 +65,8 @@ class AccountEligibilityService:
         """Only ordinary USER accounts without active clubs may apply for Creator status."""
         if user.account_type == PublicAccountType.COIN_TRADER:
             raise AccountTypeConflictError("Coin trader accounts cannot be promoted to Creator.")
-        if user.account_type == PublicAccountType.CREATOR:
-            raise AccountTypeConflictError("Account is already a Creator.")
-        if user.account_type != PublicAccountType.USER:
-            raise AccountTypeConflictError("Creator promotion requires a normal USER account.")
+        if user.account_type == PublicAccountType.CREATOR or user.account_type != PublicAccountType.USER:
+            raise AccountTypeConflictError("creator_promotion_requires_normal_account")
 
         owned_active_club = session.scalar(
             select(ClubProfile.id)

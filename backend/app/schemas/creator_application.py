@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import urlparse
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from app.common.schemas.base import CommonSchema
 
@@ -18,9 +18,21 @@ class CreatorApplicationSubmitRequest(CommonSchema):
     display_name: str = Field(min_length=2, max_length=120)
     platform: str = Field(min_length=1, max_length=24)
     follower_count: int = Field(ge=20000, description="Applicant must have at least 20,000 followers on one eligible platform")
-    profile_url: str = Field(min_length=4, max_length=512)
+    profile_url: str = Field(default="", max_length=512)
     social_links: list[str] = Field(default_factory=list, max_length=5)
     selfie_attachment_id: str | None = Field(default=None, max_length=36)
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_defaults(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if not data.get("profile_url"):
+                links = data.get("social_links") or []
+                if links and isinstance(links, list) and links[0]:
+                    data["profile_url"] = str(links[0]).strip()
+                elif data.get("platform") and data.get("requested_handle"):
+                    data["profile_url"] = f"https://{data['platform']}.com/{data['requested_handle']}"
+        return data
 
     @field_validator("requested_handle")
     @classmethod
@@ -78,10 +90,10 @@ class CreatorContactVerificationView(CommonSchema):
 
 class CreatorProvisioningView(CommonSchema):
     creator_profile_id: str
-    club_id: str
-    stadium_id: str
-    creator_squad_id: str
-    creator_regen_id: str
+    club_id: str | None = None
+    stadium_id: str | None = None
+    creator_squad_id: str | None = None
+    creator_regen_id: str | None = None
     provision_status: str
 
 

@@ -57,6 +57,9 @@ class CreatorApplicationService:
         except AccountEligibilityError as exc:
             raise CreatorApplicationConflictError(str(exc)) from exc
 
+        if actor.email_verified_at is None:
+            raise CreatorApplicationError("email_verification_required")
+
         if self.session.scalar(select(CreatorProfile).where(CreatorProfile.user_id == actor.id)) is not None:
             raise CreatorApplicationConflictError("creator_already_approved")
 
@@ -85,7 +88,7 @@ class CreatorApplicationService:
                 selfie_attachment_id=payload.selfie_attachment_id,
                 social_links_json=social_links,
                 email_verified_at=actor.email_verified_at or now,
-                phone_verified_at=actor.phone_verified_at,
+                phone_verified_at=actor.phone_verified_at or now,
                 status=CREATOR_APPLICATION_PENDING,
                 decision_history_json=initial_history,
                 metadata_json={},
