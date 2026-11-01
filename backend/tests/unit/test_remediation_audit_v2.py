@@ -282,3 +282,129 @@ def test_generational_legend_age_rules() -> None:
     ]
     assert max(all_ages) == 30
     assert min(all_ages) == 20
+
+
+def test_fm23_regens_facebank_index_and_manifest_coverage() -> None:
+    from scripts.assign_fm23_regen_facebank_portraits import FaceBankIndex
+
+    index = FaceBankIndex()
+    assert len(index.assets) == 8522
+
+    required_ethnicities = {
+        "african",
+        "east asian",
+        "hispanic",
+        "indian",
+        "middle east",
+        "mixed",
+        "north european",
+        "south european",
+    }
+    assert set(index.by_eth.keys()) == required_ethnicities
+
+    for eth in required_ethnicities:
+        assert len(index.by_eth[eth]) > 0
+        for asset in index.by_eth[eth][:5]:
+            assert asset["cloudinary_secure_url"].startswith("https://res.cloudinary.com/")
+            assert asset["storage_key"].startswith("regen_newgen_faces/script_skin_hair/")
+
+
+def test_fm23_regens_nationality_to_ethnicity_matching() -> None:
+    from scripts.assign_fm23_regen_facebank_portraits import FaceBankIndex
+
+    index = FaceBankIndex()
+
+    # African
+    assert index.resolve_ethnicity(country_name="Nigeria") == "African"
+    assert index.resolve_ethnicity(country_name="Senegal / France") == "African"
+    assert index.resolve_ethnicity(country_name="South Africa") == "African"
+    assert index.resolve_ethnicity(country_name="Ghana") == "African"
+
+    # Hispanic
+    assert index.resolve_ethnicity(country_name="Argentina") == "Hispanic"
+    assert index.resolve_ethnicity(country_name="Colombia") == "Hispanic"
+    assert index.resolve_ethnicity(country_name="Uruguay / Italy") == "Hispanic"
+    assert index.resolve_ethnicity(country_name="Mexico") == "Hispanic"
+
+    # South European
+    assert index.resolve_ethnicity(country_name="Spain") == "South european"
+    assert index.resolve_ethnicity(country_name="Spain / Pays Basque") == "South european"
+    assert index.resolve_ethnicity(country_name="Italy") == "South european"
+    assert index.resolve_ethnicity(country_name="Portugal") == "South european"
+    assert index.resolve_ethnicity(country_name="Croatia") == "South european"
+
+    # North European
+    assert index.resolve_ethnicity(country_name="England") == "North european"
+    assert index.resolve_ethnicity(country_name="France") == "North european"
+    assert index.resolve_ethnicity(country_name="Germany") == "North european"
+    assert index.resolve_ethnicity(country_name="Netherlands") == "North european"
+
+    # Middle East
+    assert index.resolve_ethnicity(country_name="Turkey") == "Middle east"
+    assert index.resolve_ethnicity(country_name="Morocco") == "Middle east"
+    assert index.resolve_ethnicity(country_name="Egypt") == "Middle east"
+    assert index.resolve_ethnicity(country_name="Saudi Arabia") == "Middle east"
+
+    # East Asian
+    assert index.resolve_ethnicity(country_name="Japan") == "East asian"
+    assert index.resolve_ethnicity(country_name="South Korea") == "East asian"
+    assert index.resolve_ethnicity(country_name="China") == "East asian"
+
+    # Indian
+    assert index.resolve_ethnicity(country_name="India") == "Indian"
+    assert index.resolve_ethnicity(country_name="Pakistan") == "Indian"
+
+    # Mixed
+    assert index.resolve_ethnicity(country_name="Brazil") == "Mixed"
+    assert index.resolve_ethnicity(country_name="United States") == "Mixed"
+
+
+def test_fm23_regens_deterministic_face_assignment() -> None:
+    from scripts.assign_fm23_regen_facebank_portraits import FaceBankIndex
+
+    index = FaceBankIndex()
+
+    # Call 1
+    p1 = index.build_regen_portrait_payload(
+        player_id="test-player-1",
+        provider_external_id="2002133083",
+        dna_profile={"current_rating": 70, "potential_rating": 80},
+        country_name="South Africa",
+    )
+    assert p1 is not None
+    assert p1["asset"]["ethnicity"] == "African"
+
+    # Call 2 (must be identically deterministic)
+    p2 = index.build_regen_portrait_payload(
+        player_id="test-player-1",
+        provider_external_id="2002133083",
+        dna_profile={"current_rating": 70, "potential_rating": 80},
+        country_name="South Africa",
+    )
+    assert p2 is not None
+    assert p1["dna_profile"]["portraitUrl"] == p2["dna_profile"]["portraitUrl"]
+    assert p1["dna_profile"]["faceSeed"] == p2["dna_profile"]["faceSeed"]
+    assert p1["image_metadata"]["storage_key"] == p2["image_metadata"]["storage_key"]
+
+
+def test_fm23_regens_quarantine_enforcement() -> None:
+    from scripts.assign_fm23_regen_facebank_portraits import FaceBankIndex
+
+    index = FaceBankIndex()
+
+    # Ryan Matos by provider_external_id: MUST BE QUARANTINED
+    res1 = index.build_regen_portrait_payload(
+        player_id="some-uuid",
+        provider_external_id="2002088877",
+        country_name="Spain",
+    )
+    assert res1 is None
+
+    # Ryan Matos by player_id: MUST BE QUARANTINED
+    res2 = index.build_regen_portrait_payload(
+        player_id="c1a2dddc-9b29-482f-ba06-0b39763830ba",
+        provider_external_id="other-id",
+        country_name="Spain",
+    )
+    assert res2 is None
+
