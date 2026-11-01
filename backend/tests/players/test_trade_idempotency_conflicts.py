@@ -156,7 +156,6 @@ def test_sell_replay_is_disabled_for_non_transferable_acquisitions(session):
     assert service.get_holding(user_id=fan.id, player_id=player.id).share_count == 1
 
 
-
 def test_same_key_different_user_does_not_conflict(session):
     service, wallet, admin = _setup_service(session, admin_id="admin-multi-user")
     player = _issue_market(session, service, admin, player_id="p-multi-user")
