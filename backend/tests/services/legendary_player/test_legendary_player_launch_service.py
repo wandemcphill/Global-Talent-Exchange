@@ -10,7 +10,7 @@ from app.core.database import load_model_modules
 from app.models.base import Base
 from app.models.player_token_market import PlayerShareMarket
 from app.models.user import User, UserRole
-from app.players.token_service import PlayerTokenMarketService
+from app.players.token_service import PlayerTokenMarketError, PlayerTokenMarketService
 from app.schemas.legendary_player import LegendaryPlayerProfileCreate
 from app.services.legendary_player_launch_service import LegendaryPlayerLaunchService
 from app.wallets.service import LedgerPosting, WalletService
