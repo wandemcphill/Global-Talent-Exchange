@@ -184,7 +184,7 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
             getattr(player, "is_real_player", True) is False
             or bool(getattr(player, "legendary_profile_id", None))
             or source_provider in {"gtex_legend", "gtex_legend_prime"}
-            or tier in {"legend", "legendary"}
+            or tier in {"legend", "legendary", "icon", "immortal", "world_class", "hero"}
         )
         if is_one_of_one:
             total_shares = 1
