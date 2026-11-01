@@ -305,7 +305,7 @@ def test_creator_account_can_hold_only_one_share_per_player_before_any_debit(ses
 
     with pytest.raises(PlayerTokenMarketError) as too_many:
         service.buy_shares(actor=creator, player_id=player.id, share_count=2)
-    assert too_many.value.reason == "creator_single_share_limit"
+    assert too_many.value.reason == "acquisition_quantity_must_be_one"
     holding = service.get_holding(user_id=creator.id, player_id=player.id)
     assert holding is None
 
@@ -318,7 +318,7 @@ def test_creator_account_can_hold_only_one_share_per_player_before_any_debit(ses
 
     with pytest.raises(PlayerTokenMarketError) as second_share:
         service.buy_shares(actor=creator, player_id=player.id, share_count=1)
-    assert second_share.value.reason == "creator_single_share_limit"
+    assert second_share.value.reason == "player_already_owned"
     balance_after_rejection = wallet.get_balance(
         session,
         wallet.get_user_account(session, creator, LedgerUnit.COIN),
