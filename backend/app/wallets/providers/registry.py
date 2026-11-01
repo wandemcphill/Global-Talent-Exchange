@@ -78,8 +78,6 @@ def provider_webhook_secret_configured(provider_key: str) -> bool:
     normalized = provider_key.strip().lower()
     env_names = {
         "paystack": (
-            "GTE_PAYSTACK_WEBHOOK_SECRET",
-            "PAYSTACK_WEBHOOK_SECRET",
             "GTE_PAYSTACK_SECRET_KEY",
             "PAYSTACK_SECRET_KEY",
         ),
