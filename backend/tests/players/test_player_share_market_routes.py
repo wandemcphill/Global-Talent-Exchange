@@ -388,7 +388,7 @@ def test_buy_player_shares_updates_market_holding_and_event_log(monkeypatch) -> 
             auth["user"] = fan
             buy_response = client.post(
                 f"/players/{player.id}/shares/buy",
-                json={"share_count": 10},
+                json={"share_count": 1},
             )
             events_response = client.get(f"/players/{player.id}/shares/events")
 
@@ -400,18 +400,18 @@ def test_buy_player_shares_updates_market_holding_and_event_log(monkeypatch) -> 
         holding = session.query(PlayerShareHolding).filter_by(user_id=fan.id, player_id=player.id).one()
         events = events_response.json()
 
-        assert payload["gross_amount_coin"] == "5.0000"
-        assert payload["fee_amount_coin"] == "1.0000"
-        assert payload["net_amount_coin"] == "6.0000"
+        assert payload["gross_amount_coin"] == "0.5000"
+        assert payload["fee_amount_coin"] == "0.1000"
+        assert payload["net_amount_coin"] == "0.6000"
         assert payload["transaction_id"]
-        assert payload["market"]["circulating_shares"] == 10
-        assert payload["holding"]["share_count"] == 10
+        assert payload["market"]["circulating_shares"] == 1
+        assert payload["holding"]["share_count"] == 1
         assert payload["holding"]["average_cost_coin"] == "0.6000"
-        assert holding.share_count == 10
+        assert holding.share_count == 1
         assert holding.average_cost_coin == Decimal("0.6000")
         assert [item["event_type"] for item in events] == ["buy", "issue"]
         assert events[0]["metadata_json"]["transaction_id"] == payload["transaction_id"]
-        assert events[0]["metadata_json"]["circulating_shares"] == 10
+        assert events[0]["metadata_json"]["circulating_shares"] == 1
     finally:
         session.close()
         engine.dispose()
@@ -473,7 +473,7 @@ def test_buy_player_shares_requires_verified_wallet_compliance(monkeypatch) -> N
             auth["user"] = fan
             buy_response = client.post(
                 f"/players/{player.id}/shares/buy",
-                json={"share_count": 10},
+                json={"share_count": 1},
             )
 
         assert issue_response.status_code == 200, issue_response.text
@@ -506,14 +506,14 @@ def test_sell_player_shares_rejects_active_trading_risk_block(monkeypatch) -> No
             )
 
         assert issue_response.status_code == 200, issue_response.text
-        assert sell_response.status_code == 423, sell_response.text
-        assert "trading is temporarily blocked" in sell_response.json()["detail"].lower()
+        assert sell_response.status_code == 409, sell_response.text
+        assert "not listed for resale" in sell_response.json()["detail"].lower()
     finally:
         session.close()
         engine.dispose()
 
 
-def test_market_buy_and_sell_endpoints_execute_share_trades(monkeypatch) -> None:
+def test_market_buy_endpoint_acquires_one_player_and_sell_is_disabled(monkeypatch) -> None:
     engine, session = _build_session()
     try:
         admin = _create_user(session, user_id="share-market-admin", role=UserRole.ADMIN)
@@ -528,21 +528,17 @@ def test_market_buy_and_sell_endpoints_execute_share_trades(monkeypatch) -> None
                 json={"total_shares": 1000, "share_price_coin": "0.5000", "liquidity_coin": "20.0000"},
             )
             auth["user"] = fan
-            buy_response = client.post("/market/buy", json={"player_id": player.id, "share_count": 10})
-            sell_response = client.post("/market/sell", json={"player_id": player.id, "share_count": 4})
+            buy_response = client.post("/market/buy", json={"player_id": player.id, "share_count": 1})
+            sell_response = client.post("/market/sell", json={"player_id": player.id, "share_count": 1})
 
         assert buy_response.status_code == 201, buy_response.text
-        assert sell_response.status_code == 201, sell_response.text
+        assert sell_response.status_code == 409, sell_response.text
 
         buy_payload = buy_response.json()
-        sell_payload = sell_response.json()
-        assert buy_payload["holding"]["share_count"] == 10
+        assert buy_payload["holding"]["share_count"] == 1
         assert Decimal(buy_payload["fee_amount_coin"]) > Decimal("0.0000")
-        assert sell_payload["holding"]["share_count"] == 6
-        assert sell_payload["market"]["circulating_shares"] == 6
-        assert Decimal(sell_payload["gross_amount_coin"]) > Decimal("0.0000")
-        assert Decimal(sell_payload["fee_amount_coin"]) > Decimal("0.0000")
-        assert Decimal(sell_payload["net_amount_coin"]) < Decimal(sell_payload["gross_amount_coin"])
+        assert buy_payload["market"]["circulating_shares"] == 1
+        assert "not listed for resale" in sell_response.json()["detail"].lower()
     finally:
         session.close()
         engine.dispose()
