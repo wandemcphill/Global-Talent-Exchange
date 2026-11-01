@@ -461,8 +461,11 @@ class PlayerTokenMarketService:
         }
 
         market.circulating_shares = int(market.circulating_shares or 0) + int(share_count)
+        # This is now a primary acquisition, not a secondary market trade.
+        # Every available unit of the same player carries the same published
+        # price; buying one must not move the next buyer's price.
         previous_price = executed_price
-        market.share_price_coin = self._price_after_trade(market=market, direction="buy", share_count=share_count)
+        market.share_price_coin = executed_price
         liquidity_balance = self._sync_market_liquidity_balance(market)
         self._record_event(
             player_id=player_id,
