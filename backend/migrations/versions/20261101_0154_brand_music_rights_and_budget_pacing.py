@@ -1,7 +1,7 @@
 """Add music rights clearance fields and budget pacing indexes.
 
 Revision ID: 20261101_0154_brand_music_rights_and_budget_pacing
-Revises: 20261031_0153_brand_advertising_portal
+Revises: 20261101_0152_korapay_paystack_payout_and_order_fields
 Create Date: 2026-11-01
 """
 
@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "20261101_0154_brand_music_rights_and_budget_pacing"
-down_revision = "20261031_0153_brand_advertising_portal"
+down_revision = "20261101_0152_korapay_paystack_payout_and_order_fields"
 branch_labels = None
 depends_on = None
 
