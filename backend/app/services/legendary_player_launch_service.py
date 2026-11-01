@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.ingestion.models import Player
@@ -48,29 +48,53 @@ class LegendaryPlayerLaunchService:
 
         normalized_name = profile.full_name.strip().lower()
         candidates = self.session.scalars(
-            select(Player).where(func.lower(Player.full_name) == normalized_name)
+            select(Player).where(
+                or_(
+                    func.lower(Player.full_name) == normalized_name,
+                    func.lower(Player.canonical_display_name) == normalized_name,
+                    func.lower(Player.short_name) == normalized_name,
+                )
+            )
         ).all()
         for player in candidates:
             source = str(player.source_provider or "").strip().lower()
             tier = str(player.real_player_tier or "").strip().lower()
-            if not bool(player.is_tradable) or source in {"gtex_legend", "gtex_legend_prime"} or tier in {"legend", "legendary"}:
+            if (
+                not bool(player.is_tradable)
+                or source in {"gtex_legend", "gtex_legend_prime"}
+                or tier in {"legend", "legendary", "icon", "immortal", "world_class", "hero"}
+            ):
                 continue
+
+            active_age = None
+            if player.date_of_birth is not None:
+                active_age = date.today().year - player.date_of_birth.year
+                if (date.today().month, date.today().day) < (
+                    player.date_of_birth.month,
+                    player.date_of_birth.day,
+                ):
+                    active_age -= 1
+
             dna = player.dna_profile if isinstance(player.dna_profile, dict) else {}
-            ratings = [
+            current_ratings = [
                 dna.get("overall"),
                 dna.get("current_rating"),
-                dna.get("potential"),
-                dna.get("potential_rating"),
-                player.potential,
+                dna.get("sofifa_overall"),
+                player.rating,
             ]
-            gsi = max(
-                (int(float(value)) for value in ratings if isinstance(value, (int, float)) and float(value) > 0),
+            current_gsi = max(
+                (
+                    int(float(value))
+                    for value in current_ratings
+                    if isinstance(value, (int, float)) and float(value) > 0
+                ),
                 default=0,
             )
-            if gsi >= 80:
+            if (active_age is not None and active_age < 31) or current_gsi >= 80:
                 raise LegendaryPlayerLaunchError(
-                    f"{profile.full_name} has an active under-31 real-player identity "
-                    f"with GSI {gsi}; keep that identity active instead of launching a legend duplicate."
+                    f"{profile.full_name} already has an active real-player identity "
+                    f"(age {active_age if active_age is not None else 'unknown'}, current GSI {current_gsi}); "
+                    "keep that identity active instead of launching a legend duplicate."
                 )
 
     @staticmethod
