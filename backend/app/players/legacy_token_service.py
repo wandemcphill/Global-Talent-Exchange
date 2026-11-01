@@ -1111,9 +1111,12 @@ class PlayerTokenMarketService:
         else:
             current_club_name = player.real_world_club_name
         is_regen = player.source_provider in self.REGEN_PROVIDERS or not bool(player.is_real_player)
+        player_tier = str(player.real_player_tier or "").strip().lower()
+        source_provider = str(player.source_provider or "").strip().lower()
         is_legend = (
-            str(player.real_player_tier or "").strip().lower() == "legend"
-            or player.source_provider == "gtex_legend_prime"
+            bool(player.legendary_profile_id)
+            or source_provider in {"gtex_legend", "gtex_legend_prime"}
+            or player_tier in {"legend", "legendary", "icon", "immortal", "world_class", "hero"}
         )
         dna = dict(player.dna_profile or {}) if isinstance(player.dna_profile, dict) else {}
         m_meta = dict(market.metadata_json or {}) if isinstance(market.metadata_json, dict) else {}
@@ -1145,8 +1148,8 @@ class PlayerTokenMarketService:
             or self._dna_int(m_meta, "potential_gsi")
             or cur_rating
         )
-        if is_legend and pot_rating:
-            cur_rating = max(cur_rating or 0, pot_rating)
+        if cur_rating is None:
+            cur_rating = pot_rating
         return {
             "player_id": player.id,
             "player_name": player.canonical_display_name or player.full_name,
@@ -1313,6 +1316,23 @@ class PlayerTokenMarketService:
 
     @staticmethod
     def _player_age(player: Player) -> int | None:
+        source_provider = str(player.source_provider or "").strip().lower()
+        tier = str(player.real_player_tier or "").strip().lower()
+        is_legend = (
+            bool(player.legendary_profile_id)
+            or source_provider in {"gtex_legend", "gtex_legend_prime"}
+            or tier in {"legend", "legendary", "icon", "immortal", "world_class", "hero"}
+        )
+        if is_legend:
+            dna = player.dna_profile if isinstance(player.dna_profile, dict) else {}
+            for key in ("game_age", "gtex_age", "peak_age"):
+                try:
+                    age = int(dna.get(key))
+                except (TypeError, ValueError):
+                    continue
+                if 18 <= age <= 35:
+                    return age
+            return 28
         if player.date_of_birth is None:
             return None
         today = player.last_synced_at.date() if player.last_synced_at is not None else date.today()
