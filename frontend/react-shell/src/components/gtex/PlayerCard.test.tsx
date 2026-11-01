@@ -3,7 +3,7 @@ declare const test: any;
 declare const expect: any;
 
 import React from "react";
-import { PlayerCard, tierOf, posShort, TIERS, resolvePlayerFallback } from "./PlayerCard";
+import { PlayerCard, tierOf, posShort, TIERS, resolvePlayerFallback, buildSilhouetteDataUri } from "./PlayerCard";
 import { RegenCard, RegenPotentialBar, resolveRegenFallback, formatGtexCoin } from "./RegenCard";
 
 describe("PlayerCard & RegenCard Logic and Element Rendering Suite", () => {
@@ -37,11 +37,11 @@ describe("PlayerCard & RegenCard Logic and Element Rendering Suite", () => {
   });
 
   test("resolvePlayerFallback & resolveRegenFallback select position-specific art", () => {
-    expect(resolvePlayerFallback("GK")).toBe("/img/players/keeper.png");
-    expect(resolvePlayerFallback("DEF")).toBe("/img/players/defender.png");
-    expect(resolvePlayerFallback("CB")).toBe("/img/players/defender.png");
-    expect(resolvePlayerFallback("MID")).toBe("/img/players/midfielder.png");
-    expect(resolvePlayerFallback("ST")).toBe("/img/players/striker.png");
+    expect(resolvePlayerFallback("GK")).toBe(buildSilhouetteDataUri("GK"));
+    expect(resolvePlayerFallback("DEF")).toBe(buildSilhouetteDataUri("DEF"));
+    expect(resolvePlayerFallback("CB")).toBe(buildSilhouetteDataUri("CB"));
+    expect(resolvePlayerFallback("MID")).toBe(buildSilhouetteDataUri("MID"));
+    expect(resolvePlayerFallback("ST")).toBe(buildSilhouetteDataUri("ST"));
 
     expect(resolveRegenFallback("GK")).toBe("/img/players/keeper.png");
     expect(resolveRegenFallback("DEF")).toBe("/img/players/defender.png");

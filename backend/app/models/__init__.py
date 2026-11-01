@@ -669,6 +669,8 @@ from app.models.governance_engine import (
 from app.models.creator_attention_earnings import ClipEarningEventType, ClipEarningsLog, CreatorWallet
 from app.models.creator_clip_monetization import CreatorClipRevenueAttribution
 from app.models.sponsored_clip import SponsoredClip
+from app.models.brand_ad_campaign import BrandAdCampaign
+from app.models.brand_advertising import BrandAdvertiserProfile, BrandAdEvent, BrandAdReviewEvent
 from app.models.highlight_share import HighlightShareAmplification, HighlightShareExport, HighlightShareTemplate
 from app.models.moderation_report import (
     ModerationPriority,

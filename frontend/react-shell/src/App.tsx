@@ -23,6 +23,8 @@ import Academy from "@/pages/Academy";
 import Finance from "@/pages/Finance";
 import InboxPage from "@/pages/Inbox";
 import Admin from "@/pages/Admin";
+import AdvertiserAds from "@/pages/AdvertiserAds";
+import AdminAdvertising from "@/pages/AdminAdvertising";
 import PaymentCallback from "@/pages/PaymentCallback";
 import NationalTeam from "@/pages/NationalTeam";
 import { ClubStory } from "@/pages/ClubStory";
@@ -31,15 +33,16 @@ import { Newsroom } from "@/pages/Newsroom";
 import { Showroom } from "@/pages/Showroom";
 import Jackpot from "@/pages/Jackpot";
 import { ROUTER_BASENAME } from "@/lib/publicPath";
+import { GtexAdvertisingProvider } from "@/components/advertising/GtexAdvertising";
 
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter basename={ROUTER_BASENAME}>
         <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/login" element={<AuthPage mode="login" />} />
-          <Route path="/signup" element={<AuthPage mode="signup" />} />
+          <Route path="/" element={<GtexAdvertisingProvider><Landing /></GtexAdvertisingProvider>} />
+          <Route path="/login" element={<GtexAdvertisingProvider><AuthPage mode="login" /></GtexAdvertisingProvider>} />
+          <Route path="/signup" element={<GtexAdvertisingProvider><AuthPage mode="signup" /></GtexAdvertisingProvider>} />
           <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/payment/callback" element={<PaymentCallback />} />
           <Route path="/club/:clubSlug" element={<PublicClubProfile />} />
@@ -66,9 +69,11 @@ export default function App() {
             <Route path="finance" element={<Finance />} />
             <Route path="jackpot" element={<Jackpot />} />
             <Route path="creator-access" element={<CreatorAccess />} />
+            <Route path="advertising" element={<AdvertiserAds />} />
             <Route path="coin-traders" element={<CoinTraders />} />
             <Route path="inbox" element={<InboxPage />} />
             <Route path="admin" element={<Admin />} />
+            <Route path="admin/advertising" element={<AdminAdvertising />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { publicUrl } from "@/lib/publicPath";
 import { Btn, Loading } from "@/components/gtex/ui";
 import { TURNSTILE_SITE_KEY, TurnstileChallenge } from "@/components/gtex/TurnstileChallenge";
+import { GtexAuthAdvertisingPanel } from "@/components/advertising/GtexAdvertising";
 
 type SignupAccountType = "user" | "creator" | "coin_trader";
 
@@ -224,18 +225,11 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
       <div className="relative hidden overflow-hidden lg:block">
         <img src={publicUrl("/img/hero.jpg")} alt="Stadium under lights" className="absolute inset-0 h-full w-full object-cover opacity-50" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#070B11] via-[#070B11]/40 to-transparent" />
-        <div className="absolute bottom-12 left-12 right-12">
-          <p className="gx-eyebrow mb-3">GTEX Platform</p>
-          <p className="gx-h2">{mode === "login" ? "Back to the boardroom." : "Choose your GTEX account."}</p>
-          <p className="mt-3 max-w-md text-sm text-slate-300">
-            {mode === "login"
-              ? "Sign in to your dedicated account lane."
-              : "User, Creator, and Coin Trader accounts are separate account types. Choose the account you intend to use."}
-          </p>
-        </div>
+        <div className="relative z-10 flex min-h-screen items-center justify-center p-8 xl:p-12"><GtexAuthAdvertisingPanel /></div>
       </div>
       <div className="flex items-center justify-center px-6 py-12">
         <form onSubmit={submit} data-testid={`${mode}-form`} className="w-full max-w-xl space-y-4">
+          <div className="lg:hidden"><GtexAuthAdvertisingPanel compact /></div>
           <Link to="/" className="gx-display text-3xl font-black text-white">
             GTEX
           </Link>

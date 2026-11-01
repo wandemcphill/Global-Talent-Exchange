@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import signal
 from threading import Event as ThreadEvent
 
 from app.core.config import get_settings
@@ -20,6 +21,20 @@ def main() -> None:
         service_name=service_name,
         environment=settings.app_env,
     )
+
+    shutdown_event = ThreadEvent()
+
+    def _handle_signal(signum: int, _frame) -> None:
+        logger.info("Signal %s received; gracefully shutting down outbox relay...", signum)
+        shutdown_event.set()
+
+    for sig in (getattr(signal, "SIGTERM", None), getattr(signal, "SIGINT", None)):
+        if sig is not None:
+            try:
+                signal.signal(sig, _handle_signal)
+            except Exception:
+                pass
+
     try:
         context = build_application_context(settings=settings)
         configure_tracing(
@@ -37,9 +52,12 @@ def main() -> None:
         outbox_relay = getattr(context, "outbox_relay", None)
         if outbox_relay is None:
             logger.info("Outbox relay disabled. Standing by.")
-            ThreadEvent().wait()
+            shutdown_event.wait()
             return
-        ThreadEvent().wait()
+        shutdown_event.wait()
+    except Exception as exc:
+        logger.exception("outbox_relay_main unhandled exception: %s", exc)
+        raise
     finally:
         if context is not None:
             shutdown = getattr(context, "shutdown", None)
