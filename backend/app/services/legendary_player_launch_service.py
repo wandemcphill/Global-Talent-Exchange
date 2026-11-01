@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.ingestion.models import Player
@@ -35,6 +36,42 @@ class LegendaryPlayerLaunchService:
     @property
     def registry(self) -> LegendaryPlayerRegistryService:
         return LegendaryPlayerRegistryService(self.session)
+
+    def _assert_no_active_player_promotion(self, profile: LegendaryPlayerProfileCreate) -> None:
+        if profile.date_of_birth is None:
+            return
+        age = date.today().year - profile.date_of_birth.year
+        if (date.today().month, date.today().day) < (profile.date_of_birth.month, profile.date_of_birth.day):
+            age -= 1
+        if age >= 31:
+            return
+
+        normalized_name = profile.full_name.strip().lower()
+        candidates = self.session.scalars(
+            select(Player).where(func.lower(Player.full_name) == normalized_name)
+        ).all()
+        for player in candidates:
+            source = str(player.source_provider or "").strip().lower()
+            tier = str(player.real_player_tier or "").strip().lower()
+            if not bool(player.is_tradable) or source in {"gtex_legend", "gtex_legend_prime"} or tier in {"legend", "legendary"}:
+                continue
+            dna = player.dna_profile if isinstance(player.dna_profile, dict) else {}
+            ratings = [
+                dna.get("overall"),
+                dna.get("current_rating"),
+                dna.get("potential"),
+                dna.get("potential_rating"),
+                player.potential,
+            ]
+            gsi = max(
+                (int(float(value)) for value in ratings if isinstance(value, (int, float)) and float(value) > 0),
+                default=0,
+            )
+            if gsi >= 80:
+                raise LegendaryPlayerLaunchError(
+                    f"{profile.full_name} has an active under-31 real-player identity "
+                    f"with GSI {gsi}; keep that identity active instead of launching a legend duplicate."
+                )
 
     @staticmethod
     def _assert_launch_approved(profile: LegendaryPlayerProfileCreate) -> None:
@@ -69,6 +106,7 @@ class LegendaryPlayerLaunchService:
         actor: User,
     ) -> tuple[LegendaryPlayerProfile, Player, PlayerShareMarket]:
         self._assert_launch_approved(profile)
+        self._assert_no_active_player_promotion(profile)
         stored_profile, _created = self.registry.upsert_legendary_profile(profile)
         player = self.registry.instantiate_gtex_player(stored_profile)
         market = self.issue_active_market(player=player, actor=actor)
