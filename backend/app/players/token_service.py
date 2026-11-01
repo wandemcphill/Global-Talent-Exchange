@@ -167,6 +167,44 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
             "net_amount_coin": total_debit,
         }
 
+    def issue_market(
+        self,
+        *,
+        actor: User,
+        player_id: str,
+        total_shares: int = 1000,
+        share_price_coin,
+        liquidity_coin=None,
+        status: str = "active",
+    ) -> PlayerShareMarket:
+        player = self._get_player(player_id)
+        source_provider = str(getattr(player, "source_provider", "") or "").strip().lower()
+        tier = str(getattr(player, "real_player_tier", "") or "").strip().lower()
+        is_one_of_one = (
+            getattr(player, "is_real_player", True) is False
+            or bool(getattr(player, "legendary_profile_id", None))
+            or source_provider in {"gtex_legend", "gtex_legend_prime"}
+            or tier in {"legend", "legendary"}
+        )
+        if is_one_of_one:
+            total_shares = 1
+            liquidity_coin = 0
+        elif total_shares > 600:
+            raise PlayerTokenMarketError(
+                "Player availability cannot exceed 600 individual units.",
+                reason="player_supply_limit_exceeded",
+            )
+        if total_shares < 1:
+            raise PlayerTokenMarketError("Player availability must be at least one unit.", reason="player_supply_invalid")
+        return super().issue_market(
+            actor=actor,
+            player_id=player_id,
+            total_shares=total_shares,
+            share_price_coin=share_price_coin,
+            liquidity_coin=liquidity_coin,
+            status=status,
+        )
+
     def ensure_market(self, *, player_id: str, **kwargs: Any):
         override = _trade_market_override.get()
         if override is not None and override.player_id == player_id:
