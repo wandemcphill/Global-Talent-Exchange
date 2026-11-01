@@ -1773,7 +1773,7 @@ class PlayerLifecycleService:
 
         proposed_bid_amount = offer_market.training_fee_gtex_coin if offer_market is not None else payload.bid_amount
         if offer_market is None and selling_club_id is not None:
-            self._assert_buying_club_can_fund(payload.buying_club_id, proposed_bid_amount)
+            self._assert_buying_club_can_fund(payload.buying_club_id, proposed_bid_amount, player_id=player.id)
         from app.ownership_groups.service import OwnershipGroupService
 
         ownership_validation = OwnershipGroupService(self.session).validate_transfer(
@@ -1938,7 +1938,7 @@ class PlayerLifecycleService:
             )
         treasury_funded = offer is None and bid.selling_club_id is not None
         if treasury_funded:
-            self._assert_buying_club_can_fund(bid.buying_club_id, bid.bid_amount)
+            self._assert_buying_club_can_fund(bid.buying_club_id, bid.bid_amount, player_id=bid.player_id)
         if current_contract is not None:
             if bid.selling_club_id is not None and current_contract.club_id != bid.selling_club_id:
                 raise PlayerLifecycleValidationError(
@@ -2129,8 +2129,13 @@ class PlayerLifecycleService:
                     amount=bid.bid_amount,
                     transfer_bid_id=bid.id,
                     memo=f"Transfer of {player.full_name}",
+                    player_or_id=player,
                 )
             except club_ledger.LedgerError as exc:
+                if "restricted" in str(exc):
+                    raise PlayerLifecycleValidationError(
+                        "Restricted players (GSI 80+, Regens, Legends) require deposited GTEX Coin. Promotional launch credit cannot be used."
+                    ) from exc
                 raise PlayerLifecycleValidationError("Buying club treasury cannot cover this transfer fee") from exc
         else:
             from app.club_finance.service import ClubFinanceService
@@ -2503,10 +2508,14 @@ class PlayerLifecycleService:
             raise PlayerLifecycleNotFoundError(f"Injury case {injury_id} was not found for player {player_id}")
         return injury
 
-    def _assert_buying_club_can_fund(self, club_id: str, amount: Decimal) -> None:
+    def _assert_buying_club_can_fund(self, club_id: str, amount: Decimal, player_id: str | None = None) -> None:
         try:
-            club_ledger.assert_club_can_fund(self.session, club_id, amount)
+            club_ledger.assert_club_can_fund(self.session, club_id, amount, player_or_id=player_id)
         except club_ledger.LedgerError as exc:
+            if "restricted" in str(exc):
+                raise PlayerLifecycleValidationError(
+                    "Restricted players (GSI 80+, Regens, Legends) require deposited GTEX Coin. Promotional launch credit cannot be used."
+                ) from exc
             raise PlayerLifecycleValidationError("Buying club treasury cannot cover this transfer fee") from exc
 
     def _require_bid(self, window_id: str, bid_id: str) -> TransferBid:
@@ -3071,6 +3080,13 @@ class PlayerLifecycleService:
             current_gtex_balance=gtex_summary.available_balance,
         )
         total_gtex_required = offer.training_fee_gtex_coin + conversion.gtex_required_for_conversion
+        if offer.training_fee_gtex_coin > Decimal("0"):
+            classes = club_ledger.wallet_classes(self.session, owner.id)
+            deposited_available = Decimal(str(classes.get("deposited") or "0"))
+            if deposited_available < offer.training_fee_gtex_coin:
+                raise PlayerLifecycleValidationError(
+                    "Regens are restricted players and require deposited GTEX Coin. Promotional launch credit cannot be used."
+                )
         if gtex_summary.available_balance < total_gtex_required:
             raise PlayerLifecycleValidationError(
                 "Buying club owner does not have enough GTex Coin for the training fee and required Fan Coin auto-conversion"

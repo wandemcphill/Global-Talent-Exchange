@@ -221,9 +221,109 @@ def record(
     return event
 
 
-def assert_club_can_fund(session: Session, club_id: str, amount) -> None:
+def _sum(session: Session, *conditions, column=LedgerEvent.net_amount) -> Decimal:
+    return D(session.scalar(select(func.coalesce(func.sum(column), 0)).where(*conditions)) or 0)
+
+
+def get_club_funding(session: Session, club_id: str) -> dict[str, Any]:
+    acct = club_account(club_id)
+    total_cash = balance(session, acct, GTEX)
+
+    # Provenance tracking:
+    # Deposited: only credits with balance_class == "deposited"
+    dep_credits = _sum(
+        session,
+        LedgerEvent.destination_account == acct,
+        LedgerEvent.currency == GTEX,
+        LedgerEvent.status == "completed",
+        LedgerEvent.balance_class == "deposited",
+    )
+    dep_debits = _sum(
+        session,
+        LedgerEvent.source_account == acct,
+        LedgerEvent.currency == GTEX,
+        LedgerEvent.status.in_(LIVE_STATUSES),
+        LedgerEvent.balance_class == "deposited",
+        column=LedgerEvent.gross_amount,
+    )
+    net_deposited = max(Decimal("0"), dep_credits - dep_debits)
+
+    # Promotional: platform launch grants and promotional credit
+    promo_credits = _sum(
+        session,
+        LedgerEvent.destination_account == acct,
+        LedgerEvent.currency == GTEX,
+        LedgerEvent.status == "completed",
+        LedgerEvent.balance_class == "promotional",
+    )
+    promo_debits = _sum(
+        session,
+        LedgerEvent.source_account == acct,
+        LedgerEvent.currency == GTEX,
+        LedgerEvent.status.in_(LIVE_STATUSES),
+        LedgerEvent.balance_class == "promotional",
+        column=LedgerEvent.gross_amount,
+    )
+    net_promotional = max(Decimal("0"), promo_credits - promo_debits)
+
+    # Earned: gameplay rewards, match gate receipts, player sales, sponsor income
+    earned_credits = _sum(
+        session,
+        LedgerEvent.destination_account == acct,
+        LedgerEvent.currency == GTEX,
+        LedgerEvent.status == "completed",
+        LedgerEvent.balance_class == "earned",
+    )
+    earned_debits = _sum(
+        session,
+        LedgerEvent.source_account == acct,
+        LedgerEvent.currency == GTEX,
+        LedgerEvent.status.in_(LIVE_STATUSES),
+        LedgerEvent.balance_class == "earned",
+        column=LedgerEvent.gross_amount,
+    )
+    net_earned = max(Decimal("0"), earned_credits - earned_debits)
+
+    # Conservative available allocation (historical or untraceable funds stay non-deposited)
+    available_deposited = min(net_deposited, total_cash)
+    available_promotional = min(net_promotional, max(Decimal("0"), total_cash - available_deposited))
+    available_earned = max(Decimal("0"), total_cash - available_deposited - available_promotional)
+
+    return {
+        "total_cash": total_cash,
+        "available_deposited": available_deposited,
+        "available_promotional": available_promotional,
+        "available_earned": available_earned,
+        "net_deposited": net_deposited,
+        "net_promotional": net_promotional,
+        "net_earned": net_earned,
+    }
+
+
+def assert_club_can_fund_player(session: Session, club_id: str, amount, player_or_id: Any) -> Any:
+    from app.owner_console.player_classification import classify_player_for_acquisition
+
     gross_amount = D(amount)
     if gross_amount <= 0:
+        return None
+
+    funding = get_club_funding(session, club_id)
+    if funding["total_cash"] < gross_amount:
+        raise LedgerError("insufficient_club_treasury")
+
+    classification = classify_player_for_acquisition(session, player_or_id)
+    if classification.requires_deposited_funds and funding["available_deposited"] < gross_amount:
+        raise LedgerError("restricted_player_requires_deposited_funds")
+
+    return classification
+
+
+def assert_club_can_fund(session: Session, club_id: str, amount, player_or_id: Any = None) -> None:
+    gross_amount = D(amount)
+    if gross_amount <= 0:
+        return
+    if player_or_id is not None:
+        assert_club_can_fund_player(session, club_id, amount, player_or_id)
         return
     if balance(session, club_account(club_id), GTEX) < gross_amount:
         raise LedgerError("insufficient_club_treasury")
@@ -237,9 +337,11 @@ def settle_club_transfer(
     amount,
     transfer_bid_id: str,
     memo: str,
+    player_or_id: Any = None,
 ) -> LedgerEvent | None:
     """Pay a player transfer from the buying club treasury; the seller nets the fee less the platform cut."""
-    if D(amount) <= 0:
+    gross_amount = D(amount)
+    if gross_amount <= 0:
         return None
     existing = session.scalar(
         select(LedgerEvent).where(
@@ -250,14 +352,49 @@ def settle_club_transfer(
     )
     if existing is not None:
         return existing
+
+    funding = get_club_funding(session, buying_club_id)
+    if funding["total_cash"] < gross_amount:
+        raise LedgerError("insufficient_club_treasury")
+
+    is_restricted = False
+    if player_or_id is not None:
+        from app.owner_console.player_classification import classify_player_for_acquisition
+
+        classification = classify_player_for_acquisition(session, player_or_id)
+        is_restricted = classification.requires_deposited_funds
+    else:
+        from app.models.transfer_bid import TransferBid
+
+        bid = session.get(TransferBid, transfer_bid_id)
+        if bid is not None and getattr(bid, "player_id", None):
+            from app.owner_console.player_classification import classify_player_for_acquisition
+
+            classification = classify_player_for_acquisition(session, bid.player_id)
+            is_restricted = classification.requires_deposited_funds
+
+    if is_restricted:
+        if funding["available_deposited"] < gross_amount:
+            raise LedgerError("restricted_player_requires_deposited_funds")
+        balance_class = "deposited"
+    else:
+        # Prefer consuming promotional first, then earned, then deposited
+        if funding["available_promotional"] >= gross_amount:
+            balance_class = "promotional"
+        elif funding["available_earned"] >= gross_amount:
+            balance_class = "earned"
+        else:
+            balance_class = "deposited"
+
     return record(
         session,
         event_type="transfer_purchase",
         source=club_account(buying_club_id),
         destination=club_account(selling_club_id),
         currency=GTEX,
-        gross=amount,
+        gross=gross_amount,
         fee_bps=TRANSFER_PLATFORM_FEE_BPS,
+        balance_class=balance_class,
         club_id=buying_club_id,
         related_type="transfer_bid",
         related_id=transfer_bid_id,
@@ -358,12 +495,21 @@ def club_economy(session: Session, club_id: str) -> dict[str, object]:
         LedgerEvent.status == "completed",
         column=LedgerEvent.gross_amount,
     )
+    funding = get_club_funding(session, club_id)
     return {
         "cash_gtex": str(balance(session, acct, GTEX)),
         "gifts_fan_coin": str(balance(session, acct, FAN)),
         "earnings_sources": sources,
         "pending_payouts": str(held),
         "total_spend": str(spend),
+        "deposited": str(funding["available_deposited"]),
+        "promotional": str(funding["available_promotional"]),
+        "earned": str(funding["available_earned"]),
+        "funding_breakdown": {
+            "deposited": str(funding["available_deposited"]),
+            "promotional": str(funding["available_promotional"]),
+            "earned": str(funding["available_earned"]),
+        },
     }
 
 

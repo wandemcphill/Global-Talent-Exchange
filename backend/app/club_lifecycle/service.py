@@ -35,7 +35,7 @@ from .schemas import (
     SquadRegistrationView,
 )
 
-MIN_SQUAD_SIZE = 11
+MIN_SQUAD_SIZE = 22
 POSITION_REQUIREMENTS = {"goalkeeper": 1, "defender": 3, "midfielder": 3, "forward": 1}
 TERMINAL_STATES = {
     ClubLifecycleStatus.RESTRICTED,
