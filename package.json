@@ -2,6 +2,7 @@
   "name": "global-talent-exchange-quality",
   "private": true,
   "scripts": {
+    "build": "bash ops/render/build-frontend.sh",
     "lint:js": "eslint --max-warnings=0 .",
     "format:js": "prettier --write \"**/*.{js,mjs,cjs}\"",
     "format:js:check": "prettier --check \"**/*.{js,mjs,cjs}\""

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import unicodedata
 from dataclasses import dataclass
 from datetime import date
 
@@ -15,6 +16,14 @@ from app.players.token_market_defaults import resolve_player_share_market_config
 from app.players.token_service import PlayerTokenMarketError, PlayerTokenMarketService
 from app.schemas.legendary_player import LegendaryPlayerProfileCreate, LegendarySeedImportRequest
 from app.services.legendary_player_service import LegendaryPlayerRegistryService
+
+
+def _normalize_name(value: str | None) -> str:
+    if not value:
+        return ""
+    nfkd = unicodedata.normalize("NFKD", value)
+    unaccented = "".join(c for c in nfkd if not unicodedata.combining(c))
+    return "".join(c.lower() for c in unaccented if c.isalnum() or c.isspace()).strip()
 
 
 class LegendaryPlayerLaunchError(ValueError):
@@ -38,31 +47,56 @@ class LegendaryPlayerLaunchService:
         return LegendaryPlayerRegistryService(self.session)
 
     def _assert_no_active_player_promotion(self, profile: LegendaryPlayerProfileCreate) -> None:
-        if profile.date_of_birth is None:
-            return
-        age = date.today().year - profile.date_of_birth.year
-        if (date.today().month, date.today().day) < (profile.date_of_birth.month, profile.date_of_birth.day):
-            age -= 1
-        if age >= 31:
+        normalized_profile_name = _normalize_name(profile.full_name)
+        if not normalized_profile_name:
             return
 
-        normalized_name = profile.full_name.strip().lower()
-        candidates = self.session.scalars(
-            select(Player).where(
-                or_(
-                    func.lower(Player.full_name) == normalized_name,
-                    func.lower(Player.canonical_display_name) == normalized_name,
-                    func.lower(Player.short_name) == normalized_name,
+        candidates = list(
+            self.session.scalars(
+                select(Player).where(
+                    or_(
+                        func.lower(Player.full_name) == profile.full_name.strip().lower(),
+                        func.lower(Player.canonical_display_name) == profile.full_name.strip().lower(),
+                        func.lower(Player.short_name) == profile.full_name.strip().lower(),
+                        func.lower(Player.provider_external_id) == profile.slug.strip().lower(),
+                    )
                 )
-            )
-        ).all()
+            ).all()
+        )
+
+        tokens = [t for t in normalized_profile_name.split() if len(t) > 2]
+        if tokens:
+            token_filters = [
+                or_(
+                    func.lower(Player.full_name).contains(token),
+                    func.lower(Player.canonical_display_name).contains(token),
+                    func.lower(Player.short_name).contains(token),
+                )
+                for token in tokens
+            ]
+            potential_matches = self.session.scalars(
+                select(Player).where(
+                    Player.is_tradable.is_(True),
+                    or_(*token_filters),
+                )
+            ).all()
+            for candidate in potential_matches:
+                if (
+                    _normalize_name(candidate.full_name) == normalized_profile_name
+                    or _normalize_name(candidate.canonical_display_name) == normalized_profile_name
+                    or _normalize_name(candidate.short_name) == normalized_profile_name
+                ):
+                    if candidate not in candidates:
+                        candidates.append(candidate)
+
         for player in candidates:
             source = str(player.source_provider or "").strip().lower()
             tier = str(player.real_player_tier or "").strip().lower()
             if (
                 not bool(player.is_tradable)
-                or source in {"gtex_legend", "gtex_legend_prime"}
-                or tier in {"legend", "legendary", "icon", "immortal", "world_class", "hero"}
+                or not bool(player.is_real_player)
+                or source in {"gtex_legend", "gtex_legend_prime", "legendary_player_foundation"}
+                or tier in {"legend", "legendary", "icon", "immortal", "hero"}
             ):
                 continue
 
@@ -80,7 +114,7 @@ class LegendaryPlayerLaunchService:
                 dna.get("overall"),
                 dna.get("current_rating"),
                 dna.get("sofifa_overall"),
-                player.rating,
+                getattr(player, "rating", None),
             ]
             current_gsi = max(
                 (

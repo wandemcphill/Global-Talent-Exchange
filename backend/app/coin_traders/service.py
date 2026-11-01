@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -505,9 +506,10 @@ class CoinTraderService:
         coin_unit: LedgerUnit = LedgerUnit.COIN,
         input_unit: str = "coin",
     ) -> dict[str, Any]:
-        profile = self._require_approved_profile_for_user(actor)
+        self._require_approved_profile_for_user(actor)
         from app.treasury.service import TreasuryService
         from app.wallets.rail_service import WalletRailService
+
         treasury = TreasuryService(wallet_service=self.wallet_service)
         settings = treasury.ensure_settings(self.session)
         rail = WalletRailService(session=self.session, wallet_service=self.wallet_service)
@@ -543,8 +545,9 @@ class CoinTraderService:
         coin_unit: LedgerUnit = LedgerUnit.COIN,
         callback_url: str | None = None,
     ) -> dict[str, Any]:
-        profile = self._require_approved_profile_for_user(actor)
+        self._require_approved_profile_for_user(actor)
         from app.wallets.funding_service import WalletFundingService
+
         funding_service = WalletFundingService(wallet_service=self.wallet_service)
         session = funding_service.initiate_top_up(
             self.session,
@@ -575,6 +578,7 @@ class CoinTraderService:
     ) -> dict[str, Any]:
         profile = self._require_approved_profile_for_user(actor)
         from app.wallets.funding_service import WalletFundingService
+
         funding_service = WalletFundingService(wallet_service=self.wallet_service)
         result = funding_service.verify_top_up(
             self.session,

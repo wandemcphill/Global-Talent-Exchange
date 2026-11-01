@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import func, select
@@ -407,7 +409,6 @@ def pending_withdrawals(session: Session, user_id: str) -> list[OwnerWithdrawal]
     )
 
 def ecosystem_waterfall_summary(session: Session, club_id: str | None = None) -> dict[str, Any]:
-    from typing import Any
     total_fees_dec = session.scalar(
         select(func.coalesce(func.sum(LedgerEvent.platform_fee), 0))
         .where(LedgerEvent.currency == GTEX, LedgerEvent.status == "completed")

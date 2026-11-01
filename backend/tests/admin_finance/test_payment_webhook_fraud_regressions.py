@@ -98,7 +98,7 @@ def test_paystack_verifies_valid_hmac_with_the_api_secret_key(
 
     from app.admin_finance.service import AdminFinanceService
 
-    secret = "sk_live_paystack_secret"
+    secret = "sk_live_paystack_secret"  # pragma: allowlist secret
     raw_body = b'{"event":"charge.success","data":{"reference":"gtex-valid-ref"}}'
     signature = hmac.new(secret.encode("utf-8"), raw_body, sha512).hexdigest()
     monkeypatch.setenv("GTE_APP_ENV", "production")

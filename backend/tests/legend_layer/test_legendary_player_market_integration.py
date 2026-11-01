@@ -22,6 +22,7 @@ from app.players.token_service import PlayerTokenMarketError, PlayerTokenMarketS
 from app.transfer_market.schemas import TransferHubOfferCreateRequest, TransferListingCreateRequest
 from app.transfer_market.service import TransferMarketService
 from app.wallets.service import LedgerPosting, WalletService
+from tests.support.club_treasury import fund_club_treasury
 
 
 def _user(session, *, user_id: str, role: UserRole = UserRole.USER) -> User:
@@ -29,7 +30,7 @@ def _user(session, *, user_id: str, role: UserRole = UserRole.USER) -> User:
         id=user_id,
         email=f"{user_id}@example.com",
         username=user_id,
-        password_hash="hash",
+        password_hash="hash",  # pragma: allowlist secret
         role=role,
     )
     session.add(user)
@@ -85,6 +86,7 @@ def test_legendary_player_uses_the_standard_search_market_and_transfer_lifecycle
         buyer = _user(session, user_id="legendary-buyer")
         seller_club = _club(session, club_id="legendary-seller-fc", owner=seller)
         buyer_club = _club(session, club_id="legendary-buyer-fc", owner=buyer)
+        fund_club_treasury(session, buyer_club.id, "10000000")
         _fund_coin(session, user=buyer, amount=Decimal("100.0000"))
 
         ordinary = Player(

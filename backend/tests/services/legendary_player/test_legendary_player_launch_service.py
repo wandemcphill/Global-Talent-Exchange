@@ -25,7 +25,7 @@ def _user(session, *, user_id: str, role: UserRole) -> User:
         id=user_id,
         email=f"{user_id}@example.com",
         username=user_id,
-        password_hash="hash",
+        password_hash="hash",  # pragma: allowlist secret
         role=role,
     )
     session.add(user)
@@ -143,6 +143,10 @@ def test_legendary_launch_materializes_active_market_and_uses_normal_share_tradi
             is_tradable=True,
             is_rentable=True,
             is_national_team_eligible=True,
+            portrait_metadata={"is_fictional_non_replicative": True},
+            editorial_status="approved",
+            rights_status="approved",
+            catalogue_status="approved",
         )
 
         service = LegendaryPlayerLaunchService(session)

@@ -375,7 +375,11 @@ class KoraPayProviderAdapter:
         body = response.json()
         data = body.get("data") if isinstance(body, dict) else {}
         status_raw = str(data.get("status") or "").strip().lower()
-        status = "success" if status_raw in {"success", "successful"} else ("failed" if status_raw == "failed" else "pending")
+        status = (
+            "success"
+            if status_raw in {"success", "successful"}
+            else ("failed" if status_raw == "failed" else "pending")
+        )
         provider_ref = str(data.get("reference") or data.get("trans_id") or reference)
         fee = Decimal(str(data.get("fee") or 0)).quantize(AMOUNT_QUANTUM) if data.get("fee") is not None else None
 

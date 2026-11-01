@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-import hashlib
-import hmac
 import os
 import uuid
 from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 
-import httpx
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -221,8 +218,11 @@ def release_payout(session: Session, ledger_event_id: str) -> LedgerEvent:
 # ---------- Paystack deposits ----------
 
 
-def paystack_init(session: Session, user, amount_ngn: int, callback_url: str, provider: str = "paystack") -> dict[str, Any]:
+def paystack_init(
+    session: Session, user, amount_ngn: int, callback_url: str, provider: str = "paystack"
+) -> dict[str, Any]:
     from app.wallets.providers.registry import get_live_provider_adapter
+
     if amount_ngn < 100:
         raise OwnerError("minimum_deposit_100_ngn")
     reference = f"gtex_{uuid.uuid4().hex[:18]}"
@@ -271,6 +271,7 @@ def _credit_deposit(session: Session, user_id: str, reference: str, amount_kobo:
 
 def paystack_verify(session: Session, user, reference: str, provider: str = "paystack") -> dict[str, Any]:
     from app.wallets.providers.registry import get_provider_adapter
+
     try:
         adapter = get_provider_adapter(provider)
         verification = adapter.verify_payment(reference)
@@ -285,8 +286,11 @@ def paystack_verify(session: Session, user, reference: str, provider: str = "pay
 
 def paystack_webhook(session: Session, raw: bytes, signature: str | None, event: dict[str, Any]) -> None:
     from app.wallets.providers.registry import get_provider_adapter
+
     adapter = get_provider_adapter("paystack")
-    if not adapter.verify_webhook_signature(payload=event, raw_body=raw, headers={"x-paystack-signature": signature or ""}):
+    if not adapter.verify_webhook_signature(
+        payload=event, raw_body=raw, headers={"x-paystack-signature": signature or ""}
+    ):
         raise OwnerError("invalid_signature", 401)
     if event.get("event") == "charge.success":
         tx = event.get("data") or {}
@@ -596,12 +600,15 @@ def send_gift(
 
     try:
         from app.realtime.service import publish_realtime_domain_event
+
         publish_realtime_domain_event("match.gift", broadcast_data)
         if app is not None and getattr(app.state, "realtime", None):
             from app.core.events import DomainEvent
+
             app.state.realtime.handle_event(DomainEvent(name="match.gift", payload=broadcast_data))
     except Exception as exc:
         import logging
+
         logging.getLogger(__name__).warning("Failed to publish match.gift realtime event: %s", exc)
 
     if match_id:
@@ -609,14 +616,17 @@ def send_gift(
             hub = None
             if app is not None:
                 from app.live_matches.service import ensure_live_match_hub
+
                 hub = ensure_live_match_hub(app)
             else:
                 from app.live_matches.service import get_global_live_match_hub
+
                 hub = get_global_live_match_hub()
             if hub is not None:
                 hub.broadcast_match_gift(match_id, broadcast_data)
         except Exception as exc:
             import logging
+
             logging.getLogger(__name__).warning("Failed to broadcast gift to LiveMatchHub: %s", exc)
 
     return {
