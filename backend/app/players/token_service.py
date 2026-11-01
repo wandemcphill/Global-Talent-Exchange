@@ -321,10 +321,19 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
         share_count: int,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
-        del actor, player_id, share_count, idempotency_key
-        raise PlayerTokenMarketError(
-            "Player acquisitions are not listed for resale or secondary trading.",
-            reason="player_acquisition_non_transferable",
+        def reject_resale() -> dict[str, Any]:
+            raise PlayerTokenMarketError(
+                "Player acquisitions are not listed for resale or secondary trading.",
+                reason="player_acquisition_non_transferable",
+            )
+
+        return self._run_trade_with_boundary(
+            actor=actor,
+            player_id=player_id,
+            share_count=share_count,
+            side="sell",
+            idempotency_key=idempotency_key,
+            operation=reject_resale,
         )
 
     def distribute_dividend(

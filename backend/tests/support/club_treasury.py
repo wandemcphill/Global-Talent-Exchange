@@ -18,6 +18,7 @@ def fund_club_treasury(session: Session, club_id: str, amount: Decimal | str = "
         gross=amount,
         club_id=club_id,
         memo="Test treasury funding",
+        balance_class="deposited",
         check_funds=False,
     )
     session.commit()
