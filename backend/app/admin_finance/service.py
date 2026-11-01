@@ -553,7 +553,7 @@ class AdminFinanceService:
                     "GTE_PAYSTACK_WEBHOOK_SIGNATURE_OPTIONAL=true."
                 )
                 return False
-            raise ValueError("Paystack webhook cannot be verified: GTE_PAYSTACK_WEBHOOK_SECRET is not configured.")
+            raise ValueError("Paystack webhook cannot be verified: GTE_PAYSTACK_SECRET_KEY is not configured.")
         signature = headers.get("x-paystack-signature")
         if not signature:
             raise ValueError("Paystack webhook signature header (x-paystack-signature) is missing.")
@@ -605,17 +605,24 @@ class AdminFinanceService:
     @staticmethod
     def _provider_secret(provider_key: str) -> str | None:
         normalized_provider = provider_key.strip().upper()
-        env_names = [
-            f"GTE_{normalized_provider}_WEBHOOK_SECRET",
-            f"{normalized_provider}_WEBHOOK_SECRET",
-        ]
-        if normalized_provider == "KORAPAY":
-            env_names.extend(
-                [
-                    "GTE_KORAPAY_SECRET_KEY",
-                    "KORAPAY_SECRET_KEY",
-                ]
-            )
+        if normalized_provider == "PAYSTACK":
+            # Paystack's x-paystack-signature is HMAC-SHA512 signed with the
+            # API secret key itself. Do not require or prefer a separate
+            # webhook secret: that is not a separately configurable Paystack
+            # credential and can cause valid events to fail verification.
+            env_names = ["GTE_PAYSTACK_SECRET_KEY", "PAYSTACK_SECRET_KEY"]
+        else:
+            env_names = [
+                f"GTE_{normalized_provider}_WEBHOOK_SECRET",
+                f"{normalized_provider}_WEBHOOK_SECRET",
+            ]
+            if normalized_provider == "KORAPAY":
+                env_names.extend(
+                    [
+                        "GTE_KORAPAY_SECRET_KEY",
+                        "KORAPAY_SECRET_KEY",
+                    ]
+                )
         for name in env_names:
             secret = os.getenv(name)
             if secret and secret.strip():
