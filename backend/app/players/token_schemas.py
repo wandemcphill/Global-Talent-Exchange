@@ -49,7 +49,9 @@ class PlayerShareReleaseRequest(BaseModel):
 
 
 class PlayerSharePurchaseRequest(BaseModel):
-    share_count: int = Field(ge=1)
+    # Kept in the wire schema for old clients, but it is an invariant not a
+    # user-selectable quantity. Omitted means one whole player unit.
+    share_count: int = Field(default=1, ge=1, le=1)
     idempotency_key: str | None = Field(default=None, min_length=8, max_length=128)
 
     def model_post_init(self, __context: Any) -> None:
@@ -98,7 +100,7 @@ class PlayerShareSaleView(BaseModel):
 
 class PlayerShareTradeRequest(BaseModel):
     player_id: str = Field(min_length=1)
-    share_count: int = Field(ge=1)
+    share_count: int = Field(default=1, ge=1, le=1)
     idempotency_key: str | None = Field(default=None, min_length=8, max_length=128)
 
     def model_post_init(self, __context: Any) -> None:
