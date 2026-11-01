@@ -176,5 +176,5 @@ def test_retired_player_holdings_preserved_and_trading_blocked(db_session: Sessi
     # Trading on retired player must raise error
     token_service = PlayerTokenMarketService(db_session)
     with pytest.raises(PlayerTokenMarketError) as exc_info:
-        token_service.buy_shares(actor=user, player_id=player.id, share_count=10)
+        token_service.buy_shares(actor=user, player_id=player.id, share_count=1)
     assert exc_info.value.reason in ("share_market_ineligible", "market_ineligible", "market_inactive")
