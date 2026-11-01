@@ -341,7 +341,11 @@ class PaystackProviderAdapter:
         transfer_body = transfer_res.json()
         transfer_data = transfer_body.get("data") if isinstance(transfer_body, dict) else {}
         status_raw = str(transfer_data.get("status") or "").strip().lower()
-        status = "success" if status_raw in {"success"} else ("failed" if status_raw in {"failed", "rejected"} else "pending")
+        status = (
+            "success"
+            if status_raw in {"success"}
+            else ("failed" if status_raw in {"failed", "rejected"} else "pending")
+        )
         provider_ref = str(transfer_data.get("reference") or reference)
         transfer_code = str(transfer_data.get("transfer_code") or "")
 
