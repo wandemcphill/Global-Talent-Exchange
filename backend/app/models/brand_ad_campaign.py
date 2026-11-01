@@ -80,6 +80,9 @@ class BrandAdCampaign(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     music_artist_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
     music_playlist_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
     music_genre: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    music_rights_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false())
+    music_rights_holder: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    music_license_doc_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
 
 
 __all__ = ["BrandAdCampaign"]

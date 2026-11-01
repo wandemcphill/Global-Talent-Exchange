@@ -167,6 +167,9 @@ class BrandCampaignView(CommonSchema):
     music_artist_name: str | None = None
     music_playlist_name: str | None = None
     music_genre: str | None = None
+    music_rights_verified: bool = False
+    music_rights_holder: str | None = None
+    music_license_doc_url: str | None = None
 
 
 class BrandCampaignHistoryView(CommonSchema):
@@ -202,6 +205,30 @@ class CampaignReportsResponse(CommonSchema):
     generated_at: datetime
 
 
+class AdminMusicRightsVerificationRequest(CommonSchema):
+    music_rights_verified: bool
+    music_rights_holder: str | None = Field(default=None, max_length=160)
+    music_license_doc_url: str | None = Field(default=None, max_length=2048)
+    note: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("music_license_doc_url")
+    @classmethod
+    def validate_doc_url(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        from urllib.parse import urlsplit
+
+        parsed = urlsplit(value.strip())
+        if (
+            parsed.scheme.lower() not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.username is not None
+            or parsed.password is not None
+        ):
+            raise ValueError("Music license doc URL must use HTTP or HTTPS and contain no credentials.")
+        return value.strip()
+
+
 class BrandCampaignReviewRequest(CommonSchema):
     action: Literal["approve", "reject", "pause", "archive"]
     note: str | None = Field(default=None, max_length=2000)
@@ -232,6 +259,8 @@ class PublicMusicPromotionView(CommonSchema):
     artist_name: str | None = None
     playlist_name: str | None = None
     genre: str | None = None
+    music_rights_verified: bool = False
+    music_rights_holder: str | None = None
 
 
 class PublicMusicPromotionsResponse(CommonSchema):

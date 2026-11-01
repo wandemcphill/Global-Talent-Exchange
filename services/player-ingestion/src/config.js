@@ -84,6 +84,9 @@ function sanitizeDatabaseUrl(url) {
     const parsed = new URL(url);
     parsed.searchParams.delete("sslmode");
     parsed.searchParams.delete("ssl");
+    if (parsed.hostname.includes("pooler.supabase.com") && parsed.port === "6543") {
+      parsed.port = "5432";
+    }
     return parsed.toString();
   } catch (_) {
     return url;

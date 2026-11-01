@@ -372,7 +372,7 @@ services:
       - key: HEALTH_PORT
         value: "3000"
       - key: NODE_OPTIONS
-        value: "--max-old-space-size=512"
+        value: "--max-old-space-size=384"
       - key: SENTRY_DSN
         sync: false
       - key: SEASON_ENGINE_ENABLED

@@ -22,7 +22,9 @@ def _client() -> tuple[TestClient, sessionmaker[Session]]:
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    Base.metadata.create_all(engine, tables=[BrandAdCampaign.__table__])
+    from app.models.brand_advertising import BrandAdEvent
+
+    Base.metadata.create_all(engine, tables=[BrandAdCampaign.__table__, BrandAdEvent.__table__])
     factory = sessionmaker(bind=engine, expire_on_commit=False)
 
     def override_session():

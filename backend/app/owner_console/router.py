@@ -579,13 +579,21 @@ def control_center(user=Depends(get_current_user), session: Session = Depends(ge
                 .order_by(OwnerMatch.round_number.asc())
             ).all():
                 if m.home_club_id in club_ids or m.away_club_id in club_ids:
-                    (upcoming if m.status == "scheduled" else recent).append(comps.match_dict(m))
+                    mapped = comps.mapped_match_dict(session, m)
+                    (upcoming if mapped.get("status") == "scheduled" else recent).append(mapped)
         my_comp_rows = (
             session.scalars(select(OwnerCompetition).where(OwnerCompetition.id.in_(comp_ids))).all() if comp_ids else []
         )
         my_comps = [comps.comp_dict(session, c, user.id) for c in my_comp_rows]
         board = [
-            {"competition": comp, "standings": comps.standings(session, row)}
+            {
+                "competition": comp,
+                "standings": (
+                    comps._canonical_competition_standings(session, row.id, comp["canonical_competition_id"])
+                    if comp.get("canonical_lifecycle_status") == "active" and comp.get("canonical_competition_id")
+                    else comps.standings(session, row)
+                ),
+            }
             for comp, row in zip(my_comps, my_comp_rows)
         ]
         open_comps = [
@@ -1258,6 +1266,7 @@ def map_global_match_to_canonical(
 
 # ---------- Executive Staff & Delegation ----------
 
+
 @router.get("/clubs/{club_id}/staff")
 def get_club_staff(
     club_id: str,
@@ -1310,6 +1319,7 @@ def update_delegation(
 
 # ---------- Daily AI Briefing & Boardroom Chat ----------
 
+
 @router.get("/clubs/{club_id}/briefing")
 def get_daily_briefing(
     club_id: str,
@@ -1359,6 +1369,7 @@ def post_staff_chat(
 
 # ---------- Academy Contract & Promotion Pipeline ----------
 
+
 @router.post("/clubs/{club_id}/academy/{player_id}/contract")
 def offer_academy_contract(
     club_id: str,
@@ -1380,6 +1391,7 @@ def promote_academy_player(
 
 
 # ---------- Ecosystem Waterfall, Win Bonus & Press Conference ----------
+
 
 @router.get("/economy/waterfall")
 def get_waterfall(
@@ -1410,6 +1422,7 @@ def hold_press_conference(
 
 
 # ---------- Boardroom Dilemma, GM Sponsor Negotiation & Shareholder Dividend/Takeover ----------
+
 
 class ResolveDilemmaRequest(BaseModel):
     choice_id: str = Field(min_length=1, max_length=80)

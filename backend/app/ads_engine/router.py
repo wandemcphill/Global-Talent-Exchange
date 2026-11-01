@@ -146,10 +146,23 @@ def get_public_brand_ad_campaigns(
     if placement:
         statement = statement.where(BrandAdCampaign.placement == placement)
 
+    from decimal import Decimal
+    from app.ads_engine.brand_campaigns import _estimated_spend, _event_counts
+
+    candidates = session.scalars(statement).all()
+    candidate_ids = [c.id for c in candidates]
+    counts_by_campaign = _event_counts(session, candidate_ids) if candidate_ids else {}
+
     campaigns: list[PublicBrandAdCampaignView] = []
-    for campaign in session.scalars(statement).all():
+    for campaign in candidates:
         if not _is_safe_public_http_url(campaign.destination_url):
             continue
+        # Phase 5: Exclude budget-exhausted campaigns from live delivery
+        budget = Decimal(campaign.budget_amount or 0)
+        if budget > Decimal("0"):
+            spend = _estimated_spend(campaign, counts_by_campaign.get(campaign.id, {}))
+            if spend >= budget:
+                continue
         campaigns.append(
             PublicBrandAdCampaignView(
                 id=campaign.id,
