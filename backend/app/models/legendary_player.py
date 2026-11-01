@@ -31,6 +31,15 @@ class LegendaryPlayerProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     full_name: Mapped[str] = mapped_column(String(160), nullable=False)
     country_code: Mapped[str] = mapped_column(String(8), nullable=False)
     date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
+    factual_date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
+    source_game_date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
+    prime_age_at_snapshot: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    governed_gsi: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    governed_potential_gsi: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    gsi_methodology_version: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="v2.0", server_default="v2.0"
+    )
+    gsi_override_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     primary_position: Mapped[str] = mapped_column(String(40), nullable=False)
     secondary_positions_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     preferred_foot: Mapped[str] = mapped_column(String(16), nullable=False, default="right")

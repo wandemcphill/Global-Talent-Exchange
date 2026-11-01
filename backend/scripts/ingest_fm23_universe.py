@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import csv
 from datetime import UTC, date, datetime
+import hashlib
 import json
 import logging
 import os
@@ -238,7 +239,8 @@ def resolve_player_picture(
         return None
     # 3. Deterministic Cloudinary facebank fallback (ONLY for pure regens!)
     if faces:
-        idx = hash(f"{uid}-{name}") % len(faces)
+        seed_hash = int(hashlib.sha256(f"{uid}-{name}".encode("utf-8")).hexdigest(), 16)
+        idx = seed_hash % len(faces)
         face_url = faces[idx].get("cloudinary_secure_url")
         if face_url:
             return face_url
@@ -281,6 +283,9 @@ def analyze_universe() -> dict[str, Any]:
 
     for r in regens_csv:
         uid = r["Unique ID"]
+        if uid == "2002088877":
+            logger.warning("Skipping quarantined anomaly: Ryan Matos (UID %s)", uid)
+            continue
         if uid.isdigit() and int(uid) < 2_002_130_000:
             regens_real_youth[uid] = r
         else:
@@ -647,12 +652,7 @@ def execute_ingestion(batch_size: int = 500):
                 :id, :player_id, :total_shares, :circulating_shares, :share_price,
                 'active', 0.0, :meta, :now, :now
             )
-            ON CONFLICT (player_id) DO UPDATE SET
-                total_shares = EXCLUDED.total_shares,
-                circulating_shares = EXCLUDED.circulating_shares,
-                share_price_coin = EXCLUDED.share_price_coin,
-                metadata_json = EXCLUDED.metadata_json,
-                updated_at = EXCLUDED.updated_at
+            ON CONFLICT (player_id) DO NOTHING
         """)
 
         # 2. Ingest Unified Legends (Batch Execution)
@@ -1307,7 +1307,7 @@ def execute_ingestion(batch_size: int = 500):
                 cur = parse_rating(r.get("Best Rating")) or max(45, pot - 10)
                 club = r.get("Club")
 
-                face_idx = hash(f"{uid}-{name}") % face_count if face_count > 0 else 0
+                face_idx = int(hashlib.sha256(f"{uid}-{name}".encode("utf-8")).hexdigest(), 16) % face_count if face_count > 0 else 0
                 face_asset = faces[face_idx] if face_count > 0 else {}
                 face_url = face_asset.get("cloudinary_secure_url", "")
                 dna = {
@@ -1388,6 +1388,8 @@ def execute_ingestion(batch_size: int = 500):
                 SELECT p.id, p.is_real_player, p.legendary_profile_id, p.market_value_eur, p.potential, p.dna_profile, p.real_player_tier
                 FROM ingestion_players p
                 WHERE p.source_provider = 'fm23_genie_scout'
+                  AND p.provider_external_id != '2002088877'
+                  AND p.id NOT IN (SELECT player_id FROM player_share_markets)
             """)).fetchall()
 
         logger.info("Found %d FM23 players to synchronize share markets.", len(unissued_players))
@@ -1557,11 +1559,23 @@ def execute_ingestion(batch_size: int = 500):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Ingest FM23 & Genie Scout exports into GTEX.")
-    parser.add_argument("--execute", action="store_true", help="Execute database ingestion.")
-    parser.add_argument("--dry-run", action="store_true", help="Perform dry run validation without database writes.")
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Apply database ingestion. Requires GTEX_ALLOW_FM23_INGEST=true.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=True,
+        help="Perform dry run validation without database writes (default).",
+    )
     args = parser.parse_args()
 
-    if args.execute:
+    if args.apply:
+        if os.getenv("GTEX_ALLOW_FM23_INGEST", "").lower() != "true":
+            logger.error("Database ingestion is locked for production safety. Set GTEX_ALLOW_FM23_INGEST=true to proceed.")
+            sys.exit(1)
         execute_ingestion()
     else:
         execute_dry_run()
