@@ -1,0 +1,125 @@
+{
+  "schema_version": "legendary-enrichment-v1",
+  "generated_at": "2026-11-01T20:00:00Z",
+  "patches": [
+    {
+      "source_id": "wikidata:Q191139",
+      "country_code": "FRA",
+      "date_of_birth": "1971-06-28",
+      "historical_height_cm": 180,
+      "position_candidates": ["goalkeeper"],
+      "preferred_foot": "left",
+      "football_evidence": [
+        {"provider": "Wikidata", "uri": "https://www.wikidata.org/wiki/Q191139", "claim_types": ["country_for_sport", "date_of_birth", "height", "position_played"]},
+        {"provider": "FFF", "uri": "https://www.fff.fr/equipe-nationale/joueur/9680-barthez-fabien/fiche.html", "claim_types": ["country_for_sport", "preferred_foot"]}
+      ],
+      "editorial_status": "enriched",
+      "rights_status": "unknown",
+      "catalogue_status": "staged",
+      "source_notes": "Fabien Barthez - authoritative nationality: France (FRA).",
+      "metadata": {"research_batch": "2026-11-01-nationality-corrections-003"}
+    },
+    {
+      "source_id": "wikidata:Q168540",
+      "country_code": "CMR",
+      "date_of_birth": "1952-05-20",
+      "historical_height_cm": 176,
+      "position_candidates": ["forward", "striker"],
+      "preferred_foot": "right",
+      "football_evidence": [
+        {"provider": "Wikidata", "uri": "https://www.wikidata.org/wiki/Q168540", "claim_types": ["country_for_sport", "date_of_birth", "height", "position_played"]},
+        {"provider": "FECAFOOT", "uri": "https://fecafoot-officiel.com/roger-milla", "claim_types": ["country_for_sport", "preferred_foot"]}
+      ],
+      "editorial_status": "enriched",
+      "rights_status": "unknown",
+      "catalogue_status": "staged",
+      "source_notes": "Roger Milla - authoritative nationality: Cameroon (CMR).",
+      "metadata": {"research_batch": "2026-11-01-nationality-corrections-003"}
+    },
+    {
+      "source_id": "wikidata:Q208833",
+      "country_code": "MKD",
+      "date_of_birth": "1983-07-27",
+      "historical_height_cm": 184,
+      "position_candidates": ["forward", "striker", "attacking midfielder"],
+      "preferred_foot": "left",
+      "football_evidence": [
+        {"provider": "Wikidata", "uri": "https://www.wikidata.org/wiki/Q208833", "claim_types": ["country_for_sport", "date_of_birth", "height", "position_played"]},
+        {"provider": "FFM", "uri": "https://ffm.mk/goran-pandev", "claim_types": ["country_for_sport", "caps", "preferred_foot"]}
+      ],
+      "editorial_status": "enriched",
+      "rights_status": "unknown",
+      "catalogue_status": "staged",
+      "source_notes": "Goran Pandev - authoritative nationality: North Macedonia (MKD).",
+      "metadata": {"research_batch": "2026-11-01-nationality-corrections-003"}
+    },
+    {
+      "source_id": "wikidata:Q211516",
+      "country_code": "MLI",
+      "date_of_birth": "1977-09-02",
+      "historical_height_cm": 192,
+      "position_candidates": ["forward", "striker"],
+      "preferred_foot": "right",
+      "football_evidence": [
+        {"provider": "Wikidata", "uri": "https://www.wikidata.org/wiki/Q211516", "claim_types": ["country_for_sport", "date_of_birth", "height", "position_played"]},
+        {"provider": "FEMAFOOT", "uri": "https://femafoot.ml/frederic-kanoute", "claim_types": ["country_for_sport", "preferred_foot"]}
+      ],
+      "editorial_status": "enriched",
+      "rights_status": "unknown",
+      "catalogue_status": "staged",
+      "source_notes": "Frédéric Kanouté - authoritative nationality: Mali (MLI).",
+      "metadata": {"research_batch": "2026-11-01-nationality-corrections-003"}
+    },
+    {
+      "source_id": "wikidata:Q233581",
+      "country_code": "WAL",
+      "date_of_birth": "1961-10-20",
+      "historical_height_cm": 180,
+      "position_candidates": ["forward", "striker"],
+      "preferred_foot": "right",
+      "football_evidence": [
+        {"provider": "Wikidata", "uri": "https://www.wikidata.org/wiki/Q233581", "claim_types": ["country_for_sport", "date_of_birth", "height", "position_played"]},
+        {"provider": "FAW", "uri": "https://faw.cymru/ian-rush", "claim_types": ["country_for_sport", "caps", "preferred_foot"]}
+      ],
+      "editorial_status": "enriched",
+      "rights_status": "unknown",
+      "catalogue_status": "staged",
+      "source_notes": "Ian Rush - authoritative nationality: Wales (WAL).",
+      "metadata": {"research_batch": "2026-11-01-nationality-corrections-003"}
+    },
+    {
+      "source_id": "wikidata:Q187198",
+      "country_code": "SCO",
+      "date_of_birth": "1951-03-04",
+      "historical_height_cm": 173,
+      "position_candidates": ["forward", "striker"],
+      "preferred_foot": "right",
+      "football_evidence": [
+        {"provider": "Wikidata", "uri": "https://www.wikidata.org/wiki/Q187198", "claim_types": ["country_for_sport", "date_of_birth", "height", "position_played"]},
+        {"provider": "SFA", "uri": "https://scottishfa.co.uk/kenny-dalglish", "claim_types": ["country_for_sport", "caps", "preferred_foot"]}
+      ],
+      "editorial_status": "enriched",
+      "rights_status": "unknown",
+      "catalogue_status": "staged",
+      "source_notes": "Kenny Dalglish - authoritative nationality: Scotland (SCO).",
+      "metadata": {"research_batch": "2026-11-01-nationality-corrections-003"}
+    },
+    {
+      "source_id": "wikidata:Q192175",
+      "country_code": "TTO",
+      "date_of_birth": "1971-11-03",
+      "historical_height_cm": 178,
+      "position_candidates": ["forward", "striker"],
+      "preferred_foot": "right",
+      "football_evidence": [
+        {"provider": "Wikidata", "uri": "https://www.wikidata.org/wiki/Q192175", "claim_types": ["country_for_sport", "date_of_birth", "height", "position_played"]},
+        {"provider": "TTFA", "uri": "https://thettfa.com/dwight-yorke", "claim_types": ["country_for_sport", "caps", "preferred_foot"]}
+      ],
+      "editorial_status": "enriched",
+      "rights_status": "unknown",
+      "catalogue_status": "staged",
+      "source_notes": "Dwight Yorke - authoritative nationality: Trinidad and Tobago (TTO).",
+      "metadata": {"research_batch": "2026-11-01-nationality-corrections-003"}
+    }
+  ]
+}
