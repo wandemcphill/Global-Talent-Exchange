@@ -17,7 +17,7 @@ from app.models.club_profile import ClubProfile
 from app.models.player_token_market import PlayerShareMarket
 from app.models.user import User, UserRole
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
-from app.players.legacy_token_service import PlayerTokenMarketService
+from app.players.token_service import PlayerTokenMarketError, PlayerTokenMarketService
 from app.transfer_market.schemas import TransferHubOfferCreateRequest, TransferListingCreateRequest
 from app.transfer_market.service import TransferMarketService
 from app.wallets.service import LedgerPosting, WalletService
