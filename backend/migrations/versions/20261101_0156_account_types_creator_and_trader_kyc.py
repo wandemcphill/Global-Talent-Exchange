@@ -41,8 +41,16 @@ def upgrade() -> None:
                 sa.Column("decision_history_json", sa.JSON(), nullable=False, server_default="[]"),
             )
         with op.batch_alter_table("creator_applications") as batch_op:
-            batch_op.alter_column("email_verified_at", existing_type=sa.DateTime(timezone=True), nullable=True)
-            batch_op.alter_column("phone_verified_at", existing_type=sa.DateTime(timezone=True), nullable=True)
+            batch_op.alter_column(
+                "email_verified_at",
+                existing_type=sa.DateTime(timezone=True),
+                nullable=True,
+            )
+            batch_op.alter_column(
+                "phone_verified_at",
+                existing_type=sa.DateTime(timezone=True),
+                nullable=True,
+            )
 
     # 2. coin_trader_profiles updates
     if "coin_trader_profiles" in tables:
@@ -130,7 +138,7 @@ def upgrade() -> None:
             unique=False,
         )
         op.create_index(
-            "ix_identity_verification_records_idempotency",
+            "ix_identity_verification_records_idempotency_key",
             "identity_verification_records",
             ["idempotency_key"],
             unique=False,
@@ -150,7 +158,7 @@ def downgrade() -> None:
 
     if "identity_verification_records" in tables:
         op.drop_index("ix_identity_verification_records_status", table_name="identity_verification_records")
-        op.drop_index("ix_identity_verification_records_idempotency", table_name="identity_verification_records")
+        op.drop_index("ix_identity_verification_records_idempotency_key", table_name="identity_verification_records")
         op.drop_index("ix_identity_verification_records_provider_ref", table_name="identity_verification_records")
         op.drop_index("ix_identity_verification_records_provider_reference", table_name="identity_verification_records")
         op.drop_index(
@@ -171,10 +179,18 @@ def downgrade() -> None:
                 op.drop_column("coin_trader_profiles", col)
 
     if "creator_applications" in tables:
-        with op.batch_alter_table("creator_applications") as batch_op:
-            batch_op.alter_column("phone_verified_at", existing_type=sa.DateTime(timezone=True), nullable=False)
-            batch_op.alter_column("email_verified_at", existing_type=sa.DateTime(timezone=True), nullable=False)
         columns = {c["name"] for c in inspector.get_columns("creator_applications")}
-        for col in ["decision_history_json", "selfie_attachment_id", "profile_url"]:
-            if col in columns:
-                op.drop_column("creator_applications", col)
+        with op.batch_alter_table("creator_applications") as batch_op:
+            batch_op.alter_column(
+                "phone_verified_at",
+                existing_type=sa.DateTime(timezone=True),
+                nullable=False,
+            )
+            batch_op.alter_column(
+                "email_verified_at",
+                existing_type=sa.DateTime(timezone=True),
+                nullable=False,
+            )
+            for col in ["decision_history_json", "selfie_attachment_id", "profile_url"]:
+                if col in columns:
+                    batch_op.drop_column(col)
