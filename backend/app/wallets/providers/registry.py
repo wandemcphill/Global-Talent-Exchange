@@ -105,9 +105,11 @@ def _env_flag_disabled(name: str) -> bool:
 def paystack_enabled() -> bool:
     if _env_flag_disabled("GTE_ENABLE_PAYSTACK"):
         return False
-    if not provider_secret_configured("paystack"):
+    secret = (os.getenv("GTE_PAYSTACK_SECRET_KEY") or os.getenv("PAYSTACK_SECRET_KEY") or "").strip()
+    webhook_secret = (os.getenv("GTE_PAYSTACK_WEBHOOK_SECRET") or os.getenv("PAYSTACK_WEBHOOK_SECRET") or "").strip()
+    if not secret:
         return False
-    if is_production_environment() and not provider_webhook_secret_configured("paystack"):
+    if is_production_environment() and not webhook_secret:
         return False
     return True
 
@@ -158,8 +160,6 @@ def provider_runtime_status(
     if enabled_providers is not None and normalized not in {item.strip().lower() for item in enabled_providers}:
         return "blocked"
     if normalized == "paystack" and not paystack_enabled():
-        return "blocked"
-    if normalized == "korapay" and not korapay_enabled():
         return "blocked"
     if provider_live_deposit_ready(normalized):
         return "ready"
