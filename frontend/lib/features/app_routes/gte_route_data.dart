@@ -241,11 +241,11 @@ class GteAppRouteCatalog {
         ),
         GteAppRouteRegistration(
           name: GteAppRouteNames.clubIdentityJerseys,
-          path: '/clubs/:clubId/identity',
+          path: '/clubs/:clubId/identity/jerseys',
         ),
         GteAppRouteRegistration(
           name: GteAppRouteNames.clubIdentityJerseys,
-          path: '/clubs/:clubId/identity/jerseys',
+          path: '/clubs/:clubId/identity',
         ),
         GteAppRouteRegistration(
           name: GteAppRouteNames.clubIdentityReputationOverview,
