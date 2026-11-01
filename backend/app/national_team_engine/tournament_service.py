@@ -7,7 +7,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.gift_engine.service import GiftEngineError, GiftEngineService
@@ -1364,11 +1364,8 @@ class NationalTeamTournamentService:
             .outerjoin(InternalLeague, InternalLeague.id == Player.internal_league_id)
             .outerjoin(PlayerSummaryReadModel, PlayerSummaryReadModel.player_id == Player.id)
             .options(selectinload(Player.image_metadata))
-            .limit(limit)
+            .where(Player.is_tradable.is_(True))
         )
-        # Apply the nationality constraint in SQL before the catalogue cap.
-        # Without this, a country whose players sort after the first global
-        # ``limit`` rows could never be rented or selected.
         if country_code:
             normalized_country_code = country_code.strip().upper()
             stmt = stmt.where(
@@ -1378,6 +1375,11 @@ class NationalTeamTournamentService:
                     IngestionCountry.fifa_code == normalized_country_code,
                 )
             )
+        stmt = stmt.order_by(
+            case((Player.real_player_tier == "legend", 1), else_=0).desc(),
+            func.coalesce(Player.market_value_eur, 0).desc(),
+            Player.full_name.asc(),
+        ).limit(max(limit, 500))
         rows: list[dict[str, Any]] = []
         for (
             player,
