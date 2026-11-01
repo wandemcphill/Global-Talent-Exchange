@@ -46,16 +46,18 @@ def calculate_gsi_player_price(current_gsi: int, potential_gsi: int, is_real: bo
 
 
 def get_shares_for_gsi(eval_gsi: float) -> tuple[str, int]:
+    # High-GSI players are scarcer. Legends and regens are handled separately
+    # as one-of-one catalogue assets; real players never exceed 600 units.
     if eval_gsi >= 97.0:
         return "icon", 100
     elif eval_gsi >= 90.0:
         return "elite", 200
     elif eval_gsi >= 72.0:
-        return "core", 400
+        return "core", 300
     elif eval_gsi >= 50.0:
-        return "prospect", 600
+        return "prospect", 450
     else:
-        return "discovery", 900
+        return "discovery", 600
 
 
 def run_alignment():
