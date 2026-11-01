@@ -36,6 +36,7 @@ import 'package:gte_frontend/screens/gte_login_screen.dart';
 import 'package:gte_frontend/screens/gte_exchange_shell_screen.dart';
 import 'package:gte_frontend/screens/gtex_public_landing_screen_v2.dart';
 import 'package:gte_frontend/screens/gtex_national_team_rental_screen_v2.dart';
+import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/screens/manager_market_screen.dart';
 import 'package:gte_frontend/features/regens/request_son_screen_v2.dart';
 import 'package:gte_frontend/features/player_detail/gtex_fm_player_profile_screen.dart';
