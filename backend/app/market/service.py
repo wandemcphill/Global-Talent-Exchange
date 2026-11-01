@@ -1226,7 +1226,7 @@ class MarketPlayerQueryService:
                 secondary_positions=list(player.secondary_positions_json or []),
                 nationality=player.country.name if player.country is not None else None,
                 nationality_code=self._nationality_code(record),
-                age=self._player_age(player.date_of_birth),
+                age=self._player_display_age(player),
                 date_of_birth=player.date_of_birth,
                 preferred_foot=player.preferred_foot,
                 shirt_number=player.shirt_number,
@@ -1674,7 +1674,7 @@ class MarketPlayerQueryService:
             current_competition_country_name=self._current_competition_country_name(record),
             current_division_id=self._current_division_id(record),
             current_division_name=self._current_division_name(record),
-            age=self._player_age(record.player.date_of_birth),
+            age=self._player_display_age(record.player),
             height_cm=record.player.height_cm,
             preferred_foot=record.player.preferred_foot,
             market_value_eur=self._real_world_market_value_eur(record),
@@ -2433,6 +2433,26 @@ class MarketPlayerQueryService:
             "maker_inventory_target": record.player.liquidity_band.maker_inventory_target,
             "instant_sell_fee_bps": record.player.liquidity_band.instant_sell_fee_bps,
         }
+
+    def _player_display_age(self, player: Player) -> int | None:
+        source_provider = str(player.source_provider or "").strip().lower()
+        tier = str(player.real_player_tier or "").strip().lower()
+        is_legend = (
+            bool(player.legendary_profile_id)
+            or source_provider in {"gtex_legend", "gtex_legend_prime"}
+            or tier in {"legend", "legendary", "icon", "immortal", "world_class", "hero"}
+        )
+        if is_legend:
+            dna = player.dna_profile if isinstance(player.dna_profile, dict) else {}
+            for key in ("game_age", "gtex_age", "peak_age"):
+                try:
+                    age = int(dna.get(key))
+                except (TypeError, ValueError):
+                    continue
+                if 18 <= age <= 35:
+                    return age
+            return 28
+        return self._player_age(player.date_of_birth)
 
     def _player_age(self, date_of_birth: date | None) -> int | None:
         if date_of_birth is None:
