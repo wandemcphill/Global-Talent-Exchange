@@ -1432,15 +1432,17 @@ List<RouteBase> _buildFeatureRoutes({
     '/football/transfer-center',
     '/streamer-tournaments',
   };
+  final Set<String> registeredNames = <String>{};
   return GteAppRouteCatalog.registrations
       .where(
         (GteAppRouteRegistration route) =>
             !shellOwnedPaths.contains(route.path),
       )
       .map((GteAppRouteRegistration route) {
+        final bool isDuplicate = !registeredNames.add(route.name);
         return GoRoute(
           path: route.path,
-          name: route.name,
+          name: isDuplicate ? null : route.name,
           pageBuilder: (BuildContext context, GoRouterState state) {
             final GteNavigationDependencies dependencies = dependenciesBuilder(
               context,
