@@ -500,6 +500,7 @@ class AdminFinanceService:
     ) -> dict[str, object]:
         if getattr(event, "is_payout", False):
             from app.treasury.service import TreasuryService
+
             treasury = TreasuryService(wallet_service=self.wallet_service)
             withdrawal = treasury.handle_provider_payout_event(self.session, event=event)
             return {
