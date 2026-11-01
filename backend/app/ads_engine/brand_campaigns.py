@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.ads_engine.brand_schemas import (
     AdminConversionEventRequest,
+    AdminMusicRightsVerificationRequest,
     BrandAdEventResponse,
     BrandAdvertiserProfileUpsertRequest,
     BrandAdvertiserProfileView,
@@ -61,15 +62,20 @@ def _campaign_for_owner(session: Session, campaign_id: str, user_id: str) -> Bra
 def _event_counts(session: Session, campaign_ids: list[str]) -> dict[str, dict[str, int]]:
     if not campaign_ids:
         return {}
-    rows = session.execute(
-        select(BrandAdEvent.campaign_id, BrandAdEvent.event_type, func.count(BrandAdEvent.id))
-        .where(BrandAdEvent.campaign_id.in_(campaign_ids))
-        .group_by(BrandAdEvent.campaign_id, BrandAdEvent.event_type)
-    ).all()
-    result: dict[str, dict[str, int]] = {}
-    for campaign_id, event_type, count in rows:
-        result.setdefault(campaign_id, {})[event_type] = int(count)
-    return result
+    from sqlalchemy.exc import SQLAlchemyError
+
+    try:
+        rows = session.execute(
+            select(BrandAdEvent.campaign_id, BrandAdEvent.event_type, func.count(BrandAdEvent.id))
+            .where(BrandAdEvent.campaign_id.in_(campaign_ids))
+            .group_by(BrandAdEvent.campaign_id, BrandAdEvent.event_type)
+        ).all()
+        result: dict[str, dict[str, int]] = {}
+        for campaign_id, event_type, count in rows:
+            result.setdefault(campaign_id, {})[event_type] = int(count)
+        return result
+    except SQLAlchemyError:
+        return {}
 
 
 def _estimated_spend(campaign: BrandAdCampaign, counts: dict[str, int]) -> Decimal:
@@ -102,6 +108,15 @@ def _report(campaign: BrandAdCampaign, counts: dict[str, int]) -> CampaignReport
         estimated_spend=spend,
         estimated_budget_remaining=max(Decimal("0"), budget - spend),
     )
+
+
+def _is_campaign_budget_exhausted(session: Session, campaign: BrandAdCampaign) -> bool:
+    budget = Decimal(campaign.budget_amount or 0)
+    if budget <= Decimal("0"):
+        return False
+    counts = _event_counts(session, [campaign.id]).get(campaign.id, {})
+    spend = _estimated_spend(campaign, counts)
+    return spend >= budget
 
 
 def _live_campaign_statement(*, campaign_type: str, now: datetime):
@@ -369,6 +384,40 @@ def admin_review_brand_campaign(
     return campaign
 
 
+@router.put("/admin/campaigns/{campaign_id}/music-rights", response_model=BrandCampaignView)
+def admin_verify_music_rights(
+    campaign_id: str,
+    payload: AdminMusicRightsVerificationRequest,
+    admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+):
+    campaign = session.get(BrandAdCampaign, campaign_id)
+    if campaign is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found.")
+    if campaign.campaign_type != "music":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Music rights verification only applies to music campaigns.",
+        )
+    previous_verified = campaign.music_rights_verified
+    campaign.music_rights_verified = payload.music_rights_verified
+    campaign.music_rights_holder = payload.music_rights_holder
+    campaign.music_license_doc_url = payload.music_license_doc_url
+    session.add(
+        BrandAdReviewEvent(
+            campaign_id=campaign.id,
+            actor_user_id=admin.id,
+            action="verify_music_rights",
+            note=payload.note,
+            from_status=f"rights_verified:{previous_verified}",
+            to_status=f"rights_verified:{campaign.music_rights_verified}",
+        )
+    )
+    session.commit()
+    session.refresh(campaign)
+    return campaign
+
+
 @router.post("/admin/campaigns/{campaign_id}/conversions", response_model=BrandAdEventResponse)
 def admin_record_conversion(
     campaign_id: str,
@@ -408,26 +457,41 @@ def get_public_music_promotions(
 ):
     now = _now()
     rows = session.scalars(_live_campaign_statement(campaign_type="music", now=now).limit(100)).all()
-    promotions = [
-        PublicMusicPromotionView(
-            campaign_id=row.id,
-            brand_name=row.brand_name,
-            headline=row.headline,
-            description=row.description or "",
-            destination_url=row.destination_url,
-            creative_url=row.creative_url if _safe_http_url(row.creative_url) else None,
-            target_type=row.music_target_type,
-            target_id=row.music_target_id,
-            track_title=row.music_title,
-            artist_name=row.music_artist_name,
-            playlist_name=row.music_playlist_name,
-            genre=row.music_genre,
+    candidate_ids = [row.id for row in rows]
+    counts_by_campaign = _event_counts(session, candidate_ids) if candidate_ids else {}
+    promotions = []
+    for row in rows:
+        if row.music_target_type not in {"track", "artist", "playlist"}:
+            continue
+        if not row.music_target_id or not _safe_http_url(row.destination_url):
+            continue
+        # Phase 5: Only deliver music promotions with verified rights clearance
+        if not row.music_rights_verified:
+            continue
+        # Phase 5: Pacing / throttling - exclude budget-exhausted campaigns
+        budget = Decimal(row.budget_amount or 0)
+        if budget > Decimal("0"):
+            spend = _estimated_spend(row, counts_by_campaign.get(row.id, {}))
+            if spend >= budget:
+                continue
+        promotions.append(
+            PublicMusicPromotionView(
+                campaign_id=row.id,
+                brand_name=row.brand_name,
+                headline=row.headline,
+                description=row.description or "",
+                destination_url=row.destination_url,
+                creative_url=row.creative_url if _safe_http_url(row.creative_url) else None,
+                target_type=row.music_target_type,
+                target_id=row.music_target_id,
+                track_title=row.music_title,
+                artist_name=row.music_artist_name,
+                playlist_name=row.music_playlist_name,
+                genre=row.music_genre,
+                music_rights_verified=row.music_rights_verified,
+                music_rights_holder=row.music_rights_holder,
+            )
         )
-        for row in rows
-        if row.music_target_type in {"track", "artist", "playlist"}
-        and row.music_target_id
-        and _safe_http_url(row.destination_url)
-    ]
     response.headers["Cache-Control"] = "public, max-age=30, stale-while-revalidate=60"
     return PublicMusicPromotionsResponse(promotions=promotions, generated_at=now)
 
@@ -466,6 +530,7 @@ def record_public_brand_ad_event(
         or _as_utc(campaign.start_at) > now
         or _as_utc(campaign.end_at) <= now
         or not _safe_http_url(campaign.destination_url)
+        or _is_campaign_budget_exhausted(session, campaign)
     ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Live campaign not found.")
     event = BrandAdEvent(

@@ -78,12 +78,15 @@ function sanitizeDatabaseUrl(url) {
   if (!url) {
     return url;
   }
-  const unquoted = url.replace(/^[\"']|[\"']$/g, '').trim();
+  const unquoted = url.replace(/^["']|["']$/g, "").trim();
   try {
     url = unquoted;
     const parsed = new URL(url);
     parsed.searchParams.delete("sslmode");
     parsed.searchParams.delete("ssl");
+    if (parsed.hostname.includes("pooler.supabase.com") && parsed.port === "6543") {
+      parsed.port = "5432";
+    }
     return parsed.toString();
   } catch (_) {
     return url;

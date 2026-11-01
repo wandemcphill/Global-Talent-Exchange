@@ -164,6 +164,8 @@ def test_idempotent_events_and_music_promotion_disclosure_fields():
             music_target_id="gtex-trax-afro-01",
             music_title="Lagos Nightlights",
             music_artist_name="Kazeem",
+            music_rights_verified=True,
+            music_rights_holder="Afrobeat Collective",
         )
         session.add_all([profile, campaign])
         session.commit()
@@ -185,3 +187,245 @@ def test_idempotent_events_and_music_promotion_disclosure_fields():
         assert second.json()["duplicate"] is True
         assert promotions.status_code == 200
         assert promotions.json()["promotions"][0]["target_id"] == "gtex-trax-afro-01"
+        assert promotions.json()["promotions"][0]["music_rights_verified"] is True
+        assert promotions.json()["promotions"][0]["music_rights_holder"] == "Afrobeat Collective"
+
+
+def test_music_rights_verification_admin_endpoint():
+    client, factory, advertiser, admin = _client()
+    now = datetime.now(UTC)
+    with factory() as session:
+        profile = BrandAdvertiserProfile(
+            user_id=advertiser.id,
+            company_name="Major Trax Records",
+            contact_name="A&R Lead",
+            billing_email="ar@traxrecords.com",
+        )
+        music_campaign = BrandAdCampaign(
+            advertiser_id=advertiser.id,
+            campaign_type="music",
+            brand_name="Major Trax",
+            headline="Promote Afrobeats Anthem",
+            description="Clearance pending campaign",
+            placement="music_track",
+            destination_url="https://example.com/track",
+            start_at=now - timedelta(minutes=5),
+            end_at=now + timedelta(days=7),
+            budget_amount=Decimal("100.00"),
+            currency="USD",
+            pricing_model="CPM",
+            unit_price=Decimal("5.0000"),
+            status="pending",
+            is_approved=False,
+            is_active=False,
+            music_target_type="track",
+            music_target_id="trax-anthem-42",
+            music_title="Vibes from Lagos",
+            music_artist_name="Tunde & The Crew",
+            music_rights_verified=False,
+        )
+        brand_campaign = BrandAdCampaign(
+            advertiser_id=advertiser.id,
+            campaign_type="brand",
+            brand_name="Tech Brand",
+            headline="Global Cloud Services",
+            description="Non-music campaign",
+            placement="homepage_rail",
+            destination_url="https://example.com/cloud",
+            start_at=now - timedelta(minutes=5),
+            end_at=now + timedelta(days=7),
+            budget_amount=Decimal("100.00"),
+            currency="USD",
+            pricing_model="CPM",
+            unit_price=Decimal("5.0000"),
+            status="pending",
+            is_approved=False,
+            is_active=False,
+        )
+        session.add_all([profile, music_campaign, brand_campaign])
+        session.commit()
+        music_campaign_id = music_campaign.id
+        brand_campaign_id = brand_campaign.id
+
+    with client:
+        # Non-music campaign cannot be verified for music rights
+        invalid_type_res = client.put(
+            f"/ads/brand/admin/campaigns/{brand_campaign_id}/music-rights",
+            json={
+                "music_rights_verified": True,
+                "music_rights_holder": "Some Publisher",
+                "music_license_doc_url": "https://example.com/license.pdf",
+                "note": "Invalid attempt",
+            },
+        )
+        assert invalid_type_res.status_code == 400
+        assert "only applies to music campaigns" in invalid_type_res.text
+
+        # Verify music rights on valid music campaign
+        verify_res = client.put(
+            f"/ads/brand/admin/campaigns/{music_campaign_id}/music-rights",
+            json={
+                "music_rights_verified": True,
+                "music_rights_holder": "Afrobeats Global Publishing Ltd",
+                "music_license_doc_url": "https://example.com/cleared-license.pdf",
+                "note": "Master recording and publishing agreement verified",
+            },
+        )
+        assert verify_res.status_code == 200, verify_res.text
+        data = verify_res.json()
+        assert data["music_rights_verified"] is True
+        assert data["music_rights_holder"] == "Afrobeats Global Publishing Ltd"
+        assert data["music_license_doc_url"] == "https://example.com/cleared-license.pdf"
+
+        # Verify review event history
+        history = client.get(f"/ads/brand/campaigns/{music_campaign_id}/history")
+        assert history.status_code == 200
+        events = history.json()
+        assert any(e["action"] == "verify_music_rights" for e in events)
+
+
+def test_unverified_music_campaign_excluded_from_public_promotions():
+    client, factory, advertiser, _admin = _client()
+    now = datetime.now(UTC)
+    with factory() as session:
+        profile = BrandAdvertiserProfile(
+            user_id=advertiser.id,
+            company_name="Indie Label",
+            contact_name="Indie Producer",
+            billing_email="indie@example.com",
+        )
+        # Approved and active, BUT music_rights_verified is False
+        unverified_campaign = BrandAdCampaign(
+            advertiser_id=advertiser.id,
+            campaign_type="music",
+            brand_name="Unverified Artist",
+            headline="Check out my demo",
+            description="Unverified track",
+            placement="music_track",
+            destination_url="https://example.com/demo",
+            start_at=now - timedelta(minutes=5),
+            end_at=now + timedelta(days=7),
+            budget_amount=Decimal("50.00"),
+            currency="USD",
+            pricing_model="CPC",
+            unit_price=Decimal("0.5000"),
+            status="approved",
+            is_approved=True,
+            is_active=True,
+            music_target_type="track",
+            music_target_id="trax-demo-unverified",
+            music_title="Demo Track 1",
+            music_artist_name="Unknown Artist",
+            music_rights_verified=False,
+        )
+        # Approved, active, AND music_rights_verified is True
+        verified_campaign = BrandAdCampaign(
+            advertiser_id=advertiser.id,
+            campaign_type="music",
+            brand_name="Verified Artist",
+            headline="Official Single",
+            description="Verified track",
+            placement="music_track",
+            destination_url="https://example.com/official",
+            start_at=now - timedelta(minutes=5),
+            end_at=now + timedelta(days=7),
+            budget_amount=Decimal("50.00"),
+            currency="USD",
+            pricing_model="CPC",
+            unit_price=Decimal("0.5000"),
+            status="approved",
+            is_approved=True,
+            is_active=True,
+            music_target_type="track",
+            music_target_id="trax-official-verified",
+            music_title="Official Anthem",
+            music_artist_name="Verified Star",
+            music_rights_verified=True,
+            music_rights_holder="Star Records Ltd",
+        )
+        session.add_all([profile, unverified_campaign, verified_campaign])
+        session.commit()
+
+    with client:
+        res = client.get("/public/ads/music/promotions")
+        assert res.status_code == 200, res.text
+        promotions = res.json()["promotions"]
+        target_ids = [p["target_id"] for p in promotions]
+        assert "trax-official-verified" in target_ids
+        assert "trax-demo-unverified" not in target_ids
+
+
+def test_budget_exhaustion_delivery_throttling():
+    client, factory, advertiser, _admin = _client()
+    now = datetime.now(UTC)
+    with factory() as session:
+        profile = BrandAdvertiserProfile(
+            user_id=advertiser.id,
+            company_name="Budgeted Brand",
+            contact_name="Budget Manager",
+            billing_email="budget@example.com",
+        )
+        # Budget = $10.00, CPC = $2.00. Exhausts at 5 clicks.
+        campaign = BrandAdCampaign(
+            advertiser_id=advertiser.id,
+            campaign_type="music",
+            brand_name="Budgeted Trax",
+            headline="Limited Budget Track",
+            description="Track with small budget",
+            placement="music_track",
+            destination_url="https://example.com/track",
+            start_at=now - timedelta(minutes=5),
+            end_at=now + timedelta(days=7),
+            budget_amount=Decimal("10.00"),
+            currency="USD",
+            pricing_model="CPC",
+            unit_price=Decimal("2.0000"),
+            status="approved",
+            is_approved=True,
+            is_active=True,
+            music_target_type="track",
+            music_target_id="trax-budget-exhaustion",
+            music_title="Budget Hit",
+            music_artist_name="Budget Artist",
+            music_rights_verified=True,
+            music_rights_holder="Budget Label",
+        )
+        session.add_all([profile, campaign])
+        session.commit()
+        campaign_id = campaign.id
+
+    with client:
+        # Initially delivered
+        res1 = client.get("/public/ads/music/promotions")
+        assert res1.status_code == 200
+        assert any(p["target_id"] == "trax-budget-exhaustion" for p in res1.json()["promotions"])
+
+        # Record 5 clicks to exhaust the $10.00 budget
+        for i in range(5):
+            click_res = client.post(
+                "/public/ads/events",
+                json={
+                    "campaign_id": campaign_id,
+                    "event_type": "click",
+                    "idempotency_key": f"exhaust-click-{i}",
+                    "metadata_json": {},
+                },
+            )
+            assert click_res.status_code == 200
+
+        # After budget exhaustion, delivery is throttled (excluded)
+        res2 = client.get("/public/ads/music/promotions")
+        assert res2.status_code == 200
+        assert not any(p["target_id"] == "trax-budget-exhaustion" for p in res2.json()["promotions"])
+
+        # Further event recording is rejected
+        blocked_event = client.post(
+            "/public/ads/events",
+            json={
+                "campaign_id": campaign_id,
+                "event_type": "click",
+                "idempotency_key": "exhaust-click-blocked",
+                "metadata_json": {},
+            },
+        )
+        assert blocked_event.status_code == 404
