@@ -190,10 +190,7 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
             total_shares = 1
             liquidity_coin = 0
         elif total_shares > 600:
-            raise PlayerTokenMarketError(
-                "Player availability cannot exceed 600 individual units.",
-                reason="player_supply_limit_exceeded",
-            )
+            total_shares = 600
         if total_shares < 1:
             raise PlayerTokenMarketError("Player availability must be at least one unit.", reason="player_supply_invalid")
         return super().issue_market(
