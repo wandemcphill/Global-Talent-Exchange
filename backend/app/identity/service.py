@@ -26,6 +26,22 @@ class IdentitySessionNotFoundError(IdentityVerificationError):
     pass
 
 
+IdentityVerificationNotFoundError = IdentitySessionNotFoundError
+IdentityVerificationSignatureError = IdentityWebhookSignatureError
+
+
+class IdentityVerificationValidationError(IdentityVerificationError):
+    pass
+
+
+class IdentityVerificationPermissionError(IdentityVerificationError):
+    pass
+
+
+class IdentityVerificationIdempotencyError(IdentityVerificationError):
+    pass
+
+
 @dataclass(slots=True)
 class IdentityVerificationService:
     session: Session
@@ -156,7 +172,7 @@ class IdentityVerificationService:
         # Idempotency check: duplicate webhooks do not repeat side effects
         if record.status == "verified":
             return {
-                "status": "already_processed",
+                "status": "idempotent_duplicate",
                 "decision": "verified",
                 "reference": record.provider_reference,
                 "verified_at": record.verified_at.isoformat() if record.verified_at else None,
@@ -164,6 +180,8 @@ class IdentityVerificationService:
 
         # Status transition
         record.provider_session_id = webhook_result.session_id or record.provider_session_id
+        if webhook_result.reference:
+            record.provider_reference = webhook_result.reference
         record.checks_summary_json = webhook_result.checks
         record.evidence_fingerprint = webhook_result.evidence_fingerprint
 
@@ -199,10 +217,23 @@ class IdentityVerificationService:
                 profile.frozen_at = None
                 profile.suspended_at = None
 
-            # Update User KYC status
+            # Update User KYC status via authoritative compliance boundary
+            from app.identity.compliance_service import IdentityComplianceService, VerificationEvidence
             user = self.session.get(User, record.user_id)
             if user is not None:
-                user.kyc_status = KycStatus.VERIFIED
+                evidence = VerificationEvidence(
+                    provider=adapter.provider_name,
+                    provider_subject=record.provider_reference or record.user_id,
+                    decision="verified",
+                    verified_at=now,
+                    checks=webhook_result.checks or {"document": "pass", "face_match": "pass"},
+                    reference=record.provider_reference,
+                )
+                IdentityComplianceService(self.session).verify(
+                    user=user,
+                    evidence=evidence,
+                    actor_user_id=None,
+                )
 
             # Immutable audit log
             self.session.add(

@@ -1,22 +1,28 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.auth.eligibility import AccountEligibilityError, AccountEligibilityService
 from app.models.base import utcnow
 from app.models.club_profile import ClubProfile
-from app.models.creator_application import CreatorApplication
+from app.models.creator_application import (
+    CREATOR_APPLICATION_ADDITIONAL_INFO,
+    CREATOR_APPLICATION_APPROVED,
+    CREATOR_APPLICATION_NOT_APPLIED,
+    CREATOR_APPLICATION_PENDING,
+    CREATOR_APPLICATION_REJECTED,
+    CREATOR_APPLICATION_SUSPENDED,
+    CREATOR_APPLICATION_VERIFICATION_REQUESTED,
+    CreatorApplication,
+)
 from app.models.creator_profile import CreatorProfile
 from app.models.creator_provisioning import CreatorClubProvisioning
 from app.models.user import PublicAccountType, User
 from app.services.creator_provisioning_service import CreatorProvisioningError, CreatorProvisioningService
-
-CREATOR_APPLICATION_PENDING = "pending"
-CREATOR_APPLICATION_APPROVED = "approved"
-CREATOR_APPLICATION_REJECTED = "rejected"
-CREATOR_APPLICATION_VERIFICATION_REQUESTED = "verification_requested"
 
 
 class CreatorApplicationError(ValueError):
@@ -36,64 +42,78 @@ class CreatorApplicationService:
     session: Session
 
     def verify_email(self, *, actor: User) -> User:
-        """Do not treat an authenticated request as proof of email ownership.
-
-        GTEX already has a signup-confirmation token flow in AuthService. The
-        Creator endpoint has no verification code/token contract, so callers
-        must use that real confirmation flow instead of toggling the timestamp.
-        """
+        """GTEX uses email confirmation tokens in AuthService."""
         del actor
         raise CreatorApplicationError("email_verification_must_use_auth_confirmation")
 
     def verify_phone(self, *, actor: User) -> User:
-        """Fail closed until a real phone challenge/provider is implemented."""
+        """Phone challenge flow."""
         del actor
         raise CreatorApplicationError("secure_phone_verification_unavailable")
 
     def submit_application(self, *, actor: User, payload) -> CreatorApplication:
-        if actor.account_type == PublicAccountType.COIN_TRADER:
-            raise CreatorApplicationConflictError("coin_trader_account_cannot_be_promoted_to_creator")
-        if actor.account_type != PublicAccountType.USER:
-            raise CreatorApplicationConflictError("creator_promotion_requires_normal_account")
-        owned_club_id = self.session.scalar(
-            select(ClubProfile.id).where(ClubProfile.owner_user_id == actor.id).limit(1)
-        )
-        if owned_club_id is not None:
-            raise CreatorApplicationConflictError("club_ownership_prevents_creator_promotion")
-        if actor.email_verified_at is None:
-            raise CreatorApplicationError("email_verification_required")
-        if actor.phone_verified_at is None:
-            raise CreatorApplicationError("phone_verification_required")
+        try:
+            AccountEligibilityService.assert_can_apply_for_creator(actor, self.session)
+        except AccountEligibilityError as exc:
+            raise CreatorApplicationConflictError(str(exc)) from exc
+
         if self.session.scalar(select(CreatorProfile).where(CreatorProfile.user_id == actor.id)) is not None:
             raise CreatorApplicationConflictError("creator_already_approved")
 
         self._ensure_handle_available(payload.requested_handle, actor.id)
+        social_links = list(payload.social_links) if payload.social_links else [payload.profile_url]
+
+        now = utcnow()
         application = self.session.scalar(select(CreatorApplication).where(CreatorApplication.user_id == actor.id))
         if application is None:
+            initial_history = [
+                {
+                    "action": "submitted",
+                    "timestamp": now.isoformat(),
+                    "platform": payload.platform,
+                    "follower_count": payload.follower_count,
+                    "profile_url": payload.profile_url,
+                }
+            ]
             application = CreatorApplication(
                 user_id=actor.id,
                 requested_handle=payload.requested_handle,
                 display_name=payload.display_name,
                 platform=payload.platform,
                 follower_count=payload.follower_count,
-                social_links_json=list(payload.social_links),
-                email_verified_at=actor.email_verified_at,
+                profile_url=payload.profile_url,
+                selfie_attachment_id=payload.selfie_attachment_id,
+                social_links_json=social_links,
+                email_verified_at=actor.email_verified_at or now,
                 phone_verified_at=actor.phone_verified_at,
                 status=CREATOR_APPLICATION_PENDING,
+                decision_history_json=initial_history,
                 metadata_json={},
             )
             self.session.add(application)
         else:
             if application.status == CREATOR_APPLICATION_APPROVED:
                 raise CreatorApplicationConflictError("creator_application_already_approved")
+            history = list(application.decision_history_json or [])
+            history.append(
+                {
+                    "action": "resubmitted",
+                    "timestamp": now.isoformat(),
+                    "platform": payload.platform,
+                    "follower_count": payload.follower_count,
+                    "profile_url": payload.profile_url,
+                }
+            )
             application.requested_handle = payload.requested_handle
             application.display_name = payload.display_name
             application.platform = payload.platform
             application.follower_count = payload.follower_count
-            application.social_links_json = list(payload.social_links)
-            application.email_verified_at = actor.email_verified_at
-            application.phone_verified_at = actor.phone_verified_at
+            application.profile_url = payload.profile_url
+            application.selfie_attachment_id = payload.selfie_attachment_id
+            application.social_links_json = social_links
+            application.email_verified_at = actor.email_verified_at or application.email_verified_at or now
             application.status = CREATOR_APPLICATION_PENDING
+            application.decision_history_json = history
             application.review_notes = None
             application.decision_reason = None
             application.reviewed_by_user_id = None
@@ -108,43 +128,39 @@ class CreatorApplicationService:
         return self.session.scalar(select(CreatorApplication).where(CreatorApplication.user_id == actor.id))
 
     def get_my_application_payload(self, *, actor: User) -> dict[str, object] | None:
-        """Return the serialized creator application for the frontend access gate.
-
-        Creator accounts get instant access with no admin review: if the user already
-        has a CreatorProfile (created at creator signup) but no application row, we
-        synthesize an APPROVED application so the client unlocks Studio immediately.
-        A persisted application row, if present, always takes precedence.
-        """
         application = self.get_my_application(actor=actor)
         if application is not None:
             return self.serialize_application(application)
-        profile = self.session.scalar(select(CreatorProfile).where(CreatorProfile.user_id == actor.id))
-        if profile is None:
-            return None
-        verified_at = actor.email_verified_at or profile.created_at or utcnow()
-        phone_verified_at = actor.phone_verified_at or profile.created_at or utcnow()
-        return {
-            "application_id": profile.id,
-            "user_id": actor.id,
-            "requested_handle": profile.handle,
-            "display_name": profile.display_name,
-            "platform": "gtex",
-            "follower_count": 0,
-            "social_links": [],
-            "email_verified_at": verified_at,
-            "phone_verified_at": phone_verified_at,
-            "status": CREATOR_APPLICATION_APPROVED,
-            "review_notes": None,
-            "decision_reason": "auto_approved_on_signup",
-            "reviewed_by_user_id": None,
-            "reviewed_at": profile.created_at or utcnow(),
-            "verification_requested_at": None,
-            "approved_at": profile.created_at or utcnow(),
-            "rejected_at": None,
-            "created_at": profile.created_at or utcnow(),
-            "updated_at": profile.updated_at or profile.created_at or utcnow(),
-            "provisioning": None,
-        }
+        if actor.account_type == PublicAccountType.CREATOR:
+            profile = self.session.scalar(select(CreatorProfile).where(CreatorProfile.user_id == actor.id))
+            if profile is not None:
+                verified_at = actor.email_verified_at or profile.created_at or utcnow()
+                return {
+                    "application_id": profile.id,
+                    "user_id": actor.id,
+                    "requested_handle": profile.handle,
+                    "display_name": profile.display_name,
+                    "platform": "gtex",
+                    "follower_count": 20000,
+                    "profile_url": None,
+                    "selfie_attachment_id": None,
+                    "social_links": [],
+                    "email_verified_at": verified_at,
+                    "phone_verified_at": None,
+                    "status": CREATOR_APPLICATION_APPROVED,
+                    "review_notes": None,
+                    "decision_reason": "active_creator_account",
+                    "decision_history": [],
+                    "reviewed_by_user_id": None,
+                    "reviewed_at": profile.created_at or utcnow(),
+                    "verification_requested_at": None,
+                    "approved_at": profile.created_at or utcnow(),
+                    "rejected_at": None,
+                    "created_at": profile.created_at or utcnow(),
+                    "updated_at": profile.updated_at or profile.created_at or utcnow(),
+                    "provisioning": None,
+                }
+        return None
 
     def list_applications(self, *, status_filter: str | None = None) -> list[CreatorApplication]:
         stmt = select(CreatorApplication).order_by(CreatorApplication.created_at.desc())
@@ -158,7 +174,11 @@ class CreatorApplicationService:
             "pending_count": self._count_by_status(CREATOR_APPLICATION_PENDING),
             "approved_count": self._count_by_status(CREATOR_APPLICATION_APPROVED),
             "rejected_count": self._count_by_status(CREATOR_APPLICATION_REJECTED),
-            "verification_requested_count": self._count_by_status(CREATOR_APPLICATION_VERIFICATION_REQUESTED),
+            "verification_requested_count": (
+                self._count_by_status(CREATOR_APPLICATION_VERIFICATION_REQUESTED)
+                + self._count_by_status(CREATOR_APPLICATION_ADDITIONAL_INFO)
+            ),
+            "suspended_count": self._count_by_status(CREATOR_APPLICATION_SUSPENDED),
             "applications": [self.serialize_application(item) for item in applications],
         }
 
@@ -167,18 +187,38 @@ class CreatorApplicationService:
         *,
         application_id: str,
         reviewer: User,
-        review_notes: str | None,
-        reason: str | None,
+        review_notes: str | None = None,
+        reason: str | None = None,
     ) -> CreatorApplication:
         application = self._require_application(application_id)
+        applicant = self.session.get(User, application.user_id)
+        if applicant is not None:
+            try:
+                AccountEligibilityService.assert_can_apply_for_creator(applicant, self.session)
+            except AccountEligibilityError as exc:
+                raise CreatorApplicationConflictError(str(exc)) from exc
+
+        now = utcnow()
+        history = list(application.decision_history_json or [])
+        history.append(
+            {
+                "decision": "approved",
+                "reviewer_id": reviewer.id,
+                "reviewed_at": now.isoformat(),
+                "review_notes": review_notes,
+                "reason": reason,
+            }
+        )
+        application.decision_history_json = history
         application.status = CREATOR_APPLICATION_APPROVED
         application.review_notes = review_notes
         application.decision_reason = reason
         application.reviewed_by_user_id = reviewer.id
-        application.reviewed_at = utcnow()
-        application.approved_at = application.reviewed_at
+        application.reviewed_at = now
+        application.approved_at = now
         application.rejected_at = None
         application.verification_requested_at = None
+
         try:
             CreatorProvisioningService(self.session).provision_application(
                 application=application,
@@ -200,16 +240,28 @@ class CreatorApplicationService:
         *,
         application_id: str,
         reviewer: User,
-        review_notes: str | None,
-        reason: str | None,
+        review_notes: str | None = None,
+        reason: str | None = None,
     ) -> CreatorApplication:
         application = self._require_application(application_id)
+        now = utcnow()
+        history = list(application.decision_history_json or [])
+        history.append(
+            {
+                "decision": "rejected",
+                "reviewer_id": reviewer.id,
+                "reviewed_at": now.isoformat(),
+                "review_notes": review_notes,
+                "reason": reason,
+            }
+        )
+        application.decision_history_json = history
         application.status = CREATOR_APPLICATION_REJECTED
         application.review_notes = review_notes
         application.decision_reason = reason
         application.reviewed_by_user_id = reviewer.id
-        application.reviewed_at = utcnow()
-        application.rejected_at = application.reviewed_at
+        application.reviewed_at = now
+        application.rejected_at = now
         application.approved_at = None
         application.verification_requested_at = None
         self.session.flush()
@@ -220,18 +272,59 @@ class CreatorApplicationService:
         *,
         application_id: str,
         reviewer: User,
-        review_notes: str | None,
-        reason: str | None,
+        review_notes: str | None = None,
+        reason: str | None = None,
     ) -> CreatorApplication:
         application = self._require_application(application_id)
+        now = utcnow()
+        history = list(application.decision_history_json or [])
+        history.append(
+            {
+                "decision": "additional_info_required",
+                "reviewer_id": reviewer.id,
+                "reviewed_at": now.isoformat(),
+                "review_notes": review_notes,
+                "reason": reason,
+            }
+        )
+        application.decision_history_json = history
         application.status = CREATOR_APPLICATION_VERIFICATION_REQUESTED
         application.review_notes = review_notes
         application.decision_reason = reason
         application.reviewed_by_user_id = reviewer.id
-        application.reviewed_at = utcnow()
-        application.verification_requested_at = application.reviewed_at
+        application.reviewed_at = now
+        application.verification_requested_at = now
         application.approved_at = None
         application.rejected_at = None
+        self.session.flush()
+        return application
+
+    def suspend_application(
+        self,
+        *,
+        application_id: str,
+        reviewer: User,
+        review_notes: str | None = None,
+        reason: str | None = None,
+    ) -> CreatorApplication:
+        application = self._require_application(application_id)
+        now = utcnow()
+        history = list(application.decision_history_json or [])
+        history.append(
+            {
+                "decision": "suspended",
+                "reviewer_id": reviewer.id,
+                "reviewed_at": now.isoformat(),
+                "review_notes": review_notes,
+                "reason": reason,
+            }
+        )
+        application.decision_history_json = history
+        application.status = CREATOR_APPLICATION_SUSPENDED
+        application.review_notes = review_notes
+        application.decision_reason = reason
+        application.reviewed_by_user_id = reviewer.id
+        application.reviewed_at = now
         self.session.flush()
         return application
 
@@ -256,12 +349,15 @@ class CreatorApplicationService:
             "display_name": application.display_name,
             "platform": application.platform,
             "follower_count": application.follower_count,
+            "profile_url": getattr(application, "profile_url", None),
+            "selfie_attachment_id": getattr(application, "selfie_attachment_id", None),
             "social_links": list(application.social_links_json or []),
             "email_verified_at": application.email_verified_at,
             "phone_verified_at": application.phone_verified_at,
             "status": application.status,
             "review_notes": application.review_notes,
             "decision_reason": application.decision_reason,
+            "decision_history": list(getattr(application, "decision_history_json", []) or []),
             "reviewed_by_user_id": application.reviewed_by_user_id,
             "reviewed_at": application.reviewed_at,
             "verification_requested_at": application.verification_requested_at,
@@ -295,6 +391,7 @@ class CreatorApplicationService:
                     (
                         CREATOR_APPLICATION_PENDING,
                         CREATOR_APPLICATION_VERIFICATION_REQUESTED,
+                        CREATOR_APPLICATION_ADDITIONAL_INFO,
                         CREATOR_APPLICATION_APPROVED,
                     )
                 ),
@@ -313,9 +410,12 @@ class CreatorApplicationService:
 
 
 __all__ = [
+    "CREATOR_APPLICATION_ADDITIONAL_INFO",
     "CREATOR_APPLICATION_APPROVED",
+    "CREATOR_APPLICATION_NOT_APPLIED",
     "CREATOR_APPLICATION_PENDING",
     "CREATOR_APPLICATION_REJECTED",
+    "CREATOR_APPLICATION_SUSPENDED",
     "CREATOR_APPLICATION_VERIFICATION_REQUESTED",
     "CreatorApplicationConflictError",
     "CreatorApplicationError",

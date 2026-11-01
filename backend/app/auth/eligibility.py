@@ -32,6 +32,11 @@ class AccountEligibilityService:
             raise TradingEligibilityError("Account is inactive.")
 
     @staticmethod
+    def assert_can_operate_coin_trader(user: User, session: Session) -> None:
+        profile = session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id))
+        AccountEligibilityService.assert_can_trade_coin_marketplace(user, profile)
+
+    @staticmethod
     def assert_can_trade_coin_marketplace(user: User, profile: CoinTraderProfile | None) -> None:
         """Coin trader operations require an approved, fully verified, active CoinTraderProfile."""
         if user.account_type != PublicAccountType.COIN_TRADER:
@@ -69,7 +74,7 @@ class AccountEligibilityService:
             select(ClubProfile.id)
             .where(
                 ClubProfile.owner_user_id == user.id,
-                ClubProfile.lifecycle_status != ClubLifecycleStatus.DISSOLVED,
+                ClubProfile.lifecycle_status == ClubLifecycleStatus.ACTIVE,
             )
             .limit(1)
         )

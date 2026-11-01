@@ -31,7 +31,7 @@ from app.models.treasury import (
 )
 from app.models.withdrawal_review import WithdrawalReview
 from app.models.risk_ops import RiskSeverity, SystemEventSeverity
-from app.models.user import KycStatus, User
+from app.models.user import KycStatus, PublicAccountType, User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit, PayoutRequest, PayoutStatus
 from app.risk_ops_engine.service import RiskActionBlockedError, RiskOpsService
 from app.treasury.commission_policy import resolve_commission_policy
@@ -61,6 +61,8 @@ GTEX_LEGAL_DISCLOSURES = (
 )
 KYC_LIMITS: dict[str, Decimal] = {
     "basic": Decimal("50000.0000"),
+    "unverified": Decimal("50000.0000"),
+    "review": Decimal("50000.0000"),
     "verified": Decimal("500000.0000"),
 }
 
@@ -507,11 +509,11 @@ class TreasuryService:
 
     @staticmethod
     def resolve_kyc_tier(kyc_status: KycStatus) -> str:
-        if kyc_status == KycStatus.VERIFIED:
+        if kyc_status in {KycStatus.VERIFIED, KycStatus.FULLY_VERIFIED}:
             return "verified"
         if kyc_status == KycStatus.UNDER_REVIEW:
             return "review"
-        return "unverified"
+        return "basic"
 
     @classmethod
     def kyc_limit_for_status(cls, kyc_status: KycStatus) -> Decimal | None:
@@ -565,12 +567,22 @@ class TreasuryService:
             country_code, country_withdrawals_enabled, missing_required_policies = self._resolve_user_policy_state(
                 session, user
             )
-        requires_kyc = kyc_status in {
-            KycStatus.UNVERIFIED,
-            KycStatus.PENDING,
-            KycStatus.UNDER_REVIEW,
-            KycStatus.REJECTED,
-        }
+        # Ordinary USER and CREATOR accounts are not blocked by universal KYC.
+        # COIN_TRADER accounts must be verified and active to withdraw.
+        # Once accredited, they do not repeat routine KYC for every withdrawal.
+        if getattr(user, "account_type", None) == PublicAccountType.COIN_TRADER:
+            from app.models.coin_trader import CoinTraderProfile, CoinTraderProfileStatus
+            trader_profile = session.scalar(
+                select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id)
+            )
+            requires_kyc = (
+                trader_profile is None
+                or trader_profile.status != CoinTraderProfileStatus.APPROVED.value
+                or trader_profile.verified_at is None
+                or trader_profile.suspended_at is not None
+            )
+        else:
+            requires_kyc = False
         requires_bank = (
             self.ensure_user_bank_account(session, user) is None
             if has_active_bank_account is None
@@ -658,6 +670,12 @@ class TreasuryService:
         try:
             RiskOpsService(session).assert_withdrawal_allowed(user.id)
         except RiskActionBlockedError as exc:
+            raise TreasuryConflictError(str(exc)) from exc
+
+        from app.auth.eligibility import AccountEligibilityError, AccountEligibilityService
+        try:
+            AccountEligibilityService.assert_can_withdraw(user, session, amount_coin)
+        except AccountEligibilityError as exc:
             raise TreasuryConflictError(str(exc)) from exc
 
         eligibility = self.get_withdrawal_eligibility(session, user)

@@ -57,3 +57,12 @@ class AdminTraderVerificationRecordView(CommonSchema):
     initiated_at: datetime
     verified_at: datetime | None = None
     history: list[dict[str, Any]] = Field(default_factory=list)
+
+
+IdentityVerificationRecordAdminView = AdminTraderVerificationRecordView
+
+
+class CoinTraderAdminActionRequest(CommonSchema):
+    reason: str | None = None
+    note: str | None = None
+

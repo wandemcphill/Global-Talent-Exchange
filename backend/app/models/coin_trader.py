@@ -87,9 +87,7 @@ class CoinTraderProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class IdentityVerificationRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "identity_verification_records"
     __table_args__ = (
-        Index("ix_identity_verification_records_user_id", "user_id"),
         Index("ix_identity_verification_records_provider_ref", "provider", "provider_reference"),
-        Index("ix_identity_verification_records_idempotency", "idempotency_key"),
     )
 
     user_id: Mapped[str] = mapped_column(

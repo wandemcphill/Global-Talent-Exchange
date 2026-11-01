@@ -99,6 +99,10 @@ class CoinTraderProfileView(CommonSchema):
     status: CoinTraderProfileStatus | CoinTraderStatusLiteral | str
     tier: CoinTraderTier | str
     verification_level: str = "standard"
+    verified_at: datetime | None = None
+    verification_provider: str | None = None
+    verification_reference: str | None = None
+    suspended_at: datetime | None = None
     completion_rate: float
     average_release_minutes: float
     rating: float

@@ -1,7 +1,7 @@
 """Add creator profile URL and selfie attachment fields, coin trader verification columns, and identity verification records table.
 
-Revision ID: 20261101_0153_account_types_creator_and_trader_kyc
-Revises: 20261101_0152_korapay_paystack_payout_and_order_fields
+Revision ID: 20261101_0155_account_types_creator_and_trader_kyc
+Revises: 20261101_0154_brand_music_rights_and_budget_pacing
 """
 
 from __future__ import annotations
@@ -9,8 +9,8 @@ from __future__ import annotations
 from alembic import op
 import sqlalchemy as sa
 
-revision = "20261101_0153_account_types_creator_and_trader_kyc"
-down_revision = "20261101_0152_korapay_paystack_payout_and_order_fields"
+revision = "20261101_0155_account_types_creator_and_trader_kyc"
+down_revision = "20261101_0154_brand_music_rights_and_budget_pacing"
 branch_labels = None
 depends_on = None
 

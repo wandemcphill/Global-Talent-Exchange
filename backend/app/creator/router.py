@@ -477,6 +477,28 @@ def request_creator_application_verification(
     return CreatorApplicationView.model_validate(service.serialize_application(application))
 
 
+@admin_router.post("/applications/{application_id}/suspend", response_model=CreatorApplicationView)
+def suspend_creator_application(
+    application_id: str,
+    payload: CreatorApplicationAdminActionRequest,
+    current_admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+    service: CreatorApplicationService = Depends(get_application_service),
+) -> CreatorApplicationView:
+    try:
+        application = service.suspend_application(
+            application_id=application_id,
+            reviewer=current_admin,
+            review_notes=payload.review_notes,
+            reason=payload.reason,
+        )
+        session.commit()
+    except CreatorApplicationError as exc:
+        session.rollback()
+        raise_creator_application_http(exc)
+    return CreatorApplicationView.model_validate(service.serialize_application(application))
+
+
 @admin_router.post("/cards/assign", response_model=CreatorCardView, status_code=status.HTTP_201_CREATED)
 def assign_creator_card(
     payload: CreatorCardAssignRequest,
