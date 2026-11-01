@@ -89,6 +89,29 @@ def test_paystack_is_live_ready_with_only_live_api_secret(monkeypatch: pytest.Mo
     assert provider_live_deposit_ready("paystack") is True
 
 
+def test_paystack_verifies_valid_hmac_with_the_api_secret_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import hmac
+    from hashlib import sha512
+    from types import SimpleNamespace
+
+    from app.admin_finance.service import AdminFinanceService
+
+    secret = "sk_live_paystack_secret"
+    raw_body = b'{"event":"charge.success","data":{"reference":"gtex-valid-ref"}}'
+    signature = hmac.new(secret.encode("utf-8"), raw_body, sha512).hexdigest()
+    monkeypatch.setenv("GTE_APP_ENV", "production")
+    monkeypatch.setenv("GTE_PAYSTACK_SECRET_KEY", secret)
+    monkeypatch.delenv("GTE_PAYSTACK_WEBHOOK_SECRET", raising=False)
+
+    service = AdminFinanceService(session=SimpleNamespace(), settings=SimpleNamespace(app_env="production"))
+    assert service._verify_paystack_webhook(
+        raw_body=raw_body,
+        headers={"x-paystack-signature": signature},
+    ) is True
+
+
 def test_paystack_webhook_rejects_invalid_signature_when_secret_is_configured(
     webhook_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
