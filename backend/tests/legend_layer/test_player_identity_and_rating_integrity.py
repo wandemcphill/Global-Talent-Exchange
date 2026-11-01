@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
 
 import pytest
 from sqlalchemy import create_engine
@@ -10,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.database import load_model_modules
 from app.ingestion.models import Player
-from app.market.service import MarketPlayerQueryService, derive_player_attributes
+from app.market.service import derive_player_attributes
 from app.models.base import Base
 from app.models.user import User, UserRole
 from app.schemas.legendary_player import LegendaryPlayerProfileCreate

@@ -26,7 +26,6 @@ import sys
 import unicodedata
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
-from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -288,23 +287,54 @@ def generate_csv_report(report: InventoryReconciliationReport) -> str:
 
     # 1-of-1 Conflicts
     writer.writerow(["ONE-OF-ONE MARKET CONFLICTS", len(report.one_of_one_conflicts)])
-    writer.writerow(["Market ID", "Player ID", "Player Name", "Total Supply", "Circulating", "Holder Count", "Held Total"])
+    writer.writerow(
+        ["Market ID", "Player ID", "Player Name", "Total Supply", "Circulating", "Holder Count", "Held Total"]
+    )
     for o in report.one_of_one_conflicts:
-        writer.writerow([o.market_id, o.player_id, o.player_name, o.total_shares, o.circulating_shares, o.holder_count, o.total_held_shares])
+        writer.writerow(
+            [
+                o.market_id,
+                o.player_id,
+                o.player_name,
+                o.total_shares,
+                o.circulating_shares,
+                o.holder_count,
+                o.total_held_shares,
+            ]
+        )
     writer.writerow([])
 
     # Duplicate Identities
     writer.writerow(["DUPLICATE IDENTITY CONFLICTS", len(report.duplicate_identity_conflicts)])
     writer.writerow(["Normalized Name", "Player IDs", "Player Names", "Is Real Flags"])
     for d in report.duplicate_identity_conflicts:
-        writer.writerow([d.canonical_normalized_name, "; ".join(d.player_ids), "; ".join(d.player_names), "; ".join(map(str, d.is_real_flags))])
+        writer.writerow(
+            [
+                d.canonical_normalized_name,
+                "; ".join(d.player_ids),
+                "; ".join(d.player_names),
+                "; ".join(map(str, d.is_real_flags)),
+            ]
+        )
     writer.writerow([])
 
     # Circulation Mismatches
     writer.writerow(["CIRCULATION MISMATCHES", len(report.circulation_mismatches)])
-    writer.writerow(["Market ID", "Player ID", "Player Name", "Circulating", "Sum Holdings", "Sum Events", "Difference"])
+    writer.writerow(
+        ["Market ID", "Player ID", "Player Name", "Circulating", "Sum Holdings", "Sum Events", "Difference"]
+    )
     for m in report.circulation_mismatches:
-        writer.writerow([m.market_id, m.player_id, m.player_name, m.circulating_shares, m.sum_holdings, m.sum_event_deltas, m.difference])
+        writer.writerow(
+            [
+                m.market_id,
+                m.player_id,
+                m.player_name,
+                m.circulating_shares,
+                m.sum_holdings,
+                m.sum_event_deltas,
+                m.difference,
+            ]
+        )
 
     return output.getvalue()
 

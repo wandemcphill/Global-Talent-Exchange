@@ -52,7 +52,9 @@ class LegendaryPlayerFoundationService:
         surfaced so a newly seeded legend cannot silently launch unbuyable.
         """
         player, _ = self._upsert(seed=seed)
-        issuance = issue_markets_for_ingested_players(self.session, player_ids=[player.id], actor_user_id=actor.id, force=True)
+        issuance = issue_markets_for_ingested_players(
+            self.session, player_ids=[player.id], actor_user_id=actor.id, force=True
+        )
         if self.session.scalar(select(PlayerShareMarket.id).where(PlayerShareMarket.player_id == player.id)) is None:
             raise LegendaryPlayerFoundationError(
                 "Legendary player market issuance failed "
@@ -74,7 +76,9 @@ class LegendaryPlayerFoundationService:
             players.append(player)
             created += int(was_created)
         player_ids = [player.id for player in players]
-        issuance = issue_markets_for_ingested_players(self.session, player_ids=player_ids, actor_user_id=actor.id, force=True)
+        issuance = issue_markets_for_ingested_players(
+            self.session, player_ids=player_ids, actor_user_id=actor.id, force=True
+        )
         issued_player_ids = set(
             self.session.scalars(select(PlayerShareMarket.player_id).where(PlayerShareMarket.player_id.in_(player_ids)))
         )

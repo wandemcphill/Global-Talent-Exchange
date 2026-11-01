@@ -8,6 +8,7 @@ FRONTEND_DIR="${REPO_ROOT}/frontend"
 REACT_DIR="${FRONTEND_DIR}/react-shell"
 
 GTE_API_BASE_URL="${GTE_API_BASE_URL:-https://gtex-api-2gtu.onrender.com}"
+: "${GTE_API_BASE_URL:?GTE_API_BASE_URL must be set for the frontend build.}"
 GTE_BACKEND_MODE="${GTE_BACKEND_MODE:-live}"
 
 # Prevent API origins ending in /api from causing /api/api

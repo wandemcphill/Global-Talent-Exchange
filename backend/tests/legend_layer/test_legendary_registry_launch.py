@@ -47,14 +47,16 @@ def _payload(count: int = LAUNCH_REGISTRY_SIZE) -> dict:
 
 def _session():
     load_model_modules()
-    engine = create_engine("sqlite+pysqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
     Base.metadata.create_all(engine)
     session = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)()
     actor = User(
         id="legendary-registry-operator",
         email="legendary-registry-operator@example.com",
         username="legendary-registry-operator",
-        password_hash="hash",
+        password_hash="hash",  # pragma: allowlist secret
         role=UserRole.ADMIN,
     )
     session.add(actor)
@@ -97,7 +99,12 @@ def test_2000_registry_is_idempotent_searchable_market_ready_and_nationally_elig
             "markets_issued": 0,
             "markets_existing": LAUNCH_REGISTRY_SIZE,
         }
-        assert session.scalar(select(func.count()).select_from(Player).where(Player.source_provider == "legendary_player_foundation")) == 2000
+        assert (
+            session.scalar(
+                select(func.count()).select_from(Player).where(Player.source_provider == "legendary_player_foundation")
+            )
+            == 2000
+        )
         assert session.scalar(select(func.count()).select_from(PlayerShareMarket)) == 2000
 
         started = perf_counter()

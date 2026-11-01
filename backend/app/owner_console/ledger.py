@@ -408,10 +408,12 @@ def pending_withdrawals(session: Session, user_id: str) -> list[OwnerWithdrawal]
         ).all()
     )
 
+
 def ecosystem_waterfall_summary(session: Session, club_id: str | None = None) -> dict[str, Any]:
     total_fees_dec = session.scalar(
-        select(func.coalesce(func.sum(LedgerEvent.platform_fee), 0))
-        .where(LedgerEvent.currency == GTEX, LedgerEvent.status == "completed")
+        select(func.coalesce(func.sum(LedgerEvent.platform_fee), 0)).where(
+            LedgerEvent.currency == GTEX, LedgerEvent.status == "completed"
+        )
     ) or Decimal("0")
     total_fees = float(total_fees_dec)
 
@@ -425,38 +427,46 @@ def ecosystem_waterfall_summary(session: Session, club_id: str | None = None) ->
     club_matchday = 0.0
 
     if club_id:
-        club_tv_rev = float(session.scalar(
-            select(func.coalesce(func.sum(LedgerEvent.gross_amount), 0))
-            .where(
-                LedgerEvent.club_id == club_id,
-                LedgerEvent.status == "completed",
-                LedgerEvent.event_type.in_(("tv_broadcast_revenue", "tv_revenue"))
+        club_tv_rev = float(
+            session.scalar(
+                select(func.coalesce(func.sum(LedgerEvent.gross_amount), 0)).where(
+                    LedgerEvent.club_id == club_id,
+                    LedgerEvent.status == "completed",
+                    LedgerEvent.event_type.in_(("tv_broadcast_revenue", "tv_revenue")),
+                )
             )
-        ) or 0)
-        club_grants = float(session.scalar(
-            select(func.coalesce(func.sum(LedgerEvent.gross_amount), 0))
-            .where(
-                LedgerEvent.club_id == club_id,
-                LedgerEvent.status == "completed",
-                LedgerEvent.event_type.in_(("competition_entry_grant", "participation_grant"))
+            or 0
+        )
+        club_grants = float(
+            session.scalar(
+                select(func.coalesce(func.sum(LedgerEvent.gross_amount), 0)).where(
+                    LedgerEvent.club_id == club_id,
+                    LedgerEvent.status == "completed",
+                    LedgerEvent.event_type.in_(("competition_entry_grant", "participation_grant")),
+                )
             )
-        ) or 0)
-        club_prizes = float(session.scalar(
-            select(func.coalesce(func.sum(LedgerEvent.gross_amount), 0))
-            .where(
-                LedgerEvent.club_id == club_id,
-                LedgerEvent.status == "completed",
-                LedgerEvent.event_type.in_(("competition_prize", "match_prize", "competition_reward"))
+            or 0
+        )
+        club_prizes = float(
+            session.scalar(
+                select(func.coalesce(func.sum(LedgerEvent.gross_amount), 0)).where(
+                    LedgerEvent.club_id == club_id,
+                    LedgerEvent.status == "completed",
+                    LedgerEvent.event_type.in_(("competition_prize", "match_prize", "competition_reward")),
+                )
             )
-        ) or 0)
-        club_matchday = float(session.scalar(
-            select(func.coalesce(func.sum(LedgerEvent.gross_amount), 0))
-            .where(
-                LedgerEvent.club_id == club_id,
-                LedgerEvent.status == "completed",
-                LedgerEvent.event_type.in_(("gate_receipts", "matchday_revenue", "match_ticket_revenue"))
+            or 0
+        )
+        club_matchday = float(
+            session.scalar(
+                select(func.coalesce(func.sum(LedgerEvent.gross_amount), 0)).where(
+                    LedgerEvent.club_id == club_id,
+                    LedgerEvent.status == "completed",
+                    LedgerEvent.event_type.in_(("gate_receipts", "matchday_revenue", "match_ticket_revenue")),
+                )
             )
-        ) or 0)
+            or 0
+        )
 
     return {
         "club_id": club_id,
@@ -475,4 +485,3 @@ def ecosystem_waterfall_summary(session: Session, club_id: str | None = None) ->
         "club_matchday_revenue_gtex": club_matchday,
         "club_total_recycled_revenue_gtex": round(club_tv_rev + club_grants + club_prizes + club_matchday, 2),
     }
-
