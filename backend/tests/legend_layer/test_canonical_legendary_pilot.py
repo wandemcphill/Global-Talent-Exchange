@@ -13,7 +13,7 @@ from app.models.base import Base
 from app.models.legendary_player import LegendaryPlayerProfile
 from app.models.player_token_market import PlayerShareMarket
 from app.models.user import User, UserRole
-from app.players.token_service import PlayerTokenMarketService
+from app.players.token_service import PlayerTokenMarketError, PlayerTokenMarketService
 from app.schemas.legendary_player import LegendaryPlayerProfileCreate
 from app.services.legendary_player_launch_service import LegendaryPlayerLaunchError, LegendaryPlayerLaunchService
 from app.wallets.service import LedgerPosting, WalletService
@@ -175,7 +175,7 @@ def test_canonical_25_player_pilot_is_active_searchable_and_tradeable() -> None:
         purchase = trading.buy_shares(actor=buyer, player_id=player.id, share_count=1)
         assert purchase["holding"].share_count == 1
         assert purchase["market"]["total_shares"] == 1
-        with pytest.raises(Exception, match="not listed for resale"):
+        with pytest.raises(PlayerTokenMarketError, match="not listed for resale"):
             trading.sell_shares(actor=buyer, player_id=player.id, share_count=1)
 
         # Replaying the same 25 seeds produces no duplicate players or markets.
