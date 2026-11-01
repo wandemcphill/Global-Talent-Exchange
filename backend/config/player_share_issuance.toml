@@ -64,26 +64,26 @@ launch_ceiling_coin = "1000.0000"
 allow_manual_price_edits = false
 
 [tiers.icon]
-total_shares = 2000
-initial_circulating_cap = 300
-initial_mm_inventory_target = 250
+total_shares = 600
+initial_circulating_cap = 120
+initial_mm_inventory_target = 100
 
 [tiers.elite]
-total_shares = 1500
-initial_circulating_cap = 220
-initial_mm_inventory_target = 180
+total_shares = 450
+initial_circulating_cap = 90
+initial_mm_inventory_target = 75
 
 [tiers.core]
-total_shares = 1000
-initial_circulating_cap = 150
-initial_mm_inventory_target = 120
+total_shares = 300
+initial_circulating_cap = 60
+initial_mm_inventory_target = 50
 
 [tiers.prospect]
-total_shares = 600
-initial_circulating_cap = 80
-initial_mm_inventory_target = 80
+total_shares = 200
+initial_circulating_cap = 40
+initial_mm_inventory_target = 35
 
 [tiers.discovery]
-total_shares = 300
-initial_circulating_cap = 40
-initial_mm_inventory_target = 50
+total_shares = 100
+initial_circulating_cap = 20
+initial_mm_inventory_target = 20
