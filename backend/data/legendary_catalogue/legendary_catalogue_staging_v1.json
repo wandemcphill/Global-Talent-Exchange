@@ -448,8 +448,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q10516072",
       "full_name": "Nicky Grant",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "Scotland",
+      "nationality_code": "SCO",
       "continent": "Europe",
       "birth_year": 1976,
       "historical_height_cm": "unknown",
@@ -484,9 +484,9 @@
     },
     {
       "legendary_profile_id": "legendary-wikidata-q10520",
-      "full_name": "Q10520",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "full_name": "David Beckham",
+      "nationality": "England",
+      "nationality_code": "ENG",
       "continent": "Europe",
       "birth_year": 1975,
       "historical_height_cm": "unknown",
@@ -929,8 +929,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q10917",
       "full_name": "Faye White",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "England",
+      "nationality_code": "ENG",
       "continent": "Europe",
       "birth_year": 1978,
       "historical_height_cm": "unknown",
@@ -2668,8 +2668,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q128829",
       "full_name": "Michael Owen",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "England",
+      "nationality_code": "ENG",
       "continent": "Europe",
       "birth_year": 1979,
       "historical_height_cm": "unknown",
@@ -3149,8 +3149,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q133556",
       "full_name": "Ashley Cole",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "England",
+      "nationality_code": "ENG",
       "continent": "Europe",
       "birth_year": 1980,
       "historical_height_cm": "unknown",
@@ -3963,8 +3963,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q1366485",
       "full_name": "Keith Gillespie",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "Northern Ireland",
+      "nationality_code": "NIR",
       "continent": "Europe",
       "birth_year": 1975,
       "historical_height_cm": "unknown",
@@ -4555,8 +4555,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q138839",
       "full_name": "Wayne Hennessey",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "Wales",
+      "nationality_code": "WAL",
       "continent": "Europe",
       "birth_year": 1987,
       "historical_height_cm": "unknown",
@@ -7996,8 +7996,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q171583",
       "full_name": "Bobby Charlton",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "England",
+      "nationality_code": "ENG",
       "continent": "Europe",
       "birth_year": 1937,
       "historical_height_cm": "unknown",
@@ -10253,8 +10253,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q187198",
       "full_name": "Kenny Dalglish",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "Scotland",
+      "nationality_code": "SCO",
       "continent": "Europe",
       "birth_year": 1951,
       "historical_height_cm": "unknown",
@@ -11215,8 +11215,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q191492",
       "full_name": "Bobby Moore",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "England",
+      "nationality_code": "ENG",
       "continent": "Europe",
       "birth_year": 1941,
       "historical_height_cm": "unknown",
@@ -13620,8 +13620,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q202153",
       "full_name": "Gary Speed",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "Wales",
+      "nationality_code": "WAL",
       "continent": "Europe",
       "birth_year": 1969,
       "historical_height_cm": "unknown",
@@ -15764,6 +15764,53 @@
       ]
     },
     {
+      "legendary_profile_id": "legendary-wikidata-q208833",
+      "full_name": "Goran Pandev",
+      "nationality": "North Macedonia",
+      "nationality_code": "MKD",
+      "continent": "Europe",
+      "birth_year": 1983,
+      "historical_height_cm": 184,
+      "preferred_foot": "left",
+      "primary_position": "ST",
+      "secondary_positions": [
+        "SS",
+        "AM"
+      ],
+      "signature_traits": [
+        "composure",
+        "link-up play",
+        "vision"
+      ],
+      "signature_tendencies": [
+        "cuts inside",
+        "plays through balls"
+      ],
+      "role_profile": "deep_lying_forward",
+      "era": "2000s/2010s",
+      "source_notes": {
+        "source_provider": "wikidata",
+        "entity_id": "Q208833",
+        "entity_url": "https://www.wikidata.org/wiki/Q208833",
+        "national_team_entity_id": "Q188682",
+        "national_team_country_entity_id": "Q221",
+        "international_caps_source_value": 122,
+        "query_criteria": "association football player; national-team caps >= 20; birth year <= 1987",
+        "provenance": "Wikidata SPARQL snapshot"
+      },
+      "data_quality_status": "source_backed_requires_editorial_review",
+      "rights_review_status": "not_cleared",
+      "registry_import_status": "blocked_pending_factual_completion",
+      "review_reasons": [
+        "preferred_foot_not_source_verified",
+        "gameplay_traits_not_authored_without_evidence",
+        "role_profile_not_source_verified",
+        "era_not_source_verified",
+        "portrait_and_rights_not_cleared",
+        "registry_contract_requires_non_unknown_foot_weight_portrait_and_valuation"
+      ]
+    },
+    {
       "legendary_profile_id": "legendary-wikidata-q2092536",
       "full_name": "Fahrudin Mustafić",
       "nationality": "Singapore",
@@ -16266,6 +16313,48 @@
         "national_team_entity_id": "Q182740",
         "national_team_country_entity_id": "Q403",
         "international_caps_source_value": 94,
+        "query_criteria": "association football player; national-team caps >= 20; birth year <= 1987",
+        "provenance": "Wikidata SPARQL snapshot"
+      },
+      "data_quality_status": "source_backed_requires_editorial_review",
+      "rights_review_status": "not_cleared",
+      "registry_import_status": "blocked_pending_factual_completion",
+      "review_reasons": [
+        "preferred_foot_not_source_verified",
+        "gameplay_traits_not_authored_without_evidence",
+        "role_profile_not_source_verified",
+        "era_not_source_verified",
+        "portrait_and_rights_not_cleared",
+        "registry_contract_requires_non_unknown_foot_weight_portrait_and_valuation"
+      ]
+    },
+    {
+      "legendary_profile_id": "legendary-wikidata-q211516",
+      "full_name": "Frédéric Kanouté",
+      "nationality": "Mali",
+      "nationality_code": "MLI",
+      "continent": "Africa",
+      "birth_year": 1977,
+      "historical_height_cm": 192,
+      "preferred_foot": "right",
+      "primary_position": "ST",
+      "secondary_positions": [],
+      "signature_traits": [
+        "aerial threat",
+        "clinical finishing"
+      ],
+      "signature_tendencies": [
+        "target man holds ball"
+      ],
+      "role_profile": "complete_forward",
+      "era": "2000s",
+      "source_notes": {
+        "source_provider": "wikidata",
+        "entity_id": "Q211516",
+        "entity_url": "https://www.wikidata.org/wiki/Q211516",
+        "national_team_entity_id": "Q211750",
+        "national_team_country_entity_id": "Q912",
+        "international_caps_source_value": 39,
         "query_criteria": "association football player; national-team caps >= 20; birth year <= 1987",
         "provenance": "Wikidata SPARQL snapshot"
       },
@@ -18245,8 +18334,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q223234",
       "full_name": "Billy Wright",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "England",
+      "nationality_code": "ENG",
       "continent": "Europe",
       "birth_year": 1924,
       "historical_height_cm": "unknown",
@@ -19522,6 +19611,49 @@
         "national_team_entity_id": "Q193386",
         "national_team_country_entity_id": "Q750",
         "international_caps_source_value": 57,
+        "query_criteria": "association football player; national-team caps >= 20; birth year <= 1987",
+        "provenance": "Wikidata SPARQL snapshot"
+      },
+      "data_quality_status": "source_backed_requires_editorial_review",
+      "rights_review_status": "not_cleared",
+      "registry_import_status": "blocked_pending_factual_completion",
+      "review_reasons": [
+        "preferred_foot_not_source_verified",
+        "gameplay_traits_not_authored_without_evidence",
+        "role_profile_not_source_verified",
+        "era_not_source_verified",
+        "portrait_and_rights_not_cleared",
+        "registry_contract_requires_non_unknown_foot_weight_portrait_and_valuation"
+      ]
+    },
+    {
+      "legendary_profile_id": "legendary-wikidata-q233581",
+      "full_name": "Ian Rush",
+      "nationality": "Wales",
+      "nationality_code": "WAL",
+      "continent": "Europe",
+      "birth_year": 1961,
+      "historical_height_cm": 180,
+      "preferred_foot": "right",
+      "primary_position": "ST",
+      "secondary_positions": [],
+      "signature_traits": [
+        "poacher",
+        "pressing forward",
+        "clinical finishing"
+      ],
+      "signature_tendencies": [
+        "plays off the shoulder"
+      ],
+      "role_profile": "advanced_forward",
+      "era": "1980s/1990s",
+      "source_notes": {
+        "source_provider": "wikidata",
+        "entity_id": "Q233581",
+        "entity_url": "https://www.wikidata.org/wiki/Q233581",
+        "national_team_entity_id": "Q180857",
+        "national_team_country_entity_id": "Q25",
+        "international_caps_source_value": 73,
         "query_criteria": "association football player; national-team caps >= 20; birth year <= 1987",
         "provenance": "Wikidata SPARQL snapshot"
       },
@@ -21242,8 +21374,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q244799",
       "full_name": "Peter Shilton",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "England",
+      "nationality_code": "ENG",
       "continent": "Europe",
       "birth_year": 1949,
       "historical_height_cm": "unknown",
@@ -25941,8 +26073,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q266613",
       "full_name": "Wayne Rooney",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "England",
+      "nationality_code": "ENG",
       "continent": "Europe",
       "birth_year": 1985,
       "historical_height_cm": "unknown",
@@ -29049,8 +29181,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q286448",
       "full_name": "Kenny Sansom",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "England",
+      "nationality_code": "ENG",
       "continent": "Europe",
       "birth_year": 1958,
       "historical_height_cm": "unknown",
@@ -30418,8 +30550,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q296583",
       "full_name": "Bryan Robson",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "England",
+      "nationality_code": "ENG",
       "continent": "Europe",
       "birth_year": 1957,
       "historical_height_cm": "unknown",
@@ -31121,8 +31253,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q302130",
       "full_name": "Aaron Hughes",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "Northern Ireland",
+      "nationality_code": "NIR",
       "continent": "Europe",
       "birth_year": 1979,
       "historical_height_cm": "unknown",
@@ -32046,8 +32178,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q3106610",
       "full_name": "Gillian Coultard",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "England",
+      "nationality_code": "ENG",
       "continent": "Europe",
       "birth_year": 1963,
       "historical_height_cm": "unknown",
@@ -32675,8 +32807,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q311711",
       "full_name": "Pat Jennings",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "Northern Ireland",
+      "nationality_code": "NIR",
       "continent": "Europe",
       "birth_year": 1945,
       "historical_height_cm": "unknown",
@@ -33896,8 +34028,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q313617",
       "full_name": "David Healy",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "Northern Ireland",
+      "nationality_code": "NIR",
       "continent": "Europe",
       "birth_year": 1979,
       "historical_height_cm": "unknown",
@@ -38447,8 +38579,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q348857",
       "full_name": "Gary Neville",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "England",
+      "nationality_code": "ENG",
       "continent": "Europe",
       "birth_year": 1975,
       "historical_height_cm": "unknown",
@@ -39113,8 +39245,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q352209",
       "full_name": "Jim Leighton",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "Scotland",
+      "nationality_code": "SCO",
       "continent": "Europe",
       "birth_year": 1958,
       "historical_height_cm": "unknown",
@@ -39446,8 +39578,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q355807",
       "full_name": "Steven Davis",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "Northern Ireland",
+      "nationality_code": "NIR",
       "continent": "Europe",
       "birth_year": 1985,
       "historical_height_cm": "unknown",
@@ -44811,8 +44943,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q41533",
       "full_name": "Frank Lampard",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "England",
+      "nationality_code": "ENG",
       "continent": "Europe",
       "birth_year": 1978,
       "historical_height_cm": "unknown",
@@ -46143,8 +46275,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q436650",
       "full_name": "Neville Southall",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "Wales",
+      "nationality_code": "WAL",
       "continent": "Europe",
       "birth_year": 1958,
       "historical_height_cm": "unknown",
@@ -49029,8 +49161,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q459830",
       "full_name": "Steven Gerrard",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "England",
+      "nationality_code": "ENG",
       "continent": "Europe",
       "birth_year": 1980,
       "historical_height_cm": "unknown",
@@ -54320,8 +54452,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q5247888",
       "full_name": "Debbie Bampton",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "England",
+      "nationality_code": "ENG",
       "continent": "Europe",
       "birth_year": 1961,
       "historical_height_cm": "unknown",
@@ -54801,8 +54933,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q528983",
       "full_name": "Ashley Williams",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "Wales",
+      "nationality_code": "WAL",
       "continent": "Europe",
       "birth_year": 1984,
       "historical_height_cm": "unknown",
@@ -56429,8 +56561,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q552248",
       "full_name": "Sammy McIlroy",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "Northern Ireland",
+      "nationality_code": "NIR",
       "continent": "Europe",
       "birth_year": 1954,
       "historical_height_cm": "unknown",
@@ -58686,8 +58818,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q6206162",
       "full_name": "Joanne Love",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "Scotland",
+      "nationality_code": "SCO",
       "continent": "Europe",
       "birth_year": 1985,
       "historical_height_cm": "unknown",
@@ -59389,8 +59521,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q648928",
       "full_name": "Mal Donaghy",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "Northern Ireland",
+      "nationality_code": "NIR",
       "continent": "Europe",
       "birth_year": 1957,
       "historical_height_cm": "unknown",
@@ -60351,8 +60483,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q6763120",
       "full_name": "Marieanne Spacey",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "England",
+      "nationality_code": "ENG",
       "continent": "Europe",
       "birth_year": 1966,
       "historical_height_cm": "unknown",
@@ -62201,8 +62333,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q7155028",
       "full_name": "Pauline Hamill",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "Scotland",
+      "nationality_code": "SCO",
       "continent": "Europe",
       "birth_year": 1971,
       "historical_height_cm": "unknown",
@@ -64384,8 +64516,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q76538",
       "full_name": "Maik Taylor",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "Northern Ireland",
+      "nationality_code": "NIR",
       "continent": "Europe",
       "birth_year": 1971,
       "historical_height_cm": "unknown",
@@ -67714,8 +67846,8 @@
     {
       "legendary_profile_id": "legendary-wikidata-q9675",
       "full_name": "Kelly Smith",
-      "nationality": "United Kingdom",
-      "nationality_code": "GBR",
+      "nationality": "England",
+      "nationality_code": "ENG",
       "continent": "Europe",
       "birth_year": 1978,
       "historical_height_cm": "unknown",

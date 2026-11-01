@@ -209,7 +209,9 @@
       "minutes_played": 2860,
       "goals": 16,
       "assists": 11,
-      "real_player_tier": "global_star"
+      "real_player_tier": "global_star",
+      "overall_rating": 87,
+      "potential": 90
     },
     {
       "source_name": "curated-feed",
