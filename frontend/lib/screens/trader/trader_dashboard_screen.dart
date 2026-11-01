@@ -926,7 +926,8 @@ class _QuickTradePanel extends StatelessWidget {
             title: 'Execution guard',
             rows: <String>[
               'TOTP required',
-              'KYC must be verified',
+              'Trader KYC must be verified',
+              '₦200,000 minimum buyer order',
               'Recovery phrase never stored',
             ],
           ),

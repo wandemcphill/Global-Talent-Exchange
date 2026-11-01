@@ -128,6 +128,7 @@ from app.models.coin_trader import (
     CoinTraderProfileStatus,
     CoinTraderRate,
     CoinTraderTier,
+    IdentityVerificationRecord,
 )
 from app.models.fast_cup_finance import (
     FastCupEscrowStatus,

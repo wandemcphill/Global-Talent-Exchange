@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ShieldCheck, ShieldAlert, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -68,12 +69,32 @@ function OrderForm({ traders }: any) {
   const act = useOrderActions();
   const [traderId, setTraderId] = useState("");
   const [direction, setDirection] = useState("user_buys");
-  const [amount, setAmount] = useState("10");
+  const [amount, setAmount] = useState("250");
   const trader = traders.find((t: any) => t.id === traderId);
   const rate = trader ? rateOf(trader) : null;
   const unitPrice = rate ? Number(direction === "user_buys" ? rate.sell_rate_fiat : rate.buy_rate_fiat) : 0;
-  const submit = () =>
-    act("/coin-traders/orders", { trader_profile_id: traderId, direction, coin_unit: "coin", coin_amount: Number(amount), fiat_currency: "NGN", idempotency_key: `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` }, "Order created. Waiting for the trader to accept.");
+  const fiatTotal = unitPrice * Number(amount || 0);
+  const isBelowMinBuyerOrder = direction === "user_buys" && fiatTotal < 200000;
+
+  const submit = () => {
+    if (isBelowMinBuyerOrder) {
+      toast.error("Minimum buyer order value for GTEX Coin purchases is ₦200,000.");
+      return;
+    }
+    act(
+      "/coin-traders/orders",
+      {
+        trader_profile_id: traderId,
+        direction,
+        coin_unit: "coin",
+        coin_amount: Number(amount),
+        fiat_currency: "NGN",
+        idempotency_key: `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      },
+      "Order created. Waiting for the trader to accept."
+    );
+  };
+
   return (
     <div className="grid gap-3 md:grid-cols-5" data-testid="coin-order-form">
       <select data-testid="coin-trader-select" className="gx-input md:col-span-2" value={traderId} onChange={(e) => setTraderId(e.target.value)}>
@@ -87,13 +108,72 @@ function OrderForm({ traders }: any) {
         {[["user_buys", "Buy"], ["user_sells", "Sell"]].map(([v, l]) => <button key={v} data-testid={`coin-direction-${v}`} onClick={() => setDirection(v)} className={`gx-btn flex-1 ${direction === v ? "gx-btn-primary" : "gx-btn-secondary"}`}>{l}</button>)}
       </div>
       <input data-testid="coin-amount-input" className="gx-input" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
-      <Btn disabled={!rate || Number(amount) <= 0} onClick={submit} data-testid="coin-order-submit">{direction === "user_buys" ? "Buy" : "Sell"} GTX</Btn>
-      {rate && (
+      <Btn disabled={!rate || Number(amount) <= 0 || isBelowMinBuyerOrder} onClick={submit} data-testid="coin-order-submit">{direction === "user_buys" ? "Buy" : "Sell"} GTX</Btn>
+
+      {isBelowMinBuyerOrder && rate && (
+        <p className="text-xs text-amber-400 md:col-span-5 flex items-center gap-1.5" data-testid="min-buyer-order-warning">
+          <AlertTriangle size={14} />
+          ₦200,000 minimum buyer order required. Current total: ₦{fmt(fiatTotal, 2)} (Set coin amount to at least {Math.ceil(200000 / (unitPrice || 1))} GTX).
+        </p>
+      )}
+
+      {rate && !isBelowMinBuyerOrder && (
         <p className="text-xs text-slate-400 md:col-span-5" data-testid="coin-order-preview">
           {direction === "user_buys" ? "You pay" : "You receive"} <b className="text-white">₦{fmt(unitPrice * Number(amount || 0), 2)}</b> at ₦{fmt(unitPrice, 2)} per GTEX Coin · limits {fmt(rate.min_coin_amount)}–{fmt(rate.max_coin_amount) || "∞"} GTX.{" "}
           {direction === "user_sells" ? "Your coins are locked in escrow until you confirm the Naira arrived." : "The trader's coins are locked in escrow until they confirm your payment."}
         </p>
       )}
+    </div>
+  );
+}
+
+function TraderVerificationCard({ profile, onVerified }: { profile: any; onVerified?: () => void }) {
+  const [provider, setProvider] = useState<"sandbox" | "didit" | "smile_id">("sandbox");
+  const [initiating, setInitiating] = useState(false);
+  const qc = useQueryClient();
+
+  const handleInitiate = async () => {
+    setInitiating(true);
+    try {
+      const { data } = await api.post("/coin-traders/verification/initiate", {
+        provider,
+        id_type: "bvn",
+        callback_url: `${window.location.origin}/trader/verification/callback`,
+      });
+      if (data.session_url) {
+        window.open(data.session_url, "_blank");
+      }
+      toast.success(`Verification initiated with ${data.provider}. Trader desk activates automatically upon authoritative provider result.`);
+      qc.invalidateQueries({ queryKey: ["coin-trader-me"] });
+      if (onVerified) onVerified();
+    } catch (err: any) {
+      toast.error("Failed to initiate verification: " + errMsg(err));
+    } finally {
+      setInitiating(false);
+    }
+  };
+
+  return (
+    <div className="mb-6 rounded-xl border border-indigo-400/30 bg-indigo-500/[0.05] p-5" data-testid="trader-kyc-card">
+      <div className="flex items-start gap-3">
+        <ShieldCheck className="size-6 text-indigo-400 shrink-0 mt-0.5" />
+        <div className="space-y-2">
+          <h3 className="gx-display text-base font-bold uppercase text-white">Full Trader Identity Verification Required</h3>
+          <p className="text-xs leading-5 text-slate-300">
+            Coin Traders must complete authoritative identity verification before conducting marketplace trading, publishing rates, or buying desk liquidity. Supported verification methods include Government ID / Nigerian BVN or NIN with live selfie liveness detection.
+          </p>
+          <div className="pt-2 flex flex-wrap items-center gap-3">
+            <select className="gx-input max-w-[240px] py-1.5 text-xs" value={provider} onChange={(e) => setProvider(e.target.value as any)}>
+              <option value="sandbox">Sandbox Provider (Instant verification test)</option>
+              <option value="didit">DIDit (Government ID & Facial Comparison)</option>
+              <option value="smile_id">Smile ID (BVN/NIN & Liveness)</option>
+            </select>
+            <Btn disabled={initiating} onClick={handleInitiate} data-testid="initiate-trader-kyc-btn">
+              {initiating ? "Starting session..." : "Verify Identity Now"}
+            </Btn>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -113,11 +193,14 @@ export function CoinTraderDesk() {
   });
   const me = meQuery.data;
   const status = String(me?.status || "").toLowerCase();
-  const isTrader = isDedicatedTraderAccount && me && status === "approved";
+  const isVerified = Boolean(me?.verified_at);
+  const isSuspended = Boolean(me?.suspended_at) || status === "suspended";
+  const isTrader = isDedicatedTraderAccount && me && status === "approved" && isVerified && !isSuspended;
   const missingProfile = !meQuery.isLoading && !me && [403, 404].includes(Number((meQuery.error as any)?.response?.status));
   const showApplication = isDedicatedTraderAccount && (missingProfile || status === "rejected");
   const { data: deskOrders } = useQuery({ queryKey: ["coin-orders", "desk"], queryFn: async () => (await api.get("/coin-traders/orders", { params: { as_trader: true } })).data, enabled: !!isTrader });
-  const list = (traders || []).filter((t: any) => t.user_id !== user?.id);
+  const list = (traders || []).filter((t: any) => t.user_id !== user?.id && Boolean(t.verified_at));
+
   const [applyName, setApplyName] = useState(String(user?.display_name || user?.username || ""));
   const [countryCode, setCountryCode] = useState("");
   const [applying, setApplying] = useState(false);
@@ -146,7 +229,7 @@ export function CoinTraderDesk() {
       });
       await qc.invalidateQueries({ queryKey: ["coin-trader-me"] });
       await qc.invalidateQueries({ queryKey: ["coin-traders"] });
-      toast.success("Coin Trader application submitted. Trading tools unlock after approval.");
+      toast.success("Coin Trader application submitted. Complete identity verification to activate your desk.");
     } catch (error: any) {
       setApplyError(errMsg(error));
     } finally {
@@ -157,7 +240,7 @@ export function CoinTraderDesk() {
   return (
     <Panel eyebrow="GTEX Coin · P2P marketplace" title="Coin Traders" testid="coin-traders-panel" className="lg:col-span-12">
       <p className="mb-4 text-sm text-slate-400">
-        User accounts can buy or sell GTEX Coin with approved Naira traders through escrow-protected orders. Operating a trader desk requires a dedicated Coin Trader account created through the Coin Trader signup path; a User account cannot be promoted into that lane.
+        Ordinary User accounts can buy or sell GTEX Coin with verified Naira traders through escrow-protected orders with no universal KYC gate. Operating a trader desk is an exclusive lane requiring dedicated trader verification.
       </p>
       {!isDedicatedTraderAccount && (
         <div className="mb-5 rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm text-slate-400" data-testid="dedicated-trader-signup-notice">
@@ -170,7 +253,7 @@ export function CoinTraderDesk() {
           <p className="gx-label text-amber-300">{status === "rejected" ? "Resubmit desk application" : "Set up trader desk"}</p>
           <h3 className="gx-display mt-1 text-xl font-bold uppercase text-white">Set up your trader desk</h3>
           <p className="mt-2 max-w-3xl text-sm leading-5 text-slate-400">
-            Your dedicated Coin Trader account needs an approved desk profile before it can quote rates or accept client orders. Desk approval does not change account type.
+            Your dedicated Coin Trader account needs a registered desk profile followed by identity verification before it can quote rates or accept client orders.
           </p>
           <form onSubmit={submitTraderApplication} className="mt-4 grid gap-3 md:grid-cols-3">
             <label className="block">
@@ -195,19 +278,36 @@ export function CoinTraderDesk() {
           Trader application status could not be loaded: {errMsg(meQuery.error)}
         </div>
       )}
-      {me && status !== "approved" && (
+
+      {isDedicatedTraderAccount && isSuspended && (
+        <div className="mb-6 rounded-xl border border-red-500/30 bg-red-950/30 p-4 text-sm text-red-200" data-testid="trader-suspended-notice">
+          <div className="flex items-center gap-2 font-semibold">
+            <ShieldAlert size={18} />
+            <span>Trader Desk Suspended</span>
+          </div>
+          <p className="mt-1 text-xs text-red-300">
+            This trader desk has been suspended by GTEX Compliance. All trading functions, rates, and liquidity purchases are temporarily disabled.
+          </p>
+        </div>
+      )}
+
+      {isDedicatedTraderAccount && me && !isVerified && !isSuspended && (
+        <TraderVerificationCard profile={me} onVerified={() => qc.invalidateQueries({ queryKey: ["coin-trader-me"] })} />
+      )}
+
+      {me && status !== "approved" && !isSuspended && (
         <div className="mb-6 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] p-4" data-testid="coin-trader-application-status">
           <p className="gx-label">Your trader application</p>
           <p className="mt-1 text-sm font-bold text-white">{me.display_name} · {label(status)}</p>
           <p className="mt-2 text-sm text-slate-400">
             {status === "applied" || status === "pending"
-              ? "Your dedicated Coin Trader account is awaiting desk approval. It remains in the Coin Trader lane while approval is pending."
+              ? "Your dedicated Coin Trader account is awaiting desk verification. Complete identity verification above to activate."
               : "Trader operations are not enabled for this application status."}
           </p>
         </div>
       )}
 
-      {list.length === 0 ? <Empty title="No approved traders yet" body="The marketplace will show approved liquidity partners when available." /> : <OrderForm traders={list} />}
+      {list.length === 0 ? <Empty title="No verified traders yet" body="The marketplace will show verified liquidity partners when available." /> : <OrderForm traders={list} />}
       <p className="gx-label mt-6">My orders</p>
       <div className="space-y-2" data-testid="my-coin-orders">
         {(orders || []).length === 0 && <p className="text-sm text-slate-500">No coin trades yet.</p>}

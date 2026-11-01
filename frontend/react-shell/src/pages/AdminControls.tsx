@@ -227,9 +227,131 @@ function Queue({ title, path, render }: { title: string; path: string; render: (
   );
 }
 
+function CreatorApplicationsQueue() {
+  const { data, refetch } = useAdminGet("creator-applications", "/admin/creator/applications");
+  const act = useAct();
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const items = Array.isArray(data) ? data : data?.items || [];
+
+  const handleAction = async (appId: string, action: "approve" | "reject" | "request-verification" | "suspend") => {
+    const review_notes = notes[appId] || "";
+    await act(
+      () => api.post(`/admin/creator/applications/${appId}/${action}`, { review_notes, reason: review_notes || action }),
+      `Creator application ${action.replace("-", " ")} successful`
+    );
+    refetch();
+  };
+
+  return (
+    <Panel eyebrow="Audience & Creator Verification" title={`Creator Applications (${items.length})`}>
+      {items.length === 0 ? (
+        <Empty title="No applications" body="Creator applications awaiting audience review will appear here." />
+      ) : (
+        <div className="space-y-4">
+          {items.map((app: any) => (
+            <div key={app.application_id} className="rounded-lg border border-white/10 bg-white/[0.02] p-4 text-sm" data-testid={`creator-app-${app.application_id}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <span className="font-bold text-white">@{app.requested_handle}</span> ({app.display_name}) ·{" "}
+                  <span className="capitalize text-pink-300">{app.platform}</span> ·{" "}
+                  <b className="text-white">{fmt(app.follower_count)}</b> followers
+                </div>
+                <Chip tone={app.status === "approved" ? "emerald" : app.status === "rejected" ? "red" : app.status === "suspended" ? "amber" : "blue"}>
+                  {label(app.status)}
+                </Chip>
+              </div>
+
+              <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-slate-400">
+                {app.profile_url ? (
+                  <a href={app.profile_url} target="_blank" rel="noopener noreferrer" className="text-pink-400 underline hover:text-pink-300">
+                    Open Public Profile URL ↗
+                  </a>
+                ) : (
+                  <span>No profile URL</span>
+                )}
+                {app.selfie_attachment_id && (
+                  <span className="text-emerald-400">Live Selfie Attached</span>
+                )}
+                <span>Submitted: {new Date(app.created_at).toLocaleDateString()}</span>
+              </div>
+
+              {app.review_notes && (
+                <p className="mt-2 text-xs text-slate-300 bg-slate-800/40 p-2 rounded">
+                  Notes: {app.review_notes}
+                </p>
+              )}
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <input
+                  className="gx-input flex-1 min-w-[200px] py-1 text-xs"
+                  placeholder="Review notes / feedback..."
+                  value={notes[app.application_id] || ""}
+                  onChange={(e) => setNotes({ ...notes, [app.application_id]: e.target.value })}
+                />
+                <Btn onClick={() => handleAction(app.application_id, "approve")}>Approve</Btn>
+                <Btn variant="secondary" onClick={() => handleAction(app.application_id, "request-verification")}>Request More Info</Btn>
+                <Btn variant="danger" onClick={() => handleAction(app.application_id, "reject")}>Reject</Btn>
+                {app.status === "approved" && (
+                  <Btn variant="ghost" onClick={() => handleAction(app.application_id, "suspend")}>Suspend</Btn>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+function CoinTraderDeskAdminQueue() {
+  const { data, refetch } = useAdminGet("admin-coin-traders", "/api/coin-traders");
+  const act = useAct();
+  const traders = Array.isArray(data) ? data : data?.items || [];
+
+  const handleTraderStatus = async (profileId: string, action: "suspend" | "reinstate") => {
+    await act(
+      () => api.post(`/api/admin/coin-traders/${profileId}/${action}`, { reason: `Admin ${action}` }),
+      `Trader ${action} successful`
+    );
+    refetch();
+  };
+
+  return (
+    <Panel eyebrow="Desk compliance" title={`Coin Traders & Verification (${traders.length})`}>
+      {traders.length === 0 ? (
+        <Empty title="No coin traders" />
+      ) : (
+        <div className="space-y-3">
+          {traders.map((t: any) => {
+            const isVerified = Boolean(t.verified_at);
+            const isSuspended = Boolean(t.suspended_at) || t.status === "suspended";
+            return (
+              <div key={t.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 p-3 text-sm" data-testid={`admin-trader-${t.id}`}>
+                <div>
+                  <span className="font-bold text-white">{t.display_name}</span> · Tier: <span className="capitalize">{t.tier}</span> ·{" "}
+                  <Chip tone={isVerified ? "emerald" : "gold"}>{isVerified ? `Verified (${t.verification_provider || "kyc"})` : "Unverified"}</Chip>{" "}
+                  {isSuspended && <Chip tone="red">Suspended</Chip>}
+                </div>
+                <div className="flex gap-2">
+                  {!isSuspended ? (
+                    <Btn variant="danger" onClick={() => handleTraderStatus(t.id, "suspend")}>Suspend Desk</Btn>
+                  ) : (
+                    <Btn onClick={() => handleTraderStatus(t.id, "reinstate")}>Reinstate Desk</Btn>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Panel>
+  );
+}
 export function QueuesTab() {
   return (
     <div className="space-y-6" data-testid="admin-tab-queues">
+      <CreatorApplicationsQueue />
+      <CoinTraderDeskAdminQueue />
       <Queue title="Pending fiat deposits" path="/admin/treasury/deposits?status=payment_submitted" render={(d, act) => (
         <>
           <span>{d.user_email} · {fmt(d.amount_fiat)} {d.currency_code} → {fmt(d.amount_coin)} GTX · {d.payer_name || "—"} · ref {d.reference}</span>
