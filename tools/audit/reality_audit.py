@@ -34,8 +34,8 @@ def _paystack_failures() -> list[str]:
     if '"paystack": ProviderRegistration(adapter=PaystackProviderAdapter(), is_live=True, status="live")' not in registry:
         failures.append("Payment provider registry does not mark Paystack as a live provider.")
     readiness = registry[registry.find("def paystack_enabled()"):registry.find("def provider_runtime_status(")]
-    if "GTE_PAYSTACK_SECRET_KEY" not in readiness or "GTE_PAYSTACK_WEBHOOK_SECRET" not in readiness:
-        failures.append("Paystack readiness does not require both the live secret key and webhook secret.")
+    if "GTE_PAYSTACK_SECRET_KEY" not in readiness or 'secret.startswith("sk_live_")' not in readiness:
+        failures.append("Paystack readiness must require an API secret key and reject test keys in production.")
     if 'SUPPORTED_TOP_UP_PROVIDER_KEYS' not in constants or '"paystack"' not in constants:
         failures.append("Wallet top-up provider constants do not expose Paystack as a supported production rail.")
     if 'SUPPORTED_ADMIN_PAYMENT_RAILS' not in admin or 'SUPPORTED_TOP_UP_PROVIDER_KEYS' not in admin:
