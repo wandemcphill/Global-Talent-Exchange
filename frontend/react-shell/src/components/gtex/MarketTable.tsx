@@ -223,9 +223,12 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
           {filteredPlayers.map((p: any) => {
             const owned = signedRefs.includes(p.player_id);
             const price = p.quote?.price ?? 0;
+            const rating = p.quote?.rating ?? 60;
             const unaffordable = cashNum > 0 && price > cashNum && !owned;
             const tierNorm = String(p.real_player_tier || "").toLowerCase();
             const isLegend = tierNorm === "legend";
+            const isRegen = p.is_regen || p.is_real_player === false;
+            const isRestricted = isLegend || isRegen || rating >= 80;
             const isWonderkid = tierNorm === "wonderkid";
 
             return (
@@ -233,17 +236,18 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
                 key={p.player_id}
                 testid={`market-card-${p.player_id}`}
                 name={p.canonical_display_name || p.player_name}
-                rating={p.quote?.rating}
+                rating={rating}
                 position={p.position}
                 age={p.age}
                 nationality={p.nationality}
                 club={p.current_club_name}
                 image={p.image_url}
                 tier={isLegend ? "legendary" : undefined}
-                badge={isLegend ? "ICON · 1 OF 1" : isWonderkid ? "WONDERKID" : undefined}
+                badge={isLegend ? "ICON · 1 OF 1" : isRestricted ? "PAID GTEX ONLY" : isWonderkid ? "WONDERKID" : "PROMO ELIGIBLE"}
                 onClick={() => setOpen(p.player_id)}
                 stats={[
                   { k: "Fee", v: price ? `${fmt(price)}` : "-" },
+                  { k: "Funding", v: isRestricted ? "Paid Only" : "Promo OK" },
                   { k: "Value", v: p.current_value_credits != null ? fmt(p.current_value_credits, 1) : (price ? fmt(price, 1) : "-") },
                   { k: "Form", v: p.average_rating ?? "-" },
                 ]}

@@ -765,6 +765,11 @@ export default function Finance() {
               <Stat label="Distributable" value={<Coin amount={c.distributable} />} />
               <Stat label="Held payouts" value={<Coin amount={c.pending_payouts} />} />
             </div>
+            <div className="mt-3 grid grid-cols-3 gap-2 border-t border-white/10 pt-3">
+              <Stat label="Deposited" value={fmt(c.deposited ?? c.funding_breakdown?.deposited ?? 0)} tone="good" />
+              <Stat label="Promotional" value={fmt(c.promotional ?? c.funding_breakdown?.promotional ?? 0)} tone="warn" />
+              <Stat label="Earned" value={fmt(c.earned ?? c.funding_breakdown?.earned ?? 0)} />
+            </div>
             <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
               {Object.entries(c.earnings_sources).map(([k, v]: any) => <div key={k} className="flex justify-between"><span className="capitalize text-slate-400">{label(k)}</span><span className="gx-mono">{fmt(v)}</span></div>)}
             </div>

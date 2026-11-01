@@ -789,8 +789,10 @@ from app.models.withdrawal_review import WithdrawalReview
 from app.models.youth_pipeline_snapshot import YouthPipelineSnapshot
 from app.models.youth_prospect import YouthProspect
 from app.models.youth_prospect_report import YouthProspectReport
+from app.models.first_club_entitlement import FirstClubEntitlement
 
 __all__ = [
+    "FirstClubEntitlement",
     "AcademyGraduationEvent",
     "AcademyPlayer",
     "AcademyPlayerProgress",

@@ -300,20 +300,96 @@ def paystack_webhook(session: Session, raw: bytes, signature: str | None, event:
 
 def inject_capital(session: Session, user_id: str, club_id: str, amount) -> LedgerEvent:
     require_state(session, club_id, user_id)
+    gross_amount = ledger.D(amount)
+    if gross_amount <= 0:
+        raise OwnerError("amount_must_be_positive", 400)
+
+    user_acct = ledger.user_account(user_id)
+    user_total = ledger.balance(session, user_acct, ledger.GTEX)
+    if user_total < gross_amount:
+        raise OwnerError("insufficient_funds", 402)
+
+    # Calculate user's available deposited funds to preserve provenance
+    dep_credits = ledger._sum(
+        session,
+        LedgerEvent.destination_account == user_acct,
+        LedgerEvent.currency == ledger.GTEX,
+        LedgerEvent.status == "completed",
+        LedgerEvent.balance_class == "deposited",
+    )
+    dep_debits = ledger._sum(
+        session,
+        LedgerEvent.source_account == user_acct,
+        LedgerEvent.currency == ledger.GTEX,
+        LedgerEvent.status.in_(ledger.LIVE_STATUSES),
+        LedgerEvent.balance_class == "deposited",
+        column=LedgerEvent.gross_amount,
+    )
+    available_user_deposited = min(max(Decimal("0"), dep_credits - dep_debits), user_total)
+
     try:
-        return ledger.record(
-            session,
-            event_type="owner_capital_injection",
-            source=ledger.user_account(user_id),
-            destination=ledger.club_account(club_id),
-            currency=ledger.GTEX,
-            gross=amount,
-            club_id=club_id,
-            user_id=user_id,
-            related_type="club",
-            related_id=club_id,
-            memo="Approved owner capital action",
-        )
+        if available_user_deposited >= gross_amount:
+            return ledger.record(
+                session,
+                event_type="owner_capital_injection",
+                source=user_acct,
+                destination=ledger.club_account(club_id),
+                currency=ledger.GTEX,
+                gross=gross_amount,
+                balance_class="deposited",
+                club_id=club_id,
+                user_id=user_id,
+                related_type="club",
+                related_id=club_id,
+                memo="Approved owner capital action (deposited funds)",
+            )
+        elif available_user_deposited > 0:
+            # Atomic split: deposited portion + earned portion
+            dep_event = ledger.record(
+                session,
+                event_type="owner_capital_injection",
+                source=user_acct,
+                destination=ledger.club_account(club_id),
+                currency=ledger.GTEX,
+                gross=available_user_deposited,
+                balance_class="deposited",
+                club_id=club_id,
+                user_id=user_id,
+                related_type="club",
+                related_id=club_id,
+                memo="Approved owner capital action (deposited portion)",
+            )
+            earned_amount = gross_amount - available_user_deposited
+            ledger.record(
+                session,
+                event_type="owner_capital_injection",
+                source=user_acct,
+                destination=ledger.club_account(club_id),
+                currency=ledger.GTEX,
+                gross=earned_amount,
+                balance_class="earned",
+                club_id=club_id,
+                user_id=user_id,
+                related_type="club",
+                related_id=club_id,
+                memo="Approved owner capital action (earned portion)",
+            )
+            return dep_event
+        else:
+            return ledger.record(
+                session,
+                event_type="owner_capital_injection",
+                source=user_acct,
+                destination=ledger.club_account(club_id),
+                currency=ledger.GTEX,
+                gross=gross_amount,
+                balance_class="earned",
+                club_id=club_id,
+                user_id=user_id,
+                related_type="club",
+                related_id=club_id,
+                memo="Approved owner capital action",
+            )
     except ledger.LedgerError as exc:
         raise OwnerError(str(exc), 402) from exc
 

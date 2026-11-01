@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 MAX_CLUBS = 3
 LAUNCH_GRANT_GTEX = 100_000
 LAUNCH_GRANT_FAN = 1_000
-MIN_SQUAD = 11
+MIN_SQUAD = 22
 MAX_SQUAD = 30
 PLATFORM_SALE_FEE_BPS = 500
 SPONSOR_PLATFORM_BPS = 3000
@@ -125,32 +125,9 @@ def start_activation(session: Session, user_id: str, club_id: str) -> OwnerClubS
     )
     session.add(state)
     session.flush()
-    ledger.record(
-        session,
-        event_type="launch_grant",
-        source=ledger.PLATFORM_GRANTS,
-        destination=ledger.club_account(club_id),
-        currency=ledger.GTEX,
-        gross=LAUNCH_GRANT_GTEX,
-        balance_class="promotional",
-        club_id=club_id,
-        user_id=user_id,
-        related_type="club",
-        related_id=club_id,
-        memo="GTEX launch grant for first squad (promotional, non-withdrawable)",
-    )
-    if len(user_states(session, user_id)) == 1:
-        ledger.record(
-            session,
-            event_type="launch_grant",
-            source=ledger.PLATFORM_GRANTS,
-            destination=ledger.user_account(user_id),
-            currency=ledger.FAN,
-            gross=LAUNCH_GRANT_FAN,
-            balance_class="promotional",
-            user_id=user_id,
-            memo="Welcome Fan Coin (promotional, non-withdrawable)",
-        )
+    from app.owner_console.first_club_entitlement import award_first_club_launch_grant
+
+    award_first_club_launch_grant(session, user_id, club_id)
     return state
 
 
@@ -270,17 +247,119 @@ def _bootstrap_starter_club(session: Session, user_id: str, state: OwnerClubStat
         state.stage = "active"
 
 
+def get_club_formation_status(session: Session, club_id: str) -> dict[str, Any]:
+    """Calculate authoritative distinct registered player formation count.
+
+    Aggregates distinct player identities across:
+    - First team (senior)
+    - Reserve squad
+    - Academy
+    Excludes unsigned scouting prospects, uncontracted candidates, and inactive/released memberships.
+    """
+    from app.common.enums.contract_status import ContractStatus
+    from app.ingestion.models import Player
+    from app.models.academy_player import AcademyPlayer
+    from app.models.player_contract import PlayerContract
+
+    squad_players = squad(session, club_id)
+
+    distinct_ids: set[str] = set()
+    keepers: int = 0
+    first_team_count = 0
+    reserve_count = 0
+    academy_count = 0
+
+    for p in squad_players:
+        pid = p.player_ref or p.id
+        if pid not in distinct_ids:
+            distinct_ids.add(pid)
+            if (p.position or "").lower().startswith("goal"):
+                keepers += 1
+            pers = dict(p.personality_json or {}) if p.is_regen else {}
+            status_val = pers.get("squad_status", "academy" if (p.is_regen and p.age <= 18 and p.minutes == 0) else "first_team")
+            if status_val in ("first_team", "senior"):
+                first_team_count += 1
+            elif status_val == "reserve":
+                reserve_count += 1
+            else:
+                academy_count += 1
+
+    active_contracts = session.scalars(
+        select(PlayerContract).where(
+            PlayerContract.club_id == club_id,
+            PlayerContract.status.in_((ContractStatus.ACTIVE.value, ContractStatus.EXPIRING.value, ContractStatus.AGREED.value)),
+        )
+    ).all()
+    for c in active_contracts:
+        if c.player_id not in distinct_ids:
+            distinct_ids.add(c.player_id)
+            p_obj = session.get(Player, c.player_id)
+            if p_obj and (p_obj.normalized_position or p_obj.position or "").lower().startswith("goal"):
+                keepers += 1
+            first_team_count += 1
+
+    academy_players = session.scalars(
+        select(AcademyPlayer).where(
+            AcademyPlayer.club_id == club_id,
+            AcademyPlayer.status.in_(("active", "enrolled", "promoted")),
+        )
+    ).all()
+    for ap in academy_players:
+        if ap.player_id and ap.player_id not in distinct_ids:
+            distinct_ids.add(ap.player_id)
+            if (ap.position or "").lower().startswith("goal"):
+                keepers += 1
+            academy_count += 1
+
+    total_registered = len(distinct_ids)
+    has_goalkeeper = keepers > 0
+    is_formed = (total_registered >= MIN_SQUAD) and has_goalkeeper
+    remaining_required = max(0, MIN_SQUAD - total_registered)
+
+    return {
+        "minimum_required": MIN_SQUAD,
+        "target_size": MIN_SQUAD,
+        "total_registered": total_registered,
+        "total_registered_players": total_registered,
+        "distinct_registered_count": total_registered,
+        "remaining_required": remaining_required,
+        "remaining_to_formation": remaining_required,
+        "remaining_to_form": remaining_required,
+        "is_formed": is_formed,
+        "has_goalkeeper": has_goalkeeper,
+        "goalkeeper_count": keepers,
+        "first_team_count": first_team_count,
+        "reserve_count": reserve_count,
+        "academy_count": academy_count,
+        "progress_label": f"{total_registered} / {MIN_SQUAD} players",
+    }
+
+
 def _sign_starter_squad(session: Session, state: OwnerClubState) -> None:
     current = squad(session, state.club_id)
     needed = max(0, MIN_SQUAD - len(current))
     if needed:
         regens = engine.generate_regens(state.club_id, state.world_day, 1, 12, needed)
-        has_keeper = any(p.position.startswith("goal") for p in current) or any(
-            regen["position"].startswith("goal") for regen in regens
-        )
-        if regens and not has_keeper:
+        existing_keepers = sum(1 for p in current if p.position.startswith("goal"))
+        new_keepers = sum(1 for r in regens if r["position"].startswith("goal"))
+        total_keepers = existing_keepers + new_keepers
+        if total_keepers < 2 and len(regens) >= 2:
             regens[0]["position"] = "goalkeeper"
-        for regen in regens:
+            regens[1]["position"] = "goalkeeper"
+        elif total_keepers < 1 and len(regens) >= 1:
+            regens[0]["position"] = "goalkeeper"
+
+        # Distribute into 11 first team, 6 reserve, 5 academy
+        for i, regen in enumerate(regens):
+            pers = dict(regen.get("personality") or {})
+            slot_idx = len(current) + i
+            if slot_idx < 11:
+                pers["squad_status"] = "first_team"
+            elif slot_idx < 17:
+                pers["squad_status"] = "reserve"
+            else:
+                pers["squad_status"] = "academy"
+            regen["personality"] = pers
             _add_regen(session, state.club_id, regen)
     _advance_stage_after_squad(session, state)
 
@@ -555,22 +634,108 @@ def sign_market_player(session: Session, user_id: str, club_id: str, player_id: 
     if not bool(getattr(player, "is_tradable", True)):
         raise OwnerError("player_retired", 409)
     price, rating = player_quotes(session, [player])[player_id]
-    try:
-        ledger.record(
-            session,
-            event_type="transfer_purchase",
-            source=ledger.club_account(club_id),
-            destination=ledger.WORLD_MARKET,
-            currency=ledger.GTEX,
-            gross=price,
-            club_id=club_id,
-            user_id=user_id,
-            related_type="player",
-            related_id=player_id,
-            memo=f"Signed {player.full_name}",
-        )
-    except ledger.LedgerError as exc:
-        raise OwnerError(str(exc), 402) from exc
+    from app.owner_console.player_classification import classify_player_for_acquisition
+
+    classification = classify_player_for_acquisition(session, player)
+    funding = ledger.get_club_funding(session, club_id)
+    gross_price = ledger.D(price)
+
+    if funding["total_cash"] < gross_price:
+        raise OwnerError("insufficient_club_treasury", 402)
+
+    if classification.requires_deposited_funds:
+        if funding["available_deposited"] < gross_price:
+            raise OwnerError(
+                "restricted_player_requires_deposited_funds",
+                402,
+                classification.rejection_reason
+                or "Restricted players (GSI 80+, Regens, Legends) require deposited GTEX Coin. Promotional launch credit cannot be used.",
+            )
+        try:
+            ledger.record(
+                session,
+                event_type="transfer_purchase",
+                source=ledger.club_account(club_id),
+                destination=ledger.WORLD_MARKET,
+                currency=ledger.GTEX,
+                gross=gross_price,
+                balance_class="deposited",
+                club_id=club_id,
+                user_id=user_id,
+                related_type="player",
+                related_id=player_id,
+                memo=f"Signed {player.full_name} (deposited funds)",
+            )
+        except ledger.LedgerError as exc:
+            raise OwnerError(str(exc), 402) from exc
+    else:
+        # Eligible player: prefer consuming promotional funds first
+        try:
+            if funding["available_promotional"] >= gross_price:
+                ledger.record(
+                    session,
+                    event_type="transfer_purchase",
+                    source=ledger.club_account(club_id),
+                    destination=ledger.WORLD_MARKET,
+                    currency=ledger.GTEX,
+                    gross=gross_price,
+                    balance_class="promotional",
+                    club_id=club_id,
+                    user_id=user_id,
+                    related_type="player",
+                    related_id=player_id,
+                    memo=f"Signed {player.full_name} (promotional funds)",
+                )
+            elif funding["available_promotional"] > 0:
+                promo_portion = funding["available_promotional"]
+                rem_portion = gross_price - promo_portion
+                ledger.record(
+                    session,
+                    event_type="transfer_purchase",
+                    source=ledger.club_account(club_id),
+                    destination=ledger.WORLD_MARKET,
+                    currency=ledger.GTEX,
+                    gross=promo_portion,
+                    balance_class="promotional",
+                    club_id=club_id,
+                    user_id=user_id,
+                    related_type="player",
+                    related_id=player_id,
+                    memo=f"Signed {player.full_name} (promo portion)",
+                )
+                rem_class = "earned" if funding["available_earned"] >= rem_portion else "deposited"
+                ledger.record(
+                    session,
+                    event_type="transfer_purchase",
+                    source=ledger.club_account(club_id),
+                    destination=ledger.WORLD_MARKET,
+                    currency=ledger.GTEX,
+                    gross=rem_portion,
+                    balance_class=rem_class,
+                    club_id=club_id,
+                    user_id=user_id,
+                    related_type="player",
+                    related_id=player_id,
+                    memo=f"Signed {player.full_name} ({rem_class} remainder)",
+                )
+            else:
+                rem_class = "earned" if funding["available_earned"] >= gross_price else "deposited"
+                ledger.record(
+                    session,
+                    event_type="transfer_purchase",
+                    source=ledger.club_account(club_id),
+                    destination=ledger.WORLD_MARKET,
+                    currency=ledger.GTEX,
+                    gross=gross_price,
+                    balance_class=rem_class,
+                    club_id=club_id,
+                    user_id=user_id,
+                    related_type="player",
+                    related_id=player_id,
+                    memo=f"Signed {player.full_name}",
+                )
+        except ledger.LedgerError as exc:
+            raise OwnerError(str(exc), 402) from exc
     age = 24
     if player.date_of_birth:
         age = max(16, now().year - player.date_of_birth.year)
@@ -740,7 +905,22 @@ def autopick_squad(
         ).all()
     )
 
-    eligible = [c for c in candidates if c.id not in rival_refs and quotes_map.get(c.id, (999999, 0))[0] > 0]
+    from app.owner_console.player_classification import classify_player_for_acquisition
+
+    funding = ledger.get_club_funding(session, club_id)
+
+    def _is_player_eligible_for_autopick(c: Player) -> bool:
+        if c.id in rival_refs:
+            return False
+        price = quotes_map.get(c.id, (999999, 0))[0]
+        if price <= 0:
+            return False
+        classification = classify_player_for_acquisition(session, c)
+        if classification.requires_deposited_funds:
+            return funding["available_deposited"] >= price
+        return funding["total_cash"] >= price
+
+    eligible = [c for c in candidates if _is_player_eligible_for_autopick(c)]
 
     # Sort eligible players by tactical + scout efficiency when budget allows
     avg_slot_budget = max(1, effective_budget // max(1, slots_needed))
@@ -832,9 +1012,6 @@ def _advance_stage_after_squad(session: Session, state: OwnerClubState) -> None:
     if state.stage == "squad" and len(players) >= MIN_SQUAD and any(p.position.startswith("goal") for p in players):
         has_custom_manager = bool(state.manager_json and not state.manager_json.get("is_default"))
         state.stage = "competition" if has_custom_manager else "manager"
-        regens = engine.generate_regens(state.club_id, state.world_day, 1, 10, 3)
-        for regen in regens:
-            _add_regen(session, state.club_id, regen)
 
 
 def _add_regen(session: Session, club_id: str, regen: dict[str, Any]) -> OwnerSquadPlayer:
@@ -1882,6 +2059,7 @@ def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
             for k in engine.FACILITY_KINDS
         },
         "squad": [player_dict(p, session) for p in squad(session, club_id)],
+        "formation": get_club_formation_status(session, club_id),
         "health": club_health(session, state),
         "economy": ledger.club_economy(session, club_id),
         "sponsors": [

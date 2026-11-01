@@ -718,6 +718,10 @@ class AuthService:
             RegenBootstrapService(session).bootstrap_for_new_club(club)
         except Exception:
             pass
+        if user.account_type == PublicAccountType.USER:
+            from app.owner_console.first_club_entitlement import award_first_club_launch_grant
+
+            award_first_club_launch_grant(session, user_id=user.id, club_id=club.id)
         session.flush()
         return club
 
