@@ -280,7 +280,7 @@ services:
       - key: GTE_MEDIA_SIGNING_SECRET
         sync: false
       - key: GTE_RUN_MIGRATION_CHECK
-        value: "true"
+        value: "false"
       - key: GTE_INGESTION_PROVIDER
         value: sportmonks
       - key: GTE_OUTBOX_RELAY_ENABLED
