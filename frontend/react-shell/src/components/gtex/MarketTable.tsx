@@ -243,7 +243,7 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
                 club={p.current_club_name}
                 image={p.image_url}
                 tier={isLegend ? "legendary" : undefined}
-                badge={isLegend ? "ICON · 1 OF 1" : isRestricted ? "PAID GTEX ONLY" : isWonderkid ? "WONDERKID" : "PROMO ELIGIBLE"}
+                badge={isLegend ? "ICON · 1 OF 1" : isWonderkid ? (isRestricted ? "WONDERKID · PAID ONLY" : "WONDERKID") : isRestricted ? "PAID GTEX ONLY" : "PROMO ELIGIBLE"}
                 onClick={() => setOpen(p.player_id)}
                 stats={[
                   { k: "Fee", v: price ? `${fmt(price)}` : "-" },

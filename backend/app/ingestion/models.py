@@ -450,6 +450,15 @@ class Player(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     normalized_position: Mapped[str | None] = mapped_column(String(32), nullable=True)
     secondary_positions_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
     date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
+    factual_date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
+    source_game_date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
+    prime_age_at_snapshot: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    governed_gsi: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    governed_potential_gsi: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    gsi_methodology_version: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="v2.0", server_default="v2.0"
+    )
+    gsi_override_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     height_cm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     weight_kg: Mapped[int | None] = mapped_column(Integer, nullable=True)
     preferred_foot: Mapped[str | None] = mapped_column(String(16), nullable=True)
