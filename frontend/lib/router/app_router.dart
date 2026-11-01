@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gte_frontend/app/gte_app_config.dart';
+import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/core/runtime/gtex_runtime_graph.dart';
 import 'package:gte_frontend/core/runtime/gtex_runtime_models.dart';
 import 'package:gte_frontend/features/app_routes/gte_app_route_registry.dart';
