@@ -192,7 +192,9 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
         elif total_shares > 600:
             total_shares = 600
         if total_shares < 1:
-            raise PlayerTokenMarketError("Player availability must be at least one unit.", reason="player_supply_invalid")
+            raise PlayerTokenMarketError(
+                "Player availability must be at least one unit.", reason="player_supply_invalid"
+            )
         return super().issue_market(
             actor=actor,
             player_id=player_id,
@@ -300,9 +302,7 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
                 raise PlayerTokenMarketError(
                     "This player has no unallocated units remaining.", reason="player_supply_exhausted"
                 )
-            return super(PlayerTokenMarketService, self).buy_shares(
-                actor=actor, player_id=player_id, share_count=1
-            )
+            return super(PlayerTokenMarketService, self).buy_shares(actor=actor, player_id=player_id, share_count=1)
 
         return self._run_trade_with_boundary(
             actor=actor,
