@@ -27,7 +27,8 @@ class VerificationEvidence:
     reference: str | None = None
 
     def validate(self) -> None:
-        if self.provider.strip().lower() != "didit":
+        normalized_provider = self.provider.strip().lower()
+        if normalized_provider not in {"didit", "smile_id", "smileid", "sandbox"}:
             raise IdentityComplianceError("Unsupported identity verification provider.")
         if not self.provider_subject.strip():
             raise IdentityComplianceError("Provider subject is required.")

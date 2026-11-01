@@ -86,7 +86,9 @@ const READABLE: Record<string, string> = {
   paystack_secret_key_not_configured: "Paystack isn't connected yet. Add the Paystack secret key to enable Naira deposits.",
   withdrawal_not_eligible: "This withdrawal does not pass the payout eligibility checks.",
   related_party_transfer_blocked: "Related-party transfer blocked by integrity rules.",
-  sign_starting_squad_first: "Sign a starting squad (11 players incl. a goalkeeper) first.",
+  sign_starting_squad_first: "Sign a starting squad (22 players incl. a goalkeeper) first.",
+  restricted_player_requires_deposited_funds: "Restricted players (GSI 80+, Regens, Legends) require deposited GTEX Coin. Promotional launch credit cannot be used.",
+  minimum_squad_size_not_met: "Club requires at least 22 registered players with goalkeeper coverage.",
 };
 
 export function errMsg(e: any): string {

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -17,10 +18,11 @@ from app.models.club_profile import ClubProfile
 from app.models.player_token_market import PlayerShareMarket
 from app.models.user import User, UserRole
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
-from app.players.legacy_token_service import PlayerTokenMarketService
+from app.players.token_service import PlayerTokenMarketError, PlayerTokenMarketService
 from app.transfer_market.schemas import TransferHubOfferCreateRequest, TransferListingCreateRequest
 from app.transfer_market.service import TransferMarketService
 from app.wallets.service import LedgerPosting, WalletService
+from tests.support.club_treasury import fund_club_treasury
 
 
 def _user(session, *, user_id: str, role: UserRole = UserRole.USER) -> User:
@@ -28,7 +30,7 @@ def _user(session, *, user_id: str, role: UserRole = UserRole.USER) -> User:
         id=user_id,
         email=f"{user_id}@example.com",
         username=user_id,
-        password_hash="hash",
+        password_hash="hash",  # pragma: allowlist secret
         role=role,
     )
     session.add(user)
@@ -84,6 +86,7 @@ def test_legendary_player_uses_the_standard_search_market_and_transfer_lifecycle
         buyer = _user(session, user_id="legendary-buyer")
         seller_club = _club(session, club_id="legendary-seller-fc", owner=seller)
         buyer_club = _club(session, club_id="legendary-buyer-fc", owner=buyer)
+        fund_club_treasury(session, buyer_club.id, "10000000")
         _fund_coin(session, user=buyer, amount=Decimal("100.0000"))
 
         ordinary = Player(
@@ -126,10 +129,11 @@ def test_legendary_player_uses_the_standard_search_market_and_transfer_lifecycle
         assert session.get(PlayerShareMarket, active_market["id"]) is not None
 
         # Existing acquisition and resale operations create and update normal holdings.
-        purchase = shares.buy_shares(actor=buyer, player_id=legend.id, share_count=10)
-        assert purchase["holding"].share_count == 10
-        resale = shares.sell_shares(actor=buyer, player_id=legend.id, share_count=4)
-        assert resale["holding"].share_count == 6
+        purchase = shares.buy_shares(actor=buyer, player_id=legend.id, share_count=1)
+        assert purchase["holding"].share_count == 1
+        with pytest.raises(PlayerTokenMarketError) as resale:
+            shares.sell_shares(actor=buyer, player_id=legend.id, share_count=1)
+        assert resale.value.reason == "player_acquisition_non_transferable"
 
         # Existing transfer-listing and offer acceptance logic accepts the same player id.
         transfers = TransferMarketService(session)

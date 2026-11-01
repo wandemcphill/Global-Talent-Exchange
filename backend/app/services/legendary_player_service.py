@@ -189,7 +189,21 @@ class LegendaryPlayerRegistryService:
         first_name = names[0]
         last_name = names[1] if len(names) > 1 else None
 
+        profile_metadata = dict(profile.metadata_json or {})
+        raw_game_age = (
+            profile_metadata.get("game_age")
+            or profile_metadata.get("gtex_age")
+            or profile_metadata.get("peak_age")
+            or 28
+        )
+        try:
+            game_age = int(raw_game_age)
+        except (TypeError, ValueError):
+            game_age = 28
+        game_age = min(35, max(18, game_age))
+
         dna_payload = {
+            "game_age": game_age,
             "era": profile.era,
             "legendary_classification": profile.legendary_classification,
             "signature_traits": list(profile.signature_traits_json or []),

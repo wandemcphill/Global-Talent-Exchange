@@ -13,7 +13,7 @@ from app.models.base import Base
 from app.models.legendary_player import LegendaryPlayerProfile
 from app.models.player_token_market import PlayerShareMarket
 from app.models.user import User, UserRole
-from app.players.token_service import PlayerTokenMarketService
+from app.players.token_service import PlayerTokenMarketError, PlayerTokenMarketService
 from app.schemas.legendary_player import LegendaryPlayerProfileCreate
 from app.services.legendary_player_launch_service import LegendaryPlayerLaunchError, LegendaryPlayerLaunchService
 from app.wallets.service import LedgerPosting, WalletService
@@ -169,13 +169,14 @@ def test_canonical_25_player_pilot_is_active_searchable_and_tradeable() -> None:
         ok = MarketPlayerQueryService(session).list_players(search="Edson Arantes do Nascimento")
         assert [item.player_id for item in ok.items] == [materialized[0][1].id]
 
-        # Standard buy/sell works immediately after launch.
+        # Each legendary is a one-of-one, non-transferable acquisition.
         player = materialized[11][1]
         trading = PlayerTokenMarketService(session)
-        purchase = trading.buy_shares(actor=buyer, player_id=player.id, share_count=3)
-        assert purchase["holding"].share_count == 3
-        resale = trading.sell_shares(actor=buyer, player_id=player.id, share_count=1)
-        assert resale["holding"].share_count == 2
+        purchase = trading.buy_shares(actor=buyer, player_id=player.id, share_count=1)
+        assert purchase["holding"].share_count == 1
+        assert purchase["market"]["total_shares"] == 1
+        with pytest.raises(PlayerTokenMarketError, match="not listed for resale"):
+            trading.sell_shares(actor=buyer, player_id=player.id, share_count=1)
 
         # Replaying the same 25 seeds produces no duplicate players or markets.
         replayed = [launch.materialize(item, actor=admin) for item in request]

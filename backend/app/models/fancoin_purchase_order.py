@@ -62,8 +62,12 @@ class FancoinPurchaseOrder(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     amount_fiat: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
     gross_amount: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
-    fee_amount: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False, default=Decimal("0.0000"), server_default="0.0000")
-    processor_fee: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False, default=Decimal("0.0000"), server_default="0.0000")
+    fee_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 4), nullable=False, default=Decimal("0.0000"), server_default="0.0000"
+    )
+    processor_fee: Mapped[Decimal] = mapped_column(
+        Numeric(20, 4), nullable=False, default=Decimal("0.0000"), server_default="0.0000"
+    )
     net_amount: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
     currency_code: Mapped[str] = mapped_column(String(8), nullable=False, default="NGN", server_default="NGN")
     rate_value: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
@@ -71,10 +75,14 @@ class FancoinPurchaseOrder(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Enum(RateDirection, name="rate_direction", native_enum=False),
         nullable=False,
     )
-    processor_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="automatic_gateway", server_default="automatic_gateway")
+    processor_mode: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="automatic_gateway", server_default="automatic_gateway"
+    )
     payout_channel: Mapped[str] = mapped_column(String(64), nullable=False, default="gateway", server_default="gateway")
     source_scope: Mapped[str] = mapped_column(String(32), nullable=False, default="wallet", server_default="wallet")
-    purchase_purpose: Mapped[str] = mapped_column(String(64), nullable=False, default="wallet_top_up", server_default="wallet_top_up")
+    purchase_purpose: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="wallet_top_up", server_default="wallet_top_up"
+    )
     account_type_snapshot: Mapped[str | None] = mapped_column(String(32), nullable=True)
     ledger_transaction_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     notes: Mapped[str | None] = mapped_column(String(255), nullable=True)

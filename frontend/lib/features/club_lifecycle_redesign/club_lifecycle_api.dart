@@ -164,7 +164,7 @@ class GtexClubLifecycleFixtures {
                 key: 'minimum_squad',
                 label: 'Minimum squad size reached',
                 complete: true,
-                detail: '11 of 11 required players assigned.',
+                detail: '22 of 22 required players assigned.',
               ),
               const GtexClubReadinessItem(
                 key: 'position_balance',

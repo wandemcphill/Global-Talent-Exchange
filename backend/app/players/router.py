@@ -151,6 +151,12 @@ def raise_player_token_market_http_exception(exc: PlayerTokenMarketError) -> Nev
         "no_shareholders",
         "no_circulation",
         "total_shares_below_circulation",
+        "acquisition_quantity_must_be_one",
+        "player_already_owned",
+        "player_supply_exhausted",
+        "player_supply_limit_exceeded",
+        "player_acquisition_non_transferable",
+        "player_acquisition_non_investment",
     }:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.detail) from exc
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.detail) from exc

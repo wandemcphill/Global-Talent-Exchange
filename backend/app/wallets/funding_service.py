@@ -1,16 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP
-import os
-from typing import Any
+from decimal import Decimal
 
 import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
-from app.models.treasury import TreasurySettings
 from app.models.user import User
 from app.models.user_wallet import UserWallet, WalletTransactionRecord
 from app.models.wallet import LedgerUnit
@@ -23,7 +20,6 @@ from app.wallets.providers.registry import (
     get_provider_adapter,
     korapay_enabled,
     paystack_enabled,
-    provider_live_deposit_ready,
     provider_runtime_statuses,
 )
 from app.wallets.rail_service import WalletRailError, WalletRailService
@@ -147,7 +143,9 @@ class WalletFundingService:
                 "KoraPay and Paystack are the live automatic top-up providers. Manual transfer remains available."
             )
         if normalized_provider == "paystack" and not paystack_enabled():
-            raise WalletFundingError("Paystack is unavailable. Set live Paystack credentials before accepting payments.")
+            raise WalletFundingError(
+                "Paystack is unavailable. Set live Paystack credentials before accepting payments."
+            )
         if normalized_provider == "korapay" and not korapay_enabled():
             raise WalletFundingError(
                 "KoraPay requires live checkout and webhook credentials before it can accept deposits."
@@ -253,7 +251,9 @@ class WalletFundingService:
                 reference=order.provider_reference or normalized_reference
             )
         except (httpx.HTTPError, ValueError) as exc:
-            raise WalletTopUpVerificationError(f"Unable to verify the {order.provider_key.title()} transaction: {exc}") from exc
+            raise WalletTopUpVerificationError(
+                f"Unable to verify the {order.provider_key.title()} transaction: {exc}"
+            ) from exc
 
         if verification.status == "pending":
             raise WalletTopUpVerificationError("Payment is still pending confirmation.")

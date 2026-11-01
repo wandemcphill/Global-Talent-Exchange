@@ -494,6 +494,15 @@ def enter_competition(session: Session, user_id: str, competition_id: str, club_
     state = require_state(session, club_id, user_id)
     if getattr(state, "stage", None) == "squad":
         raise OwnerError("sign_starting_squad_first", 409)
+    from app.owner_console import service as owner_service
+
+    formation = owner_service.get_club_formation_status(session, club_id)
+    if not formation["is_formed"]:
+        raise OwnerError(
+            "minimum_squad_size_not_met",
+            409,
+            f"Club requires at least {owner_service.MIN_SQUAD} registered players with goalkeeper coverage (currently {formation['total_registered']}).",
+        )
     comp = session.get(OwnerCompetition, competition_id)
     if comp is None:
         raise OwnerError("competition_not_found", 404)

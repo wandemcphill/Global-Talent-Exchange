@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -227,6 +228,10 @@ class CoinTraderService:
         profile = self._require_profile(payload.trader_profile_id)
         if profile.status != CoinTraderProfileStatus.APPROVED.value:
             raise CoinTraderValidationError("Coin trader is not approved for orders.")
+        if profile.verified_at is None:
+            raise CoinTraderValidationError("Coin trader has not completed identity verification.")
+        if profile.suspended_at is not None or profile.status == CoinTraderProfileStatus.SUSPENDED.value:
+            raise CoinTraderValidationError("Coin trader is currently suspended.")
         if profile.user_id == actor.id:
             raise CoinTraderValidationError("Traders cannot create orders against their own desk.")
         # COMP-001: Enforce KYC verification if trader terms specify kyc_required
@@ -253,7 +258,7 @@ class CoinTraderService:
                 actor=actor,
                 trader_profile=profile,
                 proposed_rate_payload={
-                    "coin_unit": rate.coin_unit.value,
+                    "coin_unit": rate.coin_unit.value if hasattr(rate.coin_unit, "value") else str(rate.coin_unit),
                     "fiat_currency": rate.fiat_currency,
                     "buy_rate_fiat": str(rate.buy_rate_fiat),
                     "sell_rate_fiat": str(rate.sell_rate_fiat),
@@ -276,6 +281,9 @@ class CoinTraderService:
         ):
             raise CoinTraderValidationError("Trader liquidity is below requested amount.")
         fiat_total = payload.coin_amount * quoted_rate
+        if direction == CoinTradeDirection.USER_BUYS.value and payload.fiat_currency.upper() == "NGN":
+            if fiat_total < Decimal("200000.00"):
+                raise CoinTraderValidationError("Minimum buyer order value for GTEX Coin purchases is ₦200,000.")
         order = CoinTradeOrder(
             trader_profile_id=profile.id,
             user_id=actor.id,
@@ -463,6 +471,11 @@ class CoinTraderService:
         profile.tier = str(payload.tier.value if hasattr(payload.tier, "value") else payload.tier)
         profile.approved_by_user_id = admin.id
         profile.approved_at = now
+        if profile.verified_at is None:
+            profile.verified_at = now
+            profile.verification_provider = profile.verification_provider or "admin_decision"
+            profile.verification_reference = profile.verification_reference or f"admin_{admin.id}"
+        profile.suspended_at = None
         profile.rejected_at = None
         profile.frozen_at = None
         profile.metadata_json = {**dict(profile.metadata_json or {}), "approval_note": payload.note or ""}
@@ -496,6 +509,38 @@ class CoinTraderService:
         self.session.refresh(profile)
         return self.to_profile_view(profile)
 
+    def suspend_trader(self, profile_id: str, *, admin: User, note: str | None = None) -> CoinTraderProfileView:
+        del admin
+        profile = self._require_profile(profile_id)
+        now = utcnow()
+        profile.status = CoinTraderProfileStatus.SUSPENDED.value
+        profile.suspended_at = now
+        profile.metadata_json = {
+            **dict(profile.metadata_json or {}),
+            "suspension_note": note or "",
+            "suspended_at": now.isoformat(),
+        }
+        self.session.commit()
+        self.session.refresh(profile)
+        return self.to_profile_view(profile)
+
+    def reinstate_trader(self, profile_id: str, *, admin: User, note: str | None = None) -> CoinTraderProfileView:
+        del admin
+        profile = self._require_profile(profile_id)
+        if profile.verified_at is None:
+            raise CoinTraderValidationError("Cannot reinstate unverified trader.")
+        now = utcnow()
+        profile.status = CoinTraderProfileStatus.APPROVED.value
+        profile.suspended_at = None
+        profile.metadata_json = {
+            **dict(profile.metadata_json or {}),
+            "reinstate_note": note or "",
+            "reinstated_at": now.isoformat(),
+        }
+        self.session.commit()
+        self.session.refresh(profile)
+        return self.to_profile_view(profile)
+
     def quote_liquidity_purchase(
         self,
         *,
@@ -505,9 +550,10 @@ class CoinTraderService:
         coin_unit: LedgerUnit = LedgerUnit.COIN,
         input_unit: str = "coin",
     ) -> dict[str, Any]:
-        profile = self._require_approved_profile_for_user(actor)
+        self._require_approved_profile_for_user(actor)
         from app.treasury.service import TreasuryService
         from app.wallets.rail_service import WalletRailService
+
         treasury = TreasuryService(wallet_service=self.wallet_service)
         settings = treasury.ensure_settings(self.session)
         rail = WalletRailService(session=self.session, wallet_service=self.wallet_service)
@@ -543,8 +589,9 @@ class CoinTraderService:
         coin_unit: LedgerUnit = LedgerUnit.COIN,
         callback_url: str | None = None,
     ) -> dict[str, Any]:
-        profile = self._require_approved_profile_for_user(actor)
+        self._require_approved_profile_for_user(actor)
         from app.wallets.funding_service import WalletFundingService
+
         funding_service = WalletFundingService(wallet_service=self.wallet_service)
         session = funding_service.initiate_top_up(
             self.session,
@@ -575,6 +622,7 @@ class CoinTraderService:
     ) -> dict[str, Any]:
         profile = self._require_approved_profile_for_user(actor)
         from app.wallets.funding_service import WalletFundingService
+
         funding_service = WalletFundingService(wallet_service=self.wallet_service)
         result = funding_service.verify_top_up(
             self.session,
@@ -1018,12 +1066,20 @@ class CoinTraderService:
         profile = self._require_profile_for_user(actor)
         if profile.status != CoinTraderProfileStatus.APPROVED.value:
             raise CoinTraderPermissionError("Approved coin trader access is required.")
+        if profile.verified_at is None:
+            raise CoinTraderPermissionError("Verified coin trader identity is required.")
+        if profile.suspended_at is not None or profile.status == CoinTraderProfileStatus.SUSPENDED.value:
+            raise CoinTraderPermissionError("Coin trader account is currently suspended.")
         return profile
 
     def _require_approved_profile(self, profile_id: str) -> CoinTraderProfile:
         profile = self._require_profile(profile_id)
         if profile.status != CoinTraderProfileStatus.APPROVED.value:
             raise CoinTraderPermissionError("Approved coin trader access is required.")
+        if profile.verified_at is None:
+            raise CoinTraderPermissionError("Verified coin trader identity is required.")
+        if profile.suspended_at is not None or profile.status == CoinTraderProfileStatus.SUSPENDED.value:
+            raise CoinTraderPermissionError("Coin trader account is currently suspended.")
         self._require_dedicated_trader_account(self._require_user(profile.user_id))
         return profile
 
@@ -1135,6 +1191,10 @@ class CoinTraderService:
             status=profile.status,
             tier=profile.tier,
             verification_level=profile.verification_level,
+            verified_at=profile.verified_at,
+            verification_provider=profile.verification_provider,
+            verification_reference=profile.verification_reference,
+            suspended_at=profile.suspended_at,
             completion_rate=profile.completion_rate,
             average_release_minutes=profile.average_release_minutes,
             rating=profile.rating,

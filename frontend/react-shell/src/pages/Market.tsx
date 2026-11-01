@@ -72,7 +72,7 @@ export default function Market() {
       <Panel eyebrow="World market · live player universe" title="Available players" testid="world-market-panel">
         <MarketTable clubId={active?.club_id} initialPosition={position} signedRefs={(club?.squad || []).map((p: any) => p.player_ref)} onSigned={() => refetch()} />
       </Panel>
-      <Panel eyebrow="Player share market · live" title="Issued player markets" testid="share-market-panel">
+      <Panel eyebrow="Player catalogue · live" title="Available players" testid="share-market-panel">
         <ShareMarket />
       </Panel>
       <Panel eyebrow="Related-party · anti-collusion" title="Sister-club transfer" testid="sister-transfer-panel">

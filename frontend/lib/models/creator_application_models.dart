@@ -6,14 +6,18 @@ class CreatorApplicationSubmitRequest {
     required this.displayName,
     required this.platform,
     required this.followerCount,
+    required this.profileUrl,
     required this.socialLinks,
+    this.selfieAttachmentId,
   });
 
   final String requestedHandle;
   final String displayName;
   final String platform;
   final int followerCount;
+  final String profileUrl;
   final List<String> socialLinks;
+  final String? selfieAttachmentId;
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
@@ -21,6 +25,9 @@ class CreatorApplicationSubmitRequest {
       'display_name': displayName.trim(),
       'platform': platform.trim().toLowerCase(),
       'follower_count': followerCount,
+      'profile_url': profileUrl.trim(),
+      if (selfieAttachmentId != null && selfieAttachmentId!.isNotEmpty)
+        'selfie_attachment_id': selfieAttachmentId,
       'social_links': socialLinks
           .map((String item) => item.trim())
           .where((String item) => item.isNotEmpty)
@@ -137,6 +144,8 @@ class CreatorApplicationView {
     required this.status,
     required this.createdAt,
     required this.updatedAt,
+    this.profileUrl,
+    this.selfieAttachmentId,
     this.reviewNotes,
     this.decisionReason,
     this.reviewedByUserId,
@@ -153,6 +162,8 @@ class CreatorApplicationView {
   final String displayName;
   final String platform;
   final int followerCount;
+  final String? profileUrl;
+  final String? selfieAttachmentId;
   final List<String> socialLinks;
   final DateTime? emailVerifiedAt;
   final DateTime? phoneVerifiedAt;
@@ -172,9 +183,12 @@ class CreatorApplicationView {
 
   bool get isPending => status == 'pending';
 
-  bool get needsVerificationUpdate => status == 'verification_requested';
+  bool get needsVerificationUpdate =>
+      status == 'verification_requested' || status == 'additional_info_required';
 
   bool get isRejected => status == 'rejected';
+
+  bool get isSuspended => status == 'suspended';
 
   bool get canResubmit => needsVerificationUpdate || isRejected;
 
@@ -182,6 +196,8 @@ class CreatorApplicationView {
     DateTime? emailVerifiedAt,
     DateTime? phoneVerifiedAt,
     String? status,
+    String? profileUrl,
+    String? selfieAttachmentId,
     String? reviewNotes,
     String? decisionReason,
     String? reviewedByUserId,
@@ -199,6 +215,8 @@ class CreatorApplicationView {
       displayName: displayName,
       platform: platform,
       followerCount: followerCount,
+      profileUrl: profileUrl ?? this.profileUrl,
+      selfieAttachmentId: selfieAttachmentId ?? this.selfieAttachmentId,
       socialLinks: socialLinks,
       emailVerifiedAt: emailVerifiedAt ?? this.emailVerifiedAt,
       phoneVerifiedAt: phoneVerifiedAt ?? this.phoneVerifiedAt,
@@ -231,6 +249,10 @@ class CreatorApplicationView {
       platform: GteJson.string(json, <String>['platform']),
       followerCount:
           GteJson.integer(json, <String>['follower_count', 'followerCount']),
+      profileUrl:
+          GteJson.stringOrNull(json, <String>['profile_url', 'profileUrl']),
+      selfieAttachmentId: GteJson.stringOrNull(
+          json, <String>['selfie_attachment_id', 'selfieAttachmentId']),
       socialLinks: GteJson.typedList<String>(
         json,
         <String>['social_links', 'socialLinks'],

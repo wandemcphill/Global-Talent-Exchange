@@ -46,6 +46,17 @@ class TraderService:
         if user.account_type != PublicAccountType.COIN_TRADER:
             raise TraderAccessError("Coin trader account access is required.")
 
+    def assert_can_trade(self, user: User) -> None:
+        from app.models.coin_trader import CoinTraderProfile
+
+        profile = self.session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id))
+        from app.auth.eligibility import AccountEligibilityError, AccountEligibilityService
+
+        try:
+            AccountEligibilityService.assert_can_trade_coin_marketplace(user, profile)
+        except AccountEligibilityError as exc:
+            raise TraderAccessError(str(exc)) from exc
+
     def ensure_profile(
         self,
         user: User,
@@ -234,6 +245,7 @@ class TraderService:
         self, user: User, *, market_id: str, side: TraderOrderSide, quantity: Decimal, limit_price: Decimal | None
     ) -> TraderOrder:
         self.assert_trader(user)
+        self.assert_can_trade(user)
         self._require_market(market_id)
         order = TraderOrder(user_id=user.id, market_id=market_id, side=side, quantity=quantity, limit_price=limit_price)
         self.session.add(order)
@@ -251,6 +263,7 @@ class TraderService:
         preferred_currency: str,
     ) -> TraderP2POffer:
         self.assert_trader(user)
+        self.assert_can_trade(user)
         self._require_market(market_id)
         offer = TraderP2POffer(
             user_id=user.id,

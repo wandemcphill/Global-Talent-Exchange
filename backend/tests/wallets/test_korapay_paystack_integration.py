@@ -7,7 +7,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -18,24 +18,23 @@ from app.models.coin_trader import (
     CoinTraderRate,
     CoinTraderTier,
 )
-from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
 from app.models.treasury import (
     PaymentMode,
     RateDirection,
     TreasurySettings,
-    TreasuryWithdrawalRequest,
     TreasuryWithdrawalStatus,
     UserBankAccount,
 )
 from app.models.user import KycStatus, PublicAccountType, User, UserRole
-from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit, PayoutRequest, PayoutStatus
+from app.models.wallet import (
+    LedgerEntryReason,
+    LedgerSourceTag,
+    LedgerTransactionType,
+    LedgerUnit,
+)
 from app.wallets.funding_service import WalletFundingError, WalletFundingService
 from app.wallets.providers.base import (
-    BankResolutionResult,
-    CheckoutSession,
-    PaymentVerification,
     PayoutSession,
-    PayoutVerification,
     ProviderEvent,
     ProviderEventType,
     ProviderFeeEstimate,
@@ -44,10 +43,6 @@ from app.wallets.providers.korapay import KoraPayProviderAdapter
 from app.wallets.providers.paystack import PaystackProviderAdapter
 from app.wallets.providers.registry import (
     get_provider_adapter,
-    korapay_enabled,
-    paystack_enabled,
-    provider_live_deposit_ready,
-    provider_live_payout_ready,
 )
 from app.wallets.rail_service import WalletRailService
 from app.wallets.service import LedgerPosting, WalletService
@@ -62,6 +57,7 @@ def db_session():
         poolclass=StaticPool,
     )
     from app.core.database import load_model_modules
+
     load_model_modules()
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
@@ -101,7 +97,7 @@ def test_provider_registry_and_adapter_conformance():
 def test_korapay_webhook_signature_and_event_parsing():
     """Verify KoraPay SHA256 of JSON.stringify(payload.data) signature checking and webhook parsing."""
     adapter = KoraPayProviderAdapter()
-    secret = "korapay_test_secret_key"
+    secret = "korapay_test_secret_key"  # pragma: allowlist secret
     data_dict = {
         "reference": "PO-KORA-TEST-001",
         "amount": 5000,
@@ -138,17 +134,19 @@ def test_korapay_webhook_signature_and_event_parsing():
 def test_paystack_webhook_signature_and_payout_event_parsing():
     """Verify Paystack HMAC-SHA512 of raw body and disbursement event parsing."""
     adapter = PaystackProviderAdapter()
-    secret = "paystack_test_secret_key"
-    raw_body = json.dumps({
-        "event": "transfer.success",
-        "data": {
-            "reference": "WDL-PAYSTACK-TEST-001",
-            "transfer_code": "TRF_123456",
-            "amount": 1000000,  # 10,000 NGN in kobo
-            "currency": "NGN",
-            "status": "success",
+    secret = "paystack_test_secret_key"  # pragma: allowlist secret
+    raw_body = json.dumps(
+        {
+            "event": "transfer.success",
+            "data": {
+                "reference": "WDL-PAYSTACK-TEST-001",
+                "transfer_code": "TRF_123456",
+                "amount": 1000000,  # 10,000 NGN in kobo
+                "currency": "NGN",
+                "status": "success",
+            },
         }
-    }).encode("utf-8")
+    ).encode("utf-8")
     expected_sig = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha512).hexdigest()
     headers = {"x-paystack-signature": expected_sig}
     payload = json.loads(raw_body.decode("utf-8"))
@@ -174,7 +172,9 @@ def test_unsupported_provider_rejected(db_session):
         email="user@test.org",
         username="unsupported_user",
         account_type=PublicAccountType.USER,
-        password_hash="mock_hash_12345", is_active=True, kyc_status=KycStatus.VERIFIED,
+        password_hash="mock_hash_12345",  # pragma: allowlist secret
+        is_active=True,
+        kyc_status=KycStatus.VERIFIED,
     )
     db_session.add(user)
     db_session.flush()
@@ -204,7 +204,9 @@ def test_trader_liquidity_purchase_atomically_updates_effective_available_liquid
         email="trader@test.org",
         username="lagos_trader",
         account_type=PublicAccountType.COIN_TRADER,
-        password_hash="mock_hash_12345", is_active=True, kyc_status=KycStatus.VERIFIED,
+        password_hash="mock_hash_12345",  # pragma: allowlist secret
+        is_active=True,
+        kyc_status=KycStatus.VERIFIED,
     )
     db_session.add(trader)
     profile = CoinTraderProfile(
@@ -243,6 +245,7 @@ def test_trader_liquidity_purchase_atomically_updates_effective_available_liquid
 
     # Initial available liquidity before purchase
     from app.coin_traders.service import CoinTraderService
+
     trader_service = CoinTraderService(db_session, wallet_service)
     # With 0 balance in wallet, effective liquidity is 0
     assert trader_service._effective_available_liquidity(rate) == Decimal("0.0000")
@@ -273,8 +276,7 @@ def test_trader_liquidity_purchase_atomically_updates_effective_available_liquid
     assert rate.available_liquidity == Decimal("100.0000") + order.net_amount
     # Wallet was credited with order.net_amount
     wallet_balance = wallet_service.get_balance(
-        db_session,
-        wallet_service.get_user_account(db_session, trader, LedgerUnit.COIN)
+        db_session, wallet_service.get_user_account(db_session, trader, LedgerUnit.COIN)
     )
     assert wallet_balance == order.net_amount
 
@@ -304,7 +306,9 @@ def test_withdrawal_quote_and_payout_lifecycle(db_session):
         email="withdrawer@test.org",
         username="withdrawer",
         account_type=PublicAccountType.USER,
-        password_hash="mock_hash_12345", is_active=True, kyc_status=KycStatus.VERIFIED,
+        password_hash="mock_hash_12345",  # pragma: allowlist secret
+        is_active=True,
+        kyc_status=KycStatus.VERIFIED,
     )
     db_session.add(user)
 
@@ -379,6 +383,7 @@ def test_withdrawal_quote_and_payout_lifecycle(db_session):
     db_session.flush()
 
     from backend.tests.support.economic_policy import seed_economic_policy
+
     seed_economic_policy(db_session)
 
     # 1. Create withdrawal request for 2000 coins via Paystack
@@ -402,14 +407,17 @@ def test_withdrawal_quote_and_payout_lifecycle(db_session):
         username="treasury_admin",
         role=UserRole.ADMIN,
         account_type=PublicAccountType.USER,
-        password_hash="mock_hash_12345", is_active=True, kyc_status=KycStatus.VERIFIED,
+        password_hash="mock_hash_12345",  # pragma: allowlist secret
+        is_active=True,
+        kyc_status=KycStatus.VERIFIED,
     )
     db_session.add(admin_user)
     db_session.flush()
 
     # Mock provider payout adapter
-    with patch("app.treasury.service.get_live_provider_adapter") as mock_adapter_getter, \
-         patch("app.treasury.service.provider_live_payout_ready", return_value=True):
+    with patch("app.treasury.service.get_live_provider_adapter") as mock_adapter_getter, patch(
+        "app.treasury.service.provider_live_payout_ready", return_value=True
+    ):
         mock_adapter = MagicMock()
         mock_adapter.display_name = "Paystack"
         mock_adapter.initiate_payout.return_value = PayoutSession(

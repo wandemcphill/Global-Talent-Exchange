@@ -183,7 +183,11 @@ class WalletRailService:
         status = (
             PurchaseOrderStatus.PROCESSING if processor_mode == "automatic_gateway" else PurchaseOrderStatus.REVIEWING
         )
-        account_type_str = user.account_type.value if hasattr(user.account_type, "value") else str(getattr(user, "account_type", "user"))
+        account_type_str = (
+            user.account_type.value
+            if hasattr(user.account_type, "value")
+            else str(getattr(user, "account_type", "user"))
+        )
         order = FancoinPurchaseOrder(
             user_id=user.id,
             reference=reference,
@@ -281,9 +285,11 @@ class WalletRailService:
 
         # Update Coin Trader available liquidity if trader purchased liquidity
         account_type = getattr(user, "account_type", None)
-        is_trader = (account_type == PublicAccountType.COIN_TRADER) or (
-            getattr(order, "source_scope", None) == "trader_liquidity"
-        ) or (getattr(order, "purchase_purpose", None) == "trader_liquidity")
+        is_trader = (
+            (account_type == PublicAccountType.COIN_TRADER)
+            or (getattr(order, "source_scope", None) == "trader_liquidity")
+            or (getattr(order, "purchase_purpose", None) == "trader_liquidity")
+        )
         if is_trader:
             self._sync_trader_liquidity_on_settlement(user=user, order=order)
 
@@ -315,8 +321,11 @@ class WalletRailService:
         )
         for rate in rates:
             if rate.is_active:
-                rate.available_liquidity = (Decimal(str(rate.available_liquidity)) + order.net_amount).quantize(AMOUNT_QUANTUM)
+                rate.available_liquidity = (Decimal(str(rate.available_liquidity)) + order.net_amount).quantize(
+                    AMOUNT_QUANTUM
+                )
         from app.coin_traders.service import CoinTraderService
+
         trader_service = CoinTraderService(self.session, self.wallet_service)
         profile.liquidity_snapshot_json = trader_service._liquidity_snapshot(profile.id)
         meta = dict(profile.metadata_json or {})

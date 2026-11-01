@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -7,37 +7,52 @@ import { api, errMsg } from "@/lib/api";
 import { fmt, label } from "@/lib/owner";
 import { Btn, Chip, Loading, TraitBar } from "@/components/gtex/ui";
 import { PlayerCard } from "@/components/gtex/PlayerCard";
-import { PriceHistoryChart } from "@/components/gtex/PriceHistoryChart";
 
-function ShareBox({ playerId }: { playerId: string }) {
-  const [count, setCount] = useState("1");
+function PlayerAcquisition({ playerId }: { playerId: string }) {
   const qc = useQueryClient();
-  const { data, refetch, isError } = useQuery({ queryKey: ["share-market", playerId], queryFn: async () => (await api.get(`/v2/players/${playerId}/shares/market`)).data, retry: false });
-  if (isError) return <p className="text-xs text-slate-500" data-testid="drawer-no-share-market">No share market issued for this player yet.</p>;
-  if (!data) return null;
+  const { data: market, isError } = useQuery({
+    queryKey: ["player-acquisition", playerId],
+    queryFn: async () => (await api.get(`/v2/players/${playerId}/shares/market`)).data,
+    retry: false,
+  });
+  const { data: holdings = [] } = useQuery({
+    queryKey: ["my-player-acquisitions"],
+    queryFn: async () => (await api.get("/v2/players/me/shares/holdings")).data,
+    retry: false,
+  });
+  if (isError) return <p className="text-xs text-slate-500" data-testid="drawer-no-acquisition">This player is not currently available to acquire.</p>;
+  if (!market) return null;
+
+  const owned = Array.isArray(holdings) && holdings.some((holding: any) =>
+    holding.player_id === playerId && Number(holding.share_count) > 0
+  );
+  const available = Math.max(0, Number(market.released_shares ?? market.total_shares) - Number(market.circulating_shares || 0));
   const buy = async () => {
+    if (owned || available < 1) return;
     try {
-      const { data: res } = await api.post(`/v2/players/${playerId}/shares/buy`, { share_count: Number(count) });
-      toast.success(`Bought ${count} shares · ${fmt(res.gross_amount_coin, 4)} GTX`);
-      refetch();
-      qc.invalidateQueries({ queryKey: ["share-price-history", playerId] });
-    } catch (e) {
-      toast.error(errMsg(e));
+      const { data: result } = await api.post(`/v2/players/${playerId}/shares/buy`, { share_count: 1 });
+      toast.success(`Player acquired · ${fmt(result.net_amount_coin ?? result.gross_amount_coin, 2)} GTX`);
+      await qc.invalidateQueries({ queryKey: ["player-acquisition", playerId] });
+      await qc.invalidateQueries({ queryKey: ["my-player-acquisitions"] });
+    } catch (error) {
+      toast.error(errMsg(error));
+      await qc.invalidateQueries({ queryKey: ["my-player-acquisitions"] });
     }
   };
+
   return (
-    <div className="rounded-sm border border-white/10 p-4" data-testid="drawer-share-market">
-      <p className="gx-eyebrow mb-2">Player share market</p>
-      <div className="grid grid-cols-3 gap-3 text-sm">
-        <div><p className="gx-label">Price</p><p className="gx-mono text-white">{fmt(data.share_price_coin, 2)}</p></div>
-        <div><p className="gx-label">Circulating</p><p className="gx-mono text-white">{data.circulating_shares}/{data.total_shares}</p></div>
-        <div><p className="gx-label">Liquidity</p><p className="gx-mono text-white">{fmt(data.liquidity_coin, 2)}</p></div>
+    <div className="rounded-sm border border-white/10 p-4" data-testid="drawer-player-acquisition">
+      <p className="gx-eyebrow mb-2">Player acquisition</p>
+      <div className="grid grid-cols-2 gap-3 text-sm">
+        <div><p className="gx-label">Acquisition price</p><p className="gx-mono text-white">{fmt(market.share_price_coin, 2)} GTX</p></div>
+        <div><p className="gx-label">Units available</p><p className="gx-mono text-white">{available}</p></div>
       </div>
-      <div className="mt-3 flex gap-2">
-        <input data-testid="drawer-share-count" className="gx-input w-24" value={count} onChange={(e) => setCount(e.target.value.replace(/\D/g, ""))} />
-        <Btn onClick={buy} disabled={!Number(count)} data-testid="drawer-buy-shares">Buy shares</Btn>
+      <p className="mt-3 text-xs text-slate-400">Each account may acquire one complete unit of this player. Units cannot be resold or traded.</p>
+      <div className="mt-3">
+        <Btn onClick={buy} disabled={owned || available < 1} data-testid="drawer-acquire-player">
+          {owned ? "Already acquired" : available < 1 ? "No units available" : "Acquire player"}
+        </Btn>
       </div>
-      <PriceHistoryChart playerId={playerId} />
     </div>
   );
 }
@@ -57,7 +72,7 @@ function RegenDossier({ playerId }: { playerId: string }) {
       <div className="space-y-2.5" data-testid="drawer-regen-attributes">
         {["pace", "shooting", "passing", "dribbling", "defending", "physical"].map((k) => <TraitBar key={k} label={label(k)} value={a[k] ?? 0} max={99} />)}
       </div>
-      <ShareBox playerId={playerId} />
+      <PlayerAcquisition playerId={playerId} />
     </div>
   );
 }
@@ -123,7 +138,7 @@ export function PlayerDrawer({ playerId, onClose, extra }: { playerId: string | 
               <p className="gx-eyebrow mb-2">GTEX form</p>
               {form?.has_sample ? <p className="text-slate-300">Avg rating {form.average_rating} · {form.matches_counted} matches · trend {form.trend}</p> : <p className="text-slate-500">No GTEX competition minutes yet. Form builds once he plays.</p>}
             </div>
-            <ShareBox playerId={playerId} />
+            <PlayerAcquisition playerId={playerId} />
             {extra}
           </div>
         )}

@@ -427,9 +427,7 @@ def test_scoped_admin_without_liquidity_permission_cannot_settle_coin_trader_fun
     detail = payload.get("detail")
     if isinstance(detail, dict):
         detail = detail.get("detail")
-    assert (
-        detail or payload.get("message")
-    ) == "Permission manage_liquidity_desk is required for this action."
+    assert (detail or payload.get("message")) == "Permission manage_liquidity_desk is required for this action."
 
 
 def _approved_profile_with_rate(

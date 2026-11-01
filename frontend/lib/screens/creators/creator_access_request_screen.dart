@@ -29,6 +29,7 @@ class _CreatorAccessRequestScreenState
     extends State<CreatorAccessRequestScreen> {
   late final TextEditingController _handleController;
   late final TextEditingController _displayNameController;
+  late final TextEditingController _profileUrlController;
   late final TextEditingController _followerCountController;
   late final TextEditingController _socialLinksController;
 
@@ -37,7 +38,7 @@ class _CreatorAccessRequestScreenState
   String? _boundBaseUrl;
   GteBackendMode? _boundMode;
   String? _seededApplicationSignature;
-  String _selectedPlatform = 'youtube';
+  String _selectedPlatform = 'tiktok';
   String? _localError;
 
   @override
@@ -45,7 +46,8 @@ class _CreatorAccessRequestScreenState
     super.initState();
     _handleController = TextEditingController();
     _displayNameController = TextEditingController();
-    _followerCountController = TextEditingController();
+    _profileUrlController = TextEditingController();
+    _followerCountController = TextEditingController(text: '20000');
     _socialLinksController = TextEditingController();
     widget.exchangeController.addListener(_handleExchangeControllerChanged);
     _syncApplicationController(force: true);
@@ -69,6 +71,7 @@ class _CreatorAccessRequestScreenState
     _disposeApplicationController();
     _handleController.dispose();
     _displayNameController.dispose();
+    _profileUrlController.dispose();
     _followerCountController.dispose();
     _socialLinksController.dispose();
     super.dispose();
@@ -150,12 +153,13 @@ class _CreatorAccessRequestScreenState
   void _seedFormFromApplication(CreatorApplicationView application) {
     _handleController.text = application.requestedHandle;
     _displayNameController.text = application.displayName;
+    _profileUrlController.text = application.profileUrl ?? '';
     _followerCountController.text = application.followerCount.toString();
     _socialLinksController.text = application.socialLinks.join('\n');
     _selectedPlatform =
-        <String>{'youtube', 'twitch', 'tiktok'}.contains(application.platform)
+        <String>{'tiktok', 'instagram', 'twitch', 'youtube', 'x'}.contains(application.platform)
             ? application.platform
-            : 'youtube';
+            : 'tiktok';
   }
 
   @override
@@ -354,12 +358,11 @@ class _CreatorAccessRequestScreenState
               prefixIcon: Icon(Icons.video_library_outlined),
             ),
             items: const <DropdownMenuItem<String>>[
-              DropdownMenuItem<String>(
-                value: 'youtube',
-                child: Text('YouTube'),
-              ),
-              DropdownMenuItem<String>(value: 'twitch', child: Text('Twitch')),
               DropdownMenuItem<String>(value: 'tiktok', child: Text('TikTok')),
+              DropdownMenuItem<String>(value: 'instagram', child: Text('Instagram')),
+              DropdownMenuItem<String>(value: 'twitch', child: Text('Twitch')),
+              DropdownMenuItem<String>(value: 'youtube', child: Text('YouTube')),
+              DropdownMenuItem<String>(value: 'x', child: Text('X (Twitter)')),
             ],
             onChanged: (String? value) {
               if (value == null) {
@@ -369,6 +372,15 @@ class _CreatorAccessRequestScreenState
                 _selectedPlatform = value;
               });
             },
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _profileUrlController,
+            decoration: const InputDecoration(
+              labelText: 'Public profile URL or username',
+              hintText: 'https://tiktok.com/@username',
+              prefixIcon: Icon(Icons.link_outlined),
+            ),
           ),
           const SizedBox(height: 14),
           TextField(
@@ -425,7 +437,7 @@ class _CreatorAccessRequestScreenState
             children: <Widget>[
               FilledButton.icon(
                 onPressed:
-                    !contactsReady || controller.isSubmitting
+                    (!contactsReady || controller.isSubmitting)
                         ? null
                         : _submitApplication,
                 icon: const Icon(Icons.send_outlined),
@@ -509,16 +521,17 @@ class _CreatorAccessRequestScreenState
       });
       return;
     }
-    if (followerCount == null) {
+    final String profileUrl = _profileUrlController.text.trim();
+    if (profileUrl.isEmpty) {
       setState(() {
-        _localError =
-            'Enter the current follower count for the selected platform.';
+        _localError = 'Enter a public profile URL or username for manual review.';
       });
       return;
     }
-    if (socialLinks.isEmpty) {
+    if (followerCount == null || followerCount < 20000) {
       setState(() {
-        _localError = 'Add at least one public social link for review.';
+        _localError =
+            'Creator applicants must have at least 20,000 followers on one eligible platform.';
       });
       return;
     }
@@ -529,7 +542,8 @@ class _CreatorAccessRequestScreenState
         displayName: displayName,
         platform: _selectedPlatform,
         followerCount: followerCount,
-        socialLinks: socialLinks,
+        profileUrl: profileUrl,
+        socialLinks: socialLinks.isNotEmpty ? socialLinks : <String>[profileUrl],
       ),
     );
     if (!mounted || controller.submitError != null) {

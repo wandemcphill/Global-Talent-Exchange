@@ -42,13 +42,14 @@ def issue_markets_for_ingested_players(
     *,
     player_ids: list[str],
     actor_user_id: str | None = None,
+    force: bool = False,
 ) -> dict[str, int]:
     """Compatibility issuer retained for controlled exception use only."""
     summary = {"issued": 0, "skipped_existing": 0, "skipped_ineligible": 0, "failed": 0}
     if not player_ids:
         return summary
 
-    if not issuance_enabled():
+    if not force and not issuance_enabled():
         logger.info(
             "ingestion.share_market_issuance.skipped reason=phase6_decoupled env=%s players=%d",
             ENABLED_ENV_VAR,

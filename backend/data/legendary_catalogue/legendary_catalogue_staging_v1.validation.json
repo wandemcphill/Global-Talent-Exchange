@@ -1,7 +1,7 @@
 {
   "schema_version": "gtex.legendary-catalogue-staging.v1",
-  "generated_at": "2026-09-16T22:16:55.937074+00:00",
-  "total_records": 1861,
+  "generated_at": "2026-11-01T19:12:20.835849+00:00",
+  "total_records": 1864,
   "selection": {
     "country_cap": 35,
     "minimum_source_caps": 20,
@@ -16,9 +16,9 @@
     }
   },
   "records_by_continent": {
-    "Africa": 350,
+    "Africa": 351,
     "Asia": 350,
-    "Europe": 434,
+    "Europe": 436,
     "North America/Central America/Caribbean": 300,
     "Oceania": 77,
     "South America": 350
@@ -63,6 +63,7 @@
     "Ecuador": 35,
     "Egypt": 35,
     "El Salvador": 28,
+    "England": 18,
     "Estonia": 13,
     "Ethiopia": 3,
     "Finland": 15,
@@ -104,7 +105,7 @@
     "Malawi": 6,
     "Malaysia": 14,
     "Maldives": 1,
-    "Mali": 9,
+    "Mali": 10,
     "Malta": 7,
     "Mexico": 35,
     "Moldova": 1,
@@ -118,7 +119,8 @@
     "Niger": 1,
     "Nigeria": 26,
     "North Korea": 3,
-    "North Macedonia": 2,
+    "North Macedonia": 3,
+    "Northern Ireland": 8,
     "Norway": 20,
     "Oman": 4,
     "Palestine": 1,
@@ -137,6 +139,7 @@
     "Saint Kitts and Nevis": 4,
     "Saint Vincent and the Grenadines": 5,
     "Saudi Arabia": 24,
+    "Scotland": 5,
     "Senegal": 16,
     "Serbia": 6,
     "Sierra Leone": 2,
@@ -162,17 +165,18 @@
     "Uganda": 1,
     "Ukraine": 6,
     "United Arab Emirates": 12,
-    "United Kingdom": 35,
     "United States": 35,
     "Uruguay": 35,
     "Uzbekistan": 4,
     "Venezuela": 31,
     "Vietnam": 2,
+    "Wales": 5,
     "Yugoslavia": 2,
     "Zambia": 13,
     "Zimbabwe": 3
   },
   "records_by_primary_position": {
+    "ST": 3,
     "unknown": 1861
   },
   "records_missing_required_field": {},
@@ -182,8 +186,8 @@
     "primary_position": 1861,
     "era": 1861
   },
-  "records_requiring_review": 1861,
-  "records_blocked_from_registry_import": 1861,
+  "records_requiring_review": 1864,
+  "records_blocked_from_registry_import": 1864,
   "duplicate_names": [
     {
       "normalized_name": "gabriel gómez",

@@ -167,6 +167,43 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
             "net_amount_coin": total_debit,
         }
 
+    def issue_market(
+        self,
+        *,
+        actor: User,
+        player_id: str,
+        total_shares: int = 1000,
+        share_price_coin,
+        liquidity_coin=None,
+        status: str = "active",
+    ) -> PlayerShareMarket:
+        player = self._get_player(player_id)
+        source_provider = str(getattr(player, "source_provider", "") or "").strip().lower()
+        tier = str(getattr(player, "real_player_tier", "") or "").strip().lower()
+        is_one_of_one = (
+            getattr(player, "is_real_player", True) is False
+            or bool(getattr(player, "legendary_profile_id", None))
+            or source_provider in {"gtex_legend", "gtex_legend_prime"}
+            or tier in {"legend", "legendary", "icon", "immortal", "world_class", "hero"}
+        )
+        if is_one_of_one:
+            total_shares = 1
+            liquidity_coin = 0
+        elif total_shares > 600:
+            total_shares = 600
+        if total_shares < 1:
+            raise PlayerTokenMarketError(
+                "Player availability must be at least one unit.", reason="player_supply_invalid"
+            )
+        return super().issue_market(
+            actor=actor,
+            player_id=player_id,
+            total_shares=total_shares,
+            share_price_coin=share_price_coin,
+            liquidity_coin=liquidity_coin,
+            status=status,
+        )
+
     def ensure_market(self, *, player_id: str, **kwargs: Any):
         override = _trade_market_override.get()
         if override is not None and override.player_id == player_id:
@@ -237,16 +274,35 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
         share_count: int,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
-        market = self._require_trade_market(player_id)
-        self._assert_share_market_eligible(market.player)
-        if market.status != "active":
-            raise PlayerTokenMarketError("Player share market is not active.", reason="market_inactive")
-        if share_count <= 0:
-            raise PlayerTokenMarketError("Share count must be greater than zero.", reason="share_count_invalid")
-        if share_count > max(0, self._primary_available_shares(market)):
+        if share_count != 1:
             raise PlayerTokenMarketError(
-                "Requested shares exceed currently released supply.", reason="share_supply_insufficient"
+                "A player is acquired as one complete unit. Quantity must be exactly one.",
+                reason="acquisition_quantity_must_be_one",
             )
+
+        def acquire_one_unit() -> dict[str, Any]:
+            # The boundary has already locked the player market and replayed a
+            # previous request with the same idempotency key before this
+            # operation runs. That ordering preserves safe retries after a
+            # successful purchase whose response was lost.
+            market = _trade_market_override.get()
+            if market is None:
+                market = self._require_trade_market(player_id)
+            self._assert_share_market_eligible(market.player)
+            if market.status != "active":
+                raise PlayerTokenMarketError("Player acquisition is not available.", reason="market_inactive")
+
+            existing_holding = self.get_holding(user_id=actor.id, player_id=player_id)
+            if existing_holding is not None and int(existing_holding.share_count or 0) > 0:
+                raise PlayerTokenMarketError(
+                    "This account already owns this player. Only one unit is permitted per account.",
+                    reason="player_already_owned",
+                )
+            if self._primary_available_shares(market) < 1:
+                raise PlayerTokenMarketError(
+                    "This player has no unallocated units remaining.", reason="player_supply_exhausted"
+                )
+            return super(PlayerTokenMarketService, self).buy_shares(actor=actor, player_id=player_id, share_count=1)
 
         return self._run_trade_with_boundary(
             actor=actor,
@@ -254,9 +310,7 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
             share_count=share_count,
             side="buy",
             idempotency_key=idempotency_key,
-            operation=lambda: super(PlayerTokenMarketService, self).buy_shares(
-                actor=actor, player_id=player_id, share_count=share_count
-            ),
+            operation=acquire_one_unit,
         )
 
     def sell_shares(
@@ -267,15 +321,33 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
         share_count: int,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
+        def reject_resale() -> dict[str, Any]:
+            raise PlayerTokenMarketError(
+                "Player acquisitions are not listed for resale or secondary trading.",
+                reason="player_acquisition_non_transferable",
+            )
+
         return self._run_trade_with_boundary(
             actor=actor,
             player_id=player_id,
             share_count=share_count,
             side="sell",
             idempotency_key=idempotency_key,
-            operation=lambda: super(PlayerTokenMarketService, self).sell_shares(
-                actor=actor, player_id=player_id, share_count=share_count
-            ),
+            operation=reject_resale,
+        )
+
+    def distribute_dividend(
+        self,
+        *,
+        actor: User,
+        player_id: str,
+        gross_amount_coin,
+        note: str | None = None,
+    ) -> dict[str, Any]:
+        del actor, player_id, gross_amount_coin, note
+        raise PlayerTokenMarketError(
+            "Player acquisitions do not create dividend, yield or investment entitlements.",
+            reason="player_acquisition_non_investment",
         )
 
     def release_shares(

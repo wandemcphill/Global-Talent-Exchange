@@ -115,20 +115,16 @@ void main() {
       await tester.pump(const Duration(milliseconds: 120));
     }
 
-    // The sheet is the existing exchange trade ticket, not a stub - now
-    // settling on the canonical System A market rather than placing a
-    // System B order.
-    expect(find.text('Buy shares'), findsOneWidget);
-    // Scoped to the ticket: the profile behind it now states the share price
-    // too, which is the point - both surfaces quote the same figure under
-    // the same caption, so the assertion has to say which one it means.
+    // The sheet is the whole-player acquisition surface.
+    expect(find.text('Acquire player'), findsWidgets);
     expect(
       find.descendant(
         of: find.byType(GteOrderTicketSheet),
-        matching: find.text('SHARE PRICE'),
+        matching: find.text('ACQUISITION PRICE'),
       ),
       findsOneWidget,
     );
+    expect(find.text('Buy shares'), findsNothing);
     expect(find.text('Place order'), findsNothing);
   });
 

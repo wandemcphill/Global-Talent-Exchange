@@ -607,7 +607,9 @@ class TransferMarketService:
         if resolved_bidder_club_id == listing.selling_club_id:
             raise TransferMarketValidationError("Selling club cannot offer on its own listing.")
         self._require_club(resolved_bidder_club_id)
-        self._assert_bidder_can_fund(resolved_bidder_club_id, payload.cash_amount, subject="offer")
+        self._assert_bidder_can_fund(
+            resolved_bidder_club_id, payload.cash_amount, subject="offer", player_or_id=listing.player_id
+        )
         for player_id in payload.offered_player_ids:
             player = self._require_player(player_id)
             current_club_id = self._current_player_club_id(player.id, on_date=effective_at.date())
@@ -679,7 +681,9 @@ class TransferMarketService:
             raise TransferMarketValidationError(
                 "Loan and swap Transfer Hub offers cannot be accepted yet; only cash transfer offers settle."
             )
-        self._assert_bidder_can_fund(offer.bidder_club_id, offer.cash_amount, subject="offer")
+        self._assert_bidder_can_fund(
+            offer.bidder_club_id, offer.cash_amount, subject="offer", player_or_id=listing.player_id
+        )
         effective_at = self._coerce_utc(reference_at or utcnow())
         # Claim the offer and the listing with guarded UPDATEs rather than
         # read-then-write. Two accepts racing on sibling offers of the same
@@ -884,7 +888,7 @@ class TransferMarketService:
         current_highest = listing.current_highest_bid or listing.base_price
         if amount <= current_highest:
             raise TransferMarketValidationError("Bid must exceed the current highest bid.")
-        self._assert_bidder_can_fund(resolved_bidder_club_id, amount, subject="bid")
+        self._assert_bidder_can_fund(resolved_bidder_club_id, amount, subject="bid", player_or_id=listing.player_id)
 
         previous_bidder_id = listing.highest_bidder_id
         previous_amount = listing.current_highest_bid
@@ -1958,10 +1962,14 @@ class TransferMarketService:
             contract_id = accepted.structured_terms_json.get("contract_id")
         return accepted, str(contract_id) if contract_id is not None else None
 
-    def _assert_bidder_can_fund(self, club_id: str, amount: Decimal, *, subject: str) -> None:
+    def _assert_bidder_can_fund(self, club_id: str, amount: Decimal, *, subject: str, player_or_id: Any = None) -> None:
         try:
-            club_ledger.assert_club_can_fund(self.session, club_id, amount)
+            club_ledger.assert_club_can_fund(self.session, club_id, amount, player_or_id=player_or_id)
         except club_ledger.LedgerError as exc:
+            if "restricted" in str(exc):
+                raise TransferMarketValidationError(
+                    "Restricted players (GSI 80+, Regens, Legends) require deposited GTEX Coin. Promotional launch credit cannot be used."
+                ) from exc
             raise TransferMarketValidationError(f"Bidder club treasury cannot cover this {subject}.") from exc
 
     @staticmethod

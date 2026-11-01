@@ -24,7 +24,9 @@ def upgrade() -> None:
         columns = {column["name"] for column in inspector.get_columns("fancoin_purchase_orders")}
         if "idempotency_key" not in columns:
             op.add_column("fancoin_purchase_orders", sa.Column("idempotency_key", sa.String(128), nullable=True))
-            op.create_index("ix_fancoin_purchase_orders_idempotency_key", "fancoin_purchase_orders", ["idempotency_key"])
+            op.create_index(
+                "ix_fancoin_purchase_orders_idempotency_key", "fancoin_purchase_orders", ["idempotency_key"]
+            )
         if "processor_fee" not in columns:
             op.add_column(
                 "fancoin_purchase_orders",
@@ -44,11 +46,21 @@ def upgrade() -> None:
             op.add_column("treasury_withdrawal_requests", sa.Column("provider_key", sa.String(64), nullable=True))
             op.create_index("ix_treasury_withdrawal_provider_key", "treasury_withdrawal_requests", ["provider_key"])
         if "provider_reference" not in columns:
-            op.add_column("treasury_withdrawal_requests", sa.Column("provider_reference", sa.String(128), nullable=True))
-            op.create_index("ix_treasury_withdrawal_provider_reference", "treasury_withdrawal_requests", ["provider_reference"])
+            op.add_column(
+                "treasury_withdrawal_requests", sa.Column("provider_reference", sa.String(128), nullable=True)
+            )
+            op.create_index(
+                "ix_treasury_withdrawal_provider_reference", "treasury_withdrawal_requests", ["provider_reference"]
+            )
         if "provider_transfer_code" not in columns:
-            op.add_column("treasury_withdrawal_requests", sa.Column("provider_transfer_code", sa.String(128), nullable=True))
-            op.create_index("ix_treasury_withdrawal_provider_transfer_code", "treasury_withdrawal_requests", ["provider_transfer_code"])
+            op.add_column(
+                "treasury_withdrawal_requests", sa.Column("provider_transfer_code", sa.String(128), nullable=True)
+            )
+            op.create_index(
+                "ix_treasury_withdrawal_provider_transfer_code",
+                "treasury_withdrawal_requests",
+                ["provider_transfer_code"],
+            )
         if "processor_fee" not in columns:
             op.add_column(
                 "treasury_withdrawal_requests",
@@ -60,13 +72,19 @@ def upgrade() -> None:
                 sa.Column("is_manual_reconciliation", sa.Boolean(), nullable=False, server_default="0"),
             )
         if "failed_at" not in columns:
-            op.add_column("treasury_withdrawal_requests", sa.Column("failed_at", sa.DateTime(timezone=True), nullable=True))
+            op.add_column(
+                "treasury_withdrawal_requests", sa.Column("failed_at", sa.DateTime(timezone=True), nullable=True)
+            )
         if "reversed_at" not in columns:
-            op.add_column("treasury_withdrawal_requests", sa.Column("reversed_at", sa.DateTime(timezone=True), nullable=True))
+            op.add_column(
+                "treasury_withdrawal_requests", sa.Column("reversed_at", sa.DateTime(timezone=True), nullable=True)
+            )
         if "failure_reason" not in columns:
             op.add_column("treasury_withdrawal_requests", sa.Column("failure_reason", sa.String(255), nullable=True))
         if "raw_payload" not in columns:
-            op.add_column("treasury_withdrawal_requests", sa.Column("raw_payload", sa.JSON(), nullable=False, server_default="{}"))
+            op.add_column(
+                "treasury_withdrawal_requests", sa.Column("raw_payload", sa.JSON(), nullable=False, server_default="{}")
+            )
 
 
 def downgrade() -> None:

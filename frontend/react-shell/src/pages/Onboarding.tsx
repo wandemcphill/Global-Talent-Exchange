@@ -95,7 +95,7 @@ function SquadStep({ clubId, onDone }: any) {
   const [tactic, setTactic] = useState("tiki_taka");
   const [formation, setFormation] = useState("4-3-3");
   const [budgetCap, setBudgetCap] = useState("85000");
-  const [targetSquadSize, setTargetSquadSize] = useState("11");
+  const [targetSquadSize, setTargetSquadSize] = useState("22");
   const [appointingMgr, setAppointingMgr] = useState<string | null>(null);
 
   const { data: mgrCatalog } = useQuery({
@@ -107,7 +107,7 @@ function SquadStep({ clubId, onDone }: any) {
   const hasGk = squad.some(
     (p: any) => (p.position || "").toLowerCase().includes("goal") || (p.position || "").toLowerCase() === "gk"
   );
-  const isMatchEligible = squad.length >= 11 && hasGk;
+  const isMatchEligible = club?.formation?.is_formed ?? (squad.length >= 22 && hasGk);
   const clubCash = Number(club?.economy?.cash_gtex || 0);
 
   useEffect(() => {
@@ -292,8 +292,8 @@ function SquadStep({ clubId, onDone }: any) {
             Target Squad Size
             <input
               type="number"
-              min={11}
-              max={22}
+              min={22}
+              max={25}
               value={targetSquadSize}
               onChange={(e) => setTargetSquadSize(e.target.value)}
               data-testid="onboarding-autopick-size"
@@ -306,14 +306,14 @@ function SquadStep({ clubId, onDone }: any) {
       {/* Top Status & Auto-pick Toolbar */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-sm border border-white/10 bg-slate-950/60 p-4">
         <div className="flex flex-wrap items-center gap-3">
-          <Chip tone={squad.length >= 11 ? "emerald" : "gold"} testid="onboarding-squad-count">
-            {squad.length}/11 players signed
+          <Chip tone={isMatchEligible ? "emerald" : "gold"} testid="onboarding-squad-count">
+            {club?.formation?.progress_label || `${squad.length}/22 players signed`}
           </Chip>
           <Chip tone={hasGk ? "emerald" : "red"}>
             {hasGk ? "✓ Goalkeeper signed" : "⚠ Needs a goalkeeper"}
           </Chip>
           <span className="text-xs text-slate-400">
-            A club becomes match-eligible with 11 players including a goalkeeper.
+            A club becomes match-eligible with 22 players (First Team, Reserves, Academy) including a goalkeeper.
           </span>
         </div>
 

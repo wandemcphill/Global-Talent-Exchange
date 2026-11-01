@@ -46,16 +46,18 @@ def calculate_gsi_player_price(current_gsi: int, potential_gsi: int, is_real: bo
 
 
 def get_shares_for_gsi(eval_gsi: float) -> tuple[str, int]:
+    # High-GSI players are scarcer. Legends and regens are handled separately
+    # as one-of-one catalogue assets; real players never exceed 600 units.
     if eval_gsi >= 97.0:
         return "icon", 100
     elif eval_gsi >= 90.0:
         return "elite", 200
     elif eval_gsi >= 72.0:
-        return "core", 400
+        return "core", 300
     elif eval_gsi >= 50.0:
-        return "prospect", 600
+        return "prospect", 450
     else:
-        return "discovery", 900
+        return "discovery", 600
 
 
 def run_alignment():
@@ -560,16 +562,39 @@ def run_alignment():
         # =========================================================================
         logger.info("--- 6. Universal Sofifa-Max Alignment for remaining active Sportmonks players ---")
         sm_active = session.execute(text("""
-            SELECT p.id, p.dna_profile, p.market_value_eur
+            SELECT p.id, p.dna_profile, p.market_value_eur,
+                   COALESCE(h.owner_count, 0) AS owner_count,
+                   COALESCE(h.max_units, 0) AS max_units
             FROM ingestion_players p
             JOIN player_share_markets m ON m.player_id = p.id
+            LEFT JOIN (
+                SELECT player_id,
+                       COUNT(DISTINCT user_id) AS owner_count,
+                       MAX(share_count) AS max_units
+                FROM player_share_holdings
+                WHERE share_count > 0
+                GROUP BY player_id
+            ) h ON h.player_id = p.id
             WHERE p.source_provider = 'sportmonks'
               AND m.status = 'active'
         """)).fetchall()
 
         sm_recalibrations = []
-        for pid, dna_raw, mkt_val in sm_active:
+        skipped_existing_ownership = 0
+        for pid, dna_raw, mkt_val, owner_count, max_units in sm_active:
             dna = dna_raw if isinstance(dna_raw, dict) else {}
+
+            # Never rewrite live inventory underneath existing owners. The new
+            # acquisition rules apply to future purchases; historical holdings
+            # need a separate audited reconciliation. Also do not truncate a
+            # market where the owner count already exceeds the proposed supply.
+            if int(max_units or 0) > 1:
+                skipped_existing_ownership += 1
+                logger.warning(
+                    "Skipping %s during GSI alignment: existing account holds more than one unit.",
+                    pid,
+                )
+                continue
             if isinstance(dna_raw, str):
                 try:
                     dna = json.loads(dna_raw)
@@ -601,8 +626,26 @@ def run_alignment():
             tier_code, total_shares = get_shares_for_gsi(eval_gsi)
             new_price = calculate_gsi_player_price(cur, pot, is_real=True, is_legend=False)
 
+            existing_owners = int(owner_count or 0)
+            if existing_owners > total_shares:
+                skipped_existing_ownership += 1
+                logger.warning(
+                    "Skipping %s during GSI alignment: %s existing owners exceed proposed supply %s.",
+                    pid,
+                    existing_owners,
+                    total_shares,
+                )
+                continue
+
             sm_recalibrations.append(
-                {"pid": pid, "price": new_price, "shares": total_shares, "circ": total_shares, "cur": cur, "pot": pot}
+                {
+                    "pid": pid,
+                    "price": new_price,
+                    "shares": total_shares,
+                    "circ": existing_owners,
+                    "cur": cur,
+                    "pot": pot,
+                }
             )
 
         batch_size = 500
@@ -627,7 +670,11 @@ def run_alignment():
             )
             session.commit()
 
-        logger.info("Universal alignment complete across %d Sportmonks active players.", len(sm_recalibrations))
+        logger.info(
+            "Universal alignment complete across %d Sportmonks active players; skipped %d with existing ownership constraints.",
+            len(sm_recalibrations),
+            skipped_existing_ownership,
+        )
         logger.info("=== MARKET ALIGNMENT SUCCESSFULLY COMPLETED ===")
 
 

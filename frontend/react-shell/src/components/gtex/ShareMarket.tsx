@@ -53,7 +53,7 @@ function Filters({ sourceMode, setSourceMode, nation, setNation, sort, setSort }
         {(nations || []).map((n: any) => <option key={n.name} value={n.name}>{`${n.name} (${fmt(n.count)})`}</option>)}
       </select>
       <select data-testid="share-market-sort-select" className="gx-input w-48" value={sort} onChange={(e) => setSort(e.target.value)}>
-        <option value="value">Sort: Value / GSI</option>
+        <option value="value">Sort: GSI</option>
         <option value="name">Sort: Name</option>
         <option value="wonderkid">Sort: Wonderkid</option>
       </select>
@@ -76,7 +76,7 @@ function WonderkidSpotlight({ nation, onOpen }: { nation: string; onOpen: (id: s
               <Thumb src={m.image_url} name={m.player_name} regen />
               <div className="min-w-0">
                 <p className="truncate text-xs font-semibold text-white">{m.player_name}</p>
-                <p className="gx-mono text-[11px] text-amber-300">{m.rating ?? "-"} → {m.potential ?? "-"} <span className="text-slate-500">· {m.age ?? "-"}y · {posShort(m.position)}</span></p>
+                <p className="gx-mono text-[11px] text-amber-300">GSI {m.rating ?? "-"} <span className="text-slate-500">· {m.age ?? "-"}y · {posShort(m.position)}</span></p>
               </div>
             </button>
           ))}
@@ -132,15 +132,15 @@ export function ShareMarket() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="relative min-w-[220px] max-w-md flex-1">
           <Search size={14} className="absolute left-3 top-3 text-slate-500" />
-          <input data-testid="share-market-search" className="gx-input pl-9" placeholder="Search issued player markets" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input data-testid="share-market-search" className="gx-input pl-9" placeholder="Search players" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <Filters sourceMode={effectiveSource} setSourceMode={setSourceMode} nation={nation} setNation={setNation} sort={sort} setSort={setSort} />
       </div>
       {nation && <WonderkidSpotlight nation={nation} onOpen={setOpen} />}
-      {isLoading ? <Loading label={q ? `Searching “${q}”…` : "Loading share markets"} /> : (
+      {isLoading ? <Loading label={q ? `Searching “${q}”…` : "Loading player catalogue"} /> : (
         <div className={`gx-scroll overflow-x-auto transition-opacity ${isFetching ? "opacity-50" : ""}`} data-testid="share-market-results">
           <table className="gx-table w-full min-w-[700px]">
-            <thead><tr><th>Player</th><th>Pos</th><th>OVR / POT</th><th>Club</th><th>Share price</th><th>Circulating</th><th>Liquidity</th></tr></thead>
+            <thead><tr><th>Player</th><th>Pos</th><th>GSI</th><th>Club</th><th>Acquisition price</th><th>Units available</th></tr></thead>
             <tbody>
               {(data?.items || []).map((m: any) => {
                 const isLegend = Boolean(m.is_legend) || String(m.real_player_tier || "").toLowerCase() === "legend";
@@ -173,21 +173,20 @@ export function ShareMarket() {
                       {m.age != null && <span className="ml-1 text-slate-500">· {m.age}y</span>}
                     </td>
                     <td className="text-xs text-slate-400">{m.current_club_name}</td>
-                    <td className="gx-mono text-emerald-300">{fmt(m.share_price_coin, 2)}</td>
-                    <td className="gx-mono">{m.circulating_shares}/{m.total_shares}</td>
-                    <td className="gx-mono">{fmt(m.liquidity_coin, 2)}</td>
+                    <td className="gx-mono text-emerald-300">{fmt(m.share_price_coin, 2)} GTX</td>
+                    <td className="gx-mono">{Math.max(0, Number(m.released_shares ?? m.total_shares) - Number(m.circulating_shares || 0))}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-          {data?.items?.length === 0 && <p className="py-6 text-center text-sm text-slate-500" data-testid="share-market-empty">No markets match these filters.</p>}
+          {data?.items?.length === 0 && <p className="py-6 text-center text-sm text-slate-500" data-testid="share-market-empty">No players match these filters.</p>}
         </div>
       )}
       {pg && (
         <div className="mt-4 flex items-center gap-3 text-xs text-slate-500">
           <Btn variant="secondary" disabled={!pg.has_previous} onClick={() => setPage(page - 1)} data-testid="share-market-prev">Prev</Btn>
-          <span className="gx-mono" data-testid="share-market-page">Page {pg.page} / {fmt(pg.total_pages)} · {fmt(pg.total)} markets</span>
+          <span className="gx-mono" data-testid="share-market-page">Page {pg.page} / {fmt(pg.total_pages)} · {fmt(pg.total)} players</span>
           <Btn variant="secondary" disabled={!pg.has_next} onClick={() => setPage(page + 1)} data-testid="share-market-next">Next</Btn>
         </div>
       )}
