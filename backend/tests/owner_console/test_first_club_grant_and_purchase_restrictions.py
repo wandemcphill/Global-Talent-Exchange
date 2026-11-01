@@ -248,7 +248,7 @@ def test_concurrent_first_club_claims_award_grant_exactly_once(client, auth_user
             id=str(uuid4()),
             email=f"concurrent-{uuid4().hex[:6]}@example.com",
             username=f"conc_{uuid4().hex[:6]}",
-            password_hash="test-hash",
+            password_hash="test-hash",  # pragma: allowlist secret
             account_type="user",
         )
         session.add(fresh_user)
@@ -315,7 +315,7 @@ def test_historical_club_owner_backfill_does_not_reaward_grant(client, auth_user
             id=str(uuid4()),
             email=f"historical-{uuid4().hex[:6]}@example.com",
             username=f"hist_{uuid4().hex[:6]}",
-            password_hash="test-hash",
+            password_hash="test-hash",  # pragma: allowlist secret
             account_type="user",
         )
         session.add(hist_user)
@@ -357,7 +357,7 @@ def test_trader_and_creator_accounts_denied_first_club_grant(client, auth_user_f
             email=f"creator-{uuid4().hex[:6]}@example.com",
             username=f"creator_{uuid4().hex[:6]}",
             creator_name="Test Creator",
-            password="SuperSecret1",
+            password="SuperSecret1",  # pragma: allowlist secret
         ),
     )
     assert creator_res.status_code == 201
