@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any, Protocol
@@ -25,11 +25,82 @@ class ProviderEvent:
     provider_key: str
     event_type: ProviderEventType
     provider_reference: str
-    purchase_order_reference: str | None
-    event_id: str | None
-    amount: Decimal | None
-    currency: str | None
-    raw_payload: dict[str, Any]
+    purchase_order_reference: str | None = None
+    event_id: str | None = None
+    amount: Decimal | None = None
+    currency: str | None = None
+    raw_payload: dict[str, Any] = field(default_factory=dict)
+    is_payout: bool = False
+    reference: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CheckoutSession:
+    reference: str
+    checkout_url: str
+    provider: str
+    amount: Decimal
+    currency: str
+    status: str = "pending"
+    mock_mode: bool = False
+    metadata: dict[str, Any] | None = None
+    raw_response: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PaymentVerification:
+    reference: str
+    provider_reference: str
+    status: str
+    amount: Decimal
+    currency: str
+    provider_event_id: str | None = None
+    processor_fee: Decimal | None = None
+    customer_email: str | None = None
+    metadata: dict[str, Any] | None = None
+    raw_payload: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PayoutSession:
+    reference: str
+    provider_reference: str
+    transfer_code: str | None = None
+    status: str = "pending"
+    amount: Decimal = Decimal("0.0000")
+    currency: str = "NGN"
+    processor_fee: Decimal | None = None
+    raw_payload: dict[str, Any] | None = None
+    raw_response: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PayoutVerification:
+    reference: str
+    provider_reference: str
+    status: str
+    amount: Decimal
+    currency: str
+    processor_fee: Decimal | None = None
+    failure_reason: str | None = None
+    raw_payload: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class BankResolutionResult:
+    account_number: str
+    account_name: str
+    bank_code: str
+    bank_name: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderFeeEstimate:
+    amount: Decimal
+    estimated_fee: Decimal
+    net_amount: Decimal
+    currency: str
+    is_estimate: bool = True
 
 
 class ProviderAdapter(Protocol):
@@ -78,3 +149,17 @@ class GenericProviderAdapter:
             currency=str(currency) if currency else None,
             raw_payload=payload,
         )
+
+
+__all__ = [
+    "BankResolutionResult",
+    "CheckoutSession",
+    "GenericProviderAdapter",
+    "PaymentVerification",
+    "PayoutSession",
+    "PayoutVerification",
+    "ProviderAdapter",
+    "ProviderEvent",
+    "ProviderEventType",
+    "ProviderFeeEstimate",
+]

@@ -231,6 +231,7 @@ class WithdrawalSourceScope(str, Enum):
 class WithdrawalQuoteRequest(BaseModel):
     amount_coin: Decimal
     source_scope: WithdrawalSourceScope = WithdrawalSourceScope.TRADE
+    provider_key: str | None = None
 
     @field_validator("amount_coin")
     @classmethod
@@ -252,6 +253,10 @@ class WithdrawalQuoteView(BaseModel):
     estimated_fiat_payout: Decimal
     processor_mode: str
     payout_channel: str
+    provider_key: str | None = None
+    platform_fee: Decimal = Decimal("0.0000")
+    processor_fee: Decimal = Decimal("0.0000")
+    expected_net_fiat: Decimal = Decimal("0.0000")
     fee_bps: int
     minimum_fee: Decimal
     eligibility: WithdrawalEligibilityView
@@ -277,6 +282,7 @@ class WithdrawalRequestCreate(BaseModel):
     amount_coin: Decimal
     bank_account_id: str | None = None
     source_scope: WithdrawalSourceScope = WithdrawalSourceScope.TRADE
+    provider_key: str | None = None
     notes: str | None = Field(default=None, max_length=255)
     # A withdrawal is an economic submission, so replay protection is mandatory
     # at the public API boundary. The router namespaces this key by user before
@@ -323,6 +329,15 @@ class WithdrawalRequestView(BaseModel):
     net_amount: Decimal = Decimal("0.0000")
     processor_mode: str = "manual_bank_transfer"
     payout_channel: str = "bank_transfer"
+    provider_key: str | None = None
+    provider_reference: str | None = None
+    provider_transfer_code: str | None = None
+    platform_fee: Decimal = Decimal("0.0000")
+    processor_fee: Decimal = Decimal("0.0000")
+    is_manual_reconciliation: bool = False
+    failure_reason: str | None = None
+    failed_at: datetime | None = None
+    reversed_at: datetime | None = None
     platform_positioning: str | None = None
     legal_disclosures: list[str] = Field(default_factory=list)
     notes: str | None

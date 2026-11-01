@@ -35,6 +35,12 @@ from app.models.user import KycStatus, User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit, PayoutRequest, PayoutStatus
 from app.risk_ops_engine.service import RiskActionBlockedError, RiskOpsService
 from app.treasury.commission_policy import resolve_commission_policy
+from app.wallets.providers.base import ProviderEvent, ProviderEventType
+from app.wallets.providers.registry import (
+    get_live_provider_adapter,
+    get_provider_adapter,
+    provider_live_payout_ready,
+)
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
@@ -637,11 +643,17 @@ class TreasuryService:
         source_scope: str = "trade",
         notes: str | None = None,
         idempotency_key: str | None = None,
+        provider_key: str | None = None,
     ) -> TreasuryWithdrawalRequest:
         settings = self.ensure_settings(session)
-        use_manual_payout = settings.withdrawal_mode in {PaymentMode.MANUAL, PaymentMode.HYBRID}
-        processor_mode = "manual_bank_transfer" if use_manual_payout else "automatic_gateway"
-        payout_channel = "bank_transfer" if use_manual_payout else "gateway"
+        normalized_provider = provider_key.strip().lower() if provider_key else None
+        if normalized_provider in {"korapay", "paystack"}:
+            processor_mode = "automatic_gateway"
+            payout_channel = "gateway"
+        else:
+            use_manual_payout = settings.withdrawal_mode in {PaymentMode.MANUAL, PaymentMode.HYBRID}
+            processor_mode = "manual_bank_transfer" if use_manual_payout else "automatic_gateway"
+            payout_channel = "bank_transfer" if use_manual_payout else "gateway"
 
         try:
             RiskOpsService(session).assert_withdrawal_allowed(user.id)
@@ -730,6 +742,16 @@ class TreasuryService:
         if existing_withdrawal is not None:
             return existing_withdrawal
 
+        # Estimate processor fee if provider specified
+        processor_fee = Decimal("0.0000")
+        if normalized_provider in {"korapay", "paystack"}:
+            try:
+                adapter = get_provider_adapter(normalized_provider)
+                estimate = adapter.estimate_fee(amount=amount_fiat, operation="payout")
+                processor_fee = estimate.estimated_fee
+            except Exception:
+                processor_fee = Decimal("0.0000")
+
         reference = self._generate_reference(session, prefix="WDL", model=TreasuryWithdrawalRequest)
         withdrawal = TreasuryWithdrawalRequest(
             payout_request_id=result.payout_request.id,
@@ -740,6 +762,7 @@ class TreasuryService:
             amount_coin=amount_coin,
             amount_fiat=amount_fiat,
             fee_amount=result.fee_amount,
+            processor_fee=processor_fee,
             net_amount=result.payout_request.amount,
             currency_code=settings.currency_code,
             rate_value=rate_value,
@@ -759,6 +782,7 @@ class TreasuryService:
             kyc_tier_snapshot=eligibility.kyc_tier,
             processor_mode=processor_mode,
             payout_channel=payout_channel,
+            provider_key=normalized_provider,
             source_scope=source_scope,
             notes=notes,
         )
@@ -827,6 +851,22 @@ class TreasuryService:
                 self.wallet_service.release_payout_request(
                     session, payout_request, actor=actor, failure_reason="cancelled"
                 )
+        elif status == TreasuryWithdrawalStatus.FAILED:
+            request.failed_at = now
+            payout_request.status = PayoutStatus.REJECTED
+            if payout_request.settlement_transaction_id is None:
+                self.wallet_service.release_payout_request(
+                    session, payout_request, actor=actor, failure_reason=admin_notes or "failed"
+                )
+            self.track_event(session, "withdrawal_failed", user_id=request.user_id)
+        elif status == TreasuryWithdrawalStatus.REVERSED:
+            request.reversed_at = now
+            payout_request.status = PayoutStatus.REJECTED
+            if payout_request.settlement_transaction_id is None:
+                self.wallet_service.release_payout_request(
+                    session, payout_request, actor=actor, failure_reason=admin_notes or "reversed"
+                )
+            self.track_event(session, "withdrawal_reversed", user_id=request.user_id)
         elif status == TreasuryWithdrawalStatus.DISPUTED:
             payout_request.status = PayoutStatus.HELD
         elif status == TreasuryWithdrawalStatus.PENDING_REVIEW:
@@ -891,6 +931,182 @@ class TreasuryService:
                 metadata={"reference": request.reference, "status": status.value},
             )
         return request
+
+    def initiate_withdrawal_payout(
+        self,
+        session: Session,
+        *,
+        actor: User,
+        withdrawal_id: str,
+        provider_key: str | None = None,
+    ) -> TreasuryWithdrawalRequest:
+        withdrawal = self._get_withdrawal_or_raise(session, withdrawal_id)
+        if withdrawal.status in {TreasuryWithdrawalStatus.PAID, TreasuryWithdrawalStatus.CANCELLED, TreasuryWithdrawalStatus.REJECTED}:
+            raise TreasuryConflictError(f"Cannot initiate payout for withdrawal in {withdrawal.status.value} status.")
+
+        payout_request = session.get(PayoutRequest, withdrawal.payout_request_id)
+        if payout_request is None:
+            raise TreasuryError("Withdrawal request references missing payout request.")
+
+        p_key = (provider_key or withdrawal.provider_key or "").strip().lower()
+        if p_key not in {"korapay", "paystack"}:
+            # Manual fallback
+            withdrawal.status = TreasuryWithdrawalStatus.PROCESSING
+            withdrawal.processed_at = utcnow()
+            payout_request.status = PayoutStatus.PROCESSING
+            session.flush()
+            return withdrawal
+
+        if not provider_live_payout_ready(p_key):
+            raise TreasuryConflictError(f"{p_key.title()} payout rail is not configured with live credentials.")
+
+        adapter = get_live_provider_adapter(p_key)
+        try:
+            payout_session = adapter.initiate_payout(
+                withdrawal_reference=withdrawal.reference,
+                amount=withdrawal.amount_fiat,
+                currency=withdrawal.currency_code,
+                bank_code=withdrawal.bank_code,
+                account_number=withdrawal.bank_account_number,
+                account_name=withdrawal.bank_account_name,
+                narration=f"GTEX Payout {withdrawal.reference}",
+                metadata={"withdrawal_id": withdrawal.id, "user_id": withdrawal.user_id},
+            )
+        except Exception as exc:
+            raise TreasuryConflictError(f"Failed to initiate payout via {adapter.display_name}: {exc}") from exc
+
+        withdrawal.provider_key = p_key
+        withdrawal.provider_reference = payout_session.reference or withdrawal.reference
+        withdrawal.provider_transfer_code = payout_session.transfer_code
+        withdrawal.processor_mode = "automatic_gateway"
+        withdrawal.payout_channel = "gateway"
+        raw = dict(withdrawal.raw_payload or {})
+        raw[f"{p_key}_payout_init"] = payout_session.raw_response or payout_session.raw_payload or {}
+        withdrawal.raw_payload = raw
+
+        now = utcnow()
+        if payout_session.status == "success":
+            return self.review_withdrawal_status(
+                session, actor=actor, withdrawal_id=withdrawal.id, status=TreasuryWithdrawalStatus.PAID, admin_notes="Payout succeeded synchronously."
+            )
+        elif payout_session.status in {"failed", "rejected"}:
+            withdrawal.failure_reason = "Provider rejected payout initiation"
+            return self.review_withdrawal_status(
+                session, actor=actor, withdrawal_id=withdrawal.id, status=TreasuryWithdrawalStatus.FAILED, admin_notes=withdrawal.failure_reason
+            )
+        else:
+            withdrawal.status = TreasuryWithdrawalStatus.PROCESSING
+            withdrawal.processed_at = now
+            payout_request.status = PayoutStatus.PROCESSING
+            session.flush()
+            return withdrawal
+
+    def verify_withdrawal_payout(
+        self,
+        session: Session,
+        *,
+        withdrawal_id: str,
+        actor: User | None = None,
+    ) -> TreasuryWithdrawalRequest:
+        withdrawal = self._get_withdrawal_or_raise(session, withdrawal_id)
+        if not withdrawal.provider_key or withdrawal.provider_key not in {"korapay", "paystack"}:
+            raise TreasuryConflictError("Withdrawal is not associated with an automatic payment provider.")
+
+        adapter = get_provider_adapter(withdrawal.provider_key)
+        verification = adapter.verify_payout(
+            payout_reference=withdrawal.provider_reference or withdrawal.reference,
+            transfer_code=withdrawal.provider_transfer_code,
+        )
+
+        review_actor = actor or session.get(User, withdrawal.user_id)
+        if verification.is_successful:
+            if withdrawal.status != TreasuryWithdrawalStatus.PAID:
+                raw = dict(withdrawal.raw_payload or {})
+                raw[f"{withdrawal.provider_key}_verify_payout"] = verification.raw_response or {}
+                withdrawal.raw_payload = raw
+                return self.review_withdrawal_status(
+                    session,
+                    actor=review_actor,
+                    withdrawal_id=withdrawal.id,
+                    status=TreasuryWithdrawalStatus.PAID,
+                    admin_notes=f"Payout verified via {adapter.display_name}.",
+                )
+        elif verification.is_failed:
+            if withdrawal.status not in {TreasuryWithdrawalStatus.FAILED, TreasuryWithdrawalStatus.REJECTED, TreasuryWithdrawalStatus.CANCELLED}:
+                withdrawal.failure_reason = verification.gateway_response or "Payout failed at provider"
+                return self.review_withdrawal_status(
+                    session,
+                    actor=review_actor,
+                    withdrawal_id=withdrawal.id,
+                    status=TreasuryWithdrawalStatus.FAILED,
+                    admin_notes=withdrawal.failure_reason,
+                )
+        elif verification.status == "reversed":
+            withdrawal.failure_reason = "Payout reversed by provider"
+            return self.review_withdrawal_status(
+                session,
+                actor=review_actor,
+                withdrawal_id=withdrawal.id,
+                status=TreasuryWithdrawalStatus.REVERSED,
+                admin_notes=withdrawal.failure_reason,
+            )
+
+        return withdrawal
+
+    def handle_provider_payout_event(
+        self,
+        session: Session,
+        *,
+        event: ProviderEvent,
+    ) -> TreasuryWithdrawalRequest | None:
+        ref = event.provider_reference or event.reference
+        if not ref:
+            return None
+        withdrawal = session.scalar(
+            select(TreasuryWithdrawalRequest).where(
+                (TreasuryWithdrawalRequest.reference == ref)
+                | (TreasuryWithdrawalRequest.provider_reference == ref)
+                | (TreasuryWithdrawalRequest.provider_transfer_code == ref)
+            )
+        )
+        if withdrawal is None:
+            return None
+
+        actor = session.get(User, withdrawal.user_id) or User(id=withdrawal.user_id)
+        if event.event_type in {ProviderEventType.SETTLED, ProviderEventType.CAPTURED}:
+            if withdrawal.status != TreasuryWithdrawalStatus.PAID:
+                return self.review_withdrawal_status(
+                    session, actor=actor, withdrawal_id=withdrawal.id, status=TreasuryWithdrawalStatus.PAID, admin_notes="Paid via webhook."
+                )
+        elif event.event_type in {ProviderEventType.FAILED, ProviderEventType.CANCELLED}:
+            if withdrawal.status not in {TreasuryWithdrawalStatus.FAILED, TreasuryWithdrawalStatus.PAID}:
+                return self.review_withdrawal_status(
+                    session, actor=actor, withdrawal_id=withdrawal.id, status=TreasuryWithdrawalStatus.FAILED, admin_notes="Failed via webhook."
+                )
+        elif event.event_type == ProviderEventType.REVERSED:
+            return self.review_withdrawal_status(
+                session, actor=actor, withdrawal_id=withdrawal.id, status=TreasuryWithdrawalStatus.REVERSED, admin_notes="Reversed via webhook."
+            )
+        return withdrawal
+
+    def manual_reconcile_withdrawal(
+        self,
+        session: Session,
+        *,
+        actor: User,
+        withdrawal_id: str,
+        resolution_status: TreasuryWithdrawalStatus,
+        note: str,
+    ) -> TreasuryWithdrawalRequest:
+        withdrawal = self._get_withdrawal_or_raise(session, withdrawal_id)
+        withdrawal.is_manual_reconciliation = True
+        return self.review_withdrawal_status(
+            session,
+            actor=actor,
+            withdrawal_id=withdrawal.id,
+            status=resolution_status,
+            admin_notes=f"[Manual Reconciliation] {note}",
+        )
 
     def create_withdrawal_batch(
         self,

@@ -22,6 +22,10 @@ from app.coin_traders.schemas import (
     CoinTraderProfileView,
     CoinTraderRateUpsertRequest,
     CoinTraderRateView,
+    CoinTraderLiquidityQuoteRequest,
+    CoinTraderLiquidityQuoteView,
+    CoinTraderLiquidityPurchaseRequest,
+    CoinTraderLiquidityPurchaseSessionView,
 )
 from app.coin_traders.service import (
     CoinTraderNotFoundError,
@@ -106,6 +110,59 @@ def upsert_my_coin_trader_rate(
 ) -> CoinTraderRateView:
     try:
         return service.upsert_rate(payload, actor=current_user)
+    except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
+        _raise_coin_trader_error(exc)
+
+
+@router.post("/api/coin-traders/me/liquidity/quote", response_model=CoinTraderLiquidityQuoteView)
+def quote_my_liquidity_purchase(
+    payload: CoinTraderLiquidityQuoteRequest,
+    service: CoinTraderService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> CoinTraderLiquidityQuoteView:
+    try:
+        quote = service.quote_liquidity_purchase(
+            actor=current_user,
+            amount=payload.amount,
+            provider=payload.provider,
+            coin_unit=payload.coin_unit,
+            input_unit=payload.input_unit,
+        )
+        return CoinTraderLiquidityQuoteView.model_validate(quote)
+    except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
+        _raise_coin_trader_error(exc)
+
+
+@router.post("/api/coin-traders/me/liquidity/purchase", response_model=CoinTraderLiquidityPurchaseSessionView)
+def initiate_my_liquidity_purchase(
+    payload: CoinTraderLiquidityPurchaseRequest,
+    service: CoinTraderService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> CoinTraderLiquidityPurchaseSessionView:
+    try:
+        session_data = service.initiate_liquidity_purchase(
+            actor=current_user,
+            amount=payload.amount,
+            provider=payload.provider,
+            coin_unit=payload.coin_unit,
+            callback_url=payload.callback_url,
+        )
+        return CoinTraderLiquidityPurchaseSessionView.model_validate(session_data)
+    except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
+        _raise_coin_trader_error(exc)
+
+
+@router.post("/api/coin-traders/me/liquidity/verify/{reference}")
+def verify_my_liquidity_purchase(
+    reference: str,
+    service: CoinTraderService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    try:
+        return service.verify_liquidity_purchase(
+            actor=current_user,
+            reference=reference,
+        )
     except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
         _raise_coin_trader_error(exc)
 

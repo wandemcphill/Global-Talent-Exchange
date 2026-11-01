@@ -46,6 +46,8 @@ class TreasuryWithdrawalStatus(StrEnum):
     REJECTED = "rejected"
     PROCESSING = "processing"
     PAID = "paid"
+    FAILED = "failed"
+    REVERSED = "reversed"
     DISPUTED = "disputed"
     CANCELLED = "cancelled"
 
@@ -346,6 +348,13 @@ class TreasuryWithdrawalRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     payout_channel: Mapped[str] = mapped_column(
         String(64), nullable=False, default="bank_transfer", server_default="bank_transfer"
     )
+    provider_key: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    provider_reference: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    provider_transfer_code: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    processor_fee: Mapped[Decimal] = mapped_column(
+        Numeric(20, 4), nullable=False, default=Decimal("0.0000"), server_default="0.0000"
+    )
+    is_manual_reconciliation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     source_scope: Mapped[str] = mapped_column(String(32), nullable=False, default="trade", server_default="trade")
     notes: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
@@ -354,7 +363,11 @@ class TreasuryWithdrawalRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reversed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    failure_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    raw_payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     admin_user_id: Mapped[str | None] = mapped_column(
         String(36),

@@ -797,6 +797,92 @@ def update_withdrawal_status(
     return WithdrawalRequestView.model_validate(withdrawal)
 
 
+@admin_router.post("/withdrawals/{withdrawal_id}/payout/initiate", response_model=WithdrawalRequestView)
+def initiate_withdrawal_payout(
+    request: Request,
+    withdrawal_id: str,
+    payload: dict | None = None,
+    session: Session = Depends(get_session),
+    actor: User = Depends(get_current_admin),
+) -> WithdrawalRequestView:
+    _require_permission(request, actor, "manage_treasury_withdrawals")
+    service = _service(request)
+    provider_key = (payload or {}).get("provider_key")
+    try:
+        withdrawal = service.initiate_withdrawal_payout(
+            session,
+            actor=actor,
+            withdrawal_id=withdrawal_id,
+            provider_key=provider_key,
+        )
+        session.commit()
+    except TreasuryConflictError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except Exception as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return WithdrawalRequestView.model_validate(withdrawal)
+
+
+@admin_router.post("/withdrawals/{withdrawal_id}/payout/verify", response_model=WithdrawalRequestView)
+def verify_withdrawal_payout(
+    request: Request,
+    withdrawal_id: str,
+    session: Session = Depends(get_session),
+    actor: User = Depends(get_current_admin),
+) -> WithdrawalRequestView:
+    _require_permission(request, actor, "manage_treasury_withdrawals")
+    service = _service(request)
+    try:
+        withdrawal = service.verify_withdrawal_payout(
+            session,
+            actor=actor,
+            withdrawal_id=withdrawal_id,
+        )
+        session.commit()
+    except TreasuryConflictError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except Exception as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return WithdrawalRequestView.model_validate(withdrawal)
+
+
+@admin_router.post("/withdrawals/{withdrawal_id}/reconcile", response_model=WithdrawalRequestView)
+def manual_reconcile_withdrawal(
+    request: Request,
+    withdrawal_id: str,
+    payload: dict,
+    session: Session = Depends(get_session),
+    actor: User = Depends(get_current_admin),
+) -> WithdrawalRequestView:
+    _require_permission(request, actor, "manage_treasury_withdrawals")
+    status_str = payload.get("status")
+    if not status_str:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Status is required for reconciliation.")
+    note = str(payload.get("note") or payload.get("admin_notes") or "Manual administrative reconciliation")
+    service = _service(request)
+    try:
+        status_value = TreasuryWithdrawalStatus(status_str)
+        withdrawal = service.manual_reconcile_withdrawal(
+            session,
+            actor=actor,
+            withdrawal_id=withdrawal_id,
+            resolution_status=status_value,
+            note=note,
+        )
+        session.commit()
+    except ValueError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except TreasuryConflictError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return WithdrawalRequestView.model_validate(withdrawal)
+
+
 @admin_router.get("/withdrawals/{withdrawal_id}/reviews", response_model=list[WithdrawalReviewView])
 def list_withdrawal_reviews(
     request: Request,

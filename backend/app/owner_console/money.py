@@ -221,28 +221,26 @@ def release_payout(session: Session, ledger_event_id: str) -> LedgerEvent:
 # ---------- Paystack deposits ----------
 
 
-def paystack_init(session: Session, user, amount_ngn: int, callback_url: str) -> dict[str, Any]:
-    secret = _secret()
+def paystack_init(session: Session, user, amount_ngn: int, callback_url: str, provider: str = "paystack") -> dict[str, Any]:
+    from app.wallets.providers.registry import get_live_provider_adapter
     if amount_ngn < 100:
         raise OwnerError("minimum_deposit_100_ngn")
     reference = f"gtex_{uuid.uuid4().hex[:18]}"
-    response = httpx.post(
-        "https://api.paystack.co/transaction/initialize",
-        headers={"Authorization": f"Bearer {secret}"},
-        json={
-            "email": user.email,
-            "amount": amount_ngn * 100,
-            "currency": "NGN",
-            "reference": reference,
-            "callback_url": callback_url,
-            "metadata": {"user_id": user.id, "product": "gtex_coin"},
-        },
-        timeout=20,
-    )
-    data = response.json()
-    if not data.get("status"):
-        raise OwnerError("paystack_init_failed", 502, data.get("message"))
-    return {"authorization_url": data["data"]["authorization_url"], "reference": reference}
+    try:
+        adapter = get_live_provider_adapter(provider)
+        checkout_session = adapter.initialize_checkout(
+            order_reference=reference,
+            amount=Decimal(str(amount_ngn)),
+            currency="NGN",
+            customer_email=user.email,
+            customer_name=user.full_name or user.username or user.email,
+            callback_url=callback_url,
+            metadata={"user_id": user.id, "product": "gtex_coin", "provider": provider},
+            narration=f"GTEX {reference}",
+        )
+        return {"authorization_url": checkout_session.checkout_url, "reference": reference}
+    except Exception as exc:
+        raise OwnerError(f"{provider}_init_failed", 502, str(exc)) from exc
 
 
 def _credit_deposit(session: Session, user_id: str, reference: str, amount_kobo: int) -> LedgerEvent:
@@ -271,26 +269,24 @@ def _credit_deposit(session: Session, user_id: str, reference: str, amount_kobo:
     )
 
 
-def paystack_verify(session: Session, user, reference: str) -> dict[str, Any]:
-    secret = _secret()
-    data = httpx.get(
-        f"https://api.paystack.co/transaction/verify/{reference}",
-        headers={"Authorization": f"Bearer {secret}"},
-        timeout=20,
-    ).json()
-    tx = data.get("data") or {}
-    if not data.get("status") or tx.get("status") != "success":
-        return {"status": "failed", "message": data.get("message")}
-    if (tx.get("metadata") or {}).get("user_id") != user.id:
-        raise OwnerError("deposit_owner_mismatch", 403)
-    event = _credit_deposit(session, user.id, reference, int(tx["amount"]))
-    return {"status": "success", "ledger_event": ledger.serialize(event)}
+def paystack_verify(session: Session, user, reference: str, provider: str = "paystack") -> dict[str, Any]:
+    from app.wallets.providers.registry import get_provider_adapter
+    try:
+        adapter = get_provider_adapter(provider)
+        verification = adapter.verify_payment(reference)
+        if not verification.is_successful:
+            return {"status": "failed", "message": verification.gateway_response or "Payment not verified"}
+        amount_kobo = int(verification.amount_paid * 100) if verification.amount_paid else 0
+        event = _credit_deposit(session, user.id, reference, amount_kobo)
+        return {"status": "success", "ledger_event": ledger.serialize(event)}
+    except Exception as exc:
+        return {"status": "failed", "message": str(exc)}
 
 
 def paystack_webhook(session: Session, raw: bytes, signature: str | None, event: dict[str, Any]) -> None:
-    secret = _secret()
-    computed = hmac.new(secret.encode(), raw, hashlib.sha512).hexdigest()
-    if not signature or not hmac.compare_digest(computed, signature):
+    from app.wallets.providers.registry import get_provider_adapter
+    adapter = get_provider_adapter("paystack")
+    if not adapter.verify_webhook_signature(payload=event, raw_body=raw, headers={"x-paystack-signature": signature or ""}):
         raise OwnerError("invalid_signature", 401)
     if event.get("event") == "charge.success":
         tx = event.get("data") or {}

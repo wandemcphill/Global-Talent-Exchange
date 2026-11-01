@@ -21,7 +21,7 @@ class GteFundWalletScreen extends StatefulWidget {
 }
 
 class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
-  static const List<String> _automaticProviders = <String>['korapay'];
+  static const List<String> _automaticProviders = <String>['korapay', 'paystack'];
 
   final TextEditingController _automaticAmountController =
       TextEditingController();
@@ -423,7 +423,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
       case 'korapay':
         return 'KoraPay';
       case 'paystack':
-        return 'Unavailable payment rail';
+        return 'Paystack';
       default:
         return provider;
     }
@@ -494,8 +494,8 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
     return GteWalletFlowScaffold(
       title: 'Deposit',
       subtitle:
-          _providerSupportsCheckout('korapay')
-              ? 'Add live wallet value through KoraPay checkout or manual bank transfer review.'
+          _providerSupportsCheckout('korapay') || _providerSupportsCheckout('paystack')
+              ? 'Add live wallet value through KoraPay or Paystack checkout or manual bank transfer review.'
               : 'Add live wallet value through manual bank transfer review.',
       icon: Icons.add_card_outlined,
       statusLabel: 'FUND WALLET',
