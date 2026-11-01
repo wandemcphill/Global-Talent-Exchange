@@ -607,16 +607,9 @@ List<RouteBase> _buildLegacyAliasRoutes({
     ),
     GoRoute(
       path: '/player-cards',
-      pageBuilder: (BuildContext context, GoRouterState state) {
-        final GteNavigationDependencies dependencies =
-            dependenciesBuilder(context);
-        return NoTransitionPage<void>(
-          key: state.pageKey,
-          child: GteAppRouteRegistry(
-            dependencies: dependencies,
-          ).buildScreen(context, const PlayerCardsBrowseRouteData()),
-        );
-      },
+      redirect:
+          (BuildContext context, GoRouterState state) =>
+              const GteNavigationRoute.market().path,
       routes: <RouteBase>[
         GoRoute(
           path: 'inventory',
@@ -632,6 +625,20 @@ List<RouteBase> _buildLegacyAliasRoutes({
           },
         ),
       ],
+    ),
+    GoRoute(
+      path: '/clubs/:clubId/identity',
+      redirect: (BuildContext context, GoRouterState state) {
+        final String? clubId = state.pathParameters['clubId'];
+        return clubId != null ? '/clubs/$clubId/identity/jerseys' : null;
+      },
+    ),
+    GoRoute(
+      path: '/clubs/:clubId/identity/trophy-cabinet',
+      redirect: (BuildContext context, GoRouterState state) {
+        final String? clubId = state.pathParameters['clubId'];
+        return clubId != null ? '/clubs/$clubId/identity/trophies' : null;
+      },
     ),
     GoRoute(
       path: '/competitions',

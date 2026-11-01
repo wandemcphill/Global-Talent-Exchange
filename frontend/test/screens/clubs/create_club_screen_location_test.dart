@@ -48,6 +48,7 @@ Future<void> _pump(
         backendMode: GteBackendMode.live,
         api: api,
         onClubCreated: onCreated,
+        showConfirmationDialog: false,
       ),
     ),
   );
@@ -81,6 +82,11 @@ Future<void> _submit(WidgetTester tester) async {
   await tester.ensureVisible(button);
   await tester.tap(button);
   await tester.pumpAndSettle();
+  final Finder dismiss = find.text('Enter Club Workspace');
+  if (dismiss.evaluate().isNotEmpty) {
+    await tester.tap(dismiss);
+    await tester.pumpAndSettle();
+  }
 }
 
 void main() {

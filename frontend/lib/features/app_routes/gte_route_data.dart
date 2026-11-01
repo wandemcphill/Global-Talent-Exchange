@@ -244,10 +244,6 @@ class GteAppRouteCatalog {
           path: '/clubs/:clubId/identity/jerseys',
         ),
         GteAppRouteRegistration(
-          name: GteAppRouteNames.clubIdentityJerseys,
-          path: '/clubs/:clubId/identity',
-        ),
-        GteAppRouteRegistration(
           name: GteAppRouteNames.clubIdentityReputationOverview,
           path: '/clubs/:clubId/identity/reputation',
         ),
@@ -262,10 +258,6 @@ class GteAppRouteCatalog {
         GteAppRouteRegistration(
           name: GteAppRouteNames.clubIdentityTrophyCabinet,
           path: '/clubs/:clubId/identity/trophies',
-        ),
-        GteAppRouteRegistration(
-          name: GteAppRouteNames.clubIdentityTrophyCabinet,
-          path: '/clubs/:clubId/identity/trophy-cabinet',
         ),
         GteAppRouteRegistration(
           name: GteAppRouteNames.clubIdentityTrophyTimeline,

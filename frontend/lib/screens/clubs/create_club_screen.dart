@@ -19,6 +19,7 @@ class CreateClubScreen extends StatefulWidget {
     required this.backendMode,
     this.onClubCreated,
     this.api,
+    this.showConfirmationDialog = true,
   });
 
   final String baseUrl;
@@ -28,6 +29,9 @@ class CreateClubScreen extends StatefulWidget {
 
   /// Optional API override, used by tests.
   final ClubCreationApi? api;
+
+  /// Whether to show the inaugural academy confirmation dialog upon creation.
+  final bool showConfirmationDialog;
 
   @override
   State<CreateClubScreen> createState() => _CreateClubScreenState();
@@ -159,7 +163,13 @@ class _CreateClubScreenState extends State<CreateClubScreen> {
       }
       widget.onClubCreated?.call(created);
       AppFeedback.showSuccess(context, '${created.clubName} is live.');
-      await showDialog<void>(
+      if (mounted) {
+        setState(() {
+          _submitting = false;
+        });
+      }
+      if (widget.showConfirmationDialog) {
+        await showDialog<void>(
         context: context,
         barrierDismissible: false,
         builder: (BuildContext dialogContext) {
@@ -238,7 +248,8 @@ class _CreateClubScreenState extends State<CreateClubScreen> {
             ],
           );
         },
-      );
+        );
+      }
       if (!mounted) {
         return;
       }
@@ -248,7 +259,7 @@ class _CreateClubScreenState extends State<CreateClubScreen> {
         AppFeedback.showError(context, error);
       }
     } finally {
-      if (mounted) {
+      if (mounted && _submitting) {
         setState(() {
           _submitting = false;
         });
