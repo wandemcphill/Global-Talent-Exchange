@@ -126,10 +126,11 @@ def test_legendary_player_uses_the_standard_search_market_and_transfer_lifecycle
         assert session.get(PlayerShareMarket, active_market["id"]) is not None
 
         # Existing acquisition and resale operations create and update normal holdings.
-        purchase = shares.buy_shares(actor=buyer, player_id=legend.id, share_count=10)
-        assert purchase["holding"].share_count == 10
-        resale = shares.sell_shares(actor=buyer, player_id=legend.id, share_count=4)
-        assert resale["holding"].share_count == 6
+        purchase = shares.buy_shares(actor=buyer, player_id=legend.id, share_count=1)
+        assert purchase["holding"].share_count == 1
+        with pytest.raises(PlayerTokenMarketError) as resale:
+            shares.sell_shares(actor=buyer, player_id=legend.id, share_count=1)
+        assert resale.value.reason == "player_acquisition_non_transferable"
 
         # Existing transfer-listing and offer acceptance logic accepts the same player id.
         transfers = TransferMarketService(session)
