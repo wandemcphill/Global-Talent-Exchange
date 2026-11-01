@@ -40,6 +40,9 @@ def upgrade() -> None:
                 "creator_applications",
                 sa.Column("decision_history_json", sa.JSON(), nullable=False, server_default="[]"),
             )
+        with op.batch_alter_table("creator_applications") as batch_op:
+            batch_op.alter_column("email_verified_at", existing_type=sa.DateTime(timezone=True), nullable=True)
+            batch_op.alter_column("phone_verified_at", existing_type=sa.DateTime(timezone=True), nullable=True)
 
     # 2. coin_trader_profiles updates
     if "coin_trader_profiles" in tables:
@@ -97,6 +100,30 @@ def upgrade() -> None:
             unique=False,
         )
         op.create_index(
+            "ix_identity_verification_records_trader_profile_id",
+            "identity_verification_records",
+            ["trader_profile_id"],
+            unique=False,
+        )
+        op.create_index(
+            "ix_identity_verification_records_provider",
+            "identity_verification_records",
+            ["provider"],
+            unique=False,
+        )
+        op.create_index(
+            "ix_identity_verification_records_provider_session_id",
+            "identity_verification_records",
+            ["provider_session_id"],
+            unique=False,
+        )
+        op.create_index(
+            "ix_identity_verification_records_provider_reference",
+            "identity_verification_records",
+            ["provider_reference"],
+            unique=False,
+        )
+        op.create_index(
             "ix_identity_verification_records_provider_ref",
             "identity_verification_records",
             ["provider", "provider_reference"],
@@ -125,6 +152,12 @@ def downgrade() -> None:
         op.drop_index("ix_identity_verification_records_status", table_name="identity_verification_records")
         op.drop_index("ix_identity_verification_records_idempotency", table_name="identity_verification_records")
         op.drop_index("ix_identity_verification_records_provider_ref", table_name="identity_verification_records")
+        op.drop_index("ix_identity_verification_records_provider_reference", table_name="identity_verification_records")
+        op.drop_index(
+            "ix_identity_verification_records_provider_session_id", table_name="identity_verification_records"
+        )
+        op.drop_index("ix_identity_verification_records_provider", table_name="identity_verification_records")
+        op.drop_index("ix_identity_verification_records_trader_profile_id", table_name="identity_verification_records")
         op.drop_index("ix_identity_verification_records_user_id", table_name="identity_verification_records")
         op.drop_table("identity_verification_records")
 
@@ -138,6 +171,9 @@ def downgrade() -> None:
                 op.drop_column("coin_trader_profiles", col)
 
     if "creator_applications" in tables:
+        with op.batch_alter_table("creator_applications") as batch_op:
+            batch_op.alter_column("phone_verified_at", existing_type=sa.DateTime(timezone=True), nullable=False)
+            batch_op.alter_column("email_verified_at", existing_type=sa.DateTime(timezone=True), nullable=False)
         columns = {c["name"] for c in inspector.get_columns("creator_applications")}
         for col in ["decision_history_json", "selfie_attachment_id", "profile_url"]:
             if col in columns:

@@ -17,7 +17,9 @@ class CreatorApplicationSubmitRequest(CommonSchema):
     requested_handle: str = Field(min_length=3, max_length=64)
     display_name: str = Field(min_length=2, max_length=120)
     platform: str = Field(min_length=1, max_length=24)
-    follower_count: int = Field(ge=20000, description="Applicant must have at least 20,000 followers on one eligible platform")
+    follower_count: int = Field(
+        ge=20000, description="Applicant must have at least 20,000 followers on one eligible platform"
+    )
     profile_url: str = Field(default="", max_length=512)
     social_links: list[str] = Field(default_factory=list, max_length=5)
     selfie_attachment_id: str | None = Field(default=None, max_length=36)
@@ -39,7 +41,9 @@ class CreatorApplicationSubmitRequest(CommonSchema):
     def validate_requested_handle(cls, value: str) -> str:
         candidate = value.strip().lower()
         if any(character not in _HANDLE_CHARS for character in candidate):
-            raise ValueError("Creator handles may only include lowercase letters, numbers, dots, hyphens, and underscores.")
+            raise ValueError(
+                "Creator handles may only include lowercase letters, numbers, dots, hyphens, and underscores."
+            )
         return candidate
 
     @field_validator("platform")

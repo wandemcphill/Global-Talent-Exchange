@@ -57,7 +57,9 @@ class CoinTraderProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
     country_code: Mapped[str | None] = mapped_column(String(8), nullable=True, index=True)
-    status: Mapped[str] = mapped_column(String(32), nullable=False, default="applied", server_default="applied", index=True)
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="applied", server_default="applied", index=True
+    )
     tier: Mapped[str] = mapped_column(String(32), nullable=False, default="bronze", server_default="bronze", index=True)
     verification_level: Mapped[str] = mapped_column(
         String(32), nullable=False, default="standard", server_default="standard", index=True
@@ -73,7 +75,9 @@ class CoinTraderProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     payment_methods_json: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)
     bank_accounts_json: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)
     liquidity_snapshot_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
-    approved_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    approved_by_user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     frozen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -86,9 +90,7 @@ class CoinTraderProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class IdentityVerificationRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "identity_verification_records"
-    __table_args__ = (
-        Index("ix_identity_verification_records_provider_ref", "provider", "provider_reference"),
-    )
+    __table_args__ = (Index("ix_identity_verification_records_provider_ref", "provider", "provider_reference"),)
 
     user_id: Mapped[str] = mapped_column(
         String(36),
@@ -132,7 +134,9 @@ class IdentityVerificationRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class CoinTraderRate(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "coin_trader_rates"
     __table_args__ = (
-        UniqueConstraint("trader_profile_id", "coin_unit", "fiat_currency", name="uq_coin_trader_rates_profile_unit_fiat"),
+        UniqueConstraint(
+            "trader_profile_id", "coin_unit", "fiat_currency", name="uq_coin_trader_rates_profile_unit_fiat"
+        ),
     )
 
     trader_profile_id: Mapped[str] = mapped_column(
@@ -141,13 +145,25 @@ class CoinTraderRate(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         index=True,
     )
-    coin_unit: Mapped[LedgerUnit] = mapped_column(Enum(LedgerUnit, name="ledger_unit", native_enum=False), nullable=False)
+    coin_unit: Mapped[LedgerUnit] = mapped_column(
+        Enum(LedgerUnit, name="ledger_unit", native_enum=False), nullable=False
+    )
     fiat_currency: Mapped[str] = mapped_column(String(8), nullable=False, default="NGN", server_default="NGN")
-    buy_rate_fiat: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
-    sell_rate_fiat: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
-    min_coin_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
-    max_coin_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
-    available_liquidity: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
+    buy_rate_fiat: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
+    sell_rate_fiat: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
+    min_coin_amount: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
+    max_coin_amount: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
+    available_liquidity: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, server_default="1")
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
@@ -162,15 +178,23 @@ class CoinTradeOrder(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         index=True,
     )
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     direction: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
-    coin_unit: Mapped[LedgerUnit] = mapped_column(Enum(LedgerUnit, name="ledger_unit", native_enum=False), nullable=False)
+    coin_unit: Mapped[LedgerUnit] = mapped_column(
+        Enum(LedgerUnit, name="ledger_unit", native_enum=False), nullable=False
+    )
     coin_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     quoted_rate_fiat: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     fiat_total: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     fiat_currency: Mapped[str] = mapped_column(String(8), nullable=False, default="NGN", server_default="NGN")
-    status: Mapped[str] = mapped_column(String(32), nullable=False, default="created", server_default="created", index=True)
-    escrow_owner_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="created", server_default="created", index=True
+    )
+    escrow_owner_user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     idempotency_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
     payment_method: Mapped[str | None] = mapped_column(String(80), nullable=True)
     payment_window_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

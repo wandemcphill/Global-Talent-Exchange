@@ -62,6 +62,7 @@ def _admin_headers(client: TestClient) -> dict[str, str]:
         admin_user = session.scalar(select(User).where(User.email == email))
         if admin_user is None:
             from app.auth.service import AuthService
+
             AuthService().ensure_admin_user(
                 session,
                 email=email,

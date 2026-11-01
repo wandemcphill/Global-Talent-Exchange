@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
@@ -166,7 +166,9 @@ def admin_suspend_coin_trader(
 ) -> dict[str, Any]:
     note = payload.note if payload else None
     reason = payload.reason if payload else "Administrative suspension"
-    profile_view = service.suspend_trader(profile_id=profile_id, admin=current_admin, note=f"{reason}: {note}" if note else reason)
+    profile_view = service.suspend_trader(
+        profile_id=profile_id, admin=current_admin, note=f"{reason}: {note}" if note else reason
+    )
     return {"status": "suspended", "profile": profile_view}
 
 

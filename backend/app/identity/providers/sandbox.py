@@ -21,9 +21,7 @@ class SandboxVerificationAdapter(BaseIdentityVerificationAdapter):
 
     def _get_secret(self) -> str:
         return (
-            os.environ.get("GTE_SANDBOX_WEBHOOK_SECRET")
-            or os.environ.get("GTE_KYC_WEBHOOK_SECRET")
-            or "sandbox-secret"
+            os.environ.get("GTE_SANDBOX_WEBHOOK_SECRET") or os.environ.get("GTE_KYC_WEBHOOK_SECRET") or "sandbox-secret"
         )
 
     def initiate_session(

@@ -25,8 +25,6 @@ from app.coin_traders.schemas import (
 from app.coin_traders.service import CoinTraderPermissionError, CoinTraderService, CoinTraderValidationError
 from app.identity.providers import DIDitAdapter, SandboxAdapter, SmileIdAdapter, get_identity_provider
 from app.identity.service import (
-    IdentitySessionNotFoundError,
-    IdentityVerificationRecord,
     IdentityVerificationService,
     IdentityWebhookSignatureError,
 )
@@ -40,26 +38,22 @@ from app.models.coin_trader import (
 )
 from app.models.creator_application import (
     CREATOR_APPLICATION_ADDITIONAL_INFO,
-    CREATOR_APPLICATION_ADDITIONAL_INFO_REQUIRED,
-    CREATOR_APPLICATION_APPROVED,
     CREATOR_APPLICATION_PENDING,
     CREATOR_APPLICATION_REJECTED,
     CREATOR_APPLICATION_SUSPENDED,
     CREATOR_APPLICATION_VERIFICATION_REQUESTED,
-    CreatorApplication,
 )
 from app.models.creator_profile import CreatorProfile
 from app.models.user import KycStatus, PublicAccountType, User, UserRole
 from app.models.wallet import LedgerSourceTag, LedgerUnit
 from app.schemas.creator_application import (
-    CreatorApplicationAdminActionRequest,
     CreatorApplicationSubmitRequest,
 )
 from app.services.creator_application_service import (
     CreatorApplicationConflictError,
     CreatorApplicationService,
 )
-from app.treasury.service import TreasuryConflictError, TreasuryService
+from app.treasury.service import TreasuryService
 from app.wallets.service import WalletService
 
 
@@ -94,7 +88,7 @@ def _make_user(
         email=email,
         username=email.split("@")[0],
         display_name=email.split("@")[0].title(),
-        password_hash="test_password_hash",
+        password_hash="test_password_hash",  # pragma: allowlist secret
         account_type=account_type,
         role=role,
         kyc_status=kyc_status,
@@ -302,7 +296,10 @@ def test_creator_application_admin_workflow_and_audit(db_session: Session) -> No
     )
     assert info_app.status in {CREATOR_APPLICATION_VERIFICATION_REQUESTED, CREATOR_APPLICATION_ADDITIONAL_INFO}
     assert len(info_app.decision_history_json) >= 2
-    assert any(h.get("decision") in {"verification_requested", "additional_info_required"} for h in info_app.decision_history_json)
+    assert any(
+        h.get("decision") in {"verification_requested", "additional_info_required"}
+        for h in info_app.decision_history_json
+    )
 
     # 2. Admin suspends application
     suspended_app = service.suspend_application(
@@ -669,7 +666,7 @@ def test_coin_trader_200k_minimum_buyer_order_enforced(db_session: Session) -> N
         trader_profile_id=profile.id,
         coin_unit=LedgerUnit.COIN,
         fiat_currency="NGN",
-        buy_rate_fiat=Decimal("860"),   # Desk buys coin from user at ₦860
+        buy_rate_fiat=Decimal("860"),  # Desk buys coin from user at ₦860
         sell_rate_fiat=Decimal("920"),  # Desk sells coin to user at ₦920
         min_coin_amount=Decimal("10"),
         max_coin_amount=Decimal("50000"),

@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.auth.eligibility import AccountEligibilityError, AccountEligibilityService
 from app.models.base import utcnow
-from app.models.club_profile import ClubProfile
 from app.models.creator_application import (
     CREATOR_APPLICATION_ADDITIONAL_INFO,
     CREATOR_APPLICATION_APPROVED,

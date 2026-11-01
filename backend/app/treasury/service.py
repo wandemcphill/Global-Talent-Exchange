@@ -572,9 +572,8 @@ class TreasuryService:
         # Once accredited, they do not repeat routine KYC for every withdrawal.
         if getattr(user, "account_type", None) == PublicAccountType.COIN_TRADER:
             from app.models.coin_trader import CoinTraderProfile, CoinTraderProfileStatus
-            trader_profile = session.scalar(
-                select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id)
-            )
+
+            trader_profile = session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id))
             requires_kyc = (
                 trader_profile is None
                 or trader_profile.status != CoinTraderProfileStatus.APPROVED.value
@@ -673,6 +672,7 @@ class TreasuryService:
             raise TreasuryConflictError(str(exc)) from exc
 
         from app.auth.eligibility import AccountEligibilityError, AccountEligibilityService
+
         try:
             AccountEligibilityService.assert_can_withdraw(user, session, amount_coin)
         except AccountEligibilityError as exc:

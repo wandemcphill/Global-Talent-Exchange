@@ -515,7 +515,11 @@ class CoinTraderService:
         now = utcnow()
         profile.status = CoinTraderProfileStatus.SUSPENDED.value
         profile.suspended_at = now
-        profile.metadata_json = {**dict(profile.metadata_json or {}), "suspension_note": note or "", "suspended_at": now.isoformat()}
+        profile.metadata_json = {
+            **dict(profile.metadata_json or {}),
+            "suspension_note": note or "",
+            "suspended_at": now.isoformat(),
+        }
         self.session.commit()
         self.session.refresh(profile)
         return self.to_profile_view(profile)
@@ -528,7 +532,11 @@ class CoinTraderService:
         now = utcnow()
         profile.status = CoinTraderProfileStatus.APPROVED.value
         profile.suspended_at = None
-        profile.metadata_json = {**dict(profile.metadata_json or {}), "reinstate_note": note or "", "reinstated_at": now.isoformat()}
+        profile.metadata_json = {
+            **dict(profile.metadata_json or {}),
+            "reinstate_note": note or "",
+            "reinstated_at": now.isoformat(),
+        }
         self.session.commit()
         self.session.refresh(profile)
         return self.to_profile_view(profile)

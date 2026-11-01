@@ -65,4 +65,3 @@ IdentityVerificationRecordAdminView = AdminTraderVerificationRecordView
 class CoinTraderAdminActionRequest(CommonSchema):
     reason: str | None = None
     note: str | None = None
-
