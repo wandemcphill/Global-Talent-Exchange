@@ -42,7 +42,9 @@ class AccountEligibilityService:
         if user.account_type != PublicAccountType.COIN_TRADER:
             raise AccountTypeConflictError("Coin trader account access is required.")
         if profile is None:
-            raise TradingEligibilityError("Coin trader desk profile not found. Complete trader verification to activate your desk.")
+            raise TradingEligibilityError(
+                "Coin trader desk profile not found. Complete trader verification to activate your desk."
+            )
         if profile.status == CoinTraderProfileStatus.FROZEN.value:
             raise TradingEligibilityError("Coin trader desk is frozen by platform compliance.")
         if profile.status == CoinTraderProfileStatus.SUSPENDED.value:
@@ -52,7 +54,9 @@ class AccountEligibilityService:
         if profile.status != CoinTraderProfileStatus.APPROVED.value:
             raise TradingEligibilityError("Coin trader desk is pending identity verification.")
         if profile.verification_level not in {"fully_verified", "verified", "standard"} and not profile.verified_at:
-            raise TradingEligibilityError("Coin trader desk must complete authoritative identity verification before trading.")
+            raise TradingEligibilityError(
+                "Coin trader desk must complete authoritative identity verification before trading."
+            )
 
     @staticmethod
     def assert_can_own_club(user: User) -> None:
@@ -88,8 +92,8 @@ class AccountEligibilityService:
         """
         del amount
         if user.account_type == PublicAccountType.COIN_TRADER:
-            profile = session.scalar(
-                select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id)
-            )
+            profile = session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id))
             if profile is None or profile.status != CoinTraderProfileStatus.APPROVED.value:
-                raise TradingEligibilityError("Coin trader identity verification must be completed before requesting withdrawals.")
+                raise TradingEligibilityError(
+                    "Coin trader identity verification must be completed before requesting withdrawals."
+                )

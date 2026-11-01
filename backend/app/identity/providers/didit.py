@@ -73,12 +73,7 @@ class DIDitVerificationAdapter(BaseIdentityVerificationAdapter):
         *,
         payload: dict[str, Any],
     ) -> ProviderWebhookResult:
-        reference = (
-            payload.get("vendor_data")
-            or payload.get("reference")
-            or payload.get("session_id")
-            or ""
-        )
+        reference = payload.get("vendor_data") or payload.get("reference") or payload.get("session_id") or ""
         session_id = payload.get("session_id") or payload.get("id")
         raw_status = str(payload.get("status") or payload.get("decision") or "").strip().lower()
         decision = "verified" if raw_status in {"approved", "verified", "passed", "success"} else "rejected"

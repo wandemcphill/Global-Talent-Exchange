@@ -74,6 +74,7 @@ void main() {
         displayName: 'Maya Scout',
         platform: 'tiktok',
         followerCount: 120000,
+        profileUrl: 'https://example.test/@maya',
         socialLinks: <String>['https://example.test/@maya'],
       ),
     );

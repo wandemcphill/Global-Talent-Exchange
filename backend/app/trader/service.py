@@ -48,8 +48,10 @@ class TraderService:
 
     def assert_can_trade(self, user: User) -> None:
         from app.models.coin_trader import CoinTraderProfile
+
         profile = self.session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id))
         from app.auth.eligibility import AccountEligibilityError, AccountEligibilityService
+
         try:
             AccountEligibilityService.assert_can_trade_coin_marketplace(user, profile)
         except AccountEligibilityError as exc:

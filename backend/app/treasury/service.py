@@ -572,9 +572,8 @@ class TreasuryService:
         # Once accredited, they do not repeat routine KYC for every withdrawal.
         if getattr(user, "account_type", None) == PublicAccountType.COIN_TRADER:
             from app.models.coin_trader import CoinTraderProfile, CoinTraderProfileStatus
-            trader_profile = session.scalar(
-                select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id)
-            )
+
+            trader_profile = session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id))
             requires_kyc = (
                 trader_profile is None
                 or trader_profile.status != CoinTraderProfileStatus.APPROVED.value
@@ -673,6 +672,7 @@ class TreasuryService:
             raise TreasuryConflictError(str(exc)) from exc
 
         from app.auth.eligibility import AccountEligibilityError, AccountEligibilityService
+
         try:
             AccountEligibilityService.assert_can_withdraw(user, session, amount_coin)
         except AccountEligibilityError as exc:
@@ -959,7 +959,11 @@ class TreasuryService:
         provider_key: str | None = None,
     ) -> TreasuryWithdrawalRequest:
         withdrawal = self._get_withdrawal_or_raise(session, withdrawal_id)
-        if withdrawal.status in {TreasuryWithdrawalStatus.PAID, TreasuryWithdrawalStatus.CANCELLED, TreasuryWithdrawalStatus.REJECTED}:
+        if withdrawal.status in {
+            TreasuryWithdrawalStatus.PAID,
+            TreasuryWithdrawalStatus.CANCELLED,
+            TreasuryWithdrawalStatus.REJECTED,
+        }:
             raise TreasuryConflictError(f"Cannot initiate payout for withdrawal in {withdrawal.status.value} status.")
 
         payout_request = session.get(PayoutRequest, withdrawal.payout_request_id)
@@ -1005,12 +1009,20 @@ class TreasuryService:
         now = utcnow()
         if payout_session.status == "success":
             return self.review_withdrawal_status(
-                session, actor=actor, withdrawal_id=withdrawal.id, status=TreasuryWithdrawalStatus.PAID, admin_notes="Payout succeeded synchronously."
+                session,
+                actor=actor,
+                withdrawal_id=withdrawal.id,
+                status=TreasuryWithdrawalStatus.PAID,
+                admin_notes="Payout succeeded synchronously.",
             )
         elif payout_session.status in {"failed", "rejected"}:
             withdrawal.failure_reason = "Provider rejected payout initiation"
             return self.review_withdrawal_status(
-                session, actor=actor, withdrawal_id=withdrawal.id, status=TreasuryWithdrawalStatus.FAILED, admin_notes=withdrawal.failure_reason
+                session,
+                actor=actor,
+                withdrawal_id=withdrawal.id,
+                status=TreasuryWithdrawalStatus.FAILED,
+                admin_notes=withdrawal.failure_reason,
             )
         else:
             withdrawal.status = TreasuryWithdrawalStatus.PROCESSING
@@ -1050,7 +1062,11 @@ class TreasuryService:
                     admin_notes=f"Payout verified via {adapter.display_name}.",
                 )
         elif verification.is_failed:
-            if withdrawal.status not in {TreasuryWithdrawalStatus.FAILED, TreasuryWithdrawalStatus.REJECTED, TreasuryWithdrawalStatus.CANCELLED}:
+            if withdrawal.status not in {
+                TreasuryWithdrawalStatus.FAILED,
+                TreasuryWithdrawalStatus.REJECTED,
+                TreasuryWithdrawalStatus.CANCELLED,
+            }:
                 withdrawal.failure_reason = verification.gateway_response or "Payout failed at provider"
                 return self.review_withdrawal_status(
                     session,
@@ -1094,16 +1110,28 @@ class TreasuryService:
         if event.event_type in {ProviderEventType.SETTLED, ProviderEventType.CAPTURED}:
             if withdrawal.status != TreasuryWithdrawalStatus.PAID:
                 return self.review_withdrawal_status(
-                    session, actor=actor, withdrawal_id=withdrawal.id, status=TreasuryWithdrawalStatus.PAID, admin_notes="Paid via webhook."
+                    session,
+                    actor=actor,
+                    withdrawal_id=withdrawal.id,
+                    status=TreasuryWithdrawalStatus.PAID,
+                    admin_notes="Paid via webhook.",
                 )
         elif event.event_type in {ProviderEventType.FAILED, ProviderEventType.CANCELLED}:
             if withdrawal.status not in {TreasuryWithdrawalStatus.FAILED, TreasuryWithdrawalStatus.PAID}:
                 return self.review_withdrawal_status(
-                    session, actor=actor, withdrawal_id=withdrawal.id, status=TreasuryWithdrawalStatus.FAILED, admin_notes="Failed via webhook."
+                    session,
+                    actor=actor,
+                    withdrawal_id=withdrawal.id,
+                    status=TreasuryWithdrawalStatus.FAILED,
+                    admin_notes="Failed via webhook.",
                 )
         elif event.event_type == ProviderEventType.REVERSED:
             return self.review_withdrawal_status(
-                session, actor=actor, withdrawal_id=withdrawal.id, status=TreasuryWithdrawalStatus.REVERSED, admin_notes="Reversed via webhook."
+                session,
+                actor=actor,
+                withdrawal_id=withdrawal.id,
+                status=TreasuryWithdrawalStatus.REVERSED,
+                admin_notes="Reversed via webhook.",
             )
         return withdrawal
 

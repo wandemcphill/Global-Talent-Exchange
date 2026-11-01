@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.identity.providers import get_identity_provider
 from app.models.coin_trader import CoinTraderProfile, CoinTraderProfileStatus, IdentityVerificationRecord
 from app.models.risk_ops import AuditLog
-from app.models.user import KycStatus, PublicAccountType, User
+from app.models.user import PublicAccountType, User
 
 
 class IdentityVerificationError(ValueError):
@@ -57,9 +57,7 @@ class IdentityVerificationService:
         if actor.account_type != PublicAccountType.COIN_TRADER:
             raise IdentityVerificationError("Identity verification on this path is reserved for Coin Trader accounts.")
 
-        profile = self.session.scalar(
-            select(CoinTraderProfile).where(CoinTraderProfile.user_id == actor.id)
-        )
+        profile = self.session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == actor.id))
         if profile is None:
             # Auto-create basic profile if trader signed up but profile not initialized
             profile = CoinTraderProfile(
@@ -201,7 +199,9 @@ class IdentityVerificationService:
             ]
 
             # Activate the CoinTraderProfile automatically
-            profile = self.session.get(CoinTraderProfile, record.trader_profile_id) if record.trader_profile_id else None
+            profile = (
+                self.session.get(CoinTraderProfile, record.trader_profile_id) if record.trader_profile_id else None
+            )
             if profile is None:
                 profile = self.session.scalar(
                     select(CoinTraderProfile).where(CoinTraderProfile.user_id == record.user_id)
@@ -219,6 +219,7 @@ class IdentityVerificationService:
 
             # Update User KYC status via authoritative compliance boundary
             from app.identity.compliance_service import IdentityComplianceService, VerificationEvidence
+
             user = self.session.get(User, record.user_id)
             if user is not None:
                 evidence = VerificationEvidence(
@@ -275,7 +276,9 @@ class IdentityVerificationService:
                     "provider": adapter.provider_name,
                 },
             ]
-            profile = self.session.get(CoinTraderProfile, record.trader_profile_id) if record.trader_profile_id else None
+            profile = (
+                self.session.get(CoinTraderProfile, record.trader_profile_id) if record.trader_profile_id else None
+            )
             if profile is not None:
                 profile.status = CoinTraderProfileStatus.REJECTED.value
                 profile.rejected_at = now
