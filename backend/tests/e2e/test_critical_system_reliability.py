@@ -434,7 +434,7 @@ def test_auth_expired_token_refresh_works_and_invalid_token_is_rejected(
     )
 
 
-def test_market_buy_sell_flow_updates_holdings_wallet_and_price(
+def test_market_player_acquisition_updates_wallet_and_is_non_transferable(
     client,
     app_session_factory,
     bootstrap_admin_headers,
@@ -471,7 +471,7 @@ def test_market_buy_sell_flow_updates_holdings_wallet_and_price(
     buy_response = client.post(
         f"/players/{player_id}/shares/buy",
         headers=login["headers"],
-        json={"share_count": 10},
+        json={"share_count": 1},
     )
     assert buy_response.status_code == 201, buy_response.text
     buy_payload = buy_response.json()
@@ -482,27 +482,23 @@ def test_market_buy_sell_flow_updates_holdings_wallet_and_price(
         params={"currency": "coin"},
     ).json()
 
+    duplicate_buy = client.post(
+        f"/players/{player_id}/shares/buy",
+        headers=login["headers"],
+        json={"share_count": 1},
+    )
+    assert duplicate_buy.status_code == 409, duplicate_buy.text
+
     sell_response = client.post(
         f"/players/{player_id}/shares/sell",
         headers=login["headers"],
-        json={"share_count": 4},
+        json={"share_count": 1},
     )
-    assert sell_response.status_code == 201, sell_response.text
-    sell_payload = sell_response.json()
+    assert sell_response.status_code == 409, sell_response.text
+    assert "not listed for resale" in sell_response.json()["detail"].lower()
 
-    after_sell_summary = client.get(
-        "/api/wallets/summary",
-        headers=login["headers"],
-        params={"currency": "coin"},
-    ).json()
-
-    assert buy_payload["holding"]["share_count"] == 10
-    assert sell_payload["holding"]["share_count"] == 6
+    assert buy_payload["holding"]["share_count"] == 1
     assert Decimal(after_buy_summary["available_balance"]) < Decimal(before_summary["available_balance"])
-    assert Decimal(after_sell_summary["available_balance"]) > Decimal(after_buy_summary["available_balance"])
-    assert Decimal(buy_payload["market"]["share_price_coin"]) != Decimal("0.5000")
-    assert Decimal(sell_payload["market"]["share_price_coin"]) != Decimal(buy_payload["market"]["share_price_coin"])
-
     with app_session_factory() as session:
         holding = session.scalar(
             select(PlayerShareHolding).where(
@@ -511,7 +507,7 @@ def test_market_buy_sell_flow_updates_holdings_wallet_and_price(
             )
         )
         assert holding is not None
-        assert holding.share_count == 6
+        assert holding.share_count == 1
 
 
 def test_player_share_trade_routes_require_trading_compliance(
@@ -733,10 +729,10 @@ def test_end_to_end_register_login_fund_wallet_buy_player_and_join_competition(
     buy_response = client.post(
         f"/players/{player_id}/shares/buy",
         headers=login["headers"],
-        json={"share_count": 2},
+        json={"share_count": 1},
     )
     assert buy_response.status_code == 201, buy_response.text
-    assert buy_response.json()["holding"]["share_count"] == 2
+    assert buy_response.json()["holding"]["share_count"] == 1
 
     join_response = client.post(
         f"/api/competitions/{competition_id}/join",
@@ -762,7 +758,7 @@ def test_end_to_end_register_login_fund_wallet_buy_player_and_join_competition(
     holdings_response = client.get("/players/me/shares/holdings", headers=login["headers"])
     assert holdings_response.status_code == 200, holdings_response.text
     holdings = holdings_response.json()
-    assert any(item["player_id"] == player_id and item["share_count"] == 2 for item in holdings)
+    assert any(item["player_id"] == player_id and item["share_count"] == 1 for item in holdings)
 
     with app_session_factory() as session:
         auth_session = session.get(AuthSession, login["session_id"])
