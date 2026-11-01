@@ -14,11 +14,11 @@ Future<GteExchangeController> _controller(
     controller = GteExchangeController(api: GteExchangeApiClient.fixture());
     if (signedIn) {
       await controller.signIn(
-        email: 'fixture.player@gte.local',
+        email: 'fixture.trader@gte.local',
         password: 'DemoPass123', // pragma: allowlist secret
       );
     }
-    await controller.openPlayer('lamine-yamal');
+    await controller.openPlayer('jude-bellingham');
   });
   return controller;
 }

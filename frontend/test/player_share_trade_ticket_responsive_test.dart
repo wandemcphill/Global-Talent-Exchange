@@ -17,10 +17,10 @@ Future<GteExchangeController> _controller(WidgetTester tester) async {
   await tester.runAsync(() async {
     controller = GteExchangeController(api: GteExchangeApiClient.fixture());
     await controller.signIn(
-      email: 'fixture.player@gte.local',
+      email: 'fixture.trader@gte.local',
       password: 'DemoPass123', // pragma: allowlist secret
     );
-    await controller.openPlayer('lamine-yamal');
+    await controller.openPlayer('jude-bellingham');
   });
   return controller;
 }
