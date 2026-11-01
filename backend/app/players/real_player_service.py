@@ -292,7 +292,7 @@ class RealPlayerUniverseQueryService:
             .outerjoin(RealPlayerSourceLink, RealPlayerSourceLink.id == RealPlayerProfile.source_link_id)
             .outerjoin(Country, Country.id == Player.country_id)
             .outerjoin(PlayerSummaryReadModel, PlayerSummaryReadModel.player_id == Player.id)
-            .where(Player.is_real_player.is_(True))
+            .where(Player.is_real_player.is_(True), Player.is_tradable.is_(True))
         )
 
     def _selected_profiles_subquery(self):

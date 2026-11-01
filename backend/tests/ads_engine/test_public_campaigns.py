@@ -48,6 +48,8 @@ def _campaign(*, campaign_id: str, placement: str, now: datetime, **overrides) -
         "priority": 100,
         "is_approved": True,
         "is_active": True,
+        "campaign_type": "brand",
+        "status": "approved",
     }
     values.update(overrides)
     return BrandAdCampaign(**values)
