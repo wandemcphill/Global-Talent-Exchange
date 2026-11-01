@@ -72,16 +72,18 @@
       "secondary_positions": [
         "Winger"
       ],
-      "current_real_world_club": "Galatasaray",
-      "current_real_world_league": "Super Lig",
-      "competition_level": "top_flight",
+      "current_real_world_club": "Galatasaray SK",
+      "current_real_world_league": "Süper Lig",
+      "competition_level": "elite",
       "appearances": 31,
       "minutes_played": 2410,
       "goals": 19,
       "assists": 4,
-      "current_market_reference_value": 60000000,
+      "current_market_reference_value": 110000000.0,
       "market_reference_currency": "EUR",
-      "identity_confidence_score": 0.99
+      "identity_confidence_score": 0.99,
+      "overall_rating": 90,
+      "potential": 94
     },
     {
       "source_name": "curated-feed",

@@ -1,7 +1,7 @@
 {
   "batch_id": "top-eight-leagues-batch-v1",
   "total_players": 40,
-  "total_leagues": 9,
+  "total_leagues": 10,
   "leagues": [
     "Belgian Pro League",
     "Bundesliga",
@@ -11,9 +11,10 @@
     "Premier League",
     "Primeira Liga",
     "Serie A",
-    "Super Lig"
+    "Super Lig",
+    "Süper Lig"
   ],
-  "total_clubs": 23,
+  "total_clubs": 25,
   "clubs": [
     "AC Milan",
     "Arsenal",
@@ -25,9 +26,11 @@
     "Benfica",
     "Chelsea",
     "Club Brugge",
+    "FC Bayern München",
     "Fenerbahçe",
     "Feyenoord",
     "Galatasaray",
+    "Galatasaray SK",
     "Inter Milan",
     "Liverpool",
     "Manchester City",
