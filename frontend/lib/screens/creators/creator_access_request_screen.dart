@@ -437,7 +437,7 @@ class _CreatorAccessRequestScreenState
             children: <Widget>[
               FilledButton.icon(
                 onPressed:
-                    controller.isSubmitting
+                    (!contactsReady || controller.isSubmitting)
                         ? null
                         : _submitApplication,
                 icon: const Icon(Icons.send_outlined),

@@ -276,7 +276,9 @@ def get_club_formation_status(session: Session, club_id: str) -> dict[str, Any]:
             if (p.position or "").lower().startswith("goal"):
                 keepers += 1
             pers = dict(p.personality_json or {}) if p.is_regen else {}
-            status_val = pers.get("squad_status", "academy" if (p.is_regen and p.age <= 18 and p.minutes == 0) else "first_team")
+            status_val = pers.get(
+                "squad_status", "academy" if (p.is_regen and p.age <= 18 and p.minutes == 0) else "first_team"
+            )
             if status_val in ("first_team", "senior"):
                 first_team_count += 1
             elif status_val == "reserve":
@@ -287,7 +289,9 @@ def get_club_formation_status(session: Session, club_id: str) -> dict[str, Any]:
     active_contracts = session.scalars(
         select(PlayerContract).where(
             PlayerContract.club_id == club_id,
-            PlayerContract.status.in_((ContractStatus.ACTIVE.value, ContractStatus.EXPIRING.value, ContractStatus.AGREED.value)),
+            PlayerContract.status.in_(
+                (ContractStatus.ACTIVE.value, ContractStatus.EXPIRING.value, ContractStatus.AGREED.value)
+            ),
         )
     ).all()
     for c in active_contracts:

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import unicodedata
 from dataclasses import dataclass
+from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.ingestion.models import Player
@@ -14,6 +16,14 @@ from app.players.token_market_defaults import resolve_player_share_market_config
 from app.players.token_service import PlayerTokenMarketError, PlayerTokenMarketService
 from app.schemas.legendary_player import LegendaryPlayerProfileCreate, LegendarySeedImportRequest
 from app.services.legendary_player_service import LegendaryPlayerRegistryService
+
+
+def _normalize_name(value: str | None) -> str:
+    if not value:
+        return ""
+    nfkd = unicodedata.normalize("NFKD", value)
+    unaccented = "".join(c for c in nfkd if not unicodedata.combining(c))
+    return "".join(c.lower() for c in unaccented if c.isalnum() or c.isspace()).strip()
 
 
 class LegendaryPlayerLaunchError(ValueError):
@@ -35,6 +45,91 @@ class LegendaryPlayerLaunchService:
     @property
     def registry(self) -> LegendaryPlayerRegistryService:
         return LegendaryPlayerRegistryService(self.session)
+
+    def _assert_no_active_player_promotion(self, profile: LegendaryPlayerProfileCreate) -> None:
+        normalized_profile_name = _normalize_name(profile.full_name)
+        if not normalized_profile_name:
+            return
+
+        candidates = list(
+            self.session.scalars(
+                select(Player).where(
+                    or_(
+                        func.lower(Player.full_name) == profile.full_name.strip().lower(),
+                        func.lower(Player.canonical_display_name) == profile.full_name.strip().lower(),
+                        func.lower(Player.short_name) == profile.full_name.strip().lower(),
+                        func.lower(Player.provider_external_id) == profile.slug.strip().lower(),
+                    )
+                )
+            ).all()
+        )
+
+        tokens = [t for t in normalized_profile_name.split() if len(t) > 2]
+        if tokens:
+            token_filters = [
+                or_(
+                    func.lower(Player.full_name).contains(token),
+                    func.lower(Player.canonical_display_name).contains(token),
+                    func.lower(Player.short_name).contains(token),
+                )
+                for token in tokens
+            ]
+            potential_matches = self.session.scalars(
+                select(Player).where(
+                    Player.is_tradable.is_(True),
+                    or_(*token_filters),
+                )
+            ).all()
+            for candidate in potential_matches:
+                if (
+                    _normalize_name(candidate.full_name) == normalized_profile_name
+                    or _normalize_name(candidate.canonical_display_name) == normalized_profile_name
+                    or _normalize_name(candidate.short_name) == normalized_profile_name
+                ):
+                    if candidate not in candidates:
+                        candidates.append(candidate)
+
+        for player in candidates:
+            source = str(player.source_provider or "").strip().lower()
+            tier = str(player.real_player_tier or "").strip().lower()
+            if (
+                not bool(player.is_tradable)
+                or not bool(player.is_real_player)
+                or source in {"gtex_legend", "gtex_legend_prime", "legendary_player_foundation"}
+                or tier in {"legend", "legendary", "icon", "immortal", "hero"}
+            ):
+                continue
+
+            active_age = None
+            if player.date_of_birth is not None:
+                active_age = date.today().year - player.date_of_birth.year
+                if (date.today().month, date.today().day) < (
+                    player.date_of_birth.month,
+                    player.date_of_birth.day,
+                ):
+                    active_age -= 1
+
+            dna = player.dna_profile if isinstance(player.dna_profile, dict) else {}
+            current_ratings = [
+                dna.get("overall"),
+                dna.get("current_rating"),
+                dna.get("sofifa_overall"),
+                getattr(player, "rating", None),
+            ]
+            current_gsi = max(
+                (
+                    int(float(value))
+                    for value in current_ratings
+                    if isinstance(value, (int, float)) and float(value) > 0
+                ),
+                default=0,
+            )
+            if (active_age is not None and active_age < 31) or current_gsi >= 80:
+                raise LegendaryPlayerLaunchError(
+                    f"{profile.full_name} already has an active real-player identity "
+                    f"(age {active_age if active_age is not None else 'unknown'}, current GSI {current_gsi}); "
+                    "keep that identity active instead of launching a legend duplicate."
+                )
 
     @staticmethod
     def _assert_launch_approved(profile: LegendaryPlayerProfileCreate) -> None:
@@ -69,6 +164,7 @@ class LegendaryPlayerLaunchService:
         actor: User,
     ) -> tuple[LegendaryPlayerProfile, Player, PlayerShareMarket]:
         self._assert_launch_approved(profile)
+        self._assert_no_active_player_promotion(profile)
         stored_profile, _created = self.registry.upsert_legendary_profile(profile)
         player = self.registry.instantiate_gtex_player(stored_profile)
         market = self.issue_active_market(player=player, actor=actor)

@@ -65,7 +65,9 @@ class ClubLifecycleService:
             self.session.flush()
         return self._map_lifecycle(state, readiness)
 
-    def advance_lifecycle(self, *, actor: User, club_id: str, target_state: ClubLifecycleStatus | None, reason: str | None) -> ClubLifecycleView:
+    def advance_lifecycle(
+        self, *, actor: User, club_id: str, target_state: ClubLifecycleStatus | None, reason: str | None
+    ) -> ClubLifecycleView:
         club = self._require_club(club_id)
         readiness = self.evaluate_readiness(club_id)
         state = self._get_or_create_lifecycle(club)
@@ -149,7 +151,9 @@ class ClubLifecycleService:
             self._item(
                 "squad_registered",
                 "Squad registration submitted",
-                registration is not None and registration.status in {SquadRegistrationStatus.SUBMITTED.value, SquadRegistrationStatus.LOCKED.value},
+                registration is not None
+                and registration.status
+                in {SquadRegistrationStatus.SUBMITTED.value, SquadRegistrationStatus.LOCKED.value},
                 "Submit and lock the launch squad before competition entry.",
             ),
         ]
@@ -218,7 +222,9 @@ class ClubLifecycleService:
         self.evaluate_readiness(club_id)
         return self._map_registration(registration)
 
-    def submit_squad_registration(self, *, actor: User, club_id: str, season_label: str = "launch") -> SquadRegistrationView:
+    def submit_squad_registration(
+        self, *, actor: User, club_id: str, season_label: str = "launch"
+    ) -> SquadRegistrationView:
         registration = self._require_registration(club_id, season_label)
         if registration.status == SquadRegistrationStatus.LOCKED.value:
             raise ClubLifecycleError("squad_registration_locked")
@@ -241,7 +247,9 @@ class ClubLifecycleService:
         self.evaluate_readiness(club_id)
         return self._map_registration(registration)
 
-    def lock_squad_registration(self, *, actor: User, club_id: str, season_label: str = "launch") -> SquadRegistrationView:
+    def lock_squad_registration(
+        self, *, actor: User, club_id: str, season_label: str = "launch"
+    ) -> SquadRegistrationView:
         registration = self._require_registration(club_id, season_label)
         players = self._players_for_registration(club_id, list(registration.player_ids_json or []))
         self._validate_registration(players)
@@ -286,7 +294,10 @@ class ClubLifecycleService:
                 {"label": "Academy", "route": f"/clubs/{club_id}/academy"},
                 {"label": "Sponsorships", "route": f"/clubs/{club_id}/sponsorships"},
             ],
-            counts={"players": len(players), "registered": len(registration.players) if registration is not None else 0},
+            counts={
+                "players": len(players),
+                "registered": len(registration.players) if registration is not None else 0,
+            },
             alerts=alerts,
             updated_at=status.updated_at,
         )
@@ -363,7 +374,9 @@ class ClubLifecycleService:
         return [by_id[player_id] for player_id in player_ids if player_id in by_id]
 
     def _replace_slots(self, registration: ClubSquadRegistration, players: list[Player], *, slot_status: str) -> None:
-        self.session.execute(delete(ClubRegistrationSlot).where(ClubRegistrationSlot.registration_id == registration.id))
+        self.session.execute(
+            delete(ClubRegistrationSlot).where(ClubRegistrationSlot.registration_id == registration.id)
+        )
         for player in players:
             self.session.add(
                 ClubRegistrationSlot(
@@ -458,7 +471,9 @@ class ClubLifecycleService:
 
     @staticmethod
     def _position_balance_detail(summary: dict[str, int]) -> str:
-        return ", ".join(f"{group}: {summary.get(group, 0)}/{required}" for group, required in POSITION_REQUIREMENTS.items())
+        return ", ".join(
+            f"{group}: {summary.get(group, 0)}/{required}" for group, required in POSITION_REQUIREMENTS.items()
+        )
 
     @staticmethod
     def _item(key: str, label: str, complete: bool, detail: str) -> ClubReadinessItemView:

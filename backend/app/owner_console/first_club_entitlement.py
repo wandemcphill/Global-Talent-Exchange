@@ -25,9 +25,7 @@ class FirstClubEntitlementError(Exception):
 
 
 def get_first_club_entitlement(session: Session, user_id: str) -> FirstClubEntitlement | None:
-    return session.scalar(
-        select(FirstClubEntitlement).where(FirstClubEntitlement.user_id == user_id)
-    )
+    return session.scalar(select(FirstClubEntitlement).where(FirstClubEntitlement.user_id == user_id))
 
 
 def has_received_first_club_grant(session: Session, user_id: str) -> bool:

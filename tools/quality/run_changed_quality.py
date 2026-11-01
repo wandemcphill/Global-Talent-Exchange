@@ -227,10 +227,13 @@ def run_secret_check(command: list[str], files: list[str]) -> None:
             SECRET_BASELINE_PATH.write_bytes(baseline_bytes or b"")
             print("[quality] Secret baseline changed only by generated_at; restored original baseline.")
             return
-        baseline_after_fingerprint = _secret_result_fingerprint(SECRET_BASELINE_PATH)
-        if baseline_after_fingerprint == baseline_before_fingerprint:
+        baseline_after_fingerprint = set(_secret_result_fingerprint(SECRET_BASELINE_PATH))
+        baseline_before_fingerprint_set = set(baseline_before_fingerprint or [])
+        if baseline_after_fingerprint.issubset(baseline_before_fingerprint_set):
             SECRET_BASELINE_PATH.write_bytes(baseline_bytes or b"")
-            print("[quality] Secret baseline changed only by metadata/line numbers; restored original baseline.")
+            print(
+                "[quality] Secret baseline changed only by metadata/line numbers or allowlisted secrets; restored original baseline."
+            )
             return
 
     raise subprocess.CalledProcessError(result.returncode, full_command)

@@ -99,34 +99,35 @@ def test_player_share_market_lifecycle(session) -> None:
         total_shares=1000,
         share_price_coin=Decimal("0.0750"),
     )
-    purchase = service.buy_shares(actor=fan, player_id=player.id, share_count=10)
+    purchase = service.buy_shares(actor=fan, player_id=player.id, share_count=1)
     repriced = service.apply_performance_adjustment(
         actor=admin,
         player_id=player.id,
         multiplier=Decimal("1.0500"),
         reason="player_scored",
     )
-    dividend = service.distribute_dividend(
-        actor=admin,
-        player_id=player.id,
-        gross_amount_coin=Decimal("7.5000"),
-        note="tournament_winnings",
-    )
+    with pytest.raises(PlayerTokenMarketError) as dividend_error:
+        service.distribute_dividend(
+            actor=admin,
+            player_id=player.id,
+            gross_amount_coin=Decimal("7.5000"),
+            note="tournament_winnings",
+        )
+    assert dividend_error.value.reason == "player_acquisition_non_investment"
     holding = service.get_holding(user_id=fan.id, player_id=player.id)
     events = service.list_events(player_id=player.id)
 
-    assert market.total_shares == 1000
-    assert purchase["gross_amount_coin"] == Decimal("0.7500")
-    assert purchase["fee_amount_coin"] == Decimal("0.1500")
-    assert purchase["net_amount_coin"] == Decimal("0.9000")
+    assert market.total_shares == 600
+    assert purchase["gross_amount_coin"] == Decimal("0.0750")
+    assert purchase["fee_amount_coin"] == Decimal("0.0150")
+    assert purchase["net_amount_coin"] == Decimal("0.0900")
     assert purchase["transaction_id"]
-    assert purchase["market"]["share_price_coin"] == Decimal("0.0769")
-    assert repriced.share_price_coin == Decimal("0.0807")
-    assert dividend["gross_amount_coin"] == Decimal("7.5000")
+    assert purchase["market"]["share_price_coin"] == Decimal("0.0750")
+    assert repriced.share_price_coin > Decimal("0.0750")
     assert holding is not None
-    assert holding.share_count == 10
+    assert holding.share_count == 1
     assert holding.average_cost_coin == Decimal("0.0900")
-    assert holding.dividends_earned_coin == Decimal("7.5000")
+    assert holding.dividends_earned_coin == Decimal("0.0000")
     assert len(events) >= 4
 
 
@@ -157,7 +158,7 @@ def test_ineligible_new_player_does_not_auto_create_share_market(session) -> Non
     assert session.query(PlayerShareMarket).filter_by(player_id=player.id).first() is None
 
 
-def test_player_share_market_sell_flow_updates_holding_and_price(session) -> None:
+def test_player_acquisition_is_single_unit_and_cannot_be_resold(session) -> None:
     wallet = WalletService()
     admin = _create_user(session, user_id="token-sell-admin", role=UserRole.ADMIN)
     fan = _create_user(session, user_id="token-sell-fan")
@@ -165,27 +166,30 @@ def test_player_share_market_sell_flow_updates_holding_and_price(session) -> Non
     _seed_coin_balance(session, wallet, user=fan, amount=Decimal("50.0000"))
 
     service = PlayerTokenMarketService(session=session, wallet_service=wallet)
-    service.issue_market(
+    market = service.issue_market(
         actor=admin,
         player_id=player.id,
         total_shares=1000,
         share_price_coin=Decimal("0.5000"),
         liquidity_coin=Decimal("20.0000"),
     )
-    service.buy_shares(actor=fan, player_id=player.id, share_count=10)
-    sale = service.sell_shares(actor=fan, player_id=player.id, share_count=4)
+    purchase = service.buy_shares(actor=fan, player_id=player.id, share_count=1)
+    assert market.total_shares == 600
+    assert purchase["holding"].share_count == 1
+
+    with pytest.raises(PlayerTokenMarketError) as duplicate_error:
+        service.buy_shares(actor=fan, player_id=player.id, share_count=1)
+    assert duplicate_error.value.reason == "player_already_owned"
+
+    with pytest.raises(PlayerTokenMarketError) as resale_error:
+        service.sell_shares(actor=fan, player_id=player.id, share_count=1)
+    assert resale_error.value.reason == "player_acquisition_non_transferable"
+
     holding = service.get_holding(user_id=fan.id, player_id=player.id)
     events = service.list_events(player_id=player.id)
-
-    assert sale["transaction_id"]
-    assert sale["gross_amount_coin"] > Decimal("0.0000")
-    assert sale["fee_amount_coin"] > Decimal("0.0000")
-    assert sale["net_amount_coin"] < sale["gross_amount_coin"]
-    assert sale["market"]["circulating_shares"] == 6
-    assert Decimal(str(sale["market"]["share_price_coin"])) < Decimal("0.5125")
     assert holding is not None
-    assert holding.share_count == 6
-    assert events[0].event_type == "sell"
+    assert holding.share_count == 1
+    assert not any(event.event_type == "sell" for event in events)
 
 
 def test_player_share_market_trade_publishes_realtime_event_after_commit(session) -> None:
@@ -207,14 +211,14 @@ def test_player_share_market_trade_publishes_realtime_event_after_commit(session
         total_shares=1000,
         share_price_coin=Decimal("0.1250"),
     )
-    service.buy_shares(actor=fan, player_id=player.id, share_count=4)
+    service.buy_shares(actor=fan, player_id=player.id, share_count=1)
     session.commit()
 
     market_events = [event for event in publisher.published_events if event.name == "market.trade.executed"]
     assert len(market_events) == 1
     assert market_events[0].payload["player_id"] == player.id
     assert market_events[0].payload["side"] == "buy"
-    assert market_events[0].payload["shares"] == 4
+    assert market_events[0].payload["shares"] == 1
 
 
 def test_player_share_market_respects_governor_price_caps(session) -> None:
@@ -301,7 +305,7 @@ def test_creator_account_can_hold_only_one_share_per_player_before_any_debit(ses
 
     with pytest.raises(PlayerTokenMarketError) as too_many:
         service.buy_shares(actor=creator, player_id=player.id, share_count=2)
-    assert too_many.value.reason == "creator_single_share_limit"
+    assert too_many.value.reason == "acquisition_quantity_must_be_one"
     holding = service.get_holding(user_id=creator.id, player_id=player.id)
     assert holding is None
 
@@ -314,7 +318,7 @@ def test_creator_account_can_hold_only_one_share_per_player_before_any_debit(ses
 
     with pytest.raises(PlayerTokenMarketError) as second_share:
         service.buy_shares(actor=creator, player_id=player.id, share_count=1)
-    assert second_share.value.reason == "creator_single_share_limit"
+    assert second_share.value.reason == "player_already_owned"
     balance_after_rejection = wallet.get_balance(
         session,
         wallet.get_user_account(session, creator, LedgerUnit.COIN),

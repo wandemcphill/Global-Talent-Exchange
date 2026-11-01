@@ -78,8 +78,6 @@ def provider_webhook_secret_configured(provider_key: str) -> bool:
     normalized = provider_key.strip().lower()
     env_names = {
         "paystack": (
-            "GTE_PAYSTACK_WEBHOOK_SECRET",
-            "PAYSTACK_WEBHOOK_SECRET",
             "GTE_PAYSTACK_SECRET_KEY",
             "PAYSTACK_SECRET_KEY",
         ),
@@ -106,10 +104,12 @@ def paystack_enabled() -> bool:
     if _env_flag_disabled("GTE_ENABLE_PAYSTACK"):
         return False
     secret = (os.getenv("GTE_PAYSTACK_SECRET_KEY") or os.getenv("PAYSTACK_SECRET_KEY") or "").strip()
-    webhook_secret = (os.getenv("GTE_PAYSTACK_WEBHOOK_SECRET") or os.getenv("PAYSTACK_WEBHOOK_SECRET") or "").strip()
     if not secret:
         return False
-    if is_production_environment() and not webhook_secret:
+    # Paystack signs webhooks with the same secret key used for API requests.
+    # A second webhook secret is not part of Paystack's authentication contract.
+    # Never enable a test-mode key in the production environment.
+    if is_production_environment() and not secret.startswith("sk_live_"):
         return False
     return True
 

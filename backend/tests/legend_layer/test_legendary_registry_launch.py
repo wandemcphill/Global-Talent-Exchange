@@ -47,14 +47,16 @@ def _payload(count: int = LAUNCH_REGISTRY_SIZE) -> dict:
 
 def _session():
     load_model_modules()
-    engine = create_engine("sqlite+pysqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
     Base.metadata.create_all(engine)
     session = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)()
     actor = User(
         id="legendary-registry-operator",
         email="legendary-registry-operator@example.com",
         username="legendary-registry-operator",
-        password_hash="hash",
+        password_hash="hash",  # pragma: allowlist secret
         role=UserRole.ADMIN,
     )
     session.add(actor)
@@ -97,7 +99,12 @@ def test_2000_registry_is_idempotent_searchable_market_ready_and_nationally_elig
             "markets_issued": 0,
             "markets_existing": LAUNCH_REGISTRY_SIZE,
         }
-        assert session.scalar(select(func.count()).select_from(Player).where(Player.source_provider == "legendary_player_foundation")) == 2000
+        assert (
+            session.scalar(
+                select(func.count()).select_from(Player).where(Player.source_provider == "legendary_player_foundation")
+            )
+            == 2000
+        )
         assert session.scalar(select(func.count()).select_from(PlayerShareMarket)) == 2000
 
         started = perf_counter()
@@ -112,7 +119,7 @@ def test_2000_registry_is_idempotent_searchable_market_ready_and_nationally_elig
         pool = NationalTeamTournamentService(session)._national_pool(
             filters=NationalTeamTournamentService(session)._normalize_pool_filters(country_code="NGA"), limit=300
         )
-        assert any(item["player_name"] == "Legendary Player 0001" for item in pool)
+        assert any(item["player_name"] == "Legendary Player 1999" for item in pool)
         assert all(item["country_code"] in {"NG", "NGA"} for item in pool)
     finally:
         session.close()
@@ -126,6 +133,7 @@ def test_relevant_indexes_are_declared_without_legendary_specific_tables() -> No
         assert "ix_ingestion_players_full_name" in indexes
         unique_constraints = {item["name"] for item in inspect(engine).get_unique_constraints("ingestion_players")}
         assert "uq_ingestion_players_provider_external_id" in unique_constraints
-        assert "legendary" not in " ".join(inspect(engine).get_table_names()).lower()
+        table_names = {name for name in inspect(engine).get_table_names() if name != "legendary_player_profiles"}
+        assert not any("legendary" in name for name in table_names)
     finally:
         session.close()

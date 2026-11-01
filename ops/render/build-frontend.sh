@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build the GTEX React Web Application for Render static hosting.
+# Build the GTEX React Web Application for Render static hosting and Vercel.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 FRONTEND_DIR="${REPO_ROOT}/frontend"
 REACT_DIR="${FRONTEND_DIR}/react-shell"
 
+GTE_API_BASE_URL="${GTE_API_BASE_URL:-https://gtex-api-2gtu.onrender.com}"
 : "${GTE_API_BASE_URL:?GTE_API_BASE_URL must be set for the frontend build.}"
 GTE_BACKEND_MODE="${GTE_BACKEND_MODE:-live}"
 

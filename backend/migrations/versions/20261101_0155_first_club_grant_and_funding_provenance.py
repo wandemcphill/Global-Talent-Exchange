@@ -10,7 +10,6 @@ import uuid
 from alembic import op
 import sqlalchemy as sa
 
-
 revision = "20261101_0155_first_club_grant_and_funding_provenance"
 down_revision = "20261101_0154_brand_music_rights_and_budget_pacing"
 branch_labels = None
@@ -52,15 +51,11 @@ def upgrade() -> None:
     # as having claimed their first-club entitlement so they cannot receive another grant.
     if "owner_club_states" in tables:
         # Fetch existing owners with their earliest club
-        rows = bind.execute(
-            sa.text(
-                """
+        rows = bind.execute(sa.text("""
                 SELECT owner_user_id, club_id
                 FROM owner_club_states
                 ORDER BY created_at ASC
-                """
-            )
-        ).fetchall()
+                """)).fetchall()
 
         seen_users = set()
         for row in rows:
@@ -72,9 +67,7 @@ def upgrade() -> None:
 
             # Check if entitlement already recorded
             existing = bind.execute(
-                sa.text(
-                    "SELECT id FROM first_club_entitlements WHERE user_id = :uid"
-                ),
+                sa.text("SELECT id FROM first_club_entitlements WHERE user_id = :uid"),
                 {"uid": user_id},
             ).fetchone()
             if existing:
@@ -84,13 +77,11 @@ def upgrade() -> None:
             gtex_event_id = None
             if "owner_ledger_events" in tables:
                 event_row = bind.execute(
-                    sa.text(
-                        """
+                    sa.text("""
                         SELECT id FROM owner_ledger_events
                         WHERE destination_account = :acct AND event_type = 'launch_grant'
                         ORDER BY created_at ASC LIMIT 1
-                        """
-                    ),
+                        """),
                     {"acct": f"club:{club_id}"},
                 ).fetchone()
                 if event_row:
@@ -98,8 +89,7 @@ def upgrade() -> None:
 
             # Backfill record without duplicating or clawing back funds
             bind.execute(
-                sa.text(
-                    """
+                sa.text("""
                     INSERT INTO first_club_entitlements (
                         id, user_id, club_id, gtex_grant_amount, fan_grant_amount,
                         gtex_ledger_event_id, fan_ledger_event_id, created_at, updated_at
@@ -107,8 +97,7 @@ def upgrade() -> None:
                         :id, :user_id, :club_id, 100000.0000, 1000.0000,
                         :gtex_event_id, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                     )
-                    """
-                ),
+                    """),
                 {
                     "id": str(uuid.uuid4()),
                     "user_id": user_id,

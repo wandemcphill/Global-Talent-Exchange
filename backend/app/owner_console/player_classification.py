@@ -200,12 +200,14 @@ def classify_player_for_acquisition(
     )
     if not is_legend and player.id:
         has_legend_profile = session.scalar(
-            select(LegendaryPlayerProfile.id).where(
+            select(LegendaryPlayerProfile.id)
+            .where(
                 or_(
                     LegendaryPlayerProfile.id == player.id,
                     LegendaryPlayerProfile.slug == ext_id,
                 )
-            ).limit(1)
+            )
+            .limit(1)
         )
         if has_legend_profile:
             is_legend = True
@@ -229,12 +231,14 @@ def classify_player_for_acquisition(
     )
     if not is_regen and player.id:
         has_regen_profile = session.scalar(
-            select(RegenProfile.id).where(
+            select(RegenProfile.id)
+            .where(
                 or_(
                     RegenProfile.player_id == player.id,
                     RegenProfile.regen_id == player.id,
                 )
-            ).limit(1)
+            )
+            .limit(1)
         )
         if has_regen_profile:
             is_regen = True
@@ -247,7 +251,9 @@ def classify_player_for_acquisition(
             dna.get("sofifa_overall"),
             dna.get("current_gsi"),
         ]
-        cur_gsi = max((int(float(v)) for v in cur_candidates if isinstance(v, (int, float)) and float(v) > 0), default=65)
+        cur_gsi = max(
+            (int(float(v)) for v in cur_candidates if isinstance(v, (int, float)) and float(v) > 0), default=65
+        )
         return PlayerAcquisitionClassification(
             player_id=player.id,
             player_name=name,
@@ -268,7 +274,6 @@ def classify_player_for_acquisition(
 
     if cur_gsi <= 0:
         # Fall back to market quote calculation if dna lacks explicit rating
-        credits = {}
         _, rating = engine.market_quote(getattr(player, "market_value_eur", None), None)
         cur_gsi = int(engine.clamp(rating, 40, 99))
     else:

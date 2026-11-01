@@ -91,6 +91,7 @@ def _create_club_profile(
     short_name: str = "TFC",
 ) -> ClubProfile:
     from app.models.club_profile import ClubLifecycleStatus
+
     name = club_name or f"Test Club {uuid4().hex[:6]} FC"
     club = ClubProfile(
         owner_user_id=owner_user_id,
@@ -115,6 +116,7 @@ def _create_club_profile(
 # =========================================================================
 # 1. FIRST-CLUB LAUNCH GRANT — ONE-TIME ENTITLEMENT TESTS (Tests 1 - 11)
 # =========================================================================
+
 
 def test_first_club_receives_100k_gtex_promotional_grant(client, auth_user_factory, app_session_factory):
     """Test 1: User's first club receives exactly 100,000 GTEX Coin classified as promotional."""
@@ -150,7 +152,7 @@ def test_second_club_receives_no_gtex_grant(client, auth_user_factory, app_sessi
     # First club
     claimed1 = client.post("/api/owner/clubs/claim", headers=user["headers"])
     assert claimed1.status_code == 200, claimed1.text
-    club1_id = claimed1.json()["club_id"]
+    claimed1.json()["club_id"]
 
     # Second club created via service / onboarding
     with app_session_factory() as session:
@@ -194,7 +196,7 @@ def test_third_club_receives_no_gtex_grant(client, auth_user_factory, app_sessio
     assert claimed1.status_code == 200, claimed1.text
 
     with app_session_factory() as session:
-        club2 = _create_club_profile(session, user["user_id"], club_name=f"Club 2 {uuid4().hex[:6]} FC")
+        _create_club_profile(session, user["user_id"], club_name=f"Club 2 {uuid4().hex[:6]} FC")
         club3 = _create_club_profile(session, user["user_id"], club_name=f"Club 3 {uuid4().hex[:6]} FC")
 
         grant3, awarded = award_first_club_launch_grant(session, user_id=user["user_id"], club_id=club3.id)
@@ -230,8 +232,8 @@ def test_fourth_club_creation_rejected_by_ownership_cap(client, auth_user_factor
     assert claimed1.status_code == 200, claimed1.text
 
     with app_session_factory() as session:
-        club2 = _create_club_profile(session, user["user_id"], club_name=f"Club 2 {uuid4().hex[:6]} FC")
-        club3 = _create_club_profile(session, user["user_id"], club_name=f"Club 3 {uuid4().hex[:6]} FC")
+        _create_club_profile(session, user["user_id"], club_name=f"Club 2 {uuid4().hex[:6]} FC")
+        _create_club_profile(session, user["user_id"], club_name=f"Club 3 {uuid4().hex[:6]} FC")
         session.commit()
 
         # At 3 clubs, assert_can_acquire_club should raise ClubOwnershipCapError
@@ -246,7 +248,7 @@ def test_concurrent_first_club_claims_award_grant_exactly_once(client, auth_user
             id=str(uuid4()),
             email=f"concurrent-{uuid4().hex[:6]}@example.com",
             username=f"conc_{uuid4().hex[:6]}",
-            password_hash="test-hash",
+            password_hash="test-hash",  # pragma: allowlist secret
             account_type="user",
         )
         session.add(fresh_user)
@@ -269,9 +271,7 @@ def test_concurrent_first_club_claims_award_grant_exactly_once(client, auth_user
 
         # Verify only 1 entitlement row in database
         entitlements = list(
-            session.scalars(
-                select(FirstClubEntitlement).where(FirstClubEntitlement.user_id == fresh_user.id)
-            ).all()
+            session.scalars(select(FirstClubEntitlement).where(FirstClubEntitlement.user_id == fresh_user.id)).all()
         )
         assert len(entitlements) == 1
 
@@ -315,7 +315,7 @@ def test_historical_club_owner_backfill_does_not_reaward_grant(client, auth_user
             id=str(uuid4()),
             email=f"historical-{uuid4().hex[:6]}@example.com",
             username=f"hist_{uuid4().hex[:6]}",
-            password_hash="test-hash",
+            password_hash="test-hash",  # pragma: allowlist secret
             account_type="user",
         )
         session.add(hist_user)
@@ -357,7 +357,7 @@ def test_trader_and_creator_accounts_denied_first_club_grant(client, auth_user_f
             email=f"creator-{uuid4().hex[:6]}@example.com",
             username=f"creator_{uuid4().hex[:6]}",
             creator_name="Test Creator",
-            password="SuperSecret1",
+            password="SuperSecret1",  # pragma: allowlist secret
         ),
     )
     assert creator_res.status_code == 201
@@ -378,6 +378,7 @@ def test_trader_and_creator_accounts_denied_first_club_grant(client, auth_user_f
 # =========================================================================
 # 2. PROMOTIONAL-CREDIT PLAYER PURCHASE RESTRICTIONS (Tests 12 - 24)
 # =========================================================================
+
 
 def test_real_player_gsi_79_purchasable_with_promotional_credit(client, auth_user_factory, app_session_factory):
     """Test 12: Ordinary real player with GSI 79 is eligible and purchasable using promotional credit."""
@@ -574,7 +575,9 @@ def test_mixed_promotional_and_deposited_insufficient_deposited_fails(client, au
 
     with app_session_factory() as session:
         # Restricted player costs > 0 GTEX Coin
-        player_82 = _create_player(session, name="Player EightyTwo", overall=82, is_real=True, market_value_eur=5000000.0)
+        player_82 = _create_player(
+            session, name="Player EightyTwo", overall=82, is_real=True, market_value_eur=5000000.0
+        )
         price, _ = service.player_quotes(session, [player_82])[player_82.id]
         assert price > 0
 
@@ -668,7 +671,9 @@ def test_user_wallet_deposit_transfers_provenance_to_club_treasury(client, auth_
         assert funding["available_deposited"] == Decimal("10000")
 
 
-def test_formal_transfer_bid_enforces_funding_provenance_at_bid_and_settlement(client, auth_user_factory, app_session_factory):
+def test_formal_transfer_bid_enforces_funding_provenance_at_bid_and_settlement(
+    client, auth_user_factory, app_session_factory
+):
     """Test 23: Formal transfer bid enforces funding provenance for restricted players."""
     user = auth_user_factory(suffix="formal-bid-enforcement")
     claimed = client.post("/api/owner/clubs/claim", headers=user["headers"])
@@ -699,12 +704,15 @@ def test_transfer_hub_offer_enforces_funding_provenance(client, auth_user_factor
         # Transfer market offer assertion on restricted player must reject promotional-only club
         with pytest.raises(Exception) as exc_info:
             hub._assert_bidder_can_fund(club_id, Decimal("30000"), subject="transfer_hub_offer", player_or_id=player_82)
-        assert "Restricted players" in str(exc_info.value) or "restricted_player_requires_deposited_funds" in str(exc_info.value)
+        assert "Restricted players" in str(exc_info.value) or "restricted_player_requires_deposited_funds" in str(
+            exc_info.value
+        )
 
 
 # =========================================================================
 # 3. CLUB FORMATION — MINIMUM 22 REGISTERED PLAYERS (Tests 25 - 28)
 # =========================================================================
+
 
 def test_club_formation_fails_with_21_distinct_players(client, auth_user_factory, app_session_factory):
     """Test 25: A club with only 21 distinct registered players fails formation and cannot enter competitions."""
@@ -716,6 +724,7 @@ def test_club_formation_fails_with_21_distinct_players(client, auth_user_factory
     with app_session_factory() as session:
         # Clear squad and contracts
         from app.models.player_contract import PlayerContract
+
         session.query(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id).delete()
         session.query(PlayerContract).where(PlayerContract.club_id == club_id).delete()
         session.flush()
@@ -773,6 +782,7 @@ def test_club_formation_succeeds_with_22_distinct_players_across_tiers(client, a
     with app_session_factory() as session:
         # Clear squad and add exactly 22 players: 11 first team, 6 reserve, 5 academy
         from app.models.player_contract import PlayerContract
+
         session.query(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id).delete()
         session.query(PlayerContract).where(PlayerContract.club_id == club_id).delete()
         session.flush()
@@ -815,6 +825,7 @@ def test_club_formation_requires_goalkeeper_among_22_players(client, auth_user_f
 
     with app_session_factory() as session:
         from app.models.player_contract import PlayerContract
+
         session.query(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id).delete()
         session.query(PlayerContract).where(PlayerContract.club_id == club_id).delete()
         session.flush()

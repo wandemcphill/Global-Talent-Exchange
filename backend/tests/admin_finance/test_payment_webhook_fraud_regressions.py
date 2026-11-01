@@ -58,33 +58,69 @@ def _paystack_payload() -> dict[str, object]:
     }
 
 
-def test_paystack_enable_flag_requires_live_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_paystack_enable_flag_requires_live_secret_but_not_a_separate_webhook_secret(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GTE_APP_ENV", "production")
     monkeypatch.setenv("GTE_ENABLE_PAYSTACK", "true")
     monkeypatch.delenv("GTE_PAYSTACK_SECRET_KEY", raising=False)
+    monkeypatch.delenv("PAYSTACK_SECRET_KEY", raising=False)
     monkeypatch.delenv("GTE_PAYSTACK_WEBHOOK_SECRET", raising=False)
+    monkeypatch.delenv("PAYSTACK_WEBHOOK_SECRET", raising=False)
     assert paystack_enabled() is False
 
-    monkeypatch.setenv("GTE_PAYSTACK_SECRET_KEY", "paystack-secret")
-    monkeypatch.setenv("GTE_PAYSTACK_WEBHOOK_SECRET", "paystack-secret")
+    monkeypatch.setenv("GTE_PAYSTACK_SECRET_KEY", "sk_live_paystack_secret")
+    # Paystack uses its API secret for x-paystack-signature; no second secret
+    # is required for production readiness.
     assert paystack_enabled() is True
+
+    monkeypatch.setenv("GTE_PAYSTACK_SECRET_KEY", "sk_test_paystack_secret")
+    assert paystack_enabled() is False
 
     monkeypatch.setenv("GTE_ENABLE_PAYSTACK", "false")
     assert paystack_enabled() is False
 
 
-def test_paystack_is_live_ready_with_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_paystack_is_live_ready_with_only_live_api_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GTE_APP_ENV", "production")
     monkeypatch.setenv("GTE_ENABLE_PAYSTACK", "true")
-    monkeypatch.setenv("GTE_PAYSTACK_SECRET_KEY", "paystack-secret")
-    monkeypatch.setenv("GTE_PAYSTACK_WEBHOOK_SECRET", "paystack-secret")
+    monkeypatch.setenv("GTE_PAYSTACK_SECRET_KEY", "sk_live_paystack_secret")
+    monkeypatch.delenv("GTE_PAYSTACK_WEBHOOK_SECRET", raising=False)
     assert provider_live_deposit_ready("paystack") is True
+
+
+def test_paystack_verifies_valid_hmac_with_the_api_secret_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import hmac
+    from hashlib import sha512
+    from types import SimpleNamespace
+
+    from app.admin_finance.service import AdminFinanceService
+
+    secret = "sk_live_paystack_secret"  # pragma: allowlist secret
+    raw_body = b'{"event":"charge.success","data":{"reference":"gtex-valid-ref"}}'
+    signature = hmac.new(secret.encode("utf-8"), raw_body, sha512).hexdigest()
+    monkeypatch.setenv("GTE_APP_ENV", "production")
+    monkeypatch.setenv("GTE_PAYSTACK_SECRET_KEY", secret)
+    monkeypatch.delenv("GTE_PAYSTACK_WEBHOOK_SECRET", raising=False)
+
+    service = AdminFinanceService(session=SimpleNamespace(), settings=SimpleNamespace(app_env="production"))
+    assert (
+        service._verify_paystack_webhook(
+            raw_body=raw_body,
+            headers={"x-paystack-signature": signature},
+        )
+        is True
+    )
 
 
 def test_paystack_webhook_rejects_invalid_signature_when_secret_is_configured(
     webhook_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("GTE_ENABLE_PAYSTACK", "true")
-    monkeypatch.setenv("GTE_PAYSTACK_SECRET_KEY", "paystack-secret")
-    monkeypatch.setenv("GTE_PAYSTACK_WEBHOOK_SECRET", "paystack-secret")
+    monkeypatch.setenv("GTE_PAYSTACK_SECRET_KEY", "sk_live_paystack_secret")
+    monkeypatch.delenv("GTE_PAYSTACK_WEBHOOK_SECRET", raising=False)
 
     response = webhook_client.post(
         "/integrations/payments/paystack/webhook",

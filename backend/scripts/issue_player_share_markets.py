@@ -115,6 +115,8 @@ def _build_plan(player: Player, policy: dict[str, Any]) -> IssuancePlan:
     tier_policy = (policy.get("tiers") or {})[tier]
     total_shares = int(tier_policy["total_shares"])
     resolved = resolve_player_share_market_config(player, total_shares=total_shares)
+    total_shares = int(resolved.total_shares)
+    is_one_of_one = total_shares == 1
     pricing = policy.get("pricing", {})
     price = min(
         max(resolved.share_price_coin, _decimal(pricing.get("launch_floor_coin"), "0.0500")),
@@ -138,8 +140,8 @@ def _build_plan(player: Player, policy: dict[str, Any]) -> IssuancePlan:
     return IssuancePlan(
         tier=tier,
         total_shares=total_shares,
-        initial_circulating_cap=int(tier_policy["initial_circulating_cap"]),
-        initial_mm_inventory_target=initial_mm_inventory_target,
+        initial_circulating_cap=1 if is_one_of_one else min(int(tier_policy["initial_circulating_cap"]), total_shares),
+        initial_mm_inventory_target=1 if is_one_of_one else min(initial_mm_inventory_target, total_shares),
         share_price_coin=_decimal(price),
         liquidity_coin=liquidity_coin,
         status=status,

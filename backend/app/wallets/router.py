@@ -323,6 +323,7 @@ def _build_withdrawal_quote(
     if normalized_provider in {"korapay", "paystack"}:
         try:
             from app.wallets.providers.registry import get_provider_adapter
+
             adapter = get_provider_adapter(normalized_provider)
             estimate = adapter.estimate_fee(amount=_normalize_amount(estimated_fiat), operation="payout")
             processor_fee = estimate.estimated_fee

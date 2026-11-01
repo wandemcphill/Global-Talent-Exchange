@@ -500,7 +500,7 @@ class RealPlayerUniverseQueryService:
             nationality_code=getattr(country, "alpha2_code", None),
             position=prof_pos or player.normalized_position or player.position,
             secondary_positions=prof_sec,
-            age=self._player_age(player.date_of_birth or prof_dob),
+            age=self._player_display_age(player, player.date_of_birth or prof_dob),
             current_club_name=prof_club or player.real_world_club_name,
             current_league_name=prof_league or player.real_world_league_name,
             competition_level=prof_level,
@@ -556,7 +556,9 @@ class RealPlayerUniverseQueryService:
                 or player.position
             ),
             secondary_positions=tuple((profile.secondary_positions_json if profile is not None else None) or ()),
-            age=self._player_age(player.date_of_birth or (profile.date_of_birth if profile is not None else None)),
+            age=self._player_display_age(
+                player, player.date_of_birth or (profile.date_of_birth if profile is not None else None)
+            ),
             date_of_birth=player.date_of_birth or (profile.date_of_birth if profile is not None else None),
             dominant_foot=(profile.dominant_foot if profile is not None else None) or player.preferred_foot,
             height_cm=(profile.height_cm if profile is not None else None) or player.height_cm,
@@ -886,6 +888,28 @@ class RealPlayerUniverseQueryService:
         if not isinstance(boundary, dict):
             raise RealPlayerUniverseValidationError("cursor is invalid")
         return boundary
+
+    def _player_display_age(self, player: Player, fallback_dob):
+        source_provider = str(getattr(player, "source_provider", "") or "").strip().lower()
+        tier = str(getattr(player, "real_player_tier", "") or "").strip().lower()
+        is_legend = (
+            bool(getattr(player, "legendary_profile_id", None))
+            or source_provider in {"gtex_legend", "gtex_legend_prime"}
+            or tier in {"legend", "legendary", "icon", "immortal", "world_class", "hero"}
+        )
+        if is_legend:
+            dna = player.dna_profile if isinstance(player.dna_profile, dict) else {}
+            for key in ("game_age", "gtex_age", "peak_age"):
+                try:
+                    candidate = int(dna.get(key))
+                except (TypeError, ValueError):
+                    continue
+                if 18 <= candidate <= 35:
+                    return candidate
+            # A historical birth date remains available as historical metadata,
+            # but must not be presented as the age of an in-game legendary card.
+            return 28
+        return self._player_age(fallback_dob)
 
     def _player_age(self, date_of_birth):
         if date_of_birth is None or self.today is None:

@@ -51,7 +51,12 @@ def search_users(
     if term:
         like = f"%{term}%"
         stmt = stmt.where(
-            or_(User.email.ilike(like), User.username.ilike(like), User.display_name.ilike(like), User.id == search.strip())
+            or_(
+                User.email.ilike(like),
+                User.username.ilike(like),
+                User.display_name.ilike(like),
+                User.id == search.strip(),
+            )
         )
     rows = session.scalars(stmt.order_by(User.created_at.desc()).limit(limit)).all()
     return [

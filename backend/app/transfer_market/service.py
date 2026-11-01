@@ -888,9 +888,7 @@ class TransferMarketService:
         current_highest = listing.current_highest_bid or listing.base_price
         if amount <= current_highest:
             raise TransferMarketValidationError("Bid must exceed the current highest bid.")
-        self._assert_bidder_can_fund(
-            resolved_bidder_club_id, amount, subject="bid", player_or_id=listing.player_id
-        )
+        self._assert_bidder_can_fund(resolved_bidder_club_id, amount, subject="bid", player_or_id=listing.player_id)
 
         previous_bidder_id = listing.highest_bidder_id
         previous_amount = listing.current_highest_bid
@@ -1964,9 +1962,7 @@ class TransferMarketService:
             contract_id = accepted.structured_terms_json.get("contract_id")
         return accepted, str(contract_id) if contract_id is not None else None
 
-    def _assert_bidder_can_fund(
-        self, club_id: str, amount: Decimal, *, subject: str, player_or_id: Any = None
-    ) -> None:
+    def _assert_bidder_can_fund(self, club_id: str, amount: Decimal, *, subject: str, player_or_id: Any = None) -> None:
         try:
             club_ledger.assert_club_can_fund(self.session, club_id, amount, player_or_id=player_or_id)
         except club_ledger.LedgerError as exc:

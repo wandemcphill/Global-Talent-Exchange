@@ -54,13 +54,8 @@ class PaystackProviderAdapter:
         return None
 
     def _webhook_secret(self) -> str | None:
-        for name in (
-            "GTE_PAYSTACK_WEBHOOK_SECRET",
-            "PAYSTACK_WEBHOOK_SECRET",
-        ):
-            val = os.getenv(name)
-            if val and val.strip():
-                return val.strip()
+        # Paystack's webhook HMAC uses the API secret key (sk_live_ / sk_test_).
+        # There is no separate webhook-signing secret in Paystack's contract.
         return self._secret_key()
 
     def is_configured(self) -> bool:
@@ -71,7 +66,8 @@ class PaystackProviderAdapter:
             return False
         env = (os.getenv("GTE_APP_ENV") or os.getenv("APP_ENV") or "development").strip().lower()
         if env in {"production", "prod", "release"}:
-            return bool(self._webhook_secret())
+            secret = self._secret_key() or ""
+            return secret.startswith("sk_live_")
         return True
 
     def _callback_url(self) -> str | None:
@@ -345,7 +341,11 @@ class PaystackProviderAdapter:
         transfer_body = transfer_res.json()
         transfer_data = transfer_body.get("data") if isinstance(transfer_body, dict) else {}
         status_raw = str(transfer_data.get("status") or "").strip().lower()
-        status = "success" if status_raw in {"success"} else ("failed" if status_raw in {"failed", "rejected"} else "pending")
+        status = (
+            "success"
+            if status_raw in {"success"}
+            else ("failed" if status_raw in {"failed", "rejected"} else "pending")
+        )
         provider_ref = str(transfer_data.get("reference") or reference)
         transfer_code = str(transfer_data.get("transfer_code") or "")
 

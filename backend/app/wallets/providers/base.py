@@ -107,8 +107,7 @@ class ProviderAdapter(Protocol):
     key: str
     display_name: str
 
-    def parse_webhook(self, payload: dict[str, Any], headers: dict[str, str] | None = None) -> ProviderEvent | None:
-        ...
+    def parse_webhook(self, payload: dict[str, Any], headers: dict[str, str] | None = None) -> ProviderEvent | None: ...
 
 
 class GenericProviderAdapter:
@@ -126,10 +125,14 @@ class GenericProviderAdapter:
             event_type = ProviderEventType(str(raw_type).strip().lower())
         except ValueError:
             return None
-        provider_reference = payload.get("provider_reference") or payload.get("transaction_id") or payload.get("reference")
+        provider_reference = (
+            payload.get("provider_reference") or payload.get("transaction_id") or payload.get("reference")
+        )
         if not provider_reference:
             return None
-        purchase_order_reference = payload.get("purchase_order_reference") or payload.get("order_reference") or payload.get("order_id")
+        purchase_order_reference = (
+            payload.get("purchase_order_reference") or payload.get("order_reference") or payload.get("order_id")
+        )
         event_id = payload.get("event_id") or payload.get("id")
         amount_raw = payload.get("amount") or payload.get("gross_amount")
         amount = None

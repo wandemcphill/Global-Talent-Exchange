@@ -12,9 +12,7 @@ class FirstClubEntitlement(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """Authoritative record of a user's one-time first-club launch grant entitlement."""
 
     __tablename__ = "first_club_entitlements"
-    __table_args__ = (
-        UniqueConstraint("user_id", name="uq_first_club_entitlements_user_id"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", name="uq_first_club_entitlements_user_id"),)
 
     user_id: Mapped[str] = mapped_column(
         String(36),

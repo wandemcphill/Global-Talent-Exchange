@@ -48,7 +48,7 @@ def _admin(session) -> User:
         id="share-boundary-admin",
         email="share-boundary-admin@example.com",
         username="share-boundary-admin",
-        password_hash="hashed",
+        password_hash="hashed",  # pragma: allowlist secret
         role=UserRole.ADMIN,
     )
     session.add(admin)
@@ -77,6 +77,22 @@ def test_explicit_issue_still_creates_market(session) -> None:
     )
 
     assert market.player_id == player.id
-    assert market.total_shares == 1000
+    assert market.total_shares == 600
     assert market.status == "active"
     assert session.query(PlayerShareMarket).filter_by(player_id=player.id).one().id == market.id
+
+
+def test_explicit_issue_caps_supply_at_600(session) -> None:
+    player = _player(session, "player-capped-market")
+    admin = _admin(session)
+    session.flush()
+
+    market = PlayerTokenMarketService(session).issue_market(
+        actor=admin,
+        player_id=player.id,
+        total_shares=5000,
+        share_price_coin=Decimal("0.1000"),
+        liquidity_coin=Decimal("25.0000"),
+    )
+
+    assert market.total_shares == 600
