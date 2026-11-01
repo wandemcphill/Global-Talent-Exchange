@@ -81,7 +81,9 @@ class _GteOrderTicketSheetState extends State<GteOrderTicketSheet> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Text(
-                            'Acquire player',
+                            widget.controller.isAuthenticated
+                                ? 'Acquire player'
+                                : 'Player acquisition',
                             style: Theme.of(context).textTheme.headlineSmall,
                           ),
                           const SizedBox(height: 8),
@@ -205,6 +207,7 @@ class _GteOrderTicketSheetState extends State<GteOrderTicketSheet> {
 
   String _submitLabel(bool owned) {
     if (widget.controller.isSubmittingOrder) return 'Confirming...';
+    if (!widget.controller.isAuthenticated) return 'Sign in to acquire';
     if (owned) return 'Already acquired';
     if (!_marketAvailable) return 'Unavailable';
     if (_pendingIdempotencyKey != null) return 'Retry acquisition';

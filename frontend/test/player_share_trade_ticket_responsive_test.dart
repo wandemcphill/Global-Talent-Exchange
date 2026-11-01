@@ -61,14 +61,17 @@ void main() {
       // No RenderFlex overflow or fixed-height clipping at this width.
       expect(tester.takeException(), isNull);
 
-      // Every control the migration touched is still reachable.
-      expect(find.text('SHARE PRICE'), findsOneWidget);
-      expect(find.widgetWithText(TextField, 'Shares'), findsOneWidget);
-      expect(find.text('Buy shares'), findsOneWidget);
+      // Whole-player acquisition controls:
+      expect(find.text('ACQUISITION PRICE'), findsOneWidget);
+      expect(find.text('Acquire player'), findsWidgets);
+      expect(find.byType(TextField), findsNothing);
+      expect(find.text('Buy shares'), findsNothing);
 
       // The confirm action stays within the viewport rather than being
       // clipped off the bottom edge.
-      final Rect button = tester.getRect(find.text('Buy shares'));
+      final Rect button = tester.getRect(
+        find.widgetWithText(FilledButton, 'Acquire player'),
+      );
       expect(button.right, lessThanOrEqualTo(width));
       expect(button.left, greaterThanOrEqualTo(0));
     });
@@ -91,24 +94,9 @@ void main() {
     );
     await _settle(tester);
 
-    // The quantity field is labelled, so it is not an unnamed text box.
-    expect(
-      tester.getSemantics(find.byType(EditableText)),
-      matchesSemantics(
-        isTextField: true,
-        hasEnabledState: true,
-        isEnabled: true,
-        isFocusable: true,
-        hasTapAction: true,
-        hasFocusAction: true,
-        label: 'Shares',
-        value: '1',
-      ),
-    );
-
     // The confirm action announces itself as an enabled, tappable button.
     expect(
-      tester.getSemantics(find.widgetWithText(FilledButton, 'Buy shares')),
+      tester.getSemantics(find.widgetWithText(FilledButton, 'Acquire player')),
       matchesSemantics(
         isButton: true,
         hasEnabledState: true,
@@ -116,7 +104,21 @@ void main() {
         isFocusable: true,
         hasTapAction: true,
         hasFocusAction: true,
-        label: 'Buy shares',
+        label: 'Acquire player',
+      ),
+    );
+
+    // The close action announces itself as an enabled, tappable button.
+    expect(
+      tester.getSemantics(find.widgetWithText(OutlinedButton, 'Close')),
+      matchesSemantics(
+        isButton: true,
+        hasEnabledState: true,
+        isEnabled: true,
+        isFocusable: true,
+        hasTapAction: true,
+        hasFocusAction: true,
+        label: 'Close',
       ),
     );
 

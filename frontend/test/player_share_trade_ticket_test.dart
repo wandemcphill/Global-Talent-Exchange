@@ -66,7 +66,7 @@ void main() {
     final GteExchangeController controller = await _controller(tester);
     await _pumpAcquisition(tester, controller);
 
-    expect(find.text('Units owned'), findsOneWidget);
+    expect(find.text('UNITS OWNED'), findsOneWidget);
     expect(find.text('Acquire player'), findsWidgets);
     expect(find.text('Buy shares'), findsNothing);
     expect(find.text('Sell shares'), findsNothing);
