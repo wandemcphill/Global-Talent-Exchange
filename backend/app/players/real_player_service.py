@@ -895,7 +895,7 @@ class RealPlayerUniverseQueryService:
         is_legend = (
             bool(getattr(player, "legendary_profile_id", None))
             or source_provider in {"gtex_legend", "gtex_legend_prime"}
-            or tier in {"legend", "legendary"}
+            or tier in {"legend", "legendary", "icon", "immortal", "world_class", "hero"}
         )
         if is_legend:
             dna = player.dna_profile if isinstance(player.dna_profile, dict) else {}
