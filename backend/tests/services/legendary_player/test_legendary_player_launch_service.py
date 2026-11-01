@@ -106,7 +106,8 @@ def test_legendary_launch_materializes_active_market_and_uses_normal_share_tradi
 
         # Normal GTEX share trading is the only market path used after launch.
         trading = PlayerTokenMarketService(session)
-        purchase = trading.buy_shares(actor=buyer, player_id=player.id, share_count=5)
-        assert purchase["holding"].share_count == 5
-        resale = trading.sell_shares(actor=buyer, player_id=player.id, share_count=2)
-        assert resale["holding"].share_count == 3
+        purchase = trading.buy_shares(actor=buyer, player_id=player.id, share_count=1)
+        assert purchase["holding"].share_count == 1
+        with pytest.raises(PlayerTokenMarketError) as resale:
+            trading.sell_shares(actor=buyer, player_id=player.id, share_count=1)
+        assert resale.value.reason == "player_acquisition_non_transferable"
