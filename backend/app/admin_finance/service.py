@@ -548,7 +548,7 @@ class AdminFinanceService:
         if not secret:
             if self._signature_optional("paystack"):
                 logger.warning(
-                    "Paystack webhook received without GTE_PAYSTACK_WEBHOOK_SECRET. "
+                    "Paystack webhook received without GTE_PAYSTACK_SECRET_KEY. "
                     "Continuing without signature verification because "
                     "GTE_PAYSTACK_WEBHOOK_SIGNATURE_OPTIONAL=true."
                 )
