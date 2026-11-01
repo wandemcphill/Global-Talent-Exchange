@@ -154,9 +154,7 @@ def test_legendary_launch_materializes_active_market_and_uses_normal_share_tradi
         assert player.is_tradable is True
         assert market.status == "active"
         assert market.player_id == player.id
-        assert session.scalar(
-            select(PlayerShareMarket).where(PlayerShareMarket.player_id == player.id)
-        ).id == market.id
+        assert session.scalar(select(PlayerShareMarket).where(PlayerShareMarket.player_id == player.id)).id == market.id
 
         # Re-running the launch path is idempotent and does not create a second market.
         stored_again, player_again, market_again = service.materialize(profile, actor=admin)
