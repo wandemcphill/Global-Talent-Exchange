@@ -51,7 +51,7 @@ def resolve_player_share_market_config(
         getattr(player, "is_real_player", True) is False
         or bool(getattr(player, "legendary_profile_id", None))
         or source_provider in {"gtex_legend", "gtex_legend_prime"}
-        or player_tier in {"legend", "legendary"}
+        or player_tier in {"legend", "legendary", "icon", "immortal", "world_class", "hero"}
     )
     normalized_total_shares = 1 if is_one_of_one else min(600, int(total_shares or DEFAULT_TOTAL_SHARES))
     normalized_share_price = _resolve_share_price_coin(
