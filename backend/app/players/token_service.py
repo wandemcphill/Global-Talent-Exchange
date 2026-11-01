@@ -240,12 +240,26 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
         market = self._require_trade_market(player_id)
         self._assert_share_market_eligible(market.player)
         if market.status != "active":
-            raise PlayerTokenMarketError("Player share market is not active.", reason="market_inactive")
-        if share_count <= 0:
-            raise PlayerTokenMarketError("Share count must be greater than zero.", reason="share_count_invalid")
+            raise PlayerTokenMarketError("Player acquisition is not available.", reason="market_inactive")
+        if share_count != 1:
+            raise PlayerTokenMarketError(
+                "A player is acquired as one complete unit. Quantity must be exactly one.",
+                reason="acquisition_quantity_must_be_one",
+            )
+
+        # _require_trade_market locks the one market row for this player. That
+        # serializes competing acquisitions so a second request cannot race the
+        # first buyer between the ownership check and ledger settlement.
+        existing_holding = self.get_holding(user_id=actor.id, player_id=player_id)
+        if existing_holding is not None and int(existing_holding.share_count or 0) > 0:
+            raise PlayerTokenMarketError(
+                "This account already owns this player. Only one unit is permitted per account.",
+                reason="player_already_owned",
+            )
+
         if share_count > max(0, self._primary_available_shares(market)):
             raise PlayerTokenMarketError(
-                "Requested shares exceed currently released supply.", reason="share_supply_insufficient"
+                "This player has no unallocated units remaining.", reason="player_supply_exhausted"
             )
 
         return self._run_trade_with_boundary(
@@ -267,15 +281,10 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
         share_count: int,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
-        return self._run_trade_with_boundary(
-            actor=actor,
-            player_id=player_id,
-            share_count=share_count,
-            side="sell",
-            idempotency_key=idempotency_key,
-            operation=lambda: super(PlayerTokenMarketService, self).sell_shares(
-                actor=actor, player_id=player_id, share_count=share_count
-            ),
+        del actor, player_id, share_count, idempotency_key
+        raise PlayerTokenMarketError(
+            "Player acquisitions are not listed for resale or secondary trading.",
+            reason="player_acquisition_non_transferable",
         )
 
     def release_shares(
