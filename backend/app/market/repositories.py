@@ -585,19 +585,44 @@ class SqlAlchemyMarketPlayerRepository:
         summary_statement = select(PlayerSummaryReadModel).where(PlayerSummaryReadModel.player_id.in_(player_ids))
         summaries = {summary.player_id: summary for summary in self.session.scalars(summary_statement)}
 
+        # For targeted lookups (detail calls, paginated pages with <= 100 players),
+        # always load snapshots so breakdown_json (holder_count, trade_trust_score, etc.)
+        # is available on the detail view.
+        # For bulk catalog scans (> 100 players), only fetch snapshots for players missing a summary,
+        # using distinct on PostgreSQL, to prevent loading millions of historical snapshots into RAM.
+        snapshot_target_ids = player_ids if len(player_ids) <= 100 else [pid for pid in player_ids if pid not in summaries]
+
         latest_snapshots: dict[str, PlayerValueSnapshotRecord] = {}
-        snapshot_statement = (
-            select(PlayerValueSnapshotRecord)
-            .where(PlayerValueSnapshotRecord.player_id.in_(player_ids))
-            .order_by(
-                PlayerValueSnapshotRecord.player_id.asc(),
-                PlayerValueSnapshotRecord.as_of.desc(),
-                PlayerValueSnapshotRecord.created_at.desc(),
-                PlayerValueSnapshotRecord.id.desc(),
-            )
-        )
-        for snapshot in self.session.scalars(snapshot_statement):
-            latest_snapshots.setdefault(snapshot.player_id, snapshot)
+        if snapshot_target_ids:
+            bind = self.session.get_bind()
+            dialect_name = getattr(getattr(bind, "dialect", None), "name", "")
+            if dialect_name == "postgresql":
+                snapshot_statement = (
+                    select(PlayerValueSnapshotRecord)
+                    .distinct(PlayerValueSnapshotRecord.player_id)
+                    .where(PlayerValueSnapshotRecord.player_id.in_(snapshot_target_ids))
+                    .order_by(
+                        PlayerValueSnapshotRecord.player_id.asc(),
+                        PlayerValueSnapshotRecord.as_of.desc(),
+                        PlayerValueSnapshotRecord.created_at.desc(),
+                        PlayerValueSnapshotRecord.id.desc(),
+                    )
+                )
+                for snapshot in self.session.scalars(snapshot_statement):
+                    latest_snapshots[snapshot.player_id] = snapshot
+            else:
+                snapshot_statement = (
+                    select(PlayerValueSnapshotRecord)
+                    .where(PlayerValueSnapshotRecord.player_id.in_(snapshot_target_ids))
+                    .order_by(
+                        PlayerValueSnapshotRecord.player_id.asc(),
+                        PlayerValueSnapshotRecord.as_of.desc(),
+                        PlayerValueSnapshotRecord.created_at.desc(),
+                        PlayerValueSnapshotRecord.id.desc(),
+                    )
+                )
+                for snapshot in self.session.scalars(snapshot_statement):
+                    latest_snapshots.setdefault(snapshot.player_id, snapshot)
 
         return [
             MarketPlayerRecord(
