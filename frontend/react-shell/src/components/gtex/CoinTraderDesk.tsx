@@ -216,6 +216,8 @@ export function CoinTraderDesk() {
       {isTrader && (
         <>
           <p className="gx-label mt-6">My trader desk · {me.display_name}</p>
+          <TraderLiquidityPurchase onPurchased={() => qc.invalidateQueries({ queryKey: ["coin-trader-me"] })} />
+          <p className="gx-label mt-6">Desk client orders</p>
           <div className="space-y-2" data-testid="trader-desk-orders">
             {(deskOrders || []).length === 0 && <p className="text-sm text-slate-500">No client orders.</p>}
             {(deskOrders || []).map((o: any) => <OrderRow key={o.id} o={o} asTrader traders={traders || []} />)}
@@ -223,5 +225,107 @@ export function CoinTraderDesk() {
         </>
       )}
     </Panel>
+  );
+}
+
+function TraderLiquidityPurchase({ onPurchased }: { onPurchased?: () => void }) {
+  const [amount, setAmount] = useState("1000");
+  const [provider, setProvider] = useState<"korapay" | "paystack">("korapay");
+  const [submitting, setSubmitting] = useState(false);
+  const qc = useQueryClient();
+
+  const { data: quote, isLoading: quoteLoading } = useQuery({
+    queryKey: ["liquidity-quote", amount, provider],
+    queryFn: async () => {
+      if (!Number(amount) || Number(amount) <= 0) return null;
+      const { data } = await api.post("/coin-traders/me/liquidity/quote", {
+        amount: Number(amount),
+        provider,
+        coin_unit: "coin",
+      });
+      return data;
+    },
+    enabled: Number(amount) > 0,
+  });
+
+  const handlePurchase = async () => {
+    if (!Number(amount) || Number(amount) <= 0) return;
+    setSubmitting(true);
+    try {
+      const { data } = await api.post("/coin-traders/me/liquidity/purchase", {
+        amount: Number(amount),
+        provider,
+        coin_unit: "coin",
+        callback_url: `${window.location.origin}/payment/callback`,
+      });
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+      } else {
+        toast.success("Liquidity purchase initiated.");
+        qc.invalidateQueries({ queryKey: ["coin-trader-me"] });
+        if (onPurchased) onPurchased();
+      }
+    } catch (e: any) {
+      toast.error(errMsg(e));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const providerLabel = provider === "korapay" ? "KoraPay" : "Paystack";
+
+  return (
+    <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-4" data-testid="trader-liquidity-purchase-panel">
+      <h4 className="gx-label text-slate-300">Add Trading Liquidity / Buy Inventory</h4>
+      <p className="mt-1 text-xs text-slate-400">
+        Acquire GTEX Coin inventory to back your desk orders. Purchased coins automatically update your trading liquidity and available balance upon verified payment.
+      </p>
+      <div className="mt-3 grid gap-3 md:grid-cols-4">
+        <div>
+          <label className="gx-label">Provider</label>
+          <div className="mt-1 flex gap-2">
+            {(["korapay", "paystack"] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                data-testid={`trader-liquidity-provider-${p}`}
+                onClick={() => setProvider(p)}
+                className={`gx-btn flex-1 py-1.5 text-xs ${provider === p ? "gx-btn-primary" : "gx-btn-secondary"}`}
+              >
+                {p === "korapay" ? "KoraPay" : "Paystack"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label className="gx-label">Amount (GTX)</label>
+          <input
+            data-testid="trader-liquidity-amount-input"
+            className="gx-input mt-1"
+            type="number"
+            min={1}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
+        </div>
+        <div className="md:col-span-2 flex flex-col justify-end">
+          {quote && (
+            <div className="mb-2 text-xs text-slate-400 flex flex-wrap gap-x-4" data-testid="trader-liquidity-quote">
+              <span>Fiat: <b className="text-white">₦{fmt(quote.amount_fiat)}</b></span>
+              <span>Platform fee: <b className="text-white">{fmt(quote.fee_amount)} GTX</b></span>
+              <span>Processor fee: <b className="text-white">{fmt(quote.processor_fee)} GTX</b></span>
+              <span>Net: <b className="text-emerald-400">{fmt(quote.net_amount)} GTX</b></span>
+            </div>
+          )}
+          <Btn
+            disabled={submitting || quoteLoading || !Number(amount) || Number(amount) <= 0}
+            onClick={handlePurchase}
+            data-testid="trader-liquidity-submit"
+          >
+            {submitting ? "Initiating..." : `Buy with ${providerLabel}`}
+          </Btn>
+        </div>
+      </div>
+    </div>
   );
 }

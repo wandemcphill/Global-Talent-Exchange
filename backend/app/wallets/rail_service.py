@@ -18,7 +18,10 @@ from app.models.risk_ops import RiskSeverity, SystemEventSeverity
 from app.models.treasury import RateDirection, TreasurySettings
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
+from app.models.coin_trader import CoinTraderProfile, CoinTraderProfileStatus, CoinTraderRate
+from app.models.user import PublicAccountType
 from app.risk_ops_engine.service import RiskOpsService
+from app.wallets.providers.registry import get_provider_adapter
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 from app.wallets.providers.base import ProviderEvent, ProviderEventType
 
@@ -50,6 +53,9 @@ class PurchaseOrderQuote:
     payout_channel: str
     provider_key: str
     source_scope: str
+    processor_fee: Decimal = Decimal("0.0000")
+    total_fiat_charged: Decimal = Decimal("0.0000")
+    merchant_bears_processor_fee: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +108,22 @@ class WalletRailService:
         fee_bps = int(self._commission_settings().get("buy_commission_bps", 0) or 0)
         fee_amount = self._normalize_amount(amount_coin * Decimal(fee_bps) / Decimal(10_000))
         net_amount = self._normalize_amount(amount_coin - fee_amount)
+
+        # Estimate processor fee from provider adapter if supported
+        processor_fee_coin = Decimal("0.0000")
+        if provider_key in {"korapay", "paystack"}:
+            try:
+                adapter = get_provider_adapter(provider_key)
+                estimate = adapter.estimate_fee(amount=amount_fiat, operation="checkout")
+                _, processor_fee_coin = self._compute_amounts(
+                    amount=estimate.estimated_fee,
+                    input_unit="fiat",
+                    rate_value=rate_value,
+                    rate_direction=settings.deposit_rate_direction,
+                )
+            except Exception:
+                processor_fee_coin = Decimal("0.0000")
+
         return PurchaseOrderQuote(
             amount_fiat=amount_fiat,
             gross_amount=amount_coin,
@@ -115,6 +137,9 @@ class WalletRailService:
             payout_channel=payout_channel,
             provider_key=provider_key,
             source_scope=source_scope,
+            processor_fee=processor_fee_coin,
+            total_fiat_charged=amount_fiat,
+            merchant_bears_processor_fee=True,
         )
 
     def create_purchase_order(
@@ -131,7 +156,19 @@ class WalletRailService:
         payout_channel: str,
         provider_reference: str | None = None,
         notes: str | None = None,
+        idempotency_key: str | None = None,
+        purchase_purpose: str | None = None,
     ) -> FancoinPurchaseOrder:
+        if idempotency_key:
+            existing = self.session.scalar(
+                select(FancoinPurchaseOrder).where(
+                    FancoinPurchaseOrder.idempotency_key == idempotency_key,
+                    FancoinPurchaseOrder.user_id == user.id,
+                )
+            )
+            if existing is not None:
+                return existing
+
         quote = self.quote_purchase_order(
             settings=settings,
             amount=amount,
@@ -146,16 +183,19 @@ class WalletRailService:
         status = (
             PurchaseOrderStatus.PROCESSING if processor_mode == "automatic_gateway" else PurchaseOrderStatus.REVIEWING
         )
+        account_type_str = user.account_type.value if hasattr(user.account_type, "value") else str(getattr(user, "account_type", "user"))
         order = FancoinPurchaseOrder(
             user_id=user.id,
             reference=reference,
             status=status,
             provider_key=provider_key,
             provider_reference=provider_reference,
+            idempotency_key=idempotency_key,
             unit=unit,
             amount_fiat=quote.amount_fiat,
             gross_amount=quote.gross_amount,
             fee_amount=quote.fee_amount,
+            processor_fee=quote.processor_fee,
             net_amount=quote.net_amount,
             currency_code=quote.currency_code,
             rate_value=quote.rate_value,
@@ -163,6 +203,8 @@ class WalletRailService:
             processor_mode=processor_mode,
             payout_channel=payout_channel,
             source_scope=source_scope,
+            purchase_purpose=purchase_purpose or source_scope,
+            account_type_snapshot=account_type_str,
             notes=notes,
         )
         self.session.add(order)
@@ -236,6 +278,15 @@ class WalletRailService:
         order.status = PurchaseOrderStatus.SETTLED
         order.settled_at = utcnow()
         order.ledger_transaction_id = entries[0].transaction_id if entries else order.ledger_transaction_id
+
+        # Update Coin Trader available liquidity if trader purchased liquidity
+        account_type = getattr(user, "account_type", None)
+        is_trader = (account_type == PublicAccountType.COIN_TRADER) or (
+            getattr(order, "source_scope", None) == "trader_liquidity"
+        ) or (getattr(order, "purchase_purpose", None) == "trader_liquidity")
+        if is_trader:
+            self._sync_trader_liquidity_on_settlement(user=user, order=order)
+
         self.session.flush()
         self.event_publisher.publish(
             DomainEvent(
@@ -249,6 +300,35 @@ class WalletRailService:
             )
         )
         return order
+
+    def _sync_trader_liquidity_on_settlement(self, *, user: User, order: FancoinPurchaseOrder) -> None:
+        profile = self.session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id))
+        if profile is None or profile.status != CoinTraderProfileStatus.APPROVED.value:
+            return
+        rates = list(
+            self.session.scalars(
+                select(CoinTraderRate).where(
+                    CoinTraderRate.trader_profile_id == profile.id,
+                    CoinTraderRate.coin_unit == order.unit,
+                )
+            ).all()
+        )
+        for rate in rates:
+            if rate.is_active:
+                rate.available_liquidity = (Decimal(str(rate.available_liquidity)) + order.net_amount).quantize(AMOUNT_QUANTUM)
+        from app.coin_traders.service import CoinTraderService
+        trader_service = CoinTraderService(self.session, self.wallet_service)
+        profile.liquidity_snapshot_json = trader_service._liquidity_snapshot(profile.id)
+        meta = dict(profile.metadata_json or {})
+        meta["last_provider_liquidity_purchase"] = {
+            "order_id": order.id,
+            "order_reference": order.reference,
+            "amount": str(order.net_amount),
+            "provider_key": order.provider_key,
+            "settled_at": order.settled_at.isoformat() if order.settled_at else None,
+        }
+        profile.metadata_json = meta
+        self.session.flush()
 
     def mark_purchase_order_failed(
         self, *, order: FancoinPurchaseOrder, status: PurchaseOrderStatus, notes: str | None = None

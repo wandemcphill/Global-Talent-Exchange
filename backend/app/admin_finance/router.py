@@ -458,4 +458,12 @@ async def handle_korapay_webhook_alias(
     return await _handle_korapay_webhook_impl(request=request, session=session)
 
 
+@webhook_alias_router.post("/paystack", response_model=AdminFinanceWebhookResultView)
+async def handle_paystack_webhook_alias(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> AdminFinanceWebhookResultView:
+    return await handle_paystack_webhook(request=request, session=session)
+
+
 __all__ = ["router", "webhook_router", "webhook_alias_router"]

@@ -185,3 +185,40 @@ class CoinTraderAdminRejectRequest(CommonSchema):
 class CoinTradeAdminResolutionRequest(CommonSchema):
     resolution: Literal["release", "refund"]
     note: str | None = Field(default=None, max_length=1000)
+
+
+class CoinTraderLiquidityQuoteRequest(CommonSchema):
+    amount: Decimal = Field(gt=0)
+    provider: str = "korapay"
+    coin_unit: LedgerUnit = LedgerUnit.COIN
+    input_unit: str = "coin"
+
+
+class CoinTraderLiquidityQuoteView(CommonSchema):
+    gross_amount: Decimal
+    fee_amount: Decimal
+    processor_fee: Decimal
+    net_amount: Decimal
+    amount_fiat: Decimal
+    total_fiat_charged: Decimal
+    currency_code: str
+    rate_value: Decimal
+    unit: LedgerUnit
+    provider_key: str
+
+
+class CoinTraderLiquidityPurchaseRequest(CommonSchema):
+    amount: Decimal = Field(gt=0)
+    provider: str = "korapay"
+    coin_unit: LedgerUnit = LedgerUnit.COIN
+    callback_url: str | None = None
+
+
+class CoinTraderLiquidityPurchaseSessionView(CommonSchema):
+    order_reference: str
+    checkout_url: str
+    provider: str
+    unit: LedgerUnit
+    amount_coin: Decimal
+    amount_fiat: Decimal
+    status: str

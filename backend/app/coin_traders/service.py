@@ -496,6 +496,101 @@ class CoinTraderService:
         self.session.refresh(profile)
         return self.to_profile_view(profile)
 
+    def quote_liquidity_purchase(
+        self,
+        *,
+        actor: User,
+        amount: Decimal,
+        provider: str = "korapay",
+        coin_unit: LedgerUnit = LedgerUnit.COIN,
+        input_unit: str = "coin",
+    ) -> dict[str, Any]:
+        profile = self._require_approved_profile_for_user(actor)
+        from app.treasury.service import TreasuryService
+        from app.wallets.rail_service import WalletRailService
+        treasury = TreasuryService(wallet_service=self.wallet_service)
+        settings = treasury.ensure_settings(self.session)
+        rail = WalletRailService(session=self.session, wallet_service=self.wallet_service)
+        quote = rail.quote_purchase_order(
+            settings=settings,
+            amount=amount,
+            input_unit=input_unit,
+            provider_key=provider.strip().lower(),
+            source_scope="trader_liquidity",
+            unit=coin_unit,
+            processor_mode="automatic_gateway",
+            payout_channel="gateway",
+        )
+        return {
+            "gross_amount": quote.gross_amount,
+            "fee_amount": quote.fee_amount,
+            "processor_fee": quote.processor_fee,
+            "net_amount": quote.net_amount,
+            "amount_fiat": quote.amount_fiat,
+            "total_fiat_charged": quote.total_fiat_charged,
+            "currency_code": quote.currency_code,
+            "rate_value": quote.rate_value,
+            "unit": quote.unit,
+            "provider_key": quote.provider_key,
+        }
+
+    def initiate_liquidity_purchase(
+        self,
+        *,
+        actor: User,
+        amount: Decimal,
+        provider: str = "korapay",
+        coin_unit: LedgerUnit = LedgerUnit.COIN,
+        callback_url: str | None = None,
+    ) -> dict[str, Any]:
+        profile = self._require_approved_profile_for_user(actor)
+        from app.wallets.funding_service import WalletFundingService
+        funding_service = WalletFundingService(wallet_service=self.wallet_service)
+        session = funding_service.initiate_top_up(
+            self.session,
+            user=actor,
+            amount=amount,
+            input_unit="coin",
+            provider=provider,
+            unit=coin_unit,
+            callback_url=callback_url,
+            source_scope="trader_liquidity",
+            purchase_purpose="trader_liquidity",
+        )
+        return {
+            "order_reference": session.order_reference,
+            "checkout_url": session.checkout_url,
+            "provider": session.provider,
+            "unit": session.unit,
+            "amount_coin": session.amount_coin,
+            "amount_fiat": session.amount_fiat,
+            "status": session.status,
+        }
+
+    def verify_liquidity_purchase(
+        self,
+        *,
+        actor: User,
+        reference: str,
+    ) -> dict[str, Any]:
+        profile = self._require_approved_profile_for_user(actor)
+        from app.wallets.funding_service import WalletFundingService
+        funding_service = WalletFundingService(wallet_service=self.wallet_service)
+        result = funding_service.verify_top_up(
+            self.session,
+            user=actor,
+            reference=reference,
+        )
+        self.session.refresh(profile)
+        return {
+            "order_reference": result.order_reference,
+            "status": result.status,
+            "unit": result.unit,
+            "amount_coin": result.amount_coin,
+            "amount_fiat": result.amount_fiat,
+            "available_liquidity_snapshot": profile.liquidity_snapshot_json,
+        }
+
     def admin_list_profiles(self) -> list[CoinTraderProfileView]:
         statement = select(CoinTraderProfile).order_by(CoinTraderProfile.created_at.desc())
         return [self.to_profile_view(profile) for profile in self.session.scalars(statement).all()]

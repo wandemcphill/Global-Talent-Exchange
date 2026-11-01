@@ -423,8 +423,12 @@ def test_scoped_admin_without_liquidity_permission_cannot_settle_coin_trader_fun
     )
 
     assert response.status_code == 403
+    payload = response.json()
+    detail = payload.get("detail")
+    if isinstance(detail, dict):
+        detail = detail.get("detail")
     assert (
-        response.json().get("detail") or response.json().get("message")
+        detail or payload.get("message")
     ) == "Permission manage_liquidity_desk is required for this action."
 
 

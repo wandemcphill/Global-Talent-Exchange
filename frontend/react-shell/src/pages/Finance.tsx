@@ -39,24 +39,43 @@ function Balances({ w }: any) {
 
 function Deposit({ configured, rates, mode }: any) {
   const [amount, setAmount] = useState("5000");
+  const [provider, setProvider] = useState<"korapay" | "paystack">("korapay");
   const rate = Number(rates?.deposit_rate || 0);
   const coins = rates?.deposit_direction === "coin_per_fiat" ? Number(amount || 0) * rate : Number(amount || 0) / (rate || 1);
+  const providerLabel = provider === "korapay" ? "KoraPay" : "Paystack";
   const go = async () => {
     try {
-      const { data } = await api.post("/owner/deposits/init", { amount_ngn: Number(amount), callback_url: `${window.location.origin}${publicUrl("/payment/callback")}` });
+      const { data } = await api.post("/owner/deposits/init", {
+        amount_ngn: Number(amount),
+        provider,
+        callback_url: `${window.location.origin}${publicUrl("/payment/callback")}`,
+      });
       window.location.href = data.authorization_url;
     } catch (e) {
       toast.error(errMsg(e));
     }
   };
   return (
-    <Panel eyebrow="Paystack · NGN" title="Deposit" testid="deposit-panel" className="lg:col-span-4">
+    <Panel eyebrow={`${providerLabel} · NGN`} title="Deposit" testid="deposit-panel" className="lg:col-span-4">
+      <div className="mb-3 flex gap-2">
+        {(["korapay", "paystack"] as const).map((p) => (
+          <button
+            key={p}
+            type="button"
+            data-testid={`deposit-provider-${p}`}
+            onClick={() => setProvider(p)}
+            className={`gx-btn flex-1 py-1 text-xs ${provider === p ? "gx-btn-primary" : "gx-btn-secondary"}`}
+          >
+            {p === "korapay" ? "KoraPay" : "Paystack"}
+          </button>
+        ))}
+      </div>
       <label className="gx-label">Amount (₦)</label>
       <input data-testid="deposit-amount-input" className="gx-input" type="number" min={100} value={amount} onChange={(e) => setAmount(e.target.value)} />
       <p className="mt-2 text-xs text-slate-400" data-testid="deposit-preview">You receive <b className="text-white">{fmt(coins, 2)} GTX</b> at the treasury rate of ₦{fmt(rate)} per GTEX Coin {mode === "live" && <Chip tone="red">Live payments</Chip>}</p>
-      <Btn className="mt-3 w-full" disabled={!configured} onClick={go} data-testid="deposit-button">Pay with Paystack</Btn>
-      {!configured && <p className="mt-2 text-xs text-amber-300" data-testid="paystack-not-configured">Paystack keys are not connected yet, so Naira deposits are switched off.</p>}
-      <p className="mt-2 text-xs text-slate-500">Deposits credit your wallet as "deposited" GTEX Coin after Paystack verification.</p>
+      <Btn className="mt-3 w-full" disabled={!configured} onClick={go} data-testid="deposit-button">Pay with {providerLabel}</Btn>
+      {!configured && <p className="mt-2 text-xs text-amber-300" data-testid="paystack-not-configured">Payment provider keys are not connected yet, so Naira deposits are switched off.</p>}
+      <p className="mt-2 text-xs text-slate-500">Deposits credit your wallet as "deposited" GTEX Coin after {providerLabel} verification.</p>
     </Panel>
   );
 }

@@ -136,7 +136,9 @@ ALL_ADMIN_PERMISSIONS: tuple[str, ...] = tuple(
 )
 
 SUPPORTED_ADMIN_PAYMENT_RAILS: tuple[str, ...] = ("bank_transfer_manual", *SUPPORTED_TOP_UP_PROVIDER_KEYS)
-PAYSTACK_UNAVAILABLE_MESSAGE = "Paystack is unavailable for production. Use KoraPay or manual bank transfer."
+PAYSTACK_UNAVAILABLE_MESSAGE = (
+    "Paystack requires live checkout and webhook credentials before it can accept production deposits."
+)
 KORAPAY_UNAVAILABLE_MESSAGE = (
     "KoraPay requires live checkout and webhook credentials before it can accept production deposits."
 )

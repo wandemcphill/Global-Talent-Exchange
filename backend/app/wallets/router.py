@@ -240,6 +240,15 @@ def _build_withdrawal_view(
         net_amount=net_amount,
         processor_mode=processor_mode,
         payout_channel=payout_channel,
+        provider_key=getattr(withdrawal, "provider_key", None),
+        provider_reference=getattr(withdrawal, "provider_reference", None),
+        provider_transfer_code=getattr(withdrawal, "provider_transfer_code", None),
+        platform_fee=fee_amount,
+        processor_fee=getattr(withdrawal, "processor_fee", Decimal("0.0000")) or Decimal("0.0000"),
+        is_manual_reconciliation=bool(getattr(withdrawal, "is_manual_reconciliation", False)),
+        failure_reason=getattr(withdrawal, "failure_reason", None),
+        failed_at=getattr(withdrawal, "failed_at", None),
+        reversed_at=getattr(withdrawal, "reversed_at", None),
         platform_positioning=platform_positioning,
         legal_disclosures=disclosure_items,
         notes=withdrawal.notes,
@@ -260,6 +269,7 @@ def _build_withdrawal_quote(
     current_user: User,
     amount_coin: Decimal,
     source_scope: WithdrawalSourceScope,
+    provider_key: str | None = None,
 ) -> WithdrawalQuoteView:
     treasury = _build_treasury_service(request)
     settings = treasury.ensure_settings(session)
@@ -283,9 +293,14 @@ def _build_withdrawal_quote(
     )
     gross_amount = Decimal(amount_coin).quantize(Decimal("0.0001"))
     total_debit = (gross_amount + fee_amount).quantize(Decimal("0.0001"))
-    use_manual_payout = settings.withdrawal_mode in {PaymentMode.MANUAL, PaymentMode.HYBRID}
-    payout_channel = "bank_transfer" if use_manual_payout else "gateway"
-    processor_mode = "manual_bank_transfer" if use_manual_payout else "automatic_gateway"
+    normalized_provider = provider_key.strip().lower() if provider_key else None
+    if normalized_provider in {"korapay", "paystack"}:
+        payout_channel = "gateway"
+        processor_mode = "automatic_gateway"
+    else:
+        use_manual_payout = settings.withdrawal_mode in {PaymentMode.MANUAL, PaymentMode.HYBRID}
+        payout_channel = "bank_transfer" if use_manual_payout else "gateway"
+        processor_mode = "manual_bank_transfer" if use_manual_payout else "automatic_gateway"
     blocked_reason = None
     controls = _withdrawal_controls(request)
     if source_scope == WithdrawalSourceScope.COMPETITION and not bool(controls.get("egame_withdrawals_enabled", False)):
@@ -304,6 +319,17 @@ def _build_withdrawal_quote(
         if settings.withdrawal_rate_direction.value == "fiat_per_coin"
         else gross_amount / rate_value
     )
+    processor_fee = Decimal("0.0000")
+    if normalized_provider in {"korapay", "paystack"}:
+        try:
+            from app.wallets.providers.registry import get_provider_adapter
+            adapter = get_provider_adapter(normalized_provider)
+            estimate = adapter.estimate_fee(amount=_normalize_amount(estimated_fiat), operation="payout")
+            processor_fee = estimate.estimated_fee
+        except Exception:
+            processor_fee = Decimal("0.0000")
+    expected_net_fiat = max(Decimal("0.0000"), _normalize_amount(estimated_fiat) - processor_fee)
+
     return WithdrawalQuoteView(
         gross_amount=gross_amount,
         fee_amount=fee_amount,
@@ -316,6 +342,10 @@ def _build_withdrawal_quote(
         estimated_fiat_payout=_normalize_amount(estimated_fiat),
         processor_mode=processor_mode,
         payout_channel=payout_channel,
+        provider_key=normalized_provider,
+        platform_fee=fee_amount,
+        processor_fee=processor_fee,
+        expected_net_fiat=expected_net_fiat,
         fee_bps=fee_bps,
         minimum_fee=minimum_fee,
         eligibility=WithdrawalEligibilityView(
@@ -1412,6 +1442,7 @@ def create_withdrawal_quote(
         current_user=current_user,
         amount_coin=payload.amount_coin,
         source_scope=payload.source_scope,
+        provider_key=payload.provider_key,
     )
 
 
@@ -1472,6 +1503,7 @@ def create_withdrawal_request(
                 bank_account_id=payload.bank_account_id,
                 source_scope=payload.source_scope.value,
                 notes=payload.notes,
+                provider_key=payload.provider_key,
                 # Namespace the caller's key by user. The unique index on
                 # payout_requests.idempotency_key is global, so two users
                 # picking the same key ("1", a shared uuid) would otherwise

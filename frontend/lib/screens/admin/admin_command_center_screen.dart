@@ -572,7 +572,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
   }
 
   bool _paymentRailLocked(AdminPaymentRail rail) {
-    return rail.provider.trim().toLowerCase() == 'paystack';
+    return false;
   }
 
   String _depositStatusLabel(GteDepositStatus status) {

@@ -288,6 +288,17 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                               accent: GteShellTheme.accentCapital,
                               onPressed: _openDeposit,
                             ),
+                          if (overview.paymentProviderStatus['paystack'] ==
+                              'ready')
+                            _WalletQuickAction(
+                              label: 'Top up via Paystack',
+                              detail: _providerStatusLabel(
+                                overview.paymentProviderStatus['paystack'],
+                              ),
+                              icon: Icons.open_in_new_outlined,
+                              accent: GteShellTheme.accent,
+                              onPressed: _openDeposit,
+                            ),
                           _WalletQuickAction(
                             label: 'Manual deposit',
                             detail: 'Admin review',
@@ -351,6 +362,12 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                               label: 'KoraPay',
                               value: _providerStatusLabel(
                                 overview.paymentProviderStatus['korapay'],
+                              ),
+                            ),
+                            _RestrictionChip(
+                              label: 'Paystack',
+                              value: _providerStatusLabel(
+                                overview.paymentProviderStatus['paystack'],
                               ),
                             ),
                           ],

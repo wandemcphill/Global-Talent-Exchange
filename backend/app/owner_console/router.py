@@ -200,6 +200,7 @@ class WithdrawalRequest(BaseModel):
 class DepositInitRequest(BaseModel):
     amount_ngn: int = Field(ge=100)
     callback_url: str
+    provider: str = "paystack"
 
 
 class GiftRequest(BaseModel):
@@ -995,7 +996,7 @@ def withdraw(
 def deposit_init(
     body: DepositInitRequest, user=Depends(get_current_user), session: Session = Depends(get_session)
 ) -> dict[str, Any]:
-    return _run(session, money.paystack_init, session, user, body.amount_ngn, body.callback_url)
+    return _run(session, money.paystack_init, session, user, body.amount_ngn, body.callback_url, body.provider)
 
 
 @router.get("/deposits/verify/{reference}")
