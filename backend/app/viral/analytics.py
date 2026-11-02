@@ -10,6 +10,25 @@ from app.core.config import Settings
 
 
 def _extract_llm_text(payload: dict[str, Any]) -> str | None:
+    output_text = payload.get("output_text")
+    if isinstance(output_text, str) and output_text.strip():
+        return output_text.strip()
+    choices = payload.get("choices")
+    if isinstance(choices, list):
+        for choice in choices:
+            if not isinstance(choice, dict):
+                continue
+            message = choice.get("message")
+            if isinstance(message, dict):
+                content = message.get("content")
+                if isinstance(content, str) and content.strip():
+                    return content.strip()
+                if isinstance(content, list):
+                    for item in content:
+                        if isinstance(item, dict):
+                            text = item.get("text")
+                            if isinstance(text, str) and text.strip():
+                                return text.strip()
     output = payload.get("output")
     if isinstance(output, list):
         for item in output:
@@ -24,9 +43,22 @@ def _extract_llm_text(payload: dict[str, Any]) -> str | None:
                 text = chunk.get("text")
                 if isinstance(text, str) and text.strip():
                     return text.strip()
-    text = payload.get("output_text")
-    if isinstance(text, str) and text.strip():
-        return text.strip()
+    candidates = payload.get("candidates")
+    if isinstance(candidates, list) and candidates:
+        first = candidates[0]
+        if isinstance(first, dict):
+            c_content = first.get("content")
+            if isinstance(c_content, dict):
+                parts = c_content.get("parts")
+                if isinstance(parts, list):
+                    for part in parts:
+                        if isinstance(part, dict) and "text" in part:
+                            p_text = part.get("text")
+                            if isinstance(p_text, str) and p_text.strip():
+                                return p_text.strip()
+    direct_text = payload.get("text")
+    if isinstance(direct_text, str) and direct_text.strip():
+        return direct_text.strip()
     return None
 
 
@@ -204,34 +236,51 @@ class RemoteViralityInsightLLMClient:
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
-        body = {
-            "model": self.model,
-            "input": [
-                {
-                    "role": "system",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": (
-                                "You analyze short-form football clip performance. "
-                                "Answer the question 'Why did this clip go viral?' in 2 concise sentences."
-                            ),
-                        }
-                    ],
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": json.dumps(prompt, ensure_ascii=True),
-                        }
-                    ],
-                },
-            ],
-            "temperature": 0.4,
-            "max_output_tokens": 120,
-        }
+        system_text = (
+            "You analyze short-form football clip performance. "
+            "Answer the question 'Why did this clip go viral?' in 2 concise sentences."
+        )
+        user_text = json.dumps(prompt, ensure_ascii=True)
+        lower_url = (self.endpoint_url or "").lower()
+        if any(
+            token in lower_url
+            for token in ("/chat/completions", "openai", "groq", "openrouter", "deepseek", "together", "mistral")
+        ):
+            body = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": system_text},
+                    {"role": "user", "content": user_text},
+                ],
+                "temperature": 0.4,
+                "max_tokens": 120,
+            }
+        else:
+            body = {
+                "model": self.model,
+                "input": [
+                    {
+                        "role": "system",
+                        "content": [
+                            {
+                                "type": "input_text",
+                                "text": system_text,
+                            }
+                        ],
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "input_text",
+                                "text": user_text,
+                            }
+                        ],
+                    },
+                ],
+                "temperature": 0.4,
+                "max_output_tokens": 120,
+            }
         try:
             response = requests.post(  # nosec B113 - timeout set from configured timeout_seconds
                 self.endpoint_url,

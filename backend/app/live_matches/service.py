@@ -227,7 +227,15 @@ class LiveMatchHub:
 
     def __post_init__(self) -> None:
         self._hot_cache = HotPathCache(self.cache_backend)
-        self.commentary_engine.configure(cache_backend=self.cache_backend)
+        if self.commentary_engine.settings is None:
+            try:
+                from app.core.config import get_settings
+
+                self.commentary_engine.configure(settings=get_settings(), cache_backend=self.cache_backend)
+            except Exception:
+                self.commentary_engine.configure(cache_backend=self.cache_backend)
+        else:
+            self.commentary_engine.configure(cache_backend=self.cache_backend)
         self.stadium_service.session_factory = self.session_factory
 
     def start_stream(

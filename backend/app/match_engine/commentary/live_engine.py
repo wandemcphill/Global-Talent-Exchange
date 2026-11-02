@@ -124,35 +124,52 @@ class RemoteCommentaryLLMClient:
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
-        body = {
-            "model": self.model,
-            "input": [
-                {
-                    "role": "system",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": (
-                                "You are a world-class football commentator. "
-                                "Style: energetic, emotional, concise, no fluff. "
-                                "Return one or two short sentences only."
-                            ),
-                        }
-                    ],
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": json.dumps(prompt, ensure_ascii=True),
-                        }
-                    ],
-                },
-            ],
-            "temperature": 0.9,
-            "max_output_tokens": 120,
-        }
+        system_text = (
+            "You are a world-class football commentator. "
+            "Style: energetic, emotional, concise, no fluff. "
+            "Return one or two short sentences only."
+        )
+        user_text = json.dumps(prompt, ensure_ascii=True)
+        lower_url = (self.endpoint_url or "").lower()
+        if any(
+            token in lower_url
+            for token in ("/chat/completions", "openai", "groq", "openrouter", "deepseek", "together", "mistral")
+        ):
+            body = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": system_text},
+                    {"role": "user", "content": user_text},
+                ],
+                "temperature": 0.9,
+                "max_tokens": 120,
+            }
+        else:
+            body = {
+                "model": self.model,
+                "input": [
+                    {
+                        "role": "system",
+                        "content": [
+                            {
+                                "type": "input_text",
+                                "text": system_text,
+                            }
+                        ],
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "input_text",
+                                "text": user_text,
+                            }
+                        ],
+                    },
+                ],
+                "temperature": 0.9,
+                "max_output_tokens": 120,
+            }
         try:
             response = requests.post(  # nosec B113 - timeout set from configured timeout_seconds
                 self.endpoint_url,
@@ -216,7 +233,26 @@ class LiveCommentaryEngine:
     cost_guard: CommentaryCostGuard = field(default_factory=CommentaryCostGuard)
     llm_client: CommentaryLLMClient = field(default_factory=NullCommentaryLLMClient)
 
+    @classmethod
+    def from_settings(
+        cls,
+        settings: Settings | None,
+        *,
+        cache_backend: CacheBackend | None = None,
+    ) -> "LiveCommentaryEngine":
+        engine = cls(settings=settings)
+        if cache_backend is not None:
+            engine.configure(cache_backend=cache_backend)
+        return engine
+
     def __post_init__(self) -> None:
+        if self.settings is None:
+            try:
+                from app.core.config import get_settings
+
+                self.settings = get_settings()
+            except Exception:
+                pass
         if self.settings is not None:
             self.configure(settings=self.settings)
 
@@ -800,6 +836,22 @@ def _extract_llm_text(payload: dict[str, Any]) -> str | None:
                 text = block.get("text")
                 if isinstance(text, str) and text.strip():
                     return text
+    candidates = payload.get("candidates")
+    if isinstance(candidates, list) and candidates:
+        first = candidates[0]
+        if isinstance(first, dict):
+            c_content = first.get("content")
+            if isinstance(c_content, dict):
+                parts = c_content.get("parts")
+                if isinstance(parts, list):
+                    for part in parts:
+                        if isinstance(part, dict) and "text" in part:
+                            p_text = part.get("text")
+                            if isinstance(p_text, str) and p_text.strip():
+                                return p_text
+    direct_text = payload.get("text")
+    if isinstance(direct_text, str) and direct_text.strip():
+        return direct_text
     return None
 
 
