@@ -44,7 +44,12 @@ def test_web_service_targets_the_live_api_host(blueprint: dict) -> None:
 
 
 def test_api_allows_the_live_web_origin(blueprint: dict) -> None:
-    assert _env(blueprint, "gtex-api")["GTE_CORS_ALLOW_ORIGINS"] == PRODUCTION_WEB_ORIGIN
+    cors_origins = [
+        origin.strip() for origin in _env(blueprint, "gtex-api")["GTE_CORS_ALLOW_ORIGINS"].split(",") if origin.strip()
+    ]
+    assert PRODUCTION_WEB_ORIGIN in cors_origins
+    assert "https://playgtex.app" in cors_origins
+    assert "https://www.playgtex.app" in cors_origins
 
 
 def test_korapay_notification_url_is_the_canonical_route(blueprint: dict) -> None:
