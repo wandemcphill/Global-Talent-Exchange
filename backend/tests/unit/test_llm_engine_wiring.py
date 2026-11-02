@@ -95,7 +95,7 @@ class TestLLMEngineWiring:
             enabled=True,
             endpoint_url="https://api.openai.com/v1/chat/completions",
             model="gpt-4o-mini",
-            api_key="sk-test-secret-key",
+            api_key="sk-test-secret-key",  # pragma: allowlist secret
             timeout_seconds=8,
         )
 
@@ -104,7 +104,7 @@ class TestLLMEngineWiring:
 
         mock_post.assert_called_once()
         call_kwargs = mock_post.call_args[1]
-        assert call_kwargs["headers"]["Authorization"] == "Bearer sk-test-secret-key"
+        assert call_kwargs["headers"]["Authorization"] == "Bearer sk-test-secret-key"  # pragma: allowlist secret
         body = call_kwargs["json"]
         assert body["model"] == "gpt-4o-mini"
         assert "messages" in body
@@ -123,7 +123,7 @@ class TestLLMEngineWiring:
             enabled=True,
             endpoint_url="https://bedrock-runtime.eu-central-1.amazonaws.com/model/custom/invoke",
             model="anthropic.claude-3-haiku",
-            api_key="token-123",
+            api_key="token-123",  # pragma: allowlist secret
             timeout_seconds=5,
         )
 
@@ -149,7 +149,7 @@ class TestLLMEngineWiring:
             live_commentary_llm_enabled=True,
             live_commentary_llm_endpoint_url="https://api.openai.com/v1/chat/completions",
             live_commentary_llm_model="gpt-4o-mini",
-            live_commentary_llm_api_key="sk-test",
+            live_commentary_llm_api_key="sk-test",  # pragma: allowlist secret
             live_commentary_llm_timeout_seconds=8,
         )
 
@@ -177,7 +177,7 @@ class TestLLMEngineWiring:
             live_commentary_llm_enabled=True,
             live_commentary_llm_endpoint_url="https://api.openai.com/v1/chat/completions",
             live_commentary_llm_model="gpt-4o-mini",
-            live_commentary_llm_api_key="sk-test",
+            live_commentary_llm_api_key="sk-test",  # pragma: allowlist secret
         )
 
         engine = LiveCommentaryEngine.from_settings(settings)
@@ -220,7 +220,7 @@ class TestLLMEngineWiring:
             social_content_llm_enabled=True,
             social_content_llm_endpoint_url="https://api.openai.com/v1/chat/completions",
             social_content_llm_model="gpt-4o-mini",
-            social_content_llm_api_key="sk-test",
+            social_content_llm_api_key="sk-test",  # pragma: allowlist secret
         )
 
         generator = DebateGenerator.from_settings(settings)
@@ -256,7 +256,7 @@ class TestLLMEngineWiring:
             social_content_llm_enabled=True,
             social_content_llm_endpoint_url="https://api.openai.com/v1/chat/completions",
             social_content_llm_model="gpt-4o-mini",
-            social_content_llm_api_key="sk-test",
+            social_content_llm_api_key="sk-test",  # pragma: allowlist secret
         )
 
         service = ViralCaptionService.from_settings(settings)
@@ -285,7 +285,7 @@ class TestLLMEngineWiring:
             social_content_llm_enabled=True,
             social_content_llm_endpoint_url="https://api.openai.com/v1/chat/completions",
             social_content_llm_model="gpt-4o-mini",
-            social_content_llm_api_key="sk-test",
+            social_content_llm_api_key="sk-test",  # pragma: allowlist secret
         )
 
         feedback_service = ViralFeedbackLoopService.from_settings(settings)
