@@ -43,7 +43,7 @@ services:
       - key: GTE_INGESTION_PROVIDER
         value: sportmonks
       - key: GTE_CORS_ALLOW_ORIGINS
-        value: https://gtex-web-np2t.onrender.com
+        value: https://gtex-web-np2t.onrender.com,https://playgtex.app,https://www.playgtex.app
       - key: GTE_CORS_ALLOW_ORIGIN_REGEX
         value: ""
       - key: GTE_TRUSTED_PROXY_HOPS
