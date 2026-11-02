@@ -124,3 +124,43 @@ def test_wonderkids_canonical_and_provider_overrides() -> None:
         player = DummyPlayer(full_name=name)
         cur, pot = resolve_player_gsi(player)
         assert (cur, pot) == expected, f"Resolution failed for {name}"
+
+
+def test_wonderkids_shortlist_calibration() -> None:
+    shortlist_expected = {
+        "luca vozar": (73, 85),
+        "yannik wagner": (72, 85),
+        "xavi espart": (75, 88),
+        "alejandro santiago": (71, 84),
+        "aimar goved": (73, 86),
+        "aimar govea": (73, 86),
+        "trevor benedict": (73, 86),
+        "will thompson": (71, 84),
+        "quincy hoquee": (72, 84),
+        "alvin ayman": (75, 89),
+        "isaac holland": (72, 85),
+        "clydel kigongo": (71, 84),
+        "dylan smith": (72, 85),
+        "jay matadeen": (73, 88),
+        "tony algarin": (72, 85),
+        "max knoll": (73, 86),
+        "alec shabany": (72, 85),
+        "jahnoa hensel": (73, 86),
+        "ezra carrington": (74, 87),
+        "philipp schreiber": (72, 85),
+        "jacob fasida": (73, 86),
+        "hugo voskamp": (71, 84),
+        "gonzalo gross": (74, 87),
+        "rui araki": (80, 91),
+        "abdellah ouazane": (78, 92),
+        "mateus mide": (77, 88),
+        "mattia liberali": (77, 88),
+        "darlington osuchukwu": (73, 87),
+    }
+
+    for name, (exp_ovr, exp_pot) in shortlist_expected.items():
+        assert name in CANONICAL_GSI_OVERRIDES, f"Missing canonical override for {name}"
+        assert CANONICAL_GSI_OVERRIDES[name] == (exp_ovr, exp_pot), f"Mismatch for {name}"
+        player = DummyPlayer(full_name=name)
+        cur, pot = resolve_player_gsi(player)
+        assert (cur, pot) == (exp_ovr, exp_pot), f"Resolution failed for {name}"
