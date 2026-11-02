@@ -146,6 +146,7 @@ def test_authoritative_active_player_ratings_and_potentials() -> None:
         "harry-kane-001": (92, 92),  # Harry Kane
         "cole-palmer-001": (88, 92),  # Cole Palmer
         "osimhen-001": (90, 94),  # Victor Osimhen
+        "diomande-001": (86, 92),  # Yan Diomandé
     }
 
     for key, (exp_ovr, exp_pot) in expected_ratings.items():
