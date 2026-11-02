@@ -1119,7 +1119,6 @@ class PlayerTokenMarketService:
             or player_tier in {"legend", "legendary", "icon", "immortal", "world_class", "hero"}
         )
         dna = dict(player.dna_profile or {}) if isinstance(player.dna_profile, dict) else {}
-        m_meta = dict(market.metadata_json or {}) if isinstance(market.metadata_json, dict) else {}
         if not portrait:
             for key in ("portraitUrl", "photo_url", "image_url"):
                 val = dna.get(key)
@@ -1139,17 +1138,9 @@ class PlayerTokenMarketService:
                 )
             ):
                 portrait = None
-        cur_rating = self._dna_int(dna, "overall", "current_rating", "sofifa_overall") or self._dna_int(
-            m_meta, "current_gsi", "gsi"
-        )
-        pot_rating = (
-            self._dna_int(dna, "potential", "potential_rating", "sofifa_potential")
-            or (int(player.potential) if player.potential else None)
-            or self._dna_int(m_meta, "potential_gsi")
-            or cur_rating
-        )
-        if cur_rating is None:
-            cur_rating = pot_rating
+        from app.players.gsi_service import resolve_player_gsi
+
+        cur_rating, pot_rating = resolve_player_gsi(player, market)
         return {
             "player_id": player.id,
             "player_name": player.canonical_display_name or player.full_name,
@@ -1332,6 +1323,13 @@ class PlayerTokenMarketService:
                     continue
                 if 18 <= age <= 35:
                     return age
+            if player.date_of_birth is not None:
+                today = player.last_synced_at.date() if player.last_synced_at is not None else date.today()
+                age = today.year - player.date_of_birth.year
+                before_birthday = (today.month, today.day) < (player.date_of_birth.month, player.date_of_birth.day)
+                calc_age = age - 1 if before_birthday else age
+                if 18 <= calc_age <= 35:
+                    return calc_age
             return 28
         if player.date_of_birth is None:
             return None

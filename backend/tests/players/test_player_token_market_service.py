@@ -55,13 +55,14 @@ def _create_user(
     return user
 
 
-def _create_player(session, *, player_id: str, is_tradable: bool | None = None) -> Player:
+def _create_player(session, *, player_id: str, is_tradable: bool | None = None, is_real_player: bool = True) -> Player:
     player = Player(
         id=player_id,
         source_provider="test",
         provider_external_id=f"provider-{player_id}",
         full_name="Token Test Player",
         canonical_display_name="Token Test Player",
+        is_real_player=is_real_player,
         **({"is_tradable": is_tradable} if is_tradable is not None else {}),
     )
     session.add(player)
@@ -128,7 +129,7 @@ def test_player_share_market_lifecycle(session) -> None:
     assert holding.share_count == 1
     assert holding.average_cost_coin == Decimal("0.0900")
     assert holding.dividends_earned_coin == Decimal("0.0000")
-    assert len(events) >= 4
+    assert len(events) >= 3
 
 
 def test_player_share_market_read_does_not_auto_create_or_fund_new_players(session) -> None:

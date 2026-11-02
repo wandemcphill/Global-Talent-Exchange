@@ -906,8 +906,11 @@ class RealPlayerUniverseQueryService:
                     continue
                 if 18 <= candidate <= 35:
                     return candidate
-            # A historical birth date remains available as historical metadata,
-            # but must not be presented as the age of an in-game legendary card.
+            dob = player.date_of_birth or fallback_dob
+            if dob is not None:
+                calc_age = self._player_age(dob)
+                if calc_age is not None and 18 <= calc_age <= 35:
+                    return calc_age
             return 28
         return self._player_age(fallback_dob)
 
