@@ -58,9 +58,7 @@ class TestLLMEngineWiring:
         ]
         for extract in extractors:
             # 1. OpenAI format (choices[0].message.content string)
-            openai_resp = {
-                "choices": [{"message": {"role": "assistant", "content": "What an unbelievable volley!"}}]
-            }
+            openai_resp = {"choices": [{"message": {"role": "assistant", "content": "What an unbelievable volley!"}}]}
             assert extract(openai_resp) == "What an unbelievable volley!"
 
             # 2. OpenAI format (content as list of text chunks)
@@ -70,15 +68,11 @@ class TestLLMEngineWiring:
             assert extract(openai_chunked) == "Chunked commentary."
 
             # 3. Gemini format (candidates[0].content.parts[0].text)
-            gemini_resp = {
-                "candidates": [{"content": {"parts": [{"text": "Gemini generated insight."}]}}]
-            }
+            gemini_resp = {"candidates": [{"content": {"parts": [{"text": "Gemini generated insight."}]}}]}
             assert extract(gemini_resp) == "Gemini generated insight."
 
             # 4. Bedrock / Anthropic format (output[0].content[0].text)
-            bedrock_resp = {
-                "output": [{"content": [{"type": "text", "text": "Bedrock generated text."}]}]
-            }
+            bedrock_resp = {"output": [{"content": [{"type": "text", "text": "Bedrock generated text."}]}]}
             assert extract(bedrock_resp) == "Bedrock generated text."
 
             # 5. Direct output_text
@@ -127,9 +121,7 @@ class TestLLMEngineWiring:
     def test_commentary_llm_client_custom_input_payload(self, mock_post: MagicMock) -> None:
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "output_text": "Custom input formatted commentary."
-        }
+        mock_response.json.return_value = {"output_text": "Custom input formatted commentary."}
         mock_post.return_value = mock_response
 
         client = RemoteCommentaryLLMClient(
