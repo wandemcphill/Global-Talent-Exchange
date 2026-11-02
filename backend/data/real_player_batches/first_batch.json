@@ -1645,6 +1645,45 @@
       "assists": 4,
       "identity_confidence_score": 0.99,
       "is_verified_real_player": true
+    },
+    {
+      "source_name": "curated-feed",
+      "source_player_key": "diomande-001",
+      "canonical_name": "Yan Diomandé",
+      "known_aliases": [
+        "Yan Diomande",
+        "Yan Diomandé",
+        "Yanis Diomande",
+        "Y. Diomandé",
+        "Y. Diomande"
+      ],
+      "nationality": "Côte d'Ivoire",
+      "nationality_code": "CI",
+      "date_of_birth": "2006-11-14",
+      "birth_year": 2006,
+      "dominant_foot": "right",
+      "height_cm": 178,
+      "weight_kg": 72,
+      "primary_position": "Winger",
+      "secondary_positions": [
+        "Attacking Midfielder",
+        "Striker"
+      ],
+      "current_real_world_club": "Real Madrid",
+      "current_real_world_club_key": "real-madrid",
+      "current_real_world_league": "La Liga",
+      "current_real_world_league_key": "la-liga",
+      "competition_level": "elite",
+      "overall_rating": 86,
+      "potential": 92,
+      "current_market_reference_value": 85000000.0,
+      "market_reference_currency": "EUR",
+      "appearances": 28,
+      "minutes_played": 2150,
+      "goals": 12,
+      "assists": 9,
+      "identity_confidence_score": 0.99,
+      "is_verified_real_player": true
     }
   ]
 }
