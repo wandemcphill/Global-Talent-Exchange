@@ -1,4 +1,6 @@
-/console       /app        301
-/console/      /app        301
-/console/*     /app/:splat 301
-/*             /index.html 200
+/console           /app        301
+/console/          /app        301
+/console/app       /app        301
+/console/app/*     /app/:splat 301
+/console/*         /:splat     301
+/*                 /index.html 200
