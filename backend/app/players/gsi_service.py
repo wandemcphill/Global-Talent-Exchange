@@ -29,31 +29,191 @@ CANONICAL_GSI_OVERRIDES: dict[str, tuple[int, int]] = {
     "eric cantona": (91, 91),
     "éric cantona": (91, 91),
     "michael laudrup": (90, 90),
-    # Active Player Benchmarks
+    # Active Stars & Wonderkids (Calibrated per FC 27 ±1 Benchmarks)
     "ademola lookman": (84, 90),
-    "cole palmer": (89, 93),
+    "aleksandar pavlovic": (82, 89),
+    "aleksandar pavlović": (82, 89),
+    "amara diouf": (76, 90),
+    "amir ibragimov": (76, 88),
+    "andrea natali": (74, 86),
+    "archie gray": (77, 88),
+    "arda guler": (82, 90),
+    "arda güler": (82, 90),
+    "assan ouedraogo": (77, 88),
+    "assan ouédraogo": (77, 88),
+    "ayyoub bouaddi": (77, 89),
+    "can uzun": (77, 89),
+    "cardoso varela": (77, 89),
+    "cavan sullivan": (76, 90),
+    "chido obi": (75, 89),
+    "chris rigg": (74, 88),
+    "claudio echeverri": (78, 89),
+    "claudio jeremias echeverri": (78, 89),
+    "claudio jeremías echeverri": (78, 89),
     "cole jermaine palmer": (89, 93),
-    "estêvão": (85, 90),
-    "estevao": (85, 90),
+    "cole palmer": (89, 93),
+    "dean huijsen": (78, 88),
+    "ebrima tunkara": (73, 90),
+    "endrick": (81, 91),
+    "endrick felipe moreira de sousa": (81, 91),
+    "enzo alves": (73, 88),
+    "estevao": (81, 91),
+    "estevao willian": (81, 91),
+    "estêvão": (81, 91),
+    "estêvão willian": (81, 91),
+    "ethan chidiebere nwaneri": (78, 90),
+    "ethan mbappe": (72, 85),
+    "ethan mbappé": (72, 85),
+    "ethan nwaneri": (78, 90),
+    "finlay gorman": (74, 89),
+    "francesco camarda": (77, 91),
+    "franco mastantuono": (78, 90),
     "gabriel mec": (78, 89),
-    "zadok yohanna": (74, 89),
+    "geovany quenda": (77, 89),
+    "guille fernandez": (77, 89),
+    "guille fernández": (77, 89),
+    "jj gabriel": (73, 92),
+    "jorrel hato": (81, 89),
+    "justin lerma": (74, 88),
+    "kenan yıldız": (84, 91),
+    "kendry paez": (77, 89),
+    "kendry páez": (77, 89),
+    "kobbie mainoo": (81, 91),
+    "konstantinos karetsas": (76, 88),
+    "lennart karl": (78, 91),
+    "leny yoro": (81, 90),
+    "lewis miley": (76, 88),
+    "lucas bergvall": (78, 89),
+    "luka vuskovic": (77, 89),
+    "luka vušković": (77, 89),
+    "marc bernal": (77, 89),
+    "marc bernal casas": (77, 89),
+    "mathys tel": (80, 89),
+    "max dowman": (74, 89),
+    "michal zuk": (73, 87),
+    "mikey moore": (75, 90),
+    "myles anthony lewis-skelly": (76, 88),
+    "myles lewis-skelly": (76, 88),
+    "pau cubarsi": (83, 92),
+    "pau cubarsi paredes": (83, 92),
+    "pau cubarsí": (83, 92),
+    "pau cubarsí paredes": (83, 92),
+    "paul wanner": (77, 88),
+    "pedro rodriguez": (73, 87),
+    "pedro rodríguez": (73, 87),
+    "rio ngumoha": (75, 89),
+    "rodrigo mora": (75, 88),
+    "ruslan mba": (73, 87),
+    "saba kharebashvili": (74, 88),
+    "samu aghehowa": (81, 89),
+    "samu omorodion": (81, 89),
+    "samuel omorodion aghehowa": (81, 89),
+    "sean steur": (73, 87),
+    "shane kluivert": (72, 86),
+    "shumaira mheuka": (77, 88),
+    "sverre halseth nypan": (76, 89),
+    "sverre nypan": (76, 89),
+    "toni fernandez": (77, 89),
+    "toni fernández": (77, 89),
+    "warren zaire-emery": (83, 90),
+    "warren zaïre-emery": (83, 90),
     "z. yohanna": (74, 89),
+    "zadok yohanna": (74, 89),
 }
 
 # External provider IDs mapped to governed (current_gsi, potential_gsi)
 PROVIDER_ID_GSI_OVERRIDES: dict[str, tuple[int, int]] = {
-    "5321": (84, 90),        # Lookman (sportmonks)
-    "29141828": (84, 90),    # Lookman (fm23)
-    "257534": (89, 93),      # Palmer (sofifa)
-    "28120042": (89, 93),    # Palmer (fm23)
-    "28912747": (89, 93),    # Palmer (sportmonks)
-    "2002042919": (85, 90),  # Estêvão (fm23)
-    "37701999": (85, 90),    # Estêvão (sportmonks)
-    "2002088213": (78, 89),  # Mec (fm23)
-    "2002046177": (78, 89),  # Mec (fm23)
-    "1421433": (74, 89),     # Zadok (fm23)
-    "37974187": (74, 89),    # Zadok (sportmonks)
-    "601710": (90, 90),      # Michael Laudrup (fm23)
+    "1421433": (74, 89),
+    "2000077193": (82, 90),
+    "2000094152": (78, 89),
+    "2000103330": (77, 89),
+    "2000104850": (80, 89),
+    "2000105654": (81, 89),
+    "2000109240": (78, 88),
+    "2000123586": (81, 91),
+    "2000138516": (77, 88),
+    "2000138835": (84, 91),
+    "2000169739": (78, 89),
+    "2000171034": (82, 89),
+    "2000179712": (83, 90),
+    "2000182795": (77, 88),
+    "2000182819": (81, 90),
+    "2000188173": (77, 88),
+    "2000189871": (76, 88),
+    "2000211219": (81, 89),
+    "2000220941": (81, 91),
+    "2002042919": (81, 91),
+    "2002042933": (77, 89),
+    "2002042937": (77, 89),
+    "2002042945": (75, 90),
+    "2002042946": (77, 89),
+    "2002042948": (78, 90),
+    "2002042951": (83, 92),
+    "2002042974": (76, 88),
+    "2002042976": (78, 90),
+    "2002042982": (74, 88),
+    "2002043015": (76, 90),
+    "2002044535": (76, 88),
+    "2002045113": (77, 88),
+    "2002046177": (78, 89),
+    "2002086609": (74, 89),
+    "2002086652": (74, 89),
+    "2002087591": (73, 92),
+    "2002087653": (74, 88),
+    "2002087805": (77, 88),
+    "2002087817": (76, 88),
+    "2002087865": (75, 89),
+    "2002087921": (77, 89),
+    "2002088033": (77, 91),
+    "2002088148": (72, 86),
+    "2002088168": (77, 89),
+    "2002088213": (78, 89),
+    "2002088219": (77, 89),
+    "2002088237": (78, 91),
+    "2002088246": (73, 88),
+    "2002088249": (73, 87),
+    "2002088256": (73, 87),
+    "2002088298": (74, 89),
+    "2002088307": (76, 90),
+    "2002088331": (73, 90),
+    "2002088353": (73, 87),
+    "2002088411": (74, 88),
+    "2002088421": (77, 89),
+    "2002088971": (73, 92),
+    "2002089123": (75, 89),
+    "2002089126": (77, 89),
+    "2002089127": (73, 90),
+    "2002089128": (77, 89),
+    "257534": (89, 93),
+    "276528": (78, 89),
+    "278773": (76, 88),
+    "28120042": (89, 93),
+    "28912747": (89, 93),
+    "29141828": (84, 90),
+    "37531504": (80, 89),
+    "37547467": (82, 90),
+    "37568808": (78, 90),
+    "37577660": (76, 89),
+    "37582044": (82, 89),
+    "37582045": (77, 88),
+    "37593237": (83, 90),
+    "37598725": (84, 91),
+    "37598726": (77, 89),
+    "37600357": (81, 90),
+    "37612542": (78, 88),
+    "37622274": (81, 89),
+    "37645043": (77, 88),
+    "37656652": (77, 89),
+    "37656790": (83, 92),
+    "37656803": (75, 88),
+    "37657587": (77, 89),
+    "37710798": (77, 89),
+    "37717176": (77, 89),
+    "37720618": (74, 89),
+    "37729623": (78, 90),
+    "37974187": (74, 89),
+    "5321": (84, 90),
+    "601710": (90, 90),
 }
 
 
@@ -97,11 +257,15 @@ def resolve_player_gsi(
 
     # 3. Canonical and Provider ID overrides
     name = (
-        getattr(player, "canonical_display_name", None)
-        or getattr(player, "full_name", None)
-        or getattr(player, "name", None)
-        or ""
-    ).strip().lower()
+        (
+            getattr(player, "canonical_display_name", None)
+            or getattr(player, "full_name", None)
+            or getattr(player, "name", None)
+            or ""
+        )
+        .strip()
+        .lower()
+    )
 
     ext_id = str(getattr(player, "provider_external_id", "") or "").strip()
 
@@ -136,7 +300,11 @@ def resolve_player_gsi(
                 pot_gsi = int(m_meta["potential_gsi"])
 
     # 5. DNA profile inspection
-    dna = dict(getattr(player, "dna_profile", None) or {}) if isinstance(getattr(player, "dna_profile", None), dict) else {}
+    dna = (
+        dict(getattr(player, "dna_profile", None) or {})
+        if isinstance(getattr(player, "dna_profile", None), dict)
+        else {}
+    )
     if cur_gsi is None:
         cur_candidates = [
             dna.get("current_rating"),
