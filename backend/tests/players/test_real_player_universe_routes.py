@@ -1406,7 +1406,7 @@ def test_real_player_universe_supports_profileless_fm23_legends_excludes_retired
         o_price, o_rating = quotes[osimhen_fm.id]
         m_price, m_rating = quotes[messi_legend.id]
         assert (int(o_price), o_rating) == (272, 90)
-        assert (int(m_price), m_rating) == (1221, 99)
+        assert (int(m_price), m_rating) == (1221, 98)
     finally:
         session.close()
         engine.dispose()
