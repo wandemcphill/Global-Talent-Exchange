@@ -54,7 +54,7 @@ def test_marc_bernal_calibration() -> None:
 def test_wonderkids_canonical_and_provider_overrides() -> None:
     expected_benchmarks = {
         "ethan nwaneri": (78, 90),
-        "ayyoub bouaddi": (77, 89),
+        "ayyoub bouaddi": (84, 91),
         "archie gray": (77, 88),
         "kobbie mainoo": (81, 91),
         "estêvão": (81, 91),
@@ -77,8 +77,9 @@ def test_wonderkids_canonical_and_provider_overrides() -> None:
         "can uzun": (77, 89),
         "geovany quenda": (77, 89),
         "rodrigo mora": (75, 88),
-        "pau cubarsí": (83, 92),
-        "dean huijsen": (78, 88),
+        "pau cubarsí": (86, 94),
+        "dean huijsen": (81, 90),
+        "dastan satpaev": (76, 87),
         "lewis miley": (76, 88),
         "ebrima tunkara": (73, 90),
         "guille fernández": (77, 89),
