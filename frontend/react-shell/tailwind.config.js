@@ -11,7 +11,20 @@ module.exports = {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      fontFamily: {
+        display: ["'Barlow Condensed'", "'Teko'", "sans-serif"],
+        sans: ["'Inter'", "system-ui", "sans-serif"],
+        mono: ["'JetBrains Mono'", "monospace"],
+      },
       colors: {
+        gtex: {
+          midnight: "#080F1C",
+          slate: "#14243A",
+          emerald: "#00C991",
+          gold: "#E5B63F",
+          pitch: "#42B9EC",
+          graphite: "#25354B",
+        },
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         card: {

@@ -52,13 +52,26 @@ def resolve_player_share_market_config(
 
     # Active superstars (e.g. Kane, Mbappé, Bellingham, Vinícius, Rodri) are NOT 1-of-1
     is_active_superstar = player_id in {
-        "50235403-679f-48c8-88a0-7614e76ccc0e",
-        "0b429e4e-3588-4e05-aed4-70015f211585",
-        "64b8ed47-c422-4b03-a0f6-c8bfef31aa35",
-        "42e150d2-dafe-4fd4-8c96-6bf0844893a6",
-        "574f0bc7-7878-40b3-ac11-627d7071e344",
-        "5f79b913-9e1f-4735-93b0-b3ce2c4d9577",
-        "0fb47397-8e40-4f65-ad37-fd0760515e03",
+        "0b429e4e-3588-4e05-aed4-70015f211585",  # Harry Kane (keeper)
+        "50235403-679f-48c8-88a0-7614e76ccc0e",  # Harry Kane
+        "729dc5c1-fc66-4b4a-933b-b69785cebaf1",  # Kylian Mbappé (keeper)
+        "64b8ed47-c422-4b03-a0f6-c8bfef31aa35",  # Kylian Mbappé
+        "b89bf448-982b-4cfb-86cc-1525eb4e70d1",  # Vinicius Junior (keeper)
+        "42e150d2-dafe-4fd4-8c96-6bf0844893a6",  # Vinicius Junior
+        "517f060d-ea68-49f1-9e94-ddb3e5265585",  # Jude Bellingham (keeper)
+        "574f0bc7-7878-40b3-ac11-627d7071e344",  # Jude Bellingham
+        "f4b4531b-a342-48b5-8f43-618cfa0dc49a",  # Bukayo Saka (keeper)
+        "c02852d3-656f-49d8-bcb2-f83234525e27",  # Bukayo Saka
+        "2dc62da9-550b-423b-bfe3-445de565051e",  # Victor Osimhen (keeper)
+        "cd6eaa94-3e3a-4187-bc2c-8ec16f2be165",  # Victor Osimhen
+        "e7a8ab67-7737-457b-b717-ee457be4ef31",  # Paul Onuachu (keeper)
+        "62930b4f-ce7b-43c9-a6b7-17abd26125a4",  # Paul Onuachu
+        "557789ab-838f-4599-bb86-669b6cf100f4",  # Aaron Wan-Bissaka (keeper)
+        "8f4f3204-985e-4244-ad1b-a820eaada964",  # Aaron Wan-Bissaka
+        "9bb4b8c1-0b9e-4804-baa9-a62cf480c3d4",  # Joshua Kimmich (keeper)
+        "db0bf799-9b9b-4084-be0a-8d3cff413a15",  # Joshua Kimmich
+        "5f79b913-9e1f-4735-93b0-b3ce2c4d9577",  # Rodri
+        "0fb47397-8e40-4f65-ad37-fd0760515e03",  # Thibaut Courtois
     } or player_name in {
         "harry kane",
         "kylian mbappé",
@@ -68,6 +81,30 @@ def resolve_player_share_market_config(
         "jude bellingham",
         "rodri",
         "thibaut courtois",
+        "erling haaland",
+        "bukayo saka",
+        "victor osimhen",
+        "joshua kimmich",
+        "joshua walter kimmich",
+        "paul onuachu",
+        "ebere paul onuachu",
+        "aaron wan-bissaka",
+        "aaron wan bissaka",
+        "emre can",
+        "adnan januzaj",
+        "alessio romagnoli",
+        "dante",
+        "mohamed salah",
+        "kevin de bruyne",
+        "virgil van dijk",
+        "alisson becker",
+        "bernardo silva",
+        "bruno fernandes",
+        "declan rice",
+        "florian wirtz",
+        "jamal musiala",
+        "lamine yamal",
+        "cole palmer",
     }
 
     if is_active_superstar:

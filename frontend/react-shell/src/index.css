@@ -5,15 +5,18 @@
 @tailwind utilities;
 
 :root {
-  --gx-bg: #050811;
-  --gx-card: #0b1220;
-  --gx-line: rgba(255, 255, 255, 0.11);
-  --gx-emerald: #10b981;
-  --gx-gold: #f59e0b;
-  --gx-cyan: #06b6d4;
-  --gx-blaze: #ef4444;
-  --gx-gtex: #3b82f6;
-  --gx-fan: #f59e0b;
+  --gx-bg: #080F1C;
+  --gx-card: #14243A;
+  --gx-line: rgba(255, 255, 255, 0.08);
+  --gx-border: #25354B;
+  --gx-emerald: #00C991;
+  --gx-gold: #E5B63F;
+  --gx-pitch: #42B9EC;
+  --gx-cyan: #42B9EC;
+  --gx-graphite: #25354B;
+  --gx-blaze: #EF4444;
+  --gx-gtex: #00C991;
+  --gx-fan: #E5B63F;
 }
 
 html, body, #root {
@@ -23,90 +26,86 @@ html, body, #root {
 body {
   margin: 0;
   color: #f1f5f9;
-  font-family: "Inter", "DM Sans", sans-serif;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
 ::selection {
-  background: rgba(16, 185, 129, 0.35);
+  background: rgba(0, 201, 145, 0.35);
   color: #fff;
 }
 
 @layer components {
   .gx-display {
-    font-family: "Barlow Condensed", "Outfit", sans-serif;
+    font-family: "Barlow Condensed", "Teko", sans-serif;
+    font-feature-settings: "tnum";
   }
   .gx-mono {
     font-family: "JetBrains Mono", monospace;
     font-variant-numeric: tabular-nums;
   }
   .gx-eyebrow {
-    @apply text-[11px] font-extrabold uppercase tracking-[0.22em] text-emerald-400;
+    @apply text-[11px] font-extrabold uppercase tracking-[0.18em] text-[#00C991];
     font-family: "JetBrains Mono", monospace;
-    text-shadow: 0 0 18px rgba(16, 185, 129, 0.35);
   }
   .gx-h1 {
     @apply text-4xl sm:text-5xl lg:text-6xl font-black uppercase leading-[0.92] tracking-tight text-white;
     font-family: "Barlow Condensed", sans-serif;
-    text-shadow: 0 4px 24px rgba(0, 0, 0, 0.65);
+    text-shadow: 0 4px 20px rgba(0, 0, 0, 0.7);
   }
   .gx-h2 {
     @apply text-2xl sm:text-3xl font-extrabold uppercase tracking-tight text-white;
     font-family: "Barlow Condensed", sans-serif;
-    text-shadow: 0 2px 14px rgba(0, 0, 0, 0.55);
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
   }
   .gx-h3 {
     @apply text-xl font-bold uppercase tracking-wide text-white;
     font-family: "Barlow Condensed", sans-serif;
   }
 
-  /* Obsidian Broadcast Glass Panel */
+  /* Matchday Raised Slate Structural Panel */
   .gx-panel {
-    @apply relative rounded-2xl border border-white/[0.11] p-5 sm:p-6 transition-all duration-300;
-    background: linear-gradient(155deg, rgba(17, 27, 48, 0.86) 0%, rgba(9, 15, 28, 0.94) 65%, rgba(6, 10, 20, 0.98) 100%);
+    @apply relative rounded-2xl border border-[#25354B] p-5 sm:p-6 transition-all duration-300;
+    background: linear-gradient(160deg, #14243A 0%, #0E1A2C 65%, #080F1C 100%);
     box-shadow:
-      0 18px 42px -10px rgba(0, 0, 0, 0.68),
-      inset 0 1px 0 rgba(255, 255, 255, 0.14),
-      inset 0 0 24px rgba(16, 185, 129, 0.02);
-    backdrop-filter: blur(16px);
+      0 14px 36px -8px rgba(0, 0, 0, 0.65),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
   .gx-panel:hover {
-    border-color: rgba(255, 255, 255, 0.18);
+    border-color: rgba(66, 185, 236, 0.28);
     box-shadow:
-      0 22px 48px -10px rgba(0, 0, 0, 0.78),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2),
-      0 0 28px rgba(16, 185, 129, 0.06);
+      0 18px 42px -8px rgba(0, 0, 0, 0.75),
+      inset 0 1px 0 rgba(255, 255, 255, 0.12);
   }
   .gx-panel-live {
-    border-color: rgba(16, 185, 129, 0.48);
-    background: linear-gradient(155deg, rgba(16, 185, 129, 0.11) 0%, rgba(13, 22, 40, 0.94) 48%, rgba(6, 10, 20, 0.98) 100%);
+    border-color: rgba(0, 201, 145, 0.45);
+    background: linear-gradient(160deg, rgba(0, 201, 145, 0.08) 0%, #14243A 45%, #080F1C 100%);
     box-shadow:
-      0 20px 46px -10px rgba(0, 0, 0, 0.75),
-      inset 0 1px 0 rgba(52, 211, 153, 0.42),
-      0 0 32px rgba(16, 185, 129, 0.12);
+      0 16px 40px -8px rgba(0, 0, 0, 0.7),
+      inset 0 1px 0 rgba(0, 201, 145, 0.35);
   }
 
-  /* Tactile Metallic Shimmer Buttons */
+  /* Tactile Metallic Matchday Buttons */
   .gx-btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.14em] transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40 active:scale-[0.97];
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold uppercase tracking-[0.12em] transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40 active:scale-[0.97];
   }
   .gx-btn-primary {
-    @apply text-slate-950 hover:-translate-y-0.5;
-    background: linear-gradient(135deg, #34d399 0%, #10b981 55%, #059669 100%);
+    @apply text-slate-950 font-black hover:-translate-y-0.5;
+    background: linear-gradient(135deg, #00E8A8 0%, #00C991 55%, #00A677 100%);
     box-shadow:
-      0 8px 22px -4px rgba(16, 185, 129, 0.5),
-      inset 0 1px 0 rgba(255, 255, 255, 0.45);
+      0 6px 18px -2px rgba(0, 201, 145, 0.45),
+      inset 0 1px 0 rgba(255, 255, 255, 0.4);
   }
   .gx-btn-primary:hover {
-    background: linear-gradient(135deg, #6ee7b7 0%, #10b981 55%, #047857 100%);
+    background: linear-gradient(135deg, #22f8bb 0%, #00C991 55%, #008f66 100%);
     box-shadow:
-      0 12px 28px -4px rgba(16, 185, 129, 0.68),
-      inset 0 1px 0 rgba(255, 255, 255, 0.6);
+      0 10px 24px -2px rgba(0, 201, 145, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.55);
   }
   .gx-btn-secondary {
-    @apply border border-white/15 bg-white/[0.04] text-slate-100 hover:border-emerald-400/60 hover:bg-emerald-500/15 hover:text-white hover:-translate-y-0.5;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    @apply border border-[#25354B] bg-[#14243A]/80 text-slate-100 hover:border-[#42B9EC]/60 hover:bg-[#14243A] hover:text-white hover:-translate-y-0.5;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
   .gx-btn-ghost {
     @apply text-slate-300 hover:bg-white/10 hover:text-white rounded-xl;
@@ -115,50 +114,50 @@ body {
     @apply border border-red-500/45 bg-red-500/10 text-red-200 hover:bg-red-500/20 hover:text-white;
   }
   .gx-btn-gold {
-    @apply text-slate-950 hover:-translate-y-0.5;
-    background: linear-gradient(135deg, #fde047 0%, #f59e0b 58%, #d97706 100%);
+    @apply text-slate-950 font-black hover:-translate-y-0.5;
+    background: linear-gradient(135deg, #F3CA5A 0%, #E5B63F 58%, #C79727 100%);
     box-shadow:
-      0 8px 22px -4px rgba(245, 158, 11, 0.48),
-      inset 0 1px 0 rgba(255, 255, 255, 0.55);
+      0 6px 18px -2px rgba(229, 182, 63, 0.42),
+      inset 0 1px 0 rgba(255, 255, 255, 0.45);
   }
   .gx-btn-gold:hover {
-    background: linear-gradient(135deg, #fef08a 0%, #fbbf24 58%, #b45309 100%);
+    background: linear-gradient(135deg, #fcd97a 0%, #E5B63F 58%, #ad801c 100%);
     box-shadow:
-      0 12px 28px -4px rgba(245, 158, 11, 0.65),
-      inset 0 1px 0 rgba(255, 255, 255, 0.7);
+      0 10px 24px -2px rgba(229, 182, 63, 0.58),
+      inset 0 1px 0 rgba(255, 255, 255, 0.6);
   }
 
-  /* High-Contrast Glass Inputs & Chips */
+  /* High-Contrast Precise Glass Inputs & Chips */
   .gx-input {
-    @apply w-full rounded-xl border border-white/15 bg-slate-950/80 px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition-all focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30;
-    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55);
+    @apply w-full rounded-xl border border-[#25354B] bg-[#080F1C] px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition-all focus:border-[#00C991] focus:ring-2 focus:ring-[#00C991]/25;
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5);
   }
   .gx-label {
-    @apply mb-1.5 block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-300;
+    @apply mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-slate-300;
   }
   .gx-chip {
-    @apply inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em];
+    @apply inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em];
     font-family: "JetBrains Mono", monospace;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
   }
 
   /* Broadcast Data Tables */
   .gx-table th {
-    @apply border-b border-white/15 bg-white/[0.02] px-3.5 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400;
+    @apply border-b border-[#25354B] bg-[#0E1A2C] px-3.5 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400;
   }
   .gx-table td {
-    @apply border-b border-white/[0.06] px-3.5 py-3 text-sm text-slate-100;
+    @apply border-b border-white/[0.05] px-3.5 py-3 text-sm text-slate-100;
   }
   .gx-table tr {
-    @apply transition-colors hover:bg-emerald-500/[0.05];
+    @apply transition-colors hover:bg-[#00C991]/[0.05];
   }
 }
 
 .gx-pitch-grid {
   background-image:
-    linear-gradient(rgba(16, 185, 129, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(16, 185, 129, 0.06) 1px, transparent 1px);
-  background-size: 44px 44px;
+    linear-gradient(rgba(0, 201, 145, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 201, 145, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
 }
 
 .gx-noise::after {
@@ -166,14 +165,14 @@ body {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: 0.04;
+  opacity: 0.035;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
 }
 
 @keyframes gx-rise {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -181,7 +180,7 @@ body {
   }
 }
 .gx-rise {
-  animation: gx-rise 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: gx-rise 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes gx-pulse {
@@ -214,7 +213,6 @@ body {
   border-radius: 999px;
 }
 
-
 /* GTEX public advertising surfaces */
 .gx-ad-top-rail {
   position: fixed;
@@ -223,8 +221,8 @@ body {
   left: 0;
   right: 0;
   padding: 9px clamp(10px, 2.2vw, 32px);
-  background: linear-gradient(180deg, rgba(5, 8, 17, 0.98), rgba(5, 8, 17, 0.94));
-  border-bottom: 1px solid rgba(16, 185, 129, 0.3);
+  background: linear-gradient(180deg, rgba(8, 15, 28, 0.98), rgba(8, 15, 28, 0.94));
+  border-bottom: 1px solid rgba(0, 201, 145, 0.3);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(18px);
 }
@@ -232,12 +230,12 @@ body {
   position: relative;
   isolation: isolate;
   color: #f8fafc;
-  border: 1px solid rgba(16, 185, 129, 0.55);
+  border: 1px solid rgba(0, 201, 145, 0.45);
   border-radius: 15px;
   background:
-    radial-gradient(ellipse at 0% 50%, rgba(16, 185, 129, 0.17), transparent 38%),
-    linear-gradient(110deg, #071421 0%, #0b1728 48%, #121326 100%);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.09), 0 0 24px rgba(16,185,129,0.08);
+    radial-gradient(ellipse at 0% 50%, rgba(0, 201, 145, 0.14), transparent 38%),
+    linear-gradient(110deg, #080F1C 0%, #14243A 48%, #1B2B44 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.09), 0 0 24px rgba(0, 201, 145, 0.08);
 }
 .gx-ad-unit-rail { min-height: 68px; border-radius: 12px; }
 .gx-ad-active-card, .gx-ad-placeholder {
@@ -253,7 +251,7 @@ body {
   overflow: hidden;
 }
 .gx-ad-active-card { transition: border-color .2s ease, background .2s ease; }
-.gx-ad-active-card:hover { background: rgba(16,185,129,0.06); }
+.gx-ad-active-card:hover { background: rgba(0, 201, 145, 0.06); }
 .gx-ad-creative-image {
   position: absolute;
   inset: 0;
@@ -276,7 +274,7 @@ body {
   flex: 0 0 auto;
   align-items: center;
   gap: 7px;
-  color: #34d399;
+  color: #00E8A8;
   font-family: "JetBrains Mono", monospace;
   font-size: 9px;
   font-weight: 800;
@@ -288,17 +286,17 @@ body {
 .gx-ad-brand-name { font-size: 19px; font-weight: 900; letter-spacing: -.03em; white-space: nowrap; }
 .gx-ad-headline { color: #fff; font-size: 15px; font-weight: 800; }
 .gx-ad-description { color: #c0ccda; font-size: 12px; line-height: 1.45; }
-.gx-ad-visit { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; flex: 0 0 auto; color: #e8c766; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }
+.gx-ad-visit { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; flex: 0 0 auto; color: #E5B63F; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }
 .gx-ad-placeholder { gap: 15px; }
 .gx-ad-placeholder-icon {
   display: grid;
   flex: 0 0 44px;
   height: 44px;
   place-items: center;
-  color: #e8c766;
-  border: 1px solid rgba(232,199,102,.35);
+  color: #E5B63F;
+  border: 1px solid rgba(229, 182, 63, .35);
   border-radius: 11px;
-  background: rgba(232,199,102,.08);
+  background: rgba(229, 182, 63, .08);
 }
 .gx-ad-placeholder-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
 .gx-ad-placeholder-copy strong {
@@ -313,9 +311,9 @@ body {
 .gx-ad-placeholder-aside {
   flex: 0 0 auto;
   padding: 8px 13px;
-  border: 1px solid rgba(232,199,102,.35);
+  border: 1px solid rgba(229, 182, 63, .35);
   border-radius: 8px;
-  color: #e8c766;
+  color: #E5B63F;
   font-family: "JetBrains Mono", monospace;
   font-size: 9px;
   font-weight: 800;
@@ -331,22 +329,22 @@ body {
   color: #d7e2ee;
   border: 1px solid rgba(255,255,255,.17);
   border-radius: 50%;
-  background: rgba(4,10,19,.78);
+  background: rgba(8, 15, 28, .85);
   pointer-events: auto;
   transition: background .2s ease, border-color .2s ease;
 }
-.gx-ad-controls button:hover { border-color: #34d399; background: #102b2b; }
+.gx-ad-controls button:hover { border-color: #00C991; background: #0E1A2C; }
 .gx-ad-indicators { position: absolute; z-index: 3; left: 50%; bottom: 4px; display: flex; gap: 5px; transform: translateX(-50%); }
 .gx-ad-indicators button { width: 5px; height: 5px; padding: 0; border: 0; border-radius: 99px; background: rgba(203,213,225,.42); }
-.gx-ad-indicators button.is-active { width: 17px; background: #e8c766; }
+.gx-ad-indicators button.is-active { width: 17px; background: #E5B63F; }
 .gx-ad-slide-enter { animation: gx-ad-slide-in .48s cubic-bezier(.2,.75,.25,1) both; }
 @keyframes gx-ad-slide-in {
   from { opacity: .15; transform: translateX(24px); }
   to { opacity: 1; transform: translateX(0); }
 }
-.gx-ad-homepage-wrap { position: relative; z-index: 1; padding: 0 24px 30px; background: #0b1626; }
+.gx-ad-homepage-wrap { position: relative; z-index: 1; padding: 0 24px 30px; background: #080F1C; }
 .gx-ad-homepage-inner { max-width: 1296px; margin: 0 auto; }
-.gx-ad-unit-hero { min-height: 136px; border-color: rgba(212,175,55,.55); background: radial-gradient(ellipse at 90% 50%, rgba(212,175,55,.13), transparent 45%), linear-gradient(110deg,#0b1728,#10192b 55%,#17192a); }
+.gx-ad-unit-hero { min-height: 136px; border-color: rgba(229, 182, 63, .55); background: radial-gradient(ellipse at 90% 50%, rgba(229, 182, 63, .13), transparent 45%), linear-gradient(110deg,#080F1C,#14243A 55%,#1E2C44); }
 .gx-ad-unit-hero .gx-ad-placeholder { min-height: 136px; padding: 24px clamp(20px,4vw,46px); }
 .gx-ad-unit-hero .gx-ad-placeholder-copy strong { font-size: clamp(27px,3.2vw,40px); }
 .gx-ad-unit-hero .gx-ad-placeholder-copy > span:last-child { max-width: 600px; font-size: 13px; }
@@ -357,13 +355,13 @@ body {
 .gx-ad-unit-hero .gx-ad-description { max-width: 460px; font-size: 13px; }
 .gx-ad-unit-hero .gx-ad-active-card { min-height: 136px; padding: 22px 42px; }
 .gx-ad-unit-hero .gx-ad-active-content { flex-wrap: wrap; }
-.gx-ad-partner-showcase { display: flex; align-items: stretch; gap: 12px; margin-top: 15px; padding: 12px; border: 1px solid rgba(16,185,129,.38); border-radius: 13px; background: #071321; }
-.gx-ad-partner-label { display: flex; flex: 0 0 138px; align-items: center; gap: 9px; color: #e8c766; font-family: "Barlow Condensed",sans-serif; font-size: 13px; font-weight: 900; line-height: 1.05; }
+.gx-ad-partner-showcase { display: flex; align-items: stretch; gap: 12px; margin-top: 15px; padding: 12px; border: 1px solid rgba(0, 201, 145, .38); border-radius: 13px; background: #0E1A2C; }
+.gx-ad-partner-label { display: flex; flex: 0 0 138px; align-items: center; gap: 9px; color: #E5B63F; font-family: "Barlow Condensed",sans-serif; font-size: 13px; font-weight: 900; line-height: 1.05; }
 .gx-ad-partner-track { display: flex; flex: 1; gap: 9px; overflow-x: auto; scrollbar-width: thin; }
 .gx-ad-partner-card { display: inline-flex; min-width: 180px; min-height: 50px; align-items: center; justify-content: center; gap: 10px; padding: 8px 14px; border: 1px solid rgba(255,255,255,.12); border-radius: 9px; background: rgba(255,255,255,.035); color: #eff6ff; text-decoration: none; font-size: 13px; font-weight: 800; }
-.gx-ad-partner-card:hover { border-color: rgba(52,211,153,.55); background: rgba(16,185,129,.09); }
+.gx-ad-partner-card:hover { border-color: rgba(0, 201, 145, .55); background: rgba(0, 201, 145, .09); }
 .gx-ad-partner-card img { max-width: 78px; max-height: 28px; object-fit: contain; }
-.gx-ad-unit-auth { display: flex; min-height: min(70vh, 620px); align-items: center; justify-content: center; padding: clamp(22px,4vw,54px); border-color: rgba(16,185,129,.38); background: linear-gradient(145deg,rgba(3,13,21,.78),rgba(4,9,17,.86)); }
+.gx-ad-unit-auth { display: flex; min-height: min(70vh, 620px); align-items: center; justify-content: center; padding: clamp(22px,4vw,54px); border-color: rgba(0, 201, 145, .38); background: linear-gradient(145deg,rgba(8, 15, 28, .88),rgba(14, 26, 44, .92)); }
 .gx-ad-unit-auth .gx-ad-placeholder { align-items: flex-start; flex-direction: column; padding: clamp(22px,4vw,44px); }
 .gx-ad-unit-auth .gx-ad-placeholder-icon { width: 68px; height: 68px; flex-basis: 68px; }
 .gx-ad-unit-auth .gx-ad-placeholder-copy strong { font-size: clamp(34px,5vw,64px); }
@@ -375,7 +373,7 @@ body {
 .gx-ad-unit-auth .gx-ad-brand-name { font-size: 27px; }
 .gx-ad-unit-auth .gx-ad-headline { font-family: "Barlow Condensed",sans-serif; font-size: clamp(28px,4vw,48px); line-height: 1; text-transform: uppercase; }
 .gx-ad-unit-auth .gx-ad-description { max-width: 460px; font-size: 15px; }
-.gx-ad-unit-auth .gx-ad-visit { margin: 10px 0 0; padding: 12px 17px; border-radius: 8px; background: #d4af37; color: #07111d; }
+.gx-ad-unit-auth .gx-ad-visit { margin: 10px 0 0; padding: 12px 17px; border-radius: 8px; background: #E5B63F; color: #080F1C; }
 .gx-ad-unit-auth-compact { min-height: 112px; border-radius: 10px; }
 .gx-ad-unit-auth-compact .gx-ad-placeholder { gap: 9px; padding: 13px; }
 .gx-ad-unit-auth-compact .gx-ad-placeholder-icon { width: 33px; height: 33px; flex-basis: 33px; }

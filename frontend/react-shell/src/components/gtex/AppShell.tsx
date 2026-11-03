@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Award,
+  Bell,
   BookOpen,
   Building2,
   CandlestickChart,
@@ -23,6 +24,7 @@ import {
   Sprout,
   Swords,
   Trophy,
+  User,
   Wallet,
   Video,
 } from "lucide-react";
@@ -35,32 +37,44 @@ import { GtexTraxTopBarControl } from "@/components/gtex/GtexTraxPlayer";
 import { formatWorldDate, formatWorldTime, useWorldClock } from "@/lib/worldClock";
 
 const NAV = [
-  { to: "/app", label: "Control Center", icon: Gauge, end: true, id: "home", category: "CLUB HQ & DYNASTY" },
-  { to: "/app/clubs", label: "My Clubs", icon: Building2, id: "clubs", category: "CLUB HQ & DYNASTY" },
-  { to: "/app/showroom", label: "Showroom", icon: Sparkles, id: "showroom", category: "CLUB HQ & DYNASTY" },
-  { to: "/app/story", label: "Club Story", icon: BookOpen, id: "story", category: "CLUB HQ & DYNASTY" },
-  { to: "/app/trophies", label: "Trophy Cabinet", icon: Trophy, id: "trophies", category: "CLUB HQ & DYNASTY" },
-  { to: "/app/inbox", label: "Inbox", icon: Inbox, id: "inbox", category: "CLUB HQ & DYNASTY" },
+  // 1. HOME
+  { to: "/app", label: "Control Centre", icon: Gauge, end: true, id: "home", category: "HOME" },
 
-  { to: "/app/squad", label: "Manager & Squad", icon: Shirt, id: "squad", category: "FOOTBALL & TRANSFERS" },
-  { to: "/app/lineup", label: "Lineup & Tactics", icon: Swords, id: "lineup", category: "FOOTBALL & TRANSFERS" },
-  { to: "/app/transfer-hub", label: "Transfer Hub", icon: Compass, id: "transfers", category: "FOOTBALL & TRANSFERS" },
-  { to: "/app/academy", label: "Academy", icon: Sprout, id: "academy", category: "FOOTBALL & TRANSFERS" },
-  { to: "/app/build-a-son", label: "Build-a-Son Scion", icon: Award, id: "build-a-son", category: "FOOTBALL & TRANSFERS" },
-  { to: "/app/competitions", label: "Competitions", icon: Trophy, id: "competitions", category: "FOOTBALL & TRANSFERS" },
-  { to: "/app/national", label: "National Team", icon: Flag, id: "national", category: "FOOTBALL & TRANSFERS" },
+  // 2. MY CLUB
+  { to: "/app/clubs", label: "My Clubs", icon: Building2, id: "clubs", category: "MY CLUB" },
+  { to: "/app/showroom", label: "Club Prestige", icon: Sparkles, id: "showroom", category: "MY CLUB" },
+  { to: "/app/story", label: "Club Story & Dynasty", icon: BookOpen, id: "story", category: "MY CLUB" },
+  { to: "/app/trophies", label: "Trophy Cabinet", icon: Trophy, id: "trophies", category: "MY CLUB" },
+  { to: "/app/inbox", label: "Boardroom Inbox", icon: Inbox, id: "inbox", category: "MY CLUB" },
 
-  { to: "/app/newsroom", label: "AI Newsroom", icon: Newspaper, id: "newsroom", category: "WORLD & MEDIA" },
-  { to: "/app/regen-world", label: "Regen World", icon: Globe, id: "regen-world", category: "WORLD & MEDIA" },
-  { to: "/app/awards", label: "Regen Awards", icon: Award, id: "awards", category: "WORLD & MEDIA" },
-  { to: "/app/creator-access", label: "Creator Access", icon: Video, id: "creator-access", category: "WORLD & MEDIA" },
-  { to: "/app/advertising", label: "Advertiser Studio", icon: Megaphone, id: "advertising", category: "WORLD & MEDIA" },
+  // 3. TRANSFERS
+  { to: "/app/transfer-hub", label: "Player Transfers", icon: Compass, id: "transfers", category: "TRANSFERS" },
+  { to: "/app/market?tab=club-sales", label: "Club Equity Market", icon: Building2, id: "club-sale-market", category: "TRANSFERS" },
 
-  { to: "/app/finance", label: "Finance & Ledger", icon: Wallet, id: "finance", category: "ECONOMY & VAULT" },
-  { to: "/app/market", label: "Player Shares", icon: ShoppingBag, id: "market", category: "ECONOMY & VAULT" },
-  { to: "/app/market?tab=club-sales", label: "Club Sale Market", icon: Building2, id: "club-sale-market", category: "ECONOMY & VAULT" },
-  { to: "/app/jackpot", label: "Global Jackpot", icon: Flame, id: "jackpot", category: "ECONOMY & VAULT" },
-  { to: "/app/coin-traders", label: "Coin Traders", icon: CandlestickChart, id: "coin-traders", category: "ECONOMY & VAULT" },
+  // 4. FOOTBALL
+  { to: "/app/squad", label: "Squad & Management", icon: Shirt, id: "squad", category: "FOOTBALL" },
+  { to: "/app/lineup", label: "Tactics & Lineup", icon: Swords, id: "lineup", category: "FOOTBALL" },
+  { to: "/app/competitions", label: "Competitions & Tournaments", icon: Trophy, id: "competitions", category: "FOOTBALL" },
+  { to: "/app/national", label: "National Teams", icon: Flag, id: "national", category: "FOOTBALL" },
+
+  // 5. TALENT & SCOUTING
+  { to: "/app/regen-world", label: "Scouting & Regen World", icon: Globe, id: "regen-world", category: "TALENT & SCOUTING" },
+  { to: "/app/awards", label: "Regen Awards", icon: Award, id: "awards", category: "TALENT & SCOUTING" },
+  { to: "/app/academy", label: "Youth Academy", icon: Sprout, id: "academy", category: "TALENT & SCOUTING" },
+  { to: "/app/build-a-son", label: "Build-a-Son Scion", icon: Award, id: "build-a-son", category: "TALENT & SCOUTING" },
+
+  // 6. COMMUNITY & MEDIA
+  { to: "/app/newsroom", label: "Football Newsroom", icon: Newspaper, id: "newsroom", category: "COMMUNITY & MEDIA" },
+
+  // 7. WALLET & ECONOMY
+  { to: "/app/finance", label: "Wallet & Finance", icon: Wallet, id: "finance", category: "WALLET & ECONOMY" },
+  { to: "/app/market", label: "Player Shares Market", icon: ShoppingBag, id: "market", category: "WALLET & ECONOMY" },
+  { to: "/app/jackpot", label: "Global Jackpot", icon: Flame, id: "jackpot", category: "WALLET & ECONOMY" },
+  { to: "/app/coin-traders", label: "Buy & Sell GTEX Coin", icon: CandlestickChart, id: "coin-traders", category: "WALLET & ECONOMY" },
+
+  // 8. BUSINESS
+  { to: "/app/creator-access", label: "Creator Studio", icon: Video, id: "creator-access", category: "BUSINESS" },
+  { to: "/app/advertising", label: "Advertiser Studio", icon: Megaphone, id: "advertising", category: "BUSINESS" },
 ];
 
 function NavItem({ item, badge }: any) {
@@ -73,15 +87,15 @@ function NavItem({ item, badge }: any) {
       className={({ isActive }) =>
         `group flex items-center gap-3 rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
           isActive
-            ? "bg-gradient-to-r from-emerald-500/20 to-emerald-500/5 text-white shadow-[inset_3px_0_0_#10B981,0_4px_14px_rgba(0,0,0,0.4)] border border-emerald-500/35"
-            : "text-slate-400 hover:bg-white/[0.05] hover:text-white border border-transparent"
+            ? "bg-gradient-to-r from-[#00C991]/20 to-[#00C991]/5 text-white shadow-[inset_3px_0_0_#00C991,0_4px_14px_rgba(0,0,0,0.4)] border border-[#00C991]/35"
+            : "text-slate-300 hover:bg-white/[0.04] hover:text-white border border-transparent"
         }`
       }
     >
-      <Icon size={15} className="shrink-0 text-emerald-400/85 group-hover:text-emerald-300" />
+      <Icon size={15} className="shrink-0 text-[#00C991] group-hover:text-[#00E8A8] transition-colors" />
       <span className="truncate">{item.label}</span>
       {badge > 0 && (
-        <span className="gx-mono ml-auto rounded-md bg-amber-400 px-1.5 py-0.2 text-[10px] font-black text-slate-950 shadow">
+        <span className="gx-mono ml-auto rounded-md bg-[#E5B63F] px-1.5 py-0.2 text-[10px] font-black text-slate-950 shadow">
           {badge}
         </span>
       )}
@@ -98,8 +112,8 @@ function ClubSwitcher() {
         <span
           className="gx-display hidden sm:flex size-7 shrink-0 items-center justify-center rounded-lg text-[10px] font-black shadow-md border border-white/20"
           style={{
-            background: active.primary_color || "#10b981",
-            color: active.secondary_color || "#070b11",
+            background: active.primary_color || "#00C991",
+            color: active.secondary_color || "#080F1C",
           }}
         >
           {(active.short_name || active.club_name).slice(0, 3).toUpperCase()}
@@ -107,7 +121,7 @@ function ClubSwitcher() {
       )}
       <select
         data-testid="club-switcher"
-        className="gx-input max-w-[220px] py-1.5 text-xs border-white/15 bg-slate-950/90 font-bold rounded-xl"
+        className="gx-input max-w-[210px] py-1.5 text-xs border-[#25354B] bg-[#0E1A2C] font-bold rounded-xl text-slate-100"
         value={active?.club_id}
         onChange={(e) => select(e.target.value)}
       >
@@ -127,17 +141,17 @@ function GlobalWorldClockPill() {
   return (
     <div
       data-testid="global-world-clock-pill"
-      className="hidden md:flex items-center gap-2 rounded-full border border-sky-400/35 bg-sky-950/50 px-3 py-1 text-[11px] font-medium text-sky-200 shadow-inner"
+      className="hidden md:flex items-center gap-2 rounded-full border border-[#42B9EC]/35 bg-[#0E1A2C] px-3 py-1 text-[11px] font-medium text-[#42B9EC] shadow-inner"
       title={`Authoritative GTEX World Clock · ${clock.isPaused ? "Paused" : "Running"}`}
     >
-      <Clock size={13} className="text-amber-300 shrink-0" />
-      <span className="font-bold text-amber-300">
+      <Clock size={13} className="text-[#E5B63F] shrink-0" />
+      <span className="font-bold text-[#E5B63F]">
         {clock.currentSeasonLabel || `GTEX Year ${clock.gtexYearsRunning || 1}`}
       </span>
-      <span className="text-white/40">·</span>
+      <span className="text-white/30">·</span>
       <span className="gx-mono text-white">{formatWorldDate(clock.worldDate)}</span>
-      <span className="text-white/40">·</span>
-      <span className="gx-mono text-sky-300">{formatWorldTime(clock.worldTime)}</span>
+      <span className="text-white/30">·</span>
+      <span className="gx-mono text-[#42B9EC]">{formatWorldTime(clock.worldTime)}</span>
     </div>
   );
 }
@@ -164,7 +178,7 @@ export default function AppShell() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  if (loading) return <Loading label="Opening the boardroom..." />;
+  if (loading) return <Loading label="Entering the matchday suite..." />;
   if (!user) return <Navigate to="/login" replace />;
   if (isLoading) return <Loading label="Loading your clubs..." />;
 
@@ -209,13 +223,13 @@ export default function AppShell() {
     return <Navigate to="/app/creator-access" replace />;
   }
 
-  // Club-independent pillars stay reachable via the user_id even while a club
-  // claim is still mid-onboarding (national team, wallet, market, world media).
+  // Club-independent pillars stay reachable via user account without owning a club
   const userLevelRoutes = [
     "/app/clubs",
     "/app/national",
     "/app/finance",
     "/app/market",
+    "/app/transfer-hub",
     "/app/regen-world",
     "/app/awards",
     "/app/newsroom",
@@ -248,14 +262,19 @@ export default function AppShell() {
           "regen-world",
           "awards",
           "market",
+          "transfer-hub",
+          "transfers",
           "competitions",
           "national",
+          "newsroom",
           "finance",
           "creator-access",
           "advertising",
           "coin-traders",
+          "inbox",
         ].includes(item.id)
       );
+
   const visibleNav = isTraderAccount
     ? NAV.filter((item) => ["coin-traders", "finance"].includes(item.id))
     : isCreatorAccount
@@ -276,15 +295,15 @@ export default function AppShell() {
     : normalNav;
 
   const wallet = data?.economy?.wallet || {};
-  const clubPrimary = active?.primary_color || "#10b981";
-  const clubSecondary = active?.secondary_color || "#f59e0b";
+  const clubPrimary = active?.primary_color || "#00C991";
+  const clubSecondary = active?.secondary_color || "#E5B63F";
 
-  // Group visible navigation items by category for zero-clutter scanning
-  const categories = Array.from(new Set(visibleNav.map((n) => n.category || "COMMAND")));
+  // Group visible navigation items by mandated categories
+  const categories = Array.from(new Set(visibleNav.map((n) => n.category || "HOME")));
 
   return (
-    <div className="min-h-screen bg-[#050811] text-slate-100">
-      {/* Global Ctrl+K Command Spotlight Modal */}
+    <div className="min-h-screen bg-[#080F1C] text-slate-100 antialiased">
+      {/* Global Command Palette (Ctrl+K) */}
       <CommandPaletteModal
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
@@ -292,44 +311,51 @@ export default function AppShell() {
         onNavigate={(to) => navigate(to)}
       />
 
-      {/* Desktop Fixed Sidebar */}
+      {/* Desktop Fixed Matchday Sidebar */}
       <aside
-        className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-white/[0.09] lg:flex"
+        className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-[#25354B] lg:flex"
         style={{
-          background: "linear-gradient(180deg, #060a14 0%, #04070f 100%)",
-          boxShadow: "10px 0 36px rgba(0,0,0,0.65)",
+          background: "linear-gradient(180deg, #0E1A2C 0%, #080F1C 100%)",
+          boxShadow: "8px 0 32px rgba(0,0,0,0.6)",
         }}
       >
-        <div className="px-5 pb-4 pt-5 border-b border-white/[0.08] flex items-center justify-between">
+        {/* Brand Header */}
+        <div className="px-5 pb-4 pt-5 border-b border-[#25354B] flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2.5">
               <span
                 className="flex size-8 items-center justify-center rounded-xl font-display text-sm font-black text-slate-950 shadow-lg"
                 style={{
-                  background: "linear-gradient(135deg, #34d399, #10b981)",
-                  boxShadow: "0 0 18px rgba(16,185,129,0.5)",
+                  background: "linear-gradient(135deg, #00E8A8, #00C991)",
+                  boxShadow: "0 0 16px rgba(0,201,145,0.45)",
                 }}
               >
                 GX
               </span>
-              <p className="gx-display text-2xl font-black tracking-tight text-white leading-none">
-                GTEX
-              </p>
+              <div className="flex flex-col">
+                <p className="gx-display text-2xl font-black tracking-tight text-white leading-none">
+                  GTEX
+                </p>
+                <span className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-[#00C991] leading-tight">
+                  2027 EDITION
+                </span>
+              </div>
             </div>
-            <p className="gx-eyebrow mt-1.5 !text-[9px] text-emerald-400">
-              Football Management Universe
+            <p className="gx-eyebrow mt-1.5 !text-[9px] text-[#42B9EC]">
+              Matchday Luxury Universe
             </p>
           </div>
         </div>
 
+        {/* Navigation Groups */}
         <nav className="gx-scroll flex-1 space-y-4 overflow-y-auto px-3 py-4" data-testid="primary-nav">
           {categories.map((cat) => (
             <div key={cat} className="space-y-1">
-              <p className="px-3 text-[9px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
+              <p className="px-3 text-[9px] font-extrabold uppercase tracking-[0.2em] text-[#42B9EC]/80">
                 {cat}
               </p>
               {visibleNav
-                .filter((n) => (n.category || "COMMAND") === cat)
+                .filter((n) => (n.category || "HOME") === cat)
                 .map((n) => (
                   <NavItem
                     key={n.to}
@@ -339,27 +365,40 @@ export default function AppShell() {
                 ))}
             </div>
           ))}
+
+          {/* Administration Pillar */}
           {isAdmin && (
-            <div className="pt-3 border-t border-white/[0.08]">
+            <div className="pt-3 border-t border-[#25354B] space-y-1">
+              <p className="px-3 text-[9px] font-extrabold uppercase tracking-[0.2em] text-[#E5B63F]/90">
+                ADMINISTRATION
+              </p>
               <NavItem item={{ to: "/app/admin/advertising", label: "Advertising Review", icon: Megaphone, id: "admin-advertising" }} />
               <NavItem item={{ to: "/app/admin", label: "Admin Godmode", icon: Shield, id: "admin" }} />
             </div>
           )}
         </nav>
 
-        <div className="border-t border-white/[0.09] bg-black/50 p-4">
-          <p className="truncate text-xs font-extrabold text-white">
-            {user.display_name || user.username}
-          </p>
-          <p className="gx-mono text-[10px] text-slate-400 mt-0.5">
-            {isTraderAccount
-              ? "Coin trader account · dedicated lane"
-              : isCreatorAccount
-              ? "Creator account · dedicated lane"
-              : hasActiveClub
-              ? `Owner integrity ${data?.integrity?.score ?? 100}/100`
-              : "User account · club ownership optional"}
-          </p>
+        {/* User Profile Bar */}
+        <div className="border-t border-[#25354B] bg-[#080F1C]/90 p-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-[#14243A] border border-[#25354B] text-[#00C991]">
+              <User size={14} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-bold text-white">
+                {user.display_name || user.username}
+              </p>
+              <p className="gx-mono text-[9px] text-slate-400 truncate">
+                {isTraderAccount
+                  ? "Coin Trader · Dedicated Lane"
+                  : isCreatorAccount
+                  ? "Creator · Dedicated Lane"
+                  : hasActiveClub
+                  ? `Integrity ${data?.integrity?.score ?? 100}/100`
+                  : "Member · Club Ownership Optional"}
+              </p>
+            </div>
+          </div>
           <button
             data-testid="logout-button"
             onClick={() => {
@@ -373,61 +412,79 @@ export default function AppShell() {
         </div>
       </aside>
 
-      {/* Main App Content Viewport */}
+      {/* Main Viewport */}
       <div className="lg:pl-64">
-        {/* Sticky Broadcast Top Bar */}
-        <header className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-white/[0.1] bg-slate-950/85 px-4 py-2.5 backdrop-blur-xl sm:px-8">
+        {/* Matchday Top Control Strip */}
+        <header className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-[#25354B] bg-[#0E1A2C]/90 px-4 py-2.5 backdrop-blur-xl sm:px-8">
           <p className="gx-display text-xl font-black text-white lg:hidden">GTEX</p>
           {!isDedicatedAccount && <ClubSwitcher />}
           <GlobalWorldClockPill />
 
-          {/* Quick Command Palette Trigger (Ctrl+K) */}
+          {/* Quick Jump Search Button (Ctrl+K) */}
           <button
             type="button"
             onClick={() => setPaletteOpen(true)}
-            className="hidden xl:inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-emerald-400/50 hover:text-white"
+            className="hidden xl:inline-flex items-center gap-2 rounded-xl border border-[#25354B] bg-[#14243A]/80 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-[#00C991]/50 hover:text-white"
           >
-            <Search size={13} className="text-emerald-400" />
+            <Search size={13} className="text-[#00C991]" />
             <span>Quick Jump...</span>
-            <kbd className="rounded bg-white/10 px-1.5 py-0.2 text-[10px] font-bold text-slate-300">
+            <kbd className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-bold text-slate-300">
               Ctrl K
             </kbd>
           </button>
 
-          {/* Glowing Vault Balance Pills & GTEX TRAX Artist Radio */}
+          {/* Top Bar Controls & Balances */}
           <div className="ml-auto flex items-center gap-2.5 text-xs">
             <GtexTraxTopBarControl />
+
+            {/* Notification Access */}
+            <NavLink
+              to="/app/inbox"
+              className="relative hidden sm:flex size-8 items-center justify-center rounded-xl border border-[#25354B] bg-[#14243A] text-slate-300 transition hover:text-white hover:border-[#00C991]/40"
+              title="Boardroom Inbox"
+            >
+              <Bell size={14} />
+              {(data?.inbox_open_count ?? 0) > 0 && (
+                <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-[#E5B63F] text-[9px] font-black text-slate-950">
+                  {data?.inbox_open_count}
+                </span>
+              )}
+            </NavLink>
+
+            {/* GTEX Coin Treasury Balance */}
             {hasActiveClub ? (
               <span
                 data-testid="topbar-gtex-balance"
-                className="gx-mono inline-flex items-center gap-1.5 rounded-xl border border-sky-400/35 bg-slate-950/90 px-3 py-1 text-slate-200 shadow-inner"
+                className="gx-mono inline-flex items-center gap-1.5 rounded-xl border border-[#42B9EC]/35 bg-[#080F1C] px-3 py-1 text-slate-200 shadow-inner"
               >
-                <span className="h-2 w-2 rounded-full bg-sky-400 shadow-[0_0_8px_#38bdf8]" />
-                <span>Treasury</span>
+                <span className="h-2 w-2 rounded-full bg-[#42B9EC] shadow-[0_0_8px_#42B9EC]" />
+                <span className="text-slate-400">Treasury</span>
                 <b className="text-white font-mono">{fmt(wallet.gtex_total)}</b>
-                <span className="text-sky-400 font-extrabold">GTX</span>
+                <span className="text-[#42B9EC] font-extrabold">GTX</span>
               </span>
             ) : (
-              <span data-testid="topbar-user-account" className="gx-mono text-slate-300">
+              <span data-testid="topbar-user-account" className="gx-mono text-slate-300 text-xs">
                 {isTraderAccount
-                  ? "Coin Trader account · dedicated lane"
+                  ? "Coin Trader account"
                   : isCreatorAccount
-                  ? "Creator account · dedicated lane"
-                  : "GTEX member account · no club required"}
+                  ? "Creator account"
+                  : "Member account"}
               </span>
             )}
+
+            {/* Fan Coin Balance */}
             <span
               data-testid="topbar-fan-balance"
-              className="gx-mono hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-amber-400/35 bg-slate-950/90 px-3 py-1 text-slate-200 shadow-inner"
+              className="gx-mono hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-[#E5B63F]/35 bg-[#080F1C] px-3 py-1 text-slate-200 shadow-inner"
             >
-              <span className="h-2 w-2 rounded-full bg-amber-400 shadow-[0_0_8px_#f59e0b]" />
+              <span className="h-2 w-2 rounded-full bg-[#E5B63F] shadow-[0_0_8px_#E5B63F]" />
               <b className="text-white font-mono">{fmt(wallet.fan_total)}</b>
-              <span className="text-amber-400 font-extrabold">FAN</span>
+              <span className="text-[#E5B63F] font-extrabold">FAN</span>
             </span>
           </div>
 
           {/* Responsive Mobile Navigation Rail */}
-          <nav className="gx-scroll -mx-1 flex w-full gap-1.5 overflow-x-auto lg:hidden pt-2 border-t border-white/[0.08]">
+          <nav className="gx-scroll -mx-1 flex w-full gap-1.5 overflow-x-auto lg:hidden pt-2 border-t border-[#25354B]">
             {visibleNav.map((n) => (
               <NavLink
                 key={n.to}
@@ -436,7 +493,7 @@ export default function AppShell() {
                 className={({ isActive }) =>
                   `whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-bold uppercase ${
                     isActive
-                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                      ? "bg-[#00C991]/20 text-[#00E8A8] border border-[#00C991]/40"
                       : "text-slate-400"
                   }`
                 }
@@ -447,14 +504,14 @@ export default function AppShell() {
           </nav>
         </header>
 
-        {/* Global Live Ticker */}
+        {/* Global Matchday Live Ticker */}
         <GlobalLiveTicker />
 
-        {/* Screen Outlet with Dynamic Club-Color Ambient Stadium Spotlight */}
+        {/* Screen Outlet with Ambient Stadium Spotlight */}
         <main
-          className="relative min-h-[calc(100vh-64px)]"
+          className="relative min-h-[calc(100vh-64px)] p-4 sm:p-6 lg:p-8"
           style={{
-            background: `radial-gradient(ellipse at 25% 0%, ${clubPrimary}1f 0%, ${clubSecondary}0d 38%, transparent 70%)`,
+            background: `radial-gradient(ellipse at 25% 0%, ${clubPrimary}16 0%, ${clubSecondary}08 35%, transparent 68%)`,
           }}
         >
           <Outlet />

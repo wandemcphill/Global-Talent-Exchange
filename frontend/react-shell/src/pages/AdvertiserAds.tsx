@@ -260,7 +260,7 @@ export default function AdvertiserAds() {
       </header>
 
       <section className="grid gap-5 xl:grid-cols-[.85fr_1.15fr]">
-        <form onSubmit={saveProfile} className="space-y-4 rounded-2xl border border-white/10 bg-slate-950/65 p-5">
+        <form onSubmit={saveProfile} className="space-y-4 rounded-2xl border border-gtex-graphite bg-gtex-slate/80 p-6 shadow-xl">
           <div>
             <p className="gx-label">Advertiser account</p>
             <h2 className="mt-1 text-lg font-black text-white">Business profile</h2>
@@ -273,7 +273,7 @@ export default function AdvertiserAds() {
           <button disabled={saving} className="w-full rounded-xl bg-emerald-400 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-slate-950 disabled:opacity-50">{saving ? "Saving…" : hasProfile ? "Update advertiser profile" : "Create advertiser profile"}</button>
         </form>
 
-        <form onSubmit={saveCampaign} className="space-y-4 rounded-2xl border border-emerald-400/20 bg-slate-950/65 p-5">
+        <form onSubmit={saveCampaign} className="space-y-4 rounded-2xl border border-gtex-emerald/30 bg-gtex-slate/80 p-6 shadow-xl">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div><p className="gx-label">Campaign workspace</p><h2 className="mt-1 text-lg font-black text-white">{editingId ? "Edit campaign draft" : "Create a campaign"}</h2></div>
             {editingId && <button type="button" onClick={resetEditor} className="text-xs font-bold text-slate-400 hover:text-white">Cancel edit</button>}
@@ -319,7 +319,7 @@ export default function AdvertiserAds() {
         </form>
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-slate-950/65 p-5">
+      <section className="rounded-2xl border border-gtex-graphite bg-gtex-slate/80 p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between gap-3"><div><p className="gx-label">Your inventory</p><h2 className="text-lg font-black text-white">Campaigns & review status</h2></div><button onClick={() => void refresh()} className="text-xs font-bold text-emerald-300 hover:text-white">Refresh</button></div>
         {loading ? <p className="py-8 text-center text-sm text-slate-500">Loading campaigns…</p> : campaigns.length === 0 ? <p className="py-8 text-center text-sm text-slate-500">No campaigns created yet.</p> : <div className="space-y-3">{campaigns.map((campaign) => <article key={campaign.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.025] p-4">
           <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-black text-white">{campaign.headline}</h3><span className="rounded bg-white/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-slate-300">{campaign.status}</span><span className="text-[9px] font-bold uppercase text-amber-300">{campaign.campaign_type === "music" ? "GTEX TRAX" : campaign.placement.replaceAll("_"," ")}</span></div><p className="mt-1 text-xs text-slate-400">{campaign.brand_name} · {campaign.start_at.slice(0,10)} → {campaign.end_at.slice(0,10)}</p>{campaign.review_note && <p className="mt-1 text-xs text-amber-200">Review note: {campaign.review_note}</p>}</div>
@@ -328,7 +328,7 @@ export default function AdvertiserAds() {
         </article>)}</div>}
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-slate-950/65 p-5">
+      <section className="rounded-2xl border border-gtex-graphite bg-gtex-slate/80 p-6 shadow-xl">
         <div className="mb-3"><p className="gx-label">Performance</p><h2 className="text-lg font-black text-white">Campaign reporting</h2><p className="mt-1 text-[10px] text-amber-200">All counts and spend figures below are estimated telemetry. Browser events are not verified billable actions.</p></div>
         {reports.length === 0 ? <p className="py-5 text-center text-sm text-slate-500">Reports will appear when campaign events are recorded.</p> : <div className="grid gap-3 md:grid-cols-2">{reports.map((report) => <div key={report.campaign_id} className="rounded-xl border border-white/10 bg-white/[0.025] p-4">
           <h3 className="font-bold text-white">{report.campaign_name}</h3>

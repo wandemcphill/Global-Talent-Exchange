@@ -50,7 +50,7 @@ import {
 function NoClubDashboard({ onCreateClub }: { onCreateClub: () => void }) {
   return (
     <div className="space-y-8 p-4 sm:p-8" data-testid="no-club-home">
-      <section className="relative overflow-hidden rounded-3xl border border-emerald-500/25 bg-gradient-to-br from-[#061e16] via-[#09151f] to-[#040b10] p-6 sm:p-10">
+      <section className="relative overflow-hidden rounded-3xl border border-gtex-emerald/30 bg-gradient-to-br from-gtex-slate via-[#0A1628] to-gtex-midnight p-6 sm:p-10 shadow-2xl ring-1 ring-white/5">
         <p className="gx-eyebrow mb-3">GTEX member workspace</p>
         <h1 className="gx-display max-w-3xl text-3xl font-black uppercase leading-tight text-white sm:text-5xl">
           Your account is ready. Your football journey starts here.
@@ -63,19 +63,19 @@ function NoClubDashboard({ onCreateClub }: { onCreateClub: () => void }) {
       <WorldClockCard />
 
       <section className="grid gap-4 md:grid-cols-3" aria-label="Explore GTEX">
-        <Link to="/app/national" data-testid="no-club-national-team" className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.06] p-5 transition hover:border-emerald-400/60">
+        <Link to="/app/national" data-testid="no-club-national-team" className="rounded-2xl group rounded-2xl border border-gtex-emerald/30 bg-gtex-slate/80 p-6 transition-all hover:border-gtex-emerald hover:bg-gtex-slate shadow-xl hover:-translate-y-1">
           <Trophy className="mb-4 text-emerald-300" size={22} />
           <h2 className="gx-display text-xl font-bold uppercase text-white">National team</h2>
           <p className="mt-2 text-sm leading-5 text-slate-400">Enter an eligible national competition and rent players without owning a club.</p>
           <span className="mt-5 inline-block text-xs font-bold uppercase tracking-wider text-emerald-300">Explore national duty →</span>
         </Link>
-        <Link to="/app/regen-world" data-testid="no-club-regen-world" className="rounded-2xl border border-white/10 bg-slate-900/60 p-5 transition hover:border-white/25">
+        <Link to="/app/regen-world" data-testid="no-club-regen-world" className="rounded-2xl group rounded-2xl border border-gtex-graphite bg-gtex-slate/80 p-6 transition-all hover:border-gtex-pitch hover:bg-gtex-slate shadow-xl hover:-translate-y-1">
           <Globe2 className="mb-4 text-cyan-300" size={22} />
           <h2 className="gx-display text-xl font-bold uppercase text-white">Regen world</h2>
           <p className="mt-2 text-sm leading-5 text-slate-400">Discover emerging talent and follow the next generation across GTEX.</p>
           <span className="mt-5 inline-block text-xs font-bold uppercase tracking-wider text-cyan-300">Explore talent →</span>
         </Link>
-        <Link to="/app/market" data-testid="no-club-player-shares" className="rounded-2xl border border-white/10 bg-slate-900/60 p-5 transition hover:border-white/25">
+        <Link to="/app/market" data-testid="no-club-player-shares" className="rounded-2xl group rounded-2xl border border-gtex-graphite bg-gtex-slate/80 p-6 transition-all hover:border-gtex-pitch hover:bg-gtex-slate shadow-xl hover:-translate-y-1">
           <Users className="mb-4 text-amber-300" size={22} />
           <h2 className="gx-display text-xl font-bold uppercase text-white">Player shares</h2>
           <p className="mt-2 text-sm leading-5 text-slate-400">Explore available player-share opportunities and club ownership markets.</p>
@@ -84,14 +84,14 @@ function NoClubDashboard({ onCreateClub }: { onCreateClub: () => void }) {
       </section>
 
       <section className="grid gap-4 md:grid-cols-2" aria-label="Optional GTEX capabilities">
-        <Link to="/app/creator-access" data-testid="no-club-creator-access" className="rounded-2xl border border-pink-400/20 bg-pink-400/[0.04] p-5 transition hover:border-pink-300/50">
+        <Link to="/app/creator-access" data-testid="no-club-creator-access" className="rounded-2xl group rounded-2xl border border-gtex-graphite bg-gtex-slate/80 p-6 transition-all hover:border-purple-400/60 hover:bg-gtex-slate shadow-xl hover:-translate-y-1">
           <Video className="mb-4 text-pink-300" size={22} />
           <p className="gx-eyebrow text-pink-300">Creator tools</p>
           <h2 className="gx-display mt-1 text-xl font-bold uppercase text-white">Build a football audience</h2>
           <p className="mt-2 text-sm leading-5 text-slate-400">Use your existing GTEX ID to apply for creator access, publish football stories, and build a community. Creator tools do not require club ownership.</p>
           <span className="mt-5 inline-block text-xs font-bold uppercase tracking-wider text-pink-300">Apply for creator access →</span>
         </Link>
-        <Link to="/app/coin-traders" data-testid="no-club-coin-traders" className="rounded-2xl border border-amber-400/20 bg-amber-400/[0.04] p-5 transition hover:border-amber-300/50">
+        <Link to="/app/coin-traders" data-testid="no-club-coin-traders" className="rounded-2xl group rounded-2xl border border-gtex-gold/30 bg-gtex-slate/80 p-6 transition-all hover:border-gtex-gold hover:bg-gtex-slate shadow-xl hover:-translate-y-1">
           <CandlestickChart className="mb-4 text-amber-300" size={22} />
           <p className="gx-eyebrow text-amber-300">Coin trader tools</p>
           <h2 className="gx-display mt-1 text-xl font-bold uppercase text-white">Enter the GTEX economy</h2>
@@ -227,7 +227,7 @@ export function ControlCenter() {
   return (
     <div className="space-y-8 p-4 sm:p-8" data-testid="control-center-screen">
       {/* 1. EXECUTIVE FIRST VIEWPORT: CLUB COMMAND HERO */}
-      <section className="relative overflow-hidden rounded-3xl border-2 border-emerald-500/30 bg-gradient-to-br from-[#061e16] via-[#09151f] to-[#040b10] p-6 sm:p-10 shadow-2xl">
+      <section className="relative overflow-hidden rounded-3xl border border-gtex-graphite bg-gradient-to-br from-gtex-slate via-[#0A1628] to-gtex-midnight p-6 sm:p-10 shadow-2xl ring-1 ring-white/5">
         <div className="pointer-events-none absolute right-0 top-0 h-full w-1/2 bg-[radial-gradient(ellipse_at_80%_20%,rgba(16,185,129,0.18),transparent_70%)]" />
 
         <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
@@ -294,7 +294,7 @@ export function ControlCenter() {
 
         {/* 2. VERIFIED FINANCIAL COMMAND STATS */}
         <div className="mt-8 grid grid-cols-2 lg:grid-cols-4 gap-4 border-t border-white/10 pt-6">
-          <div className="rounded-xl border border-white/10 bg-black/40 p-4">
+          <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4">
             <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Total Treasury</p>
             <p className="gx-mono text-2xl font-black text-white mt-1">
               {fmt(wallet.gtex_total)} <span className="text-xs text-blue-400">GTX</span>
@@ -304,7 +304,7 @@ export function ControlCenter() {
             </p>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-black/40 p-4">
+          <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4">
             <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Fan Tokens (FAN)</p>
             <p className="gx-mono text-2xl font-black text-amber-300 mt-1">
               {fmt(wallet.fan_total)} <span className="text-xs text-amber-400/80">FAN</span>
@@ -312,7 +312,7 @@ export function ControlCenter() {
             <p className="text-[11px] text-slate-400 mt-1">Community & Voting Reserve</p>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-black/40 p-4">
+          <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4">
             <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Club Valuation</p>
             <p className="gx-mono text-2xl font-black text-emerald-300 mt-1">
               {activeClubProfile.value ? fmt(activeClubProfile.value) : fmt(activeClubProfile.cash || 0)} <span className="text-xs text-emerald-400/80">GTX</span>
@@ -322,7 +322,7 @@ export function ControlCenter() {
             </p>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-black/40 p-4">
+          <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4">
             <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Broadcast & TV Rights</p>
             <p className="gx-mono text-2xl font-black text-cyan-300 mt-1">
               {tvRevenue ? `${fmt(tvRevenue)} GTX` : "Active Pool"}
@@ -375,7 +375,7 @@ export function ControlCenter() {
           <Link
             key={exec.roleKey}
             to={exec.to}
-            className="group rounded-2xl border border-white/10 bg-slate-900/60 p-4 transition-all hover:border-emerald-500/40 hover:bg-slate-900/90 shadow-lg space-y-2.5"
+            className="group rounded-2xl border border-gtex-graphite bg-gtex-slate/80 p-5 transition-all hover:border-gtex-emerald/50 hover:bg-gtex-slate hover:-translate-y-0.5 shadow-xl space-y-3"
           >
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase tracking-wider text-emerald-300">
@@ -404,7 +404,7 @@ export function ControlCenter() {
       </section>
 
       {/* 2a-3D. INTERACTIVE 3D CEREMONIAL & BOARDROOM PRESENTATION SUITE */}
-      <section className="rounded-2xl border border-amber-500/30 bg-slate-950/80 p-5 shadow-2xl space-y-4" data-testid="executive-3d-suite">
+      <section className="rounded-2xl border border-gtex-gold/30 bg-gtex-slate/90 p-6 shadow-2xl space-y-4" data-testid="executive-3d-suite">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-400">
@@ -492,7 +492,7 @@ export function ControlCenter() {
       </div>
 
       {/* 2c. ECOSYSTEM REVENUE & PRE-MATCH WIN BONUS */}
-      <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-6 shadow-xl space-y-4" data-testid="ecosystem-revenue-card">
+      <section className="rounded-2xl border border-gtex-graphite bg-gtex-slate/80 p-6 shadow-xl space-y-4" data-testid="ecosystem-revenue-card">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
           <div>
             <div className="flex items-center gap-2">
@@ -528,28 +528,28 @@ export function ControlCenter() {
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="rounded-xl border border-white/10 bg-black/40 p-3.5">
+          <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4">
             <p className="text-[10px] uppercase font-bold text-slate-400">TV Broadcast Rights</p>
             <p className="gx-mono text-xl font-black text-cyan-300 mt-1">
               {fmt(waterfall.club_tv_revenue_gtex ?? 0)} <span className="text-xs">GTX</span>
             </p>
             <p className="text-[10px] text-slate-400 mt-0.5">Continental pool share</p>
           </div>
-          <div className="rounded-xl border border-white/10 bg-black/40 p-3.5">
+          <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4">
             <p className="text-[10px] uppercase font-bold text-slate-400">Competition Grants</p>
             <p className="gx-mono text-xl font-black text-emerald-300 mt-1">
               {fmt(waterfall.club_competition_grants_gtex ?? 0)} <span className="text-xs">GTX</span>
             </p>
             <p className="text-[10px] text-slate-400 mt-0.5">Participation stipend</p>
           </div>
-          <div className="rounded-xl border border-white/10 bg-black/40 p-3.5">
+          <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4">
             <p className="text-[10px] uppercase font-bold text-slate-400">Prize Winnings</p>
             <p className="gx-mono text-xl font-black text-amber-300 mt-1">
               {fmt(waterfall.club_prize_winnings_gtex ?? 0)} <span className="text-xs">GTX</span>
             </p>
             <p className="text-[10px] text-slate-400 mt-0.5">Matchday performance</p>
           </div>
-          <div className="rounded-xl border border-white/10 bg-black/40 p-3.5">
+          <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4">
             <p className="text-[10px] uppercase font-bold text-slate-400">Matchday Gate & Misc</p>
             <p className="gx-mono text-xl font-black text-purple-300 mt-1">
               {fmt(waterfall.club_matchday_revenue_gtex ?? 0)} <span className="text-xs">GTX</span>
@@ -559,7 +559,7 @@ export function ControlCenter() {
         </div>
 
         {/* Recycling Waterfall Note */}
-        <div className="rounded-xl border border-dashed border-emerald-500/30 bg-emerald-950/20 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-emerald-200">
+        <div className="rounded-xl border border-gtex-emerald/30 bg-gtex-emerald/5 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-emerald-200">
           <div className="flex items-center gap-2">
             <Sparkles size={15} className="text-emerald-400 shrink-0" />
             <span>
@@ -575,7 +575,7 @@ export function ControlCenter() {
       {/* 3. MATCHDAY RAIL & ACTION QUEUE */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Matchday Command Rail (7 cols) */}
-        <section className="lg:col-span-7 rounded-2xl border border-white/10 bg-slate-900/60 p-6 shadow-xl space-y-4">
+        <section className="lg:col-span-7 rounded-2xl border border-gtex-graphite bg-gtex-slate/80 p-6 shadow-xl space-y-4">
           <div className="flex items-center justify-between border-b border-white/10 pb-3">
             <div className="flex items-center gap-2">
               <Trophy size={18} className="text-amber-400" />
@@ -590,7 +590,7 @@ export function ControlCenter() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Next Upcoming Match */}
-            <div className="rounded-xl border border-emerald-500/40 bg-[#051812] p-4 flex flex-col justify-between space-y-3">
+            <div className="rounded-xl border border-gtex-emerald/40 bg-gtex-midnight/80 p-5 flex flex-col justify-between space-y-3">
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-1.5 rounded bg-emerald-950 px-2 py-0.5 text-[9px] font-black uppercase text-emerald-300 border border-emerald-500/30">
                   <Radio size={10} className="text-emerald-400 animate-pulse" /> NEXT FIXTURE
@@ -622,7 +622,7 @@ export function ControlCenter() {
             </div>
 
             {/* Latest Result */}
-            <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4 flex flex-col justify-between space-y-3">
+            <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/60 p-5 flex flex-col justify-between space-y-3">
               <div className="flex items-center justify-between">
                 <span className="rounded bg-slate-800 px-2 py-0.5 text-[9px] font-black uppercase text-slate-300">
                   LATEST RESULT
@@ -658,7 +658,7 @@ export function ControlCenter() {
         </section>
 
         {/* Action Queue & Decisions Awaiting Attention (5 cols) */}
-        <section className="lg:col-span-5 rounded-2xl border border-white/10 bg-slate-900/60 p-6 shadow-xl space-y-4">
+        <section className="lg:col-span-5 rounded-2xl border border-gtex-graphite bg-gtex-slate/80 p-6 shadow-xl space-y-4">
           <div className="flex items-center justify-between border-b border-white/10 pb-3">
             <div className="flex items-center gap-2">
               <ShieldAlert size={18} className="text-amber-400" />
@@ -712,7 +712,7 @@ export function ControlCenter() {
               <Link
                 key={op.to}
                 to={op.to}
-                className="group rounded-xl border border-white/10 bg-slate-900/60 p-3.5 text-center transition-all hover:-translate-y-1 hover:border-emerald-500/40 hover:bg-slate-900/90 shadow-lg"
+                className="group rounded-xl border border-gtex-graphite bg-gtex-slate/80 p-4 text-center transition-all hover:-translate-y-1 hover:border-gtex-emerald/50 hover:bg-gtex-slate shadow-lg"
               >
                 <Icon size={20} className={`mx-auto mb-1.5 ${op.color} transition-transform group-hover:scale-110`} />
                 <p className="gx-display text-xs font-bold uppercase text-white group-hover:text-emerald-300 transition-colors">
@@ -728,7 +728,7 @@ export function ControlCenter() {
       {/* Convene Press Conference Modal */}
       {pressConferenceOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" data-testid="press-conference-modal">
-          <div className="w-full max-w-md rounded-2xl border border-sky-400/20 bg-[#070B11] p-6 shadow-2xl space-y-4">
+          <div className="w-full max-w-md rounded-2xl border border-gtex-pitch/40 bg-gtex-slate p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2">
                 <Radio className="text-sky-300" size={18} />
@@ -795,7 +795,7 @@ export function ControlCenter() {
       {/* Pledge Win Bonus Modal */}
       {winBonusOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" data-testid="win-bonus-modal">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#070B11] p-6 shadow-2xl space-y-4">
+          <div className="w-full max-w-md rounded-2xl border border-gtex-graphite bg-gtex-slate p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2">
                 <Flame className="text-amber-400" size={18} />

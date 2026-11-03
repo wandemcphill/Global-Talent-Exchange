@@ -44,7 +44,7 @@ function EnterForm({ comp, onDone }: any) {
   };
   return (
     <div className="space-y-3" data-testid="national-enter-form">
-      <div className="rounded border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-slate-300">
+      <div className="rounded-xl border border-gtex-emerald/30 bg-gtex-emerald/5 p-4 text-xs text-slate-300">
         <p className="font-semibold text-emerald-300">
           Free Entry · Open to All User IDs (0–3 Clubs Supported) · Pre-Qualifier Representative System
         </p>

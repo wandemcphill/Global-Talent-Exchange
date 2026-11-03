@@ -82,7 +82,7 @@ export function PlayerDrawer({ playerId, onClose, extra }: { playerId: string | 
   const { data: form } = useQuery({ queryKey: ["player-form", playerId], queryFn: async () => (await api.get(`/v2/players/${playerId}/form`, { params: { include_performances: false } })).data, enabled: !!playerId });
   const { data: quote } = useQuery({ queryKey: ["player-quote", playerId], queryFn: async () => (await api.get("/owner/market/quote", { params: { player_ids: playerId } })).data.quotes[playerId as string], enabled: !!playerId });
   if (!playerId) return null;
-  const signals = p?.normalized_signals || {};
+  const signals = (p?.attributes && Object.keys(p.attributes).length > 0) ? p.attributes : (p?.normalized_signals || {});
   const isLegend = String(p?.real_player_tier || "").toLowerCase() === "legend";
   const honors: string[] = Array.isArray(p?.metadata_json?.honors) ? p.metadata_json.honors : [];
   return createPortal(

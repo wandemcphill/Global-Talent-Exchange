@@ -24,25 +24,106 @@ function CompCard({ c, clubId }: any) {
       setBusy(false);
     }
   };
+  const fillPct = Math.min(100, Math.round(((c.entrants || 0) / (c.max_clubs || 1)) * 100));
+
   return (
-    <div data-testid={`competition-card-${c.id}`} className="flex flex-col rounded-sm border border-white/10 bg-slate-950/40 p-5 transition-colors hover:border-emerald-500/30">
-      <div className="flex flex-wrap gap-2">
-        <Chip tone={c.host_type === "gtex" ? "emerald" : "cyan"}>{c.host_type === "gtex" ? "GTEX-hosted" : "User-hosted"}</Chip>
-        <Chip>{c.format}</Chip>
-        <Chip tone={c.status === "open" ? "gold" : c.status === "running" ? "emerald" : "slate"}>{c.status}</Chip>
-        {c.allow_same_owner && <Chip tone="red">Same-owner allowed</Chip>}
+    <div
+      data-testid={`competition-card-${c.id}`}
+      className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-gtex-graphite bg-gtex-slate/90 p-5 shadow-xl transition-all duration-300 hover:-translate-y-1 hover:border-gtex-emerald/60 hover:shadow-2xl"
+    >
+      {/* Top Arena Header */}
+      <div>
+        <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-3">
+          <div className="flex flex-wrap gap-1.5">
+            <Chip tone={c.host_type === "gtex" ? "emerald" : "cyan"}>
+              {c.host_type === "gtex" ? "GTEX Major" : "Community Cup"}
+            </Chip>
+            <Chip>{c.format?.toUpperCase()}</Chip>
+            {c.allow_same_owner && <Chip tone="red">Open Ownership</Chip>}
+          </div>
+          <span
+            className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+              c.status === "open"
+                ? "border border-amber-400/40 bg-amber-400/10 text-amber-300"
+                : c.status === "running"
+                ? "border border-emerald-400/40 bg-emerald-400/10 text-emerald-300 animate-pulse"
+                : "border border-slate-700 bg-slate-800 text-slate-400"
+            }`}
+          >
+            {c.status}
+          </span>
+        </div>
+
+        <div className="mt-3 flex items-start gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-gtex-midnight text-amber-300 shadow-inner">
+            <Trophy size={18} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="gx-display text-lg font-bold uppercase tracking-tight text-white group-hover:text-emerald-300 transition-colors truncate">
+              {c.name}
+            </h3>
+            <p className="text-xs text-slate-400 line-clamp-2 mt-0.5 leading-relaxed">{c.description}</p>
+          </div>
+        </div>
+
+        {/* Prize & Entrant Metrics */}
+        <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl border border-white/5 bg-gtex-midnight/70 p-3 text-center">
+          <div>
+            <p className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Entry</p>
+            <p className="gx-mono text-xs font-bold text-white mt-0.5">
+              {c.entry_fee ? <Coin amount={c.entry_fee} /> : "FREE"}
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Prize Pool</p>
+            <p className="gx-mono text-xs font-black text-amber-300 mt-0.5">
+              <Coin amount={c.prize_pool} />
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Bracket</p>
+            <p className="gx-mono text-xs font-bold text-slate-300 mt-0.5">
+              {c.entrants}/{c.max_clubs}
+            </p>
+          </div>
+        </div>
+
+        {/* Capacity Bar */}
+        <div className="mt-2.5">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+            <div
+              className="h-full bg-gradient-to-r from-emerald-500 to-amber-400 transition-all duration-500"
+              style={{ width: `${fillPct}%` }}
+            />
+          </div>
+        </div>
+
+        {c.invite_code && (
+          <p className="gx-mono mt-3 rounded bg-white/5 px-2 py-1 text-center text-xs text-cyan-300" data-testid={`invite-code-${c.id}`}>
+            Invite Code: <b className="text-white tracking-widest">{c.invite_code}</b>
+          </p>
+        )}
       </div>
-      <p className="gx-display mt-3 text-xl font-bold uppercase text-white">{c.name}</p>
-      <p className="mt-1 flex-1 text-xs text-slate-400">{c.description}</p>
-      <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
-        <div><p className="text-slate-500">Entry</p><Coin amount={c.entry_fee} /></div>
-        <div><p className="text-slate-500">Pool</p><Coin amount={c.prize_pool} /></div>
-        <div><p className="text-slate-500">Clubs</p><span className="gx-mono text-white">{c.entrants}/{c.max_clubs}</span></div>
-      </div>
-      {c.invite_code && <p className="gx-mono mt-3 text-xs text-cyan-300" data-testid={`invite-code-${c.id}`}>Invite code: {c.invite_code}</p>}
-      <div className="mt-4 flex gap-2">
-        <Link to={`/app/competitions/${c.id}`} className="gx-btn gx-btn-secondary flex-1" data-testid={`view-competition-${c.id}`}>View</Link>
-        {c.status === "open" && !entered && <Btn className="flex-1" disabled={busy || !clubId} onClick={enter} data-testid={`enter-competition-${c.id}`}>Enter</Btn>}
+
+      {/* Action Footer */}
+      <div className="mt-5 flex gap-2">
+        <Link
+          to={`/app/competitions/${c.id}`}
+          className="gx-btn gx-btn-secondary flex-1 text-xs"
+          data-testid={`view-competition-${c.id}`}
+        >
+          View Details
+        </Link>
+        {c.status === "open" && !entered && (
+          <Btn
+            className="flex-1 text-xs font-black uppercase tracking-wider"
+            disabled={busy || !clubId}
+            onClick={enter}
+            data-testid={`enter-competition-${c.id}`}
+          >
+            {busy ? "Registering…" : "Enter Match"}
+          </Btn>
+        )}
       </div>
     </div>
   );

@@ -22,6 +22,7 @@ import {
 import { api, errMsg } from "@/lib/api";
 import { fmt, useActiveClub, useClub } from "@/lib/owner";
 import { Loading } from "@/components/gtex/ui";
+import { PlayerCard } from "@/components/gtex/PlayerCard";
 import { PlayerDossier } from "@/components/gtex/PlayerDossier";
 import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
 import {
@@ -377,13 +378,13 @@ export function TransferHub() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <div className="rounded-lg border border-white/10 bg-black/40 px-3.5 py-2">
+            <div className="rounded-lg border border-[#25354B] bg-black/40 px-3.5 py-2">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Transfer Budget</p>
               <p className="gx-mono text-lg font-black text-emerald-300">
                 {activeClub?.transfer_budget != null ? fmt(activeClub.transfer_budget) : "—"} <span className="text-[10px] text-emerald-400/80">GTX</span>
               </p>
             </div>
-            <div className="rounded-lg border border-white/10 bg-black/40 px-3.5 py-2">
+            <div className="rounded-lg border border-[#25354B] bg-black/40 px-3.5 py-2">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Wage Room</p>
               <p className="gx-mono text-lg font-black text-amber-300">
                 {activeClub?.wage_budget != null ? fmt(activeClub.wage_budget) : "—"} <span className="text-[10px] text-amber-400/80">GTX/w</span>
@@ -410,7 +411,7 @@ export function TransferHub() {
 
         {/* Transfer Drama, Super-Agent Rumors & Coach Demands Strip */}
         <div
-          className="mt-5 grid gap-3 md:grid-cols-3 rounded-xl border border-white/10 bg-black/40 p-3.5 text-xs"
+          className="mt-5 grid gap-3 md:grid-cols-3 rounded-xl border border-[#25354B] bg-black/40 p-3.5 text-xs"
           data-testid="transfer-drama-strip"
         >
           <div className="flex items-start gap-2.5">
@@ -475,13 +476,13 @@ export function TransferHub() {
       </section>
 
       {/* Five Lanes Navigation Tabs */}
-      <nav className="flex flex-wrap gap-2 border-b border-white/10 pb-4" data-testid="transfer-hub-lanes">
+      <nav className="flex flex-wrap gap-2 border-b border-[#25354B] pb-4" data-testid="transfer-hub-lanes">
         {[
-          { id: "listings", label: "Market Listings", count: filteredListings.length, icon: ArrowLeftRight },
-          { id: "offers", label: "Active Offers", count: filteredOffers.length, icon: Handshake },
-          { id: "negotiations", label: "Negotiations", count: filteredNegotiations.length, icon: MessageSquare },
-          { id: "bids", label: "Window Bids", count: bidListings.length, icon: Clock },
-          { id: "shortlist", label: "Shortlist", count: filteredShortlist.length, icon: Sparkles },
+          { id: "listings", label: "Buy Players", count: filteredListings.length, icon: ArrowLeftRight },
+          { id: "offers", label: "Sell Players & Offers", count: filteredOffers.length, icon: Handshake },
+          { id: "negotiations", label: "Contract Negotiations", count: filteredNegotiations.length, icon: MessageSquare },
+          { id: "bids", label: "Transfer List & Bids", count: bidListings.length, icon: Clock },
+          { id: "shortlist", label: "Watchlist", count: filteredShortlist.length, icon: Sparkles },
         ].map((item) => {
           const Icon = item.icon;
           const active = lane === item.id;
@@ -493,7 +494,7 @@ export function TransferHub() {
               className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-all ${
                 active
                   ? "bg-emerald-500 text-slate-950 shadow-[0_0_16px_rgba(16,185,129,0.35)]"
-                  : "border border-white/10 bg-slate-900/60 text-slate-300 hover:border-emerald-400/40 hover:text-white"
+                  : "border border-[#25354B] bg-[#14243A]/80 text-slate-300 hover:border-emerald-400/40 hover:text-white"
               }`}
             >
               <Icon size={14} />
@@ -514,7 +515,7 @@ export function TransferHub() {
       {lane === "listings" && (
         <div className="space-y-6" data-testid="lane-listings-view">
           {/* Filters Bar */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-900/60 p-4 rounded-xl border border-white/10">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-[#14243A]/80 p-4 rounded-xl border border-[#25354B]">
             <div className="relative sm:col-span-2">
               <Search className="absolute left-3 top-3 size-4 text-slate-500" />
               <input
@@ -552,7 +553,7 @@ export function TransferHub() {
               <button type="button" onClick={() => refetchListings()} className="gx-btn gx-btn-secondary mt-3 text-xs">Retry</button>
             </div>
           ) : filteredListings.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+            <div className="rounded-xl border border-dashed border-[#25354B] p-12 text-center">
               <ArrowLeftRight className="mx-auto size-10 text-emerald-400/50 mb-3" />
               <p className="gx-display text-xl font-bold uppercase text-white">No active transfer listings</p>
               <p className="text-sm text-slate-400 mt-1">
@@ -575,53 +576,56 @@ export function TransferHub() {
               {filteredListings.map((listing: any) => {
                 const p = listing.player || {};
                 const playerId = listing.player_id || p.id;
+                const rating = Number(p.gsi_rating || p.rating || 76);
+                const tier = rating >= 85 ? "legendary" : rating >= 75 ? "elite" : "standard";
+
                 return (
-                  <div key={listing.id} className="flex flex-col w-full max-w-[310px]">
-                    <div className="flex-1 rounded-xl border border-white/10 bg-slate-900/70 p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h3 className="gx-display text-lg font-bold uppercase text-white">
-                            {p.full_name || playerId}
-                          </h3>
-                          <p className="text-xs text-slate-400 mt-1">
-                            {p.normalized_position || "Position not recorded"}
-                          </p>
+                  <div key={listing.id} className="flex flex-col w-full max-w-[310px] items-center">
+                    <PlayerCard
+                      name={p.full_name || p.name || p.canonical_display_name || playerId}
+                      rating={rating}
+                      position={p.normalized_position || p.position || "MID"}
+                      age={p.age}
+                      nationality={p.nationality || p.country_name || "Global"}
+                      club={p.current_club_name || "Free Agent"}
+                      image={p.image_url || p.image}
+                      tier={tier}
+                      price={listing.base_price}
+                      badge={tier === "legendary" ? "ICON · 1 OF 1" : "TRANSFER LISTED"}
+                      onClick={() => setSelectedPlayerId(playerId)}
+                      stats={[
+                        { k: "Valuation", v: `${fmt(listing.base_price)}` },
+                        { k: "Status", v: (listing.status || "OPEN").toUpperCase() },
+                        { k: "Window", v: `${Math.ceil(Number(listing.time_remaining || 0) / 60)}m` },
+                      ]}
+                      footer={
+                        <div className="flex flex-col gap-1.5 w-full mt-2">
+                          <button
+                            type="button"
+                            disabled={!activeClub?.club_id || listing.status !== "open"}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOfferListing(listing);
+                              setOfferAmount(String(listing.base_price ?? ""));
+                            }}
+                            className="gx-btn gx-btn-primary w-full text-xs font-black shadow-md disabled:cursor-not-allowed disabled:opacity-50"
+                            data-testid={`make-offer-btn-${listing.id}`}
+                          >
+                            <Handshake size={14} /> Buy Player ({fmt(listing.base_price)} GTX)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedPlayerId(playerId);
+                            }}
+                            className="gx-btn gx-btn-secondary w-full text-xs"
+                          >
+                            View Profile
+                          </button>
                         </div>
-                        <span className="shrink-0 gx-mono text-xs font-black text-amber-300">
-                          {fmt(listing.base_price)} GTX
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-400">
-                        {p.current_club_name ? `Current club: ${p.current_club_name}` : "Current club not recorded"}
-                      </p>
-                      {p.market_value != null && (
-                        <p className="text-xs text-slate-400">
-                          Imported market reference: €{new Intl.NumberFormat("en-IE", { maximumFractionDigits: 0 }).format(Number(p.market_value))}
-                        </p>
-                      )}
-                      <p className="text-xs text-slate-500">
-                        Listing status: {listing.status} · {Math.ceil(Number(listing.time_remaining || 0) / 60)} minutes remaining
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedPlayerId(playerId)}
-                        className="gx-btn gx-btn-secondary w-full text-xs"
-                      >
-                        Open player dossier
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={!activeClub?.club_id || listing.status !== "open"}
-                      onClick={() => {
-                        setOfferListing(listing);
-                        setOfferAmount(String(listing.base_price ?? ""));
-                      }}
-                      className="gx-btn gx-btn-primary mt-2.5 w-full text-xs font-black shadow-md disabled:cursor-not-allowed disabled:opacity-50"
-                      data-testid={`make-offer-btn-${listing.id}`}
-                    >
-                      <Handshake size={14} /> Submit Club Offer
-                    </button>
+                      }
+                    />
                   </div>
                 );
               })}
@@ -636,7 +640,7 @@ export function TransferHub() {
           {loadingOffers ? (
             <Loading label="Gathering offer transactions..." />
           ) : !activeClub?.club_id ? (
-            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+            <div className="rounded-xl border border-dashed border-[#25354B] p-12 text-center">
               <Handshake className="mx-auto size-10 text-emerald-400/50 mb-3" />
               <p className="gx-display text-xl font-bold uppercase text-white">Choose an active club</p>
               <p className="text-sm text-slate-400 mt-1">Offers are scoped to a club you are authorized to manage.</p>
@@ -648,7 +652,7 @@ export function TransferHub() {
               <button type="button" onClick={() => refetchOffers()} className="gx-btn gx-btn-secondary mt-3 text-xs">Retry</button>
             </div>
           ) : filteredOffers.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+            <div className="rounded-xl border border-dashed border-[#25354B] p-12 text-center">
               <Handshake className="mx-auto size-10 text-emerald-400/50 mb-3" />
               <p className="gx-display text-xl font-bold uppercase text-white">No open transfer offers</p>
               <p className="text-sm text-slate-400 mt-1">
@@ -671,7 +675,7 @@ export function TransferHub() {
                 return (
                   <div
                     key={offer.id}
-                    className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-xl border border-white/10 bg-slate-900/60 p-4 shadow-lg"
+                    className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-xl border border-[#25354B] bg-[#14243A]/80 p-4 shadow-lg"
                     data-testid={`transfer-offer-row-${offer.id}`}
                   >
                     <div className="space-y-1">
@@ -747,7 +751,7 @@ export function TransferHub() {
           {loadingNegotiations ? (
             <Loading label="Loading persisted transfer negotiations..." />
           ) : !activeClub?.club_id ? (
-            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+            <div className="rounded-xl border border-dashed border-[#25354B] p-12 text-center">
               <MessageSquare className="mx-auto size-10 text-emerald-400/50 mb-3" />
               <p className="gx-display text-xl font-bold uppercase text-white">Choose an active club</p>
               <p className="text-sm text-slate-400 mt-1">Negotiations are scoped to a club you are authorized to manage.</p>
@@ -765,7 +769,7 @@ export function TransferHub() {
               </button>
             </div>
           ) : filteredNegotiations.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+            <div className="rounded-xl border border-dashed border-[#25354B] p-12 text-center">
               <MessageSquare className="mx-auto size-10 text-emerald-400/50 mb-3" />
               <p className="gx-display text-xl font-bold uppercase text-white">No accessible active negotiations</p>
               <p className="text-sm text-slate-400 mt-1">
@@ -787,11 +791,11 @@ export function TransferHub() {
                 return (
                   <div
                     key={negotiation.id}
-                    className="rounded-xl border border-white/10 bg-slate-900/70 p-5 space-y-4 shadow-xl"
+                    className="rounded-xl border border-[#25354B] bg-[#14243A] p-5 space-y-4 shadow-xl"
                     data-testid={`negotiation-card-${negotiation.id}`}
                   >
                     {/* Header */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#25354B] pb-3">
                       <div className="flex items-center gap-2">
                         <span
                           className={`rounded px-2.5 py-0.5 text-[10px] font-black uppercase ${
@@ -926,7 +930,7 @@ export function TransferHub() {
                         </div>
                       </div>
                     ) : (
-                      <div className="pt-2 border-t border-white/10 flex flex-wrap gap-2">
+                      <div className="pt-2 border-t border-[#25354B] flex flex-wrap gap-2">
                         <button
                           type="button"
                           onClick={() => setSelectedPlayerId(negotiation.player_id)}
@@ -968,13 +972,13 @@ export function TransferHub() {
             <Clock size={16} /> Bids below or equal to the current highest bid are rejected by the market.
           </div>
           {!activeClub?.club_id ? (
-            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+            <div className="rounded-xl border border-dashed border-[#25354B] p-12 text-center">
               <Clock className="mx-auto size-10 text-emerald-400/50 mb-3" />
               <p className="gx-display text-xl font-bold uppercase text-white">Choose an active club</p>
               <p className="text-sm text-slate-400 mt-1">Bids can only be submitted for a club you are authorized to manage.</p>
             </div>
           ) : bidListings.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+            <div className="rounded-xl border border-dashed border-[#25354B] p-12 text-center">
               <Clock className="mx-auto size-10 text-emerald-400/50 mb-3" />
               <p className="gx-display text-xl font-bold uppercase text-white">No open transfer listings</p>
               <p className="text-sm text-slate-400 mt-1">Open transfer listings will appear here when the market has eligible players available to bid on.</p>
@@ -989,7 +993,7 @@ export function TransferHub() {
                   && Number.isFinite(Number(enteredAmount))
                   && Number(enteredAmount) > bidThreshold;
                 return (
-                  <div key={listing.id} className="flex flex-col gap-4 rounded-xl border border-white/10 bg-slate-900/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div key={listing.id} className="flex flex-col gap-4 rounded-xl border border-[#25354B] bg-[#14243A]/80 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                       <h4 className="gx-display text-lg font-bold uppercase text-white">
                         {listing.player?.full_name || listing.player_id}
@@ -1053,7 +1057,7 @@ export function TransferHub() {
           {loadingShortlist ? (
             <Loading label="Loading the club's persisted scouting shortlist..." />
           ) : !activeClub?.club_id ? (
-            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+            <div className="rounded-xl border border-dashed border-[#25354B] p-12 text-center">
               <Sparkles className="mx-auto size-10 text-emerald-400/50 mb-3" />
               <p className="gx-display text-xl font-bold uppercase text-white">Choose an active club</p>
               <p className="text-sm text-slate-400 mt-1">Shortlist entries are private to the authenticated club context.</p>
@@ -1065,7 +1069,7 @@ export function TransferHub() {
               <button type="button" onClick={() => refetchShortlist()} className="gx-btn gx-btn-secondary mt-3 text-xs">Retry</button>
             </div>
           ) : filteredShortlist.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+            <div className="rounded-xl border border-dashed border-[#25354B] p-12 text-center">
               <Sparkles className="mx-auto size-10 text-emerald-400/50 mb-3" />
               <p className="gx-display text-xl font-bold uppercase text-white">No saved scouting targets</p>
               <p className="text-sm text-slate-400 mt-1">
@@ -1079,7 +1083,7 @@ export function TransferHub() {
                 const listing = entry.active_listing;
                 const hasListing = Boolean(listing?.id);
                 return (
-                  <div key={entry.id} className="rounded-xl border border-white/10 bg-slate-900/60 p-4 space-y-3">
+                  <div key={entry.id} className="rounded-xl border border-[#25354B] bg-[#14243A]/80 p-4 space-y-3">
                     <div className="flex items-center justify-between gap-2">
                       <span className="gx-mono text-xs font-bold text-emerald-400">
                         {player.normalized_position || "Position not recorded"}
@@ -1105,7 +1109,7 @@ export function TransferHub() {
                       </p>
                     )}
                     <p className="text-xs text-slate-500">Saved via {entry.source || "scouting"}.</p>
-                    <div className="pt-2 border-t border-white/10 flex gap-2">
+                    <div className="pt-2 border-t border-[#25354B] flex gap-2">
                       <button
                         type="button"
                         onClick={() => setSelectedPlayerId(entry.player_id)}
@@ -1398,7 +1402,7 @@ export function TransferHub() {
                     className={`rounded-xl border p-2.5 text-left text-xs transition ${
                       unveilTheme === tier.id
                         ? "border-amber-400 bg-amber-500/20 text-white"
-                        : "border-white/10 bg-black/40 text-slate-300"
+                        : "border-[#25354B] bg-black/40 text-slate-300"
                     }`}
                   >
                     <p className="font-bold">{tier.label}</p>

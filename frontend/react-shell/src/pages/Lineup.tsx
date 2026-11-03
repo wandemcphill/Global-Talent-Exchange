@@ -162,12 +162,12 @@ export default function Lineup() {
             <select id="lineup-formation" data-testid="lineup-formation-select" className="gx-input w-full" value={formation} onChange={(event) => setFormation(event.target.value)}>
               {LINEUP_FORMATIONS.map((option) => <option key={option} value={option}>{option}</option>)}
             </select>
-            <div className="rounded-sm border border-emerald-400/20 bg-gradient-to-b from-emerald-950/80 to-slate-950 p-4">
+            <div className="rounded-xl border border-gtex-emerald/30 bg-gradient-to-b from-gtex-slate to-gtex-midnight p-5 shadow-xl">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-200">Tactical pitch</span>
                 <Chip tone="emerald">{formation}</Chip>
               </div>
-              <div className="relative overflow-hidden rounded-sm border border-white/20 bg-emerald-900/50 px-3 py-4">
+              <div className="relative overflow-hidden rounded-xl border border-gtex-emerald/40 bg-emerald-950/60 px-4 py-5 shadow-inner">
                 <div className="pointer-events-none absolute inset-2 border border-white/15" />
                 <div className="pointer-events-none absolute left-1/2 top-2 bottom-2 w-px bg-white/15" />
                 <div className="pointer-events-none absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/15" />
@@ -178,7 +178,7 @@ export default function Lineup() {
                         const role = roles[slotIndex] || "Player";
                         const player = players.find((item) => item.player_id === starters[slotIndex]);
                         return (
-                          <div key={slotIndex} className="flex min-w-0 max-w-[31%] flex-1 flex-col items-center rounded-sm border border-white/15 bg-slate-950/80 px-2 py-2 text-center">
+                          <div key={slotIndex} className="flex min-w-0 max-w-[31%] flex-1 flex-col items-center rounded-xl border border-white/20 bg-gtex-midnight/90 px-2.5 py-2 text-center shadow-md">
                             <span className="mb-1 flex h-7 w-7 items-center justify-center rounded-full border border-emerald-300/40 bg-emerald-400/10 text-[10px] font-bold text-emerald-100">{player ? (player.rating ? Math.round(player.rating) : "XI") : slotIndex + 1}</span>
                             <span className="w-full truncate text-[10px] font-semibold text-white">{player?.player_name || role}</span>
                             <span className="w-full truncate text-[9px] text-slate-400">{role}</span>
@@ -195,7 +195,7 @@ export default function Lineup() {
                 <span>{players.length} players available</span>
               </div>
             </div>
-            <div className="flex items-start gap-2 rounded-sm border border-white/10 p-3 text-xs leading-5 text-slate-400">
+            <div className="flex items-start gap-2 rounded-xl border border-gtex-graphite bg-gtex-slate/80 p-4 text-xs leading-5 text-slate-300">
               <CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300" />
               Formation sets the shape. Choose a player for each position; the same player cannot be used twice. At least eleven eligible players, including a goalkeeper, are needed for competition registration.
             </div>

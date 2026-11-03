@@ -241,7 +241,7 @@ export default function CreatorAccess() {
           )}
 
           {application.review_notes && (
-            <div className="mt-3 rounded-lg border border-slate-700 bg-slate-800/50 p-3">
+            <div className="mt-3 rounded-lg border border-gtex-graphite bg-gtex-slate/60 p-3">
               <p className="text-xs font-semibold uppercase text-slate-400">Admin Review Notes</p>
               <p className="mt-1 text-sm text-slate-200">{application.review_notes}</p>
             </div>
@@ -297,7 +297,7 @@ export default function CreatorAccess() {
               <textarea rows={2} className="gx-input mt-2" placeholder="https://youtube.com/@channel&#10;https://x.com/handle" value={socialLinks} onChange={(e) => setSocialLinks(e.target.value)} />
             </label>
 
-            <div className="block md:col-span-2 rounded-xl border border-slate-700 bg-slate-900/60 p-4">
+            <div className="block md:col-span-2 rounded-xl border border-gtex-graphite bg-gtex-slate/70 p-4">
               <span className="gx-label block mb-2">Live selfie capture (application camera)</span>
               <p className="text-xs text-slate-400 mb-3">Capture a live selfie from your device camera to compare against your public creator profile during review.</p>
               <div className="flex items-center gap-4">

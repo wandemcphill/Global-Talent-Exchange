@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any
 
@@ -108,6 +108,7 @@ class RealPlayerUniverseDetail:
     metadata_json: dict[str, Any]
     summary_json: dict[str, Any]
     updated_at: datetime
+    attributes: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

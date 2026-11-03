@@ -37,6 +37,15 @@ ARCHIVED_DUPLICATE_PLAYER_IDS = frozenset(
         "55f70b9b-dae9-4a55-8721-ccf9bdaa0154",  # Andres Iniesta duplicate
         "0704b985-6e51-49fc-bf74-45820da69183",  # Luis Figo duplicate
         "862d907b-917a-4508-a19d-da3481ae778d",  # Emerson duplicate
+        "c02852d3-656f-49d8-bcb2-f83234525e27",  # Bukayo Saka duplicate
+        "cd6eaa94-3e3a-4187-bc2c-8ec16f2be165",  # Victor Osimhen duplicate
+        "50235403-679f-48c8-88a0-7614e76ccc0e",  # Harry Kane duplicate
+        "62930b4f-ce7b-43c9-a6b7-17abd26125a4",  # Paul Onuachu duplicate
+        "8f4f3204-985e-4244-ad1b-a820eaada964",  # Aaron Wan-Bissaka duplicate
+        "db0bf799-9b9b-4084-be0a-8d3cff413a15",  # Joshua Kimmich duplicate
+        "64b8ed47-c422-4b03-a0f6-c8bfef31aa35",  # Kylian Mbappé duplicate
+        "42e150d2-dafe-4fd4-8c96-6bf0844893a6",  # Vinicius Junior duplicate
+        "0ce1de07-ad08-43da-b34b-875e3ce600fb",  # Jude Bellingham duplicate
     }
 )
 REAL_PLAYER_POSITION_SEARCH_TERMS: dict[str, frozenset[str]] = {
@@ -310,7 +319,7 @@ class RealPlayerUniverseQueryService:
         base_filter = and_(
             Player.is_real_player.is_(True),
             Player.is_tradable.is_(True),
-            Player.real_player_tier.notin_(["archived_duplicate", "retired"]),
+            or_(Player.real_player_tier.is_(None), Player.real_player_tier.notin_(["archived_duplicate", "retired"])),
             Player.id.notin_(ARCHIVED_DUPLICATE_PLAYER_IDS),
         )
         if dialect_name == "postgresql":
@@ -377,7 +386,9 @@ class RealPlayerUniverseQueryService:
             stmt = select(func.count(Player.id)).where(
                 Player.is_real_player.is_(True),
                 Player.is_tradable.is_(True),
-                Player.real_player_tier.notin_(["archived_duplicate", "retired"]),
+                or_(
+                    Player.real_player_tier.is_(None), Player.real_player_tier.notin_(["archived_duplicate", "retired"])
+                ),
                 Player.id.notin_(ARCHIVED_DUPLICATE_PLAYER_IDS),
             )
             if tier:
@@ -711,13 +722,28 @@ class RealPlayerUniverseQueryService:
         summary: PlayerSummaryReadModel | None,
     ) -> RealPlayerUniverseDetail:
         dna = dict(player.dna_profile or {}) if isinstance(player.dna_profile, dict) else {}
-        raw_signals = dict(profile.normalized_signals_json or {}) if profile is not None else {}
-        if not raw_signals and isinstance(dna.get("attributes"), dict):
-            raw_signals = {
-                str(k): min(99, int(float(v) * 5)) if float(v) <= 20 else int(float(v))
-                for k, v in dict(dna["attributes"]).items()
-                if isinstance(v, (int, float))
-            }
+        summary_data = (
+            dict(summary.summary_json or {}) if summary is not None and isinstance(summary.summary_json, dict) else {}
+        )
+        football_attributes: dict[str, int] = {}
+        raw_attrs = dna.get("attributes") or summary_data.get("attributes")
+        if (
+            not isinstance(raw_attrs, dict)
+            and profile is not None
+            and isinstance(profile.normalized_signals_json, dict)
+        ):
+            potential_traits = {"pace", "shooting", "passing", "dribbling", "defending", "physical"}
+            if any(k.lower() in potential_traits for k in profile.normalized_signals_json):
+                raw_attrs = profile.normalized_signals_json
+
+        if isinstance(raw_attrs, dict):
+            for k, v in raw_attrs.items():
+                if isinstance(v, (int, float)):
+                    val = min(99, max(1, int(float(v) * 5))) if float(v) <= 20 else min(99, max(1, int(float(v))))
+                    football_attributes[str(k).lower()] = val
+
+        profile_signals = dict(profile.normalized_signals_json or {}) if profile is not None else {}
+        raw_signals = football_attributes if football_attributes else profile_signals
         return RealPlayerUniverseDetail(
             player_id=player.id,
             player_name=player.full_name,

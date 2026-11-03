@@ -72,18 +72,24 @@ def test_legend_market_is_one_of_one():
 
 
 def test_active_superstars_are_not_legends_and_have_200_shares():
-    """Active players such as Harry Kane, Mbappé, Bellingham, Vinícius have 200 shares."""
-    mock_kane = MagicMock()
-    mock_kane.id = "50235403-679f-48c8-88a0-7614e76ccc0e"
-    mock_kane.full_name = "Harry Kane"
-    mock_kane.name = "Harry Kane"
-    mock_kane.real_player_tier = "marquee"
-    mock_kane.source_provider = "sportmonks"
-    mock_kane.is_real_player = True
-    mock_kane.legendary_profile_id = None
+    """Active players such as Harry Kane, Mbappé, Bellingham, Vinícius, Saka, Osimhen, Kimmich have 200 shares."""
+    for name, pid in [
+        ("Harry Kane", "0b429e4e-3588-4e05-aed4-70015f211585"),
+        ("Bukayo Saka", "f4b4531b-a342-48b5-8f43-618cfa0dc49a"),
+        ("Victor Osimhen", "2dc62da9-550b-423b-bfe3-445de565051e"),
+        ("Joshua Kimmich", "9bb4b8c1-0b9e-4804-baa9-a62cf480c3d4"),
+    ]:
+        mock_player = MagicMock()
+        mock_player.id = pid
+        mock_player.full_name = name
+        mock_player.name = name
+        mock_player.real_player_tier = "marquee"
+        mock_player.source_provider = "fm23_genie_scout"
+        mock_player.is_real_player = True
+        mock_player.legendary_profile_id = None
 
-    cfg = resolve_player_share_market_config(mock_kane, total_shares=200)
-    assert cfg.total_shares == 200, f"Expected 200 shares for Kane, got {cfg.total_shares}"
+        cfg = resolve_player_share_market_config(mock_player, total_shares=200)
+        assert cfg.total_shares == 200, f"Expected 200 shares for {name}, got {cfg.total_shares}"
 
 
 def test_archived_duplicates_list():
@@ -92,3 +98,9 @@ def test_archived_duplicates_list():
     assert "55f70b9b-dae9-4a55-8721-ccf9bdaa0154" in ARCHIVED_DUPLICATE_PLAYER_IDS
     assert "0704b985-6e51-49fc-bf74-45820da69183" in ARCHIVED_DUPLICATE_PLAYER_IDS
     assert "862d907b-917a-4508-a19d-da3481ae778d" in ARCHIVED_DUPLICATE_PLAYER_IDS
+    assert "c02852d3-656f-49d8-bcb2-f83234525e27" in ARCHIVED_DUPLICATE_PLAYER_IDS  # Bukayo Saka duplicate
+    assert "cd6eaa94-3e3a-4187-bc2c-8ec16f2be165" in ARCHIVED_DUPLICATE_PLAYER_IDS  # Victor Osimhen duplicate
+    assert "50235403-679f-48c8-88a0-7614e76ccc0e" in ARCHIVED_DUPLICATE_PLAYER_IDS  # Harry Kane duplicate
+    assert "62930b4f-ce7b-43c9-a6b7-17abd26125a4" in ARCHIVED_DUPLICATE_PLAYER_IDS  # Paul Onuachu duplicate
+    assert "8f4f3204-985e-4244-ad1b-a820eaada964" in ARCHIVED_DUPLICATE_PLAYER_IDS  # Aaron Wan-Bissaka duplicate
+    assert "db0bf799-9b9b-4084-be0a-8d3cff413a15" in ARCHIVED_DUPLICATE_PLAYER_IDS  # Joshua Kimmich duplicate
