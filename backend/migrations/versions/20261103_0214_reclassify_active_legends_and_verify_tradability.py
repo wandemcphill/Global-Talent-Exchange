@@ -80,7 +80,8 @@ def upgrade() -> None:
         return
 
     # 1. Deactivate active player profiles in legendary_player_profiles linked to active provider records
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         UPDATE legendary_player_profiles lpp
         SET is_active = false,
             is_searchable = false,
@@ -92,17 +93,22 @@ def upgrade() -> None:
               ip.source_provider IN ('sportmonks', 'sofifa_fc25')
               OR ip.id = ANY(:active_fm_ids)
           );
-    """), {"active_fm_ids": ACTIVE_FM23_PLAYER_IDS})
+    """),
+        {"active_fm_ids": ACTIVE_FM23_PLAYER_IDS},
+    )
 
     # 2. Deactivate known direct active player profiles in legendary_player_profiles
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         UPDATE legendary_player_profiles
         SET is_active = false,
             is_searchable = false,
             is_tradable = false,
             updated_at = NOW()
         WHERE id = ANY(:active_lpp_ids);
-    """), {"active_lpp_ids": ACTIVE_LPP_PROFILE_IDS})
+    """),
+        {"active_lpp_ids": ACTIVE_LPP_PROFILE_IDS},
+    )
 
     # 3. Reclassify active Sportmonks and Sofifa FC 25 players to marquee / established
     conn.execute(sa.text("""
@@ -121,7 +127,8 @@ def upgrade() -> None:
     """))
 
     # 4. Reclassify active FM23 players to marquee / established
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         UPDATE ingestion_players
         SET real_player_tier = CASE 
                 WHEN id IN (
@@ -135,7 +142,9 @@ def upgrade() -> None:
             is_tradable = true,
             updated_at = NOW()
         WHERE id = ANY(:active_fm_ids);
-    """), {"active_fm_ids": ACTIVE_FM23_PLAYER_IDS})
+    """),
+        {"active_fm_ids": ACTIVE_FM23_PLAYER_IDS},
+    )
 
     # 5. Clear legendary_profile_id linkage on all non-legend players (e.g. Mbappé, Rodri, etc.)
     conn.execute(sa.text("""
@@ -147,7 +156,8 @@ def upgrade() -> None:
     """))
 
     # 6. Ensure all genuine historical legends in ingestion_players are tradeable and buyable
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         UPDATE ingestion_players
         SET is_tradable = true,
             updated_at = NOW()
@@ -155,7 +165,9 @@ def upgrade() -> None:
           AND id != ALL(:dup_ids)
           AND real_player_tier != 'regen'
           AND is_real_player = true;
-    """), {"dup_ids": DUPLICATE_LEGEND_IDS})
+    """),
+        {"dup_ids": DUPLICATE_LEGEND_IDS},
+    )
 
 
 def downgrade() -> None:
@@ -164,11 +176,14 @@ def downgrade() -> None:
         return
 
     # Downgrade re-enables active profiles if needed
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         UPDATE legendary_player_profiles
         SET is_active = true,
             is_searchable = true,
             is_tradable = true,
             updated_at = NOW()
         WHERE id = ANY(:active_lpp_ids);
-    """), {"active_lpp_ids": ACTIVE_LPP_PROFILE_IDS})
+    """),
+        {"active_lpp_ids": ACTIVE_LPP_PROFILE_IDS},
+    )
