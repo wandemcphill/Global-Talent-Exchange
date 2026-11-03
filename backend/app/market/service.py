@@ -2014,8 +2014,12 @@ class MarketPlayerQueryService:
     def _matches_search(self, record: MarketPlayerRecord, search: str | None) -> bool:
         if search is None:
             return True
+        norm_search = self._normalize_text(search)
+        if not norm_search:
+            return True
         haystacks = [
             record.player.full_name,
+            record.player.canonical_display_name,
             record.player.first_name,
             record.player.last_name,
             record.player.short_name,
@@ -2026,7 +2030,23 @@ class MarketPlayerQueryService:
             record.player.country.name if record.player.country is not None else None,
             *self._national_team_search_terms(record),
         ]
-        return any(search in self._normalize_text(candidate) for candidate in haystacks)
+        norm_haystacks = [self._normalize_text(candidate) for candidate in haystacks if candidate]
+        combined = " ".join(norm_haystacks)
+
+        # 1. Multi-token order-independent check: all query tokens appear in combined haystack
+        tokens = norm_search.split()
+        if all(token in combined for token in tokens):
+            return True
+
+        # 2. Fuzzy spelling check (SequenceMatcher ratio >= 0.72)
+        import difflib
+
+        for h in norm_haystacks:
+            for word in h.split():
+                if len(word) >= 3 and len(norm_search) >= 3:
+                    if difflib.SequenceMatcher(None, norm_search, word).ratio() >= 0.72:
+                        return True
+        return False
 
     def _sort_player_records(
         self,
@@ -2566,7 +2586,11 @@ class MarketPlayerQueryService:
     def _normalize_text(self, value: str | None) -> str:
         if value is None:
             return ""
-        return " ".join(value.strip().lower().split())
+        import unicodedata
+
+        decomp = unicodedata.normalize("NFKD", value)
+        unaccented = "".join(c for c in decomp if not unicodedata.combining(c))
+        return " ".join(unaccented.strip().lower().split())
 
     def _string_tuple(self, value: Any) -> tuple[str, ...]:
         if not isinstance(value, (list, tuple)):

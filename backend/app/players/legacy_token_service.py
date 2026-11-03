@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Integer, cast, func, or_, select, text
+from sqlalchemy import Integer, and_, cast, func, or_, select, text
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.event_backbone import defer_event_publish_until_commit
@@ -176,13 +176,60 @@ class PlayerTokenMarketService:
                 Player.id.asc(),
             )
         if normalized_search:
-            search_pattern = f"%{normalized_search}%"
-            filters.append(
-                or_(
-                    Player.full_name.ilike(search_pattern),
-                    Player.canonical_display_name.ilike(search_pattern),
+            tokens = [t.strip().lower() for t in normalized_search.split() if t.strip()]
+            bind = self.session.get_bind()
+            dialect_name = getattr(getattr(bind, "dialect", None), "name", "")
+            if dialect_name == "postgresql":
+                token_conditions = []
+                for t in tokens:
+                    term = f"%{t}%"
+                    token_conditions.append(
+                        or_(
+                            func.unaccent(func.lower(Player.full_name)).ilike(term),
+                            func.unaccent(func.lower(func.coalesce(Player.canonical_display_name, ""))).ilike(term),
+                            func.unaccent(func.lower(func.coalesce(Player.first_name, ""))).ilike(term),
+                            func.unaccent(func.lower(func.coalesce(Player.last_name, ""))).ilike(term),
+                            func.unaccent(func.lower(func.coalesce(Player.real_world_club_name, ""))).ilike(term),
+                            func.unaccent(func.lower(func.coalesce(Country.name, ""))).ilike(term),
+                        )
+                    )
+                fuzzy_condition = or_(
+                    func.word_similarity(normalized_search.lower(), func.unaccent(func.lower(Player.full_name))) > 0.38,
+                    func.word_similarity(
+                        normalized_search.lower(),
+                        func.unaccent(func.lower(func.coalesce(Player.canonical_display_name, ""))),
+                    )
+                    > 0.38,
                 )
-            )
+                filters.append(or_(and_(*token_conditions), fuzzy_condition))
+                if not sort:
+                    relevance_expr = func.greatest(
+                        func.word_similarity(normalized_search.lower(), func.unaccent(func.lower(Player.full_name))),
+                        func.word_similarity(
+                            normalized_search.lower(),
+                            func.unaccent(func.lower(func.coalesce(Player.canonical_display_name, ""))),
+                        ),
+                    )
+                    order_by = (
+                        relevance_expr.desc(),
+                        func.coalesce(Player.governed_gsi, 0).desc(),
+                        PlayerShareMarket.share_price_coin.desc(),
+                        Player.full_name.asc(),
+                        Player.id.asc(),
+                    )
+            else:
+                token_conditions = []
+                for t in tokens:
+                    term = f"%{t}%"
+                    token_conditions.append(
+                        or_(
+                            Player.full_name.ilike(term),
+                            Player.canonical_display_name.ilike(term),
+                            Player.first_name.ilike(term),
+                            Player.last_name.ilike(term),
+                        )
+                    )
+                filters.append(and_(*token_conditions))
         # Only players whose market has already been issued and is active are
         # listable.  This used to also admit players with no market row and
         # lazily create one per listed player, which meant a GET minted markets

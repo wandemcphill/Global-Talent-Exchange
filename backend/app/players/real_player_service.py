@@ -393,20 +393,47 @@ class RealPlayerUniverseQueryService:
         if availability == "free_agent":
             statement = statement.where(self._free_agent_clause())
         if search:
-            term = f"%{search.strip()}%"
-            statement = statement.where(
-                or_(
-                    Player.full_name.ilike(term),
-                    Player.canonical_display_name.ilike(term),
-                    RealPlayerProfile.canonical_name.ilike(term),
-                    cast(RealPlayerProfile.known_aliases_json, String).ilike(term),
-                    func.coalesce(Player.real_player_tier, "").ilike(term),
-                    self._club_expr().ilike(term),
-                    self._league_expr().ilike(term),
-                    self._nationality_expr().ilike(term),
-                    self._position_expr().ilike(term),
+            cleaned = search.strip()
+            tokens = [t.lower() for t in cleaned.split() if t]
+            bind = self.session.get_bind()
+            dialect_name = getattr(getattr(bind, "dialect", None), "name", "")
+            if dialect_name == "postgresql":
+                token_conditions = []
+                for t in tokens:
+                    term = f"%{t}%"
+                    token_conditions.append(
+                        or_(
+                            func.unaccent(func.lower(Player.full_name)).ilike(term),
+                            func.unaccent(func.lower(func.coalesce(Player.canonical_display_name, ""))).ilike(term),
+                            func.unaccent(func.lower(func.coalesce(RealPlayerProfile.canonical_name, ""))).ilike(term),
+                            func.unaccent(func.lower(cast(RealPlayerProfile.known_aliases_json, String))).ilike(term),
+                            func.unaccent(func.lower(func.coalesce(Player.first_name, ""))).ilike(term),
+                            func.unaccent(func.lower(func.coalesce(Player.last_name, ""))).ilike(term),
+                            func.unaccent(func.lower(func.coalesce(self._club_expr(), ""))).ilike(term),
+                            func.unaccent(func.lower(func.coalesce(self._nationality_expr(), ""))).ilike(term),
+                        )
+                    )
+                fuzzy_condition = or_(
+                    func.word_similarity(cleaned.lower(), func.unaccent(func.lower(Player.full_name))) > 0.38,
+                    func.word_similarity(
+                        cleaned.lower(), func.unaccent(func.lower(func.coalesce(Player.canonical_display_name, "")))
+                    )
+                    > 0.38,
                 )
-            )
+                statement = statement.where(or_(and_(*token_conditions), fuzzy_condition))
+            else:
+                token_conditions = []
+                for t in tokens:
+                    term = f"%{t}%"
+                    token_conditions.append(
+                        or_(
+                            Player.full_name.ilike(term),
+                            Player.canonical_display_name.ilike(term),
+                            RealPlayerProfile.canonical_name.ilike(term),
+                            cast(RealPlayerProfile.known_aliases_json, String).ilike(term),
+                        )
+                    )
+                statement = statement.where(and_(*token_conditions))
         return statement
 
     def _apply_match_prefilters(
