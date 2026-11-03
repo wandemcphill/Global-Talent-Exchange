@@ -15,6 +15,7 @@ from app.market.lifecycle_status import resolve_player_lifecycle_status
 from app.models.real_player_profile import RealPlayerProfile
 from app.models.real_player_source_link import RealPlayerSourceLink
 from app.players.read_models import PlayerSummaryReadModel
+from app.players.gsi_service import resolve_player_gsi
 from app.players.real_player_schemas import RealPlayerMatchRequest
 from app.players.real_player_read_models import (
     RealPlayerUniverseDetail,
@@ -46,6 +47,7 @@ ARCHIVED_DUPLICATE_PLAYER_IDS = frozenset(
         "64b8ed47-c422-4b03-a0f6-c8bfef31aa35",  # Kylian Mbappé duplicate
         "42e150d2-dafe-4fd4-8c96-6bf0844893a6",  # Vinicius Junior duplicate
         "0ce1de07-ad08-43da-b34b-875e3ce600fb",  # Jude Bellingham duplicate
+        "63ce3e82-7695-40ea-89ee-908126c0c038",  # Michael Olise duplicate
     }
 )
 REAL_PLAYER_POSITION_SEARCH_TERMS: dict[str, frozenset[str]] = {
@@ -744,6 +746,13 @@ class RealPlayerUniverseQueryService:
 
         profile_signals = dict(profile.normalized_signals_json or {}) if profile is not None else {}
         raw_signals = football_attributes if football_attributes else profile_signals
+        is_legend = (
+            str(player.real_player_tier or "").strip().lower() == "legend"
+            or str(player.source_provider or "").strip().lower() in ("gtex_legend", "gtex_legend_prime")
+            or player.legendary_profile_id is not None
+        )
+        cur_gsi, pot_gsi = resolve_player_gsi(player)
+        detail_potential = None if is_legend else (player.potential or pot_gsi)
         return RealPlayerUniverseDetail(
             player_id=player.id,
             player_name=player.full_name,
@@ -822,6 +831,9 @@ class RealPlayerUniverseQueryService:
             metadata_json=dict((profile.metadata_json if profile is not None else None) or dna),
             summary_json=self._summary_payload(summary),
             updated_at=profile.updated_at if profile is not None else player.updated_at,
+            governed_gsi=cur_gsi,
+            potential=detail_potential,
+            attributes=football_attributes,
         )
 
     def _build_match_candidate_snapshot(

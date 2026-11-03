@@ -116,6 +116,8 @@ class RealPlayerUniverseDetailView(BaseModel):
     metadata_json: dict[str, Any] = Field(default_factory=dict)
     summary_json: dict[str, Any] = Field(default_factory=dict)
     updated_at: datetime
+    governed_gsi: int | None = None
+    potential: int | None = None
     attributes: dict[str, Any] = Field(default_factory=dict)
 
 

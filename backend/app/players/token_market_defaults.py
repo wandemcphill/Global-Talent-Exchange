@@ -72,6 +72,10 @@ def resolve_player_share_market_config(
         "db0bf799-9b9b-4084-be0a-8d3cff413a15",  # Joshua Kimmich
         "5f79b913-9e1f-4735-93b0-b3ce2c4d9577",  # Rodri
         "0fb47397-8e40-4f65-ad37-fd0760515e03",  # Thibaut Courtois
+        "729dc5c1-fc66-4b4a-933b-b69785cebaf1",  # Kylian Mbappé (keeper)
+        "5456d831-66d3-40f1-8dc6-89ea195eac73",  # Lamine Yamal (keeper)
+        "7adffe47-8001-41da-beda-af3b89c8527f",  # Michael Olise (keeper)
+        "379bb246-c951-44e8-8584-fd8dbe1e4cc1",  # Ousmane Dembélé (keeper)
     } or player_name in {
         "harry kane",
         "kylian mbappé",
@@ -105,6 +109,11 @@ def resolve_player_share_market_config(
         "jamal musiala",
         "lamine yamal",
         "cole palmer",
+        "michael olise",
+        "m. olise",
+        "ousmane dembélé",
+        "ousmane dembele",
+        "o. dembele",
     }
 
     if is_active_superstar:

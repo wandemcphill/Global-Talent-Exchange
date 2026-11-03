@@ -104,3 +104,39 @@ def test_archived_duplicates_list():
     assert "62930b4f-ce7b-43c9-a6b7-17abd26125a4" in ARCHIVED_DUPLICATE_PLAYER_IDS  # Paul Onuachu duplicate
     assert "8f4f3204-985e-4244-ad1b-a820eaada964" in ARCHIVED_DUPLICATE_PLAYER_IDS  # Aaron Wan-Bissaka duplicate
     assert "db0bf799-9b9b-4084-be0a-8d3cff413a15" in ARCHIVED_DUPLICATE_PLAYER_IDS  # Joshua Kimmich duplicate
+    assert "63ce3e82-7695-40ea-89ee-908126c0c038" in ARCHIVED_DUPLICATE_PLAYER_IDS  # Michael Olise duplicate
+
+
+def test_superstar_ratings_and_potential_calibrations():
+    """Verify calibrated ratings and potential ceilings for key superstars."""
+    assert CANONICAL_GSI_OVERRIDES["victor osimhen"] == (90, 91)
+    assert CANONICAL_GSI_OVERRIDES["michael olise"] == (90, 93)
+    assert CANONICAL_GSI_OVERRIDES["m. olise"] == (90, 93)
+    assert CANONICAL_GSI_OVERRIDES["kylian mbappe"] == (93, 95)
+    assert CANONICAL_GSI_OVERRIDES["kylian mbappé"] == (93, 95)
+    assert CANONICAL_GSI_OVERRIDES["lamine yamal"] == (91, 96)
+    assert CANONICAL_GSI_OVERRIDES["yamal"] == (91, 96)
+    assert CANONICAL_GSI_OVERRIDES["ousmane dembele"] == (91, 92)
+    assert CANONICAL_GSI_OVERRIDES["ousmane dembélé"] == (91, 92)
+    assert CANONICAL_GSI_OVERRIDES["sunday oliseh"] == (87, 87)
+
+
+def test_active_superstars_include_olise_yamal_dembele():
+    """Verify Olise, Yamal, and Dembele resolve to 200 shares as active players."""
+    for name, pid in [
+        ("Michael Olise", "7adffe47-8001-41da-beda-af3b89c8527f"),
+        ("Lamine Yamal", "5456d831-66d3-40f1-8dc6-89ea195eac73"),
+        ("Ousmane Dembélé", "379bb246-c951-44e8-8584-fd8dbe1e4cc1"),
+        ("Kylian Mbappé", "729dc5c1-fc66-4b4a-933b-b69785cebaf1"),
+    ]:
+        mock_player = MagicMock()
+        mock_player.id = pid
+        mock_player.full_name = name
+        mock_player.name = name
+        mock_player.real_player_tier = "marquee"
+        mock_player.source_provider = "fm23_genie_scout"
+        mock_player.is_real_player = True
+        mock_player.legendary_profile_id = None
+
+        cfg = resolve_player_share_market_config(mock_player, total_shares=200)
+        assert cfg.total_shares == 200, f"Expected 200 shares for {name}, got {cfg.total_shares}"

@@ -315,12 +315,15 @@ CANONICAL_GSI_OVERRIDES: dict[str, tuple[int, int]] = {
     "kingsley coman": (84, 84),
     "kobbie mainoo": (81, 91),
     "konstantinos karetsas": (76, 88),
-    "kylian mbappe": (91, 94),
-    "kylian mbappé": (91, 94),
+    "kylian mbappe": (93, 95),
+    "kylian mbappé": (93, 95),
     "laciné megnan": (73, 87),
     "lautaro martinez": (89, 90),
     "lautaro martínez": (89, 90),
     "lazola maku": (73, 84),
+    "lamine yamal": (91, 96),
+    "lamine yamal nasraoui ebana": (91, 96),
+    "yamal": (91, 96),
     "lennart karl": (78, 91),
     "leny yoro": (81, 90),
     "leo shahar": (71, 82),
@@ -390,6 +393,8 @@ CANONICAL_GSI_OVERRIDES: dict[str, tuple[int, int]] = {
     "mesut özil": (90, 90),
     "mezian mesloub": (71, 85),
     "michael laudrup": (90, 90),
+    "michael olise": (90, 93),
+    "m. olise": (90, 93),
     "michael owen": (93, 93),
     "michal zuk": (73, 87),
     "miguel agámez": (69, 83),
@@ -431,8 +436,10 @@ CANONICAL_GSI_OVERRIDES: dict[str, tuple[int, int]] = {
     "oliver månsson": (69, 83),
     "omar abdelrahim": (71, 85),
     "orian goren": (71, 85),
-    "ousmane dembele": (86, 87),
-    "ousmane dembélé": (86, 87),
+    "ousmane dembele": (91, 92),
+    "ousmane dembélé": (91, 92),
+    "o. dembele": (91, 92),
+    "o. dembélé": (91, 92),
     "owen emeka": (69, 83),
     "paolo maldini": (96, 96),
     "patrick vieira": (92, 92),
@@ -551,7 +558,7 @@ CANONICAL_GSI_OVERRIDES: dict[str, tuple[int, int]] = {
     "vakhtang salia": (73, 84),
     "victor bastianele": (69, 83),
     "victor ikpeba": (88, 88),
-    "victor osimhen": (87, 89),
+    "victor osimhen": (90, 91),
     "victory okorie": (69, 83),
     "viktor bjarki daðason": (73, 84),
     "vincent joseph": (69, 83),
@@ -592,6 +599,12 @@ CANONICAL_GSI_OVERRIDES: dict[str, tuple[int, int]] = {
 
 # External provider IDs mapped to governed (current_gsi, potential_gsi)
 PROVIDER_ID_GSI_OVERRIDES: dict[str, tuple[int, int]] = {
+    "2876": (87, 87),  # Sunday Oliseh
+    "13158205": (90, 91),  # Victor Osimhen
+    "29221846": (90, 93),  # Michael Olise
+    "85139014": (93, 95),  # Kylian Mbappé
+    "2002042927": (91, 96),  # Lamine Yamal
+    "85140178": (91, 92),  # Ousmane Dembélé
     "12096621": (69, 83),
     "1421433": (74, 89),
     "2000077193": (82, 90),
