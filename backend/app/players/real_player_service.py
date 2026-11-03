@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import Integer, String, and_, case, cast, func, literal, or_, select
+from sqlalchemy import Integer, String, and_, case, cast, distinct, func, literal, or_, select
 from sqlalchemy.orm import Session
 
 from app.ingestion.models import Country, Player
@@ -171,8 +171,21 @@ class RealPlayerUniverseQueryService:
             availability=normalized_availability,
             search=search,
         )
-        total = int(self.session.scalar(select(func.count()).select_from(base_statement.subquery())) or 0)
-        statement = base_statement.order_by(*self._order_by(sort=sort)).offset(effective_offset).limit(limit)
+        total = self._count_players(
+            position=position,
+            nationality=normalized_country,
+            club=club,
+            tier=normalized_tier,
+            min_age=min_age,
+            max_age=max_age,
+            min_value=min_value,
+            max_value=max_value,
+            availability=normalized_availability,
+            search=search,
+        )
+        statement = (
+            base_statement.order_by(*self._order_by(sort=sort, search=search)).offset(effective_offset).limit(limit)
+        )
         rows = self.session.execute(statement).all()
         items = tuple(self._build_list_item(*row) for row in rows)
         next_offset = effective_offset + len(items)
@@ -284,6 +297,17 @@ class RealPlayerUniverseQueryService:
         return list(self.session.execute(statement).all())
 
     def _base_statement(self):
+        bind = self.session.get_bind()
+        dialect_name = getattr(getattr(bind, "dialect", None), "name", "")
+        if dialect_name == "postgresql":
+            return (
+                select(Player, RealPlayerProfile, RealPlayerSourceLink, Country, PlayerSummaryReadModel)
+                .outerjoin(RealPlayerProfile, RealPlayerProfile.gtex_player_id == Player.id)
+                .outerjoin(RealPlayerSourceLink, RealPlayerSourceLink.id == RealPlayerProfile.source_link_id)
+                .outerjoin(Country, Country.id == Player.country_id)
+                .outerjoin(PlayerSummaryReadModel, PlayerSummaryReadModel.player_id == Player.id)
+                .where(Player.is_real_player.is_(True), Player.is_tradable.is_(True))
+            )
         selected_profiles = self._selected_profiles_subquery()
         return (
             select(Player, RealPlayerProfile, RealPlayerSourceLink, Country, PlayerSummaryReadModel)
@@ -316,6 +340,92 @@ class RealPlayerUniverseQueryService:
             .where(ranked_profiles.c.profile_rank == 1)
             .subquery()
         )
+
+    def _count_players(
+        self,
+        *,
+        position: str | None,
+        nationality: str | None,
+        club: str | None,
+        tier: str | None,
+        min_age: int | None,
+        max_age: int | None,
+        min_value: float | None,
+        max_value: float | None,
+        availability: str | None,
+        search: str | None,
+    ) -> int:
+        needs_profile = bool(position or club)
+        needs_country = bool(nationality)
+        needs_summary = bool(min_value is not None or max_value is not None)
+
+        if not (needs_profile or needs_country or needs_summary or availability == "free_agent"):
+            stmt = select(func.count(Player.id)).where(Player.is_real_player.is_(True), Player.is_tradable.is_(True))
+            if tier:
+                tier_norm = tier.strip().lower()
+                if tier_norm in {"legend", "legends", "legendary", "icon"}:
+                    stmt = stmt.where(
+                        or_(
+                            func.lower(func.coalesce(Player.real_player_tier, "")) == "legend",
+                            Player.source_provider == "gtex_legend_prime",
+                        )
+                    )
+                elif tier_norm in {"wonderkid", "wonderkids"}:
+                    stmt = stmt.where(func.lower(func.coalesce(Player.real_player_tier, "")) == "wonderkid")
+                elif tier_norm in {"marquee", "elite", "stars"}:
+                    stmt = stmt.where(
+                        func.lower(func.coalesce(Player.real_player_tier, "")).in_(("marquee", "featured", "elite"))
+                    )
+                else:
+                    stmt = stmt.where(func.lower(func.coalesce(Player.real_player_tier, "")) == tier_norm)
+            if min_age is not None:
+                stmt = stmt.where(self._age_expr() >= min_age)
+            if max_age is not None:
+                stmt = stmt.where(self._age_expr() <= max_age)
+            if search:
+                cleaned = search.strip()
+                tokens = [t.lower() for t in cleaned.split() if t]
+                bind = self.session.get_bind()
+                dialect_name = getattr(getattr(bind, "dialect", None), "name", "")
+                if dialect_name == "postgresql":
+                    token_conditions = []
+                    for t in tokens:
+                        term = f"%{t}%"
+                        token_conditions.append(
+                            or_(
+                                func.f_unaccent(Player.full_name).ilike(term),
+                                func.f_unaccent(Player.canonical_display_name).ilike(term),
+                            )
+                        )
+                    stmt = stmt.where(and_(*token_conditions))
+                else:
+                    token_conditions = []
+                    for t in tokens:
+                        term = f"%{t}%"
+                        token_conditions.append(
+                            or_(
+                                Player.full_name.ilike(term),
+                                Player.canonical_display_name.ilike(term),
+                            )
+                        )
+                    stmt = stmt.where(and_(*token_conditions))
+            return int(self.session.scalar(stmt) or 0)
+
+        # Fallback for queries with profile/country/summary join requirements
+        filtered_stmt = self._apply_filters(
+            position=position,
+            nationality=nationality,
+            club=club,
+            tier=tier,
+            min_age=min_age,
+            max_age=max_age,
+            min_value=min_value,
+            max_value=max_value,
+            availability=availability,
+            search=search,
+        )
+        subq = filtered_stmt.subquery()
+        return int(self.session.scalar(select(func.count(distinct(subq.c.id)))) or 0)
 
     def _apply_filters(
         self,
@@ -403,24 +513,11 @@ class RealPlayerUniverseQueryService:
                     term = f"%{t}%"
                     token_conditions.append(
                         or_(
-                            func.unaccent(func.lower(Player.full_name)).ilike(term),
-                            func.unaccent(func.lower(func.coalesce(Player.canonical_display_name, ""))).ilike(term),
-                            func.unaccent(func.lower(func.coalesce(RealPlayerProfile.canonical_name, ""))).ilike(term),
-                            func.unaccent(func.lower(cast(RealPlayerProfile.known_aliases_json, String))).ilike(term),
-                            func.unaccent(func.lower(func.coalesce(Player.first_name, ""))).ilike(term),
-                            func.unaccent(func.lower(func.coalesce(Player.last_name, ""))).ilike(term),
-                            func.unaccent(func.lower(func.coalesce(self._club_expr(), ""))).ilike(term),
-                            func.unaccent(func.lower(func.coalesce(self._nationality_expr(), ""))).ilike(term),
+                            func.f_unaccent(Player.full_name).ilike(term),
+                            func.f_unaccent(Player.canonical_display_name).ilike(term),
                         )
                     )
-                fuzzy_condition = or_(
-                    func.word_similarity(cleaned.lower(), func.unaccent(func.lower(Player.full_name))) > 0.38,
-                    func.word_similarity(
-                        cleaned.lower(), func.unaccent(func.lower(func.coalesce(Player.canonical_display_name, "")))
-                    )
-                    > 0.38,
-                )
-                statement = statement.where(or_(and_(*token_conditions), fuzzy_condition))
+                statement = statement.where(and_(*token_conditions))
             else:
                 token_conditions = []
                 for t in tokens:
@@ -455,8 +552,49 @@ class RealPlayerUniverseQueryService:
             statement = statement.where(self._experience_years_expr() <= payload.brief.experience_years.max)
         return statement
 
-    def _order_by(self, *, sort: str):
+    def _order_by(self, *, sort: str, search: str | None = None):
         name_expr = func.lower(Player.full_name)
+        if search and search.strip():
+            cleaned = search.strip()
+            prefix = f"{cleaned}%"
+            bind = self.session.get_bind()
+            dialect_name = getattr(getattr(bind, "dialect", None), "name", "")
+            if dialect_name == "postgresql":
+                relevance = case(
+                    (func.lower(func.f_unaccent(Player.full_name)) == func.lower(func.f_unaccent(cleaned)), 1),
+                    (
+                        func.lower(func.f_unaccent(func.coalesce(Player.canonical_display_name, "")))
+                        == func.lower(func.f_unaccent(cleaned)),
+                        1,
+                    ),
+                    (func.f_unaccent(Player.full_name).ilike(f"{cleaned} %"), 2),
+                    (func.f_unaccent(Player.full_name).ilike(f"% {cleaned}"), 2),
+                    (func.f_unaccent(Player.full_name).ilike(f"% {cleaned} %"), 2),
+                    (func.f_unaccent(func.coalesce(Player.canonical_display_name, "")).ilike(f"{cleaned} %"), 2),
+                    (func.f_unaccent(func.coalesce(Player.canonical_display_name, "")).ilike(f"% {cleaned}"), 2),
+                    (func.f_unaccent(func.coalesce(Player.canonical_display_name, "")).ilike(f"% {cleaned} %"), 2),
+                    (func.f_unaccent(Player.full_name).ilike(prefix), 3),
+                    (func.f_unaccent(func.coalesce(Player.canonical_display_name, "")).ilike(prefix), 3),
+                    else_=4,
+                )
+            else:
+                relevance = case(
+                    (func.lower(Player.full_name) == cleaned.lower(), 1),
+                    (func.lower(func.coalesce(Player.canonical_display_name, "")) == cleaned.lower(), 1),
+                    (Player.full_name.ilike(f"{cleaned} %"), 2),
+                    (Player.full_name.ilike(f"% {cleaned}"), 2),
+                    (Player.full_name.ilike(f"% {cleaned} %"), 2),
+                    (Player.full_name.ilike(prefix), 3),
+                    else_=4,
+                )
+            return (
+                relevance.asc(),
+                func.coalesce(Player.governed_gsi, 0).desc(),
+                self._current_value_expr().is_(None),
+                self._current_value_expr().desc(),
+                name_expr.asc(),
+                Player.id.asc(),
+            )
         if sort == "current_value":
             current_value_expr = self._current_value_expr()
             return (

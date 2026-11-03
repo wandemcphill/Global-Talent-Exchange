@@ -965,7 +965,21 @@ def resolve_player_gsi(
         if pot_gsi is None and getattr(leg, "governed_potential_gsi", None) is not None:
             pot_gsi = int(getattr(leg, "governed_potential_gsi"))
 
-    # 3. Canonical and Provider ID overrides
+    # 3. Market metadata (current_gsi / governed_gsi)
+    if market is not None and hasattr(market, "metadata_json") and isinstance(market.metadata_json, dict):
+        m_meta = market.metadata_json
+        if cur_gsi is None:
+            if m_meta.get("governed_gsi"):
+                cur_gsi = int(m_meta["governed_gsi"])
+            elif m_meta.get("current_gsi"):
+                cur_gsi = int(m_meta["current_gsi"])
+        if pot_gsi is None:
+            if m_meta.get("governed_potential_gsi"):
+                pot_gsi = int(m_meta["governed_potential_gsi"])
+            elif m_meta.get("potential_gsi"):
+                pot_gsi = int(m_meta["potential_gsi"])
+
+    # 4. Canonical and Provider ID overrides
     name = (
         (
             getattr(player, "canonical_display_name", None)
@@ -993,21 +1007,11 @@ def resolve_player_gsi(
         if pot_gsi is None:
             pot_gsi = o_pot
 
-    # 4. Market metadata
+    # 5. Legacy market metadata 'gsi' fallback
     if market is not None and hasattr(market, "metadata_json") and isinstance(market.metadata_json, dict):
         m_meta = market.metadata_json
-        if cur_gsi is None:
-            if m_meta.get("governed_gsi"):
-                cur_gsi = int(m_meta["governed_gsi"])
-            elif m_meta.get("current_gsi"):
-                cur_gsi = int(m_meta["current_gsi"])
-            elif m_meta.get("gsi"):
-                cur_gsi = int(m_meta["gsi"])
-        if pot_gsi is None:
-            if m_meta.get("governed_potential_gsi"):
-                pot_gsi = int(m_meta["governed_potential_gsi"])
-            elif m_meta.get("potential_gsi"):
-                pot_gsi = int(m_meta["potential_gsi"])
+        if cur_gsi is None and m_meta.get("gsi"):
+            cur_gsi = int(m_meta["gsi"])
 
     # 5. DNA profile inspection
     dna = (
