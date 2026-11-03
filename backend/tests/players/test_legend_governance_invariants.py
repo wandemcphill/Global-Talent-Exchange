@@ -1,5 +1,4 @@
 from unittest.mock import MagicMock
-from decimal import Decimal
 
 from app.players.gsi_service import resolve_player_gsi, CANONICAL_GSI_OVERRIDES
 from app.players.token_market_defaults import resolve_player_share_market_config
@@ -8,13 +7,16 @@ from app.players.real_player_service import ARCHIVED_DUPLICATE_PLAYER_IDS
 
 def test_top_four_pantheon_at_98_only():
     """Strict invariant: ONLY Pelé, Maradona, Cristiano Ronaldo, and Lionel Messi can have 98."""
-    ninety_eights = [
-        name for name, (cur, _) in CANONICAL_GSI_OVERRIDES.items() if cur == 98
-    ]
+    ninety_eights = [name for name, (cur, _) in CANONICAL_GSI_OVERRIDES.items() if cur == 98]
     allowed_names = {
-        "pelé", "pele", "edson arantes do nascimento", "edson arantes do nascimento (pelé)",
-        "diego maradona", "diego armando maradona",
-        "cristiano ronaldo", "lionel messi",
+        "pelé",
+        "pele",
+        "edson arantes do nascimento",
+        "edson arantes do nascimento (pelé)",
+        "diego maradona",
+        "diego armando maradona",
+        "cristiano ronaldo",
+        "lionel messi",
     }
     for name in ninety_eights:
         assert name in allowed_names, f"Unexpected 98 rating for {name}"

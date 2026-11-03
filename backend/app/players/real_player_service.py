@@ -31,12 +31,14 @@ REAL_PLAYER_MATCH_SCORE_KEYS = ("position", "age", "country", "height", "foot", 
 REAL_PLAYER_HEALTHY_INJURY_STATUSES = frozenset({"", "available", "fit", "healthy", "cleared", "match_fit"})
 REAL_PLAYER_TIER_1_LEVELS = frozenset({"tier1", "elite", "featured", "premier", "top-flight", "top_flight"})
 REAL_PLAYER_TIER_2_LEVELS = frozenset({"tier2", "core", "open_market", "open market", "development"})
-ARCHIVED_DUPLICATE_PLAYER_IDS = frozenset({
-    "106bbc0a-a8b3-408e-b856-a4dad15799fd",  # Eric Cantona duplicate (wrong image 2002042479)
-    "55f70b9b-dae9-4a55-8721-ccf9bdaa0154",  # Andres Iniesta duplicate
-    "0704b985-6e51-49fc-bf74-45820da69183",  # Luis Figo duplicate
-    "862d907b-917a-4508-a19d-da3481ae778d",  # Emerson duplicate
-})
+ARCHIVED_DUPLICATE_PLAYER_IDS = frozenset(
+    {
+        "106bbc0a-a8b3-408e-b856-a4dad15799fd",  # Eric Cantona duplicate (wrong image 2002042479)
+        "55f70b9b-dae9-4a55-8721-ccf9bdaa0154",  # Andres Iniesta duplicate
+        "0704b985-6e51-49fc-bf74-45820da69183",  # Luis Figo duplicate
+        "862d907b-917a-4508-a19d-da3481ae778d",  # Emerson duplicate
+    }
+)
 REAL_PLAYER_POSITION_SEARCH_TERMS: dict[str, frozenset[str]] = {
     "GK": frozenset({"gk", "goalkeeper"}),
     "CB": frozenset({"cb", "centre-back", "center-back", "central defender"}),

@@ -51,27 +51,24 @@ def resolve_player_share_market_config(
     player_name = str(getattr(player, "full_name", "") or getattr(player, "name", "") or "").strip().lower()
 
     # Active superstars (e.g. Kane, Mbappé, Bellingham, Vinícius, Rodri) are NOT 1-of-1
-    is_active_superstar = (
-        player_id in {
-            "50235403-679f-48c8-88a0-7614e76ccc0e",
-            "0b429e4e-3588-4e05-aed4-70015f211585",
-            "64b8ed47-c422-4b03-a0f6-c8bfef31aa35",
-            "42e150d2-dafe-4fd4-8c96-6bf0844893a6",
-            "574f0bc7-7878-40b3-ac11-627d7071e344",
-            "5f79b913-9e1f-4735-93b0-b3ce2c4d9577",
-            "0fb47397-8e40-4f65-ad37-fd0760515e03",
-        }
-        or player_name in {
-            "harry kane",
-            "kylian mbappé",
-            "kylian mbappe",
-            "vinícius júnior",
-            "vinicius junior",
-            "jude bellingham",
-            "rodri",
-            "thibaut courtois",
-        }
-    )
+    is_active_superstar = player_id in {
+        "50235403-679f-48c8-88a0-7614e76ccc0e",
+        "0b429e4e-3588-4e05-aed4-70015f211585",
+        "64b8ed47-c422-4b03-a0f6-c8bfef31aa35",
+        "42e150d2-dafe-4fd4-8c96-6bf0844893a6",
+        "574f0bc7-7878-40b3-ac11-627d7071e344",
+        "5f79b913-9e1f-4735-93b0-b3ce2c4d9577",
+        "0fb47397-8e40-4f65-ad37-fd0760515e03",
+    } or player_name in {
+        "harry kane",
+        "kylian mbappé",
+        "kylian mbappe",
+        "vinícius júnior",
+        "vinicius junior",
+        "jude bellingham",
+        "rodri",
+        "thibaut courtois",
+    }
 
     if is_active_superstar:
         is_one_of_one = False
@@ -82,7 +79,9 @@ def resolve_player_share_market_config(
             or source_provider in {"gtex_legend", "gtex_legend_prime"}
             or player_tier in {"legend", "legendary", "icon", "immortal", "world_class", "hero"}
         )
-    normalized_total_shares = 1 if is_one_of_one else (200 if is_active_superstar else min(600, int(total_shares or DEFAULT_TOTAL_SHARES)))
+    normalized_total_shares = (
+        1 if is_one_of_one else (200 if is_active_superstar else min(600, int(total_shares or DEFAULT_TOTAL_SHARES)))
+    )
     normalized_share_price = _resolve_share_price_coin(
         player, explicit_value=share_price_coin, total_shares=normalized_total_shares
     )
