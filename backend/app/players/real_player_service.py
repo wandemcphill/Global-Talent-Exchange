@@ -31,6 +31,12 @@ REAL_PLAYER_MATCH_SCORE_KEYS = ("position", "age", "country", "height", "foot", 
 REAL_PLAYER_HEALTHY_INJURY_STATUSES = frozenset({"", "available", "fit", "healthy", "cleared", "match_fit"})
 REAL_PLAYER_TIER_1_LEVELS = frozenset({"tier1", "elite", "featured", "premier", "top-flight", "top_flight"})
 REAL_PLAYER_TIER_2_LEVELS = frozenset({"tier2", "core", "open_market", "open market", "development"})
+ARCHIVED_DUPLICATE_PLAYER_IDS = frozenset({
+    "106bbc0a-a8b3-408e-b856-a4dad15799fd",  # Eric Cantona duplicate (wrong image 2002042479)
+    "55f70b9b-dae9-4a55-8721-ccf9bdaa0154",  # Andres Iniesta duplicate
+    "0704b985-6e51-49fc-bf74-45820da69183",  # Luis Figo duplicate
+    "862d907b-917a-4508-a19d-da3481ae778d",  # Emerson duplicate
+})
 REAL_PLAYER_POSITION_SEARCH_TERMS: dict[str, frozenset[str]] = {
     "GK": frozenset({"gk", "goalkeeper"}),
     "CB": frozenset({"cb", "centre-back", "center-back", "central defender"}),
@@ -299,6 +305,12 @@ class RealPlayerUniverseQueryService:
     def _base_statement(self):
         bind = self.session.get_bind()
         dialect_name = getattr(getattr(bind, "dialect", None), "name", "")
+        base_filter = and_(
+            Player.is_real_player.is_(True),
+            Player.is_tradable.is_(True),
+            Player.real_player_tier.notin_(["archived_duplicate", "retired"]),
+            Player.id.notin_(ARCHIVED_DUPLICATE_PLAYER_IDS),
+        )
         if dialect_name == "postgresql":
             return (
                 select(Player, RealPlayerProfile, RealPlayerSourceLink, Country, PlayerSummaryReadModel)
@@ -306,7 +318,7 @@ class RealPlayerUniverseQueryService:
                 .outerjoin(RealPlayerSourceLink, RealPlayerSourceLink.id == RealPlayerProfile.source_link_id)
                 .outerjoin(Country, Country.id == Player.country_id)
                 .outerjoin(PlayerSummaryReadModel, PlayerSummaryReadModel.player_id == Player.id)
-                .where(Player.is_real_player.is_(True), Player.is_tradable.is_(True))
+                .where(base_filter)
             )
         selected_profiles = self._selected_profiles_subquery()
         return (
@@ -316,7 +328,7 @@ class RealPlayerUniverseQueryService:
             .outerjoin(RealPlayerSourceLink, RealPlayerSourceLink.id == RealPlayerProfile.source_link_id)
             .outerjoin(Country, Country.id == Player.country_id)
             .outerjoin(PlayerSummaryReadModel, PlayerSummaryReadModel.player_id == Player.id)
-            .where(Player.is_real_player.is_(True), Player.is_tradable.is_(True))
+            .where(base_filter)
         )
 
     def _selected_profiles_subquery(self):
@@ -360,7 +372,12 @@ class RealPlayerUniverseQueryService:
         needs_summary = bool(min_value is not None or max_value is not None)
 
         if not (needs_profile or needs_country or needs_summary or availability == "free_agent"):
-            stmt = select(func.count(Player.id)).where(Player.is_real_player.is_(True), Player.is_tradable.is_(True))
+            stmt = select(func.count(Player.id)).where(
+                Player.is_real_player.is_(True),
+                Player.is_tradable.is_(True),
+                Player.real_player_tier.notin_(["archived_duplicate", "retired"]),
+                Player.id.notin_(ARCHIVED_DUPLICATE_PLAYER_IDS),
+            )
             if tier:
                 tier_norm = tier.strip().lower()
                 if tier_norm in {"legend", "legends", "legendary", "icon"}:

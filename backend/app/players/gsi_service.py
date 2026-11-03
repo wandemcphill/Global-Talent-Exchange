@@ -14,6 +14,127 @@ logger = logging.getLogger(__name__)
 
 # Calibrated benchmarks and user-governed overrides by lowercase canonical name
 CANONICAL_GSI_OVERRIDES: dict[str, tuple[int, int]] = {
+    # 98 Pantheon (STRICTLY ONLY 4 PLAYERS)
+    "pelé": (98, 98),
+    "pele": (98, 98),
+    "edson arantes do nascimento": (98, 98),
+    "diego maradona": (98, 98),
+    "diego armando maradona": (98, 98),
+    "cristiano ronaldo": (98, 98),
+    "lionel messi": (98, 98),
+
+    # 96 Pantheon Tier 2
+    "ronaldo": (96, 96),
+    "ronaldo nazário": (96, 96),
+    "ronaldo nazario": (96, 96),
+    "zinedine zidane": (96, 96),
+    "ronaldinho": (96, 96),
+    "marco van basten": (96, 96),
+    "alfredo di stéfano": (96, 96),
+    "alfredo di stefano": (96, 96),
+    "paolo maldini": (96, 96),
+
+    # 95 Ballon d'Or winners & icons
+    "fabio cannavaro": (95, 95),
+    "pavel nedvěd": (95, 95),
+    "pavel nedved": (95, 95),
+    "andrés iniesta": (95, 95),
+    "andres iniesta": (95, 95),
+    "kaká": (95, 95),
+    "kaka": (95, 95),
+    "luka modrić": (95, 95),
+    "luka modric": (95, 95),
+    "roberto baggio": (95, 95),
+    "george weah": (95, 95),
+    "lothar matthäus": (95, 95),
+    "lothar matthaus": (95, 95),
+    "rivaldo": (95, 95),
+    "romário": (95, 95),
+    "romario": (95, 95),
+
+    # 94s
+    "xavi": (94, 94),
+    "xavi hernández": (94, 94),
+    "thierry henry": (94, 94),
+    "luís figo": (94, 94),
+    "luis figo": (94, 94),
+    "andriy shevchenko": (94, 94),
+    "hristo stoichkov": (94, 94),
+    "ruud gullit": (94, 94),
+    "matthias sammer": (94, 94),
+    "franco baresi": (94, 94),
+    "paul scholes": (94, 94),
+    "zico": (94, 94),
+
+    # 93s
+    "roberto carlos": (93, 93),
+    "samuel eto'o": (93, 93),
+    "dennis bergkamp": (93, 93),
+    "gianluigi buffon": (93, 93),
+    "oliver kahn": (93, 93),
+    "iker casillas": (93, 93),
+    "andrea pirlo": (93, 93),
+    "éric cantona": (93, 93),
+    "eric cantona": (93, 93),
+    "michael owen": (93, 93),
+    "kenny dalglish": (93, 93),
+    "wesley sneijder": (93, 93),
+
+    # 92s
+    "arjen robben": (92, 92),
+    "francesco totti": (92, 92),
+    "franck ribéry": (92, 92),
+    "alessandro del piero": (92, 92),
+    "wayne rooney": (92, 92),
+    "steven gerrard": (92, 92),
+    "alessandro nesta": (92, 92),
+    "cafu": (92, 92),
+    "petr čech": (92, 92),
+    "peter schmeichel": (92, 92),
+    "patrick vieira": (92, 92),
+    "luis suárez": (92, 92),
+    "sergio agüero": (92, 92),
+    "raúl": (92, 92),
+
+    # 91s
+    "nemanja vidić": (91, 91),
+    "nemanja vidic": (91, 91),
+    "david beckham": (91, 91),
+    "ángel di maría": (91, 91),
+    "angel di maria": (91, 91),
+    "frank lampard": (91, 91),
+    "deco": (91, 91),
+    "didier drogba": (91, 91),
+    "ruud van nistelrooy": (91, 91),
+    "carles puyol": (91, 91),
+    "javier zanetti": (91, 91),
+    "clarence seedorf": (91, 91),
+    "david silva": (91, 91),
+
+    # 90s
+    "cesc fàbregas": (90, 90),
+    "cesc fabregas": (90, 90),
+    "mesut özil": (90, 90),
+    "mesut ozil": (90, 90),
+    "fernando torres": (90, 90),
+
+    # Nigerian stars
+    "jay-jay okocha": (89, 89),
+    "nwankwo kanu": (89, 89),
+    "rashidi yekini": (89, 89),
+    "emmanuel amuneke": (88, 88),
+    "peter rufai": (88, 88),
+    "stephen keshi": (88, 88),
+    "victor ikpeba": (88, 88),
+    "obafemi martins": (88, 88),
+    "finidi george": (88, 88),
+    "daniel amokachi": (87, 87),
+    "augustine eguavoen": (87, 87),
+    "sunday oliseh": (87, 87),
+    "john obi mikel": (87, 87),
+    "segun odegbami": (84, 84),
+    "taribo west": (84, 84),
+
     "harry kane": (90, 90),
     "kylian mbappé": (91, 94),
     "kylian mbappe": (91, 94),
@@ -1050,6 +1171,11 @@ def resolve_player_gsi(
     if is_legend:
         cur_gsi = max(cur_gsi or 80, 80)
         pot_gsi = max(pot_gsi or cur_gsi, cur_gsi)
+        # Strict user invariant: ONLY Pelé, Maradona, Cristiano Ronaldo, and Lionel Messi can have 98.
+        pantheon_names = {"pelé", "pele", "diego maradona", "maradona", "cristiano ronaldo", "lionel messi"}
+        if cur_gsi >= 98 and name not in pantheon_names:
+            cur_gsi = min(cur_gsi, 96)
+            pot_gsi = min(pot_gsi, 96)
 
     # 7. Final defaults and clamping
     final_cur = max(40, min(99, cur_gsi if cur_gsi is not None else 65))
