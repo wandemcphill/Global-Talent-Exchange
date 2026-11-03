@@ -17,21 +17,39 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "brand_ad_campaigns",
-        sa.Column("music_rights_verified", sa.Boolean(), nullable=False, server_default=sa.text("false")),
-    )
-    op.add_column(
-        "brand_ad_campaigns",
-        sa.Column("music_rights_holder", sa.String(length=160), nullable=True),
-    )
-    op.add_column(
-        "brand_ad_campaigns",
-        sa.Column("music_license_doc_url", sa.String(length=2048), nullable=True),
-    )
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if not inspector.has_table("brand_ad_campaigns"):
+        return
+
+    existing_cols = {col["name"] for col in inspector.get_columns("brand_ad_campaigns")}
+    if "music_rights_verified" not in existing_cols:
+        op.add_column(
+            "brand_ad_campaigns",
+            sa.Column("music_rights_verified", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        )
+    if "music_rights_holder" not in existing_cols:
+        op.add_column(
+            "brand_ad_campaigns",
+            sa.Column("music_rights_holder", sa.String(length=160), nullable=True),
+        )
+    if "music_license_doc_url" not in existing_cols:
+        op.add_column(
+            "brand_ad_campaigns",
+            sa.Column("music_license_doc_url", sa.String(length=2048), nullable=True),
+        )
 
 
 def downgrade() -> None:
-    op.drop_column("brand_ad_campaigns", "music_license_doc_url")
-    op.drop_column("brand_ad_campaigns", "music_rights_holder")
-    op.drop_column("brand_ad_campaigns", "music_rights_verified")
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if not inspector.has_table("brand_ad_campaigns"):
+        return
+
+    existing_cols = {col["name"] for col in inspector.get_columns("brand_ad_campaigns")}
+    if "music_license_doc_url" in existing_cols:
+        op.drop_column("brand_ad_campaigns", "music_license_doc_url")
+    if "music_rights_holder" in existing_cols:
+        op.drop_column("brand_ad_campaigns", "music_rights_holder")
+    if "music_rights_verified" in existing_cols:
+        op.drop_column("brand_ad_campaigns", "music_rights_verified")
