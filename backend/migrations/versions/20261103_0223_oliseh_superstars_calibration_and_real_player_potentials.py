@@ -15,6 +15,10 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    if getattr(getattr(bind, "dialect", None), "name", "") != "postgresql":
+        return
+
     # 1. Sunday Oliseh: DM/CM NOT CB
     op.execute(sa.text("""
             UPDATE ingestion_players
