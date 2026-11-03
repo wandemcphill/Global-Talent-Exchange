@@ -391,7 +391,7 @@ export function Showroom() {
               <article
                 key={key}
                 data-testid={`showroom-item-${key}`}
-                className="group flex flex-col overflow-hidden rounded-2xl border border-gtex-graphite bg-gtex-slate/90 shadow-xl transition-all duration-300 hover:-translate-y-1 hover:border-gtex-gold/60 hover:shadow-2xl"
+                className="group flex flex-col overflow-hidden rounded-2xl border border-[#25354B] bg-[#14243A] gx-card-bezel shadow-xl transition-all duration-300 hover:-translate-y-1 hover:border-[#E5B63F]/70 hover:shadow-[0_20px_50px_rgba(229,182,63,0.22)]"
               >
                 {/* Visual Header */}
                 <div className="relative h-52 overflow-hidden bg-gtex-midnight border-b border-gtex-graphite">

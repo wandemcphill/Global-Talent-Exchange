@@ -645,19 +645,19 @@ export function EditorialLineupPosterCard({
   return (
     <div
       data-testid={testid || "matchday-editorial-poster-card"}
-      className="relative overflow-hidden rounded-xl border border-stone-300/80 bg-[#F2F0EC] text-[#161616] shadow-[0_22px_55px_rgba(0,0,0,0.45)]"
+      className="relative overflow-hidden rounded-2xl border border-[#25354B] bg-[#0E1A2C] text-white shadow-[0_24px_60px_rgba(0,0,0,0.85)]"
       style={{
         backgroundImage:
-          "radial-gradient(circle at 20% 20%, rgba(255,255,255,0.75) 0%, rgba(242,240,236,0.95) 55%, rgba(231,227,220,1) 100%)",
+          "radial-gradient(circle at 20% 20%, rgba(229,182,63,0.12) 0%, rgba(20,36,58,0.95) 55%, #080F1C 100%)",
       }}
     >
       {/* Top Condensed Editorial Matchday Metadata Strip */}
       <div className="px-4 sm:px-6 pt-3.5">
-        <div className="flex items-center justify-between gap-2 border-b-[1.5px] border-[#1A1A1A] pb-1.5 text-[9.5px] sm:text-[10.5px] font-black uppercase tracking-[0.14em] text-[#1A1A1A]">
+        <div className="flex items-center justify-between gap-2 border-b border-[#25354B] pb-1.5 text-[9.5px] sm:text-[10.5px] font-black uppercase tracking-[0.14em] text-slate-300">
           <span className="truncate">
-            MATCHDAY {formattedMd}. LIVE FROM {arenaLabel}. {formattedDate}
+            MATCHDAY {formattedMd} · LIVE FROM {arenaLabel} · {formattedDate}
           </span>
-          <span className="shrink-0 gx-mono text-[9.5px] font-black">
+          <span className="shrink-0 gx-mono text-[9.5px] font-black text-[#00E8A8] bg-[#00C991]/15 px-2 py-0.5 rounded border border-[#00C991]/30">
             {sheet.formation}
           </span>
         </div>
@@ -670,7 +670,7 @@ export function EditorialLineupPosterCard({
           className="pointer-events-none select-none overflow-hidden text-center leading-none"
         >
           <span
-            className="gx-display block text-[68px] sm:text-[86px] font-black uppercase tracking-[-0.04em]"
+            className="gx-display block text-[68px] sm:text-[86px] font-black uppercase tracking-[-0.04em] drop-shadow-[0_4px_24px_rgba(0,0,0,0.7)]"
             style={{ color: accent.wordmark, lineHeight: 0.88 }}
           >
             LINEUP
@@ -685,14 +685,14 @@ export function EditorialLineupPosterCard({
                 src={heroSrc}
                 alt={sheet.hero.full_name}
                 onError={() => setHeroSrc(heroFallback)}
-                className="max-h-[300px] w-full object-contain object-bottom drop-shadow-[0_12px_18px_rgba(0,0,0,0.22)]"
+                className="max-h-[300px] w-full object-contain object-bottom drop-shadow-[0_16px_28px_rgba(0,0,0,0.85)]"
               />
             </div>
-            <div className="mt-1.5 rounded bg-[#161616]/90 px-2 py-1 text-center text-white">
-              <p className="truncate text-[10px] font-black uppercase tracking-wider">
+            <div className="mt-1.5 rounded-xl border border-[#25354B] bg-[#080F1C]/95 px-2.5 py-1.5 text-center text-white shadow-lg backdrop-blur-md">
+              <p className="truncate text-[10.5px] font-black uppercase tracking-wider text-[#00E8A8]">
                 {sheet.hero.short_name} #{sheet.hero.shirt_number}
               </p>
-              <p className="text-[8.5px] uppercase tracking-widest text-stone-300">
+              <p className="text-[9px] uppercase tracking-widest text-slate-400 font-semibold">
                 {sheet.clubName} · GSI {sheet.hero.rating}
               </p>
             </div>
@@ -700,16 +700,16 @@ export function EditorialLineupPosterCard({
 
           {/* Center-Right Numbered Uppercase Bold Starting XI Stack */}
           <div className="col-span-7 flex flex-col items-center text-center">
-            <ol className="space-y-0.5 sm:space-y-1" data-testid="editorial-starters-list">
+            <ol className="space-y-1 sm:space-y-1.5" data-testid="editorial-starters-list">
               {sheet.starters.map((player) => (
                 <li
                   key={player.player_id}
-                  className="flex items-baseline justify-center gap-1.5 leading-none"
+                  className="flex items-baseline justify-center gap-2 leading-none"
                 >
-                  <span className="gx-mono text-[10px] sm:text-[11px] font-extrabold text-[#2B2B2B]">
+                  <span className="gx-mono text-[10px] sm:text-[11px] font-black text-[#E5B63F]">
                     {String(player.shirt_number).padStart(2, "0")}
                   </span>
-                  <span className="gx-display text-[15px] sm:text-[17px] font-black uppercase tracking-tight text-[#141414]">
+                  <span className="gx-display text-[15px] sm:text-[18px] font-black uppercase tracking-tight text-white hover:text-[#00E8A8] transition-colors">
                     {player.short_name}
                     {player.is_captain ? " (C)" : ""}
                   </span>
@@ -718,7 +718,7 @@ export function EditorialLineupPosterCard({
             </ol>
 
             {/* Centered Club-Accent Uppercase Substitutes Block */}
-            <div className="mt-4 max-w-[260px] border-t border-stone-300/90 pt-2.5 text-center">
+            <div className="mt-4 max-w-[260px] border-t border-[#25354B] pt-2.5 text-center">
               <p
                 className="text-[9.5px] sm:text-[10px] font-black uppercase leading-snug tracking-[0.06em]"
                 style={{ color: accent.subText }}

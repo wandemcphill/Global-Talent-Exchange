@@ -366,6 +366,11 @@ export function PlayerCard(props: PlayerCardProps) {
 
   // Full signature collectible 3D-Tilt Holographic player card
   const up = change != null ? change >= 0 : true;
+  const bezelClass = isLegendaryTier
+    ? "gx-gold-rim gx-gold-shimmer"
+    : props.tier === "elite" || numRating >= 75
+    ? "gx-emerald-rim"
+    : "gx-card-bezel";
 
   return (
     <article
@@ -389,10 +394,13 @@ export function PlayerCard(props: PlayerCardProps) {
         transform: `perspective(950px) rotateX(${holo.rx}deg) rotateY(${holo.ry}deg) scale(${holo.active ? 1.02 : 1})`,
         boxShadow: "inset 0 1px 0 rgba(255,255,255,0.22)",
       }}
-      className={`group relative isolate flex aspect-[5/7.2] w-full max-w-[310px] flex-col overflow-hidden rounded-2xl border-2 ${tier.frame} ${tier.glow} p-4 text-white shadow-2xl transition-transform duration-100 ${
+      className={`group relative isolate flex aspect-[5/7.2] w-full max-w-[310px] flex-col overflow-hidden rounded-2xl border-2 ${tier.frame} ${tier.glow} ${bezelClass} p-4 text-white shadow-2xl transition-transform duration-100 ${
         onClick ? "cursor-pointer" : ""
       } ${className}`}
     >
+      {/* Subtle animated holographic foil prism layer */}
+      <div className="pointer-events-none absolute inset-0 gx-holographic-foil opacity-[0.07] mix-blend-overlay" />
+
       {/* Dynamic Mouse-Reactive Holographic Foil Glare */}
       <div
         className="pointer-events-none absolute inset-0 transition-opacity duration-200"
@@ -423,21 +431,31 @@ export function PlayerCard(props: PlayerCardProps) {
         />
       </svg>
 
-      {/* Header bar: Tier badge & verified icons */}
+      {/* Header bar: EA FC Shield Rating Bezel & Tier badge */}
       <header className="relative z-10 flex items-start justify-between">
-        <div className="flex flex-col leading-none">
-          <span
-            className={`gx-display text-5xl sm:text-6xl font-black tracking-tight ${tier.ratingText} drop-shadow-md`}
-            data-testid={`${testid}-rating`}
-          >
-            {rating}
-          </span>
-          <span className="gx-mono mt-1 text-sm font-black tracking-wider text-slate-200">
-            {posShort(position)}
-          </span>
-          <span className="mt-1 text-[11px] font-bold tracking-widest text-slate-300 uppercase">
-            {nationality || "Global"}
-          </span>
+        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#080F1C]/85 px-2.5 py-1.5 shadow-lg backdrop-blur-md">
+          <div className="flex flex-col items-center leading-none">
+            <span
+              className={`gx-display text-4xl sm:text-5xl font-black tracking-tight ${tier.ratingText} drop-shadow-md`}
+              data-testid={`${testid}-rating`}
+            >
+              {rating}
+            </span>
+            <span className="gx-mono mt-0.5 text-xs font-black tracking-wider text-slate-200">
+              {posShort(position)}
+            </span>
+          </div>
+          <div className="h-7 w-[1px] bg-white/15" />
+          <div className="flex flex-col text-left leading-none">
+            <span className="text-[10px] font-extrabold tracking-wider text-slate-300 uppercase">
+              {nationality || "Global"}
+            </span>
+            {potential != null && (
+              <span className="gx-mono mt-1 text-[9px] font-extrabold text-[#00E8A8]">
+                POT {potential}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-col items-end gap-1.5">
@@ -448,11 +466,6 @@ export function PlayerCard(props: PlayerCardProps) {
             {numRating >= 85 ? <Star size={10} className="fill-[#E5B63F]" /> : <ShieldCheck size={10} />}
             {badge || tier.name}
           </span>
-          {potential != null && (
-            <span className="gx-mono rounded bg-black/60 px-2 py-0.5 text-[10px] font-bold text-[#00E8A8] border border-[#00C991]/40">
-              POT {potential}
-            </span>
-          )}
         </div>
       </header>
 
@@ -483,26 +496,26 @@ export function PlayerCard(props: PlayerCardProps) {
 
       {/* Key attributes row */}
       {stats.length > 0 ? (
-        <dl className="relative z-10 my-2.5 grid grid-cols-6 gap-0.5 border-y border-white/10 py-1.5 bg-black/50 rounded-lg">
+        <dl className="relative z-10 my-2.5 grid grid-cols-6 gap-1 border-y border-white/10 py-1.5 bg-[#080F1C]/75 rounded-xl px-1">
           {stats.slice(0, 6).map((s) => (
-            <div key={s.k} className="flex flex-col items-center">
-              <dt className="text-[9px] font-bold tracking-wider text-slate-400 uppercase">{s.k}</dt>
+            <div key={s.k} className="flex flex-col items-center rounded-lg bg-white/[0.03] py-1 border border-white/[0.04]">
+              <dt className="text-[9px] font-extrabold tracking-wider text-slate-400 uppercase">{s.k}</dt>
               <dd className="gx-mono text-xs font-black text-white">{s.v}</dd>
             </div>
           ))}
         </dl>
       ) : (
-        <div className="relative z-10 my-2.5 border-y border-white/10 py-1.5 flex items-center justify-around bg-black/45 rounded-lg text-center">
+        <div className="relative z-10 my-2.5 border-y border-white/10 py-1.5 flex items-center justify-around bg-[#080F1C]/75 rounded-xl text-center">
           <div>
-            <p className="text-[9px] font-bold tracking-wider text-slate-400 uppercase">TIER</p>
+            <p className="text-[9px] font-extrabold tracking-wider text-slate-400 uppercase">TIER</p>
             <p className="gx-mono text-xs font-black text-[#E5B63F] uppercase">{tier.name}</p>
           </div>
           <div>
-            <p className="text-[9px] font-bold tracking-wider text-slate-400 uppercase">FORM</p>
+            <p className="text-[9px] font-extrabold tracking-wider text-slate-400 uppercase">FORM</p>
             <p className="gx-mono text-xs font-black text-[#00E8A8]">{form ?? "7.4"}</p>
           </div>
           <div>
-            <p className="text-[9px] font-bold tracking-wider text-slate-400 uppercase">FOIL</p>
+            <p className="text-[9px] font-extrabold tracking-wider text-slate-400 uppercase">FOIL</p>
             <p className="gx-mono text-xs font-black text-[#42B9EC]">3D HOLO</p>
           </div>
         </div>
@@ -514,7 +527,7 @@ export function PlayerCard(props: PlayerCardProps) {
           {price != null && (
             <div className="flex flex-col">
               <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Valuation</span>
-              <span className="gx-display text-xl font-black leading-none text-[#E5B63F]">
+              <span className="gx-display text-xl font-black leading-none text-[#E5B63F] drop-shadow-[0_2px_8px_rgba(229,182,63,0.3)]">
                 {price} <span className="gx-mono text-[10px] font-bold text-[#E5B63F]/80">GTX</span>
               </span>
             </div>

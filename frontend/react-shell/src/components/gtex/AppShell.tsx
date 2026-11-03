@@ -415,7 +415,7 @@ export default function AppShell() {
       {/* Main Viewport */}
       <div className="lg:pl-64">
         {/* Matchday Top Control Strip */}
-        <header className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-[#25354B] bg-[#0E1A2C]/90 px-4 py-2.5 backdrop-blur-xl sm:px-8">
+        <header className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-[#25354B] bg-[#0E1A2C]/95 px-4 py-2.5 backdrop-blur-2xl sm:px-8 shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_-1px_0_rgba(0,201,145,0.18)]">
           <p className="gx-display text-xl font-black text-white lg:hidden">GTEX</p>
           {!isDedicatedAccount && <ClubSwitcher />}
           <GlobalWorldClockPill />
@@ -455,12 +455,12 @@ export default function AppShell() {
             {hasActiveClub ? (
               <span
                 data-testid="topbar-gtex-balance"
-                className="gx-mono inline-flex items-center gap-1.5 rounded-xl border border-[#42B9EC]/35 bg-[#080F1C] px-3 py-1 text-slate-200 shadow-inner"
+                className="gx-mono inline-flex items-center gap-2 rounded-xl border border-[#42B9EC]/40 bg-[#080F1C] px-3 py-1 text-slate-200 shadow-[0_0_14px_rgba(66,185,236,0.18),inset_0_1px_0_rgba(255,255,255,0.1)] transition hover:border-[#42B9EC]"
               >
-                <span className="h-2 w-2 rounded-full bg-[#42B9EC] shadow-[0_0_8px_#42B9EC]" />
-                <span className="text-slate-400">Treasury</span>
-                <b className="text-white font-mono">{fmt(wallet.gtex_total)}</b>
-                <span className="text-[#42B9EC] font-extrabold">GTX</span>
+                <span className="h-2 w-2 rounded-full bg-[#42B9EC] shadow-[0_0_8px_#42B9EC] animate-pulse" />
+                <span className="text-slate-400 text-[11px] font-bold">Treasury</span>
+                <b className="text-white font-mono text-xs">{fmt(wallet.gtex_total)}</b>
+                <span className="text-[#42B9EC] font-black text-xs">GTX</span>
               </span>
             ) : (
               <span data-testid="topbar-user-account" className="gx-mono text-slate-300 text-xs">
@@ -475,11 +475,11 @@ export default function AppShell() {
             {/* Fan Coin Balance */}
             <span
               data-testid="topbar-fan-balance"
-              className="gx-mono hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-[#E5B63F]/35 bg-[#080F1C] px-3 py-1 text-slate-200 shadow-inner"
+              className="gx-mono hidden sm:inline-flex items-center gap-2 rounded-xl border border-[#E5B63F]/40 bg-[#080F1C] px-3 py-1 text-slate-200 shadow-[0_0_14px_rgba(229,182,63,0.18),inset_0_1px_0_rgba(255,255,255,0.1)] transition hover:border-[#E5B63F]"
             >
               <span className="h-2 w-2 rounded-full bg-[#E5B63F] shadow-[0_0_8px_#E5B63F]" />
-              <b className="text-white font-mono">{fmt(wallet.fan_total)}</b>
-              <span className="text-[#E5B63F] font-extrabold">FAN</span>
+              <b className="text-white font-mono text-xs">{fmt(wallet.fan_total)}</b>
+              <span className="text-[#E5B63F] font-black text-xs">FAN</span>
             </span>
           </div>
 

@@ -160,6 +160,116 @@ body {
   background-size: 40px 40px;
 }
 
+/* Stadium Turf & Broadcast Textures */
+.gx-pitch-grass-pattern {
+  background-color: #0b1c16;
+  background-image: 
+    repeating-linear-gradient(
+      90deg,
+      rgba(0, 201, 145, 0.04) 0px,
+      rgba(0, 201, 145, 0.04) 60px,
+      rgba(0, 201, 145, 0.015) 60px,
+      rgba(0, 201, 145, 0.015) 120px
+    ),
+    radial-gradient(circle at 50% 50%, rgba(66, 185, 236, 0.08) 0%, transparent 70%);
+}
+
+.gx-stadium-mesh {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+/* Authentic Holographic Foil & Gold Sweeps */
+@keyframes gx-holographic-foil {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.gx-holographic-foil {
+  background: linear-gradient(
+    135deg,
+    rgba(229, 182, 63, 0.35) 0%,
+    rgba(66, 185, 236, 0.3) 25%,
+    rgba(0, 201, 145, 0.35) 50%,
+    rgba(229, 182, 63, 0.35) 75%,
+    rgba(66, 185, 236, 0.3) 100%
+  );
+  background-size: 300% 300%;
+  animation: gx-holographic-foil 8s ease infinite;
+}
+
+@keyframes gx-gold-sweep {
+  0% {
+    transform: translateX(-150%) skewX(-25deg);
+  }
+  50%, 100% {
+    transform: translateX(250%) skewX(-25deg);
+  }
+}
+
+.gx-gold-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.gx-gold-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 60%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(229, 182, 63, 0.35) 50%,
+    transparent 100%
+  );
+  pointer-events: none;
+  animation: gx-gold-sweep 4s ease-in-out infinite;
+}
+
+/* Matchday Broadcast Scoreboard & Card Bezels */
+.gx-scoreboard-box {
+  background: linear-gradient(180deg, rgba(20, 36, 58, 0.95) 0%, rgba(8, 15, 28, 0.98) 100%);
+  border: 1px solid #25354B;
+  box-shadow: 
+    0 16px 36px -6px rgba(0, 0, 0, 0.75),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.gx-card-bezel {
+  box-shadow:
+    0 12px 30px -4px rgba(0, 0, 0, 0.75),
+    inset 0 1px 1px rgba(255, 255, 255, 0.16),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.5);
+}
+
+.gx-gold-rim {
+  border: 1.5px solid rgba(229, 182, 63, 0.65);
+  box-shadow: 
+    0 0 18px rgba(229, 182, 63, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.gx-emerald-rim {
+  border: 1.5px solid rgba(0, 201, 145, 0.6);
+  box-shadow: 
+    0 0 18px rgba(0, 201, 145, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.gx-pitch-rim {
+  border: 1.5px solid rgba(66, 185, 236, 0.6);
+  box-shadow: 
+    0 0 18px rgba(66, 185, 236, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
 .gx-noise::after {
   content: "";
   position: absolute;
