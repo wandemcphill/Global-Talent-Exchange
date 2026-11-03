@@ -6,6 +6,9 @@ import { api } from "@/lib/api";
 import { useActiveClub } from "@/lib/owner";
 import { journeyLinks, readJourneyParams } from "@/lib/playerJourney";
 import { RegenCard } from "@/components/gtex/RegenCard";
+import { useSkin } from "@/lib/skin-engine";
+import { ScoutingTableView, ScoutingTableItem } from "@/components/gtex/ScoutingTableView";
+import { ScoutingDevelopmentView } from "@/components/gtex/ScoutingDevelopmentView";
 import { PlayerDossier } from "@/components/gtex/PlayerDossier";
 import { Loading } from "@/components/gtex/ui";
 import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
@@ -28,6 +31,16 @@ export function RegenWorld() {
   const [positionFilter, setPositionFilter] = useState("ALL");
   const [originFilter, setOriginFilter] = useState("ALL");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(journeyParams.player);
+
+  const { getModuleView } = useSkin();
+  const configuredScoutingView = (getModuleView("scouting") as "cards" | "table" | "development") || "cards";
+  const [viewMode, setViewMode] = useState<"cards" | "table" | "development">(configuredScoutingView);
+
+  useEffect(() => {
+    if (configuredScoutingView) {
+      setViewMode(configuredScoutingView);
+    }
+  }, [configuredScoutingView]);
 
   useEffect(() => {
     if (journeyParams.player && journeyParams.player !== selectedPlayerId) {
@@ -188,6 +201,31 @@ export function RegenWorld() {
     return deduped;
   }, [tab, scoutingData, risingData, search, positionFilter, originFilter]);
 
+  const normalizedScoutingItems: ScoutingTableItem[] = useMemo(() => {
+    return activeItems.map((item: any, idx: number) => {
+      const p = item.player || item;
+      const pid = p.id || p.player_id || item.player_id || `prospect-${idx}`;
+      const cleanName = String(p.name || p.player_name || `Prospect #${idx + 1}`)
+        .replace(/\s+\d+$/, "")
+        .trim();
+      return {
+        id: pid,
+        name: cleanName,
+        rating: Number(p.current_rating || p.rating || 71),
+        potential: Number(p.potential || 88),
+        position: p.position || p.primary_position || "MID",
+        age: Number(p.age ?? 18),
+        nationality: p.nationality || "Global",
+        club: p.current_club_name || "GTEX Academy",
+        generation: Number(p.generation ?? 1),
+        archetype: p.archetype || "Tactical Prodigy",
+        serial: p.serial_number,
+        price: Number(p.market_value_coin ?? item.market_value_coin ?? 350),
+        rawItem: item,
+      };
+    });
+  }, [activeItems]);
+
   const handleAddToWatchlist = async (id: string) => {
     try {
       await api.post("/transfer-market/watchlist", {
@@ -324,7 +362,57 @@ export function RegenWorld() {
         </div>
       )}
 
-      {/* Main Content Area */}
+            {/* Scouting Presentation Switcher (Layer 3) */}
+      {(tab === "feed" || tab === "rising") && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/40 p-2" data-testid="scouting-view-switcher">
+          <div className="flex items-center gap-2 pl-2">
+            <span className="text-xs font-bold text-slate-400">Presentation Mode:</span>
+            <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-300">
+              {viewMode}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setViewMode("cards")}
+              className={`rounded px-3 py-1.5 text-xs font-bold uppercase transition-all ${
+                viewMode === "cards"
+                  ? "bg-emerald-500 text-slate-950 shadow"
+                  : "text-slate-400 hover:text-white"
+              }`}
+              data-testid="scouting-mode-cards"
+            >
+              Cards Grid
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("table")}
+              className={`rounded px-3 py-1.5 text-xs font-bold uppercase transition-all ${
+                viewMode === "table"
+                  ? "bg-emerald-500 text-slate-950 shadow"
+                  : "text-slate-400 hover:text-white"
+              }`}
+              data-testid="scouting-mode-table"
+            >
+              Scouting Database
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("development")}
+              className={`rounded px-3 py-1.5 text-xs font-bold uppercase transition-all ${
+                viewMode === "development"
+                  ? "bg-emerald-500 text-slate-950 shadow"
+                  : "text-slate-400 hover:text-white"
+              }`}
+              data-testid="scouting-mode-dev"
+            >
+              Development Pipeline
+            </button>
+          </div>
+        </div>
+      )}
+
+{/* Main Content Area */}
       {tab === "feed" || tab === "rising" ? (
         <div>
           {loadingScouting || loadingRising ? (
@@ -342,6 +430,18 @@ export function RegenWorld() {
                 Reset Filters
               </button>
             </div>
+          ) : viewMode === "table" ? (
+            <ScoutingTableView
+              items={normalizedScoutingItems}
+              onSelectPlayer={updateSelectedPlayer}
+              onAddToWatchlist={handleAddToWatchlist}
+            />
+          ) : viewMode === "development" ? (
+            <ScoutingDevelopmentView
+              items={normalizedScoutingItems}
+              onSelectPlayer={updateSelectedPlayer}
+              onAddToWatchlist={handleAddToWatchlist}
+            />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 place-items-center" data-testid="regen-grid">
               {activeItems.map((item: any, idx: number) => {

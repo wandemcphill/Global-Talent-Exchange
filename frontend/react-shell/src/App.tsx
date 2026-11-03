@@ -32,12 +32,15 @@ import PublicClubProfile from "@/pages/PublicClubProfile";
 import { Newsroom } from "@/pages/Newsroom";
 import { Showroom } from "@/pages/Showroom";
 import Jackpot from "@/pages/Jackpot";
+import AppearanceStudio from "@/pages/AppearanceStudio";
+import { SkinProvider } from "@/lib/skin-engine";
 import { ROUTER_BASENAME } from "@/lib/publicPath";
 import { GtexAdvertisingProvider } from "@/components/advertising/GtexAdvertising";
 
 export default function App() {
   return (
     <AuthProvider>
+      <SkinProvider>
       <BrowserRouter basename={ROUTER_BASENAME}>
         <Routes>
           <Route path="/" element={<GtexAdvertisingProvider><Landing /></GtexAdvertisingProvider>} />
@@ -81,11 +84,14 @@ export default function App() {
             <Route path="inbox" element={<InboxPage />} />
             <Route path="admin" element={<Admin />} />
             <Route path="admin/advertising" element={<AdminAdvertising />} />
+            <Route path="settings/appearance" element={<AppearanceStudio />} />
+            <Route path="appearance" element={<Navigate to="/app/settings/appearance" replace />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
       <Toaster theme="dark" position="top-right" richColors />
+    </SkinProvider>
     </AuthProvider>
   );
 }

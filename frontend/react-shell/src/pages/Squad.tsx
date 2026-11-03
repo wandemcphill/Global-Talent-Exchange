@@ -32,6 +32,8 @@ import { PlayerCard } from "@/components/gtex/PlayerCard";
 import { PlayerDrawer } from "@/components/gtex/PlayerDrawer";
 import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
 import { HolographicPlayerCard, TacticalPitch25D } from "@/components/gtex/ApexWidgets";
+import { SquadCardGridView } from "@/components/gtex/SquadCardGridView";
+import { useSkin } from "@/lib/skin-engine";
 import { journeyLinks, readJourneyParams, SQUAD_SEASON_LABEL } from "@/lib/playerJourney";
 
 function ManagerSheet({ club }: any) {
@@ -1054,6 +1056,8 @@ export default function Squad() {
   const navigate = useNavigate();
   const { active } = useActiveClub();
   const [selectedPlayer, setSelectedPlayer] = useState<any | null>(null);
+  const { getModuleView, setModuleView } = useSkin();
+  const squadView = getModuleView("squad");
 
   const journeyParams = useMemo(() => readJourneyParams(location.search), [location.search]);
   const targetPlayerId = journeyParams.player;
@@ -1135,6 +1139,46 @@ export default function Squad() {
         sub={club.club_name + " · " + club.squad.length + " registered players · Wage bill " + fmt(club.wage_bill) + " GTX / match"}
         action={
           <div className="flex flex-wrap items-center gap-2">
+            {/* Layer 3: Football Display Mode Switcher */}
+            <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-black/40 p-1" data-testid="squad-view-toggle">
+              <button
+                type="button"
+                onClick={() => setModuleView("squad", "table")}
+                data-testid="squad-view-table"
+                className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                  squadView === "table"
+                    ? "bg-emerald-500 text-black shadow"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Roster Table
+              </button>
+              <button
+                type="button"
+                onClick={() => setModuleView("squad", "pitch")}
+                data-testid="squad-view-pitch"
+                className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                  squadView === "pitch"
+                    ? "bg-emerald-500 text-black shadow"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Tactical Pitch
+              </button>
+              <button
+                type="button"
+                onClick={() => setModuleView("squad", "cards")}
+                data-testid="squad-view-cards"
+                className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                  squadView === "cards"
+                    ? "bg-emerald-500 text-black shadow"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Card Grid
+              </button>
+            </div>
+
             <Link
               to="/app/academy"
               data-testid="open-academy-button"
@@ -1184,36 +1228,58 @@ export default function Squad() {
       {/* 2. Executive & Staff Boardroom */}
       <BoardroomSection club={club} />
 
-      <div className="grid gap-6 lg:grid-cols-12 mt-6">
-        <div className="lg:col-span-8">
-          <TacticalPitch25D
-            formation={club.formation || "4-3-3"}
-            players={club.squad || []}
+      {/* Layer 3: Football Display Modes (Table | Pitch | Card Grid) */}
+      {squadView === "cards" ? (
+        <div className="mt-6 space-y-6">
+          <SquadCardGridView
+            squad={club.squad || []}
             onSelectPlayer={setSelectedPlayer}
+            targetPlayerId={targetPlayerId}
           />
+          <div className="grid gap-6 lg:grid-cols-12">
+            <ManagerSheet club={club} />
+            <HireManager club={club} />
+          </div>
         </div>
-        <div className="lg:col-span-4">
-          <HolographicPlayerCard
-            name={club.squad?.[0]?.name || "Marquee Talisman"}
-            position={club.squad?.[0]?.position || "ST"}
-            overall={Number(club.squad?.[0]?.rating || 88)}
-            potential={Number(club.squad?.[0]?.potential || 93)}
-            clubName={club.club_name}
-            priceGtx={Number(club.squad?.[0]?.value_coin || 14500)}
-            jerseyNumber={9}
-            badgeLabel="★ SQUAD CAPTAIN FOIL"
-            actionLabel="Open Dossier →"
-            onAction={() => club.squad?.[0] && setSelectedPlayer(club.squad[0])}
-          />
+      ) : squadView === "pitch" ? (
+        <div className="mt-6 space-y-6">
+          <div className="grid gap-6 lg:grid-cols-12">
+            <div className="lg:col-span-8">
+              <TacticalPitch25D
+                formation={club.formation || "4-3-3"}
+                players={club.squad || []}
+                onSelectPlayer={setSelectedPlayer}
+              />
+            </div>
+            <div className="lg:col-span-4">
+              <HolographicPlayerCard
+                name={club.squad?.[0]?.name || "Marquee Talisman"}
+                position={club.squad?.[0]?.position || "ST"}
+                overall={Number(club.squad?.[0]?.rating || 88)}
+                potential={Number(club.squad?.[0]?.potential || 93)}
+                clubName={club.club_name}
+                priceGtx={Number(club.squad?.[0]?.value_coin || 14500)}
+                jerseyNumber={9}
+                badgeLabel="★ SQUAD CAPTAIN FOIL"
+                actionLabel="Open Dossier →"
+                onAction={() => club.squad?.[0] && setSelectedPlayer(club.squad[0])}
+              />
+            </div>
+          </div>
+          <div className="grid gap-6 lg:grid-cols-12">
+            <ManagerSheet club={club} />
+            <HireManager club={club} />
+          </div>
         </div>
-      </div>
-
-      {/* 3. Pitch Operations & Squad Roster */}
-      <div className="grid gap-6 lg:grid-cols-12 mt-6">
-        <ManagerSheet club={club} />
-        <SquadTable club={club} targetPlayerId={targetPlayerId} onSelectPlayer={setSelectedPlayer} />
-        <HireManager club={club} />
-      </div>
+      ) : (
+        <div className="mt-6 space-y-6">
+          <div className="grid gap-6 lg:grid-cols-12">
+            <ManagerSheet club={club} />
+            <SquadTable club={club} targetPlayerId={targetPlayerId} onSelectPlayer={setSelectedPlayer} />
+            <HireManager club={club} />
+          </div>
+        </div>
+      )}
 
       {/* 4. Universal Player Dossier Drawer */}
       <PlayerDrawer

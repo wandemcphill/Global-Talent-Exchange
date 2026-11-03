@@ -7,6 +7,8 @@ import { api, errMsg } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { fmt, label, useActiveClub, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, Stat } from "@/components/gtex/ui";
+import { CompetitionsTableView } from "@/components/gtex/CompetitionsTableView";
+import { useSkin } from "@/lib/skin-engine";
 
 function CompCard({ c, clubId }: any) {
   const refresh = useRefreshOwner();
@@ -393,6 +395,8 @@ function GlobalLeaderboardPanel({ worldClubs }: { worldClubs: any[] }) {
 
 export default function Competitions() {
   const { active } = useActiveClub();
+  const { getModuleView, setModuleView } = useSkin();
+  const compView = getModuleView("competitions");
   const { data, isLoading } = useQuery({ queryKey: ["competitions"], queryFn: async () => (await api.get("/owner/competitions")).data.competitions });
   const { data: worldClubs = [] } = useQuery({
     queryKey: ["world-clubs"],
@@ -409,12 +413,50 @@ export default function Competitions() {
   const user = (data || []).filter((c: any) => c.host_type === "user");
   return (
     <div data-testid="competitions-page" className="space-y-6">
-      <PageHeader eyebrow="Competitions" title="Where prestige is earned" sub={`Entering as ${active?.club_name || "-"}. Same-owner clubs can't share a prize-sensitive bracket and are routed apart in knockouts.`} />
+      <PageHeader
+        eyebrow="Competitions"
+        title="Where prestige is earned"
+        sub={`Entering as ${active?.club_name || "-"}. Same-owner clubs can't share a prize-sensitive bracket and are routed apart in knockouts.`}
+        action={
+          <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-black/40 p-1" data-testid="competitions-view-toggle">
+            <button
+              type="button"
+              onClick={() => setModuleView("competitions", "discovery")}
+              data-testid="comp-view-discovery"
+              className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                compView === "discovery"
+                  ? "bg-emerald-500 text-black shadow"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              Tournament Cards
+            </button>
+            <button
+              type="button"
+              onClick={() => setModuleView("competitions", "table")}
+              data-testid="comp-view-table"
+              className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                compView === "table"
+                  ? "bg-emerald-500 text-black shadow"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              Fixtures Table
+            </button>
+          </div>
+        }
+      />
       {isLoading ? <Loading /> : (
         <>
           <QuickMatchmakingDesk activeClub={active} />
           <Panel eyebrow="GTEX-hosted" title="Platform competitions" testid="gtex-competitions-panel">
-            <div className="grid gap-4 md:grid-cols-3">{gtex.map((c: any) => <CompCard key={c.id} c={c} clubId={active?.club_id} />)}</div>
+            {compView === "table" ? (
+              <CompetitionsTableView competitions={gtex} clubId={active?.club_id} />
+            ) : (
+              <div className="grid gap-4 md:grid-cols-3" data-testid="competitions-cards-grid">
+                {gtex.map((c: any) => <CompCard key={c.id} c={c} clubId={active?.club_id} />)}
+              </div>
+            )}
           </Panel>
           <div className="grid gap-6 lg:grid-cols-12">
             <Panel eyebrow="User-hosted" title="Host a friend competition" className="lg:col-span-8" testid="host-panel"><HostForm /></Panel>

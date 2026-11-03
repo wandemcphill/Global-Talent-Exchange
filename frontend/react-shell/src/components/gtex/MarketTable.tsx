@@ -7,6 +7,8 @@ import { fmt, useRefreshOwner } from "@/lib/owner";
 import { Btn, Coin, Empty, Loading } from "@/components/gtex/ui";
 import { PlayerCard } from "@/components/gtex/PlayerCard";
 import { PlayerDrawer } from "@/components/gtex/PlayerDrawer";
+import { MarketTableView } from "@/components/gtex/MarketTableView";
+import { useSkin } from "@/lib/skin-engine";
 
 const POSITIONS = ["", "goalkeeper", "defender", "midfielder", "forward"];
 
@@ -47,6 +49,8 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
   const [busy, setBusy] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const refresh = useRefreshOwner();
+  const { getModuleView, setModuleView } = useSkin();
+  const marketView = getModuleView("market");
 
   const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
     queryKey: ["market", position, tier, q],
@@ -188,6 +192,34 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Layer 3: Football Display Mode Switcher */}
+          <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-black/40 p-0.5" data-testid="market-view-toggle">
+            <button
+              type="button"
+              onClick={() => setModuleView("market", "cards")}
+              data-testid="market-view-cards"
+              className={`rounded px-2.5 py-1 text-xs font-bold transition ${
+                marketView === "cards"
+                  ? "bg-emerald-500 text-black shadow"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              FC Cards
+            </button>
+            <button
+              type="button"
+              onClick={() => setModuleView("market", "table")}
+              data-testid="market-view-table"
+              className={`rounded px-2.5 py-1 text-xs font-bold transition ${
+                marketView === "table"
+                  ? "bg-emerald-500 text-black shadow"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              FM Table
+            </button>
+          </div>
+
           <span className="flex items-center gap-1 text-xs font-semibold text-slate-400">
             <ArrowUpDown size={13} /> Sort:
           </span>
@@ -218,8 +250,18 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
           title="No players match the current filters"
           body={maxPrice > 0 ? "Try selecting 'All Prices' or increasing your price filter." : "Try another name, tier, or position."}
         />
+      ) : marketView === "table" ? (
+        <MarketTableView
+          players={filteredPlayers}
+          signedRefs={signedRefs}
+          clubId={clubId}
+          clubCash={clubCash}
+          busyPlayerId={busy}
+          onSign={sign}
+          onOpenDossier={(id) => setOpen(id)}
+        />
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6" data-testid="market-cards-grid">
           {filteredPlayers.map((p: any) => {
             const owned = signedRefs.includes(p.player_id);
             const price = p.quote?.price ?? 0;

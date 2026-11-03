@@ -25,6 +25,7 @@ import {
   Trophy,
   Wallet,
   Video,
+  Palette,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { fmt, useActiveClub, useControlCenter } from "@/lib/owner";
@@ -33,6 +34,7 @@ import { GlobalLiveTicker } from "@/components/gtex/GlobalLiveTicker";
 import { CommandPaletteModal } from "@/components/gtex/ApexWidgets";
 import { GtexTraxTopBarControl } from "@/components/gtex/GtexTraxPlayer";
 import { formatWorldDate, formatWorldTime, useWorldClock } from "@/lib/worldClock";
+import { useSkin } from "@/lib/skin-engine";
 
 const NAV = [
   { to: "/app", label: "Control Center", icon: Gauge, end: true, id: "home", category: "CLUB HQ & DYNASTY" },
@@ -41,6 +43,7 @@ const NAV = [
   { to: "/app/story", label: "Club Story", icon: BookOpen, id: "story", category: "CLUB HQ & DYNASTY" },
   { to: "/app/trophies", label: "Trophy Cabinet", icon: Trophy, id: "trophies", category: "CLUB HQ & DYNASTY" },
   { to: "/app/inbox", label: "Inbox", icon: Inbox, id: "inbox", category: "CLUB HQ & DYNASTY" },
+  { to: "/app/settings/appearance", label: "Appearance Studio", icon: Palette, id: "appearance-studio", category: "CLUB HQ & DYNASTY" },
 
   { to: "/app/squad", label: "Manager & Squad", icon: Shirt, id: "squad", category: "FOOTBALL & TRANSFERS" },
   { to: "/app/lineup", label: "Lineup & Tactics", icon: Swords, id: "lineup", category: "FOOTBALL & TRANSFERS" },
@@ -63,15 +66,16 @@ const NAV = [
   { to: "/app/coin-traders", label: "Coin Traders", icon: CandlestickChart, id: "coin-traders", category: "ECONOMY & VAULT" },
 ];
 
-function NavItem({ item, badge }: any) {
+function NavItem({ item, badge, compact }: any) {
   const Icon = item.icon;
   return (
     <NavLink
       to={item.to}
       end={item.end}
+      title={item.label}
       data-testid={`nav-${item.id}`}
       className={({ isActive }) =>
-        `group flex items-center gap-3 rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
+        `group flex items-center ${compact ? "justify-center px-2" : "gap-3 px-3"} rounded-xl py-2 text-xs font-bold uppercase tracking-wider transition-all ${
           isActive
             ? "bg-gradient-to-r from-emerald-500/20 to-emerald-500/5 text-white shadow-[inset_3px_0_0_#10B981,0_4px_14px_rgba(0,0,0,0.4)] border border-emerald-500/35"
             : "text-slate-400 hover:bg-white/[0.05] hover:text-white border border-transparent"
@@ -79,8 +83,8 @@ function NavItem({ item, badge }: any) {
       }
     >
       <Icon size={15} className="shrink-0 text-emerald-400/85 group-hover:text-emerald-300" />
-      <span className="truncate">{item.label}</span>
-      {badge > 0 && (
+      {!compact && <span className="truncate">{item.label}</span>}
+      {badge > 0 && !compact && (
         <span className="gx-mono ml-auto rounded-md bg-amber-400 px-1.5 py-0.2 text-[10px] font-black text-slate-950 shadow">
           {badge}
         </span>
@@ -149,6 +153,8 @@ export default function AppShell() {
   const { data, isLoading } = useControlCenter();
   const { active } = useActiveClub();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const { skin, sidebarMode, dataSaver } = useSkin();
+  const isCompactSidebar = sidebarMode === "compact";
 
   // Global Ctrl+K / Cmd+K shortcut for Executive Command Spotlight
   useEffect(() => {
@@ -180,7 +186,7 @@ export default function AppShell() {
     !isDedicatedAccount &&
     clubs.some((c: any) => ["competition", "active"].includes(c.stage));
 
-  const traderAllowed = ["/app/coin-traders", "/app/finance"];
+  const traderAllowed = ["/app/coin-traders", "/app/finance", "/app/settings/appearance", "/app/appearance"];
   const creatorAllowed = [
     "/app/creator-access",
     "/app/advertising",
@@ -192,6 +198,8 @@ export default function AppShell() {
     "/app/competitions",
     "/app/national",
     "/app/finance",
+    "/app/settings/appearance",
+    "/app/appearance",
   ];
   const routeIsAllowed = (allowed: string[]) =>
     allowed.some((route) => pathname === route || pathname.startsWith(`${route}/`));
@@ -225,6 +233,8 @@ export default function AppShell() {
     "/app/coin-traders",
     "/app/inbox",
     "/app/advertising",
+    "/app/settings/appearance",
+    "/app/appearance",
   ];
   if (
     !isAdmin &&
@@ -254,10 +264,11 @@ export default function AppShell() {
           "creator-access",
           "advertising",
           "coin-traders",
+          "appearance-studio",
         ].includes(item.id)
       );
   const visibleNav = isTraderAccount
-    ? NAV.filter((item) => ["coin-traders", "finance"].includes(item.id))
+    ? NAV.filter((item) => ["coin-traders", "finance", "appearance-studio"].includes(item.id))
     : isCreatorAccount
     ? NAV.filter((item) =>
         [
@@ -271,6 +282,7 @@ export default function AppShell() {
           "competitions",
           "national",
           "finance",
+          "appearance-studio",
         ].includes(item.id)
       ).map((item) => (item.id === "creator-access" ? { ...item, label: "Creator Studio" } : item))
     : normalNav;
@@ -294,7 +306,7 @@ export default function AppShell() {
 
       {/* Desktop Fixed Sidebar */}
       <aside
-        className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-white/[0.09] lg:flex"
+        className={`fixed inset-y-0 left-0 z-30 hidden ${isCompactSidebar ? "w-20" : "w-64"} flex-col border-r border-white/[0.09] lg:flex transition-all duration-200`}
         style={{
           background: "linear-gradient(180deg, #060a14 0%, #04070f 100%)",
           boxShadow: "10px 0 36px rgba(0,0,0,0.65)",
@@ -335,6 +347,7 @@ export default function AppShell() {
                     key={n.to}
                     item={n}
                     badge={n.id === "inbox" ? data?.inbox_open_count : 0}
+                    compact={isCompactSidebar}
                   />
                 ))}
             </div>
@@ -374,12 +387,23 @@ export default function AppShell() {
       </aside>
 
       {/* Main App Content Viewport */}
-      <div className="lg:pl-64">
+      <div className={isCompactSidebar ? "lg:pl-20 transition-all duration-200" : "lg:pl-64 transition-all duration-200"}>
         {/* Sticky Broadcast Top Bar */}
         <header className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-white/[0.1] bg-slate-950/85 px-4 py-2.5 backdrop-blur-xl sm:px-8">
           <p className="gx-display text-xl font-black text-white lg:hidden">GTEX</p>
           {!isDedicatedAccount && <ClubSwitcher />}
           <GlobalWorldClockPill />
+
+          {/* Appearance Studio Shortcut Pill */}
+          <NavLink
+            to="/app/settings/appearance"
+            data-testid="topbar-appearance-studio-link"
+            className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/[0.04] px-2.5 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-emerald-400/50 hover:text-white"
+            title="Appearance Studio · Customise Skins & Views"
+          >
+            <Palette size={13} className="text-emerald-400" />
+            <span className="hidden xl:inline">Appearance</span>
+          </NavLink>
 
           {/* Quick Command Palette Trigger (Ctrl+K) */}
           <button

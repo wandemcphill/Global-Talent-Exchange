@@ -25,6 +25,8 @@ import { api, errMsg } from "@/lib/api";
 import { fmt, label, useActiveClub } from "@/lib/owner";
 import { Btn, Chip, Loading, TraitBar } from "@/components/gtex/ui";
 import { PlayerCard } from "./PlayerCard";
+import { useSkin } from "@/lib/skin-engine";
+import { PlayerStatisticalProfileView } from "./PlayerStatisticalProfileView";
 import { RegenCard } from "./RegenCard";
 import {
   buildJourney,
@@ -46,6 +48,15 @@ export function PlayerDossier({ playerId, onClose, onMakeOffer, onAddToWatchlist
   const qc = useQueryClient();
   const { active: activeClub } = useActiveClub();
   const [commissioningReport, setCommissioningReport] = useState(false);
+  const { getModuleView } = useSkin();
+  const configuredProfileView = (getModuleView("profiles") as "dossier" | "stats") || "dossier";
+  const [profileView, setProfileView] = useState<"dossier" | "stats">(configuredProfileView);
+
+  React.useEffect(() => {
+    if (configuredProfileView) {
+      setProfileView(configuredProfileView);
+    }
+  }, [configuredProfileView]);
 
   // 1. Primary player entity (regen or established real universe)
   const { data: regenData, isLoading: loadingRegen } = useQuery({
@@ -382,11 +393,54 @@ export function PlayerDossier({ playerId, onClose, onMakeOffer, onAddToWatchlist
           </button>
         </div>
 
+        <div className="flex items-center justify-between rounded-lg border border-white/10 bg-black/40 p-1.5" data-testid="profile-view-switcher">
+          <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 pl-2">Display Mode</span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setProfileView("dossier")}
+              className={`rounded px-2.5 py-1 text-[11px] font-bold uppercase transition-all ${
+                profileView === "dossier"
+                  ? "bg-emerald-500 text-slate-950 shadow"
+                  : "text-slate-400 hover:text-white"
+              }`}
+              data-testid="profile-view-dossier"
+            >
+              Card View
+            </button>
+            <button
+              type="button"
+              onClick={() => setProfileView("stats")}
+              className={`rounded px-2.5 py-1 text-[11px] font-bold uppercase transition-all ${
+                profileView === "stats"
+                  ? "bg-emerald-500 text-slate-950 shadow"
+                  : "text-slate-400 hover:text-white"
+              }`}
+              data-testid="profile-view-stats"
+            >
+              Analytical Stats
+            </button>
+          </div>
+        </div>
+
         {isLoading ? (
           <Loading label="Synthesizing scouting intel..." />
         ) : (
           <div className="space-y-6">
-            {/* Centerpiece Collectible Card */}
+            {/* Centerpiece Collectible Card or Statistical Profile */}
+            {profileView === "stats" ? (
+              <PlayerStatisticalProfileView
+                player={p}
+                rating={rating}
+                potential={potential}
+                position={position}
+                age={age}
+                nationality={nationality}
+                club={club}
+                careerEntries={careerEntries}
+                scoutReport={scoutReport}
+              />
+            ) : (
             <div className="flex justify-center py-2">
               {isRegen ? (
                 <RegenCard
@@ -418,6 +472,7 @@ export function PlayerDossier({ playerId, onClose, onMakeOffer, onAddToWatchlist
                 />
               )}
             </div>
+            )}
 
             {/* Quick Action Bar */}
             <div className="grid grid-cols-2 gap-3">

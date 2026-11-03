@@ -6,14 +6,61 @@
 
 :root {
   --gx-bg: #050811;
+  --gx-bg-gradient: linear-gradient(180deg, #050811 0%, #03060c 100%);
   --gx-card: #0b1220;
   --gx-line: rgba(255, 255, 255, 0.11);
+  --gx-line-strong: rgba(255, 255, 255, 0.22);
+  --gx-border-focus: #10b981;
   --gx-emerald: #10b981;
   --gx-gold: #f59e0b;
   --gx-cyan: #06b6d4;
   --gx-blaze: #ef4444;
   --gx-gtex: #3b82f6;
   --gx-fan: #f59e0b;
+
+  /* Semantic Typography Tokens */
+  --gx-text-primary: #f8fafc;
+  --gx-text-secondary: #94a3b8;
+  --gx-text-muted: #64748b;
+  --gx-text-accent: #10b981;
+
+  /* Semantic Surface Tokens */
+  --gx-surface-panel: rgba(11, 18, 32, 0.92);
+  --gx-surface-panel-gradient: linear-gradient(155deg, rgba(17, 27, 48, 0.86) 0%, rgba(9, 15, 28, 0.94) 65%, rgba(6, 10, 20, 0.98) 100%);
+  --gx-surface-panel-hover: rgba(16, 26, 46, 0.96);
+  --gx-surface-elevated: #0f1a2e;
+  --gx-surface-input: rgba(3, 6, 14, 0.85);
+  --gx-surface-input-focus: rgba(5, 10, 22, 0.95);
+  --gx-surface-modal: #070b14;
+
+  /* Semantic Action Tokens */
+  --gx-btn-primary-bg: linear-gradient(135deg, #34d399 0%, #10b981 55%, #059669 100%);
+  --gx-btn-primary-text: #022c22;
+  --gx-btn-primary-hover: linear-gradient(135deg, #6ee7b7 0%, #10b981 55%, #047857 100%);
+  --gx-btn-secondary-bg: rgba(255, 255, 255, 0.05);
+  --gx-btn-secondary-border: rgba(255, 255, 255, 0.15);
+  --gx-btn-secondary-text: #f1f5f9;
+  --gx-btn-danger-bg: rgba(239, 68, 68, 0.14);
+  --gx-btn-danger-text: #fca5a5;
+
+  /* Football & Status Tokens */
+  --gx-status-success: #10b981;
+  --gx-status-warning: #f59e0b;
+  --gx-status-danger: #ef4444;
+  --gx-status-info: #38bdf8;
+  --gx-football-pitch: #0c3827;
+  --gx-football-live: #10b981;
+  --gx-prestige-accent: #f59e0b;
+
+  /* Commercial / Advertising Tokens */
+  --gx-ad-surface: #071421;
+  --gx-ad-border: rgba(16, 185, 129, 0.45);
+  --gx-ad-bg: radial-gradient(ellipse at 0% 50%, rgba(16, 185, 129, 0.17), transparent 38%), linear-gradient(110deg, #071421 0%, #0b1728 48%, #121326 100%);
+
+  /* Badge Tokens */
+  --gx-badge-bg: rgba(16, 185, 129, 0.15);
+  --gx-badge-border: rgba(16, 185, 129, 0.35);
+  --gx-badge-text: #34d399;
 }
 
 html, body, #root {
@@ -63,8 +110,8 @@ body {
 
   /* Obsidian Broadcast Glass Panel */
   .gx-panel {
-    @apply relative rounded-2xl border border-white/[0.11] p-5 sm:p-6 transition-all duration-300;
-    background: linear-gradient(155deg, rgba(17, 27, 48, 0.86) 0%, rgba(9, 15, 28, 0.94) 65%, rgba(6, 10, 20, 0.98) 100%);
+    @apply relative rounded-2xl border p-5 sm:p-6 transition-all duration-300; border-color: var(--gx-line);
+    background: var(--gx-surface-panel-gradient);
     box-shadow:
       0 18px 42px -10px rgba(0, 0, 0, 0.68),
       inset 0 1px 0 rgba(255, 255, 255, 0.14),
@@ -419,4 +466,143 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .gx-ad-slide-enter { animation: none !important; }
   .gx-ad-active-card, .gx-ad-partner-card { transition: none !important; }
+}
+
+
+/* ==========================================================================
+   GTEX SKIN ENGINE: FOUR-LAYER ARCHITECTURE EXTENSIONS
+   ========================================================================== */
+
+/* Layer 1: GTEX Pro Light Skin Core Overrides */
+[data-skin-light="true"] {
+  color-scheme: light;
+}
+[data-skin-light="true"] body {
+  background: var(--gx-bg) !important;
+  color: var(--gx-text-primary) !important;
+}
+[data-skin-light="true"] .gx-panel {
+  background: var(--gx-surface-panel-gradient) !important;
+  border-color: var(--gx-line) !important;
+  box-shadow: 0 4px 18px -2px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+}
+[data-skin-light="true"] .gx-panel:hover {
+  border-color: var(--gx-line-strong) !important;
+  box-shadow: 0 8px 26px -4px rgba(15, 23, 42, 0.12) !important;
+}
+[data-skin-light="true"] .gx-h1,
+[data-skin-light="true"] .gx-h2,
+[data-skin-light="true"] .gx-h3 {
+  color: #0f172a !important;
+  text-shadow: none !important;
+}
+[data-skin-light="true"] .gx-input {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-color: var(--gx-line-strong) !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+[data-skin-light="true"] .gx-input:focus {
+  border-color: var(--gx-emerald) !important;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2) !important;
+}
+[data-skin-light="true"] .gx-table th {
+  background: #f1f5f9 !important;
+  color: #475569 !important;
+  border-bottom-color: #cbd5e1 !important;
+}
+[data-skin-light="true"] .gx-table td {
+  color: #0f172a !important;
+  border-bottom-color: #e2e8f0 !important;
+}
+[data-skin-light="true"] .gx-table tr:hover {
+  background: rgba(16, 185, 129, 0.07) !important;
+}
+[data-skin-light="true"] .gx-btn-secondary {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+[data-skin-light="true"] .gx-btn-secondary:hover {
+  background: #f8fafc !important;
+  border-color: #94a3b8 !important;
+}
+
+/* Layer 2: Layout Density Presets */
+[data-density="compact"] .gx-panel {
+  padding: 1rem 1.25rem !important;
+}
+[data-density="compact"] .gx-table th {
+  padding: 0.45rem 0.75rem !important;
+}
+[data-density="compact"] .gx-table td {
+  padding: 0.5rem 0.75rem !important;
+}
+
+[data-density="manager_dense"] .gx-panel {
+  padding: 0.75rem 1rem !important;
+  border-radius: 0.75rem !important;
+}
+[data-density="manager_dense"] .gx-table th {
+  padding: 0.35rem 0.5rem !important;
+  font-size: 9px !important;
+}
+[data-density="manager_dense"] .gx-table td {
+  padding: 0.35rem 0.5rem !important;
+  font-size: 12px !important;
+}
+[data-density="manager_dense"] .gx-h1 {
+  font-size: 2rem !important;
+}
+[data-density="manager_dense"] .gx-h2 {
+  font-size: 1.5rem !important;
+}
+[data-density="manager_dense"] .gx-h3 {
+  font-size: 1.15rem !important;
+}
+
+/* Layer 4: Approved Graphical Asset Packs */
+.gx-stadium-lights {
+  background-image:
+    radial-gradient(circle at 50% -10%, rgba(16, 185, 129, 0.18) 0%, transparent 60%),
+    radial-gradient(circle at 85% 20%, rgba(56, 189, 248, 0.12) 0%, transparent 45%);
+}
+.gx-minimal-clean {
+  background-image: none !important;
+}
+
+/* Accessibility Presets */
+[data-contrast="high"] {
+  --gx-line: rgba(255, 255, 255, 0.38) !important;
+  --gx-line-strong: rgba(255, 255, 255, 0.65) !important;
+}
+[data-skin-light="true"][data-contrast="high"] {
+  --gx-line: #94a3b8 !important;
+  --gx-line-strong: #475569 !important;
+}
+
+[data-text-scale="large"] {
+  font-size: 110%;
+}
+[data-text-scale="extra_large"] {
+  font-size: 125%;
+}
+
+[data-focus-rings="visible"] *:focus-visible {
+  outline: 3px solid var(--gx-border-focus, #10b981) !important;
+  outline-offset: 2px !important;
+}
+
+[data-reduced-motion="true"] * {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Data Saver Mode */
+[data-data-saver="true"] .gx-noise::after {
+  display: none !important;
+}
+[data-data-saver="true"] .gx-live-dot {
+  animation: none !important;
 }

@@ -37,6 +37,7 @@ import { Btn, Chip, Loading, Panel } from "@/components/gtex/ui";
 import { Cinema3DStage, Cinema3DSceneType } from "@/components/gtex/Cinema3DStage";
 import { HolographicPlayerCard } from "@/components/gtex/ApexWidgets";
 import { MatchdayLineupBroadcast, useClubMatchdaySheet, type MatchdaySquadMember } from "@/components/gtex/MatchdayLineupBroadcast";
+import { useSkin } from "@/lib/skin-engine";
 
 const GIFTS = [
   { code: "stadium_roar", name: "Stadium Roar", cost: 10 },
@@ -1964,6 +1965,8 @@ export default function MatchCenter() {
   const { id } = useParams();
   const [params] = useSearchParams();
   const clubId = params.get("club") || activeClub?.club_id || "";
+  const { getModuleView, setModuleView } = useSkin();
+  const matchView = getModuleView("match_center");
   const { data: m, isLoading } = useQuery({
     queryKey: ["match", id],
     queryFn: async () => (await api.get(`/owner/matches/${id}`)).data,
@@ -2099,6 +2102,55 @@ export default function MatchCenter() {
         {/* Main Match Header & Scoreboard */}
         <section className="gx-panel gx-pitch-grid gx-panel-live relative overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-3">
+            {/* Layer 3: Football Display Mode Switcher */}
+            <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-black/40 p-1" data-testid="match-center-view-toggle">
+              <button
+                type="button"
+                onClick={() => {
+                  setModuleView("match_center", "broadcast");
+                  setActiveTab("pitch");
+                }}
+                data-testid="match-view-broadcast"
+                className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                  matchView === "broadcast"
+                    ? "bg-emerald-500 text-black shadow"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Broadcast View
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setModuleView("match_center", "tactical");
+                  setActiveTab("tactics");
+                }}
+                data-testid="match-view-tactical"
+                className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                  matchView === "tactical"
+                    ? "bg-emerald-500 text-black shadow"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Tactical Command
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setModuleView("match_center", "compact");
+                  setActiveTab("commentary");
+                }}
+                data-testid="match-view-compact"
+                className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                  matchView === "compact"
+                    ? "bg-emerald-500 text-black shadow"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Compact Ticker
+              </button>
+            </div>
+
             <div className="flex items-center gap-2">
               <Chip tone={!liveState ? "slate" : done ? "slate" : isScheduled ? "cyan" : "emerald"}>
                 {!liveState ? (
