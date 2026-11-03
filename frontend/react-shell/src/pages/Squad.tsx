@@ -101,7 +101,7 @@ function HireManager({ club }: any) {
     <Panel eyebrow="Candidate market" title="Available managers" testid="hire-manager-panel" className="lg:col-span-12">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {catalog.map((m: any) => (
-          <div key={m.manager_id} className="rounded border border-white/10 bg-slate-900/60 p-4">
+          <div key={m.manager_id} className="rounded border border-gtex-graphite bg-gtex-slate/80 p-4">
             <div className="flex items-start justify-between">
               <div>
                 <p className="font-semibold text-white">{m.display_name}</p>
@@ -815,7 +815,7 @@ function BoardroomSection({ club }: any) {
           return (
             <div
               key={roleDef.key}
-              className="flex flex-col justify-between rounded-xl border border-white/10 bg-slate-900/60 p-4 shadow-lg space-y-3 hover:border-white/20 transition-colors"
+              className="flex flex-col justify-between rounded-xl border border-gtex-graphite bg-gtex-slate/80 p-4 shadow-lg space-y-3 hover:border-white/20 transition-colors"
             >
               <div>
                 <div className="flex items-center justify-between">
@@ -956,7 +956,7 @@ function BoardroomSection({ club }: any) {
             return (
               <div
                 key={cand.staff_id}
-                className="flex flex-col justify-between rounded-xl border border-white/10 bg-slate-900/60 p-4 space-y-3"
+                className="flex flex-col justify-between rounded-xl border border-gtex-graphite bg-gtex-slate/80 p-4 space-y-3"
               >
                 <div>
                   <div className="flex items-start justify-between">

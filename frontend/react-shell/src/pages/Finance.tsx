@@ -276,7 +276,7 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
       testid="sponsor-negotiation-desk"
       className="lg:col-span-12"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gtex-graphite pb-4">
         <div className="flex flex-wrap items-center gap-3">
           {clubs && clubs.length > 1 && (
             <select
@@ -580,7 +580,7 @@ function ClubShareholderDesk({ clubs }: { clubs: any[] }) {
       testid="club-shareholder-dividend-desk"
       className="lg:col-span-12"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gtex-graphite pb-4">
         <div className="flex flex-wrap items-center gap-3">
           {clubs && clubs.length > 1 && (
             <select
@@ -688,7 +688,7 @@ function ClubShareholderDesk({ clubs }: { clubs: any[] }) {
             </div>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-black/40 p-4">
+          <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4">
             <h5 className="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3">
               Club Shareholder Registry ({shData.shareholders?.length || 0} Investors)
             </h5>

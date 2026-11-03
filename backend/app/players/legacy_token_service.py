@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Integer, and_, cast, func, or_, select, text
+from sqlalchemy import Integer, and_, case, cast, func, or_, select, text
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.event_backbone import defer_event_publish_until_commit
@@ -185,33 +185,51 @@ class PlayerTokenMarketService:
                     term = f"%{t}%"
                     token_conditions.append(
                         or_(
-                            func.unaccent(func.lower(Player.full_name)).ilike(term),
-                            func.unaccent(func.lower(func.coalesce(Player.canonical_display_name, ""))).ilike(term),
-                            func.unaccent(func.lower(func.coalesce(Player.first_name, ""))).ilike(term),
-                            func.unaccent(func.lower(func.coalesce(Player.last_name, ""))).ilike(term),
-                            func.unaccent(func.lower(func.coalesce(Player.real_world_club_name, ""))).ilike(term),
-                            func.unaccent(func.lower(func.coalesce(Country.name, ""))).ilike(term),
+                            func.f_unaccent(Player.full_name).ilike(term),
+                            func.f_unaccent(Player.canonical_display_name).ilike(term),
                         )
                     )
-                fuzzy_condition = or_(
-                    func.word_similarity(normalized_search.lower(), func.unaccent(func.lower(Player.full_name))) > 0.38,
-                    func.word_similarity(
-                        normalized_search.lower(),
-                        func.unaccent(func.lower(func.coalesce(Player.canonical_display_name, ""))),
-                    )
-                    > 0.38,
-                )
-                filters.append(or_(and_(*token_conditions), fuzzy_condition))
+                filters.append(and_(*token_conditions))
                 if not sort:
-                    relevance_expr = func.greatest(
-                        func.word_similarity(normalized_search.lower(), func.unaccent(func.lower(Player.full_name))),
-                        func.word_similarity(
-                            normalized_search.lower(),
-                            func.unaccent(func.lower(func.coalesce(Player.canonical_display_name, ""))),
+                    prefix = f"{normalized_search}%"
+                    relevance_expr = case(
+                        (
+                            func.lower(func.f_unaccent(Player.full_name))
+                            == func.lower(func.f_unaccent(normalized_search)),
+                            1,
                         ),
+                        (
+                            func.lower(func.f_unaccent(func.coalesce(Player.canonical_display_name, "")))
+                            == func.lower(func.f_unaccent(normalized_search)),
+                            1,
+                        ),
+                        (func.f_unaccent(Player.full_name).ilike(f"{normalized_search} %"), 2),
+                        (func.f_unaccent(Player.full_name).ilike(f"% {normalized_search}"), 2),
+                        (func.f_unaccent(Player.full_name).ilike(f"% {normalized_search} %"), 2),
+                        (
+                            func.f_unaccent(func.coalesce(Player.canonical_display_name, "")).ilike(
+                                f"{normalized_search} %"
+                            ),
+                            2,
+                        ),
+                        (
+                            func.f_unaccent(func.coalesce(Player.canonical_display_name, "")).ilike(
+                                f"% {normalized_search}"
+                            ),
+                            2,
+                        ),
+                        (
+                            func.f_unaccent(func.coalesce(Player.canonical_display_name, "")).ilike(
+                                f"% {normalized_search} %"
+                            ),
+                            2,
+                        ),
+                        (func.f_unaccent(Player.full_name).ilike(prefix), 3),
+                        (func.f_unaccent(func.coalesce(Player.canonical_display_name, "")).ilike(prefix), 3),
+                        else_=4,
                     )
                     order_by = (
-                        relevance_expr.desc(),
+                        relevance_expr.asc(),
                         func.coalesce(Player.governed_gsi, 0).desc(),
                         PlayerShareMarket.share_price_coin.desc(),
                         Player.full_name.asc(),
@@ -230,6 +248,24 @@ class PlayerTokenMarketService:
                         )
                     )
                 filters.append(and_(*token_conditions))
+                if not sort:
+                    prefix = f"{normalized_search}%"
+                    relevance_expr = case(
+                        (func.lower(Player.full_name) == normalized_search.lower(), 1),
+                        (func.lower(func.coalesce(Player.canonical_display_name, "")) == normalized_search.lower(), 1),
+                        (Player.full_name.ilike(f"{normalized_search} %"), 2),
+                        (Player.full_name.ilike(f"% {normalized_search}"), 2),
+                        (Player.full_name.ilike(f"% {normalized_search} %"), 2),
+                        (Player.full_name.ilike(prefix), 3),
+                        else_=4,
+                    )
+                    order_by = (
+                        relevance_expr.asc(),
+                        func.coalesce(Player.governed_gsi, 0).desc(),
+                        PlayerShareMarket.share_price_coin.desc(),
+                        Player.full_name.asc(),
+                        Player.id.asc(),
+                    )
         # Only players whose market has already been issued and is active are
         # listable.  This used to also admit players with no market row and
         # lazily create one per listed player, which meant a GET minted markets
@@ -1087,7 +1123,13 @@ class PlayerTokenMarketService:
                 )
             )
         elif source == "real":
-            filters.append(Player.is_real_player.is_(True))
+            filters.append(
+                and_(
+                    Player.is_real_player.is_(True),
+                    func.lower(func.coalesce(Player.real_player_tier, "")) != "legend",
+                    Player.source_provider != "gtex_legend_prime",
+                )
+            )
         if nation and nation.strip():
             value = nation.strip()
             filters.append(or_(func.lower(Country.name) == value.lower(), Country.alpha2_code == value.upper()))

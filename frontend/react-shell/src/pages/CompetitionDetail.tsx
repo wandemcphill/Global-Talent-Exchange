@@ -16,7 +16,7 @@ function Standings({ rows, myIds }: any) {
         <thead><tr><th>#</th><th>Club</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th></tr></thead>
         <tbody>
           {rows.map((r: any, i: number) => (
-            <tr key={r.club_id} className={myIds.includes(r.club_id) ? "bg-emerald-500/[0.06]" : ""}>
+            <tr key={r.club_id} className={myIds.includes(r.club_id) ? "bg-gtex-emerald/10 font-bold" : ""}>
               <td className="gx-mono text-slate-500">{r.final_position || i + 1}</td>
               <td className="font-medium text-white">{r.club_name} {r.is_ai && <span className="text-[10px] text-slate-500">AI</span>} {r.eliminated && <Chip tone="red">Out</Chip>}</td>
               <td className="gx-mono">{r.played}</td><td className="gx-mono">{r.won}</td><td className="gx-mono">{r.drawn}</td><td className="gx-mono">{r.lost}</td>
@@ -192,22 +192,22 @@ export default function CompetitionDetail() {
         {/* Ecosystem Waterfall & Prize Settlement Desk */}
         <Panel eyebrow="Ecosystem Economics & Prize Settlement" title="TV Rights, Podium Payouts & Settlement Waterfall" className="lg:col-span-12" testid="competition-waterfall-panel">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-xl border border-white/10 bg-black/40 p-3.5">
+            <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4">
               <p className="text-[10px] uppercase font-bold text-slate-400">Competition Prize Pool</p>
               <p className="gx-mono text-xl font-black text-amber-300 mt-1">{fmt(comp.prize_pool)} <span className="text-xs">GTX</span></p>
               <p className="text-[10px] text-slate-400 mt-0.5">35% Ecosystem allocation</p>
             </div>
-            <div className="rounded-xl border border-white/10 bg-black/40 p-3.5">
+            <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4">
               <p className="text-[10px] uppercase font-bold text-slate-400">TV & Broadcast Rights</p>
               <p className="gx-mono text-xl font-black text-cyan-300 mt-1">{fmt(comp.broadcast_pool ?? Math.round(Number(comp.prize_pool || 0) * 1.14))} <span className="text-xs">GTX</span></p>
               <p className="text-[10px] text-slate-400 mt-0.5">40% Matchday broadcast share</p>
             </div>
-            <div className="rounded-xl border border-white/10 bg-black/40 p-3.5">
+            <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4">
               <p className="text-[10px] uppercase font-bold text-slate-400">Participation Grants</p>
               <p className="gx-mono text-xl font-black text-emerald-300 mt-1">{fmt(comp.participation_grant ?? 2500)} <span className="text-xs">GTX / club</span></p>
               <p className="text-[10px] text-slate-400 mt-0.5">Base stipend per entrant</p>
             </div>
-            <div className="rounded-xl border border-white/10 bg-black/40 p-3.5">
+            <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4">
               <p className="text-[10px] uppercase font-bold text-slate-400">Jackpot Contribution</p>
               <p className="gx-mono text-xl font-black text-purple-300 mt-1">{fmt(comp.jackpot_contribution ?? Math.round(Number(comp.prize_pool || 0) * 0.71))} <span className="text-xs">GTX</span></p>
               <p className="text-[10px] text-slate-400 mt-0.5">25% Recycled to Global Jackpot</p>

@@ -242,7 +242,7 @@ export function RegenWorld() {
   return (
     <div className="space-y-8 p-4 sm:p-8" data-testid="regen-world-screen">
       {/* World Introduction Hero Banner */}
-      <section className="relative overflow-hidden rounded-2xl border-2 border-emerald-500/30 bg-gradient-to-br from-[#061e16] via-[#04120e] to-[#020906] p-6 sm:p-10 shadow-2xl">
+      <section className="relative overflow-hidden rounded-2xl border border-gtex-graphite bg-gradient-to-br from-gtex-slate via-[#07191B] to-gtex-midnight p-6 sm:p-10 shadow-2xl ring-1 ring-white/5">
         <div className="pointer-events-none absolute right-0 top-0 h-full w-1/2 bg-[radial-gradient(ellipse_at_70%_20%,rgba(16,185,129,0.2),transparent_75%)]" />
         <div className="relative z-10 max-w-2xl">
           <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-950/80 px-3 py-1 text-[11px] font-black uppercase tracking-widest text-emerald-300 backdrop-blur-sm">
@@ -257,25 +257,25 @@ export function RegenWorld() {
 
             {/* Quick World Stats Ticker */}
             <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3 text-left">
-              <div className="rounded-lg border border-emerald-500/20 bg-black/40 p-3">
+              <div className="rounded-lg border border-gtex-graphite bg-gtex-midnight/70 p-3.5">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Gen Active</p>
                 <p className="gx-mono text-xl font-black text-emerald-300">
                   Gen {trackingData?.current_generation ?? "1"}
                 </p>
               </div>
-              <div className="rounded-lg border border-emerald-500/20 bg-black/40 p-3">
+              <div className="rounded-lg border border-gtex-graphite bg-gtex-midnight/70 p-3.5">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Seeded</p>
                 <p className="gx-mono text-xl font-black text-white">
                   {trackingData?.total_regens_generated != null ? `${trackingData.total_regens_generated}` : "—"}
                 </p>
               </div>
-              <div className="rounded-lg border border-emerald-500/20 bg-black/40 p-3">
+              <div className="rounded-lg border border-gtex-graphite bg-gtex-midnight/70 p-3.5">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Top Potential</p>
                 <p className="gx-mono text-xl font-black text-amber-300">
                   {trackingData?.top_potential != null ? `${trackingData.top_potential} POT` : "—"}
                 </p>
               </div>
-              <div className="rounded-lg border border-emerald-500/20 bg-black/40 p-3">
+              <div className="rounded-lg border border-gtex-graphite bg-gtex-midnight/70 p-3.5">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Scouted Nations</p>
                 <p className="gx-mono text-xl font-black text-cyan-300">
                   {trackingData?.nations_count != null ? `${trackingData.nations_count} Regions` : "—"}
@@ -286,7 +286,7 @@ export function RegenWorld() {
       </section>
 
       {/* Navigation Lanes */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gtex-graphite pb-4">
         <nav className="flex flex-wrap gap-2" data-testid="regen-world-tabs">
           {[
             { id: "feed", label: "Scouting Feed", icon: Compass },

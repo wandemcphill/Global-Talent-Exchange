@@ -46059,8 +46059,10 @@
       "birth_year": 1974,
       "historical_height_cm": "unknown",
       "preferred_foot": "unknown",
-      "primary_position": "unknown",
-      "secondary_positions": [],
+      "primary_position": "DM",
+      "secondary_positions": [
+        "CM"
+      ],
       "signature_traits": [],
       "signature_tendencies": [],
       "role_profile": "unassigned_pending_evidence",

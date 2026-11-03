@@ -48,7 +48,7 @@ export function RegenAwards() {
   return (
     <div className="space-y-10 p-4 sm:p-8" data-testid="regen-awards-screen">
       {/* Grand Football Gala Ceremony Banner */}
-      <section className="relative overflow-hidden rounded-3xl border-2 border-amber-400/50 bg-gradient-to-b from-[#2a1e05] via-[#151004] to-[#080602] p-6 sm:p-12 text-center shadow-[0_25px_60px_rgba(245,158,11,0.25)]">
+      <section className="relative overflow-hidden rounded-3xl border border-gtex-gold/40 bg-gradient-to-b from-[#1C1202] via-gtex-slate to-gtex-midnight p-6 sm:p-12 text-center shadow-2xl ring-1 ring-white/5">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(245,158,11,0.25),transparent_65%)]" />
 
         <div className="relative z-10 max-w-3xl mx-auto space-y-4">
@@ -103,7 +103,7 @@ export function RegenAwards() {
 
       {/* Featured Ceremony Spotlight Winner */}
       {featuredWinner ? (
-        <section className="relative rounded-2xl border-2 border-amber-400/40 bg-gradient-to-r from-[#1b1304] via-[#0f0c05] to-[#120e05] p-6 sm:p-8 shadow-2xl">
+        <section className="relative rounded-2xl border border-gtex-gold/30 bg-gtex-slate/90 p-6 sm:p-8 shadow-2xl">
           <div className="flex flex-col lg:flex-row items-center justify-between gap-8">
             <div className="max-w-xl text-left space-y-3">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/60 bg-amber-950/80 px-3 py-1 text-[11px] font-black uppercase tracking-widest text-amber-300">
@@ -122,14 +122,14 @@ export function RegenAwards() {
 
               <div className="flex flex-wrap gap-4 pt-2">
                 {featuredWinner.ranking_score != null && (
-                  <div className="rounded-lg border border-amber-500/20 bg-black/50 px-4 py-2">
+                  <div className="rounded-lg border border-gtex-graphite bg-gtex-midnight/80 px-4 py-2">
                     <p className="text-[10px] uppercase font-bold text-slate-400">Gala Score</p>
                     <p className="gx-mono text-xl font-black text-amber-300">
                       {featuredWinner.ranking_score.toFixed(1)} pts
                     </p>
                   </div>
                 )}
-                <div className="rounded-lg border border-amber-500/20 bg-black/50 px-4 py-2">
+                <div className="rounded-lg border border-gtex-graphite bg-gtex-midnight/80 px-4 py-2">
                   <p className="text-[10px] uppercase font-bold text-slate-400">Ceremony Rank</p>
                   <p className="gx-mono text-xl font-black text-emerald-300">#1 Laureate</p>
                 </div>

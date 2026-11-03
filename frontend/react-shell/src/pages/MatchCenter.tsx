@@ -2099,9 +2099,10 @@ export default function MatchCenter() {
   return (
     <div data-testid="match-center-page" className="grid gap-6 lg:grid-cols-12">
       <div className="space-y-6 lg:col-span-8">
-        {/* Main Match Header & Scoreboard */}
-        <section className="gx-panel gx-pitch-grid gx-panel-live relative overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        {/* Main Match Header & Broadcast Scoreboard */}
+        <section className="gx-scoreboard-box gx-pitch-grid gx-panel-live relative overflow-hidden rounded-2xl border border-[#25354B] p-5 sm:p-6 shadow-2xl">
+          {/* Top Broadcast Venue & Status Strip */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.08] pb-3.5">
             {/* Layer 3: Football Display Mode Switcher */}
             <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-black/40 p-1" data-testid="match-center-view-toggle">
               <button
@@ -2151,7 +2152,7 @@ export default function MatchCenter() {
               </button>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Chip tone={!liveState ? "slate" : done ? "slate" : isScheduled ? "cyan" : "emerald"}>
                 {!liveState ? (
                   "Preview · authoritative match feed unavailable"
@@ -2166,13 +2167,19 @@ export default function MatchCenter() {
                 )}
               </Chip>
 
+              {/* Broadcast Match Period Capsule */}
+              <div className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-[#080F1C]/70 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-widest text-slate-300">
+                <span className="size-1.5 rounded-full bg-[#00C991] animate-ping" />
+                <span>{minute <= 45 ? "1st Half" : minute <= 90 ? "2nd Half" : "Full Time"}</span>
+              </div>
+
               {/* Pause/Resume Toggle */}
               {!done && !liveState && (
                 <button
                   onClick={() => setIsPaused(!isPaused)}
-                  className="flex items-center gap-1 rounded-sm border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-300 hover:border-white/30"
+                  className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-[#14243A] px-2.5 py-1 text-xs font-bold text-slate-200 transition hover:border-[#00C991]/50 hover:bg-[#14243A]/90 hover:text-white"
                 >
-                  {isPaused ? <Play size={12} className="text-emerald-400" /> : <Pause size={12} />}
+                  {isPaused ? <Play size={12} className="text-[#00E8A8]" /> : <Pause size={12} className="text-amber-400" />}
                   <span>{isPaused ? "RESUME" : "PAUSE"}</span>
                 </button>
               )}
@@ -2181,7 +2188,7 @@ export default function MatchCenter() {
               {!done && !liveState && (
                 <button
                   onClick={() => setSpeed((s) => (s === 0.5 ? 1.0 : s === 1.0 ? 2.0 : 0.5))}
-                  className="gx-mono rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-xs font-bold text-emerald-400"
+                  className="gx-mono rounded-xl border border-[#00C991]/40 bg-[#00C991]/15 px-2.5 py-1 text-xs font-black text-[#00E8A8] transition hover:bg-[#00C991]/25"
                 >
                   {speed.toFixed(1)}x
                 </button>
@@ -2193,49 +2200,105 @@ export default function MatchCenter() {
                   setAudioAtmosphere(!audioAtmosphere);
                   toast.info(audioAtmosphere ? "Stadium crowd audio muted" : "Synthesized stadium atmosphere active");
                 }}
-                className={`flex items-center gap-1 rounded-sm border px-2 py-1 text-xs transition-colors ${
+                className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1 text-xs font-bold transition-all ${
                   audioAtmosphere
-                    ? "border-blue-500/40 bg-blue-500/15 text-blue-300"
-                    : "border-white/10 bg-white/5 text-slate-400"
+                    ? "border-[#42B9EC]/50 bg-[#42B9EC]/20 text-[#42B9EC] shadow-[0_0_12px_rgba(66,185,236,0.3)]"
+                    : "border-white/10 bg-white/5 text-slate-400 hover:text-white"
                 }`}
               >
                 {audioAtmosphere ? <Volume2 size={12} /> : <VolumeX size={12} />}
-                <span className="hidden sm:inline">CROWD</span>
+                <span className="hidden sm:inline">CROWD SFX</span>
               </button>
             </div>
 
             {!done && !liveState && (
               <Btn variant="ghost" onClick={() => setLocalMinute(120)} data-testid="skip-to-full-time">
-                Skip to full time
+                Skip to full time →
               </Btn>
             )}
           </div>
 
-          {/* Big Score Display */}
-          <div className="my-6 grid grid-cols-3 items-center text-center">
-            <div>
-              <p className="gx-display text-xl font-bold uppercase text-white sm:text-2xl">{m.home_name}</p>
-              <span className="gx-mono text-[11px] font-bold text-emerald-400">{formation}</span>
+          {/* Authentic Television Esports Scoreboard Hero */}
+          <div className="my-6 grid grid-cols-12 items-center gap-3">
+            {/* Home Club Team Card */}
+            <div className="col-span-4 flex flex-col items-center sm:items-end text-center sm:text-right">
+              <div className="flex items-center gap-2.5 flex-row-reverse sm:flex-row">
+                <div>
+                  <p className="gx-display text-lg sm:text-2xl font-black uppercase text-white tracking-tight leading-none" title={m.home_name}>
+                    {m.home_name}
+                  </p>
+                  <div className="mt-1 flex items-center justify-center sm:justify-end gap-1.5">
+                    <span className="gx-mono text-[10px] font-extrabold text-[#00E8A8] bg-[#00C991]/15 px-1.5 py-0.5 rounded border border-[#00C991]/30">
+                      {formation}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase hidden sm:inline">HOME</span>
+                  </div>
+                </div>
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#00E8A8] to-[#00A677] text-slate-950 font-black text-sm shadow-lg border border-white/20">
+                  {m.home_name?.slice(0, 2).toUpperCase() || "HM"}
+                </div>
+              </div>
             </div>
-            <p className="gx-display text-5xl font-black text-emerald-300 sm:text-6xl" data-testid="match-score">
-              {score.home} – {score.away}
-            </p>
-            <div>
-              <p className="gx-display text-xl font-bold uppercase text-white sm:text-2xl">{m.away_name}</p>
-              <span className="gx-mono text-[11px] font-bold text-amber-400">4-3-3</span>
+
+            {/* Central Score Digits Display */}
+            <div className="col-span-4 flex flex-col items-center justify-center">
+              <div className="flex items-center gap-2 sm:gap-3 rounded-2xl border border-white/15 bg-[#080F1C]/90 px-4 sm:px-6 py-2 shadow-2xl backdrop-blur-xl">
+                <span className="gx-display text-4xl sm:text-6xl font-black text-white tracking-tight drop-shadow-md">
+                  {score.home}
+                </span>
+                <span className="text-xl sm:text-2xl font-black text-white/30">
+                  :
+                </span>
+                <span className="gx-display text-4xl sm:text-6xl font-black text-white tracking-tight drop-shadow-md">
+                  {score.away}
+                </span>
+              </div>
+              <span className="gx-mono mt-1.5 text-[11px] font-black text-[#00E8A8] tracking-widest uppercase">
+                {done ? "FINAL" : `${Math.min(minute, 90)}' MATCHDAY`}
+              </span>
+              <p className="sr-only" data-testid="match-score">
+                {score.home} – {score.away}
+              </p>
+            </div>
+
+            {/* Away Club Team Card */}
+            <div className="col-span-4 flex flex-col items-center sm:items-start text-center sm:text-left">
+              <div className="flex items-center gap-2.5">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#F3CA5A] to-[#C79727] text-slate-950 font-black text-sm shadow-lg border border-white/20">
+                  {m.away_name?.slice(0, 2).toUpperCase() || "AW"}
+                </div>
+                <div>
+                  <p className="gx-display text-lg sm:text-2xl font-black uppercase text-white tracking-tight leading-none" title={m.away_name}>
+                    {m.away_name}
+                  </p>
+                  <div className="mt-1 flex items-center justify-center sm:justify-start gap-1.5">
+                    <span className="gx-mono text-[10px] font-extrabold text-[#E5B63F] bg-[#E5B63F]/15 px-1.5 py-0.5 rounded border border-[#E5B63F]/30">
+                      4-3-3
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase hidden sm:inline">AWAY</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Tactical Momentum Scrubber */}
-          <p className="gx-label">Tactical momentum</p>
-          <Momentum values={m.narrative?.momentum || []} upto={minute} />
-          <p className="mt-2 text-[11px] text-slate-500">
-            Mentality: {m.narrative?.mentality?.home || "Balanced"} vs {m.narrative?.mentality?.away || "Balanced"}
-          </p>
+          {/* Tactical Momentum Scrubber with Pitch Zones */}
+          <div className="border-t border-white/[0.08] pt-3 mt-4">
+            <div className="flex items-center justify-between mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <span className="flex items-center gap-1.5 text-white">
+                <Activity size={12} className="text-[#00C991]" />
+                Tactical Momentum & Field Dominance
+              </span>
+              <span className="gx-mono text-slate-300">
+                {m.narrative?.mentality?.home || "Balanced"} vs {m.narrative?.mentality?.away || "Balanced"}
+              </span>
+            </div>
+            <Momentum values={m.narrative?.momentum || []} upto={minute} />
+          </div>
         </section>
 
-        {/* Navigation Tabs */}
-        <div className="flex flex-wrap gap-2 border-b border-white/10 pb-3">
+        {/* Match Navigation Tabs */}
+        <div className="flex flex-wrap gap-2 border-b border-[#25354B] pb-3">
           {[
             { id: "pitch", label: "2D / 2.5D MATCH PITCH", icon: Tv },
             { id: "lineups", label: "MATCHDAY LINEUPS", icon: Users },
@@ -2250,13 +2313,13 @@ export default function MatchCenter() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-xs font-bold transition-all ${
+                className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
                   isActive
-                    ? "border border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
-                    : "border border-transparent text-slate-400 hover:border-white/10 hover:text-white"
+                    ? "border border-[#00C991]/50 bg-gradient-to-r from-[#00C991]/20 to-[#00C991]/5 text-white shadow-[0_4px_16px_rgba(0,201,145,0.25)]"
+                    : "border border-transparent text-slate-400 hover:border-white/10 hover:bg-white/[0.04] hover:text-white"
                 }`}
               >
-                <IconComponent size={13} />
+                <IconComponent size={14} className={isActive ? "text-[#00E8A8]" : "text-slate-400"} />
                 <span>{tab.label}</span>
               </button>
             );

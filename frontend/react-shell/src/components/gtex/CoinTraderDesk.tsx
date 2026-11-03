@@ -38,7 +38,7 @@ function OrderRow({ o, asTrader, traders }: any) {
   const trader = traders.find((t: any) => t.id === o.trader_profile_id);
   const base = `/coin-traders/orders/${o.id}`;
   return (
-    <div data-testid={`coin-order-${o.id}`} className="rounded-sm border border-white/10 p-3 text-sm">
+    <div data-testid={`coin-order-${o.id}`} className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4 text-sm shadow-md">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-white">
           {buys ? (asTrader ? "Client buys" : "Buy") : asTrader ? "Client sells" : "Sell"} <b>{fmt(o.coin_amount)} GTX</b> for ₦{fmt(o.fiat_total)}

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import Integer, String, and_, case, cast, func, literal, or_, select
+from sqlalchemy import Integer, String, and_, case, cast, distinct, func, literal, or_, select
 from sqlalchemy.orm import Session
 
 from app.ingestion.models import Country, Player
@@ -15,6 +15,7 @@ from app.market.lifecycle_status import resolve_player_lifecycle_status
 from app.models.real_player_profile import RealPlayerProfile
 from app.models.real_player_source_link import RealPlayerSourceLink
 from app.players.read_models import PlayerSummaryReadModel
+from app.players.gsi_service import resolve_player_gsi
 from app.players.real_player_schemas import RealPlayerMatchRequest
 from app.players.real_player_read_models import (
     RealPlayerUniverseDetail,
@@ -31,6 +32,24 @@ REAL_PLAYER_MATCH_SCORE_KEYS = ("position", "age", "country", "height", "foot", 
 REAL_PLAYER_HEALTHY_INJURY_STATUSES = frozenset({"", "available", "fit", "healthy", "cleared", "match_fit"})
 REAL_PLAYER_TIER_1_LEVELS = frozenset({"tier1", "elite", "featured", "premier", "top-flight", "top_flight"})
 REAL_PLAYER_TIER_2_LEVELS = frozenset({"tier2", "core", "open_market", "open market", "development"})
+ARCHIVED_DUPLICATE_PLAYER_IDS = frozenset(
+    {
+        "106bbc0a-a8b3-408e-b856-a4dad15799fd",  # Eric Cantona duplicate (wrong image 2002042479)
+        "55f70b9b-dae9-4a55-8721-ccf9bdaa0154",  # Andres Iniesta duplicate
+        "0704b985-6e51-49fc-bf74-45820da69183",  # Luis Figo duplicate
+        "862d907b-917a-4508-a19d-da3481ae778d",  # Emerson duplicate
+        "c02852d3-656f-49d8-bcb2-f83234525e27",  # Bukayo Saka duplicate
+        "cd6eaa94-3e3a-4187-bc2c-8ec16f2be165",  # Victor Osimhen duplicate
+        "50235403-679f-48c8-88a0-7614e76ccc0e",  # Harry Kane duplicate
+        "62930b4f-ce7b-43c9-a6b7-17abd26125a4",  # Paul Onuachu duplicate
+        "8f4f3204-985e-4244-ad1b-a820eaada964",  # Aaron Wan-Bissaka duplicate
+        "db0bf799-9b9b-4084-be0a-8d3cff413a15",  # Joshua Kimmich duplicate
+        "64b8ed47-c422-4b03-a0f6-c8bfef31aa35",  # Kylian Mbappé duplicate
+        "42e150d2-dafe-4fd4-8c96-6bf0844893a6",  # Vinicius Junior duplicate
+        "0ce1de07-ad08-43da-b34b-875e3ce600fb",  # Jude Bellingham duplicate
+        "63ce3e82-7695-40ea-89ee-908126c0c038",  # Michael Olise duplicate
+    }
+)
 REAL_PLAYER_POSITION_SEARCH_TERMS: dict[str, frozenset[str]] = {
     "GK": frozenset({"gk", "goalkeeper"}),
     "CB": frozenset({"cb", "centre-back", "center-back", "central defender"}),
@@ -171,8 +190,21 @@ class RealPlayerUniverseQueryService:
             availability=normalized_availability,
             search=search,
         )
-        total = int(self.session.scalar(select(func.count()).select_from(base_statement.subquery())) or 0)
-        statement = base_statement.order_by(*self._order_by(sort=sort)).offset(effective_offset).limit(limit)
+        total = self._count_players(
+            position=position,
+            nationality=normalized_country,
+            club=club,
+            tier=normalized_tier,
+            min_age=min_age,
+            max_age=max_age,
+            min_value=min_value,
+            max_value=max_value,
+            availability=normalized_availability,
+            search=search,
+        )
+        statement = (
+            base_statement.order_by(*self._order_by(sort=sort, search=search)).offset(effective_offset).limit(limit)
+        )
         rows = self.session.execute(statement).all()
         items = tuple(self._build_list_item(*row) for row in rows)
         next_offset = effective_offset + len(items)
@@ -284,6 +316,23 @@ class RealPlayerUniverseQueryService:
         return list(self.session.execute(statement).all())
 
     def _base_statement(self):
+        bind = self.session.get_bind()
+        dialect_name = getattr(getattr(bind, "dialect", None), "name", "")
+        base_filter = and_(
+            Player.is_real_player.is_(True),
+            Player.is_tradable.is_(True),
+            or_(Player.real_player_tier.is_(None), Player.real_player_tier.notin_(["archived_duplicate", "retired"])),
+            Player.id.notin_(ARCHIVED_DUPLICATE_PLAYER_IDS),
+        )
+        if dialect_name == "postgresql":
+            return (
+                select(Player, RealPlayerProfile, RealPlayerSourceLink, Country, PlayerSummaryReadModel)
+                .outerjoin(RealPlayerProfile, RealPlayerProfile.gtex_player_id == Player.id)
+                .outerjoin(RealPlayerSourceLink, RealPlayerSourceLink.id == RealPlayerProfile.source_link_id)
+                .outerjoin(Country, Country.id == Player.country_id)
+                .outerjoin(PlayerSummaryReadModel, PlayerSummaryReadModel.player_id == Player.id)
+                .where(base_filter)
+            )
         selected_profiles = self._selected_profiles_subquery()
         return (
             select(Player, RealPlayerProfile, RealPlayerSourceLink, Country, PlayerSummaryReadModel)
@@ -292,7 +341,7 @@ class RealPlayerUniverseQueryService:
             .outerjoin(RealPlayerSourceLink, RealPlayerSourceLink.id == RealPlayerProfile.source_link_id)
             .outerjoin(Country, Country.id == Player.country_id)
             .outerjoin(PlayerSummaryReadModel, PlayerSummaryReadModel.player_id == Player.id)
-            .where(Player.is_real_player.is_(True), Player.is_tradable.is_(True))
+            .where(base_filter)
         )
 
     def _selected_profiles_subquery(self):
@@ -316,6 +365,99 @@ class RealPlayerUniverseQueryService:
             .where(ranked_profiles.c.profile_rank == 1)
             .subquery()
         )
+
+    def _count_players(
+        self,
+        *,
+        position: str | None,
+        nationality: str | None,
+        club: str | None,
+        tier: str | None,
+        min_age: int | None,
+        max_age: int | None,
+        min_value: float | None,
+        max_value: float | None,
+        availability: str | None,
+        search: str | None,
+    ) -> int:
+        needs_profile = bool(position or club)
+        needs_country = bool(nationality)
+        needs_summary = bool(min_value is not None or max_value is not None)
+
+        if not (needs_profile or needs_country or needs_summary or availability == "free_agent"):
+            stmt = select(func.count(Player.id)).where(
+                Player.is_real_player.is_(True),
+                Player.is_tradable.is_(True),
+                or_(
+                    Player.real_player_tier.is_(None), Player.real_player_tier.notin_(["archived_duplicate", "retired"])
+                ),
+                Player.id.notin_(ARCHIVED_DUPLICATE_PLAYER_IDS),
+            )
+            if tier:
+                tier_norm = tier.strip().lower()
+                if tier_norm in {"legend", "legends", "legendary", "icon"}:
+                    stmt = stmt.where(
+                        or_(
+                            func.lower(func.coalesce(Player.real_player_tier, "")) == "legend",
+                            Player.source_provider == "gtex_legend_prime",
+                        )
+                    )
+                elif tier_norm in {"wonderkid", "wonderkids"}:
+                    stmt = stmt.where(func.lower(func.coalesce(Player.real_player_tier, "")) == "wonderkid")
+                elif tier_norm in {"marquee", "elite", "stars"}:
+                    stmt = stmt.where(
+                        func.lower(func.coalesce(Player.real_player_tier, "")).in_(("marquee", "featured", "elite"))
+                    )
+                else:
+                    stmt = stmt.where(func.lower(func.coalesce(Player.real_player_tier, "")) == tier_norm)
+            if min_age is not None:
+                stmt = stmt.where(self._age_expr() >= min_age)
+            if max_age is not None:
+                stmt = stmt.where(self._age_expr() <= max_age)
+            if search:
+                cleaned = search.strip()
+                tokens = [t.lower() for t in cleaned.split() if t]
+                bind = self.session.get_bind()
+                dialect_name = getattr(getattr(bind, "dialect", None), "name", "")
+                if dialect_name == "postgresql":
+                    token_conditions = []
+                    for t in tokens:
+                        term = f"%{t}%"
+                        token_conditions.append(
+                            or_(
+                                func.f_unaccent(Player.full_name).ilike(term),
+                                func.f_unaccent(Player.canonical_display_name).ilike(term),
+                            )
+                        )
+                    stmt = stmt.where(and_(*token_conditions))
+                else:
+                    token_conditions = []
+                    for t in tokens:
+                        term = f"%{t}%"
+                        token_conditions.append(
+                            or_(
+                                Player.full_name.ilike(term),
+                                Player.canonical_display_name.ilike(term),
+                            )
+                        )
+                    stmt = stmt.where(and_(*token_conditions))
+            return int(self.session.scalar(stmt) or 0)
+
+        # Fallback for queries with profile/country/summary join requirements
+        filtered_stmt = self._apply_filters(
+            position=position,
+            nationality=nationality,
+            club=club,
+            tier=tier,
+            min_age=min_age,
+            max_age=max_age,
+            min_value=min_value,
+            max_value=max_value,
+            availability=availability,
+            search=search,
+        )
+        subq = filtered_stmt.subquery()
+        return int(self.session.scalar(select(func.count(distinct(subq.c.id)))) or 0)
 
     def _apply_filters(
         self,
@@ -403,24 +545,11 @@ class RealPlayerUniverseQueryService:
                     term = f"%{t}%"
                     token_conditions.append(
                         or_(
-                            func.unaccent(func.lower(Player.full_name)).ilike(term),
-                            func.unaccent(func.lower(func.coalesce(Player.canonical_display_name, ""))).ilike(term),
-                            func.unaccent(func.lower(func.coalesce(RealPlayerProfile.canonical_name, ""))).ilike(term),
-                            func.unaccent(func.lower(cast(RealPlayerProfile.known_aliases_json, String))).ilike(term),
-                            func.unaccent(func.lower(func.coalesce(Player.first_name, ""))).ilike(term),
-                            func.unaccent(func.lower(func.coalesce(Player.last_name, ""))).ilike(term),
-                            func.unaccent(func.lower(func.coalesce(self._club_expr(), ""))).ilike(term),
-                            func.unaccent(func.lower(func.coalesce(self._nationality_expr(), ""))).ilike(term),
+                            func.f_unaccent(Player.full_name).ilike(term),
+                            func.f_unaccent(Player.canonical_display_name).ilike(term),
                         )
                     )
-                fuzzy_condition = or_(
-                    func.word_similarity(cleaned.lower(), func.unaccent(func.lower(Player.full_name))) > 0.38,
-                    func.word_similarity(
-                        cleaned.lower(), func.unaccent(func.lower(func.coalesce(Player.canonical_display_name, "")))
-                    )
-                    > 0.38,
-                )
-                statement = statement.where(or_(and_(*token_conditions), fuzzy_condition))
+                statement = statement.where(and_(*token_conditions))
             else:
                 token_conditions = []
                 for t in tokens:
@@ -455,8 +584,49 @@ class RealPlayerUniverseQueryService:
             statement = statement.where(self._experience_years_expr() <= payload.brief.experience_years.max)
         return statement
 
-    def _order_by(self, *, sort: str):
+    def _order_by(self, *, sort: str, search: str | None = None):
         name_expr = func.lower(Player.full_name)
+        if search and search.strip():
+            cleaned = search.strip()
+            prefix = f"{cleaned}%"
+            bind = self.session.get_bind()
+            dialect_name = getattr(getattr(bind, "dialect", None), "name", "")
+            if dialect_name == "postgresql":
+                relevance = case(
+                    (func.lower(func.f_unaccent(Player.full_name)) == func.lower(func.f_unaccent(cleaned)), 1),
+                    (
+                        func.lower(func.f_unaccent(func.coalesce(Player.canonical_display_name, "")))
+                        == func.lower(func.f_unaccent(cleaned)),
+                        1,
+                    ),
+                    (func.f_unaccent(Player.full_name).ilike(f"{cleaned} %"), 2),
+                    (func.f_unaccent(Player.full_name).ilike(f"% {cleaned}"), 2),
+                    (func.f_unaccent(Player.full_name).ilike(f"% {cleaned} %"), 2),
+                    (func.f_unaccent(func.coalesce(Player.canonical_display_name, "")).ilike(f"{cleaned} %"), 2),
+                    (func.f_unaccent(func.coalesce(Player.canonical_display_name, "")).ilike(f"% {cleaned}"), 2),
+                    (func.f_unaccent(func.coalesce(Player.canonical_display_name, "")).ilike(f"% {cleaned} %"), 2),
+                    (func.f_unaccent(Player.full_name).ilike(prefix), 3),
+                    (func.f_unaccent(func.coalesce(Player.canonical_display_name, "")).ilike(prefix), 3),
+                    else_=4,
+                )
+            else:
+                relevance = case(
+                    (func.lower(Player.full_name) == cleaned.lower(), 1),
+                    (func.lower(func.coalesce(Player.canonical_display_name, "")) == cleaned.lower(), 1),
+                    (Player.full_name.ilike(f"{cleaned} %"), 2),
+                    (Player.full_name.ilike(f"% {cleaned}"), 2),
+                    (Player.full_name.ilike(f"% {cleaned} %"), 2),
+                    (Player.full_name.ilike(prefix), 3),
+                    else_=4,
+                )
+            return (
+                relevance.asc(),
+                func.coalesce(Player.governed_gsi, 0).desc(),
+                self._current_value_expr().is_(None),
+                self._current_value_expr().desc(),
+                name_expr.asc(),
+                Player.id.asc(),
+            )
         if sort == "current_value":
             current_value_expr = self._current_value_expr()
             return (
@@ -554,13 +724,35 @@ class RealPlayerUniverseQueryService:
         summary: PlayerSummaryReadModel | None,
     ) -> RealPlayerUniverseDetail:
         dna = dict(player.dna_profile or {}) if isinstance(player.dna_profile, dict) else {}
-        raw_signals = dict(profile.normalized_signals_json or {}) if profile is not None else {}
-        if not raw_signals and isinstance(dna.get("attributes"), dict):
-            raw_signals = {
-                str(k): min(99, int(float(v) * 5)) if float(v) <= 20 else int(float(v))
-                for k, v in dict(dna["attributes"]).items()
-                if isinstance(v, (int, float))
-            }
+        summary_data = (
+            dict(summary.summary_json or {}) if summary is not None and isinstance(summary.summary_json, dict) else {}
+        )
+        football_attributes: dict[str, int] = {}
+        raw_attrs = dna.get("attributes") or summary_data.get("attributes")
+        if (
+            not isinstance(raw_attrs, dict)
+            and profile is not None
+            and isinstance(profile.normalized_signals_json, dict)
+        ):
+            potential_traits = {"pace", "shooting", "passing", "dribbling", "defending", "physical"}
+            if any(k.lower() in potential_traits for k in profile.normalized_signals_json):
+                raw_attrs = profile.normalized_signals_json
+
+        if isinstance(raw_attrs, dict):
+            for k, v in raw_attrs.items():
+                if isinstance(v, (int, float)):
+                    val = min(99, max(1, int(float(v) * 5))) if float(v) <= 20 else min(99, max(1, int(float(v))))
+                    football_attributes[str(k).lower()] = val
+
+        profile_signals = dict(profile.normalized_signals_json or {}) if profile is not None else {}
+        raw_signals = football_attributes if football_attributes else profile_signals
+        is_legend = (
+            str(player.real_player_tier or "").strip().lower() == "legend"
+            or str(player.source_provider or "").strip().lower() in ("gtex_legend", "gtex_legend_prime")
+            or player.legendary_profile_id is not None
+        )
+        cur_gsi, pot_gsi = resolve_player_gsi(player)
+        detail_potential = None if is_legend else (player.potential or pot_gsi)
         return RealPlayerUniverseDetail(
             player_id=player.id,
             player_name=player.full_name,
@@ -639,6 +831,9 @@ class RealPlayerUniverseQueryService:
             metadata_json=dict((profile.metadata_json if profile is not None else None) or dna),
             summary_json=self._summary_payload(summary),
             updated_at=profile.updated_at if profile is not None else player.updated_at,
+            governed_gsi=cur_gsi,
+            potential=detail_potential,
+            attributes=football_attributes,
         )
 
     def _build_match_candidate_snapshot(

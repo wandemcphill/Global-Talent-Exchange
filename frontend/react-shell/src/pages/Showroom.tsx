@@ -252,7 +252,7 @@ export function Showroom() {
       </nav>
 
       {/* Editorial Header & Gifting Demarcation Banner */}
-      <div className="rounded-2xl border border-amber-500/25 bg-gradient-to-br from-slate-900 via-slate-950 to-amber-950/20 p-6 md:p-8 space-y-6">
+      <div className="rounded-2xl border border-gtex-gold/30 bg-gradient-to-br from-gtex-slate via-[#0C1524] to-gtex-midnight p-6 md:p-8 space-y-6 shadow-2xl ring-1 ring-white/5">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-amber-400 text-xs font-black uppercase tracking-[0.2em]">
@@ -268,11 +268,11 @@ export function Showroom() {
           </div>
 
           <div className="flex flex-col sm:flex-row md:flex-col gap-3 shrink-0">
-            <div className="rounded-xl border border-amber-400/30 bg-slate-950/80 px-4 py-3 text-right">
+            <div className="rounded-xl border border-gtex-gold/30 bg-gtex-midnight/80 px-4 py-3 text-right shadow-inner">
               <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Club Treasury</div>
               <div className="font-mono text-xl font-black text-amber-300">{fmt(clubCash)} GTX</div>
             </div>
-            <div className="rounded-xl border border-amber-500/40 bg-amber-950/40 px-4 py-2.5 text-right">
+            <div className="rounded-xl border border-gtex-gold/40 bg-gtex-gold/10 px-4 py-2.5 text-right shadow-inner">
               <div className="text-[10px] uppercase tracking-wider text-amber-300 font-bold">Club Prestige Standing</div>
               <div className="font-mono text-sm font-black text-white">{clubPrestige}/100 · {prestigeTierLabel}</div>
             </div>
@@ -280,21 +280,21 @@ export function Showroom() {
         </div>
 
         {/* Prestige System Strategic Mechanics */}
-        <div className="rounded-xl border border-amber-400/30 bg-gradient-to-r from-amber-950/40 via-purple-950/30 to-black/50 p-4 text-xs space-y-2">
+        <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-5 text-xs space-y-3">
           <div className="flex items-center gap-2 font-black uppercase tracking-wider text-amber-300">
             <Sparkles size={15} />
             <span>How Prestige Powers Club Development</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px] text-slate-300">
-            <div className="rounded-lg bg-black/40 border border-white/5 p-2.5">
+            <div className="rounded-lg bg-gtex-slate/60 border border-gtex-graphite p-3">
               <b className="text-amber-300 block mb-0.5">Academy Intake Ceiling</b>
               Higher Prestige directly raises the max potential of generated regens (+3 to +15 pts).
             </div>
-            <div className="rounded-lg bg-black/40 border border-white/5 p-2.5">
+            <div className="rounded-lg bg-gtex-slate/60 border border-gtex-graphite p-3">
               <b className="text-cyan-300 block mb-0.5">Player & Regen Pull</b>
               World-class stars prioritize clubs with high prestige scores in transfer negotiations.
             </div>
-            <div className="rounded-lg bg-black/40 border border-white/5 p-2.5">
+            <div className="rounded-lg bg-gtex-slate/60 border border-gtex-graphite p-3">
               <b className="text-purple-300 block mb-0.5">Elite Staff Hiring</b>
               Bypasses marquee wage premiums when hiring top General Managers and HOYDs.
             </div>
@@ -303,7 +303,7 @@ export function Showroom() {
 
         {/* Demarcation Card: Owner Luxury Gifting vs. Community FanCoin Gifting */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-white/10 text-xs">
-          <div className="rounded-xl border border-purple-500/30 bg-purple-500/[0.08] p-4 space-y-1.5 text-purple-200">
+          <div className="rounded-xl border border-gtex-gold/30 bg-gtex-gold/[0.06] p-4 space-y-1.5 text-amber-200">
             <div className="flex items-center gap-2 font-bold text-purple-300">
               <Gift className="h-4 w-4 shrink-0 text-purple-300" />
               <span className="uppercase tracking-wider text-[11px]">Owner Luxury Gifting (Club GTEX Coin)</span>
@@ -313,7 +313,7 @@ export function Showroom() {
             </p>
           </div>
 
-          <div className="rounded-xl border border-slate-700 bg-slate-900/50 p-4 space-y-1.5 text-slate-400">
+          <div className="rounded-xl border border-gtex-graphite bg-gtex-slate/50 p-4 space-y-1.5 text-slate-400">
             <div className="flex items-center gap-2 font-bold text-slate-300">
               <Coins className="h-4 w-4 shrink-0 text-amber-400" />
               <span className="uppercase tracking-wider text-[11px]">Community Gifting (FanCoin)</span>
@@ -336,8 +336,8 @@ export function Showroom() {
                 data-testid={`showroom-cat-${cat.key}`}
                 className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all ${
                   active
-                    ? "bg-amber-400 text-slate-950 font-black shadow-[0_0_16px_rgba(251,191,36,0.4)]"
-                    : "border border-white/10 bg-slate-900/70 text-slate-300 hover:border-amber-400/40 hover:text-white"
+                    ? "bg-gtex-gold text-slate-950 font-black shadow-md"
+                    : "border border-gtex-graphite bg-gtex-slate/80 text-slate-300 hover:border-gtex-gold/50 hover:text-white"
                 }`}
               >
                 {Icon && <Icon className="h-3.5 w-3.5" />}
@@ -391,10 +391,10 @@ export function Showroom() {
               <article
                 key={key}
                 data-testid={`showroom-item-${key}`}
-                className="group flex flex-col overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900 to-slate-950 shadow-xl transition-all duration-300 hover:-translate-y-1 hover:border-amber-400/50 hover:shadow-amber-950/20"
+                className="group flex flex-col overflow-hidden rounded-2xl border border-[#25354B] bg-[#14243A] gx-card-bezel shadow-xl transition-all duration-300 hover:-translate-y-1 hover:border-[#E5B63F]/70 hover:shadow-[0_20px_50px_rgba(229,182,63,0.22)]"
               >
                 {/* Visual Header */}
-                <div className="relative h-48 overflow-hidden bg-slate-950 border-b border-white/5">
+                <div className="relative h-52 overflow-hidden bg-gtex-midnight border-b border-gtex-graphite">
                   {assetImage(it) ? (
                     <img
                       src={assetImage(it)}
@@ -427,7 +427,7 @@ export function Showroom() {
                   </div>
 
                   {/* Price pill */}
-                  <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-md bg-slate-950/90 border border-amber-400/30 px-2.5 py-1 font-mono text-xs font-black text-amber-300">
+                  <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-md bg-gtex-midnight/90 border border-gtex-gold/40 px-3 py-1 font-mono text-xs font-black text-gtex-gold">
                     <Coins className="h-3.5 w-3.5 text-amber-400" /> {formatPrice(it)} GTX
                   </div>
 

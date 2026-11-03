@@ -49,3 +49,28 @@ The local product loop is the Python API plus the Flutter web app. Unity batch b
 - Flutter web: from `frontend/`, `flutter run -d web-server --web-hostname 0.0.0.0 --web-port 8080 --dart-define=GTE_API_BASE_URL=http://127.0.0.1:8000 --dart-define=GTE_BACKEND_MODE=live`. Open `http://127.0.0.1:8080/auth/login`. Demo accounts are in `docs/RUNBOOK_LOCAL_DEV.md`.
 - Checks that passed in this environment: `GET /health`, `POST /api/v2/auth/login` as `seed.fan@gte.local`, `flutter test test/widget_test.dart`, and `pytest backend/tests/app/test_health_root.py`.
 - `npm run lint:js` still reports existing issues under `services/player-ingestion` and `qa/playwright`. `.venv` is excluded so the virtualenv does not add more.
+
+## Football Legends & Market Invariants (STRICT GOVERNANCE)
+All agents working on GTEX must adhere to the following rules permanently:
+1. **1-of-1 In-Game Legend Assets**:
+   - Every single legend (ex-players from the 50s through 2000s and recently retired players) MUST have `real_player_tier = 'legend'`, `is_tradable = true`, and exactly 1 share in the market (`total_shares = 1`, `released_shares = 1`).
+   - They MUST display the badge `ICON · 1 OF 1` in the UI.
+   - When a legend unit is purchased, NO additional shares may be minted.
+2. **Duplicate Player Elimination**:
+   - No duplicate copies of legends are permitted in the game.
+   - Specific retired duplicate IDs:
+     - `106bbc0a-a8b3-408e-b856-a4dad15799fd` (Eric Cantona fake portrait, retired in favor of authentic `b421109b-b268-49cc-b2cb-0fe6cf40ce4a`)
+     - `55f70b9b-dae9-4a55-8721-ccf9bdaa0154` (Andrés Iniesta duplicate, retired in favor of authentic `b496213b-ff42-4feb-878f-55389ae7a50c`)
+     - `0704b985-6e51-49fc-bf74-45820da69183` (Luís Figo duplicate, retired in favor of authentic `5220d191-0220-4d93-87c2-e47d15929d7d`)
+     - `862d907b-917a-4508-a19d-da3481ae778d` (Émerson duplicate, retired in favor of authentic `88580a67-b712-4c17-a69d-579d44f9fb69`)
+   - All duplicate records have `real_player_tier = 'archived_duplicate'`, `is_tradable = false`, and are excluded from all search queries, markets, and read models.
+3. **Active Players Are NOT Legends**:
+   - Active superstars (Harry Kane, Kylian Mbappé, Jude Bellingham, Vinícius Júnior, Rodri, Thibaut Courtois, etc.) are active players, NOT legends.
+   - They must maintain `real_player_tier = 'marquee'`, `legendary_profile_id = NULL`, and 200 units available (`total_shares = 200`, `released_shares = 200`) so they can be traded multiple times.
+4. **Ratings (GSI) Calibration Rules**:
+   - **Only 4 players in history are rated 98**: Pelé, Diego Maradona, Cristiano Ronaldo, and Lionel Messi.
+   - Lionel Messi and Cristiano Ronaldo maintain peak age (age 20).
+   - Tier 2 Pantheon (rating 96): Ronaldo Nazário (R9), Zinedine Zidane, Ronaldinho, Marco van Basten, Alfredo Di Stéfano, Paolo Maldini.
+   - Ballon d'Or winners and top podium finishers are calibrated across 90-95.
+   - Minimum rating floor: **No legend may be rated below 80**. The floor for all legends is **80 on the dot**.
+   - No uniform clumping: ratings are spread across 80-96 according to individual achievements, international tournaments, and career honors.

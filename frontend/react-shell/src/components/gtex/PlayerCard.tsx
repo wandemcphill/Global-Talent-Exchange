@@ -40,35 +40,35 @@ export interface TierConfig {
 export const TIERS: Record<TierType, TierConfig> = {
   standard: {
     name: "Standard",
-    badge: "border-slate-500/40 bg-slate-900/80 text-slate-300",
-    frame: "border-slate-600/60 bg-gradient-to-b from-[#131c2e] via-[#0b121e] to-[#060a12]",
-    glow: "shadow-slate-950/60",
+    badge: "border-[#25354B] bg-[#14243A] text-slate-300",
+    frame: "border-[#25354B] bg-gradient-to-b from-[#14243A] via-[#0E1A2C] to-[#080F1C]",
+    glow: "shadow-black/70",
     accent: "text-slate-400",
     ratingText: "text-white",
   },
   elite: {
     name: "Elite",
-    badge: "border-emerald-400/50 bg-emerald-950/70 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.3)]",
-    frame: "border-emerald-400/60 bg-gradient-to-b from-[#062a1e] via-[#091b15] to-[#040e0a]",
-    glow: "shadow-[0_16px_40px_rgba(16,185,129,0.25)]",
-    accent: "text-emerald-400",
-    ratingText: "text-emerald-300",
+    badge: "border-[#00C991]/50 bg-[#00C991]/15 text-[#00E8A8] shadow-[0_0_12px_rgba(0,201,145,0.25)]",
+    frame: "border-[#00C991]/60 bg-gradient-to-b from-[#082E22] via-[#0E1A2C] to-[#080F1C]",
+    glow: "shadow-[0_16px_40px_rgba(0,201,145,0.22)]",
+    accent: "text-[#00C991]",
+    ratingText: "text-[#00E8A8]",
   },
   legendary: {
     name: "Legendary",
-    badge: "border-amber-400/60 bg-amber-950/70 text-amber-300 shadow-[0_0_16px_rgba(245,158,11,0.4)]",
-    frame: "border-amber-400/75 bg-gradient-to-b from-[#2e2007] via-[#1c1407] to-[#0c0903]",
-    glow: "shadow-[0_20px_50px_rgba(245,158,11,0.32)]",
-    accent: "text-amber-400",
-    ratingText: "text-amber-200",
+    badge: "border-[#E5B63F]/60 bg-[#E5B63F]/15 text-[#E5B63F] shadow-[0_0_16px_rgba(229,182,63,0.35)]",
+    frame: "border-[#E5B63F]/75 bg-gradient-to-b from-[#2E240D] via-[#14243A] to-[#080F1C]",
+    glow: "shadow-[0_20px_50px_rgba(229,182,63,0.28)]",
+    accent: "text-[#E5B63F]",
+    ratingText: "text-[#E5B63F]",
   },
   regen: {
     name: "Regen",
-    badge: "border-emerald-400/60 bg-emerald-950/80 text-emerald-300",
-    frame: "border-emerald-500/50 bg-[#04120e]",
-    glow: "shadow-[0_16px_40px_rgba(16,185,129,0.25)]",
-    accent: "text-emerald-400",
-    ratingText: "text-emerald-300",
+    badge: "border-[#00C991]/60 bg-[#00C991]/15 text-[#00E8A8]",
+    frame: "border-[#00C991]/50 bg-gradient-to-b from-[#082E22] via-[#0E1A2C] to-[#080F1C]",
+    glow: "shadow-[0_16px_40px_rgba(0,201,145,0.22)]",
+    accent: "text-[#00C991]",
+    ratingText: "text-[#00E8A8]",
   },
 };
 
@@ -103,10 +103,10 @@ export function sanitizeRealPlayerImage(image?: string | null, isRegen?: boolean
 
 export function buildSilhouetteDataUri(position?: string, isLegendary?: boolean): string {
   const posLabel = posShort(position);
-  const accent = isLegendary ? "#F59E0B" : "#10B981";
-  const bgTop = isLegendary ? "#291D09" : "#0F1E2E";
-  const bgBot = isLegendary ? "#120C03" : "#060B13";
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 260" fill="none"><defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${bgTop}" stop-opacity="0.4"/><stop offset="100%" stop-color="${bgBot}" stop-opacity="0.06"/></linearGradient><linearGradient id="sil" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#64748B"/><stop offset="65%" stop-color="#334155"/><stop offset="100%" stop-color="#0F172A"/></linearGradient></defs><circle cx="120" cy="118" r="88" fill="url(#bg)" stroke="${accent}" stroke-opacity="0.28" stroke-width="1.5"/><path d="M120 52c21 0 37 17 37 39 0 18-10 33-24 39l1 9c33 9 57 32 64 68H42c7-36 31-59 64-68l1-9c-14-6-24-21-24-39 0-22 16-39 37-39Z" fill="url(#sil)" stroke="rgba(255,255,255,0.22)" stroke-width="1.6"/><path d="M97 143l23 18 23-18" stroke="${accent}" stroke-opacity="0.7" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><rect x="96" y="176" width="48" height="20" rx="10" fill="rgba(6,10,18,0.82)" stroke="${accent}" stroke-opacity="0.55" stroke-width="1.2"/><text x="120" y="190" text-anchor="middle" fill="#E2E8F0" font-family="monospace" font-weight="800" font-size="11" letter-spacing="1">${posLabel}</text></svg>`;
+  const accent = isLegendary ? "#E5B63F" : "#00C991";
+  const bgTop = isLegendary ? "#2E240D" : "#14243A";
+  const bgBot = isLegendary ? "#14243A" : "#080F1C";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 260" fill="none"><defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${bgTop}" stop-opacity="0.45"/><stop offset="100%" stop-color="${bgBot}" stop-opacity="0.1"/></linearGradient><linearGradient id="sil" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#64748B"/><stop offset="65%" stop-color="#334155"/><stop offset="100%" stop-color="#0F172A"/></linearGradient></defs><circle cx="120" cy="118" r="88" fill="url(#bg)" stroke="${accent}" stroke-opacity="0.32" stroke-width="1.5"/><path d="M120 52c21 0 37 17 37 39 0 18-10 33-24 39l1 9c33 9 57 32 64 68H42c7-36 31-59 64-68l1-9c-14-6-24-21-24-39 0-22 16-39 37-39Z" fill="url(#sil)" stroke="rgba(255,255,255,0.22)" stroke-width="1.6"/><path d="M97 143l23 18 23-18" stroke="${accent}" stroke-opacity="0.75" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><rect x="96" y="176" width="48" height="20" rx="10" fill="rgba(8,15,28,0.85)" stroke="${accent}" stroke-opacity="0.55" stroke-width="1.2"/><text x="120" y="190" text-anchor="middle" fill="#E2E8F0" font-family="monospace" font-weight="800" font-size="11" letter-spacing="1">${posLabel}</text></svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
@@ -217,8 +217,8 @@ export function PlayerCard(props: PlayerCardProps) {
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top) / rect.height;
     setHolo({
-      rx: (0.5 - y) * 16,
-      ry: (x - 0.5) * 20,
+      rx: (0.5 - y) * 14,
+      ry: (x - 0.5) * 18,
       gx: Math.round(x * 100),
       gy: Math.round(y * 100),
       active: true,
@@ -285,9 +285,9 @@ export function PlayerCard(props: PlayerCardProps) {
         style={{
           transformStyle: "preserve-3d",
           transform: `perspective(850px) rotateX(${holo.rx}deg) rotateY(${holo.ry}deg) scale(${holo.active ? 1.02 : 1})`,
-          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.22)",
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.18)",
         }}
-        className={`group relative flex flex-col overflow-hidden rounded-2xl border-2 ${tier.frame} p-3.5 shadow-xl transition-transform duration-100 ${
+        className={`group relative flex flex-col overflow-hidden rounded-2xl border ${tier.frame} p-3.5 shadow-xl transition-transform duration-100 ${
           onClick ? "cursor-pointer" : ""
         } ${className}`}
       >
@@ -295,8 +295,8 @@ export function PlayerCard(props: PlayerCardProps) {
         <div
           className="pointer-events-none absolute inset-0 transition-opacity duration-200"
           style={{
-            opacity: holo.active ? 0.85 : 0.35,
-            background: `radial-gradient(circle at ${holo.gx}% ${holo.gy}%, rgba(253,224,71,0.42), rgba(16,185,129,0.24) 40%, transparent 72%)`,
+            opacity: holo.active ? 0.8 : 0.28,
+            background: `radial-gradient(circle at ${holo.gx}% ${holo.gy}%, rgba(229,182,63,0.35), rgba(0,201,145,0.20) 40%, transparent 72%)`,
             mixBlendMode: "screen",
           }}
         />
@@ -310,7 +310,7 @@ export function PlayerCard(props: PlayerCardProps) {
               {posShort(position)}
             </span>
             {potential != null && (
-              <span className="gx-mono mt-1 inline-block rounded bg-emerald-500/20 border border-emerald-400/40 px-1.5 py-0.5 text-[10px] text-emerald-300 font-extrabold">
+              <span className="gx-mono mt-1 inline-block rounded bg-[#00C991]/20 border border-[#00C991]/40 px-1.5 py-0.5 text-[10px] text-[#00E8A8] font-extrabold">
                 POT {potential}
               </span>
             )}
@@ -318,7 +318,7 @@ export function PlayerCard(props: PlayerCardProps) {
 
           <div className="flex items-center gap-2">
             {/* 6-Axis Attribute Mini Radar */}
-            <svg viewBox="0 0 100 100" className="h-12 w-12 shrink-0 overflow-visible opacity-90">
+            <svg viewBox="0 0 100 100" className="h-12 w-12 shrink-0 overflow-visible opacity-85">
               <polygon
                 points="50,10 85,30 85,70 50,90 15,70 15,30"
                 fill="rgba(255,255,255,0.04)"
@@ -327,12 +327,12 @@ export function PlayerCard(props: PlayerCardProps) {
               />
               <polygon
                 points={radarPts}
-                fill="rgba(16,185,129,0.35)"
-                stroke="#10b981"
+                fill="rgba(0,201,145,0.35)"
+                stroke="#00C991"
                 strokeWidth="2.2"
               />
             </svg>
-            <div className="relative size-14 shrink-0 overflow-hidden rounded-full border-2 border-white/25 bg-slate-950/80 shadow-md">
+            <div className="relative size-14 shrink-0 overflow-hidden rounded-full border-2 border-white/20 bg-[#080F1C] shadow-md">
               <img
                 src={imageSrc}
                 alt=""
@@ -354,9 +354,9 @@ export function PlayerCard(props: PlayerCardProps) {
         </div>
 
         {price != null && (
-          <div className="relative z-10 mt-2.5 pt-2 border-t border-white/15 flex items-center justify-between text-xs">
+          <div className="relative z-10 mt-2.5 pt-2 border-t border-white/10 flex items-center justify-between text-xs">
             <span className="text-[10px] uppercase font-bold text-slate-400">Valuation</span>
-            <span className="gx-mono font-extrabold text-amber-300">{price} GTX</span>
+            <span className="gx-mono font-extrabold text-[#E5B63F]">{price} GTX</span>
           </div>
         )}
         {footer && <div className="relative z-10 mt-2">{footer}</div>}
@@ -366,6 +366,11 @@ export function PlayerCard(props: PlayerCardProps) {
 
   // Full signature collectible 3D-Tilt Holographic player card
   const up = change != null ? change >= 0 : true;
+  const bezelClass = isLegendaryTier
+    ? "gx-gold-rim gx-gold-shimmer"
+    : props.tier === "elite" || numRating >= 75
+    ? "gx-emerald-rim"
+    : "gx-card-bezel";
 
   return (
     <article
@@ -387,18 +392,21 @@ export function PlayerCard(props: PlayerCardProps) {
       style={{
         transformStyle: "preserve-3d",
         transform: `perspective(950px) rotateX(${holo.rx}deg) rotateY(${holo.ry}deg) scale(${holo.active ? 1.02 : 1})`,
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.28)",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.22)",
       }}
-      className={`group relative isolate flex aspect-[5/7.2] w-full max-w-[310px] flex-col overflow-hidden rounded-2xl border-2 ${tier.frame} ${tier.glow} p-4 text-white shadow-2xl transition-transform duration-100 ${
+      className={`group relative isolate flex aspect-[5/7.2] w-full max-w-[310px] flex-col overflow-hidden rounded-2xl border-2 ${tier.frame} ${tier.glow} ${bezelClass} p-4 text-white shadow-2xl transition-transform duration-100 ${
         onClick ? "cursor-pointer" : ""
       } ${className}`}
     >
+      {/* Subtle animated holographic foil prism layer */}
+      <div className="pointer-events-none absolute inset-0 gx-holographic-foil opacity-[0.07] mix-blend-overlay" />
+
       {/* Dynamic Mouse-Reactive Holographic Foil Glare */}
       <div
         className="pointer-events-none absolute inset-0 transition-opacity duration-200"
         style={{
-          opacity: holo.active ? 0.9 : 0.42,
-          background: `radial-gradient(circle at ${holo.gx}% ${holo.gy}%, rgba(253,224,71,0.45), rgba(16,185,129,0.25) 38%, rgba(56,189,248,0.16) 58%, transparent 74%)`,
+          opacity: holo.active ? 0.85 : 0.35,
+          background: `radial-gradient(circle at ${holo.gx}% ${holo.gy}%, rgba(229,182,63,0.38), rgba(0,201,145,0.22) 38%, rgba(66,185,236,0.14) 58%, transparent 74%)`,
           mixBlendMode: "screen",
         }}
       />
@@ -417,27 +425,37 @@ export function PlayerCard(props: PlayerCardProps) {
         />
         <polygon
           points={radarPts}
-          fill="rgba(16,185,129,0.38)"
-          stroke="#10b981"
+          fill="rgba(0,201,145,0.35)"
+          stroke="#00C991"
           strokeWidth="2.2"
         />
       </svg>
 
-      {/* Header bar: Tier badge & verified icons */}
+      {/* Header bar: EA FC Shield Rating Bezel & Tier badge */}
       <header className="relative z-10 flex items-start justify-between">
-        <div className="flex flex-col leading-none">
-          <span
-            className={`gx-display text-5xl sm:text-6xl font-black tracking-tight ${tier.ratingText} drop-shadow-md`}
-            data-testid={`${testid}-rating`}
-          >
-            {rating}
-          </span>
-          <span className="gx-mono mt-1 text-sm font-black tracking-wider text-slate-200">
-            {posShort(position)}
-          </span>
-          <span className="mt-1 text-[11px] font-bold tracking-widest text-slate-300 uppercase">
-            {nationality || "Global"}
-          </span>
+        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#080F1C]/85 px-2.5 py-1.5 shadow-lg backdrop-blur-md">
+          <div className="flex flex-col items-center leading-none">
+            <span
+              className={`gx-display text-4xl sm:text-5xl font-black tracking-tight ${tier.ratingText} drop-shadow-md`}
+              data-testid={`${testid}-rating`}
+            >
+              {rating}
+            </span>
+            <span className="gx-mono mt-0.5 text-xs font-black tracking-wider text-slate-200">
+              {posShort(position)}
+            </span>
+          </div>
+          <div className="h-7 w-[1px] bg-white/15" />
+          <div className="flex flex-col text-left leading-none">
+            <span className="text-[10px] font-extrabold tracking-wider text-slate-300 uppercase">
+              {nationality || "Global"}
+            </span>
+            {potential != null && (
+              <span className="gx-mono mt-1 text-[9px] font-extrabold text-[#00E8A8]">
+                POT {potential}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-col items-end gap-1.5">
@@ -445,14 +463,9 @@ export function PlayerCard(props: PlayerCardProps) {
             className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${tier.badge}`}
             data-testid={testid ? `${testid}-badge` : undefined}
           >
-            {numRating >= 85 ? <Star size={10} className="fill-amber-300" /> : <ShieldCheck size={10} />}
+            {numRating >= 85 ? <Star size={10} className="fill-[#E5B63F]" /> : <ShieldCheck size={10} />}
             {badge || tier.name}
           </span>
-          {potential != null && (
-            <span className="gx-mono rounded bg-black/60 px-2 py-0.5 text-[10px] font-bold text-emerald-300 border border-emerald-500/40">
-              POT {potential}
-            </span>
-          )}
         </div>
       </header>
 
@@ -465,7 +478,7 @@ export function PlayerCard(props: PlayerCardProps) {
           loading="lazy"
           className="h-full max-h-48 w-auto object-contain object-bottom drop-shadow-[0_12px_24px_rgba(0,0,0,0.85)] transition-transform duration-500 group-hover:scale-105"
         />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[#080F1C] via-[#080F1C]/60 to-transparent" />
       </div>
 
       {/* Identity block */}
@@ -483,27 +496,27 @@ export function PlayerCard(props: PlayerCardProps) {
 
       {/* Key attributes row */}
       {stats.length > 0 ? (
-        <dl className="relative z-10 my-2.5 grid grid-cols-6 gap-0.5 border-y border-white/15 py-1.5 bg-black/50 rounded-lg">
+        <dl className="relative z-10 my-2.5 grid grid-cols-6 gap-1 border-y border-white/10 py-1.5 bg-[#080F1C]/75 rounded-xl px-1">
           {stats.slice(0, 6).map((s) => (
-            <div key={s.k} className="flex flex-col items-center">
-              <dt className="text-[9px] font-bold tracking-wider text-slate-400 uppercase">{s.k}</dt>
+            <div key={s.k} className="flex flex-col items-center rounded-lg bg-white/[0.03] py-1 border border-white/[0.04]">
+              <dt className="text-[9px] font-extrabold tracking-wider text-slate-400 uppercase">{s.k}</dt>
               <dd className="gx-mono text-xs font-black text-white">{s.v}</dd>
             </div>
           ))}
         </dl>
       ) : (
-        <div className="relative z-10 my-2.5 border-y border-white/15 py-1.5 flex items-center justify-around bg-black/45 rounded-lg text-center">
+        <div className="relative z-10 my-2.5 border-y border-white/10 py-1.5 flex items-center justify-around bg-[#080F1C]/75 rounded-xl text-center">
           <div>
-            <p className="text-[9px] font-bold tracking-wider text-slate-400 uppercase">TIER</p>
-            <p className="gx-mono text-xs font-black text-amber-300 uppercase">{tier.name}</p>
+            <p className="text-[9px] font-extrabold tracking-wider text-slate-400 uppercase">TIER</p>
+            <p className="gx-mono text-xs font-black text-[#E5B63F] uppercase">{tier.name}</p>
           </div>
           <div>
-            <p className="text-[9px] font-bold tracking-wider text-slate-400 uppercase">FORM</p>
-            <p className="gx-mono text-xs font-black text-emerald-400">{form ?? "7.4"}</p>
+            <p className="text-[9px] font-extrabold tracking-wider text-slate-400 uppercase">FORM</p>
+            <p className="gx-mono text-xs font-black text-[#00E8A8]">{form ?? "7.4"}</p>
           </div>
           <div>
-            <p className="text-[9px] font-bold tracking-wider text-slate-400 uppercase">FOIL</p>
-            <p className="gx-mono text-xs font-black text-sky-300">3D HOLO</p>
+            <p className="text-[9px] font-extrabold tracking-wider text-slate-400 uppercase">FOIL</p>
+            <p className="gx-mono text-xs font-black text-[#42B9EC]">3D HOLO</p>
           </div>
         </div>
       )}
@@ -514,15 +527,15 @@ export function PlayerCard(props: PlayerCardProps) {
           {price != null && (
             <div className="flex flex-col">
               <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Valuation</span>
-              <span className="gx-display text-xl font-black leading-none text-amber-300">
-                {price} <span className="gx-mono text-[10px] font-bold text-amber-400/80">GTX</span>
+              <span className="gx-display text-xl font-black leading-none text-[#E5B63F] drop-shadow-[0_2px_8px_rgba(229,182,63,0.3)]">
+                {price} <span className="gx-mono text-[10px] font-bold text-[#E5B63F]/80">GTX</span>
               </span>
             </div>
           )}
           {change != null && (
             <span
               className={`flex items-center gap-0.5 rounded px-1.5 py-0.5 gx-mono text-xs font-black ${
-                up ? "bg-emerald-500/20 text-emerald-300" : "bg-red-500/20 text-red-300"
+                up ? "bg-[#00C991]/20 text-[#00E8A8]" : "bg-red-500/20 text-red-300"
               }`}
             >
               {up ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
@@ -533,7 +546,7 @@ export function PlayerCard(props: PlayerCardProps) {
       ) : (
         <footer className="relative z-10 flex items-center justify-between pt-1 text-[10px] text-slate-400 font-semibold">
           <span>GTEX PRO HOLO</span>
-          <span className="gx-mono text-amber-300/90">#PLR-{rating}</span>
+          <span className="gx-mono text-[#E5B63F]/90">#PLR-{rating}</span>
         </footer>
       )}
 
