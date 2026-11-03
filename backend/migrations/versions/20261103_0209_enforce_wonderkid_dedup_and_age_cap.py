@@ -162,6 +162,10 @@ CUBARSI_FACE_URL = (
 
 def upgrade() -> None:
     conn = op.get_bind()
+    is_postgres = conn.dialect.name == "postgresql"
+    if not is_postgres:
+        return
+
     insp = sa.inspect(conn)
     tables = set(insp.get_table_names())
 
