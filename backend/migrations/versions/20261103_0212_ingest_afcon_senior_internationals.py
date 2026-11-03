@@ -26999,6 +26999,7 @@ def upgrade() -> None:
         meta_json = json.dumps({'source': 'afcon_senior_international', 'gsi': p['governed_gsi'], 'country': p['country_name']}).replace("'", "''")
         summary_json = json.dumps({
             'gsi': p['governed_gsi'],
+            'global_scouting_index': p['governed_gsi'],
             'overall': p['governed_gsi'],
             'potential': p['potential'],
             'position': p['position'],
@@ -27010,7 +27011,13 @@ def upgrade() -> None:
             'real_player_tier': 'international',
             'country_name': p['country_name'],
             'share_price_coin': p['share_price_coin'],
-            'total_shares': 200
+            'total_shares': 200,
+            'published_card_value_credits': p['share_price_coin'],
+            'is_tradable': True,
+            'market_visibility': {
+                'status': 'visible',
+                'eligible': True
+            }
         }).replace("'", "''")
 
         full_name = p['full_name'].replace("'", "''")
