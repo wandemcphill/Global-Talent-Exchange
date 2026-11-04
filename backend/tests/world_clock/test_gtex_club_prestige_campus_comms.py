@@ -72,7 +72,7 @@ def _seed_club(session: Session, *, prestige: int = 55, cash: int = 120_000) -> 
         id="user-prestige-1",
         email="prestige@gtex.test",
         username="prestige_owner",
-        password_hash="hash",
+        password_hash="hash",  # pragma: allowlist secret
     )
     profile = ClubProfile(
         id="club-prestige-1",
@@ -468,7 +468,7 @@ def test_cross_club_isolation_and_unauthorized_access_rejection():
         id="user-intruder-2",
         email="intruder@gtex.test",
         username="intruder_owner",
-        password_hash="hash",
+        password_hash="hash",  # pragma: allowlist secret
     )
     session.add(intruder)
     session.commit()
@@ -781,7 +781,7 @@ def test_upgrade_cancellation_does_not_resurrect_or_award_facility_benefits():
     assert int(state.facilities_json["stadium"]) == original_level
 
     # A fresh upgrade awards the facility level and prestige exactly when it becomes operational.
-    next_started = prestige_campus_comms.start_campus_construction(
+    prestige_campus_comms.start_campus_construction(
         session,
         "user-prestige-1",
         "club-prestige-1",

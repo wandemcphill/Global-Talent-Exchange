@@ -1069,7 +1069,7 @@ def start_campus_construction(
     idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     """Commits a paid 3D campus module build or upgrade through the authoritative GTEX ledger."""
-    from app.owner_console import service, storytelling
+    from app.owner_console import storytelling
 
     state = require_state(session, club_id, user_id)
     placed, projects = _reconcile_campus_projects(session, state)
@@ -1152,7 +1152,11 @@ def start_campus_construction(
     if operation == "advance_stage" and instance_id:
         # Advance construction stage of an active project sequentially through all 6 stages (or complete immediately)
         proj = next(
-            (p for p in projects if p.get("instance_id") == instance_id and p.get("status") not in ("completed", "cancelled")),
+            (
+                p
+                for p in projects
+                if p.get("instance_id") == instance_id and p.get("status") not in ("completed", "cancelled")
+            ),
             None,
         )
         if not proj:
@@ -1366,8 +1370,8 @@ def start_campus_construction(
         ledger_event_id=leg.id,
         idempotency_key=f"campus:{project_entry['project_id']}",
         payload_json={
-            "facility_kind": linked_fac,
-            "facility_level": facs[linked_fac],
+            "facility_kind": str(spec.get("linked_facility") or "training"),
+            "facility_level": int(facs.get(str(spec.get("linked_facility") or "training"), 1) or 1),
             "module_key": mod_key,
             "instance_id": new_inst_id,
             "construction_stage": init_stage,
