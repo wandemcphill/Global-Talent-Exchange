@@ -8,7 +8,6 @@ import unicodedata
 from app.ingestion.normalizers import clean_name, normalize_country_name, slugify
 from app.schemas.real_player_ingestion import RealPlayerSeedInput
 
-
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 _POSITION_NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 _FOOT_ALIASES = {
@@ -259,7 +258,9 @@ def names_equivalent(left: str | None, right: str | None) -> bool:
     if len(left_tokens) >= 2 and len(right_tokens) >= 2:
         first_matches = _tokens_compatible(left_tokens[0], right_tokens[0])
         last_matches = _tokens_compatible(left_tokens[-1], right_tokens[-1])
-        inverted_matches = _tokens_compatible(left_tokens[0], right_tokens[-1]) and _tokens_compatible(left_tokens[-1], right_tokens[0])
+        inverted_matches = _tokens_compatible(left_tokens[0], right_tokens[-1]) and _tokens_compatible(
+            left_tokens[-1], right_tokens[0]
+        )
 
         if (first_matches and last_matches) or inverted_matches:
             left_set = set(left_tokens)
@@ -378,7 +379,9 @@ def normalize_real_player_identity(payload: RealPlayerSeedInput, *, as_of: date)
     secondary_position_keys = tuple(canonical_position_key(value) for value in secondary_positions)
     dominant_foot = normalize_preferred_foot(payload.dominant_foot)
     club_reference = normalize_external_reference(payload.current_real_world_club, payload.current_real_world_club_key)
-    league_reference = normalize_external_reference(payload.current_real_world_league, payload.current_real_world_league_key)
+    league_reference = normalize_external_reference(
+        payload.current_real_world_league, payload.current_real_world_league_key
+    )
     provider_identity_key = f"{slugify(payload.source_name)}::{slugify(payload.source_player_key)}"
     exact_identity_key = (
         f"{canonical_normalized.normalized}|{date_of_birth.isoformat()}"

@@ -690,6 +690,7 @@ def test_identity_matcher_matches_birthyear_club_key_before_fuzzy_merge(session_
         assert result.player_id == player.id
         assert result.confidence_score >= 0.88
 
+
 def test_identity_matcher_resolves_middle_name_variant_haaland(session_factory) -> None:
     matcher = RealPlayerIdentityMatcher()
     with session_factory() as session:
