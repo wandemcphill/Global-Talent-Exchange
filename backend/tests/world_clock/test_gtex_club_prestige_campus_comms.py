@@ -697,6 +697,7 @@ def test_phase2_1_six_stage_construction_progression_and_28_model_inventory():
     assert audit_report["summary"]["matching_geometry"] == []
     assert audit_report["summary"]["same_metrics_only"] == []
 
+
 @pytest.mark.parametrize("rotation", [45, 135, 225, 315])
 def test_campus_grid_rejects_non_right_angle_rotations(rotation: int):
     result = prestige_campus_comms.validate_module_placement(
@@ -760,8 +761,7 @@ def test_upgrade_cancellation_does_not_resurrect_or_award_facility_benefits():
     )
     assert cancelled["status"] == "cancelled"
     cancelled_project = next(
-        p for p in cancelled["campus"]["construction_projects"]
-        if p["project_id"] == started["project"]["project_id"]
+        p for p in cancelled["campus"]["construction_projects"] if p["project_id"] == started["project"]["project_id"]
     )
     assert cancelled_project["status"] == "cancelled"
 
@@ -770,8 +770,7 @@ def test_upgrade_cancellation_does_not_resurrect_or_award_facility_benefits():
     session.commit()
     later = prestige_campus_comms.get_club_campus(session, "user-prestige-1", "club-prestige-1")
     later_project = next(
-        p for p in later["construction_projects"]
-        if p["project_id"] == started["project"]["project_id"]
+        p for p in later["construction_projects"] if p["project_id"] == started["project"]["project_id"]
     )
     stadium = next(m for m in later["placed_modules"] if m["instance_id"] == "mod_stadium_core")
     assert later_project["status"] == "cancelled"
