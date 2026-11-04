@@ -775,6 +775,7 @@ def test_upgrade_cancellation_does_not_resurrect_or_award_facility_benefits():
     )
     stadium = next(m for m in later["placed_modules"] if m["instance_id"] == "mod_stadium_core")
     assert later_project["status"] == "cancelled"
+    assert later["active_projects_count"] == 0
     assert stadium["status"] == "operational"
     assert stadium["level"] == 2
     assert state.prestige == original_prestige
