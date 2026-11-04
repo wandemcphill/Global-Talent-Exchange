@@ -45,6 +45,7 @@ const NAV = [
   // 2. MY CLUB
   { to: "/app/clubs", label: "My Clubs", icon: Building2, id: "clubs", category: "MY CLUB" },
   { to: "/app/showroom", label: "Club Prestige", icon: Sparkles, id: "showroom", category: "MY CLUB" },
+  { to: "/app/campus", label: "3D Campus Builder", icon: Compass, id: "campus", category: "MY CLUB" },
   { to: "/app/story", label: "Club Story & Dynasty", icon: BookOpen, id: "story", category: "MY CLUB" },
   { to: "/app/trophies", label: "Trophy Cabinet", icon: Trophy, id: "trophies", category: "MY CLUB" },
   { to: "/app/inbox", label: "Boardroom Inbox", icon: Inbox, id: "inbox", category: "MY CLUB" },
@@ -266,6 +267,7 @@ export default function AppShell() {
           "home",
           "clubs",
           "showroom",
+          "campus",
           "trophies",
           "jackpot",
           "regen-world",

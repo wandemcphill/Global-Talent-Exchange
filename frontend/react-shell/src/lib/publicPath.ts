@@ -25,6 +25,15 @@ export const ROUTER_BASENAME = PUBLIC_URL || "/";
 
 /** Prefix a root-absolute route or `public/` asset with the public URL. */
 export function publicUrl(path: string): string {
-  const normalized = path.startsWith("/") ? path : `/${path}`;
+  if (!path) return "";
+  if (path.startsWith("http://") || path.startsWith("https://") || path.startsWith("data:")) {
+    return path;
+  }
+  const stripped = path.startsWith("/console/") ? path.slice("/console".length) : path;
+  const normalized = stripped.startsWith("/") ? stripped : `/${stripped}`;
   return `${PUBLIC_URL}${normalized}`;
 }
+
+export const publicAssetPath = publicUrl;
+
+

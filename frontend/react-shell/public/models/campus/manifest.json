@@ -1,0 +1,1127 @@
+{
+  "schema_version": "2.1.0",
+  "pipeline": "GTEX Club Dynasty Phase 2.1 Three.js WebGL Asset Library",
+  "coordinate_system": "Right-handed Y-up, origin at center-bottom (0,0,0), 1 unit = 1 grid tile",
+  "models": [
+    {
+      "model_key": "stadium_bowl_core",
+      "category": "stadium_structures",
+      "production_glb": "/models/campus/stadium_bowl_core.glb",
+      "master_glb": "/models/campus/masters/stadium_bowl_core.master.glb",
+      "footprint_tiles": {
+        "width": 6,
+        "depth": 5
+      },
+      "bounding_box_units": {
+        "min": [
+          -2.84,
+          0.0,
+          -2.34
+        ],
+        "max": [
+          2.84,
+          2.063,
+          2.34
+        ],
+        "span_x": 5.68,
+        "span_y": 2.063,
+        "span_z": 4.68,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 5912,
+        "triangles": 2872,
+        "pbr_materials": 10,
+        "size_bytes": 166640
+      },
+      "master_stats": {
+        "vertices": 8832,
+        "triangles": 4272,
+        "pbr_materials": 10,
+        "size_bytes": 245152
+      }
+    },
+    {
+      "model_key": "stadium_main",
+      "category": "stadium_structures",
+      "production_glb": "/models/campus/stadium_main.glb",
+      "master_glb": "/models/campus/masters/stadium_main.master.glb",
+      "footprint_tiles": {
+        "width": 6,
+        "depth": 5
+      },
+      "bounding_box_units": {
+        "min": [
+          -2.84,
+          0.0,
+          -2.34
+        ],
+        "max": [
+          2.84,
+          2.063,
+          2.34
+        ],
+        "span_x": 5.68,
+        "span_y": 2.063,
+        "span_z": 4.68,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 6824,
+        "triangles": 3328,
+        "pbr_materials": 11,
+        "size_bytes": 191956
+      },
+      "master_stats": {
+        "vertices": 9744,
+        "triangles": 4728,
+        "pbr_materials": 11,
+        "size_bytes": 270464
+      }
+    },
+    {
+      "model_key": "stadium_stand_expansion",
+      "category": "stadium_structures",
+      "production_glb": "/models/campus/stadium_stand_expansion.glb",
+      "master_glb": "/models/campus/masters/stadium_stand_expansion.master.glb",
+      "footprint_tiles": {
+        "width": 4,
+        "depth": 2
+      },
+      "bounding_box_units": {
+        "min": [
+          -1.88,
+          0.0,
+          -0.92
+        ],
+        "max": [
+          1.88,
+          1.522,
+          0.92
+        ],
+        "span_x": 3.76,
+        "span_y": 1.522,
+        "span_z": 1.84,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 1324,
+        "triangles": 648,
+        "pbr_materials": 7,
+        "size_bytes": 41020
+      },
+      "master_stats": {
+        "vertices": 1464,
+        "triangles": 708,
+        "pbr_materials": 7,
+        "size_bytes": 44756
+      }
+    },
+    {
+      "model_key": "north_stand_expansion",
+      "category": "stadium_structures",
+      "production_glb": "/models/campus/north_stand_expansion.glb",
+      "master_glb": "/models/campus/masters/north_stand_expansion.master.glb",
+      "footprint_tiles": {
+        "width": 4,
+        "depth": 2
+      },
+      "bounding_box_units": {
+        "min": [
+          -1.88,
+          0.0,
+          -0.92
+        ],
+        "max": [
+          1.88,
+          1.522,
+          0.92
+        ],
+        "span_x": 3.76,
+        "span_y": 1.522,
+        "span_z": 1.84,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 1716,
+        "triangles": 816,
+        "pbr_materials": 7,
+        "size_bytes": 51436
+      },
+      "master_stats": {
+        "vertices": 2136,
+        "triangles": 996,
+        "pbr_materials": 7,
+        "size_bytes": 62612
+      }
+    },
+    {
+      "model_key": "floodlight_pylon_array",
+      "category": "stadium_structures",
+      "production_glb": "/models/campus/floodlight_pylon_array.glb",
+      "master_glb": "/models/campus/masters/floodlight_pylon_array.master.glb",
+      "footprint_tiles": {
+        "width": 2,
+        "depth": 2
+      },
+      "bounding_box_units": {
+        "min": [
+          -0.92,
+          0.0,
+          -0.92
+        ],
+        "max": [
+          0.92,
+          2.66,
+          0.92
+        ],
+        "span_x": 1.84,
+        "span_y": 2.66,
+        "span_z": 1.84,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 1572,
+        "triangles": 772,
+        "pbr_materials": 7,
+        "size_bytes": 47704
+      },
+      "master_stats": {
+        "vertices": 1712,
+        "triangles": 832,
+        "pbr_materials": 7,
+        "size_bytes": 51444
+      }
+    },
+    {
+      "model_key": "floodlight_tower",
+      "category": "stadium_structures",
+      "production_glb": "/models/campus/floodlight_tower.glb",
+      "master_glb": "/models/campus/masters/floodlight_tower.master.glb",
+      "footprint_tiles": {
+        "width": 2,
+        "depth": 2
+      },
+      "bounding_box_units": {
+        "min": [
+          -0.92,
+          0.0,
+          -0.92
+        ],
+        "max": [
+          0.92,
+          2.66,
+          0.92
+        ],
+        "span_x": 1.84,
+        "span_y": 2.66,
+        "span_z": 1.84,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 1052,
+        "triangles": 512,
+        "pbr_materials": 7,
+        "size_bytes": 33644
+      },
+      "master_stats": {
+        "vertices": 1192,
+        "triangles": 572,
+        "pbr_materials": 7,
+        "size_bytes": 37384
+      }
+    },
+    {
+      "model_key": "vip_hospitality",
+      "category": "club_headquarters",
+      "production_glb": "/models/campus/vip_hospitality.glb",
+      "master_glb": "/models/campus/masters/vip_hospitality.master.glb",
+      "footprint_tiles": {
+        "width": 3,
+        "depth": 2
+      },
+      "bounding_box_units": {
+        "min": [
+          -1.41,
+          0.0,
+          -0.92
+        ],
+        "max": [
+          1.41,
+          1.21,
+          0.92
+        ],
+        "span_x": 2.82,
+        "span_y": 1.21,
+        "span_z": 1.84,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 1172,
+        "triangles": 540,
+        "pbr_materials": 5,
+        "size_bytes": 35240
+      },
+      "master_stats": {
+        "vertices": 1648,
+        "triangles": 744,
+        "pbr_materials": 5,
+        "size_bytes": 47912
+      }
+    },
+    {
+      "model_key": "vip_skybox_concourse",
+      "category": "club_headquarters",
+      "production_glb": "/models/campus/vip_skybox_concourse.glb",
+      "master_glb": "/models/campus/masters/vip_skybox_concourse.master.glb",
+      "footprint_tiles": {
+        "width": 3,
+        "depth": 2
+      },
+      "bounding_box_units": {
+        "min": [
+          -1.41,
+          0.0,
+          -0.92
+        ],
+        "max": [
+          1.41,
+          1.24,
+          0.92
+        ],
+        "span_x": 2.82,
+        "span_y": 1.24,
+        "span_z": 1.84,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 1544,
+        "triangles": 744,
+        "pbr_materials": 7,
+        "size_bytes": 46840
+      },
+      "master_stats": {
+        "vertices": 1824,
+        "triangles": 864,
+        "pbr_materials": 7,
+        "size_bytes": 54300
+      }
+    },
+    {
+      "model_key": "first_team_pitch_alpha",
+      "category": "training_facilities",
+      "production_glb": "/models/campus/first_team_pitch_alpha.glb",
+      "master_glb": "/models/campus/masters/first_team_pitch_alpha.master.glb",
+      "footprint_tiles": {
+        "width": 4,
+        "depth": 3
+      },
+      "bounding_box_units": {
+        "min": [
+          -1.88,
+          0.0,
+          -1.41
+        ],
+        "max": [
+          1.88,
+          1.22,
+          1.33
+        ],
+        "span_x": 3.76,
+        "span_y": 1.22,
+        "span_z": 2.74,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 1340,
+        "triangles": 652,
+        "pbr_materials": 8,
+        "size_bytes": 42092
+      },
+      "master_stats": {
+        "vertices": 1696,
+        "triangles": 816,
+        "pbr_materials": 8,
+        "size_bytes": 51636
+      }
+    },
+    {
+      "model_key": "training_pitch",
+      "category": "training_facilities",
+      "production_glb": "/models/campus/training_pitch.glb",
+      "master_glb": "/models/campus/masters/training_pitch.master.glb",
+      "footprint_tiles": {
+        "width": 4,
+        "depth": 3
+      },
+      "bounding_box_units": {
+        "min": [
+          -1.88,
+          0.0,
+          -1.41
+        ],
+        "max": [
+          1.88,
+          1.22,
+          1.33
+        ],
+        "span_x": 3.76,
+        "span_y": 1.22,
+        "span_z": 2.74,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 1364,
+        "triangles": 664,
+        "pbr_materials": 9,
+        "size_bytes": 43440
+      },
+      "master_stats": {
+        "vertices": 1720,
+        "triangles": 828,
+        "pbr_materials": 9,
+        "size_bytes": 52988
+      }
+    },
+    {
+      "model_key": "first_team_pitch_beta",
+      "category": "training_facilities",
+      "production_glb": "/models/campus/first_team_pitch_beta.glb",
+      "master_glb": "/models/campus/masters/first_team_pitch_beta.master.glb",
+      "footprint_tiles": {
+        "width": 4,
+        "depth": 3
+      },
+      "bounding_box_units": {
+        "min": [
+          -1.86,
+          0.0,
+          -1.435
+        ],
+        "max": [
+          1.86,
+          1.03,
+          1.33
+        ],
+        "span_x": 3.72,
+        "span_y": 1.03,
+        "span_z": 2.765,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 1580,
+        "triangles": 772,
+        "pbr_materials": 10,
+        "size_bytes": 49960
+      },
+      "master_stats": {
+        "vertices": 1936,
+        "triangles": 936,
+        "pbr_materials": 10,
+        "size_bytes": 59508
+      }
+    },
+    {
+      "model_key": "high_performance_centre",
+      "category": "training_facilities",
+      "production_glb": "/models/campus/high_performance_centre.glb",
+      "master_glb": "/models/campus/masters/high_performance_centre.master.glb",
+      "footprint_tiles": {
+        "width": 3,
+        "depth": 3
+      },
+      "bounding_box_units": {
+        "min": [
+          -1.41,
+          0.0,
+          -1.41
+        ],
+        "max": [
+          1.41,
+          1.135,
+          1.41
+        ],
+        "span_x": 2.82,
+        "span_y": 1.135,
+        "span_z": 2.82,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 1816,
+        "triangles": 852,
+        "pbr_materials": 8,
+        "size_bytes": 54720
+      },
+      "master_stats": {
+        "vertices": 2376,
+        "triangles": 1092,
+        "pbr_materials": 8,
+        "size_bytes": 69624
+      }
+    },
+    {
+      "model_key": "indoor_training_arena",
+      "category": "training_facilities",
+      "production_glb": "/models/campus/indoor_training_arena.glb",
+      "master_glb": "/models/campus/masters/indoor_training_arena.master.glb",
+      "footprint_tiles": {
+        "width": 4,
+        "depth": 3
+      },
+      "bounding_box_units": {
+        "min": [
+          -1.88,
+          0.0,
+          -1.38
+        ],
+        "max": [
+          1.88,
+          1.225,
+          1.38
+        ],
+        "span_x": 3.76,
+        "span_y": 1.225,
+        "span_z": 2.76,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 1968,
+        "triangles": 984,
+        "pbr_materials": 10,
+        "size_bytes": 60564
+      },
+      "master_stats": {
+        "vertices": 2168,
+        "triangles": 1084,
+        "pbr_materials": 10,
+        "size_bytes": 65988
+      }
+    },
+    {
+      "model_key": "recovery_hydro_hub",
+      "category": "medical_facilities",
+      "production_glb": "/models/campus/recovery_hydro_hub.glb",
+      "master_glb": "/models/campus/masters/recovery_hydro_hub.master.glb",
+      "footprint_tiles": {
+        "width": 3,
+        "depth": 3
+      },
+      "bounding_box_units": {
+        "min": [
+          -1.41,
+          0.0,
+          -1.41
+        ],
+        "max": [
+          1.41,
+          0.855,
+          1.41
+        ],
+        "span_x": 2.82,
+        "span_y": 0.855,
+        "span_z": 2.82,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 986,
+        "triangles": 486,
+        "pbr_materials": 10,
+        "size_bytes": 33976
+      },
+      "master_stats": {
+        "vertices": 1056,
+        "triangles": 516,
+        "pbr_materials": 10,
+        "size_bytes": 35856
+      }
+    },
+    {
+      "model_key": "elite_academy_complex",
+      "category": "academy_buildings",
+      "production_glb": "/models/campus/elite_academy_complex.glb",
+      "master_glb": "/models/campus/masters/elite_academy_complex.master.glb",
+      "footprint_tiles": {
+        "width": 4,
+        "depth": 3
+      },
+      "bounding_box_units": {
+        "min": [
+          -1.88,
+          0.0,
+          -1.38
+        ],
+        "max": [
+          1.88,
+          1.255,
+          1.38
+        ],
+        "span_x": 3.76,
+        "span_y": 1.255,
+        "span_z": 2.76,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 2560,
+        "triangles": 1252,
+        "pbr_materials": 10,
+        "size_bytes": 76388
+      },
+      "master_stats": {
+        "vertices": 3000,
+        "triangles": 1452,
+        "pbr_materials": 10,
+        "size_bytes": 88172
+      }
+    },
+    {
+      "model_key": "academy_complex",
+      "category": "academy_buildings",
+      "production_glb": "/models/campus/academy_complex.glb",
+      "master_glb": "/models/campus/masters/academy_complex.master.glb",
+      "footprint_tiles": {
+        "width": 4,
+        "depth": 3
+      },
+      "bounding_box_units": {
+        "min": [
+          -1.88,
+          0.0,
+          -1.38
+        ],
+        "max": [
+          1.88,
+          1.255,
+          1.38
+        ],
+        "span_x": 3.76,
+        "span_y": 1.255,
+        "span_z": 2.76,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 2658,
+        "triangles": 1294,
+        "pbr_materials": 10,
+        "size_bytes": 78976
+      },
+      "master_stats": {
+        "vertices": 3168,
+        "triangles": 1524,
+        "pbr_materials": 10,
+        "size_bytes": 92620
+      }
+    },
+    {
+      "model_key": "academy_youth_pitch",
+      "category": "academy_buildings",
+      "production_glb": "/models/campus/academy_youth_pitch.glb",
+      "master_glb": "/models/campus/masters/academy_youth_pitch.master.glb",
+      "footprint_tiles": {
+        "width": 4,
+        "depth": 3
+      },
+      "bounding_box_units": {
+        "min": [
+          -1.86,
+          0.0,
+          -1.4
+        ],
+        "max": [
+          1.86,
+          1.075,
+          1.34
+        ],
+        "span_x": 3.72,
+        "span_y": 1.075,
+        "span_z": 2.74,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 1292,
+        "triangles": 628,
+        "pbr_materials": 10,
+        "size_bytes": 42208
+      },
+      "master_stats": {
+        "vertices": 1648,
+        "triangles": 792,
+        "pbr_materials": 10,
+        "size_bytes": 51752
+      }
+    },
+    {
+      "model_key": "club_hq_operations",
+      "category": "club_headquarters",
+      "production_glb": "/models/campus/club_hq_operations.glb",
+      "master_glb": "/models/campus/masters/club_hq_operations.master.glb",
+      "footprint_tiles": {
+        "width": 3,
+        "depth": 2
+      },
+      "bounding_box_units": {
+        "min": [
+          -1.41,
+          0.0,
+          -0.92
+        ],
+        "max": [
+          1.41,
+          1.586,
+          1.06
+        ],
+        "span_x": 2.82,
+        "span_y": 1.586,
+        "span_z": 1.98,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 1966,
+        "triangles": 918,
+        "pbr_materials": 8,
+        "size_bytes": 58724
+      },
+      "master_stats": {
+        "vertices": 2624,
+        "triangles": 1200,
+        "pbr_materials": 8,
+        "size_bytes": 76232
+      }
+    },
+    {
+      "model_key": "club_hq",
+      "category": "club_headquarters",
+      "production_glb": "/models/campus/club_hq.glb",
+      "master_glb": "/models/campus/masters/club_hq.master.glb",
+      "footprint_tiles": {
+        "width": 3,
+        "depth": 2
+      },
+      "bounding_box_units": {
+        "min": [
+          -1.41,
+          0.0,
+          -0.92
+        ],
+        "max": [
+          1.41,
+          1.586,
+          1.06
+        ],
+        "span_x": 2.82,
+        "span_y": 1.586,
+        "span_z": 1.98,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 1840,
+        "triangles": 864,
+        "pbr_materials": 8,
+        "size_bytes": 55344
+      },
+      "master_stats": {
+        "vertices": 2400,
+        "triangles": 1104,
+        "pbr_materials": 8,
+        "size_bytes": 70244
+      }
+    },
+    {
+      "model_key": "executive_fleet_terminal",
+      "category": "club_headquarters",
+      "production_glb": "/models/campus/executive_fleet_terminal.glb",
+      "master_glb": "/models/campus/masters/executive_fleet_terminal.master.glb",
+      "footprint_tiles": {
+        "width": 3,
+        "depth": 2
+      },
+      "bounding_box_units": {
+        "min": [
+          -1.41,
+          0.0,
+          -0.92
+        ],
+        "max": [
+          1.41,
+          0.855,
+          0.92
+        ],
+        "span_x": 2.82,
+        "span_y": 0.855,
+        "span_z": 1.84,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 1034,
+        "triangles": 510,
+        "pbr_materials": 8,
+        "size_bytes": 33920
+      },
+      "master_stats": {
+        "vertices": 1104,
+        "triangles": 540,
+        "pbr_materials": 8,
+        "size_bytes": 35804
+      }
+    },
+    {
+      "model_key": "construction_crane_site",
+      "category": "construction_equipment",
+      "production_glb": "/models/campus/construction_crane_site.glb",
+      "master_glb": "/models/campus/masters/construction_crane_site.master.glb",
+      "footprint_tiles": {
+        "width": 3,
+        "depth": 3
+      },
+      "bounding_box_units": {
+        "min": [
+          -1.37,
+          0.0,
+          -1.37
+        ],
+        "max": [
+          1.37,
+          2.812,
+          1.37
+        ],
+        "span_x": 2.74,
+        "span_y": 2.812,
+        "span_z": 2.74,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 956,
+        "triangles": 436,
+        "pbr_materials": 8,
+        "size_bytes": 31560
+      },
+      "master_stats": {
+        "vertices": 1376,
+        "triangles": 616,
+        "pbr_materials": 8,
+        "size_bytes": 42732
+      }
+    },
+    {
+      "model_key": "stage_1_site_prep",
+      "category": "construction_equipment",
+      "production_glb": "/models/campus/stage_1_site_prep.glb",
+      "master_glb": "/models/campus/masters/stage_1_site_prep.master.glb",
+      "footprint_tiles": {
+        "width": 3,
+        "depth": 3
+      },
+      "bounding_box_units": {
+        "min": [
+          -1.36,
+          0.0,
+          -1.36
+        ],
+        "max": [
+          1.36,
+          0.34,
+          1.36
+        ],
+        "span_x": 2.72,
+        "span_y": 0.34,
+        "span_z": 2.72,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 746,
+        "triangles": 366,
+        "pbr_materials": 9,
+        "size_bytes": 26760
+      },
+      "master_stats": {
+        "vertices": 816,
+        "triangles": 396,
+        "pbr_materials": 9,
+        "size_bytes": 28644
+      }
+    },
+    {
+      "model_key": "stage_2_groundworks",
+      "category": "construction_equipment",
+      "production_glb": "/models/campus/stage_2_groundworks.glb",
+      "master_glb": "/models/campus/masters/stage_2_groundworks.master.glb",
+      "footprint_tiles": {
+        "width": 3,
+        "depth": 3
+      },
+      "bounding_box_units": {
+        "min": [
+          -1.36,
+          0.0,
+          -1.36
+        ],
+        "max": [
+          1.36,
+          0.545,
+          1.36
+        ],
+        "span_x": 2.72,
+        "span_y": 0.545,
+        "span_z": 2.72,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 732,
+        "triangles": 352,
+        "pbr_materials": 6,
+        "size_bytes": 24240
+      },
+      "master_stats": {
+        "vertices": 872,
+        "triangles": 412,
+        "pbr_materials": 6,
+        "size_bytes": 27984
+      }
+    },
+    {
+      "model_key": "stage_3_foundations",
+      "category": "construction_equipment",
+      "production_glb": "/models/campus/stage_3_foundations.glb",
+      "master_glb": "/models/campus/masters/stage_3_foundations.master.glb",
+      "footprint_tiles": {
+        "width": 3,
+        "depth": 3
+      },
+      "bounding_box_units": {
+        "min": [
+          -1.36,
+          0.0,
+          -1.36
+        ],
+        "max": [
+          1.36,
+          0.703,
+          1.36
+        ],
+        "span_x": 2.72,
+        "span_y": 0.703,
+        "span_z": 2.72,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 1026,
+        "triangles": 506,
+        "pbr_materials": 7,
+        "size_bytes": 32936
+      },
+      "master_stats": {
+        "vertices": 1096,
+        "triangles": 536,
+        "pbr_materials": 7,
+        "size_bytes": 34816
+      }
+    },
+    {
+      "model_key": "stage_4_structural",
+      "category": "construction_equipment",
+      "production_glb": "/models/campus/stage_4_structural.glb",
+      "master_glb": "/models/campus/masters/stage_4_structural.master.glb",
+      "footprint_tiles": {
+        "width": 3,
+        "depth": 3
+      },
+      "bounding_box_units": {
+        "min": [
+          -1.36,
+          0.0,
+          -1.36
+        ],
+        "max": [
+          1.42,
+          2.532,
+          1.36
+        ],
+        "span_x": 2.78,
+        "span_y": 2.532,
+        "span_z": 2.72,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 1106,
+        "triangles": 546,
+        "pbr_materials": 9,
+        "size_bytes": 36524
+      },
+      "master_stats": {
+        "vertices": 1176,
+        "triangles": 576,
+        "pbr_materials": 9,
+        "size_bytes": 38400
+      }
+    },
+    {
+      "model_key": "stage_5_finishing",
+      "category": "construction_equipment",
+      "production_glb": "/models/campus/stage_5_finishing.glb",
+      "master_glb": "/models/campus/masters/stage_5_finishing.master.glb",
+      "footprint_tiles": {
+        "width": 3,
+        "depth": 3
+      },
+      "bounding_box_units": {
+        "min": [
+          -1.36,
+          0.0,
+          -1.36
+        ],
+        "max": [
+          1.36,
+          1.639,
+          1.36
+        ],
+        "span_x": 2.72,
+        "span_y": 1.639,
+        "span_z": 2.72,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 1314,
+        "triangles": 650,
+        "pbr_materials": 8,
+        "size_bytes": 41400
+      },
+      "master_stats": {
+        "vertices": 1384,
+        "triangles": 680,
+        "pbr_materials": 8,
+        "size_bytes": 43284
+      }
+    },
+    {
+      "model_key": "campus_tree_cluster",
+      "category": "landscaping",
+      "production_glb": "/models/campus/campus_tree_cluster.glb",
+      "master_glb": "/models/campus/masters/campus_tree_cluster.master.glb",
+      "footprint_tiles": {
+        "width": 1,
+        "depth": 1
+      },
+      "bounding_box_units": {
+        "min": [
+          -0.42,
+          0.01,
+          -0.42
+        ],
+        "max": [
+          0.42,
+          0.687,
+          0.42
+        ],
+        "span_x": 0.84,
+        "span_y": 0.677,
+        "span_z": 0.84,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 1561,
+        "triangles": 669,
+        "pbr_materials": 4,
+        "size_bytes": 44628
+      },
+      "master_stats": {
+        "vertices": 2688,
+        "triangles": 1152,
+        "pbr_materials": 4,
+        "size_bytes": 74596
+      }
+    },
+    {
+      "model_key": "campus_road_plaza_segment",
+      "category": "roads_infrastructure",
+      "production_glb": "/models/campus/campus_road_plaza_segment.glb",
+      "master_glb": "/models/campus/masters/campus_road_plaza_segment.master.glb",
+      "footprint_tiles": {
+        "width": 1,
+        "depth": 1
+      },
+      "bounding_box_units": {
+        "min": [
+          -0.48,
+          0.0,
+          -0.48
+        ],
+        "max": [
+          0.48,
+          0.25,
+          0.48
+        ],
+        "span_x": 0.96,
+        "span_y": 0.25,
+        "span_z": 0.96,
+        "conforms_to_grid_footprint": true
+      },
+      "origin": "center-bottom (0.0, 0.0, 0.0)",
+      "unit_scale": "1.0 scene unit = 1 campus grid tile (12m x 12m)",
+      "production_stats": {
+        "vertices": 270,
+        "triangles": 126,
+        "pbr_materials": 6,
+        "size_bytes": 11852
+      },
+      "master_stats": {
+        "vertices": 368,
+        "triangles": 168,
+        "pbr_materials": 6,
+        "size_bytes": 14468
+      }
+    }
+  ]
+}

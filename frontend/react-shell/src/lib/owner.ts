@@ -51,7 +51,7 @@ export function useGlobalTicker(clubId?: string, limit = 20) {
   });
 }
 
-export function useNewsroom(clubId?: string, category?: string, limit = 20) {
+export function useNewsroom(clubId?: string, category?: string, limit = 30) {
   return useQuery({
     queryKey: ["newsroom", clubId, category, limit],
     queryFn: async () => {
@@ -61,7 +61,7 @@ export function useNewsroom(clubId?: string, category?: string, limit = 20) {
       params.set("limit", String(limit));
       return (await api.get(`/owner/newsroom?${params.toString()}`)).data;
     },
-    staleTime: 20_000,
+    staleTime: 15_000,
   });
 }
 
@@ -81,6 +81,22 @@ export function useClubShowroom(clubId?: string) {
   });
 }
 
+export function useClubCampus(clubId?: string) {
+  return useQuery({
+    queryKey: ["campus", clubId],
+    queryFn: async () => (await api.get(`/owner/clubs/${clubId}/campus`)).data,
+    enabled: !!clubId,
+  });
+}
+
+export function useClubCommunications(clubId?: string) {
+  return useQuery({
+    queryKey: ["communications", clubId],
+    queryFn: async () => (await api.get(`/owner/clubs/${clubId}/communications`)).data,
+    enabled: !!clubId,
+  });
+}
+
 export function useWatchlist(clubId?: string) {
   return useQuery({
     queryKey: ["watchlist", clubId],
@@ -96,6 +112,8 @@ export function useRefreshOwner() {
     qc.invalidateQueries({ queryKey: ["club"] });
     qc.invalidateQueries({ queryKey: ["finance"] });
     qc.invalidateQueries({ queryKey: ["inbox"] });
+    qc.invalidateQueries({ queryKey: ["communications"] });
+    qc.invalidateQueries({ queryKey: ["campus"] });
     qc.invalidateQueries({ queryKey: ["competition"] });
     qc.invalidateQueries({ queryKey: ["competitions"] });
     qc.invalidateQueries({ queryKey: ["ticker"] });

@@ -60,10 +60,14 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "name": "GTEX Sovereign 900X Private Jet",
         "category": "jet",
         "model": "Sovereign 900X Long-Range VIP",
-        "price_gtex": 5000.0,
+        "price_gtex": 4800.0,
         "prestige_bonus": 8,
         "broadcast_on_purchase": True,
         "image_file": "sovereign_900x_jet.webp",
+        "high_res_image_url": "/console/img/prestige/05_private_jet.png",
+        "aspect_ratio": "16:10",
+        "legal_owner_default": "club",
+        "min_prestige": 35,
         "description": "Executive intercontinental aircraft for continental away fixtures and owner mobility.",
         "can_gift_to_player": True,
         "can_gift_to_staff": True,
@@ -72,6 +76,12 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "academy_ceiling_bonus": 4,
         "transfer_pull_bonus": 8,
         "staff_pull_bonus": 8,
+        "specs": {
+            "range": "13,890 km Intercontinental",
+            "cabin": "19 Executive Recovery Berths",
+            "speed": "Mach 0.90",
+            "effect": "+8 Prestige · +8 Transfer Pull · Global Aviation Broadcast",
+        },
     },
     "gulfstream_g700_exec_jet": {
         "catalog_key": "gulfstream_g700_exec_jet",
@@ -82,6 +92,10 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "prestige_bonus": 10,
         "broadcast_on_purchase": True,
         "image_file": "sovereign_900x_jet.webp",
+        "high_res_image_url": "/console/img/prestige/05_private_jet.png",
+        "aspect_ratio": "16:10",
+        "legal_owner_default": "club",
+        "min_prestige": 60,
         "description": "Ultra-long-range boardroom in the sky featuring bespoke club livery and recovery suites.",
         "can_gift_to_player": True,
         "can_gift_to_staff": True,
@@ -90,6 +104,12 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "academy_ceiling_bonus": 5,
         "transfer_pull_bonus": 10,
         "staff_pull_bonus": 10,
+        "specs": {
+            "range": "14,353 km Ultra-Long-Range",
+            "cabin": "22 Bespoke Club Recovery Suites",
+            "speed": "Mach 0.925",
+            "effect": "+10 Prestige · +10 Transfer Pull · Global Aviation Broadcast",
+        },
     },
     "vanguard_xii_coach": {
         "catalog_key": "vanguard_xii_coach",
@@ -100,6 +120,10 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "prestige_bonus": 2,
         "broadcast_on_purchase": False,
         "image_file": "vanguard_xii_coach.webp",
+        "high_res_image_url": "/console/img/prestige/04_luxury_team_coach.png",
+        "aspect_ratio": "16:10",
+        "legal_owner_default": "club",
+        "min_prestige": 15,
         "description": "Armored luxury transit for matchday squad arrivals with custom tactical review screens.",
         "can_gift_to_player": False,
         "can_gift_to_staff": True,
@@ -108,6 +132,40 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "academy_ceiling_bonus": 1,
         "transfer_pull_bonus": 2,
         "staff_pull_bonus": 2,
+        "specs": {
+            "drivetrain": "680 HP Twin-Axle Armored Coach",
+            "cabin": "36 Zero-Gravity Tactical Recliners",
+            "tech": "4K Holographic Tactical Analysis Wall",
+            "effect": "+2 Prestige · +12 Staff Mood · Away Matchday Readiness",
+        },
+    },
+    "executive_suv_command": {
+        "catalog_key": "executive_suv_command",
+        "name": "GTEX Sovereign Command SUV",
+        "category": "vehicle",
+        "model": "Armored V8 Executive Flagship",
+        "price_gtex": 520.0,
+        "prestige_bonus": 2,
+        "broadcast_on_purchase": False,
+        "image_file": "executive_suv.webp",
+        "high_res_image_url": "/console/img/prestige/01_executive_suv.png",
+        "aspect_ratio": "16:10",
+        "legal_owner_default": "owner_personal",
+        "min_prestige": 10,
+        "description": "Chauffeur-grade obsidian flagship SUV for VIP transfer arrivals, executive transit, and milestone gifting.",
+        "can_gift_to_player": True,
+        "can_gift_to_staff": True,
+        "staff_mood_boost": 14,
+        "staff_loyalty_boost": 3,
+        "academy_ceiling_bonus": 1,
+        "transfer_pull_bonus": 3,
+        "staff_pull_bonus": 3,
+        "specs": {
+            "powertrain": "640 HP Twin-Turbo V8 Hybrid",
+            "cabin": "Executive Rear Chauffeur Lounge",
+            "security": "B6 Acoustic Privacy Glass",
+            "effect": "+2 Prestige · +15 Regen Morale / +14 Staff Mood Gift",
+        },
     },
     "veloce_gt9_hypercar": {
         "catalog_key": "veloce_gt9_hypercar",
@@ -118,6 +176,10 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "prestige_bonus": 4,
         "broadcast_on_purchase": False,
         "image_file": "veloce_gt9_hypercar.webp",
+        "high_res_image_url": "/console/img/prestige/02_luxury_grand_tourer.png",
+        "aspect_ratio": "16:10",
+        "legal_owner_default": "owner_personal",
+        "min_prestige": 30,
         "description": "Hand-built performance vehicle. Kept in private owner collection unless gifted to a star player.",
         "can_gift_to_player": True,
         "can_gift_to_staff": True,
@@ -126,16 +188,26 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "academy_ceiling_bonus": 2,
         "transfer_pull_bonus": 4,
         "staff_pull_bonus": 4,
+        "specs": {
+            "powertrain": "830 HP Naturally Aspirated V12",
+            "acceleration": "0–100 km/h in 2.6s",
+            "chassis": "Emerald Carbon-Titanium Monocoque",
+            "effect": "+4 Prestige · +15 Regen Morale / +16 Staff Mood Gift",
+        },
     },
     "chronos_tourbillon_watch": {
         "catalog_key": "chronos_tourbillon_watch",
         "name": "Chronos Tourbillon Piece Unique",
         "category": "watch",
         "model": "Piece Unique Sapphire-Carbon",
-        "price_gtex": 400.0,
+        "price_gtex": 220.0,
         "prestige_bonus": 2,
         "broadcast_on_purchase": False,
         "image_file": "chronos_tourbillon_watch.webp",
+        "high_res_image_url": "/console/img/prestige/03_emerald_tourbillon_watch.png",
+        "aspect_ratio": "4:5",
+        "legal_owner_default": "owner_personal",
+        "min_prestige": 10,
         "description": "Haute horlogerie timepiece. Perfect personal milestone gift for squad leaders and regens.",
         "can_gift_to_player": True,
         "can_gift_to_staff": True,
@@ -144,6 +216,12 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "academy_ceiling_bonus": 1,
         "transfer_pull_bonus": 2,
         "staff_pull_bonus": 2,
+        "specs": {
+            "movement": "Calibre GT-09 Flying Tourbillon",
+            "case": "41mm Brushed Rose Gold & Emerald Bezel",
+            "reserve": "120-Hour Twin-Barrel Power Reserve",
+            "effect": "+2 Prestige · +15 Regen Morale / +15 Staff Mood Gift",
+        },
     },
     "penthouse_box_suite": {
         "catalog_key": "penthouse_box_suite",
@@ -154,6 +232,10 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "prestige_bonus": 3,
         "broadcast_on_purchase": False,
         "image_file": "arena_imperiale_stadium.webp",
+        "high_res_image_url": "/console/img/prestige/07_academy_campus_aerial_b.png",
+        "aspect_ratio": "16:9",
+        "legal_owner_default": "club",
+        "min_prestige": 25,
         "description": "VIP private salon inside the stadium for high-stakes investor hosting and sponsor meetings.",
         "can_gift_to_player": False,
         "can_gift_to_staff": True,
@@ -162,15 +244,75 @@ SHOWROOM_CATALOG: dict[str, dict[str, Any]] = {
         "academy_ceiling_bonus": 1,
         "transfer_pull_bonus": 3,
         "staff_pull_bonus": 3,
+        "specs": {
+            "capacity": "28 VIP Investors & Dignitaries",
+            "hospitality": "Private Matchday Michelin Dining",
+            "location": "West Stand Crest Director Level",
+            "effect": "+3 Prestige · +3 Sponsor & Transfer Pull",
+        },
+    },
+    "high_performance_recovery_wing": {
+        "catalog_key": "high_performance_recovery_wing",
+        "name": "High-Performance Cryo & Hydro Wing",
+        "category": "infrastructure",
+        "model": "Cryo-Hydro Sports Science Module",
+        "price_gtex": 2400.0,
+        "prestige_bonus": 5,
+        "broadcast_on_purchase": False,
+        "image_file": "facility_medical.webp",
+        "high_res_image_url": "/console/img/prestige/09_high_performance_centre.png",
+        "aspect_ratio": "16:9",
+        "legal_owner_default": "club",
+        "min_prestige": 35,
+        "description": "Dedicated sports science, biomechanics lab, and hydrotherapy pools integrated into the Club Campus.",
+        "can_gift_to_player": False,
+        "can_gift_to_staff": True,
+        "staff_mood_boost": 16,
+        "staff_loyalty_boost": 4,
+        "academy_ceiling_bonus": 3,
+        "transfer_pull_bonus": 5,
+        "staff_pull_bonus": 6,
+        "specs": {
+            "hydrotherapy": "Dual Olympic Recovery Pools & Underwater Treadmills",
+            "biomechanics": "3D Motion Capture & Load Telemetry Lab",
+            "effect": "+5 Prestige · +3 Academy Ceiling · Medical Recovery",
+        },
+    },
+    "elite_academy_boarding_wing": {
+        "catalog_key": "elite_academy_boarding_wing",
+        "name": "Elite Academy Boarding & Show-Pitch Pavilion",
+        "category": "infrastructure",
+        "model": "NextGen Youth Excellence Complex",
+        "price_gtex": 3200.0,
+        "prestige_bonus": 6,
+        "broadcast_on_purchase": False,
+        "image_file": "facility_academy.webp",
+        "high_res_image_url": "/console/img/prestige/12_elite_academy_complex.png",
+        "aspect_ratio": "16:9",
+        "legal_owner_default": "club",
+        "min_prestige": 40,
+        "description": "Flagship residential youth academy pavilion with floodlit show pitch and tactical classrooms.",
+        "can_gift_to_player": False,
+        "can_gift_to_staff": True,
+        "staff_mood_boost": 18,
+        "staff_loyalty_boost": 4,
+        "academy_ceiling_bonus": 5,
+        "transfer_pull_bonus": 5,
+        "staff_pull_bonus": 6,
+        "specs": {
+            "boarding": "64 Scholar Suites & Tactical Auditorium",
+            "pitches": "Heated Hybrid-Turf Floodlit Youth Show Pitch",
+            "effect": "+6 Prestige · +5 Academy Regen Ceiling",
+        },
     },
 }
 
 FACILITY_IMAGES = {
     "stadium": "/console/img/showroom/arena_imperiale_stadium.webp",
     "training": "/console/img/showroom/apex_performance_campus.webp",
-    "academy": "/console/img/showroom/apex_performance_campus.webp",
-    "commercial": "/console/img/showroom/arena_imperiale_stadium.webp",
-    "medical": "/console/img/showroom/apex_performance_campus.webp",
+    "academy": "/console/img/showroom/facility_academy.webp",
+    "commercial": "/console/img/showroom/facility_commercial.webp",
+    "medical": "/console/img/showroom/facility_medical.webp",
 }
 
 # Manifest face-bank path for fallback static portraits
@@ -404,13 +546,15 @@ def build_grounded_editorial(
             f"and player recovery suites for high-stakes competition fixtures."
         )
     elif category == "infrastructure":
-        facility = established_facts.get("facility_kind") or "Campus"
-        lvl = established_facts.get("facility_level") or 2
+        facility = str(established_facts.get("facility_kind") or "Campus")
+        lvl = established_facts.get("facility_level") or established_facts.get("world_day") or 1
         headline = f"{club} Unveils Level {lvl} {facility.capitalize()} Modernisation"
         subheadline = f"Facility upgrade commits {price} GTX to world-class sporting infrastructure."
         narration = (
-            f"Club leadership has greenlit the modernisation of {club}'s {facility} facilities to Level {lvl}. "
-            f"The authoritative ledger reflects a {price} GTX infrastructure investment to boost performance and youth development."
+            f"Club leadership has greenlit the modernisation of {club}'s {facility} facilities to Level {lvl} with the commissioning of {item}. "
+            f"The authoritative ledger reflects a {price} GTX infrastructure investment to boost first-team conditioning and youth development.\n\n"
+            f"Technical directors at {club} highlighted that the Level {lvl} {facility} upgrade directly supports tactical preparation, "
+            f"sports science diagnostics, and long-term talent retention across the club campus."
         )
     elif category == "squad_culture":
         headline = f"{owner} Presents Personal Luxury Gift to {player}"
@@ -535,6 +679,7 @@ def record_verified_broadcast_event(
         "verified_price_gtex": str(price_dec),
         "player_name": player_name,
         "world_day": state.world_day if state else 1,
+        **(payload_json or {}),
     }
     def_hl, def_sub, def_narr = build_grounded_editorial(n_category, established_facts)
     final_narration = editorial_narration or def_narr
@@ -847,11 +992,41 @@ def get_club_showroom(session: Session, user_id: str, club_id: str) -> dict[str,
     club_prestige = int(getattr(state, "prestige", 45))
     from app.owner_console import engine
 
+    from app.owner_console.prestige_campus_comms import PRESTIGE_VISUAL_MANIFEST
+    cash_bal = float(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX))
+    facs = dict(state.facilities_json or {})
+    club_owned_count = sum(1 for o in owned if not o.get("gifted_to_player_name") and o.get("category") in ("jet", "coach", "suite", "infrastructure"))
+    personal_count = sum(1 for o in owned if not o.get("gifted_to_player_name") and o.get("category") in ("vehicle", "watch"))
+    gifted_count = sum(1 for o in owned if o.get("gifted_to_player_name"))
     return {
         "catalog": items,
         "owned_assets": owned,
         "club_prestige": club_prestige,
         "prestige_tier": engine.prestige_tier_label(club_prestige),
+        "visual_manifest": PRESTIGE_VISUAL_MANIFEST,
+        "owner_office_summary": {
+            "club_id": club_id,
+            "club_name": state.club_name,
+            "crest_url": resolve_club_crest_url(session, club_id, state.club_name),
+            "world_day": state.world_day,
+            "cash_balance_gtex": cash_bal,
+            "prestige": club_prestige,
+            "prestige_tier": engine.prestige_tier_label(club_prestige),
+            "fans": state.fans,
+            "facilities_levels": {
+                "stadium": int(facs.get("stadium", 1) or 1),
+                "training": int(facs.get("training", 1) or 1),
+                "academy": int(facs.get("academy", 1) or 1),
+                "medical": int(facs.get("medical", 1) or 1),
+                "commercial": int(facs.get("commercial", 1) or 1),
+            },
+            "ownership_breakdown": {
+                "club_owned_count": club_owned_count,
+                "owner_personal_count": personal_count,
+                "gifted_count": gifted_count,
+                "total_portfolio_value_gtex": sum(float(o.get("purchase_price_gtex") or 0) for o in owned),
+            },
+        },
     }
 
 

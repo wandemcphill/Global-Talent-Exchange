@@ -1,10 +1,11 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { useNewsroom, fmt } from "@/lib/owner";
+import { toast } from "sonner";
+import { api } from "@/lib/api";
+import { useActiveClub, useNewsroom, useRefreshOwner, fmt } from "@/lib/owner";
+import { publicAssetPath } from "@/lib/publicPath";
 import {
-  BookOpen,
   Building,
-  Calendar,
   CheckCircle2,
   Clock,
   ExternalLink,
@@ -13,32 +14,112 @@ import {
   Newspaper,
   Plane,
   Radio,
-  Share2,
   ShieldCheck,
   Trophy,
   X,
+  RefreshCw,
+  Compass,
+  Sparkles,
+  AlertOctagon,
 } from "lucide-react";
 import { Loading } from "@/components/gtex/ui";
 import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
 
+const resolveNewsImage = (raw?: string, category?: string) => {
+  if (raw && (raw.startsWith("http") || raw.startsWith("data:"))) return raw;
+  if (raw) {
+    const clean = raw.replace(/^\/console\//, "/");
+    return publicAssetPath(clean);
+  }
+  if (category === "fleet_aviation" || category === "private_jet_purchase") {
+    return publicAssetPath("/img/prestige/05_private_jet.png");
+  }
+  if (category === "infrastructure" || category === "facility_upgrade") {
+    return publicAssetPath("/img/prestige/11_stadium_expansion_construction.png");
+  }
+  if (category === "academy_breakthrough" || category === "build_a_son_induction") {
+    return publicAssetPath("/img/prestige/12_elite_academy_complex.png");
+  }
+  return publicAssetPath("/img/prestige/06_academy_campus_aerial_a.png");
+};
+
 export function Newsroom() {
+  const { active } = useActiveClub();
+  const clubId = active?.club_id;
+  const refresh = useRefreshOwner();
+
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [activeStory, setActiveStory] = useState<any | null>(null);
-  const { data, isLoading } = useNewsroom(undefined, selectedCategory, 40);
-  const articles: any[] = data?.articles || [];
+  const [syncing, setSyncing] = useState<boolean>(false);
+
+  // Map UI filter keys to backend category keys when querying, or filter client-side
+  const { data, isLoading, refetch } = useNewsroom(undefined, "all", 60);
+  const allArticles: any[] = data?.articles || [];
+
+  const articles = allArticles.filter((a) => {
+    if (selectedCategory === "all") return true;
+    const cat = String(a.category || "");
+    if (selectedCategory === "match_result") return ["match_result", "match_report"].includes(cat);
+    if (selectedCategory === "facility_upgrade") return ["facility_upgrade", "infrastructure"].includes(cat);
+    if (selectedCategory === "private_jet_purchase") return ["private_jet_purchase", "fleet_aviation"].includes(cat);
+    if (selectedCategory === "player_gift") return ["player_gift", "squad_culture"].includes(cat);
+    if (selectedCategory === "build_a_son_induction")
+      return ["build_a_son_induction", "academy_breakthrough"].includes(cat);
+    if (selectedCategory === "press_conference")
+      return ["press_conference", "club_announcement"].includes(cat);
+    return cat === selectedCategory;
+  });
 
   const categories = [
     { key: "all", label: "Top Stories & Wire" },
     { key: "match_result", label: "Matchday Reports", icon: Trophy },
-    { key: "facility_upgrade", label: "Club Infrastructure", icon: Building },
+    { key: "facility_upgrade", label: "Campus & Stadium", icon: Building },
     { key: "private_jet_purchase", label: "Aviation & Jets", icon: Plane },
     { key: "player_gift", label: "Player Milestones", icon: Gift },
     { key: "new_signing_presentation", label: "Signing Unveilings", icon: Flame },
-    { key: "build_a_son_induction", label: "Build-A-Son & Regens", icon: Radio },
-    { key: "press_conference", label: "Rivalry & Press", icon: Newspaper },
+    { key: "build_a_son_induction", label: "Academy & Regens", icon: Radio },
+    { key: "press_conference", label: "Communiqués & Press", icon: Newspaper },
   ];
 
-  // Lead story is the most prominent or first verified article
+  const handleSyncVerifiedNews = async () => {
+    if (!clubId || syncing) return;
+    setSyncing(true);
+    try {
+      const res = await api.post(`/owner/clubs/${clubId}/newsroom/sync`);
+      toast.success(
+        `Newsroom synchronized (${res.data?.synced_new_articles || 0} new verified dispatches indexed).`
+      );
+      refetch();
+      refresh();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail?.detail || "Unable to sync newsroom");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleEditorialStatus = async (articleId: string, status: "approved" | "retracted") => {
+    try {
+      const res = await api.post(`/owner/newsroom/${articleId}/editorial-status`, {
+        status,
+        editorial_note:
+          status === "approved"
+            ? "Verified by Club Editorial Desk against GTEX Ledger."
+            : "Retracted by Editorial Desk.",
+      });
+      toast.success(status === "approved" ? "Article provenance certified!" : "Article retracted from live wire.");
+      if (status === "retracted") {
+        setActiveStory(null);
+      } else {
+        setActiveStory(res.data);
+      }
+      refetch();
+      refresh();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail?.detail || "Editorial update failed");
+    }
+  };
+
   const leadStory = articles.find((a) => a.hero_image_url) || articles[0];
   const secondaryStories = articles.filter((a) => a.id !== leadStory?.id).slice(0, 3);
   const wireStories = articles.filter((a) => a.id !== leadStory?.id).slice(3);
@@ -51,22 +132,43 @@ export function Newsroom() {
           <div>
             <div className="flex items-center gap-2 text-amber-400 text-xs font-black uppercase tracking-[0.2em]">
               <Newspaper size={16} />
-              <span>GTEX GLOBAL EDITORIAL DESK · AUTHORITATIVE WIRE</span>
+              <span>GTEX GLOBAL EDITORIAL DESK · VERIFIED EVENT PROVENANCE</span>
             </div>
             <h1 className="gx-display mt-1 text-4xl sm:text-6xl font-black uppercase tracking-tight text-white leading-none">
               The Boardroom Chronicle
             </h1>
             <p className="mt-2 text-xs sm:text-sm text-slate-300 max-w-2xl">
-              Real-time, verified football reporting and club-owner developments. Every dispatch is strictly grounded in verified ledger and simulation events.
+              Authoritative football journalism, verified matchday reports, 3D campus construction milestones, and
+              aviation dispatches. Every story is strictly grounded in persisted GTEX database events with zero
+              hallucinated figures.
             </p>
           </div>
 
-          {/* Grounding & Privacy Guarantee Seal */}
-          <div className="flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-[#061c14] px-4 py-2.5 text-xs shadow-lg">
-            <ShieldCheck className="size-5 text-emerald-400 shrink-0" />
-            <div className="text-[11px] leading-tight">
-              <span className="font-bold text-emerald-300">Grounding & Privacy Certified:</span>
-              <p className="text-slate-400 mt-0.5">Confidential owner inboxes and private scouting remain protected.</p>
+          <div className="flex flex-wrap items-center gap-3">
+            {clubId && (
+              <button
+                type="button"
+                disabled={syncing}
+                onClick={handleSyncVerifiedNews}
+                className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-slate-950 text-xs font-black flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+                Sync Verified Club Events
+              </button>
+            )}
+            <Link
+              to="/app/campus"
+              className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-xs font-bold text-slate-200 flex items-center gap-1.5"
+            >
+              <Compass className="w-3.5 h-3.5 text-emerald-400" /> 3D Campus
+            </Link>
+            {/* Grounding & Privacy Guarantee Seal */}
+            <div className="flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-[#061c14] px-4 py-2.5 text-xs shadow-lg">
+              <ShieldCheck className="size-5 text-emerald-400 shrink-0" />
+              <div className="text-[11px] leading-tight">
+                <span className="font-bold text-emerald-300">Grounding & Privacy Certified:</span>
+                <p className="text-slate-400 mt-0.5">Confidential owner inboxes and private scouting remain protected.</p>
+              </div>
             </div>
           </div>
         </div>
@@ -75,14 +177,14 @@ export function Newsroom() {
         <nav className="flex items-center gap-2 overflow-x-auto pt-6" data-testid="newsroom-categories">
           {categories.map((cat) => {
             const Icon = cat.icon;
-            const active = selectedCategory === cat.key;
+            const isActive = selectedCategory === cat.key;
             return (
               <button
                 key={cat.key}
                 onClick={() => setSelectedCategory(cat.key)}
                 data-testid={`cat-${cat.key}`}
                 className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all ${
-                  active
+                  isActive
                     ? "bg-amber-500 text-slate-950 font-black shadow-[0_0_16px_rgba(245,158,11,0.4)]"
                     : "border border-white/10 bg-slate-900/60 text-slate-300 hover:border-amber-400/40 hover:text-white"
                 }`}
@@ -95,22 +197,22 @@ export function Newsroom() {
         </nav>
       </header>
 
-      {/* 3D Global Flex Wire (Private Jet Purchases for All Users) & 3D Official Club Announcement Studio */}
+      {/* 3D Global Flex Wire & 3D Official Club Announcement Studio */}
       <div className="grid gap-6 lg:grid-cols-2" data-testid="newsroom-3d-broadcast-row">
         <Cinema3DStage
           scene="private_jet_flex"
           compact
           enableSocialSalute
-          title="3D Global Aviation Flex · G650 Executive Jet Commissioned"
+          title="3D Global Aviation Flex · Sovereign 900X Executive Jet"
           subtitle="Public 3D Runway Showcase for All GTEX App Users · Custom Club Tail-Fin Livery"
           badgeText="GLOBAL FLEX ALERT"
-          clubName={leadStory?.club_name || "GTEX Superclub"}
-          ownerName={leadStory?.owner_name || "Executive Owner"}
-          subjectName="Gulfstream G650 Bespoke Club Edition"
+          clubName={leadStory?.established_facts?.club_name || active?.club_name || "GTEX Superclub"}
+          ownerName={leadStory?.established_facts?.owner_display_name || "Executive Owner"}
+          subjectName="GTEX Sovereign 900X Bespoke Club Edition"
           quote="Commissioned from the club treasury — inspect the 3D fuselage and salute this owner's flex."
           stats={[
-            { label: "Club Prestige", value: "+12 PTS", accent: "#00E676" },
-            { label: "Edition", value: "1 OF 10 MINTED", accent: "#F5B83D" },
+            { label: "Club Prestige", value: "+8 PTS", accent: "#00E676" },
+            { label: "Verified Ledger", value: "4,800 GTX", accent: "#F5B83D" },
           ]}
         />
         <Cinema3DStage
@@ -120,22 +222,39 @@ export function Newsroom() {
           title={leadStory?.headline || "3D Official Club Communiqué & Breaking News Desk"}
           subtitle="Sky-Studio 3D Curved LED Broadcast Wall · Verified Club Statement"
           badgeText="3D CLUB ANNOUNCEMENT"
-          clubName={leadStory?.club_name || "GTEX Broadcast Network"}
+          clubName={leadStory?.established_facts?.club_name || active?.club_name || "GTEX Broadcast Network"}
           subjectName={leadStory?.headline || "Official Boardroom Statement on Season Ambitions"}
-          subjectRole={leadStory?.category ? `Wire Category: ${leadStory.category.replace(/_/g, " ").toUpperCase()}` : "Official Club Communiqué"}
-          quote={leadStory?.summary || "The board of directors has ratified our continental roadmap and stadium expansion."}
+          subjectRole={
+            leadStory?.category
+              ? `Wire Category: ${leadStory.category.replace(/_/g, " ").toUpperCase()}`
+              : "Official Club Communiqué"
+          }
+          quote={
+            leadStory?.subheadline ||
+            "The board of directors has ratified our continental roadmap and 3D stadium expansion."
+          }
         />
       </div>
 
       {isLoading ? (
         <Loading label="Transmitting verified dispatches from the news wire..." />
       ) : articles.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-white/10 p-16 text-center">
+        <div className="rounded-2xl border border-dashed border-white/10 p-16 text-center space-y-4">
           <Newspaper className="mx-auto size-12 text-slate-600 mb-3" />
           <h3 className="gx-display text-2xl font-bold uppercase text-white">No Dispatches on this Wire</h3>
           <p className="text-sm text-slate-400 mt-1 max-w-md mx-auto">
-            Stories generate automatically following verified match whistles, facility upgrades, and high-significance club transactions.
+            Stories generate automatically following verified match whistles, 3D campus upgrades, and high-significance
+            club transactions.
           </p>
+          {clubId && (
+            <button
+              type="button"
+              onClick={handleSyncVerifiedNews}
+              className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black"
+            >
+              Generate Verified Club Coverage Now
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-12">
@@ -147,32 +266,39 @@ export function Newsroom() {
               data-testid="lead-story-card"
             >
               <div className="grid grid-cols-1 lg:grid-cols-12 min-h-[440px]">
-                {/* Hero imagery / fallback */}
+                {/* Hero imagery */}
                 <div className="relative lg:col-span-7 h-64 lg:h-full bg-slate-950 overflow-hidden">
                   <img
-                    src={leadStory.hero_image_url || "/img/hero.jpg"}
+                    src={resolveNewsImage(leadStory.hero_image_url, leadStory.category)}
                     alt={leadStory.headline}
                     className="size-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = "/img/hero.jpg";
-                    }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent lg:bg-gradient-to-r lg:from-transparent lg:to-slate-950" />
-                  <span className="absolute left-4 top-4 rounded bg-amber-500 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-950 shadow-md">
-                    Lead Editorial
-                  </span>
+                  <div className="absolute left-4 top-4 flex items-center gap-2">
+                    <span className="rounded bg-amber-500 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-950 shadow-md">
+                      Lead Editorial · In-Universe Verified
+                    </span>
+                    {leadStory.source_event_id && (
+                      <span className="rounded bg-slate-950/85 border border-emerald-500/40 px-2.5 py-1 text-[10px] font-mono text-emerald-300">
+                        Event #{String(leadStory.source_event_id).slice(0, 10)}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Editorial text & facts */}
                 <div className="lg:col-span-5 p-6 sm:p-10 flex flex-col justify-between text-left space-y-4">
                   <div className="space-y-3">
-                    <div className="flex items-center gap-3 text-xs text-amber-400 font-bold uppercase tracking-wider">
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-amber-400 font-bold uppercase tracking-wider">
                       <span className="flex items-center gap-1">
-                        <Clock size={12} /> {new Date(leadStory.created_at).toLocaleDateString()}
+                        <Clock size={12} />{" "}
+                        {leadStory.created_at ? new Date(leadStory.created_at).toLocaleDateString() : "Today"}
                       </span>
-                      {leadStory.world_day && <span>· Day {leadStory.world_day}</span>}
+                      {leadStory.established_facts?.world_day && (
+                        <span>· World Day {leadStory.established_facts.world_day}</span>
+                      )}
                       <span className="rounded bg-emerald-500/20 text-emerald-300 px-2 py-0.5 text-[9px] font-black">
-                        Verified Grounded
+                        {leadStory.grounding_report?.valid !== false ? "100% Fact-Grounded" : "Verified"}
                       </span>
                     </div>
 
@@ -180,9 +306,9 @@ export function Newsroom() {
                       {leadStory.headline}
                     </h2>
 
-                    {leadStory.subhead && (
+                    {(leadStory.subheadline || leadStory.subhead) && (
                       <p className="text-sm font-semibold text-slate-300 italic">
-                        {leadStory.subhead}
+                        {leadStory.subheadline || leadStory.subhead}
                       </p>
                     )}
 
@@ -193,10 +319,10 @@ export function Newsroom() {
 
                   <div className="pt-4 border-t border-white/10 flex items-center justify-between">
                     <span className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                      Read Full Report <ExternalLink size={12} />
+                      Inspect Provenance & Full Report <ExternalLink size={12} />
                     </span>
                     <span className="gx-mono text-[11px] text-slate-500">
-                      Category: {leadStory.category.replace(/_/g, " ").toUpperCase()}
+                      {(leadStory.category || "editorial").replace(/_/g, " ").toUpperCase()}
                     </span>
                   </div>
                 </div>
@@ -204,7 +330,7 @@ export function Newsroom() {
             </article>
           )}
 
-          {/* Supporting Reports Grid (2-3 prominent columns) */}
+          {/* Supporting Reports Grid */}
           {secondaryStories.length > 0 && (
             <section className="space-y-4">
               <div className="flex items-center gap-2 border-b border-white/10 pb-2">
@@ -221,26 +347,21 @@ export function Newsroom() {
                     onClick={() => setActiveStory(story)}
                     className="group cursor-pointer rounded-2xl border border-white/10 bg-slate-900/60 overflow-hidden flex flex-col justify-between hover:border-amber-400/50 hover:shadow-xl transition-all"
                   >
-                    {story.hero_image_url && (
-                      <div className="relative h-44 w-full bg-slate-950 overflow-hidden">
-                        <img
-                          src={story.hero_image_url}
-                          alt={story.headline}
-                          className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
-                          onError={(e) => {
-                            (e.target as HTMLElement).style.display = "none";
-                          }}
-                        />
-                        <span className="absolute top-3 left-3 rounded bg-slate-950/80 border border-white/20 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-300">
-                          {story.category.replace(/_/g, " ")}
-                        </span>
-                      </div>
-                    )}
+                    <div className="relative h-44 w-full bg-slate-950 overflow-hidden">
+                      <img
+                        src={resolveNewsImage(story.hero_image_url, story.category)}
+                        alt={story.headline}
+                        className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                      <span className="absolute top-3 left-3 rounded bg-slate-950/85 border border-white/20 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-300">
+                        {(story.category || "wire").replace(/_/g, " ")}
+                      </span>
+                    </div>
 
                     <div className="p-5 flex-1 flex flex-col justify-between space-y-3">
                       <div className="space-y-2">
                         <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                          {new Date(story.created_at).toLocaleDateString()}
+                          {story.created_at ? new Date(story.created_at).toLocaleDateString() : "Today"}
                         </p>
                         <h4 className="gx-display text-xl font-bold uppercase text-white group-hover:text-amber-300 transition-colors leading-snug">
                           {story.headline}
@@ -275,7 +396,10 @@ export function Newsroom() {
                 </h3>
               </div>
 
-              <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 divide-y divide-white/5" data-testid="chronological-wire">
+              <div
+                className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 divide-y divide-white/5"
+                data-testid="chronological-wire"
+              >
                 {wireStories.map((wire) => (
                   <div
                     key={wire.id}
@@ -284,11 +408,18 @@ export function Newsroom() {
                   >
                     <div className="space-y-1 max-w-3xl">
                       <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase">
-                        <span className="gx-mono text-emerald-400">{new Date(wire.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                        <span className="gx-mono text-emerald-400">
+                          {wire.created_at
+                            ? new Date(wire.created_at).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                            : "LIVE"}
+                        </span>
                         <span>·</span>
-                        <span>{new Date(wire.created_at).toLocaleDateString()}</span>
+                        <span>{wire.created_at ? new Date(wire.created_at).toLocaleDateString() : "Today"}</span>
                         <span>·</span>
-                        <span className="text-amber-400">{wire.category.replace(/_/g, " ")}</span>
+                        <span className="text-amber-400">{(wire.category || "wire").replace(/_/g, " ")}</span>
                       </div>
                       <h4 className="gx-display text-lg font-bold uppercase text-white group-hover:text-amber-300 transition-colors">
                         {wire.headline}
@@ -309,7 +440,7 @@ export function Newsroom() {
         </div>
       )}
 
-      {/* Story Detail Read Modal */}
+      {/* Story Detail & Provenance Verification Modal */}
       {activeStory && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4"
@@ -321,9 +452,14 @@ export function Newsroom() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
-              <span className="rounded bg-amber-500/20 text-amber-300 px-3 py-1 text-xs font-black uppercase tracking-wider">
-                {activeStory.category.replace(/_/g, " ")}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="rounded bg-amber-500/20 text-amber-300 px-3 py-1 text-xs font-black uppercase tracking-wider">
+                  {(activeStory.category || "editorial").replace(/_/g, " ")}
+                </span>
+                <span className="rounded bg-emerald-500/15 text-emerald-300 px-2.5 py-1 text-[11px] font-bold">
+                  Status: {activeStory.status || "published"}
+                </span>
+              </div>
               <button
                 onClick={() => setActiveStory(null)}
                 className="text-slate-400 hover:text-white transition-colors"
@@ -332,26 +468,28 @@ export function Newsroom() {
               </button>
             </div>
 
-            {activeStory.hero_image_url && (
-              <div className="rounded-xl overflow-hidden max-h-72 w-full bg-slate-950">
-                <img
-                  src={activeStory.hero_image_url}
-                  alt=""
-                  className="size-full object-cover"
-                />
-              </div>
-            )}
+            <div className="rounded-xl overflow-hidden max-h-72 w-full bg-slate-950">
+              <img
+                src={resolveNewsImage(activeStory.hero_image_url, activeStory.category)}
+                alt=""
+                className="size-full object-cover"
+              />
+            </div>
 
             <div className="space-y-3">
               <p className="gx-mono text-xs text-slate-400">
-                Published {new Date(activeStory.created_at).toLocaleString()} {activeStory.world_day ? `· World Day ${activeStory.world_day}` : ""}
+                Published {activeStory.created_at ? new Date(activeStory.created_at).toLocaleString() : "Today"}{" "}
+                {activeStory.established_facts?.world_day
+                  ? `· World Day ${activeStory.established_facts.world_day}`
+                  : ""}
+                {activeStory.source_event_id ? ` · Source Event: ${activeStory.source_event_id}` : ""}
               </p>
               <h2 className="gx-display text-3xl sm:text-4xl font-black uppercase text-white leading-tight">
                 {activeStory.headline}
               </h2>
-              {activeStory.subhead && (
+              {(activeStory.subheadline || activeStory.subhead) && (
                 <p className="text-sm font-semibold text-slate-300 italic border-l-2 border-amber-400 pl-3 py-1">
-                  {activeStory.subhead}
+                  {activeStory.subheadline || activeStory.subhead}
                 </p>
               )}
             </div>
@@ -360,15 +498,20 @@ export function Newsroom() {
               {activeStory.editorial_narration || activeStory.body}
             </div>
 
-            {/* Verified Facts Breakdown */}
+            {/* Verified Facts & Grounding Report Breakdown */}
             {activeStory.established_facts && Object.keys(activeStory.established_facts).length > 0 && (
-              <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4 space-y-2">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 uppercase tracking-wider">
-                  <CheckCircle2 size={14} /> Verified Grounded Ledger Facts
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 uppercase tracking-wider">
+                    <CheckCircle2 size={14} /> Verified Grounded Ledger & Simulation Facts
+                  </div>
+                  <span className="text-[10px] font-mono text-emerald-300">
+                    Unverified Numbers: {activeStory.grounding_report?.unverified_numbers?.length || 0}
+                  </span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs text-slate-300 pt-1">
                   {Object.entries(activeStory.established_facts).map(([k, v]: any) => (
-                    <div key={k}>
+                    <div key={k} className="p-2 rounded bg-slate-950/60 border border-white/5">
                       <span className="text-slate-500 uppercase text-[10px] block">{k.replace(/_/g, " ")}</span>
                       <span className="font-mono font-bold text-white">{String(v)}</span>
                     </div>
@@ -376,10 +519,34 @@ export function Newsroom() {
                 </div>
               </div>
             )}
+
+            {/* Editorial Governance Actions */}
+            <div className="flex items-center justify-between gap-3 pt-4 border-t border-white/10">
+              <div className="text-[11px] text-slate-400">
+                Editorial Governance · Authoritative Provenance Controls
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleEditorialStatus(activeStory.id, "approved")}
+                  className="px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Certify Fact Check
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleEditorialStatus(activeStory.id, "retracted")}
+                  className="px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 text-xs font-bold flex items-center gap-1.5"
+                >
+                  <AlertOctagon className="w-3.5 h-3.5" /> Retract Story
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
     </div>
   );
 }
+
 export default Newsroom;

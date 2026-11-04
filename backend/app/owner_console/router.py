@@ -1498,3 +1498,227 @@ def submit_takeover(
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
     return _run(session, service.submit_takeover_bid, session, user.id, club_id, payload.units)
+
+
+
+# ---------- Club Campus Builder (Interactive 3D Grid & Staged Construction) ----------
+
+
+class CampusLayoutUpdateRequest(BaseModel):
+    action: Literal["move", "rotate", "demolish"] = "move"
+    instance_id: str = Field(min_length=1, max_length=120)
+    x: int | None = None
+    y: int | None = None
+    rotation: int | None = None
+
+
+class CampusConstructRequest(BaseModel):
+    operation: Literal["place_new", "upgrade_existing", "advance_stage", "cancel_project"] = "place_new"
+    module_key: str | None = None
+    instance_id: str | None = None
+    x: int = 4
+    y: int = 11
+    rotation: int = 0
+    fast_track_completion: bool = False
+    initial_stage: str | None = None
+    idempotency_key: str | None = None
+
+
+@router.get("/clubs/{club_id}/campus")
+def get_club_campus_view(
+    club_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import prestige_campus_comms
+
+    return _run(session, prestige_campus_comms.get_club_campus, session, user.id, club_id)
+
+
+@router.post("/clubs/{club_id}/campus/layout")
+def update_club_campus_layout(
+    club_id: str,
+    payload: CampusLayoutUpdateRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import prestige_campus_comms
+
+    return _run(
+        session,
+        prestige_campus_comms.update_campus_layout,
+        session,
+        user.id,
+        club_id,
+        action=payload.action,
+        instance_id=payload.instance_id,
+        x=payload.x,
+        y=payload.y,
+        rotation=payload.rotation,
+    )
+
+
+@router.post("/clubs/{club_id}/campus/construct")
+def construct_club_campus_module(
+    club_id: str,
+    payload: CampusConstructRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import prestige_campus_comms
+
+    return _run(
+        session,
+        prestige_campus_comms.start_campus_construction,
+        session,
+        user.id,
+        club_id,
+        operation=payload.operation,
+        module_key=payload.module_key,
+        instance_id=payload.instance_id,
+        x=payload.x,
+        y=payload.y,
+        rotation=payload.rotation,
+        fast_track_completion=payload.fast_track_completion,
+        initial_stage=payload.initial_stage,
+        idempotency_key=payload.idempotency_key,
+    )
+
+
+# ---------- Unified Club Communications (Owner, Manager, Staff, Players) ----------
+
+
+class ClubThreadMessageRequest(BaseModel):
+    thread_id: str = Field(min_length=1, max_length=160)
+    message: str = Field(min_length=1, max_length=2000)
+    sender_role: Literal["owner", "manager"] = "owner"
+    topic: str = "general"
+
+
+class ClubMeetingScheduleRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+    meeting_type: str = "boardroom"
+    participants: list[str] | None = None
+    agenda: str = ""
+    convene_now: bool = True
+
+
+class ClubAnnouncementPublishRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=180)
+    body: str = Field(min_length=1, max_length=4000)
+    audience: str = "all_club"
+    publish_to_newsroom: bool = False
+
+
+class NewsroomEditorialStatusRequest(BaseModel):
+    status: Literal["published", "editorial_review", "approved", "retracted", "draft"]
+    editorial_note: str = ""
+
+
+@router.get("/clubs/{club_id}/communications")
+def get_club_communications_hub(
+    club_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import prestige_campus_comms
+
+    return _run(session, prestige_campus_comms.get_club_communications, session, user.id, club_id)
+
+
+@router.post("/clubs/{club_id}/communications/messages")
+def post_club_thread_message(
+    club_id: str,
+    payload: ClubThreadMessageRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import prestige_campus_comms
+
+    return _run(
+        session,
+        prestige_campus_comms.send_thread_message,
+        session,
+        user.id,
+        club_id,
+        thread_id=payload.thread_id,
+        message=payload.message,
+        sender_role=payload.sender_role,
+        topic=payload.topic,
+    )
+
+
+@router.post("/clubs/{club_id}/communications/meetings")
+def post_club_meeting(
+    club_id: str,
+    payload: ClubMeetingScheduleRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import prestige_campus_comms
+
+    return _run(
+        session,
+        prestige_campus_comms.schedule_club_meeting,
+        session,
+        user.id,
+        club_id,
+        title=payload.title,
+        meeting_type=payload.meeting_type,
+        participants=payload.participants,
+        agenda=payload.agenda,
+        convene_now=payload.convene_now,
+    )
+
+
+@router.post("/clubs/{club_id}/communications/announcements")
+def post_club_announcement(
+    club_id: str,
+    payload: ClubAnnouncementPublishRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import prestige_campus_comms
+
+    return _run(
+        session,
+        prestige_campus_comms.publish_club_announcement,
+        session,
+        user.id,
+        club_id,
+        title=payload.title,
+        body=payload.body,
+        audience=payload.audience,
+        publish_to_newsroom=payload.publish_to_newsroom,
+    )
+
+
+@router.post("/clubs/{club_id}/newsroom/sync")
+def post_sync_club_newsroom(
+    club_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import prestige_campus_comms
+
+    return _run(session, prestige_campus_comms.sync_club_verified_newsroom, session, user.id, club_id)
+
+
+@router.post("/newsroom/{article_id}/editorial-status")
+def post_newsroom_editorial_status(
+    article_id: str,
+    payload: NewsroomEditorialStatusRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import prestige_campus_comms
+
+    return _run(
+        session,
+        prestige_campus_comms.update_newsroom_editorial_status,
+        session,
+        user.id,
+        article_id,
+        new_status=payload.status,
+        editorial_note=payload.editorial_note,
+    )

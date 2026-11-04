@@ -31,6 +31,7 @@ import { ClubStory } from "@/pages/ClubStory";
 import PublicClubProfile from "@/pages/PublicClubProfile";
 import { Newsroom } from "@/pages/Newsroom";
 import { Showroom } from "@/pages/Showroom";
+import ClubCampus from "@/pages/ClubCampus";
 import Jackpot from "@/pages/Jackpot";
 import AppearanceStudio from "@/pages/AppearanceStudio";
 import { SkinProvider } from "@/lib/skin-engine";
@@ -55,6 +56,8 @@ export default function App() {
             <Route path="clubs" element={<MyClubs />} />
             <Route path="showroom" element={<Showroom />} />
             <Route path="clubs/:clubId/showroom" element={<Showroom />} />
+            <Route path="campus" element={<ClubCampus />} />
+            <Route path="clubs/:clubId/campus" element={<ClubCampus />} />
             <Route path="story" element={<ClubStory />} />
             <Route path="clubs/:clubId/story" element={<ClubStory />} />
             <Route path="newsroom" element={<Newsroom />} />
