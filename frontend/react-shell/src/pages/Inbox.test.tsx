@@ -160,8 +160,8 @@ describe("React Owner Decision Inbox", () => {
 
     await renderInbox();
 
-    expect(container.textContent).toContain("Personal Owner Inbox");
-    expect(container.textContent).toContain("Command & Decisions");
+    expect(container.textContent).toContain("GTEX Unified Club Communications");
+    expect(container.textContent).toContain("Command, Threads & Decisions");
     expect(container.querySelector('[data-testid="inbox-page"]')).not.toBeNull();
 
     // Club selector renders clubs
