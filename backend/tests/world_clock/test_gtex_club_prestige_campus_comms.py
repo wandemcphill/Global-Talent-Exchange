@@ -1160,3 +1160,88 @@ def test_phase2_2_academy_infrastructure_youth_intake_and_regen_development_inte
     for g_entry in tick_res["growth"]:
         assert "campus_infrastructure" in g_entry["drivers"]
         assert g_entry["drivers"]["campus_infrastructure"] > 0
+
+def test_phase2_2_sponsor_campus_uplift_is_applied_once_to_offer_and_active_deal_payout():
+    from sqlalchemy import select
+    from app.owner_console import competitions
+    from app.owner_console.models import LedgerEvent, OwnerMatch, OwnerSponsorDeal
+
+    session = _session()
+    state = _seed_club(session, prestige=70, cash=200_000)
+
+    # One operational VIP module provides a 20% campus sponsor-revenue bonus.
+    facs = dict(state.facilities_json or {})
+    facs["_campus_modules"] = [
+        {
+            "instance_id": "mod_vip_sponsor_test",
+            "module_key": "vip_skybox_concourse",
+            "category": "commercial",
+            "x": 18,
+            "y": 12,
+            "rotation": 0,
+            "level": 1,
+            "status": "operational",
+            "construction_stage": "completed",
+            "progress_pct": 100,
+        }
+    ]
+    state.facilities_json = facs
+    session.commit()
+
+    effects = prestige_campus_comms.compute_authoritative_campus_effects(session, state)
+    sponsor_bonus_pct = int(effects["sponsor_revenue_bonus_pct"])
+    assert sponsor_bonus_pct == 20
+
+    offers = service.get_sponsor_offers(session, "user-prestige-1", "club-prestige-1")
+    offer = offers["offers"][0]
+    base_rate = int(offer["base_per_match_gross_gtex"])
+    quoted_effective_rate = int(offer["per_match_gross_gtex"])
+    expected_effective_rate = int(round(base_rate * (1.0 + sponsor_bonus_pct / 200.0)))
+    assert quoted_effective_rate == expected_effective_rate
+
+    signed = service.sign_sponsor_offer(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        offer["offer_id"],
+    )
+    deal = session.get(OwnerSponsorDeal, signed["deal_id"])
+    assert deal is not None
+    # Persist only the negotiated base. The current campus effect is applied at settlement.
+    assert int(deal.per_match_gross) == base_rate
+
+    match = OwnerMatch(
+        id="match-sponsor-campus-uplift-once",
+        competition_id="comp-sponsor-campus-uplift",
+        round_number=1,
+        home_club_id=state.club_id,
+        away_club_id="ai-sponsor-rival",
+        home_name=state.club_name,
+        away_name="Abuja Capital FC",
+        status="played",
+    )
+    session.add(match)
+    session.flush()
+    competitions._post_match_club(
+        session,
+        {"state": state, "xi": [], "campus_effects": effects},
+        True,
+        1,
+        0,
+        match,
+    )
+    session.flush()
+
+    payout = session.scalar(
+        select(LedgerEvent).where(
+            LedgerEvent.event_type == "sponsor_revenue",
+            LedgerEvent.related_object_id == deal.id,
+        )
+    )
+    assert payout is not None
+    assert int(Decimal(payout.gross_amount)) == expected_effective_rate
+
+    active = service.get_sponsor_offers(session, "user-prestige-1", "club-prestige-1")["active_deals"]
+    signed_view = next(item for item in active if item["id"] == deal.id)
+    assert int(Decimal(signed_view["per_match_gross"])) == expected_effective_rate
+    assert int(Decimal(signed_view["contract_base_per_match_gross"])) == base_rate
