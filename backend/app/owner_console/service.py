@@ -1257,18 +1257,17 @@ def academy_intake(session: Session, user_id: str, club_id: str) -> list[OwnerSq
     youth = int((state.manager_json or {}).get("youth_development", 10))
     intake_count = 1 + level // 2 + int(campus_effects.get("academy_intake_bonus_count", 0))
     generation_key = f"world-day:{state.world_day}:intake:{state.academy_intake_sequence}"
-    try:
-        cohort = engine.generate_regens(
-            club_id,
-            generation_key,
-            level,
-            youth,
-            intake_count,
-            club_prestige=state.prestige,
-            hoyd_youth=hoyd_youth,
-            campus_intake_quality_pct=int(campus_effects.get("regen_intake_quality_pct", 0)),
-            campus_ceiling_bonus=int(campus_effects.get("academy_ceiling_bonus", 0)),
-        )
+    cohort = engine.generate_regens(
+        club_id,
+        generation_key,
+        level,
+        youth,
+        intake_count,
+        club_prestige=state.prestige,
+        hoyd_youth=hoyd_youth,
+        campus_intake_quality_pct=int(campus_effects.get("regen_intake_quality_pct", 0)),
+        campus_ceiling_bonus=int(campus_effects.get("academy_ceiling_bonus", 0)),
+    )
     return [_add_regen(session, club_id, r) for r in cohort]
 
 
