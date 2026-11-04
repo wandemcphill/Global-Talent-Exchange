@@ -1269,8 +1269,6 @@ def academy_intake(session: Session, user_id: str, club_id: str) -> list[OwnerSq
             campus_intake_quality_pct=int(campus_effects.get("regen_intake_quality_pct", 0)),
             campus_ceiling_bonus=int(campus_effects.get("academy_ceiling_bonus", 0)),
         )
-    except TypeError:
-        cohort = engine.generate_regens(club_id, generation_key, level, youth, 1 + level // 2)
     return [_add_regen(session, club_id, r) for r in cohort]
 
 
@@ -2768,6 +2766,7 @@ def get_sponsor_offers(session: Session, user_id: str, club_id: str) -> dict[str
         select(OwnerSponsorDeal).where(OwnerSponsorDeal.club_id == club_id).order_by(OwnerSponsorDeal.created_at.desc())
     ).all()
 
+    sponsor_payout_mult = 1.0 + max(0, int(campus_effects.get("sponsor_revenue_bonus_pct", 0))) / 200.0
     return {
         "club_id": club_id,
         "gm_name": gm_name,
@@ -2781,7 +2780,8 @@ def get_sponsor_offers(session: Session, user_id: str, club_id: str) -> dict[str
                 "id": d.id,
                 "sponsor_name": d.sponsor_name,
                 "slot": d.slot,
-                "per_match_gross": str(d.per_match_gross),
+                "per_match_gross": str(int(round(float(d.per_match_gross) * sponsor_payout_mult))),
+                "contract_base_per_match_gross": str(d.per_match_gross),
                 "matches_remaining": d.matches_remaining,
                 "status": d.status,
             }
@@ -2804,7 +2804,7 @@ def sign_sponsor_offer(session: Session, user_id: str, club_id: str, offer_id: s
         )
 
     upfront = int(offer["upfront_signing_bonus_gtex"])
-    per_match = Decimal(str(offer["per_match_gross_gtex"]))
+    per_match = Decimal(str(offer.get("base_per_match_gross_gtex", offer["per_match_gross_gtex"])))
     win_clause = int(offer["win_bonus_clause_gtex"])
     duration = int(offer.get("matches_duration", 10))
 
