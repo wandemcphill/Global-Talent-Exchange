@@ -1203,11 +1203,7 @@ def generate_sponsor_offers(
     campus_sponsor_bonus_pct: int = 0,
 ) -> list[dict[str, Any]]:
     """Generate 3 competing seasonal sponsor offers presented by the General Manager, gated by club prestige."""
-    base_nego_mult = (
-        1.0
-        + max(0, int(gm_negotiation) - 10) * 0.04
-        + max(0, int(commercial_level) - 1) * 0.08
-    )
+    base_nego_mult = 1.0 + max(0, int(gm_negotiation) - 10) * 0.04 + max(0, int(commercial_level) - 1) * 0.08
     campus_payout_mult = 1.0 + max(0, int(campus_sponsor_bonus_pct)) / 200.0
     # The displayed per-match offer includes the current campus uplift, but the
     # stored deal keeps its negotiated base. Match settlement applies the live
