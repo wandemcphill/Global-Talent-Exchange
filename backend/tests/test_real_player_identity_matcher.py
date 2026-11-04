@@ -689,3 +689,145 @@ def test_identity_matcher_matches_birthyear_club_key_before_fuzzy_merge(session_
         assert result.action == "matched_existing"
         assert result.player_id == player.id
         assert result.confidence_score >= 0.88
+
+def test_identity_matcher_resolves_middle_name_variant_haaland(session_factory) -> None:
+    matcher = RealPlayerIdentityMatcher()
+    with session_factory() as session:
+        country = Country(
+            source_provider="test-source",
+            provider_external_id="NO",
+            name="Norway",
+            alpha2_code="NO",
+        )
+        club = Club(
+            source_provider="test-source",
+            provider_external_id="man-city",
+            name="Manchester City",
+            slug="manchester-city",
+        )
+        player = Player(
+            source_provider="fm23_genie_scout",
+            provider_external_id="29179241",
+            full_name="Erling Haaland",
+            canonical_display_name="Erling Haaland",
+            country=country,
+            current_club=club,
+            position="Striker",
+            normalized_position="attacker",
+            date_of_birth=date(2000, 7, 21),
+            is_real_player=True,
+        )
+        session.add_all([country, club, player])
+        session.commit()
+
+        payload = RealPlayerSeedInput.model_validate(
+            {
+                "source_name": "sofifa_fc25",
+                "source_player_key": "239085",
+                "canonical_name": "Erling Braut Håland",
+                "nationality": "Norway",
+                "date_of_birth": "2000-07-21",
+                "primary_position": "ST",
+                "current_real_world_club": "Manchester City",
+            }
+        )
+
+        result = matcher.match(session, payload)
+        assert result.action == "matched_existing"
+        assert result.player_id == player.id
+        assert result.confidence_score >= 0.90
+
+
+def test_identity_matcher_resolves_middle_name_variant_bellingham(session_factory) -> None:
+    matcher = RealPlayerIdentityMatcher()
+    with session_factory() as session:
+        country = Country(
+            source_provider="test-source",
+            provider_external_id="GB-ENG",
+            name="England",
+            alpha2_code="EN",
+        )
+        club = Club(
+            source_provider="test-source",
+            provider_external_id="real-madrid",
+            name="Real Madrid",
+            slug="real-madrid",
+        )
+        player = Player(
+            source_provider="fm23_genie_scout",
+            provider_external_id="29232937",
+            full_name="Jude Bellingham",
+            canonical_display_name="Jude Bellingham",
+            country=country,
+            current_club=club,
+            position="Attacking Midfield",
+            normalized_position="midfielder",
+            date_of_birth=date(2003, 6, 29),
+            is_real_player=True,
+        )
+        session.add_all([country, club, player])
+        session.commit()
+
+        payload = RealPlayerSeedInput.model_validate(
+            {
+                "source_name": "sofifa_fc25",
+                "source_player_key": "252371",
+                "canonical_name": "Jude Victor William Bellingham",
+                "nationality": "England",
+                "date_of_birth": "2003-06-29",
+                "primary_position": "CAM",
+                "current_real_world_club": "Real Madrid",
+            }
+        )
+
+        result = matcher.match(session, payload)
+        assert result.action == "matched_existing"
+        assert result.player_id == player.id
+        assert result.confidence_score >= 0.90
+
+
+def test_identity_matcher_separates_distinct_brothers_jude_and_jobe(session_factory) -> None:
+    matcher = RealPlayerIdentityMatcher()
+    with session_factory() as session:
+        country = Country(
+            source_provider="test-source",
+            provider_external_id="GB-ENG",
+            name="England",
+            alpha2_code="EN",
+        )
+        club = Club(
+            source_provider="test-source",
+            provider_external_id="sunderland",
+            name="Sunderland",
+            slug="sunderland",
+        )
+        jude = Player(
+            source_provider="fm23_genie_scout",
+            provider_external_id="29232937",
+            full_name="Jude Bellingham",
+            canonical_display_name="Jude Bellingham",
+            country=country,
+            position="Attacking Midfield",
+            normalized_position="midfielder",
+            date_of_birth=date(2003, 6, 29),
+            is_real_player=True,
+        )
+        session.add_all([country, club, jude])
+        session.commit()
+
+        # Payload is younger brother Jobe Bellingham
+        payload = RealPlayerSeedInput.model_validate(
+            {
+                "source_name": "sofifa_fc25",
+                "source_player_key": "264350",
+                "canonical_name": "Jobe Bellingham",
+                "nationality": "England",
+                "date_of_birth": "2005-09-23",
+                "primary_position": "CAM",
+                "current_real_world_club": "Sunderland",
+            }
+        )
+
+        result = matcher.match(session, payload)
+        assert result.action == "create_new"
+        assert result.player_id != jude.id

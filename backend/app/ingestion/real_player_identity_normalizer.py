@@ -24,6 +24,45 @@ _FOOT_ALIASES = {
     "ambidextrous": "both",
 }
 
+_COMMON_NICKNAME_MAP = {
+    "ben": "benjamin",
+    "dan": "daniel",
+    "danny": "daniel",
+    "matt": "matthew",
+    "matty": "matthew",
+    "alex": "alexandre",
+    "sam": "samuel",
+    "chris": "christopher",
+    "mike": "michael",
+    "mikey": "michael",
+    "joe": "joseph",
+    "tony": "anthony",
+    "dave": "david",
+    "davy": "david",
+    "tom": "thomas",
+    "tommy": "thomas",
+    "eddie": "edward",
+    "bill": "william",
+    "billy": "william",
+    "will": "william",
+    "rob": "robert",
+    "bobby": "robert",
+    "bob": "robert",
+    "jim": "james",
+    "jimmy": "james",
+    "charlie": "charles",
+    "andy": "andrew",
+    "noni": "chukwunonso",
+    "tosin": "oluwatosin",
+    "leo": "leonardo",
+    "nico": "nicolas",
+    "gabi": "gabriel",
+    "nacho": "ignacio",
+    "paco": "francisco",
+    "koke": "jorge",
+    "pepe": "jose",
+}
+
 
 @dataclass(frozen=True, slots=True)
 class NormalizedIdentityName:
@@ -83,7 +122,39 @@ class NormalizedRealPlayerIdentity:
     def name_variants(self) -> tuple[str, ...]:
         seen: set[str] = set()
         variants: list[str] = []
-        for value in (self.canonical_name, self.display_name, *self.known_aliases):
+        raw_candidates = [self.canonical_name, self.display_name, *self.known_aliases]
+        for value in list(raw_candidates):
+            if not value:
+                continue
+            cleaned = clean_name(value)
+            if not cleaned:
+                continue
+            folded_ascii = unicodedata.normalize("NFKD", cleaned).encode("ascii", "ignore").decode("ascii")
+            if folded_ascii and folded_ascii != cleaned:
+                raw_candidates.append(folded_ascii)
+            if "aa" in cleaned.lower():
+                raw_candidates.append(re.sub(r"(?i)aa", "a", cleaned))
+            if "å" in cleaned.lower() or "Å" in cleaned:
+                raw_candidates.append(re.sub(r"(?i)å", "aa", cleaned))
+                raw_candidates.append(re.sub(r"(?i)å", "a", cleaned))
+            tokens = cleaned.split()
+            if len(tokens) >= 3:
+                raw_candidates.append(f"{tokens[0]} {tokens[-1]}")
+                first_norm = tokens[0].lower()
+                for nick, formal in _COMMON_NICKNAME_MAP.items():
+                    if first_norm == formal:
+                        raw_candidates.append(f"{nick.capitalize()} {tokens[-1]}")
+                    elif first_norm == nick:
+                        raw_candidates.append(f"{formal.capitalize()} {tokens[-1]}")
+            elif len(tokens) == 2:
+                first_norm = tokens[0].lower()
+                for nick, formal in _COMMON_NICKNAME_MAP.items():
+                    if first_norm == formal:
+                        raw_candidates.append(f"{nick.capitalize()} {tokens[-1]}")
+                    elif first_norm == nick:
+                        raw_candidates.append(f"{formal.capitalize()} {tokens[-1]}")
+
+        for value in raw_candidates:
             cleaned = clean_name(value)
             if not cleaned:
                 continue
@@ -150,6 +221,24 @@ def normalize_identity_name(value: str | None) -> NormalizedIdentityName:
     )
 
 
+def _standardize_token(t: str) -> str:
+    t = t.replace("aa", "a")
+    return _COMMON_NICKNAME_MAP.get(t, t)
+
+
+def _tokens_compatible(t1: str, t2: str) -> bool:
+    if t1 == t2:
+        return True
+    if len(t1) >= 4 and len(t2) >= 4:
+        if t1.startswith(t2) or t2.startswith(t1) or t1 in t2 or t2 in t1:
+            return True
+    if len(t1) >= 3 and len(t2) >= 4 and (t2.startswith(t1) or t1 in t2):
+        return True
+    if len(t2) >= 3 and len(t1) >= 4 and (t1.startswith(t2) or t2 in t1):
+        return True
+    return False
+
+
 def names_equivalent(left: str | None, right: str | None) -> bool:
     left_name = normalize_identity_name(left)
     right_name = normalize_identity_name(right)
@@ -157,7 +246,31 @@ def names_equivalent(left: str | None, right: str | None) -> bool:
         return False
     if left_name.normalized == right_name.normalized or left_name.compact == right_name.compact:
         return True
-    return left_name.token_signature == right_name.token_signature and left_name.first_token == right_name.first_token
+    if left_name.token_signature == right_name.token_signature and left_name.first_token == right_name.first_token:
+        return True
+
+    left_tokens = tuple(_standardize_token(t) for t in left_name.tokens)
+    right_tokens = tuple(_standardize_token(t) for t in right_name.tokens)
+    if left_tokens == right_tokens:
+        return True
+    if sorted(left_tokens) == sorted(right_tokens):
+        return True
+
+    if len(left_tokens) >= 2 and len(right_tokens) >= 2:
+        first_matches = _tokens_compatible(left_tokens[0], right_tokens[0])
+        last_matches = _tokens_compatible(left_tokens[-1], right_tokens[-1])
+        inverted_matches = _tokens_compatible(left_tokens[0], right_tokens[-1]) and _tokens_compatible(left_tokens[-1], right_tokens[0])
+
+        if (first_matches and last_matches) or inverted_matches:
+            left_set = set(left_tokens)
+            right_set = set(right_tokens)
+            if left_set.issubset(right_set) or right_set.issubset(left_set):
+                return True
+            overlap = left_set.intersection(right_set)
+            if len(overlap) >= 2 or len(right_tokens) == 2 or len(left_tokens) == 2:
+                return True
+
+    return False
 
 
 def canonical_position_key(value: str | None) -> str:
