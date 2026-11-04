@@ -1161,6 +1161,7 @@ def test_phase2_2_academy_infrastructure_youth_intake_and_regen_development_inte
         assert "campus_infrastructure" in g_entry["drivers"]
         assert g_entry["drivers"]["campus_infrastructure"] > 0
 
+
 def test_phase2_2_sponsor_campus_uplift_is_applied_once_to_offer_and_active_deal_payout():
     from sqlalchemy import select
     from app.owner_console import competitions
