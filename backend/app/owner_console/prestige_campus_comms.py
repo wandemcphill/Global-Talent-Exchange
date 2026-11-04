@@ -723,6 +723,13 @@ def validate_module_placement(
         return {"valid": False, "code": "invalid_module_key", "reason": f"Unknown module '{module_key}'."}
 
     rot = int(rotation) % 360
+    if rot not in (0, 90, 180, 270):
+        return {
+            "valid": False,
+            "code": "invalid_rotation",
+            "reason": "Campus modules can only be rotated in 90-degree increments (0°, 90°, 180°, or 270°).",
+        }
+
     fw = int(spec["footprint_w"])
     fh = int(spec["footprint_h"])
     w = fh if rot in (90, 270) else fw
@@ -760,7 +767,40 @@ def validate_module_placement(
     return {"valid": True, "code": "ok", "effective_w": w, "effective_h": h}
 
 
-def _reconcile_campus_projects(state: OwnerClubState) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def _apply_campus_completion_rewards(
+    session: Session,
+    state: OwnerClubState,
+    facs: dict[str, Any],
+    project: dict[str, Any],
+) -> bool:
+    """Apply facility-level and prestige benefits once, only when construction becomes operational."""
+    if project.get("completion_rewards_applied"):
+        return False
+
+    spec = CAMPUS_MODULE_CATALOG.get(str(project.get("module_key") or ""))
+    if not spec:
+        return False
+
+    linked_facility = str(spec.get("linked_facility") or "training")
+    current_level = int(facs.get(linked_facility, 1) or 1)
+    target_level = int(project.get("target_level", 1))
+    facs[linked_facility] = min(5, max(current_level, target_level))
+
+    prestige_gain = int((spec.get("effects") or {}).get("prestige_bonus", 2))
+    if prestige_gain:
+        state.prestige = int(engine.clamp(state.prestige + prestige_gain, 0, 100))
+        from app.owner_console import service
+
+        service.sync_club_prestige_to_reputation(session, state.club_id, state.prestige)
+
+    project["completion_rewards_applied"] = True
+    return True
+
+
+def _reconcile_campus_projects(
+    session: Session,
+    state: OwnerClubState,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     facs = dict(state.facilities_json or {})
     world_day = int(state.world_day or 1)
     placed = list(facs.get("_campus_modules") or _default_placed_modules(facs, world_day))
@@ -768,8 +808,9 @@ def _reconcile_campus_projects(state: OwnerClubState) -> tuple[list[dict[str, An
 
     changed = False
     for proj in projects:
-        if proj.get("status") == "completed":
+        if proj.get("status") in ("completed", "cancelled"):
             continue
+
         start_day = int(proj.get("start_world_day", world_day))
         duration = max(1, int(proj.get("duration_days", 2)))
         elapsed = max(0, world_day - start_day)
@@ -777,22 +818,51 @@ def _reconcile_campus_projects(state: OwnerClubState) -> tuple[list[dict[str, An
         raw_pct = min(100, int(forced_pct + (elapsed / duration) * 75)) if elapsed > 0 else forced_pct
         pct = max(raw_pct, forced_pct)
         stage = _stage_from_progress(pct)
+        expected_completion_day = start_day + duration
+        remaining_days = 0 if pct >= 100 else max(1, expected_completion_day - world_day)
+
+        previous_project_state = (
+            proj.get("progress_pct"),
+            proj.get("stage"),
+            proj.get("expected_completion_day"),
+            proj.get("remaining_days"),
+            proj.get("status"),
+        )
         proj["progress_pct"] = pct
         proj["stage"] = stage
-        proj["expected_completion_day"] = start_day + duration
-        proj["remaining_days"] = 0 if pct >= 100 else max(1, (start_day + duration) - world_day)
+        proj["expected_completion_day"] = expected_completion_day
+        proj["remaining_days"] = remaining_days
         if pct >= 100:
             proj["status"] = "completed"
-        changed = True
+            if _apply_campus_completion_rewards(session, state, facs, proj):
+                changed = True
+
+        current_project_state = (
+            proj.get("progress_pct"),
+            proj.get("stage"),
+            proj.get("expected_completion_day"),
+            proj.get("remaining_days"),
+            proj.get("status"),
+        )
+        if current_project_state != previous_project_state:
+            changed = True
 
         target_id = proj.get("instance_id")
         for mod in placed:
-            if mod.get("instance_id") == target_id:
-                mod["progress_pct"] = pct
-                mod["construction_stage"] = stage
-                mod["status"] = "operational" if pct >= 100 else "under_construction"
-                if pct >= 100 and proj.get("target_level"):
-                    mod["level"] = int(proj["target_level"])
+            if mod.get("instance_id") != target_id:
+                continue
+            next_module_state = {
+                "progress_pct": pct,
+                "construction_stage": stage,
+                "status": "operational" if pct >= 100 else "under_construction",
+            }
+            if pct >= 100 and proj.get("target_level"):
+                next_module_state["level"] = int(proj["target_level"])
+            previous_module_state = tuple(mod.get(key) for key in next_module_state)
+            for key, value in next_module_state.items():
+                mod[key] = value
+            if tuple(mod.get(key) for key in next_module_state) != previous_module_state:
+                changed = True
 
     if changed or "_campus_modules" not in facs:
         facs["_campus_modules"] = placed
@@ -805,7 +875,7 @@ def _reconcile_campus_projects(state: OwnerClubState) -> tuple[list[dict[str, An
 
 def get_club_campus(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
     state = require_state(session, club_id, user_id)
-    placed, projects = _reconcile_campus_projects(state)
+    placed, projects = _reconcile_campus_projects(session, state)
     facs = dict(state.facilities_json or {})
     cash_bal = float(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX))
 
@@ -921,7 +991,7 @@ def update_campus_layout(
 ) -> dict[str, Any]:
     """Moves, rotates, or demolishes an existing module on the 3D campus grid with strict validation."""
     state = require_state(session, club_id, user_id)
-    placed, projects = _reconcile_campus_projects(state)
+    placed, projects = _reconcile_campus_projects(session, state)
     target = next((m for m in placed if m.get("instance_id") == instance_id), None)
     if not target:
         raise OwnerError("campus_module_not_found", 404, f"Campus module '{instance_id}' was not found on grid.")
@@ -999,7 +1069,7 @@ def start_campus_construction(
     from app.owner_console import service, storytelling
 
     state = require_state(session, club_id, user_id)
-    placed, projects = _reconcile_campus_projects(state)
+    placed, projects = _reconcile_campus_projects(session, state)
     facs = dict(state.facilities_json or {})
 
     # 1. Idempotency protection against duplicate debits / retries
@@ -1095,6 +1165,7 @@ def start_campus_construction(
         proj["stage"] = _stage_from_progress(new_pct)
         if new_pct >= 100:
             proj["status"] = "completed"
+            _apply_campus_completion_rewards(session, state, facs, proj)
         updated_mod = None
         for mod in placed:
             if mod.get("instance_id") == instance_id:
@@ -1240,8 +1311,13 @@ def start_campus_construction(
         "ledger_event_id": leg.id,
         "image_url": spec["image_url"],
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "completion_rewards_applied": False,
     }
     projects.insert(0, project_entry)
+    if fast_track_completion:
+        _apply_campus_completion_rewards(session, state, facs, project_entry)
+        state.facilities_json = facs
+        flag_modified(state, "facilities_json")
 
     # Synchronize durable OwnerShowroomAsset record for infrastructure ownership
     infra_asset = OwnerShowroomAsset(
@@ -1259,20 +1335,12 @@ def start_campus_construction(
     )
     session.add(infra_asset)
 
-    # Synchronize core facility level in facilities_json and reputation
-    linked_fac = str(spec.get("linked_facility") or "training")
-    cur_fac_lvl = int(facs.get(linked_fac, 1) or 1)
-    if target_lvl > cur_fac_lvl or operation == "place_new":
-        facs[linked_fac] = min(5, max(cur_fac_lvl, target_lvl))
-
+    # Facility levels and prestige are awarded only when the module becomes operational.
+    # This prevents incomplete/cancelled projects from granting permanent gameplay benefits.
     facs["_campus_modules"] = placed
     facs["_construction_projects"] = projects
     state.facilities_json = facs
     flag_modified(state, "facilities_json")
-
-    prestige_gain = int(spec.get("effects", {}).get("prestige_bonus", 2))
-    state.prestige = int(engine.clamp(state.prestige + prestige_gain, 0, 100))
-    service.sync_club_prestige_to_reputation(session, club_id, state.prestige)
 
     # Emit verified global broadcast + grounded newsroom article
     broadcast = storytelling.record_verified_broadcast_event(
