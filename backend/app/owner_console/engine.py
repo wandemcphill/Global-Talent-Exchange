@@ -1203,12 +1203,12 @@ def generate_sponsor_offers(
     campus_sponsor_bonus_pct: int = 0,
 ) -> list[dict[str, Any]]:
     """Generate 3 competing seasonal sponsor offers presented by the General Manager, gated by club prestige."""
-    nego_mult = (
-        1.0
-        + max(0, int(gm_negotiation) - 10) * 0.04
-        + max(0, int(commercial_level) - 1) * 0.08
-        + max(0, int(campus_sponsor_bonus_pct)) / 100.0
-    )
+    base_nego_mult = 1.0 + max(0, int(gm_negotiation) - 10) * 0.04 + max(0, int(commercial_level) - 1) * 0.08
+    campus_payout_mult = 1.0 + max(0, int(campus_sponsor_bonus_pct)) / 200.0
+    # The displayed per-match offer includes the current campus uplift, but the
+    # stored deal keeps its negotiated base. Match settlement applies the live
+    # campus uplift exactly once, so the same benefit is not compounded.
+    nego_mult = base_nego_mult + max(0, int(campus_sponsor_bonus_pct)) / 100.0
 
     prestige_val = int(prestige)
 
@@ -1219,7 +1219,8 @@ def generate_sponsor_offers(
             "slot": "Front of Shirt",
             "strategy_profile": "guaranteed_heavy",
             "upfront_signing_bonus_gtex": int(round(1_200 * nego_mult, -1)),
-            "per_match_gross_gtex": int(round(280 * nego_mult, -1)),
+            "per_match_gross_gtex": int(round(int(round(280 * base_nego_mult, -1)) * campus_payout_mult)),
+            "base_per_match_gross_gtex": int(round(280 * base_nego_mult, -1)),
             "win_bonus_clause_gtex": int(round(80 * nego_mult, -1)),
             "matches_duration": 10,
             "min_prestige_required": 20,
@@ -1231,7 +1232,8 @@ def generate_sponsor_offers(
             "slot": "Stadium Naming & Kit Sleeve",
             "strategy_profile": "balanced",
             "upfront_signing_bonus_gtex": int(round(900 * nego_mult, -1)),
-            "per_match_gross_gtex": int(round(360 * nego_mult, -1)),
+            "per_match_gross_gtex": int(round(int(round(360 * base_nego_mult, -1)) * campus_payout_mult)),
+            "base_per_match_gross_gtex": int(round(360 * base_nego_mult, -1)),
             "win_bonus_clause_gtex": int(round(220 * nego_mult, -1)),
             "matches_duration": 10,
             "min_prestige_required": 40,
@@ -1243,7 +1245,8 @@ def generate_sponsor_offers(
             "slot": "Global Principal Partner",
             "strategy_profile": "trophy_incentive_heavy",
             "upfront_signing_bonus_gtex": int(round(1_800 * nego_mult, -1)),
-            "per_match_gross_gtex": int(round(520 * nego_mult, -1)),
+            "per_match_gross_gtex": int(round(int(round(520 * base_nego_mult, -1)) * campus_payout_mult)),
+            "base_per_match_gross_gtex": int(round(520 * base_nego_mult, -1)),
             "win_bonus_clause_gtex": int(round(480 * nego_mult, -1)),
             "matches_duration": 10,
             "min_prestige_required": 65,
