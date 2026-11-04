@@ -2328,6 +2328,7 @@ def publish_club_announcement(
 # 4. GTEX NEWSROOM REBUILD (Editorial Workflow, Provenance & Event Sync)
 # ---------------------------------------------------------------------------
 
+
 def sync_club_verified_newsroom(
     session: Session,
     user_id: str,
