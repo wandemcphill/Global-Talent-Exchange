@@ -248,6 +248,14 @@ def standings(session: Session, comp: OwnerCompetition) -> list[dict[str, Any]]:
 
 def match_dict(m: OwnerMatch, full: bool = False) -> dict[str, Any]:
     narrative = dict(m.narrative_json or {})
+    persisted_tv = narrative.get("tv_revenue")
+    if persisted_tv is None:
+        persisted_tv = narrative.get("tv_revenue_gtex")
+    if persisted_tv is None:
+        persisted_tv = narrative.get("home_tv_revenue_gtex")
+    if persisted_tv is None:
+        persisted_tv = narrative.get("away_tv_revenue_gtex")
+    tv_revenue_val = int(persisted_tv) if persisted_tv is not None else None
     data = {
         "id": m.id,
         "competition_id": m.competition_id,
@@ -263,9 +271,10 @@ def match_dict(m: OwnerMatch, full: bool = False) -> dict[str, Any]:
         "stadium_capacity": narrative.get("stadium_capacity"),
         "capacity_utilization_pct": narrative.get("capacity_utilization_pct"),
         "gate_receipts_gtex": narrative.get("gate_receipts_gtex"),
+        "tv_revenue": tv_revenue_val,
+        "tv_revenue_gtex": tv_revenue_val,
         "played_at": m.played_at.isoformat() if m.played_at else None,
     }
-    data["tv_revenue"] = 250 + 50 * 8
     if full:
         data["events"] = m.events_json
         data["narrative"] = m.narrative_json
@@ -782,6 +791,11 @@ def _post_match_club(
     from app.owner_console import prestige_campus_comms
 
     state: OwnerClubState = side["state"]
+    side_key = "home" if is_home else "away"
+    existing_narrative = dict(match.narrative_json or {})
+    if match.id and existing_narrative.get(f"{side_key}_settled_club_id") == state.club_id:
+        return list(existing_narrative.get(f"{side_key}_settlement_notes") or [])
+
     campus_effects = side.get("campus_effects") or prestige_campus_comms.compute_authoritative_campus_effects(
         session, state, reconcile=True
     )
@@ -798,10 +812,13 @@ def _post_match_club(
     base_fatigue = 14 + (0 if is_home else max(0, 3 - away_travel_pct // 8))
     effective_fatigue = max(4, int(round(base_fatigue * (1.0 - min(0.55, stamina_ret_pct / 100.0)))))
 
+    injury_assessments: list[dict[str, Any]] = []
+    match_injuries: list[dict[str, Any]] = []
     for p in squad(session, state.club_id):
         pers = dict(p.personality_json or {})
         cur_fitness = int(pers.get("fitness", 95))
-        if p.id in side["xi"]:
+        pre_existing_injured_days = int(p.injured_days or 0)
+        if p.id in side["xi"] and pre_existing_injured_days <= 0:
             p.minutes += 90
             p.morale = int(engine.clamp(p.morale + result * 4 + 1, 0, 100))
             new_fitness = int(engine.clamp(cur_fitness - effective_fatigue, 25, 100))
@@ -819,9 +836,33 @@ def _post_match_club(
             )
             pers["last_injury_risk"] = inj_eval["effective_risk"]
             pers["unmitigated_injury_risk"] = inj_eval["unmitigated_risk"]
-            if p.injured_days <= 0 and inj_eval["injured"]:
+            pers["last_injury_match_id"] = match.id
+            injury_assessments.append(
+                {
+                    "player_id": p.id,
+                    "player_name": p.name,
+                    "post_match_fitness": new_fitness,
+                    "unmitigated_risk": inj_eval["unmitigated_risk"],
+                    "effective_risk": inj_eval["effective_risk"],
+                    "injury_reduction_pct": inj_eval["injury_reduction_pct"],
+                    "injured": inj_eval["injured"],
+                    "injured_days": inj_eval["injured_days"],
+                }
+            )
+            if inj_eval["injured"]:
                 p.injured_days = inj_eval["injured_days"]
+                match_injuries.append(
+                    {
+                        "player_id": p.id,
+                        "player_name": p.name,
+                        "injured_days": p.injured_days,
+                        "effective_risk": inj_eval["effective_risk"],
+                    }
+                )
                 notes.append(f"Injury: {p.name} ({p.injured_days}d)")
+        elif pre_existing_injured_days > 0:
+            # Preserve existing injury state without overwriting or re-rolling
+            p.injured_days = pre_existing_injured_days
         else:
             ambition = pers.get("ambition", 10) if p.is_regen else 10
             p.morale = int(engine.clamp(p.morale - (2 if ambition >= 14 else 0) + result, 0, 100))
@@ -921,6 +962,13 @@ def _post_match_club(
             memo=f"TV broadcast distribution vs {match.away_name if is_home else match.home_name}",
         )
         notes.append(f"TV revenue {tv_rev:,}")
+        match_narrative = dict(match.narrative_json or {})
+        match_narrative[f"{side_key}_tv_revenue_gtex"] = tv_rev
+        if is_home or "tv_revenue" not in match_narrative:
+            match_narrative["tv_revenue"] = tv_rev
+            match_narrative["tv_revenue_gtex"] = tv_rev
+        match.narrative_json = match_narrative
+        flag_modified(match, "narrative_json")
     except Exception as exc:
         logger.warning("tv_broadcast_revenue recording failed: %s", exc)
 
@@ -969,6 +1017,14 @@ def _post_match_club(
                 notes.append(f"Sponsor win bonus {sponsor_win_clause:,}")
             except Exception as exc:
                 logger.warning("sponsor_win_bonus payout failed: %s", exc)
+
+    final_narrative = dict(match.narrative_json or {})
+    final_narrative[f"{side_key}_injury_assessments"] = injury_assessments
+    final_narrative[f"{side_key}_injuries"] = match_injuries
+    final_narrative[f"{side_key}_settled_club_id"] = state.club_id
+    final_narrative[f"{side_key}_settlement_notes"] = list(notes)
+    match.narrative_json = final_narrative
+    flag_modified(match, "narrative_json")
 
     return notes
 

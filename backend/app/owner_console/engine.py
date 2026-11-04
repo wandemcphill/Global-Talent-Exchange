@@ -776,6 +776,7 @@ def regen_value(rating: int, potential: int, age: int) -> int:
 def regen_growth(player: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
     """Apply one world-day of growth. ctx: training, manager_youth, competition_quality, prestige, plus campus bonuses."""
     p = player["personality"]
+    injured_days = max(0, int(player.get("injured_days", 0) or 0))
     minutes_factor = clamp(player["minutes"] / 540, 0, 1)
     morale_factor = 0.6 + player["morale"] / 125
     env = p["environment_sensitivity"] / 20
@@ -793,9 +794,18 @@ def regen_growth(player: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
     if campus_boost_term > 0:
         drivers["campus_infrastructure"] = round(0.22 * campus_boost_term * (0.7 + env * 0.5), 3)
     responsiveness = p["growth_responsiveness"] / 12 * (0.7 + p["professionalism"] / 40)
-    gain = sum(drivers.values()) * responsiveness * morale_factor * 1.6
+    raw_gain = sum(drivers.values()) * responsiveness * morale_factor * 1.6
+    if injured_days >= 7:
+        rehab_growth_multiplier = 0.15
+    elif injured_days > 0:
+        rehab_growth_multiplier = 0.35
+    else:
+        rehab_growth_multiplier = 1.0
+    if injured_days > 0:
+        drivers = {k: round(v * rehab_growth_multiplier, 3) for k, v in drivers.items()}
+    gain = raw_gain * rehab_growth_multiplier
     buffer = p.get("growth_buffer", 0.0) + gain
-    points = int(buffer)
+    points = 0 if injured_days > 0 else int(buffer)
     ceiling_bonus = int(ctx.get("campus_academy_ceiling_bonus", 0))
     effective_potential = min(
         98,
@@ -803,7 +813,10 @@ def regen_growth(player: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
     )
     headroom = effective_potential - player["rating"]
     points = max(0, min(points, headroom))
-    p["growth_buffer"] = round(buffer - int(buffer), 3)
+    if injured_days > 0:
+        p["growth_buffer"] = round(min(0.95, buffer), 3)
+    else:
+        p["growth_buffer"] = round(buffer - int(buffer), 3)
     pressure = p.get("transfer_pressure", 10)
     pressure += (p["ambition"] - 10) * 0.8 * (1 - minutes_factor)
     if ctx["prestige"] < p["ambition"] * 3:
@@ -816,13 +829,21 @@ def regen_growth(player: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
     p["transfer_pressure"] = int(clamp(pressure, 0, 100))
     top_driver = max(drivers, key=drivers.get)
     weakest = min(drivers, key=drivers.get)
+    explanation = (
+        f"Growth restricted by injury rehabilitation ({injured_days}d remaining); light tactical study only."
+        if injured_days > 0
+        else f"Growth driven mostly by {top_driver.replace('_', ' ')}; held back by {weakest.replace('_', ' ')}."
+    )
     return {
         "points": points,
         "effective_potential": effective_potential,
         "drivers": drivers,
         "top_driver": top_driver,
         "weakest_driver": weakest,
-        "explanation": f"Growth driven mostly by {top_driver.replace('_', ' ')}; held back by {weakest.replace('_', ' ')}.",
+        "injury_rehab_restriction": injured_days > 0,
+        "injured_days": injured_days,
+        "rehab_growth_multiplier": rehab_growth_multiplier,
+        "explanation": explanation,
     }
 
 
@@ -907,6 +928,46 @@ def calculate_match_attendance(
     }
 
 
+def calculate_daily_training_workload_minutes(
+    player: dict[str, Any],
+    *,
+    is_starter: bool,
+    mentality: str = "balanced",
+    training_level: int = 1,
+) -> dict[str, Any]:
+    """Deterministic daily training workload model based on squad role, cumulative match minutes, fitness, and mentality."""
+    minutes_played = max(0, int(player.get("minutes", 0) or 0))
+    pers = dict(player.get("personality") or {})
+    fitness = int(clamp(int(pers.get("fitness", player.get("fitness", 95))), 0, 100))
+    professionalism = int(pers.get("professionalism", 12))
+    age = int(player.get("age", 24) or 24)
+
+    if is_starter and minutes_played >= 180:
+        base_minutes = 55
+    elif is_starter or minutes_played >= 90:
+        base_minutes = 45
+    elif minutes_played > 0:
+        base_minutes = 35
+    else:
+        base_minutes = 25
+
+    mentality_delta = 8 if mentality == "attacking" else (-5 if mentality == "defensive" else 0)
+    fatigue_delta = 6 if (fitness < 60 and mentality == "attacking") else (-6 if fitness < 60 else 0)
+    prof_delta = -3 if professionalism >= 16 else (2 if professionalism <= 7 else 0)
+    age_delta = 4 if age >= 31 else 0
+    facility_delta = 2 if int(training_level) >= 3 else 0
+
+    minutes_load = int(
+        clamp(base_minutes + mentality_delta + fatigue_delta + prof_delta + age_delta + facility_delta, 15, 85)
+    )
+    workload_tier = "high_intensity" if minutes_load >= 55 else "standard" if minutes_load >= 40 else "light_recovery"
+    return {
+        "minutes_load": minutes_load,
+        "workload_tier": workload_tier,
+        "is_starter": bool(is_starter),
+    }
+
+
 def evaluate_player_injury_risk(
     *,
     club_id: str,
@@ -921,7 +982,8 @@ def evaluate_player_injury_risk(
 ) -> dict[str, Any]:
     """Authoritative injury-incidence and severity model consumed by matchday and world-clock simulation."""
     fit_val = int(clamp(int(fitness), 0, 100))
-    base_hazard = 0.04 if int(minutes_load) >= 60 else 0.015
+    load_clamped = int(clamp(int(minutes_load), 10, 120))
+    base_hazard = round(0.0025 + (load_clamped / 90.0) * 0.0425, 4)
     fatigue_overload = max(0, 75 - fit_val) * 0.011
     mentality_hazard = 0.025 if mentality == "attacking" else 0.0
     staff_facility_mitigation = (max(1, int(medical_level)) - 1) * 0.015 + max(
@@ -945,6 +1007,7 @@ def evaluate_player_injury_risk(
         injured_days = max(1, int(round(raw_days * reduction_factor)))
 
     return {
+        "minutes_load": load_clamped,
         "unmitigated_risk": round(unmitigated_risk, 4),
         "injury_reduction_pct": reduction_pct,
         "effective_risk": effective_risk,
