@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -92,6 +92,22 @@ export default function ClubCampus() {
   const [activeBuildModuleKey, setActiveBuildModuleKey] = useState<string | null>(null);
   const [fastTrack, setFastTrack] = useState<boolean>(false);
   const [busy, setBusy] = useState<boolean>(false);
+  const constructionIntentKeys = useRef(new Map<string, string>());
+
+  const getConstructionIntentKey = (intent: string): string => {
+    const existing = constructionIntentKeys.current.get(intent);
+    if (existing) return existing;
+
+    const entropy = new Uint32Array(4);
+    window.crypto.getRandomValues(entropy);
+    const key = `campus-${Array.from(entropy, (value) => value.toString(36)).join("")}`;
+    constructionIntentKeys.current.set(intent, key);
+    return key;
+  };
+
+  const clearConstructionIntentKey = (intent: string) => {
+    constructionIntentKeys.current.delete(intent);
+  };
 
   const placedModules: CampusModuleInstance[] = campus?.placed_modules || [];
   const moduleCatalog: any[] = campus?.module_catalog || [];
@@ -133,6 +149,8 @@ export default function ClubCampus() {
 
   const handlePlaceNewModule = async (moduleKey: string, x: number, y: number, rotation: number) => {
     if (!clubId || busy) return;
+    const intent = `place:${clubId}:${moduleKey}:${x}:${y}:${rotation}:${fastTrack}`;
+    const idempotencyKey = getConstructionIntentKey(intent);
     setBusy(true);
     try {
       const res = await api.post(`/owner/clubs/${clubId}/campus/construct`, {
@@ -143,7 +161,9 @@ export default function ClubCampus() {
         rotation,
         initial_stage: "site_prep",
         fast_track_completion: fastTrack,
+        idempotency_key: idempotencyKey,
       });
+      clearConstructionIntentKey(intent);
       toast.success(
         `Commissioned ${res.data?.project?.module_name || moduleKey} at Grid (${x}, ${y})!`
       );
@@ -200,13 +220,17 @@ export default function ClubCampus() {
 
   const handleUpgradeExisting = async (instanceId: string) => {
     if (!clubId || busy) return;
+    const intent = `upgrade:${clubId}:${instanceId}:${fastTrack}`;
+    const idempotencyKey = getConstructionIntentKey(intent);
     setBusy(true);
     try {
       const res = await api.post(`/owner/clubs/${clubId}/campus/construct`, {
         operation: "upgrade_existing",
         instance_id: instanceId,
         fast_track_completion: fastTrack,
+        idempotency_key: idempotencyKey,
       });
+      clearConstructionIntentKey(intent);
       toast.success(
         `Upgrading ${res.data?.project?.module_name} to Level ${res.data?.project?.target_level}!`
       );
