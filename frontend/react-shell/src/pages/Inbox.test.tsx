@@ -42,6 +42,20 @@ jest.mock("@/lib/owner", () => ({
     active: { club_id: "c1", club_name: "Lagos City FC" },
     select: () => {},
   }),
+  useClubCommunications: () => ({
+    data: {
+      counts: {},
+      direct_threads: [],
+      staff_contacts: [],
+      player_contacts: [],
+      staff_room: [],
+      squad_room: [],
+      meetings: [],
+      announcements: [],
+      requests_decisions: {},
+    },
+    refetch: () => Promise.resolve(),
+  }),
   useRefreshOwner: () => () => {},
   label: (val: string) => val,
 }));
