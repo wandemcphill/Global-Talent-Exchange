@@ -331,6 +331,9 @@ export default function ClubCampus() {
             <div className="text-base font-black text-white mt-0.5">
               {fmt(metrics.stadium_capacity || 30000)} seats
             </div>
+            <div className="text-[10px] text-slate-400 mt-0.5">
+              Home Adv +{metrics.home_advantage_bonus || 3} · Travel +{metrics.away_travel_readiness_pct || 10}%
+            </div>
           </div>
           <div className="rounded-xl bg-slate-950/75 border border-white/10 p-3">
             <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
@@ -338,6 +341,9 @@ export default function ClubCampus() {
             </div>
             <div className="text-base font-black text-emerald-300 mt-0.5">
               +{metrics.matchday_revenue_bonus_pct || 15}%
+            </div>
+            <div className="text-[10px] text-slate-400 mt-0.5">
+              VIP +{fmt(metrics.vip_hospitality_flat_gtex || 0)} GTX · TV +{metrics.broadcast_revenue_bonus_pct || 4}%
             </div>
           </div>
           <div className="rounded-xl bg-slate-950/75 border border-white/10 p-3">
@@ -347,13 +353,19 @@ export default function ClubCampus() {
             <div className="text-base font-black text-sky-300 mt-0.5">
               +{metrics.training_efficiency_bonus_pct || 20}%
             </div>
+            <div className="text-[10px] text-slate-400 mt-0.5">
+              Cohesion +{metrics.tactical_cohesion_pct || 8}% · Regen Dev +{metrics.regen_development_speed_pct || 14}%
+            </div>
           </div>
           <div className="rounded-xl bg-slate-950/75 border border-white/10 p-3">
             <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
-              <HeartPulse className="w-3.5 h-3.5 text-cyan-400" /> Injury Prevention
+              <HeartPulse className="w-3.5 h-3.5 text-cyan-400" /> Injury &amp; Recovery
             </div>
             <div className="text-base font-black text-cyan-300 mt-0.5">
               -{metrics.injury_reduction_pct || 22}% Risk
+            </div>
+            <div className="text-[10px] text-slate-400 mt-0.5">
+              Rehab +{metrics.rehab_daily_bonus_days || 2}d/tick · Fit +{metrics.daily_fitness_recovery || 10}/d
             </div>
           </div>
           <div className="rounded-xl bg-slate-950/75 border border-white/10 p-3">
@@ -362,6 +374,9 @@ export default function ClubCampus() {
             </div>
             <div className="text-base font-black text-purple-300 mt-0.5">
               +{metrics.academy_ceiling_bonus || 6} OVR
+            </div>
+            <div className="text-[10px] text-slate-400 mt-0.5">
+              Intake Quality +{metrics.regen_intake_quality_pct || 18}% · +{metrics.academy_intake_bonus_count || 0} slots
             </div>
           </div>
         </div>

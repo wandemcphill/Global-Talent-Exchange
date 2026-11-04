@@ -700,7 +700,14 @@ def _start(session: Session, comp: OwnerCompetition) -> None:
     session.flush()
 
 
-def _side(session: Session, entry: OwnerCompetitionEntry, mentality: str | None, lineup_mode: str) -> dict[str, Any]:
+def _side(
+    session: Session,
+    entry: OwnerCompetitionEntry,
+    mentality: str | None,
+    lineup_mode: str,
+    *,
+    is_home: bool | None = None,
+) -> dict[str, Any]:
     if entry.is_ai:
         return {
             "name": entry.club_name,
@@ -710,22 +717,42 @@ def _side(session: Session, entry: OwnerCompetitionEntry, mentality: str | None,
             "manager": None,
             "state": None,
             "xi": [],
+            "campus_effects": {},
         }
+    from app.owner_console import prestige_campus_comms
+
     state = get_state(session, entry.club_id)
+    campus_effects = (
+        prestige_campus_comms.compute_authoritative_campus_effects(session, state, reconcile=True)
+        if state is not None
+        else {}
+    )
     players = [player_dict(p) for p in squad(session, entry.club_id)]
-    strength = club_strength(players, state.manager_json or {}, state.facilities_json or {})
-    value = strength["strength"] - (6 if lineup_mode == "rotate" else 0)
+    strength = club_strength(
+        players,
+        (state.manager_json if state else None) or {},
+        (state.facilities_json if state else None) or {},
+        campus_effects=campus_effects,
+    )
+    venue_bonus = 0.0
+    if is_home is True:
+        venue_bonus = float(campus_effects.get("home_advantage_bonus", 0)) * 0.25
+    elif is_home is False:
+        venue_bonus = float(campus_effects.get("away_travel_readiness_pct", 0)) * 0.10
+    value = round(strength["strength"] + venue_bonus - (6 if lineup_mode == "rotate" else 0), 2)
     xi = [p for p in players if p["id"] in strength["xi"]]
     scorers = [p["name"] for p in xi if p["position"].startswith(("forw", "midf", "att"))] or [p["name"] for p in xi]
     return {
         "name": entry.club_name,
         "strength": value,
-        "mentality": mentality or state.mentality,
+        "mentality": mentality or (state.mentality if state else "balanced"),
         "scorers": scorers,
-        "manager": state.manager_json,
+        "manager": state.manager_json if state else None,
         "state": state,
         "xi": strength["xi"],
         "avg_morale": strength["avg_morale"],
+        "avg_fitness": strength.get("avg_fitness", 95.0),
+        "campus_effects": campus_effects,
     }
 
 
@@ -746,16 +773,35 @@ def _apply_result(entry: OwnerCompetitionEntry, gf: int, ga: int) -> None:
 def _post_match_club(
     session: Session, side: dict[str, Any], is_home: bool, gf: int, ga: int, match: OwnerMatch
 ) -> list[str]:
+    from sqlalchemy.orm.attributes import flag_modified
+    from app.owner_console import prestige_campus_comms
+
     state: OwnerClubState = side["state"]
+    campus_effects = side.get("campus_effects") or prestige_campus_comms.compute_authoritative_campus_effects(
+        session, state, reconcile=True
+    )
     notes = []
     result = 1 if gf > ga else 0 if gf == ga else -1
+
+    stamina_ret_pct = int(campus_effects.get("stamina_retention_pct", 0))
+    away_travel_pct = int(campus_effects.get("away_travel_readiness_pct", 0))
+    base_fatigue = 14 + (0 if is_home else max(0, 3 - away_travel_pct // 8))
+    effective_fatigue = max(4, int(round(base_fatigue * (1.0 - min(0.55, stamina_ret_pct / 100.0)))))
+
     for p in squad(session, state.club_id):
+        pers = dict(p.personality_json or {})
+        cur_fitness = int(pers.get("fitness", 95))
         if p.id in side["xi"]:
             p.minutes += 90
             p.morale = int(engine.clamp(p.morale + result * 4 + 1, 0, 100))
+            pers["fitness"] = int(engine.clamp(cur_fitness - effective_fatigue, 25, 100))
         else:
-            ambition = (p.personality_json or {}).get("ambition", 10) if p.is_regen else 10
+            ambition = pers.get("ambition", 10) if p.is_regen else 10
             p.morale = int(engine.clamp(p.morale - (2 if ambition >= 14 else 0) + result, 0, 100))
+            pers["fitness"] = int(engine.clamp(cur_fitness + 4, 25, 100))
+        p.personality_json = pers
+        flag_modified(p, "personality_json")
+
     state.fans = max(200, state.fans + result * 60 + gf * 15)
     state.prestige = int(engine.clamp(state.prestige + result, 0, 100))
     manager = dict(state.manager_json or {})
@@ -763,31 +809,45 @@ def _post_match_club(
         manager["mood"] = int(engine.clamp(manager.get("mood", 70) + result * 5, 0, 100))
         state.manager_json = manager
     if is_home:
-        gate = int(state.fans * 0.4 * int((state.facilities_json or {}).get("stadium", 1)))
+        stadium_level = int((state.facilities_json or {}).get("stadium", 1))
+        stadium_capacity = int(campus_effects.get("stadium_capacity", 30_000))
+        matchday_rev_pct = int(campus_effects.get("matchday_revenue_bonus_pct", 15))
+        vip_hospitality_gtex = int(campus_effects.get("vip_hospitality_flat_gtex", 0))
+        commercial_growth_pct = int(campus_effects.get("commercial_growth_bonus_pct", 0))
+        base_fan_gate = state.fans * 0.4 * stadium_level
+        capacity_seat_yield = max(0, stadium_capacity - 12_000) * 0.025
+        raw_gate = (base_fan_gate + capacity_seat_yield) * (
+            1.0 + (matchday_rev_pct + commercial_growth_pct * 0.5) / 100.0
+        ) + vip_hospitality_gtex
+        gate = max(50, int(round(raw_gate)))
         ledger.record(
             session,
             event_type="gate_receipts",
             source=ledger.WORLD_CLUBS,
             destination=ledger.club_account(state.club_id),
             currency=ledger.GTEX,
-            gross=max(gate, 50),
+            gross=gate,
             club_id=state.club_id,
             user_id=state.owner_user_id,
             related_type="match",
             related_id=match.id,
-            memo=f"Gate receipts vs {match.away_name}",
+            memo=f"Gate receipts vs {match.away_name} (cap {stadium_capacity:,}, +{matchday_rev_pct}% rev, VIP {vip_hospitality_gtex} GTX)",
         )
-        notes.append(f"Gate receipts {max(gate, 50):,}")
+        notes.append(f"Gate receipts {gate:,}")
+    sponsor_bonus_pct = int(campus_effects.get("sponsor_revenue_bonus_pct", 0))
     for deal in session.scalars(
         select(OwnerSponsorDeal).where(OwnerSponsorDeal.club_id == state.club_id, OwnerSponsorDeal.status == "active")
     ).all():
+        effective_deal_gross = Decimal(
+            str(max(1, int(round(float(deal.per_match_gross) * (1.0 + sponsor_bonus_pct / 200.0)))))
+        )
         ledger.record(
             session,
             event_type="endorsement_revenue" if deal.player_id else "sponsor_revenue",
             source=ledger.PLATFORM_SPONSORS,
             destination=ledger.club_account(state.club_id),
             currency=ledger.GTEX,
-            gross=deal.per_match_gross,
+            gross=effective_deal_gross,
             fee_bps=3000,
             club_id=state.club_id,
             user_id=state.owner_user_id,
@@ -800,7 +860,8 @@ def _post_match_club(
             deal.status = "completed"
 
     # TV Broadcast Revenue
-    tv_rev = 250 + state.prestige * 8
+    broadcast_bonus_pct = int(campus_effects.get("broadcast_revenue_bonus_pct", 0))
+    tv_rev = int(round((250 + state.prestige * 8) * (1.0 + broadcast_bonus_pct / 100.0)))
     try:
         ledger.record(
             session,
@@ -1032,12 +1093,14 @@ def play_next(
             home_e,
             mentality if m.home_club_id == club_id else None,
             lineup_mode if m.home_club_id == club_id else "strongest",
+            is_home=True,
         )
         away = _side(
             session,
             away_e,
             mentality if m.away_club_id == club_id else None,
             lineup_mode if m.away_club_id == club_id else "strongest",
+            is_home=False,
         )
         sim = engine.simulate_match(m.id, home, away)
         hg, ag = sim["home_goals"], sim["away_goals"]

@@ -635,6 +635,60 @@ def _stage_from_progress(pct: int) -> str:
     return "site_prep"
 
 
+def _effective_operational_level(
+    inst: dict[str, Any],
+    projects: list[dict[str, Any]] | None = None,
+) -> int:
+    """Return the authoritative operational level of a placed campus module.
+
+    - Completed/operational modules grant their current `level`.
+    - Existing operational modules undergoing an upgrade retain their `previous_level`
+      until the upgrade reaches 100% completion.
+    - Newly placed modules still under construction return `0` (zero gameplay benefits).
+    """
+    status = str(inst.get("status", "operational"))
+    pct = int(inst.get("progress_pct", 100))
+    if status == "operational" and pct >= 100:
+        return max(1, int(inst.get("level", 1)))
+
+    if "previous_level" in inst and inst.get("previous_level") is not None:
+        prev = int(inst.get("previous_level") or 0)
+        return max(0, prev)
+
+    inst_id = inst.get("instance_id")
+    if projects and inst_id:
+        active_proj = next(
+            (
+                p
+                for p in projects
+                if p.get("instance_id") == inst_id and p.get("status") not in ("completed", "cancelled")
+            ),
+            None,
+        )
+        if active_proj is not None:
+            if "previous_level" in active_proj and active_proj.get("previous_level") is not None:
+                return max(0, int(active_proj.get("previous_level") or 0))
+            if active_proj.get("operation") == "upgrade_existing":
+                return max(1, int(inst.get("level", 1)))
+            return 0
+
+    return 0
+
+
+def _module_effects_at_level(spec: dict[str, Any], level: int) -> dict[str, int]:
+    base_effects = dict(spec.get("effects") or {})
+    if level <= 0:
+        return {k: 0 for k in base_effects}
+    out: dict[str, int] = {}
+    for k, v in base_effects.items():
+        base_val = int(v)
+        if k == "capacity_seats":
+            out[k] = base_val + (level - 1) * 3500
+        else:
+            out[k] = int(round(base_val * (1.0 + 0.25 * (level - 1))))
+    return out
+
+
 def _enrich_module(
     inst: dict[str, Any],
     *,
@@ -650,19 +704,10 @@ def _enrich_module(
     lvl = int(inst.get("level", 1))
     max_level = 5
     upgrade_cost = int(float(spec.get("base_cost_gtex", 1200)) * (0.75 + 0.45 * lvl)) if lvl < max_level else 0
-    base_effects = dict(spec.get("effects") or {})
-    current_effects: dict[str, int] = {}
-    next_level_effects: dict[str, int] = {}
-    for k, v in base_effects.items():
-        base_val = int(v)
-        if k == "capacity_seats":
-            current_effects[k] = base_val + (lvl - 1) * 3500
-            if lvl < max_level:
-                next_level_effects[k] = base_val + lvl * 3500
-        else:
-            current_effects[k] = int(round(base_val * (1.0 + 0.25 * (lvl - 1))))
-            if lvl < max_level:
-                next_level_effects[k] = int(round(base_val * (1.0 + 0.25 * lvl)))
+    eff_op_lvl = _effective_operational_level(inst, projects)
+    current_effects = _module_effects_at_level(spec, lvl)
+    operational_effects = _module_effects_at_level(spec, eff_op_lvl)
+    next_level_effects = _module_effects_at_level(spec, lvl + 1) if lvl < max_level else {}
 
     inst_id = inst.get("instance_id")
     active_proj = None
@@ -697,9 +742,11 @@ def _enrich_module(
         "effective_w": eff_w,
         "effective_h": eff_h,
         "max_level": max_level,
+        "effective_operational_level": eff_op_lvl,
         "next_upgrade_cost_gtex": upgrade_cost,
         "upgrade_min_prestige": min(90, int(spec.get("min_prestige", 10)) + lvl * 5),
         "current_effects": current_effects,
+        "operational_effects": operational_effects,
         "next_level_effects": next_level_effects,
         "lifecycle_state": lifecycle_state,
         "ready_for_completion": lifecycle_state == "ready_for_completion",
@@ -861,6 +908,7 @@ def _reconcile_campus_projects(
             }
             if pct >= 100 and proj.get("target_level"):
                 next_module_state["level"] = int(proj["target_level"])
+                next_module_state["previous_level"] = int(proj["target_level"])
             previous_module_state = tuple(mod.get(key) for key in next_module_state)
             for key, value in next_module_state.items():
                 mod[key] = value
@@ -874,6 +922,146 @@ def _reconcile_campus_projects(
         flag_modified(state, "facilities_json")
 
     return placed, projects
+
+
+def compute_authoritative_campus_effects(
+    session: Session | None,
+    state: OwnerClubState,
+    *,
+    reconcile: bool = True,
+) -> dict[str, Any]:
+    """Compute authoritative gameplay effects from operational campus modules.
+
+    Consumed by:
+    1. Matchday economics (`competitions._post_match_club`, `competitions._side`, `service.get_sponsor_offers`)
+    2. Medical & recovery world-clock simulation (`service.tick_club`, `competitions._post_match_club`)
+    3. Academy & regen intake/development (`service.academy_intake`, `service.tick_club`, `engine.generate_regens`, `engine.regen_growth`)
+    """
+    if reconcile and session is not None:
+        placed, projects = _reconcile_campus_projects(session, state)
+    else:
+        facs = dict(state.facilities_json or {})
+        world_day = int(state.world_day or 1)
+        placed = list(facs.get("_campus_modules") or _default_placed_modules(facs, world_day))
+        projects = list(facs.get("_construction_projects") or [])
+
+    total_capacity = 12000
+    matchday_rev_bonus_pct = 0
+    vip_hospitality_flat_gtex = 0
+    sponsor_rev_bonus_pct = 0
+    commercial_growth_bonus_pct = 0
+    broadcast_rev_bonus_pct = 0
+    home_advantage_bonus = 0
+    away_travel_readiness_pct = 0
+    tactical_cohesion_pct = 0
+    transfer_pull_bonus = 0
+    scouting_efficiency_pct = 0
+    staff_mood_bonus = 0
+
+    injury_red_bonus_pct = 0
+    fatigue_recovery_pct = 0
+    stamina_retention_pct = 0
+    rehab_daily_bonus_days = 0
+
+    training_eff_bonus_pct = 0
+    regen_intake_quality_pct = 0
+    regen_dev_speed_pct = 0
+    academy_ceiling_bonus = 0
+    operational_academy_modules = 0
+    operational_modules_count = 0
+
+    for m in placed:
+        eff_lvl = _effective_operational_level(m, projects)
+        if m.get("status") == "operational" and int(m.get("progress_pct", 100)) >= 100:
+            operational_modules_count += 1
+        if eff_lvl <= 0:
+            continue
+
+        mod_key = str(m.get("module_key") or "")
+        spec = CAMPUS_MODULE_CATALOG.get(mod_key, {})
+        cat = str(spec.get("category") or m.get("category") or "")
+        eff = dict(spec.get("effects") or {})
+        scale = 1.0 + 0.25 * (eff_lvl - 1)
+
+        # 1. Stadium & Commercial Matchday Economics
+        if eff.get("capacity_seats"):
+            total_capacity += int(eff["capacity_seats"]) + (eff_lvl - 1) * (3500 if cat == "stadium" else 0)
+        if eff.get("matchday_revenue_pct"):
+            matchday_rev_bonus_pct += int(eff["matchday_revenue_pct"]) + (eff_lvl - 1) * 3
+        if mod_key == "vip_skybox_concourse":
+            vip_hospitality_flat_gtex += int(round(180 * scale))
+        if eff.get("sponsor_revenue_pct"):
+            sponsor_rev_bonus_pct += int(round(int(eff["sponsor_revenue_pct"]) * scale))
+        if eff.get("commercial_growth_pct"):
+            commercial_growth_bonus_pct += int(round(int(eff["commercial_growth_pct"]) * scale))
+        if eff.get("broadcast_revenue_pct"):
+            broadcast_rev_bonus_pct += int(round(int(eff["broadcast_revenue_pct"]) * scale))
+        if eff.get("home_advantage_bonus"):
+            home_advantage_bonus += int(round(int(eff["home_advantage_bonus"]) * scale))
+        if eff.get("away_travel_readiness_pct"):
+            away_travel_readiness_pct += int(round(int(eff["away_travel_readiness_pct"]) * scale))
+        if eff.get("tactical_cohesion_pct"):
+            tactical_cohesion_pct += int(round(int(eff["tactical_cohesion_pct"]) * scale))
+        if eff.get("transfer_pull_bonus"):
+            transfer_pull_bonus += int(round(int(eff["transfer_pull_bonus"]) * scale))
+        if eff.get("scouting_efficiency_pct"):
+            scouting_efficiency_pct += int(round(int(eff["scouting_efficiency_pct"]) * scale))
+        if eff.get("staff_mood_bonus"):
+            staff_mood_bonus += int(round(int(eff["staff_mood_bonus"]) * scale))
+
+        # 2. Medical, Hydrotherapy & High-Performance Recovery
+        if eff.get("injury_reduction_pct"):
+            injury_red_bonus_pct += int(eff["injury_reduction_pct"]) + (eff_lvl - 1) * 2
+            rehab_daily_bonus_days += eff_lvl
+        if eff.get("fatigue_recovery_pct"):
+            fatigue_recovery_pct += int(round(int(eff["fatigue_recovery_pct"]) * scale))
+        if eff.get("stamina_retention_pct"):
+            stamina_retention_pct += int(round(int(eff["stamina_retention_pct"]) * scale))
+            rehab_daily_bonus_days += max(1, eff_lvl // 2 + 1)
+
+        # 3. Training, Academy & Regen Development
+        if eff.get("training_efficiency_pct") or eff.get("attribute_growth_pct"):
+            base_train = int(eff.get("training_efficiency_pct", 0)) + int(eff.get("attribute_growth_pct", 0))
+            training_eff_bonus_pct += int(round(base_train * scale))
+        if eff.get("regen_intake_quality_pct"):
+            regen_intake_quality_pct += int(round(int(eff["regen_intake_quality_pct"]) * scale))
+        if eff.get("regen_development_speed_pct"):
+            regen_dev_speed_pct += int(round(int(eff["regen_development_speed_pct"]) * scale))
+        if eff.get("academy_ceiling_bonus"):
+            academy_ceiling_bonus += int(eff["academy_ceiling_bonus"]) + (eff_lvl - 1)
+            operational_academy_modules += 1
+
+    capped_injury_red = min(65, injury_red_bonus_pct)
+    daily_fitness_recovery = 6 + int(round((fatigue_recovery_pct + stamina_retention_pct) / 4.0))
+    intake_bonus_count = (1 if regen_intake_quality_pct >= 22 or operational_academy_modules >= 2 else 0) + (
+        1 if regen_intake_quality_pct >= 30 and academy_ceiling_bonus >= 8 else 0
+    )
+
+    return {
+        "stadium_capacity": total_capacity,
+        "matchday_revenue_bonus_pct": matchday_rev_bonus_pct,
+        "vip_hospitality_flat_gtex": vip_hospitality_flat_gtex,
+        "sponsor_revenue_bonus_pct": sponsor_rev_bonus_pct + commercial_growth_bonus_pct // 2,
+        "commercial_growth_bonus_pct": commercial_growth_bonus_pct,
+        "broadcast_revenue_bonus_pct": broadcast_rev_bonus_pct + commercial_growth_bonus_pct // 3,
+        "home_advantage_bonus": home_advantage_bonus,
+        "away_travel_readiness_pct": away_travel_readiness_pct,
+        "tactical_cohesion_pct": tactical_cohesion_pct,
+        "transfer_pull_bonus": transfer_pull_bonus,
+        "scouting_efficiency_pct": scouting_efficiency_pct,
+        "staff_mood_bonus": staff_mood_bonus,
+        "injury_reduction_pct": capped_injury_red,
+        "fatigue_recovery_pct": fatigue_recovery_pct,
+        "stamina_retention_pct": stamina_retention_pct,
+        "rehab_daily_bonus_days": rehab_daily_bonus_days,
+        "daily_fitness_recovery": daily_fitness_recovery,
+        "training_efficiency_bonus_pct": training_eff_bonus_pct,
+        "regen_intake_quality_pct": regen_intake_quality_pct,
+        "regen_development_speed_pct": regen_dev_speed_pct,
+        "academy_ceiling_bonus": academy_ceiling_bonus,
+        "academy_intake_bonus_count": intake_bonus_count,
+        "operational_modules_count": operational_modules_count,
+    }
 
 
 def get_club_campus(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
@@ -910,25 +1098,7 @@ def get_club_campus(session: Session, user_id: str, club_id: str) -> dict[str, A
             }
         )
 
-    # Aggregate real gameplay bonuses from operational campus modules
-    total_capacity = 12000
-    matchday_rev_bonus = 0
-    training_eff_bonus = 0
-    injury_red_bonus = 0
-    academy_ceil_bonus = 0
-    for m in enriched_modules:
-        if m.get("status") == "operational":
-            lvl = int(m.get("level", 1))
-            eff = dict(m.get("effects") or {})
-            total_capacity += int(eff.get("capacity_seats", 0)) + (lvl - 1) * (
-                3500 if m.get("category") == "stadium" else 0
-            )
-            matchday_rev_bonus += int(eff.get("matchday_revenue_pct", 0)) + (lvl - 1) * 3
-            training_eff_bonus += int(eff.get("training_efficiency_pct", 0)) + int(eff.get("attribute_growth_pct", 0))
-            injury_red_bonus += int(eff.get("injury_reduction_pct", 0)) + (lvl - 1) * 2
-            academy_ceil_bonus += int(eff.get("academy_ceiling_bonus", 0)) + (
-                1 if m.get("category") == "academy" and lvl >= 3 else 0
-            )
+    campus_effects = compute_authoritative_campus_effects(session, state, reconcile=False)
 
     squad_players = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
     academy_regens = [
@@ -937,8 +1107,9 @@ def get_club_campus(session: Session, user_id: str, club_id: str) -> dict[str, A
             "name": p.name,
             "position": p.position,
             "rating": p.rating,
-            "potential": min(99, p.rating + 14 + academy_ceil_bonus),
+            "potential": p.potential,
             "morale": p.morale,
+            "fitness": int((p.personality_json or {}).get("fitness", 95)),
         }
         for p in squad_players
         if p.is_regen
@@ -968,14 +1139,7 @@ def get_club_campus(session: Session, user_id: str, club_id: str) -> dict[str, A
         "module_catalog": enriched_catalog,
         "construction_projects": projects,
         "active_projects_count": len(active_projects),
-        "campus_metrics": {
-            "stadium_capacity": total_capacity,
-            "matchday_revenue_bonus_pct": matchday_rev_bonus,
-            "training_efficiency_bonus_pct": training_eff_bonus,
-            "injury_reduction_pct": min(65, injury_red_bonus),
-            "academy_ceiling_bonus": academy_ceil_bonus,
-            "operational_modules_count": sum(1 for m in enriched_modules if m.get("status") == "operational"),
-        },
+        "campus_metrics": campus_effects,
         "academy_campus_prospects": academy_regens[:8],
         "visual_assets": PRESTIGE_VISUAL_MANIFEST,
     }
@@ -1134,9 +1298,12 @@ def start_campus_construction(
         else:
             for mod in placed:
                 if mod.get("instance_id") == instance_id:
+                    prev_lvl = int(proj.get("previous_level") or mod.get("previous_level") or mod.get("level") or 1)
                     mod["status"] = "operational"
                     mod["construction_stage"] = "completed"
                     mod["progress_pct"] = 100
+                    mod["level"] = prev_lvl
+                    mod["previous_level"] = prev_lvl
 
         facs["_campus_modules"] = placed
         facs["_construction_projects"] = projects
@@ -1187,6 +1354,7 @@ def start_campus_construction(
                 mod["status"] = "operational" if new_pct >= 100 else "under_construction"
                 if new_pct >= 100 and proj.get("target_level"):
                     mod["level"] = int(proj["target_level"])
+                    mod["previous_level"] = int(proj["target_level"])
                 updated_mod = mod
         facs["_campus_modules"] = placed
         facs["_construction_projects"] = projects
@@ -1227,6 +1395,7 @@ def start_campus_construction(
         cur_lvl = int(target.get("level", 1))
         if cur_lvl >= 5:
             raise OwnerError("facility_maxed", 400, f"{spec['name']} is already at maximum Level 5.")
+        prev_lvl = cur_lvl
         target_lvl = cur_lvl + 1
         cost_dec = Decimal(str(int(float(spec["base_cost_gtex"]) * (0.75 + 0.45 * cur_lvl))))
         new_inst_id = str(target["instance_id"])
@@ -1245,6 +1414,7 @@ def start_campus_construction(
         val = validate_module_placement(placed, module_key=mod_key, x=x, y=y, rotation=rotation)
         if not val["valid"]:
             raise OwnerError(val["code"], 400, val["reason"])
+        prev_lvl = 0
         target_lvl = 1
         cost_dec = Decimal(str(spec["base_cost_gtex"]))
         new_inst_id = f"mod_{mod_key}_{secrets.token_hex(3)}"
@@ -1290,6 +1460,7 @@ def start_campus_construction(
         target["status"] = init_status
         target["construction_stage"] = init_stage
         target["progress_pct"] = init_pct
+        target["previous_level"] = target_lvl if fast_track_completion else prev_lvl
         if fast_track_completion:
             target["level"] = target_lvl
     else:
@@ -1300,6 +1471,7 @@ def start_campus_construction(
             "y": int(y),
             "rotation": int(rotation) % 360,
             "level": target_lvl,
+            "previous_level": target_lvl if fast_track_completion else 0,
             "condition": 100,
             "status": init_status,
             "construction_stage": init_stage,
@@ -1316,6 +1488,7 @@ def start_campus_construction(
         "module_key": mod_key,
         "module_name": spec["name"],
         "category": spec["category"],
+        "previous_level": prev_lvl,
         "target_level": target_lvl,
         "cost_gtex": float(cost_dec),
         "start_world_day": int(state.world_day or 1),

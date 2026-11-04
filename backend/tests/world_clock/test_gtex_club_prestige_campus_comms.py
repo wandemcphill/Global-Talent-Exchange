@@ -804,3 +804,359 @@ def test_upgrade_cancellation_does_not_resurrect_or_award_facility_benefits():
     assert advanced["project"]["status"] == "completed"
     assert state.prestige > original_prestige
     assert int(state.facilities_json["stadium"]) == original_level + 1
+
+
+def test_phase2_2_matchday_economics_gate_receipts_vip_hospitality_and_broadcast_integration():
+    from sqlalchemy import select
+    from app.owner_console import competitions
+    from app.owner_console.models import LedgerEvent, OwnerCompetition, OwnerCompetitionEntry, OwnerMatch
+
+    session = _session()
+    state = _seed_club(session, prestige=65, cash=180_000)
+    service.academy_intake(session, "user-prestige-1", "club-prestige-1")
+
+    comp = OwnerCompetition(
+        id="comp-matchday-econ-1",
+        name="Lagos Premier Dynasty Cup",
+        host_type="user",
+        format="league",
+        tier="Development",
+        status="running",
+        current_round=1,
+        total_rounds=2,
+    )
+    entry = OwnerCompetitionEntry(
+        id="entry-matchday-econ-1",
+        competition_id=comp.id,
+        club_id=state.club_id,
+        owner_user_id=state.owner_user_id,
+        club_name=state.club_name,
+        is_ai=False,
+        strength=70.0,
+    )
+    session.add_all([comp, entry])
+    session.commit()
+
+    def _run_home_match_and_capture_revenues(match_id: str) -> tuple[Decimal, Decimal]:
+        state.fans = 2500
+        state.prestige = 65
+        match = OwnerMatch(
+            id=match_id,
+            competition_id=comp.id,
+            round_number=1,
+            home_club_id=state.club_id,
+            away_club_id="ai-rival-1",
+            home_name=state.club_name,
+            away_name="Abuja Capital FC",
+            status="played",
+        )
+        session.add(match)
+        session.flush()
+        side = competitions._side(session, entry, "balanced", "strongest", is_home=True)
+        competitions._post_match_club(session, side, True, 2, 1, match)
+        session.flush()
+        gate_ev = session.scalar(
+            select(LedgerEvent).where(
+                LedgerEvent.event_type == "gate_receipts",
+                LedgerEvent.related_object_id == match_id,
+            )
+        )
+        tv_ev = session.scalar(
+            select(LedgerEvent).where(
+                LedgerEvent.event_type == "tv_broadcast_revenue",
+                LedgerEvent.related_object_id == match_id,
+            )
+        )
+        assert gate_ev is not None and tv_ev is not None
+        return Decimal(gate_ev.gross_amount), Decimal(tv_ev.gross_amount)
+
+    # 1. Baseline home matchday revenues & sponsor offers
+    base_effects = prestige_campus_comms.compute_authoritative_campus_effects(session, state)
+    base_gate, base_tv = _run_home_match_and_capture_revenues("match-econ-base")
+    base_sponsors = service.get_sponsor_offers(session, "user-prestige-1", "club-prestige-1")
+    base_airways_per_match = base_sponsors["offers"][0]["per_match_gross_gtex"]
+
+    # 2. Place North Stand Expansion, VIP Skybox Concourse, and Floodlight Pylon Array UNDER CONSTRUCTION
+    ns_build = prestige_campus_comms.start_campus_construction(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        operation="place_new",
+        module_key="north_stand_expansion",
+        x=18,
+        y=8,
+        rotation=0,
+        fast_track_completion=False,
+    )
+    vip_build = prestige_campus_comms.start_campus_construction(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        operation="place_new",
+        module_key="vip_skybox_concourse",
+        x=18,
+        y=11,
+        rotation=0,
+        fast_track_completion=False,
+    )
+    fl_build = prestige_campus_comms.start_campus_construction(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        operation="place_new",
+        module_key="floodlight_pylon_array",
+        x=22,
+        y=15,
+        rotation=0,
+        fast_track_completion=False,
+    )
+
+    # Under-construction modules must grant ZERO matchday economics bonuses!
+    uc_effects = prestige_campus_comms.compute_authoritative_campus_effects(session, state)
+    assert uc_effects["stadium_capacity"] == base_effects["stadium_capacity"]
+    assert uc_effects["matchday_revenue_bonus_pct"] == base_effects["matchday_revenue_bonus_pct"]
+    assert uc_effects["vip_hospitality_flat_gtex"] == 0
+    assert uc_effects["broadcast_revenue_bonus_pct"] == base_effects["broadcast_revenue_bonus_pct"]
+    uc_gate, uc_tv = _run_home_match_and_capture_revenues("match-econ-uc")
+    assert uc_gate == base_gate
+    assert uc_tv == base_tv
+
+    # 3. Complete all three facilities -> operational bonuses immediately feed into matchday simulation & sponsors
+    for inst_id in (
+        ns_build["module"]["instance_id"],
+        vip_build["module"]["instance_id"],
+        fl_build["module"]["instance_id"],
+    ):
+        prestige_campus_comms.start_campus_construction(
+            session,
+            "user-prestige-1",
+            "club-prestige-1",
+            operation="advance_stage",
+            instance_id=inst_id,
+            fast_track_completion=True,
+        )
+
+    op_effects = prestige_campus_comms.compute_authoritative_campus_effects(session, state)
+    assert op_effects["stadium_capacity"] == base_effects["stadium_capacity"] + 8500
+    assert op_effects["matchday_revenue_bonus_pct"] == base_effects["matchday_revenue_bonus_pct"] + 18
+    assert op_effects["vip_hospitality_flat_gtex"] == 180
+    assert op_effects["broadcast_revenue_bonus_pct"] == base_effects["broadcast_revenue_bonus_pct"] + 10
+    assert op_effects["sponsor_revenue_bonus_pct"] >= base_effects["sponsor_revenue_bonus_pct"] + 20
+
+    op_gate, op_tv = _run_home_match_and_capture_revenues("match-econ-op-l1")
+    assert op_gate > base_gate + Decimal("600")
+    assert op_tv > base_tv
+
+    op_sponsors = service.get_sponsor_offers(session, "user-prestige-1", "club-prestige-1")
+    assert op_sponsors["offers"][0]["per_match_gross_gtex"] > base_airways_per_match
+
+    # 4. Upgrade North Stand Expansion from L1 -> L2: retains L1 during build, applies only incremental (L2 - L1) on completion
+    prestige_campus_comms.start_campus_construction(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        operation="upgrade_existing",
+        instance_id=ns_build["module"]["instance_id"],
+        fast_track_completion=False,
+    )
+    upg_uc_effects = prestige_campus_comms.compute_authoritative_campus_effects(session, state)
+    assert upg_uc_effects["stadium_capacity"] == op_effects["stadium_capacity"]
+    assert upg_uc_effects["matchday_revenue_bonus_pct"] == op_effects["matchday_revenue_bonus_pct"]
+
+    prestige_campus_comms.start_campus_construction(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        operation="advance_stage",
+        instance_id=ns_build["module"]["instance_id"],
+        fast_track_completion=True,
+    )
+    upg_done_effects = prestige_campus_comms.compute_authoritative_campus_effects(session, state)
+    assert upg_done_effects["stadium_capacity"] == op_effects["stadium_capacity"] + 3500
+    assert upg_done_effects["matchday_revenue_bonus_pct"] == op_effects["matchday_revenue_bonus_pct"] + 3
+    l2_gate, _ = _run_home_match_and_capture_revenues("match-econ-op-l2")
+    assert l2_gate > op_gate
+
+
+def test_phase2_2_medical_hydrotherapy_and_high_performance_world_clock_recovery():
+    session = _session()
+    state = _seed_club(session, prestige=70, cash=200_000)
+    regens = service.academy_intake(session, "user-prestige-1", "club-prestige-1")
+    patient = regens[0]
+    patient.injured_days = 14
+    pers = dict(patient.personality_json or {})
+    pers["fitness"] = 55
+    patient.personality_json = pers
+    session.commit()
+
+    # 1. Baseline world-clock tick recovery
+    tick_base = service.tick_club(session, state)
+    base_heal_days = tick_base["medical_recovery"]["daily_injury_heal_days"]
+    base_fitness_gain = tick_base["medical_recovery"]["daily_fitness_recovery"]
+    assert patient.injured_days == 14 - base_heal_days
+    assert int(patient.personality_json["fitness"]) == 55 + base_fitness_gain
+
+    # 2. Commission High-Performance Centre and an upgrade to Hydrotherapy Hub (under_construction)
+    hpc_build = prestige_campus_comms.start_campus_construction(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        operation="place_new",
+        module_key="high_performance_centre",
+        x=18,
+        y=12,
+        rotation=0,
+        fast_track_completion=False,
+    )
+    prestige_campus_comms.start_campus_construction(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        operation="upgrade_existing",
+        instance_id="mod_hydro_hub",
+        fast_track_completion=False,
+    )
+
+    # Under construction (at start_world_day): medical recovery bonuses must not jump prematurely
+    uc_effects = prestige_campus_comms.compute_authoritative_campus_effects(session, state, reconcile=False)
+    assert uc_effects["stamina_retention_pct"] == tick_base["campus_effects"]["stamina_retention_pct"]
+    assert uc_effects["daily_fitness_recovery"] == base_fitness_gain
+
+    # 3. Complete both projects via world-clock ticks (tick_club reconciles campus projects automatically!)
+    for _ in range(4):
+        service.tick_club(session, state)
+
+    campus_after_ticks = prestige_campus_comms.get_club_campus(session, "user-prestige-1", "club-prestige-1")
+    hpc_mod = next(
+        m for m in campus_after_ticks["placed_modules"] if m["instance_id"] == hpc_build["module"]["instance_id"]
+    )
+    hydro_mod = next(m for m in campus_after_ticks["placed_modules"] if m["instance_id"] == "mod_hydro_hub")
+    assert hpc_mod["status"] == "operational"
+    assert hydro_mod["status"] == "operational"
+    assert hydro_mod["level"] == 3
+
+    # 4. Reset patient injury/fitness and verify accelerated world-clock healing & fitness recovery
+    patient.injured_days = 14
+    pers = dict(patient.personality_json or {})
+    pers["fitness"] = 55
+    patient.personality_json = pers
+    session.commit()
+
+    tick_upgraded = service.tick_club(session, state)
+    upgraded_heal_days = tick_upgraded["medical_recovery"]["daily_injury_heal_days"]
+    upgraded_fitness_gain = tick_upgraded["medical_recovery"]["daily_fitness_recovery"]
+    assert upgraded_heal_days >= base_heal_days + 2
+    assert upgraded_fitness_gain > base_fitness_gain
+    assert patient.injured_days == 14 - upgraded_heal_days
+    assert int(patient.personality_json["fitness"]) == 55 + upgraded_fitness_gain
+
+
+def test_phase2_2_academy_infrastructure_youth_intake_and_regen_development_integration():
+    session = _session()
+    state = _seed_club(session, prestige=70, cash=220_000)
+
+    # 1. Baseline intake & growth driver snapshot before academy expansion
+    base_effects = prestige_campus_comms.compute_authoritative_campus_effects(session, state)
+    base_cohort = owner_engine.generate_regens(
+        state.club_id,
+        "phase2-2-fixed-seed",
+        2,
+        12,
+        2,
+        club_prestige=state.prestige,
+        hoyd_youth=12,
+        campus_intake_quality_pct=base_effects["regen_intake_quality_pct"],
+        campus_ceiling_bonus=base_effects["academy_ceiling_bonus"],
+    )
+
+    # 2. Place Academy Youth Pitch and High-Performance Centre, and upgrade Elite Academy Complex (under_construction)
+    pitch_build = prestige_campus_comms.start_campus_construction(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        operation="place_new",
+        module_key="academy_youth_pitch",
+        x=18,
+        y=8,
+        rotation=0,
+        fast_track_completion=False,
+    )
+    hpc_build = prestige_campus_comms.start_campus_construction(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        operation="place_new",
+        module_key="high_performance_centre",
+        x=18,
+        y=12,
+        rotation=0,
+        fast_track_completion=False,
+    )
+    prestige_campus_comms.start_campus_construction(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        operation="upgrade_existing",
+        instance_id="mod_academy_hq",
+        fast_track_completion=False,
+    )
+
+    # Under construction: academy bonuses must remain at baseline (retaining L2 mod_academy_hq, 0 from new builds)
+    uc_effects = prestige_campus_comms.compute_authoritative_campus_effects(session, state)
+    assert uc_effects["regen_intake_quality_pct"] == base_effects["regen_intake_quality_pct"]
+    assert uc_effects["regen_development_speed_pct"] == base_effects["regen_development_speed_pct"]
+    assert uc_effects["academy_ceiling_bonus"] == base_effects["academy_ceiling_bonus"]
+
+    # 3. Complete all three projects -> operational academy & training bonuses activate
+    for inst_id in (
+        pitch_build["module"]["instance_id"],
+        hpc_build["module"]["instance_id"],
+        "mod_academy_hq",
+    ):
+        prestige_campus_comms.start_campus_construction(
+            session,
+            "user-prestige-1",
+            "club-prestige-1",
+            operation="advance_stage",
+            instance_id=inst_id,
+            fast_track_completion=True,
+        )
+
+    op_effects = prestige_campus_comms.compute_authoritative_campus_effects(session, state)
+    assert op_effects["regen_intake_quality_pct"] > base_effects["regen_intake_quality_pct"]
+    assert op_effects["regen_development_speed_pct"] > base_effects["regen_development_speed_pct"]
+    assert op_effects["academy_ceiling_bonus"] >= base_effects["academy_ceiling_bonus"] + 3
+    assert op_effects["training_efficiency_bonus_pct"] > base_effects["training_efficiency_bonus_pct"]
+    assert op_effects["academy_intake_bonus_count"] >= 1
+
+    # 4. Deterministic comparison with identical seed proves higher initial rating and higher potential ceiling
+    elite_cohort = owner_engine.generate_regens(
+        state.club_id,
+        "phase2-2-fixed-seed",
+        2,
+        12,
+        2,
+        club_prestige=state.prestige,
+        hoyd_youth=12,
+        campus_intake_quality_pct=op_effects["regen_intake_quality_pct"],
+        campus_ceiling_bonus=op_effects["academy_ceiling_bonus"],
+    )
+    for b_p, e_p in zip(base_cohort, elite_cohort):
+        assert e_p["rating"] > b_p["rating"]
+        assert e_p["potential"] > b_p["potential"]
+
+    # 5. Authoritative academy_intake persists enhanced cohort & get_club_campus reads persisted DB potential
+    persisted_regens = service.academy_intake(session, "user-prestige-1", "club-prestige-1")
+    assert len(persisted_regens) >= 3
+    campus_view = prestige_campus_comms.get_club_campus(session, "user-prestige-1", "club-prestige-1")
+    by_id = {p.id: p for p in persisted_regens}
+    for prospect in campus_view["academy_campus_prospects"]:
+        if prospect["id"] in by_id:
+            assert prospect["potential"] == by_id[prospect["id"]].potential
+
+    # 6. World-clock tick_club applies campus_infrastructure growth driver to academy regens
+    tick_res = service.tick_club(session, state)
+    assert len(tick_res["growth"]) >= len(persisted_regens)
+    for g_entry in tick_res["growth"]:
+        assert "campus_infrastructure" in g_entry["drivers"]
+        assert g_entry["drivers"]["campus_infrastructure"] > 0
