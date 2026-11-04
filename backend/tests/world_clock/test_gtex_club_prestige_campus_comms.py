@@ -696,3 +696,111 @@ def test_phase2_1_six_stage_construction_progression_and_28_model_inventory():
     assert audit_report["summary"]["exact_binary_duplicates"] == []
     assert audit_report["summary"]["matching_geometry"] == []
     assert audit_report["summary"]["same_metrics_only"] == []
+
+
+@pytest.mark.parametrize("rotation", [45, 135, 225, 315])
+def test_campus_grid_rejects_non_right_angle_rotations(rotation: int):
+    result = prestige_campus_comms.validate_module_placement(
+        [],
+        module_key="north_stand_expansion",
+        x=0,
+        y=0,
+        rotation=rotation,
+    )
+    assert result["valid"] is False
+    assert result["code"] == "invalid_rotation"
+
+
+def test_campus_read_reconciliation_does_not_write_unchanged_projects():
+    session = _session()
+    _seed_club(session, prestige=60, cash=100_000)
+
+    prestige_campus_comms.start_campus_construction(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        operation="place_new",
+        module_key="recovery_hydro_hub",
+        x=18,
+        y=12,
+        rotation=0,
+        initial_stage="site_prep",
+    )
+    session.commit()
+    state = session.get(OwnerClubState, "state-prestige-1")
+    assert state is not None
+
+    prestige_campus_comms.get_club_campus(session, "user-prestige-1", "club-prestige-1")
+    assert session.is_modified(state, include_collections=True) is False
+
+
+def test_upgrade_cancellation_does_not_resurrect_or_award_facility_benefits():
+    session = _session()
+    state = _seed_club(session, prestige=60, cash=120_000)
+    original_level = int(state.facilities_json["stadium"])
+    original_prestige = int(state.prestige)
+
+    started = prestige_campus_comms.start_campus_construction(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        operation="upgrade_existing",
+        instance_id="mod_stadium_core",
+        fast_track_completion=False,
+    )
+    assert started["status"] == "commissioned"
+    assert state.prestige == original_prestige
+    assert int(state.facilities_json["stadium"]) == original_level
+
+    cancelled = prestige_campus_comms.start_campus_construction(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        operation="cancel_project",
+        instance_id="mod_stadium_core",
+    )
+    assert cancelled["status"] == "cancelled"
+    cancelled_project = next(
+        p for p in cancelled["campus"]["construction_projects"] if p["project_id"] == started["project"]["project_id"]
+    )
+    assert cancelled_project["status"] == "cancelled"
+
+    session.commit()
+    state.world_day += 10
+    session.commit()
+    later = prestige_campus_comms.get_club_campus(session, "user-prestige-1", "club-prestige-1")
+    later_project = next(
+        p for p in later["construction_projects"] if p["project_id"] == started["project"]["project_id"]
+    )
+    stadium = next(m for m in later["placed_modules"] if m["instance_id"] == "mod_stadium_core")
+    assert later_project["status"] == "cancelled"
+    assert later["active_projects_count"] == 0
+    assert stadium["status"] == "operational"
+    assert stadium["level"] == 2
+    assert state.prestige == original_prestige
+    assert int(state.facilities_json["stadium"]) == original_level
+
+    # A fresh upgrade awards the facility level and prestige exactly when it becomes operational.
+    next_started = prestige_campus_comms.start_campus_construction(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        operation="upgrade_existing",
+        instance_id="mod_stadium_core",
+        fast_track_completion=False,
+    )
+    assert state.prestige == original_prestige
+    assert int(state.facilities_json["stadium"]) == original_level
+
+    for _ in range(4):
+        advanced = prestige_campus_comms.start_campus_construction(
+            session,
+            "user-prestige-1",
+            "club-prestige-1",
+            operation="advance_stage",
+            instance_id="mod_stadium_core",
+            fast_track_completion=False,
+        )
+    assert advanced["project"]["status"] == "completed"
+    assert state.prestige > original_prestige
+    assert int(state.facilities_json["stadium"]) == original_level + 1

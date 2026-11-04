@@ -42,6 +42,20 @@ jest.mock("@/lib/owner", () => ({
     active: { club_id: "c1", club_name: "Lagos City FC" },
     select: () => {},
   }),
+  useClubCommunications: () => ({
+    data: {
+      counts: {},
+      direct_threads: [],
+      staff_contacts: [],
+      player_contacts: [],
+      staff_room: [],
+      squad_room: [],
+      meetings: [],
+      announcements: [],
+      requests_decisions: {},
+    },
+    refetch: () => Promise.resolve(),
+  }),
   useRefreshOwner: () => () => {},
   label: (val: string) => val,
 }));
@@ -146,8 +160,8 @@ describe("React Owner Decision Inbox", () => {
 
     await renderInbox();
 
-    expect(container.textContent).toContain("Personal Owner Inbox");
-    expect(container.textContent).toContain("Command & Decisions");
+    expect(container.textContent).toContain("GTEX Unified Club Communications");
+    expect(container.textContent).toContain("Command, Threads & Decisions");
     expect(container.querySelector('[data-testid="inbox-page"]')).not.toBeNull();
 
     // Club selector renders clubs
