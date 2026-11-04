@@ -7,6 +7,7 @@ Usage:
 
 No Supabase, Blender, Three.js, or third-party Python packages are required.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -19,8 +20,13 @@ from typing import Any
 
 _COMPONENT_BYTES = {5120: 1, 5121: 1, 5122: 2, 5123: 2, 5125: 4, 5126: 4}
 _TYPE_COMPONENTS = {
-    "SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4,
-    "MAT2": 4, "MAT3": 9, "MAT4": 16,
+    "SCALAR": 1,
+    "VEC2": 2,
+    "VEC3": 3,
+    "VEC4": 4,
+    "MAT2": 4,
+    "MAT3": 9,
+    "MAT4": 16,
 }
 _JSON_CHUNK, _BIN_CHUNK = 0x4E4F534A, 0x004E4942
 
@@ -75,14 +81,14 @@ def _accessor_bytes(doc: dict[str, Any], binary: bytes, index: int) -> tuple[byt
         if view.get("buffer", 0) != 0:
             raise ValueError(f"accessor {index} references non-GLB buffer")
         start, size = int(view.get("byteOffset", 0)), int(view.get("byteLength", 0))
-        raw_view = binary[start:start + size]
+        raw_view = binary[start : start + size]
         stride = int(view.get("byteStride", item_size))
         first = int(accessor.get("byteOffset", 0))
         if start < 0 or size < 0 or first < 0 or len(raw_view) != size or stride < item_size:
             raise ValueError(f"accessor {index} has invalid bufferView bounds/stride")
         if count and first + (count - 1) * stride + item_size > len(raw_view):
             raise ValueError(f"accessor {index} exceeds bufferView bounds")
-        payload = b"".join(raw_view[first + i * stride:first + i * stride + item_size] for i in range(count))
+        payload = b"".join(raw_view[first + i * stride : first + i * stride + item_size] for i in range(count))
     descriptor = f"{ctype}:{atype}:{count}:{bool(accessor.get('normalized', False))}".encode()
     sparse = accessor.get("sparse")
     if sparse:
@@ -106,12 +112,25 @@ def _accessor_bytes(doc: dict[str, Any], binary: bytes, index: int) -> tuple[byt
 def _audit(path: Path, root: Path) -> dict[str, Any]:
     raw = path.read_bytes()
     item: dict[str, Any] = {
-        "path": path.relative_to(root).as_posix(), "bytes": len(raw),
-        "file_sha256": hashlib.sha256(raw).hexdigest(), "valid_glb": False,
-        "asset_version": None, "meshes": 0, "primitives": 0, "vertices": 0,
-        "triangles": 0, "materials": 0, "pbr_materials": 0, "textures": 0,
-        "images": 0, "external_uris": [], "invalid_references": [],
-        "warnings": [], "errors": [], "geometry_sha256": None, "bounds_span": None,
+        "path": path.relative_to(root).as_posix(),
+        "bytes": len(raw),
+        "file_sha256": hashlib.sha256(raw).hexdigest(),
+        "valid_glb": False,
+        "asset_version": None,
+        "meshes": 0,
+        "primitives": 0,
+        "vertices": 0,
+        "triangles": 0,
+        "materials": 0,
+        "pbr_materials": 0,
+        "textures": 0,
+        "images": 0,
+        "external_uris": [],
+        "invalid_references": [],
+        "warnings": [],
+        "errors": [],
+        "geometry_sha256": None,
+        "bounds_span": None,
     }
     try:
         doc, binary = _parse_glb(path)
@@ -124,16 +143,12 @@ def _audit(path: Path, root: Path) -> dict[str, Any]:
             item["errors"].append("declared buffer length exceeds BIN chunk")
         if len(buffers) > 1:
             item["warnings"].append("multiple buffers require manual review")
-        item["external_uris"] = [
-            str(x["uri"]) for x in [*buffers, *doc.get("images", [])] if x.get("uri")
-        ]
+        item["external_uris"] = [str(x["uri"]) for x in [*buffers, *doc.get("images", [])] if x.get("uri")]
         if item["external_uris"]:
             item["warnings"].append("external resources are referenced")
         meshes, materials = doc.get("meshes", []), doc.get("materials", [])
         item["meshes"], item["materials"] = len(meshes), len(materials)
-        item["pbr_materials"] = sum(
-            isinstance(m.get("pbrMetallicRoughness"), dict) for m in materials
-        )
+        item["pbr_materials"] = sum(isinstance(m.get("pbrMetallicRoughness"), dict) for m in materials)
         item["textures"], item["images"] = len(doc.get("textures", [])), len(doc.get("images", []))
         primitive_hashes, pos_bounds = [], []
         for mi, mesh in enumerate(meshes):
@@ -153,9 +168,7 @@ def _audit(path: Path, root: Path) -> dict[str, Any]:
                             if len(acc.get("min", [])) >= 3 and len(acc.get("max", [])) >= 3:
                                 pos_bounds.append((acc["min"][:3], acc["max"][:3]))
                     except (ValueError, TypeError, KeyError) as exc:
-                        item["invalid_references"].append(
-                            f"mesh {mi} primitive {pi} attribute {name}: {exc}"
-                        )
+                        item["invalid_references"].append(f"mesh {mi} primitive {pi} attribute {name}: {exc}")
                 index = primitive.get("indices")
                 try:
                     if index is not None:
@@ -164,34 +177,26 @@ def _audit(path: Path, root: Path) -> dict[str, Any]:
                         pos_index = attrs.get("POSITION")
                         count = doc["accessors"][pos_index]["count"] if pos_index is not None else 0
                     mode = primitive.get("mode", 4)
-                    item["triangles"] += (
-                        count // 3 if mode == 4 else max(0, count - 2) if mode in (5, 6) else 0
-                    )
+                    item["triangles"] += count // 3 if mode == 4 else max(0, count - 2) if mode in (5, 6) else 0
                     if index is not None:
                         digest.update(_accessor_bytes(doc, binary, index)[0])
                 except (ValueError, TypeError, KeyError, IndexError) as exc:
                     item["invalid_references"].append(f"mesh {mi} primitive {pi} indices: {exc}")
                 material = primitive.get("material")
-                if material is not None and not (
-                    isinstance(material, int) and 0 <= material < len(materials)
-                ):
+                if material is not None and not (isinstance(material, int) and 0 <= material < len(materials)):
                     item["invalid_references"].append(
                         f"mesh {mi} primitive {pi} references missing material {material}"
                     )
                 primitive_hashes.append(digest.hexdigest())
         if primitive_hashes:
-            item["geometry_sha256"] = hashlib.sha256(
-                "|".join(sorted(primitive_hashes)).encode()
-            ).hexdigest()
+            item["geometry_sha256"] = hashlib.sha256("|".join(sorted(primitive_hashes)).encode()).hexdigest()
         if pos_bounds:
             low = [min(float(x[0][i]) for x in pos_bounds) for i in range(3)]
             high = [max(float(x[1][i]) for x in pos_bounds) for i in range(3)]
             item["bounds_span"] = [round(high[i] - low[i], 6) for i in range(3)]
         for ni, node in enumerate(doc.get("nodes", [])):
             mesh = node.get("mesh")
-            if mesh is not None and not (
-                isinstance(mesh, int) and 0 <= mesh < len(meshes)
-            ):
+            if mesh is not None and not (isinstance(mesh, int) and 0 <= mesh < len(meshes)):
                 item["invalid_references"].append(f"node {ni} references missing mesh {mesh}")
         if item["invalid_references"]:
             item["errors"].extend(item["invalid_references"])
@@ -215,7 +220,9 @@ def audit_library(root: Path) -> dict[str, Any]:
     for item in items:
         if item["valid_glb"]:
             key = (
-                item["vertices"], item["triangles"], item["materials"],
+                item["vertices"],
+                item["triangles"],
+                item["materials"],
                 tuple(item["bounds_span"] or []),
             )
             metrics[key].append(item["path"])
@@ -236,11 +243,13 @@ def audit_library(root: Path) -> dict[str, Any]:
 def markdown(report: dict[str, Any]) -> str:
     summary = report["summary"]
     lines = [
-        "# GTEX Campus GLB Audit", "",
+        "# GTEX Campus GLB Audit",
+        "",
         f"- Files: **{summary['files']}** | valid: **{summary['valid_files']}** | invalid: **{summary['invalid_files']}**",
         f"- Exact binary duplicate groups: **{len(summary['exact_binary_duplicates'])}**",
         f"- Matching geometry groups: **{len(summary['matching_geometry'])}**",
-        f"- Same metrics only (not proof of duplication): **{len(summary['same_metrics_only'])}**", "",
+        f"- Same metrics only (not proof of duplication): **{len(summary['same_metrics_only'])}**",
+        "",
         "| Model | Valid | Vertices | Triangles | Materials/PBR | Span (local) | Bytes | Findings |",
         "|---|---:|---:|---:|---:|---|---:|---:|",
     ]
@@ -259,13 +268,18 @@ def markdown(report: dict[str, Any]) -> str:
     ):
         lines.extend(["", f"## {title}", ""])
         lines.extend(["- " + ", ".join(group) for group in summary[key]] or ["None found."])
-    lines.extend([
-        "", "## Interpretation", "",
-        "- Matching geometry fingerprints compare primitive topology and raw accessor payloads; they do not apply node transforms or compare material assignments.",
-        "- Equal vertex/triangle/material counts and dimensions are only a review signal, never proof of duplicate architecture.",
-        "- Bounds use accessor-local min/max values; this tool does not apply node transforms.",
-        "- The audit is read-only and does not alter any GLB.", "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Interpretation",
+            "",
+            "- Matching geometry fingerprints compare primitive topology and raw accessor payloads; they do not apply node transforms or compare material assignments.",
+            "- Equal vertex/triangle/material counts and dimensions are only a review signal, never proof of duplicate architecture.",
+            "- Bounds use accessor-local min/max values; this tool does not apply node transforms.",
+            "- The audit is read-only and does not alter any GLB.",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 
