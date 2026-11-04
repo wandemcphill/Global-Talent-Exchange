@@ -881,7 +881,7 @@ def get_club_campus(session: Session, user_id: str, club_id: str) -> dict[str, A
 
     world_day_int = int(state.world_day or 1)
     enriched_modules = [_enrich_module(m, projects=projects, world_day=world_day_int) for m in placed]
-    active_projects = [p for p in projects if p.get("status") != "completed"]
+    active_projects = [p for p in projects if p.get("status") not in ("completed", "cancelled")]
 
     enriched_catalog = []
     for c in CAMPUS_MODULE_CATALOG.values():
