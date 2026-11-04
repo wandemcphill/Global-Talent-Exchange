@@ -1033,8 +1033,8 @@ def compute_authoritative_campus_effects(
 
     capped_injury_red = min(65, injury_red_bonus_pct)
     daily_fitness_recovery = 6 + int(round((fatigue_recovery_pct + stamina_retention_pct) / 4.0))
-    intake_bonus_count = (1 if regen_intake_quality_pct >= 22 or operational_academy_modules >= 2 else 0) + (
-        1 if regen_intake_quality_pct >= 30 and academy_ceiling_bonus >= 8 else 0
+    intake_bonus_count = (1 if regen_intake_quality_pct >= 28 or operational_academy_modules >= 3 else 0) + (
+        1 if regen_intake_quality_pct >= 30 and operational_academy_modules >= 3 and academy_ceiling_bonus >= 8 else 0
     )
 
     return {

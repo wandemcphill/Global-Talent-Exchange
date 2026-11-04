@@ -211,6 +211,16 @@ class OwnerMatch(UUIDPrimaryKeyMixin, Base):
     narrative_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     played_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    @property
+    def attendance(self) -> int | None:
+        val = (self.narrative_json or {}).get("attendance")
+        return int(val) if val is not None else None
+
+    @property
+    def stadium_capacity(self) -> int | None:
+        val = (self.narrative_json or {}).get("stadium_capacity")
+        return int(val) if val is not None else None
+
 
 class OwnerSponsorDeal(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "owner_sponsor_deals"

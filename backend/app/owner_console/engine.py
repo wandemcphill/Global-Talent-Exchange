@@ -860,6 +860,100 @@ def club_strength(
     }
 
 
+def calculate_match_attendance(
+    *,
+    fans: int,
+    prestige: int,
+    stadium_level: int = 1,
+    campus_effects: dict[str, Any] | None = None,
+    gf: int = 0,
+    ga: int = 0,
+) -> dict[str, Any]:
+    """Calculate authoritative home match attendance (hard-capped by operational stadium capacity) and gate receipts."""
+    eff = dict(campus_effects or {})
+    stadium_capacity = max(1_000, int(eff.get("stadium_capacity", 30_000)))
+    matchday_rev_pct = int(eff.get("matchday_revenue_bonus_pct", 15))
+    vip_hospitality_gtex = int(eff.get("vip_hospitality_flat_gtex", 0))
+    commercial_growth_pct = int(eff.get("commercial_growth_bonus_pct", 0))
+    home_advantage_bonus = int(eff.get("home_advantage_bonus", 0))
+    stad_lvl = max(1, int(stadium_level))
+
+    core_supporter_turnout = int(round(max(200, int(fans)) * (2.2 + stad_lvl * 0.25)))
+    prestige_draw = int(max(10, int(prestige)) * 110)
+    infra_draw = (
+        int(round(stadium_capacity * 0.25))
+        + int(matchday_rev_pct * 85)
+        + int(home_advantage_bonus * 180)
+        + (450 if vip_hospitality_gtex > 0 else 0)
+    )
+    match_spectacle = max(0, (int(gf) + int(ga)) * 90 + (200 if int(gf) > int(ga) else 0))
+
+    raw_demand = max(200, core_supporter_turnout + prestige_draw + infra_draw + match_spectacle)
+    attendance = min(stadium_capacity, raw_demand)
+    capacity_utilization_pct = round((attendance / stadium_capacity) * 100.0, 1)
+
+    ticket_yield_per_fan = 0.055 * (1.0 + (stad_lvl - 1) * 0.15)
+    revenue_multiplier = 1.0 + (matchday_rev_pct + commercial_growth_pct * 0.5) / 100.0
+    raw_gate = attendance * ticket_yield_per_fan * revenue_multiplier + vip_hospitality_gtex
+    gate_receipts_gtex = max(50, int(round(raw_gate)))
+
+    return {
+        "attendance": attendance,
+        "stadium_capacity": stadium_capacity,
+        "raw_demand": raw_demand,
+        "capacity_utilization_pct": capacity_utilization_pct,
+        "sold_out": attendance >= stadium_capacity,
+        "gate_receipts_gtex": gate_receipts_gtex,
+    }
+
+
+def evaluate_player_injury_risk(
+    *,
+    club_id: str,
+    player_id: str,
+    context_key: str | int,
+    fitness: int,
+    minutes_load: int = 90,
+    mentality: str = "balanced",
+    medical_level: int = 1,
+    med_director_expertise: int = 10,
+    campus_injury_reduction_pct: int = 0,
+) -> dict[str, Any]:
+    """Authoritative injury-incidence and severity model consumed by matchday and world-clock simulation."""
+    fit_val = int(clamp(int(fitness), 0, 100))
+    base_hazard = 0.04 if int(minutes_load) >= 60 else 0.015
+    fatigue_overload = max(0, 75 - fit_val) * 0.011
+    mentality_hazard = 0.025 if mentality == "attacking" else 0.0
+    staff_facility_mitigation = (max(1, int(medical_level)) - 1) * 0.015 + max(
+        0, int(med_director_expertise) - 10
+    ) * 0.004
+    unmitigated_risk = clamp(
+        base_hazard + fatigue_overload + mentality_hazard - staff_facility_mitigation,
+        0.01,
+        0.85,
+    )
+    reduction_pct = int(clamp(int(campus_injury_reduction_pct), 0, 65))
+    reduction_factor = 1.0 - (reduction_pct / 100.0)
+    effective_risk = round(unmitigated_risk * reduction_factor, 4)
+
+    rng = seeded("injury_incidence", club_id, player_id, str(context_key))
+    roll = round(rng.random(), 4)
+    injured = bool(fit_val < 70 and roll < effective_risk)
+    injured_days = 0
+    if injured:
+        raw_days = 5 + max(0, (70 - fit_val) // 5) + rng.randint(0, 4)
+        injured_days = max(1, int(round(raw_days * reduction_factor)))
+
+    return {
+        "unmitigated_risk": round(unmitigated_risk, 4),
+        "injury_reduction_pct": reduction_pct,
+        "effective_risk": effective_risk,
+        "roll": roll,
+        "injured": injured,
+        "injured_days": injured_days,
+    }
+
+
 MENTALITY = {"defensive": (0.78, 0.7), "balanced": (1.0, 1.0), "attacking": (1.25, 1.22)}
 
 

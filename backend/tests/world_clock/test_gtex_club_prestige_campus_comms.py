@@ -1246,3 +1246,229 @@ def test_phase2_2_sponsor_campus_uplift_is_applied_once_to_offer_and_active_deal
     signed_view = next(item for item in active if item["id"] == deal.id)
     assert int(Decimal(signed_view["per_match_gross"])) == expected_effective_rate
     assert int(Decimal(signed_view["contract_base_per_match_gross"])) == base_rate
+
+
+def test_phase2_2_matchday_attendance_increases_with_stadium_infrastructure_and_never_exceeds_capacity():
+    from sqlalchemy import select
+    from app.owner_console import competitions
+    from app.owner_console.models import LedgerEvent, OwnerCompetition, OwnerCompetitionEntry, OwnerMatch
+
+    session = _session()
+    state = _seed_club(session, prestige=68, cash=240_000)
+    service.academy_intake(session, "user-prestige-1", "club-prestige-1")
+
+    comp = OwnerCompetition(
+        id="comp-attendance-cap-1",
+        name="GTEX Attendance Dynasty Shield",
+        host_type="user",
+        format="league",
+        tier="Friends",
+        status="running",
+        current_round=1,
+        total_rounds=4,
+    )
+    entry = OwnerCompetitionEntry(
+        id="entry-attendance-cap-1",
+        competition_id=comp.id,
+        club_id=state.club_id,
+        owner_user_id=state.owner_user_id,
+        club_name=state.club_name,
+        is_ai=False,
+        strength=72.0,
+    )
+    session.add_all([comp, entry])
+    session.commit()
+
+    def _run_home_fixture(match_id: str, *, fans: int, prestige: int) -> tuple[OwnerMatch, dict, Decimal]:
+        state.fans = fans
+        state.prestige = prestige
+        match = OwnerMatch(
+            id=match_id,
+            competition_id=comp.id,
+            round_number=1,
+            home_club_id=state.club_id,
+            away_club_id="ai-att-rival",
+            home_name=state.club_name,
+            away_name="Kano Pillars FC",
+            status="played",
+        )
+        session.add(match)
+        session.flush()
+        side = competitions._side(session, entry, "balanced", "strongest", is_home=True)
+        competitions._post_match_club(session, side, True, 2, 0, match)
+        session.flush()
+        gate_ev = session.scalar(
+            select(LedgerEvent).where(
+                LedgerEvent.event_type == "gate_receipts",
+                LedgerEvent.related_object_id == match_id,
+            )
+        )
+        assert gate_ev is not None
+        return match, competitions.match_dict(match, full=True), Decimal(gate_ev.gross_amount)
+
+    # 1. Sub-capacity regime: attendance increases with operational stadium infrastructure
+    base_match, base_resp, base_gate = _run_home_fixture("match-att-sub-base", fans=2_500, prestige=68)
+    assert base_match.attendance is not None and base_match.stadium_capacity == 33_500
+    assert base_resp["attendance"] == base_match.attendance
+    assert base_resp["narrative"]["attendance"] == base_match.attendance
+    assert base_match.attendance < base_match.stadium_capacity
+    assert int(base_gate) == base_resp["gate_receipts_gtex"]
+
+    # Place North Stand Expansion L1 (+8,500 cap) and VIP Skybox L1 -> complete construction
+    ns = prestige_campus_comms.start_campus_construction(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        operation="place_new",
+        module_key="north_stand_expansion",
+        x=18,
+        y=8,
+        rotation=0,
+        fast_track_completion=True,
+    )
+    prestige_campus_comms.start_campus_construction(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        operation="place_new",
+        module_key="vip_skybox_concourse",
+        x=18,
+        y=11,
+        rotation=0,
+        fast_track_completion=True,
+    )
+
+    exp_match, exp_resp, exp_gate = _run_home_fixture("match-att-sub-expanded", fans=2_500, prestige=68)
+    assert exp_match.stadium_capacity == 42_000
+    assert exp_match.attendance > base_match.attendance
+    assert exp_match.attendance <= exp_match.stadium_capacity
+    assert exp_resp["attendance"] == exp_match.attendance
+    assert exp_gate > base_gate
+
+    # 2. High-demand sellout regime: raw demand exceeds capacity, attendance is hard-capped at operational stadium_capacity
+    # Reset North Stand Expansion to test 33,500 cap vs 42,000 cap vs 45,500 cap under sellout demand (fans=20,000)
+    prestige_campus_comms.update_campus_layout(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        action="demolish",
+        instance_id=ns["module"]["instance_id"],
+    )
+    cap33_match, cap33_resp, cap33_gate = _run_home_fixture("match-att-cap-33k", fans=20_000, prestige=88)
+    assert cap33_match.stadium_capacity == 33_500
+    assert cap33_resp["narrative"]["raw_attendance_demand"] > 33_500
+    assert cap33_match.attendance == 33_500
+
+    ns2 = prestige_campus_comms.start_campus_construction(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        operation="place_new",
+        module_key="north_stand_expansion",
+        x=18,
+        y=8,
+        rotation=0,
+        fast_track_completion=True,
+    )
+    cap42_match, cap42_resp, cap42_gate = _run_home_fixture("match-att-cap-42k", fans=20_000, prestige=88)
+    assert cap42_match.stadium_capacity == 42_000
+    assert cap42_resp["narrative"]["raw_attendance_demand"] > 42_000
+    assert cap42_match.attendance == 42_000
+    assert cap42_match.attendance > cap33_match.attendance
+    assert cap42_gate > cap33_gate
+
+    # Upgrade North Stand Expansion to L2 (+3,500 cap -> 45,500 total capacity)
+    prestige_campus_comms.start_campus_construction(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        operation="upgrade_existing",
+        instance_id=ns2["module"]["instance_id"],
+        fast_track_completion=True,
+    )
+    cap45_match, cap45_resp, cap45_gate = _run_home_fixture("match-att-cap-45k", fans=20_000, prestige=88)
+    assert cap45_match.stadium_capacity == 45_500
+    assert cap45_resp["narrative"]["raw_attendance_demand"] > 45_500
+    assert cap45_match.attendance == 45_500
+    assert cap45_match.attendance > cap42_match.attendance
+    assert cap45_gate > cap42_gate
+
+
+def test_phase2_2_medical_injury_reduction_pct_reduces_authoritative_injury_incidence_and_severity():
+    session = _session()
+    state = _seed_club(session, prestige=75, cash=240_000)
+
+    # 1. Compare authoritative injury-risk evaluation with 0% vs operational medical campus reduction
+    base_effects = prestige_campus_comms.compute_authoritative_campus_effects(session, state)
+    assert base_effects["injury_reduction_pct"] == 24  # starter recovery_hydro_hub L2 + high_performance_centre L1
+
+    # Upgrade Hydrotherapy Hub to L3 and build High-Performance Centre L1 + second Hydrotherapy Hub L2
+    prestige_campus_comms.start_campus_construction(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        operation="upgrade_existing",
+        instance_id="mod_hydro_hub",
+        fast_track_completion=True,
+    )
+    prestige_campus_comms.start_campus_construction(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        operation="place_new",
+        module_key="recovery_hydro_hub",
+        x=18,
+        y=12,
+        rotation=0,
+        fast_track_completion=True,
+    )
+    elite_effects = prestige_campus_comms.compute_authoritative_campus_effects(session, state)
+    assert elite_effects["injury_reduction_pct"] > base_effects["injury_reduction_pct"]
+
+    # 2. Across a cohort of fatigued player states, higher injury_reduction_pct strictly lowers effective risk,
+    # reduces total injury incidence count, and reduces total injured_days layoff severity
+    unmitigated_injuries = 0
+    unmitigated_days = 0
+    elite_injuries = 0
+    elite_days = 0
+    for idx in range(40):
+        pid = f"player-strain-{idx}"
+        res_zero = owner_engine.evaluate_player_injury_risk(
+            club_id=state.club_id,
+            player_id=pid,
+            context_key="fixture-congestion-1",
+            fitness=38,
+            minutes_load=90,
+            mentality="attacking",
+            medical_level=1,
+            med_director_expertise=10,
+            campus_injury_reduction_pct=0,
+        )
+        res_elite = owner_engine.evaluate_player_injury_risk(
+            club_id=state.club_id,
+            player_id=pid,
+            context_key="fixture-congestion-1",
+            fitness=38,
+            minutes_load=90,
+            mentality="attacking",
+            medical_level=1,
+            med_director_expertise=10,
+            campus_injury_reduction_pct=elite_effects["injury_reduction_pct"],
+        )
+        assert res_elite["effective_risk"] < res_zero["effective_risk"]
+        if res_zero["injured"]:
+            unmitigated_injuries += 1
+            unmitigated_days += res_zero["injured_days"]
+        if res_elite["injured"]:
+            elite_injuries += 1
+            elite_days += res_elite["injured_days"]
+            assert res_elite["injured_days"] < res_zero["injured_days"]
+
+    assert unmitigated_injuries > elite_injuries
+    assert unmitigated_days > elite_days
+
+    # 3. Verify tick_club consumes injury_reduction_pct and reports avg_effective_injury_risk in medical_recovery
+    service.academy_intake(session, "user-prestige-1", "club-prestige-1")
+    tick_res = service.tick_club(session, state)
+    assert tick_res["medical_recovery"]["injury_reduction_pct"] == elite_effects["injury_reduction_pct"]
+    assert tick_res["medical_recovery"]["avg_effective_injury_risk"] > 0

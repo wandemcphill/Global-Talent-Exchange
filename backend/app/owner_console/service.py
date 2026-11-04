@@ -1468,6 +1468,7 @@ def tick_club(
     med_bonus = max(0, int(med.get("medical_expertise", 10)) // 5)
     hoyd_bonus = int(hoyd.get("youth_development", 10)) // 2
     rehab_campus_bonus = int(campus_effects.get("rehab_daily_bonus_days", 0))
+    injury_reduction_pct = int(campus_effects.get("injury_reduction_pct", 0))
     daily_injury_heal_days = 1 + int(facilities.get("medical", 1)) // 2 + med_bonus + rehab_campus_bonus
     daily_fitness_gain = int(campus_effects.get("daily_fitness_recovery", 6))
 
@@ -1483,16 +1484,36 @@ def tick_club(
     pending: list[tuple[OwnerInboxItem, str | None]] = []
     growth_report = []
     healed_players_count = 0
+    new_training_injuries_count = 0
+    effective_injury_risks: list[float] = []
     for p in players:
+        pers_fit = dict(p.personality_json or {})
+        cur_fitness = int(pers_fit.get("fitness", 95))
         if p.injured_days > 0:
             p.injured_days = max(0, p.injured_days - daily_injury_heal_days)
             healed_players_count += 1
-        pers_fit = dict(p.personality_json or {})
-        cur_fitness = int(pers_fit.get("fitness", 95))
+        else:
+            inj_eval = engine.evaluate_player_injury_risk(
+                club_id=state.club_id,
+                player_id=p.id,
+                context_key=f"tick:{state.world_day}",
+                fitness=cur_fitness,
+                minutes_load=45,
+                mentality=str(state.mentality or "balanced"),
+                medical_level=int(facilities.get("medical", 1) or 1),
+                med_director_expertise=int(med.get("medical_expertise", 10)),
+                campus_injury_reduction_pct=injury_reduction_pct,
+            )
+            pers_fit["last_injury_risk"] = inj_eval["effective_risk"]
+            pers_fit["unmitigated_injury_risk"] = inj_eval["unmitigated_risk"]
+            effective_injury_risks.append(inj_eval["effective_risk"])
+            if inj_eval["injured"]:
+                p.injured_days = inj_eval["injured_days"]
+                new_training_injuries_count += 1
         if cur_fitness < 100:
             pers_fit["fitness"] = int(engine.clamp(cur_fitness + daily_fitness_gain, 0, 100))
-            p.personality_json = pers_fit
-            flag_modified(p, "personality_json")
+        p.personality_json = pers_fit
+        flag_modified(p, "personality_json")
         if not p.is_regen:
             continue
         pdata = player_dict(p)
@@ -1790,6 +1811,11 @@ def tick_club(
             "healed_players_count": healed_players_count,
             "daily_injury_heal_days": daily_injury_heal_days,
             "daily_fitness_recovery": daily_fitness_gain,
+            "injury_reduction_pct": injury_reduction_pct,
+            "new_training_injuries_count": new_training_injuries_count,
+            "avg_effective_injury_risk": (
+                round(sum(effective_injury_risks) / len(effective_injury_risks), 4) if effective_injury_risks else 0.0
+            ),
         },
     }
 
