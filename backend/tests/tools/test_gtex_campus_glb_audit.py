@@ -1,4 +1,5 @@
 """Regression tests for the dependency-free GTEX campus GLB audit."""
+
 from __future__ import annotations
 
 import json
@@ -17,10 +18,16 @@ def make_glb(path: Path, positions: bytes | None = None) -> None:
         "asset": {"version": "2.0", "generator": "test-fixture"},
         "buffers": [{"byteLength": len(positions)}],
         "bufferViews": [{"buffer": 0, "byteOffset": 0, "byteLength": len(positions)}],
-        "accessors": [{
-            "bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3",
-            "min": [0, 0, 0], "max": [1, 1, 0],
-        }],
+        "accessors": [
+            {
+                "bufferView": 0,
+                "componentType": 5126,
+                "count": 3,
+                "type": "VEC3",
+                "min": [0, 0, 0],
+                "max": [1, 1, 0],
+            }
+        ],
         "meshes": [{"primitives": [{"attributes": {"POSITION": 0}, "mode": 4}]}],
         "nodes": [{"mesh": 0}],
         "scenes": [{"nodes": [0]}],
@@ -53,9 +60,7 @@ class CampusGlbAuditTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             make_glb(root / "stadium_main.glb")
-            (root / "stadium_bowl_core.glb").write_bytes(
-                (root / "stadium_main.glb").read_bytes()
-            )
+            (root / "stadium_bowl_core.glb").write_bytes((root / "stadium_main.glb").read_bytes())
             report = audit_library(root)
             self.assertEqual(len(report["summary"]["exact_binary_duplicates"]), 1)
             self.assertEqual(len(report["summary"]["matching_geometry"]), 1)
