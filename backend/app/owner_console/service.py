@@ -1486,20 +1486,46 @@ def tick_club(
     healed_players_count = 0
     new_training_injuries_count = 0
     effective_injury_risks: list[float] = []
+    workload_minutes_list: list[int] = []
+    active_xi_ids = set(
+        engine.club_strength(
+            [player_dict(pl) for pl in players],
+            manager,
+            facilities,
+            campus_effects=campus_effects,
+        ).get("xi")
+        or []
+    )
+    training_level_int = int(facilities.get("training", 1) or 1)
+    club_mentality = str(state.mentality or "balanced")
     for p in players:
         pers_fit = dict(p.personality_json or {})
         cur_fitness = int(pers_fit.get("fitness", 95))
-        if p.injured_days > 0:
-            p.injured_days = max(0, p.injured_days - daily_injury_heal_days)
+        pre_tick_injured_days = int(p.injured_days or 0)
+        if pre_tick_injured_days > 0:
+            p.injured_days = max(0, pre_tick_injured_days - daily_injury_heal_days)
             healed_players_count += 1
+            pers_fit["last_training_workload_minutes"] = 0
+            pers_fit["last_training_workload_tier"] = "rehabilitation"
         else:
+            p_snapshot = player_dict(p)
+            p_snapshot["personality"] = pers_fit
+            workload = engine.calculate_daily_training_workload_minutes(
+                p_snapshot,
+                is_starter=p.id in active_xi_ids,
+                mentality=club_mentality,
+                training_level=training_level_int,
+            )
+            pers_fit["last_training_workload_minutes"] = workload["minutes_load"]
+            pers_fit["last_training_workload_tier"] = workload["workload_tier"]
+            workload_minutes_list.append(workload["minutes_load"])
             inj_eval = engine.evaluate_player_injury_risk(
                 club_id=state.club_id,
                 player_id=p.id,
                 context_key=f"tick:{state.world_day}",
                 fitness=cur_fitness,
-                minutes_load=45,
-                mentality=str(state.mentality or "balanced"),
+                minutes_load=workload["minutes_load"],
+                mentality=club_mentality,
                 medical_level=int(facilities.get("medical", 1) or 1),
                 med_director_expertise=int(med.get("medical_expertise", 10)),
                 campus_injury_reduction_pct=injury_reduction_pct,
@@ -1518,6 +1544,7 @@ def tick_club(
             continue
         pdata = player_dict(p)
         pdata["personality"] = dict(p.personality_json or {})
+        pdata["injured_days"] = max(pre_tick_injured_days, int(p.injured_days or 0))
         result = engine.regen_growth(pdata, ctx)
         p.personality_json = pdata["personality"]
         flag_modified(p, "personality_json")
@@ -1813,6 +1840,9 @@ def tick_club(
             "daily_fitness_recovery": daily_fitness_gain,
             "injury_reduction_pct": injury_reduction_pct,
             "new_training_injuries_count": new_training_injuries_count,
+            "avg_training_workload_minutes": (
+                round(sum(workload_minutes_list) / len(workload_minutes_list), 1) if workload_minutes_list else 0.0
+            ),
             "avg_effective_injury_risk": (
                 round(sum(effective_injury_risks) / len(effective_injury_risks), 4) if effective_injury_risks else 0.0
             ),

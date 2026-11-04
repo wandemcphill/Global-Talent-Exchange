@@ -1472,3 +1472,411 @@ def test_phase2_2_medical_injury_reduction_pct_reduces_authoritative_injury_inci
     tick_res = service.tick_club(session, state)
     assert tick_res["medical_recovery"]["injury_reduction_pct"] == elite_effects["injury_reduction_pct"]
     assert tick_res["medical_recovery"]["avg_effective_injury_risk"] > 0
+
+
+def test_phase2_2_tv_revenue_settlement_matches_match_dict_and_handles_historical_matches():
+    from sqlalchemy import select
+    from app.owner_console import competitions
+    from app.owner_console.models import LedgerEvent, OwnerCompetition, OwnerCompetitionEntry, OwnerMatch
+
+    session = _session()
+    state = _seed_club(session, prestige=72, cash=200_000)
+    service.academy_intake(session, "user-prestige-1", "club-prestige-1")
+
+    comp = OwnerCompetition(
+        id="comp-tv-rev-1",
+        name="GTEX Broadcast Integrity Cup",
+        host_type="user",
+        format="league",
+        tier="Friends",
+        status="running",
+        current_round=1,
+        total_rounds=2,
+    )
+    entry = OwnerCompetitionEntry(
+        id="entry-tv-rev-1",
+        competition_id=comp.id,
+        club_id=state.club_id,
+        owner_user_id=state.owner_user_id,
+        club_name=state.club_name,
+        is_ai=False,
+        strength=70.0,
+    )
+    session.add_all([comp, entry])
+    session.commit()
+
+    # 1. Historical/unsettled match without persisted TV revenue must NOT invent 650
+    historical_match = OwnerMatch(
+        id="match-tv-historical-unpersisted",
+        competition_id=comp.id,
+        round_number=1,
+        home_club_id=state.club_id,
+        away_club_id="ai-tv-rival",
+        home_name=state.club_name,
+        away_name="Enugu Rangers FC",
+        status="played",
+        home_goals=1,
+        away_goals=1,
+        narrative_json={"momentum": [50] * 18},
+    )
+    session.add(historical_match)
+    session.flush()
+    hist_dict = competitions.match_dict(historical_match, full=True)
+    assert hist_dict["tv_revenue"] is None
+    assert hist_dict["tv_revenue_gtex"] is None
+    assert historical_match.tv_revenue is None
+
+    # 2. Settled match persists actual TV broadcast revenue and match_dict agrees 100% with LedgerEvent
+    settled_match = OwnerMatch(
+        id="match-tv-settled-base",
+        competition_id=comp.id,
+        round_number=1,
+        home_club_id=state.club_id,
+        away_club_id="ai-tv-rival",
+        home_name=state.club_name,
+        away_name="Enugu Rangers FC",
+        status="played",
+        home_goals=2,
+        away_goals=0,
+    )
+    session.add(settled_match)
+    session.flush()
+    side = competitions._side(session, entry, "balanced", "strongest", is_home=True)
+    competitions._post_match_club(session, side, True, 2, 0, settled_match)
+    session.flush()
+
+    tv_ledger = session.scalar(
+        select(LedgerEvent).where(
+            LedgerEvent.event_type == "tv_broadcast_revenue",
+            LedgerEvent.related_object_id == settled_match.id,
+        )
+    )
+    assert tv_ledger is not None
+    settled_dict = competitions.match_dict(settled_match, full=True)
+    assert settled_dict["tv_revenue"] == int(Decimal(tv_ledger.gross_amount))
+    assert settled_dict["tv_revenue_gtex"] == int(Decimal(tv_ledger.gross_amount))
+    assert settled_match.tv_revenue == int(Decimal(tv_ledger.gross_amount))
+    assert settled_dict["tv_revenue"] != 650
+
+    # 3. Add Floodlight Pylon Array -> higher settled TV revenue reflected identically in ledger and match_dict
+    prestige_campus_comms.start_campus_construction(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        operation="place_new",
+        module_key="floodlight_pylon_array",
+        x=22,
+        y=15,
+        rotation=0,
+        fast_track_completion=True,
+    )
+    upgraded_match = OwnerMatch(
+        id="match-tv-settled-upgraded",
+        competition_id=comp.id,
+        round_number=2,
+        home_club_id=state.club_id,
+        away_club_id="ai-tv-rival",
+        home_name=state.club_name,
+        away_name="Enugu Rangers FC",
+        status="played",
+        home_goals=2,
+        away_goals=0,
+    )
+    session.add(upgraded_match)
+    session.flush()
+    side_upg = competitions._side(session, entry, "balanced", "strongest", is_home=True)
+    competitions._post_match_club(session, side_upg, True, 2, 0, upgraded_match)
+    session.flush()
+
+    tv_ledger_upg = session.scalar(
+        select(LedgerEvent).where(
+            LedgerEvent.event_type == "tv_broadcast_revenue",
+            LedgerEvent.related_object_id == upgraded_match.id,
+        )
+    )
+    assert tv_ledger_upg is not None
+    upg_dict = competitions.match_dict(upgraded_match, full=True)
+    assert upg_dict["tv_revenue"] == int(Decimal(tv_ledger_upg.gross_amount))
+    assert upg_dict["tv_revenue"] > settled_dict["tv_revenue"]
+
+
+def test_phase2_2_post_match_club_injury_integration_persistence_and_idempotency():
+    from sqlalchemy import func, select
+    from sqlalchemy.orm.attributes import flag_modified
+    from app.owner_console import competitions
+    from app.owner_console.models import (
+        LedgerEvent,
+        OwnerCompetition,
+        OwnerCompetitionEntry,
+        OwnerMatch,
+        OwnerSquadPlayer,
+    )
+
+    session = _session()
+    state = _seed_club(session, prestige=75, cash=260_000)
+    # Seed 14 squad players so we have 11 fatigued starters + bench + 1 already-injured player
+    for idx in range(14):
+        pers = {"fitness": 48, "ambition": 12, "professionalism": 12}
+        p = OwnerSquadPlayer(
+            id=f"post-match-inj-p-{idx}",
+            club_id=state.club_id,
+            name=f"Match Starter {idx}",
+            position="midfielder" if idx > 0 else "goalkeeper",
+            age=23,
+            rating=72 - (idx // 3),
+            potential=80,
+            value_coin=Decimal("2500"),
+            morale=75,
+            minutes=180,
+            injured_days=11 if idx == 13 else 0,
+            is_regen=False,
+            personality_json=pers,
+        )
+        session.add(p)
+    session.commit()
+
+    comp = OwnerCompetition(
+        id="comp-post-match-inj-1",
+        name="GTEX Matchday Medical Shield",
+        host_type="user",
+        format="league",
+        tier="Friends",
+        status="running",
+        current_round=1,
+        total_rounds=2,
+    )
+    entry = OwnerCompetitionEntry(
+        id="entry-post-match-inj-1",
+        competition_id=comp.id,
+        club_id=state.club_id,
+        owner_user_id=state.owner_user_id,
+        club_name=state.club_name,
+        is_ai=False,
+        strength=72.0,
+    )
+    session.add_all([comp, entry])
+    session.commit()
+
+    # 1. Run _post_match_club with zero campus medical reduction vs elite campus medical reduction
+    side_zero = competitions._side(session, entry, "attacking", "strongest", is_home=True)
+    zero_effects = dict(side_zero["campus_effects"])
+    zero_effects["injury_reduction_pct"] = 0
+    zero_effects["stamina_retention_pct"] = 0
+    side_zero["campus_effects"] = zero_effects
+    # Include the pre-injured player in side["xi"] intentionally to verify _post_match_club never overwrites existing injury state
+    side_zero["xi"] = list(side_zero["xi"][:10]) + ["post-match-inj-p-13"]
+
+    match_zero = OwnerMatch(
+        id="match-post-inj-settlement-check",
+        competition_id=comp.id,
+        round_number=1,
+        home_club_id=state.club_id,
+        away_club_id="ai-inj-rival",
+        home_name=state.club_name,
+        away_name="Ibadan Shooting Stars",
+        status="played",
+    )
+    session.add(match_zero)
+    session.flush()
+
+    notes_first = competitions._post_match_club(session, side_zero, True, 2, 1, match_zero)
+    session.flush()
+
+    assessments_zero = match_zero.narrative_json.get("home_injury_assessments") or []
+    assert len(assessments_zero) == 10  # 10 healthy starters assessed; pre-injured player skipped
+    pre_injured = session.get(OwnerSquadPlayer, "post-match-inj-p-13")
+    assert pre_injured is not None and pre_injured.injured_days == 11  # Existing injury state preserved untouched!
+
+    # Verify idempotency: calling _post_match_club again for the same match & side is a deterministic no-op
+    p0 = session.get(OwnerSquadPlayer, "post-match-inj-p-0")
+    fitness_after_first = int(p0.personality_json["fitness"])
+    minutes_after_first = p0.minutes
+    gate_count_first = session.scalar(
+        select(func.count())
+        .select_from(LedgerEvent)
+        .where(LedgerEvent.event_type == "gate_receipts", LedgerEvent.related_object_id == match_zero.id)
+    )
+    notes_second = competitions._post_match_club(session, side_zero, True, 2, 1, match_zero)
+    session.flush()
+    assert notes_second == notes_first
+    assert int(p0.personality_json["fitness"]) == fitness_after_first
+    assert p0.minutes == minutes_after_first
+    gate_count_second = session.scalar(
+        select(func.count())
+        .select_from(LedgerEvent)
+        .where(LedgerEvent.event_type == "gate_receipts", LedgerEvent.related_object_id == match_zero.id)
+    )
+    assert gate_count_second == gate_count_first == 1
+
+    # 2. Reset squad to identical pre-match state and run _post_match_club with upgraded medical campus facilities
+    for idx in range(13):
+        pl = session.get(OwnerSquadPlayer, f"post-match-inj-p-{idx}")
+        pl.injured_days = 0
+        pl.minutes = 180
+        pers = dict(pl.personality_json or {})
+        pers["fitness"] = 48
+        pl.personality_json = pers
+        flag_modified(pl, "personality_json")
+    session.flush()
+
+    prestige_campus_comms.start_campus_construction(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        operation="upgrade_existing",
+        instance_id="mod_hydro_hub",
+        fast_track_completion=True,
+    )
+    prestige_campus_comms.start_campus_construction(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        operation="place_new",
+        module_key="recovery_hydro_hub",
+        x=18,
+        y=12,
+        rotation=0,
+        fast_track_completion=True,
+    )
+    side_med = competitions._side(session, entry, "attacking", "strongest", is_home=True)
+    side_med["xi"] = list(side_zero["xi"])
+
+    match_med = OwnerMatch(
+        id="match-post-inj-settlement-check",
+        competition_id=comp.id,
+        round_number=2,
+        home_club_id=state.club_id,
+        away_club_id="ai-inj-rival",
+        home_name=state.club_name,
+        away_name="Ibadan Shooting Stars",
+        status="played",
+    )
+    # Use a fresh match instance with same context seed or distinct match to compare assessments
+    match_med.id = "match-post-inj-med-upgraded"
+    session.add(match_med)
+    session.flush()
+    competitions._post_match_club(session, side_med, True, 2, 1, match_med)
+    session.flush()
+
+    assessments_med = match_med.narrative_json.get("home_injury_assessments") or []
+    assert len(assessments_med) == 10
+    for a_zero, a_med in zip(assessments_zero, assessments_med):
+        assert a_med["injury_reduction_pct"] > a_zero["injury_reduction_pct"]
+        assert a_med["effective_risk"] < a_zero["effective_risk"]
+        assert a_med["post_match_fitness"] > a_zero["post_match_fitness"]
+
+
+def test_phase2_2_daily_training_workload_exposure_and_injured_regen_development_restriction():
+    from sqlalchemy.orm.attributes import flag_modified
+
+    session = _session()
+    state = _seed_club(session, prestige=70, cash=220_000)
+    state.mentality = "attacking"
+    regens = service.academy_intake(session, "user-prestige-1", "club-prestige-1")
+    assert len(regens) >= 2
+
+    healthy_regen = regens[0]
+    injured_regen = regens[1]
+
+    # Configure identical attributes/personalities so only injury status differs for development comparison
+    shared_pers = {
+        "ambition": 14,
+        "loyalty": 14,
+        "marketability": 12,
+        "professionalism": 15,
+        "adaptability": 14,
+        "growth_responsiveness": 16,
+        "environment_sensitivity": 15,
+        "transfer_pressure": 10,
+        "growth_buffer": 0.85,
+        "fitness": 88,
+    }
+    for r in (healthy_regen, injured_regen):
+        r.rating = 62
+        r.potential = 86
+        r.morale = 80
+        r.minutes = 270
+        r.personality_json = dict(shared_pers)
+        flag_modified(r, "personality_json")
+
+    injured_regen.injured_days = 10  # Sidelined with a 10-day injury
+
+    # Add a low-minute reserve regen to verify deterministic daily training workload tiers
+    if len(regens) >= 3:
+        reserve_regen = regens[2]
+    else:
+        reserve_regen = service.academy_intake(session, "user-prestige-1", "club-prestige-1")[0]
+    reserve_regen.rating = 50
+    reserve_regen.minutes = 0
+    reserve_pers = dict(shared_pers)
+    reserve_pers["fitness"] = 96
+    reserve_regen.personality_json = reserve_pers
+    flag_modified(reserve_regen, "personality_json")
+    session.commit()
+
+    # 1. Verify deterministic workload calculation across starter, rotation, and unplayed reserve profiles
+    w_starter = owner_engine.calculate_daily_training_workload_minutes(
+        {"minutes": 270, "age": 19, "personality": {"fitness": 88, "professionalism": 15}},
+        is_starter=True,
+        mentality="attacking",
+        training_level=2,
+    )
+    w_rotation = owner_engine.calculate_daily_training_workload_minutes(
+        {"minutes": 45, "age": 19, "personality": {"fitness": 88, "professionalism": 15}},
+        is_starter=False,
+        mentality="balanced",
+        training_level=2,
+    )
+    w_reserve = owner_engine.calculate_daily_training_workload_minutes(
+        {"minutes": 0, "age": 19, "personality": {"fitness": 96, "professionalism": 15}},
+        is_starter=False,
+        mentality="defensive",
+        training_level=1,
+    )
+    assert w_starter["minutes_load"] > w_rotation["minutes_load"] > w_reserve["minutes_load"]
+    assert w_starter["workload_tier"] == "high_intensity"
+    assert w_reserve["workload_tier"] == "light_recovery"
+
+    # Higher training workload produces strictly higher unmitigated & effective injury risk
+    risk_starter = owner_engine.evaluate_player_injury_risk(
+        club_id=state.club_id,
+        player_id="workload-cmp",
+        context_key="day-1",
+        fitness=65,
+        minutes_load=w_starter["minutes_load"],
+        mentality="attacking",
+        campus_injury_reduction_pct=20,
+    )
+    risk_reserve = owner_engine.evaluate_player_injury_risk(
+        club_id=state.club_id,
+        player_id="workload-cmp",
+        context_key="day-1",
+        fitness=65,
+        minutes_load=w_reserve["minutes_load"],
+        mentality="defensive",
+        campus_injury_reduction_pct=20,
+    )
+    assert risk_starter["effective_risk"] > risk_reserve["effective_risk"]
+
+    # 2. Run world-clock tick_club and verify:
+    # - Healthy regen cashes out growth_buffer -> gains +1 rating point normally
+    # - Injured regen is restricted during rehabilitation (points == 0, rehab_growth_multiplier == 0.15, rating unchanged)
+    tick_res = service.tick_club(session, state)
+    assert tick_res["medical_recovery"]["avg_training_workload_minutes"] > 0
+
+    growth_by_name = {g["player"]: g for g in tick_res["growth"]}
+    h_growth = growth_by_name[healthy_regen.name]
+    i_growth = growth_by_name[injured_regen.name]
+
+    assert h_growth["injury_rehab_restriction"] is False
+    assert h_growth["rehab_growth_multiplier"] == 1.0
+    assert h_growth["points"] >= 1
+    assert healthy_regen.rating == 62 + h_growth["points"]
+
+    assert i_growth["injury_rehab_restriction"] is True
+    assert i_growth["rehab_growth_multiplier"] == 0.15
+    assert i_growth["points"] == 0
+    assert injured_regen.rating == 62
+    assert injured_regen.personality_json["last_training_workload_tier"] == "rehabilitation"
+    assert injured_regen.personality_json["last_training_workload_minutes"] == 0
+    assert sum(i_growth["drivers"].values()) < sum(h_growth["drivers"].values()) * 0.25

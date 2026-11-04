@@ -221,6 +221,18 @@ class OwnerMatch(UUIDPrimaryKeyMixin, Base):
         val = (self.narrative_json or {}).get("stadium_capacity")
         return int(val) if val is not None else None
 
+    @property
+    def tv_revenue(self) -> int | None:
+        narrative = self.narrative_json or {}
+        val = narrative.get("tv_revenue")
+        if val is None:
+            val = narrative.get("tv_revenue_gtex")
+        if val is None:
+            val = narrative.get("home_tv_revenue_gtex")
+        if val is None:
+            val = narrative.get("away_tv_revenue_gtex")
+        return int(val) if val is not None else None
+
 
 class OwnerSponsorDeal(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "owner_sponsor_deals"
