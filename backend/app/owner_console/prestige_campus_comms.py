@@ -31,7 +31,6 @@ from app.owner_console.models import (
 )
 from app.owner_console.service import OwnerError, require_state
 
-
 # ---------------------------------------------------------------------------
 # 1. CANONICAL VISUAL ASSET MANIFEST (12 Generated High-Resolution Assets)
 # ---------------------------------------------------------------------------
@@ -669,7 +668,11 @@ def _enrich_module(
     active_proj = None
     if projects and inst_id:
         active_proj = next(
-            (p for p in projects if p.get("instance_id") == inst_id and p.get("status") not in ("completed", "cancelled")),
+            (
+                p
+                for p in projects
+                if p.get("instance_id") == inst_id and p.get("status") not in ("completed", "cancelled")
+            ),
             None,
         )
 
@@ -1077,8 +1080,10 @@ def start_campus_construction(
         existing_proj = next((p for p in projects if p.get("idempotency_key") == idempotency_key), None)
         if existing_proj:
             expected_op = existing_proj.get("operation", "place_new")
-            if expected_op != operation or (operation == "place_new" and existing_proj.get("module_key") != module_key) or (
-                operation == "upgrade_existing" and existing_proj.get("instance_id") != instance_id
+            if (
+                expected_op != operation
+                or (operation == "place_new" and existing_proj.get("module_key") != module_key)
+                or (operation == "upgrade_existing" and existing_proj.get("instance_id") != instance_id)
             ):
                 raise OwnerError(
                     "idempotency_key_conflict",
@@ -1103,7 +1108,11 @@ def start_campus_construction(
     # 2. Cancellation & full ledger reversal for active construction projects
     if operation == "cancel_project" and instance_id:
         proj = next(
-            (p for p in projects if p.get("instance_id") == instance_id and p.get("status") not in ("completed", "cancelled")),
+            (
+                p
+                for p in projects
+                if p.get("instance_id") == instance_id and p.get("status") not in ("completed", "cancelled")
+            ),
             None,
         )
         if not proj:
@@ -1183,13 +1192,15 @@ def start_campus_construction(
         return {
             "status": "stage_advanced",
             "project": proj,
-            "module": _enrich_module(
-                updated_mod,
-                projects=projects,
-                world_day=int(state.world_day or 1),
-            )
-            if updated_mod
-            else None,
+            "module": (
+                _enrich_module(
+                    updated_mod,
+                    projects=projects,
+                    world_day=int(state.world_day or 1),
+                )
+                if updated_mod
+                else None
+            ),
             "campus": get_club_campus(session, user_id, club_id),
         }
 
@@ -1377,6 +1388,7 @@ def start_campus_construction(
 # ---------------------------------------------------------------------------
 # 3. UNIFIED GTEX CLUB COMMUNICATIONS (8 Core Destinations & Actionable Decisions)
 # ---------------------------------------------------------------------------
+
 
 def _ensure_default_communications(
     session: Session,
@@ -1613,7 +1625,11 @@ def _ensure_default_communications(
                 "meeting_id": f"mtg_{club_id}_1",
                 "title": "Executive Campus & Infrastructure Masterplan Review",
                 "meeting_type": "boardroom",
-                "participants": ["Club Owner", gm.get("name", "General Manager"), mgr.get("name", "First-Team Manager")],
+                "participants": [
+                    "Club Owner",
+                    gm.get("name", "General Manager"),
+                    mgr.get("name", "First-Team Manager"),
+                ],
                 "agenda": "Align next facility/campus construction priority with matchday revenue targets.",
                 "status": "scheduled",
                 "scheduled_world_day": world_day,
@@ -1793,9 +1809,7 @@ def get_club_communications(
             "inbox_unread": unread_inbox,
             "direct_unread": unread_threads,
             "open_decisions": len(open_decisions) + (1 if dilemma and dilemma.get("status") == "open" else 0),
-            "scheduled_meetings": sum(
-                1 for m in (facs.get("_club_meetings") or []) if m.get("status") == "scheduled"
-            ),
+            "scheduled_meetings": sum(1 for m in (facs.get("_club_meetings") or []) if m.get("status") == "scheduled"),
             "announcements": len(facs.get("_club_announcements") or []),
             "archived": len(archived_items),
         },
@@ -1911,9 +1925,7 @@ def send_thread_message(
 
         captain = squad_players[0] if squad_players else None
         captain_name = captain.name if captain else "Squad Captain"
-        avg_morale = (
-            int(sum(p.morale for p in squad_players) / len(squad_players)) if squad_players else 75
-        )
+        avg_morale = int(sum(p.morale for p in squad_players) / len(squad_players)) if squad_players else 75
         boost_tag = "+2 Squad Morale" if morale_applied else "Daily morale boost cap already reached today"
         cap_reply = {
             "id": f"sq_{club_id}_{secrets.token_hex(3)}",
@@ -2024,11 +2036,7 @@ def send_thread_message(
                     f"Whenever my number is called for {state.club_name}, I'll be ready."
                 )
             else:
-                pathway_note = (
-                    f"Having come through our Level {acad_lvl} Academy pathway, "
-                    if plr.is_regen
-                    else ""
-                )
+                pathway_note = f"Having come through our Level {acad_lvl} Academy pathway, " if plr.is_regen else ""
                 reply_body = (
                     f"Thank you for reaching out personally, {sender_display}. {pathway_note}"
                     f"Knowing {state.club_name} leadership backs me keeps my morale at {plr.morale}% "
@@ -2151,7 +2159,9 @@ def schedule_club_meeting(
                 ),
             },
         ]
-        boost_note = "+5 Manager Mood, +3 Squad Morale" if morale_applied else "Daily meeting boost already applied today"
+        boost_note = (
+            "+5 Manager Mood, +3 Squad Morale" if morale_applied else "Daily meeting boost already applied today"
+        )
         outcome = (
             f"Meeting convened on World Day {world_day} at {state.club_name} ({ cash_bal } GTX treasury). "
             f"Action items ratified across {len(parts)} participants ({boost_note})."
@@ -2387,9 +2397,7 @@ def sync_club_verified_newsroom(
             created_count += 1
 
     # 2. Ensure club charter / academy spotlight exists if newsroom is empty for this club
-    club_articles = session.scalars(
-        select(OwnerNewsroomArticle).where(OwnerNewsroomArticle.club_id == club_id)
-    ).all()
+    club_articles = session.scalars(select(OwnerNewsroomArticle).where(OwnerNewsroomArticle.club_id == club_id)).all()
     if not club_articles and created_count == 0:
         squad = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
         regen = next((p for p in squad if p.is_regen), squad[0] if squad else None)
