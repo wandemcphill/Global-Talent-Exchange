@@ -115,7 +115,7 @@ const DIRECTIVE_OBJECTIVES_BY_DEPARTMENT: Record<string, Array<{ key: string; la
     { key: "recruit_squad_player", label: "Recruit a player into the squad" },
   ],
   executive: [
-    { key: "advance_campus_project", label: "Advance a campus project" },
+    { key: "advance_campus_project", label: "Start or advance a campus project" },
     { key: "increase_club_prestige", label: "Increase club prestige" },
     { key: "appoint_executive_staff", label: "Appoint an executive staff member" },
     { key: "execute_operational_decision", label: "Execute an operational decision" },
@@ -224,7 +224,8 @@ export function ClubOperationsCentre3D({
     () => destinations.find((d) => d.destination_key === activeDestKey) || destinations[0],
     [destinations, activeDestKey]
   );
-  const activeDirectiveDepartment = DIRECTIVE_DEPARTMENT_BY_DESTINATION[activeDestination?.destination_key || ""] || "executive";
+  const activeDirectiveDepartment =
+    DIRECTIVE_DEPARTMENT_BY_DESTINATION[activeDestination?.destination_key || ""] || "executive";
   const directiveObjectiveOptions = DIRECTIVE_OBJECTIVES_BY_DEPARTMENT[activeDirectiveDepartment] || [];
 
   // Sync hotspot when switching destination
@@ -2176,8 +2177,8 @@ export function ClubOperationsCentre3D({
                   ))}
                 </select>
                 <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-                  The directive is completed only when GTEX verifies this selected outcome in the club's stored data.
-                  Other improvements in the department do not count.
+                  The selected objective is the enforceable completion condition. The instruction adds context;
+                  other improvements in the department do not count.
                 </p>
               </div>
               <div>
