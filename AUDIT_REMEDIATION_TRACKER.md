@@ -206,3 +206,16 @@ These remain open and drive later phases:
 - Mutable admin-finance state is still tracked in git.
 - Global async-context lint suppression and production fixture fallback remain real frontend risks.
 - Multiple routes and modules still present as hidden, blocked, read-only, or incompletely wired surfaces.
+
+## Unit 2A: 3D Tournament Arena & WebGL Match Broadcast Track
+
+Management Directive Review: Milestone 1 accepted subject to verification. Three.js/WebGL retained. Milestone 2 Stadium Expansion authorized with parallel Football Gameplay & Animation Readiness track.
+
+| Task ID | Description | Owner/System | Dependency | Acceptance Test | Status |
+|---|---|---|---|---|---|
+| U2A-001 | Milestone 1 Formal Review & Presentation Baseline Verification | 3D Broadcast Team | None | Three.js spectator gateway, spatial interpolator, camera director, and 2D fallback tests pass (33/33 tests). | DONE |
+| U2A-002 | Football Gameplay-Readiness Audit & Skeletal Rigging Assessment | 3D Engine / Simulation | U2A-001 | 11 core football mechanics audited against actual code; primitive vs skeletal gaps verified and documented. | DONE |
+| U2A-003 | Authoritative Football Animation Architecture & Safe Contract Extension | 3D Architecture | U2A-002 | End-to-end presentation state machine, locomotion blend trees, goalkeeper states, and ball interaction designed without modifying simulation authority. | DONE |
+| U2A-004 | Milestone 2 Stadium & Architectural Expansion Implementation | 3D Broadcast Arena | U2A-001 | Full FIFA pitch markings, 4 grandstands, tiered crowd, modern dugouts, player tunnel, 4 floodlight towers, and scrolling LED ad boards implemented and verified in Three.js. | DONE |
+| U2A-005 | Desktop & Mobile Visual Performance Profiling | Performance & QA | U2A-004 | Reproducible FPS, 1% low, memory, draw calls, and device tier benchmarking established for desktop and mobile. | DONE |
+| U2A-006 | Humanoid Skeletal Rigging & Action State Machine Implementation (Parallel Track) | 3D Animation Engine | U2A-003 | GLTF skinned humanoid models, walk/run/sprint locomotion blend tree, shooting/passing contact animations. | IN_PROGRESS |

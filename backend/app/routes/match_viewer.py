@@ -6,8 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.auth.dependencies import get_optional_current_user
 from app.db import get_session
 from app.fairness.match_integrity_service import MatchIntegrityService, MatchIntegrityViolation
+from app.models.user import User
 from app.infinite_league.service import ensure_infinite_league_runtime
 from app.live_matches.service import ensure_live_match_hub
 from app.models.competition import UserCompetition
@@ -57,6 +59,46 @@ def _protected_runtime_enabled(app) -> bool:
     return environment in {"production", "prod", "staging"}
 
 
+def _is_owner_or_manager(
+    user: User | None,
+    match: CompetitionMatch | None,
+    session: Session,
+) -> bool:
+    if user is None:
+        return False
+    if getattr(user, "is_admin", False) or getattr(user, "is_super_admin", False):
+        return True
+    if match is None:
+        return False
+    participating_club_ids = {match.home_club_id, match.away_club_id} - {None, ""}
+    if not participating_club_ids:
+        return False
+
+    try:
+        from app.owner_console.models import OwnerClubState, ClubDelegationPolicy
+        from sqlalchemy import func
+
+        owned = session.scalar(
+            select(func.count(OwnerClubState.id)).where(
+                OwnerClubState.owner_user_id == user.id,
+                OwnerClubState.club_id.in_(participating_club_ids),
+            )
+        )
+        if owned and owned > 0:
+            return True
+
+        delegated = session.scalar(
+            select(func.count(ClubDelegationPolicy.id)).where(
+                ClubDelegationPolicy.user_id == user.id,
+                ClubDelegationPolicy.club_id.in_(participating_club_ids),
+                ClubDelegationPolicy.is_active.is_(True),
+            )
+        )
+        return bool(delegated and delegated > 0)
+    except Exception:
+        return False
+
+
 def _attach_presentation(
     view_state: MatchViewStateView,
     *,
@@ -64,6 +106,7 @@ def _attach_presentation(
     presentation_service: MatchViewerPresentationService,
     metadata_json: dict[str, object] | None = None,
     match: CompetitionMatch | None = None,
+    include_coach_notes: bool = False,
 ) -> MatchViewStateView:
     return view_state.model_copy(
         update={
@@ -72,6 +115,7 @@ def _attach_presentation(
                 view_state=view_state,
                 metadata_json=metadata_json,
                 match=match,
+                include_coach_notes=include_coach_notes,
             )
         }
     )
@@ -344,6 +388,7 @@ def read_match_viewer_timeline(
     integrity_service: MatchIntegrityService = Depends(get_match_integrity_service),
     presentation_service: MatchViewerPresentationService = Depends(get_match_viewer_presentation_service),
     ad_engine: AdDecisionEngine = Depends(get_ad_decision_engine),
+    current_user: User | None = Depends(get_optional_current_user),
 ) -> MatchViewStateView:
     resolved = _resolve_match_viewer_context(
         match_key=match_key,
@@ -366,12 +411,14 @@ def read_match_viewer_timeline(
                 mode=mode,
                 canonical_view_state=resolved.canonical_view,
             )
+            can_view_coach_notes = _is_owner_or_manager(current_user, resolved.match, session)
             secured = _attach_presentation(
                 secured,
                 match_key=match_key,
                 presentation_service=presentation_service,
                 metadata_json=resolved.metadata_json,
                 match=resolved.match,
+                include_coach_notes=can_view_coach_notes,
             )
             return _attach_monetization(
                 secured,
@@ -384,12 +431,14 @@ def read_match_viewer_timeline(
         except MatchIntegrityViolation as exc:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.detail) from exc
 
+    can_view_coach_notes = _is_owner_or_manager(current_user, resolved.match, session)
     transformed = _attach_presentation(
         scaling_service.transform(resolved.canonical_view, mode=mode),
         match_key=match_key,
         presentation_service=presentation_service,
         metadata_json=resolved.metadata_json,
         match=resolved.match,
+        include_coach_notes=can_view_coach_notes,
     )
     return _attach_monetization(
         transformed,
@@ -413,6 +462,7 @@ def read_match_viewer_session(
     integrity_service: MatchIntegrityService = Depends(get_match_integrity_service),
     presentation_service: MatchViewerPresentationService = Depends(get_match_viewer_presentation_service),
     ad_engine: AdDecisionEngine = Depends(get_ad_decision_engine),
+    current_user: User | None = Depends(get_optional_current_user),
 ) -> MatchViewerSessionView:
     resolved = _resolve_match_viewer_context(
         match_key=match_key,
@@ -436,12 +486,14 @@ def read_match_viewer_session(
             continuation_token=token,
             canonical_view_state=resolved.canonical_view,
         )
+        can_view_coach_notes = _is_owner_or_manager(current_user, resolved.match, session)
         secured = _attach_presentation(
             secured,
             match_key=match_key,
             presentation_service=presentation_service,
             metadata_json=resolved.metadata_json,
             match=resolved.match,
+            include_coach_notes=can_view_coach_notes,
         )
         return MatchViewerSessionView.model_validate(
             _attach_monetization(

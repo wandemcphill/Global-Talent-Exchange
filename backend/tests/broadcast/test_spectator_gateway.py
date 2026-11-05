@@ -9,9 +9,15 @@ from app.broadcast.broadcast_models import ScoreUpdate, SpectatorEvent, Tourname
 from app.broadcast.spectator_gateway import BroadcastRuntime, router
 
 
+from app.auth.dependencies import get_current_user
+from types import SimpleNamespace
+
 def _build_app() -> FastAPI:
     app = FastAPI()
     app.include_router(router)
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+        id="viewer-test", is_admin=False, is_super_admin=False
+    )
     app.state.broadcast_runtime = BroadcastRuntime(
         redis_url=None,
         delay_seconds=0,

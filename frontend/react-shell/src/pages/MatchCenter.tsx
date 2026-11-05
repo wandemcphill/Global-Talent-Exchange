@@ -35,6 +35,8 @@ import { api, errMsg } from "@/lib/api";
 import { useActiveClub, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Loading, Panel } from "@/components/gtex/ui";
 import { Cinema3DStage, Cinema3DSceneType } from "@/components/gtex/Cinema3DStage";
+import { MatchPitchLiveScene } from "@/lib/3d/broadcast/MatchPitchLiveScene";
+import { useMatchSpectatorStream } from "@/lib/3d/broadcast/useMatchSpectatorStream";
 import { HolographicPlayerCard } from "@/components/gtex/ApexWidgets";
 import { MatchdayLineupBroadcast, useClubMatchdaySheet, type MatchdaySquadMember } from "@/components/gtex/MatchdayLineupBroadcast";
 import { useSkin } from "@/lib/skin-engine";
@@ -1984,6 +1986,30 @@ export default function MatchCenter() {
     enabled: !!id,
   });
 
+  const { data: viewerData, refetch: refetchViewerData } = useQuery({
+    queryKey: ["match-viewer", id],
+    queryFn: async () => {
+      try {
+        return (await api.get(`/match-viewer/${id}`)).data;
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!id,
+    retry: false,
+  });
+
+  const spectatorStream = useMatchSpectatorStream({
+    matchId: id || "",
+    enabled: Boolean(id && (params.get("live") || view3DBroadcast)),
+    onResyncRequired: () => {
+      refetchViewerData();
+    },
+  });
+
+  // 3D WebGL Broadcast View vs 2D Tactical Pitch View Toggle
+  const [view3DBroadcast, setView3DBroadcast] = useState<boolean>(true);
+
   // Clock & Playback Controls
   const [localMinute, setLocalMinute] = useState(params.get("live") ? 0 : 120);
   const [isPaused, setIsPaused] = useState(false);
@@ -2353,6 +2379,23 @@ export default function MatchCenter() {
                 ))}
               </div>
 
+              {/* 3D WebGL Broadcast / 2D Tactical Toggle */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  data-testid="toggle-3d-broadcast-mode"
+                  onClick={() => setView3DBroadcast(!view3DBroadcast)}
+                  className={`flex items-center gap-1.5 rounded-sm px-2.5 py-1 text-[10px] font-black tracking-wider transition-colors ${
+                    view3DBroadcast
+                      ? "border border-cyan-400/60 bg-cyan-500/25 text-cyan-200"
+                      : "bg-white/5 text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <Tv size={11} className={view3DBroadcast ? "text-cyan-400" : "text-slate-400"} />
+                  <span>{view3DBroadcast ? "3D BROADCAST" : "2D PITCH"}</span>
+                </button>
+              </div>
+
               {/* Spatial Shaders + Event-Driven 3D Cut-In Triggers */}
               <div className="flex flex-wrap items-center gap-1.5">
                 <button
@@ -2435,32 +2478,43 @@ export default function MatchCenter() {
               </div>
             )}
 
-            {/* Pitch View */}
-            <Pitch2DView
-              selectedPlayer={selectedPlayer}
-              onSelectPlayer={setSelectedPlayer}
-              showHeatmap={showHeatmap}
-              showTactics={showTactics}
-              showLanes={showLanes}
-              showVoronoi={showVoronoi}
-              cameraMode={cameraMode}
-              ballOwner={null}
-              pitchPlayers={liveState?.pitch_players}
-              ball={liveState?.ball}
-              activeGift={activeGift}
-              formation={formation}
-              press={press}
-              line={line}
-              tempo={tempo}
-              minute={minute}
-              homeName={m.home_name}
-              awayName={m.away_name}
-              show3DCutIn={show3DCutIn}
-              cutInScene={cutInScene}
-              onClose3DCutIn={() => setShow3DCutIn(false)}
-              homeRoster={homeSheetState.sheet.starters}
-              awayRoster={awaySheetState.sheet.starters}
-            />
+            {/* 3D WebGL Live Match Broadcast Canvas or 2D Pitch Fallback */}
+            {view3DBroadcast ? (
+              <MatchPitchLiveScene
+                matchViewState={viewerData || m}
+                isLive={Boolean(params.get("live"))}
+                viewerCount={spectatorStream.viewerCount}
+                playbackSpeed={speed}
+                isPaused={isPaused}
+                onToggle2DCompanion={() => setView3DBroadcast(false)}
+              />
+            ) : (
+              <Pitch2DView
+                selectedPlayer={selectedPlayer}
+                onSelectPlayer={setSelectedPlayer}
+                showHeatmap={showHeatmap}
+                showTactics={showTactics}
+                showLanes={showLanes}
+                showVoronoi={showVoronoi}
+                cameraMode={cameraMode}
+                ballOwner={null}
+                pitchPlayers={liveState?.pitch_players}
+                ball={liveState?.ball}
+                activeGift={activeGift}
+                formation={formation}
+                press={press}
+                line={line}
+                tempo={tempo}
+                minute={minute}
+                homeName={m.home_name}
+                awayName={m.away_name}
+                show3DCutIn={show3DCutIn}
+                cutInScene={cutInScene}
+                onClose3DCutIn={() => setShow3DCutIn(false)}
+                homeRoster={homeSheetState.sheet.starters}
+                awayRoster={awaySheetState.sheet.starters}
+              />
+            )}
           </div>
         )}
 

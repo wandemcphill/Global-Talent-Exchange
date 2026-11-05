@@ -18,6 +18,7 @@ from app.models.base import Base
 from app.models.competition import UserCompetition
 from app.models.competition_match import CompetitionMatch
 from app.models.fast_match import FastMatchEntitlement, FastMatchSession, FastMatchSettlement
+from app.owner_console.models import OwnerClubState
 from app.replay_archive.persistence import InMemoryReplayArchiveRepository
 from app.replay_archive.policy import SpectatorVisibilityPolicyService
 from app.replay_archive.service import ReplayArchiveService
@@ -48,6 +49,7 @@ def _build_app() -> tuple[FastAPI, sessionmaker[Session]]:
             FastMatchEntitlement.__table__,
             FastMatchSettlement.__table__,
             FastMatchSession.__table__,
+            OwnerClubState.__table__,
         ],
     )
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
@@ -446,3 +448,83 @@ def test_match_viewer_session_reveals_segments_progressively_without_seed_or_ful
     continued_payload = continued.json()
     assert continued_payload["segment_start_seconds"] == initial_payload["segment_end_seconds"]
     assert continued_payload["segment_end_seconds"] > initial_payload["segment_end_seconds"]
+
+
+def test_match_viewer_spectator_security_enforces_coach_notes_redaction() -> None:
+    """
+    Security Test:
+    Verify that public/unauthenticated spectators and unauthorized users are
+    strictly denied access to confidential coach_notes on the backend, while
+    the authorized club owner receives them.
+    """
+    from app.auth.dependencies import get_optional_current_user
+    from app.owner_console.models import OwnerClubState
+
+    app, session_factory = _build_app()
+    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=77))
+    base_view = MatchTimelineService().build_from_replay_payload(replay_payload)
+
+    # Insert match with home_club_id="club-apex"
+    with session_factory() as session:
+        session.add(
+            UserCompetition(
+                id="competition-sec",
+                host_user_id="host-user-sec",
+                name="Security Test Cup",
+                format="league",
+                currency="coin",
+                metadata_json={},
+            )
+        )
+        session.add(
+            CompetitionMatch(
+                id=replay_payload.match_id,
+                competition_id="competition-sec",
+                round_id="round-1",
+                round_number=1,
+                home_club_id="club-apex",
+                away_club_id="club-rival",
+                status="completed",
+                metadata_json={
+                    "match_viewer": base_view.model_dump(mode="json"),
+                    "replay_payload": replay_payload.model_dump(mode="json"),
+                },
+            )
+        )
+        # Register owner-1 as the owner of club-apex
+        session.add(
+            OwnerClubState(
+                club_id="club-apex",
+                owner_user_id="owner-user-apex",
+                club_name="Apex Lagos",
+            )
+        )
+        session.commit()
+
+    # 1. Unauthenticated spectator (get_optional_current_user -> None)
+    app.dependency_overrides[get_optional_current_user] = lambda: None
+    with TestClient(app) as client:
+        resp = client.get(f"/api/match-viewer/{replay_payload.match_id}")
+        assert resp.status_code == 200
+        pkg = resp.json()["presentation_package"]
+        assert pkg["coach_notes"] == [], "Public spectator must receive empty coach_notes"
+
+    # 2. Authenticated user who is NOT owner or manager of participating clubs
+    app.dependency_overrides[get_optional_current_user] = lambda: SimpleNamespace(
+        id="random-fan-42", is_admin=False, is_super_admin=False
+    )
+    with TestClient(app) as client:
+        resp = client.get(f"/api/match-viewer/{replay_payload.match_id}")
+        assert resp.status_code == 200
+        pkg = resp.json()["presentation_package"]
+        assert pkg["coach_notes"] == [], "Unauthorized authenticated user must receive empty coach_notes"
+
+    # 3. Authenticated owner of home club (club-apex)
+    app.dependency_overrides[get_optional_current_user] = lambda: SimpleNamespace(
+        id="owner-user-apex", is_admin=False, is_super_admin=False
+    )
+    with TestClient(app) as client:
+        resp = client.get(f"/api/match-viewer/{replay_payload.match_id}")
+        assert resp.status_code == 200
+        pkg = resp.json()["presentation_package"]
+        assert len(pkg["coach_notes"]) > 0, "Authorized club owner must receive confidential coach_notes"

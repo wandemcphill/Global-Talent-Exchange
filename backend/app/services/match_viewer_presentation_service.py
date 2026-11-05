@@ -38,6 +38,7 @@ class MatchViewerPresentationService:
         view_state: MatchViewStateView,
         metadata_json: dict[str, object] | None = None,
         match: CompetitionMatch | None = None,
+        include_coach_notes: bool = False,
     ) -> MatchViewerPresentationPackageView:
         metadata = dict(metadata_json or {})
         replay_payload = self._replay_payload(metadata)
@@ -80,7 +81,7 @@ class MatchViewerPresentationService:
             reactions=reactions[:8],
             rating_leaders=self._rating_leaders(replay_payload) if visible_complete else [],
             momentum_notes=self._momentum_notes(replay_payload) if visible_complete else [],
-            coach_notes=self._coach_notes(replay_payload) if visible_complete else [],
+            coach_notes=self._coach_notes(replay_payload) if (visible_complete and include_coach_notes) else [],
             commentary_highlights=self._commentary_highlights(replay_payload) if visible_complete else [],
         )
 
