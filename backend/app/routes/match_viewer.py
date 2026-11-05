@@ -6,8 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.auth.dependencies import get_optional_current_user
 from app.db import get_session
 from app.fairness.match_integrity_service import MatchIntegrityService, MatchIntegrityViolation
+from app.models.user import User
 from app.infinite_league.service import ensure_infinite_league_runtime
 from app.live_matches.service import ensure_live_match_hub
 from app.models.competition import UserCompetition
@@ -57,6 +59,163 @@ def _protected_runtime_enabled(app) -> bool:
     return environment in {"production", "prod", "staging"}
 
 
+_SPORTING_TACTICAL_ACTIVITIES: tuple[str, ...] = (
+    "first_team_tactics",
+    "training_and_coaching",
+)
+_SPORTING_TACTICAL_ROLES: frozenset[str] = frozenset(
+    {
+        "first_team_manager",
+        "general_manager",
+        "technical_director",
+    }
+)
+
+
+def _has_sporting_tactical_delegation(
+    user_id: str,
+    participating_club_ids: set[str],
+    session: Session,
+) -> bool:
+    from datetime import datetime
+    from app.models.base import utcnow
+    from app.owner_console.models import ClubDelegationPolicy, OwnerClubState
+
+    for club_id in participating_club_ids:
+        policy = session.scalar(
+            select(ClubDelegationPolicy).where(ClubDelegationPolicy.club_id == club_id)
+        )
+        if policy is None or policy.is_suspended or policy.mode == "hands_on":
+            continue
+
+        state = session.scalar(
+            select(OwnerClubState).where(OwnerClubState.club_id == club_id)
+        )
+        appointed_roles: set[str] = set()
+        if state is not None:
+            mgr = state.manager_json if isinstance(state.manager_json, dict) else {}
+            if mgr.get("user_id") == user_id or mgr.get("delegate_user_id") == user_id:
+                appointed_roles.add("first_team_manager")
+            facs = state.facilities_json if isinstance(state.facilities_json, dict) else {}
+            exec_staff = facs.get("_executive_staff")
+            if isinstance(exec_staff, dict):
+                for role_key, staff_info in exec_staff.items():
+                    if isinstance(staff_info, dict) and (
+                        staff_info.get("user_id") == user_id
+                        or staff_info.get("delegate_user_id") == user_id
+                    ):
+                        appointed_roles.add(str(role_key))
+
+        assignments = (
+            policy.activity_assignments_json
+            if isinstance(policy.activity_assignments_json, dict)
+            else {}
+        )
+        reserved = set(policy.reserved_decisions_json or [])
+        overrides = (
+            policy.temporary_overrides_json
+            if isinstance(policy.temporary_overrides_json, dict)
+            else {}
+        )
+
+        for activity_key in _SPORTING_TACTICAL_ACTIVITIES:
+            if activity_key in reserved:
+                continue
+
+            if activity_key in overrides and isinstance(overrides[activity_key], dict):
+                override = overrides[activity_key]
+                expires_at_iso = override.get("expires_at")
+                is_expired = False
+                if expires_at_iso:
+                    try:
+                        exp_dt = datetime.fromisoformat(
+                            str(expires_at_iso).replace("Z", "+00:00")
+                        )
+                        if utcnow() >= exp_dt:
+                            is_expired = True
+                    except (ValueError, TypeError):
+                        is_expired = False
+                if not is_expired:
+                    override_role = str(override.get("override_role") or "owner")
+                    if (
+                        override_role not in _SPORTING_TACTICAL_ROLES
+                        or override_role not in appointed_roles
+                    ):
+                        continue
+
+            rule = assignments.get(activity_key)
+            if not isinstance(rule, dict):
+                continue
+
+            authority_level = str(rule.get("authority_level") or "owner_only")
+            responsible_role = str(rule.get("responsible_role") or "owner")
+            if authority_level not in {"delegated_with_limits", "full_autonomy"}:
+                continue
+            if responsible_role not in _SPORTING_TACTICAL_ROLES:
+                continue
+
+            explicit_delegate_id = rule.get("delegate_user_id") or rule.get("user_id")
+            if explicit_delegate_id == user_id or responsible_role in appointed_roles:
+                return True
+
+    return False
+
+
+def _is_owner_or_manager(
+    user: User | None,
+    match: CompetitionMatch | None,
+    session: Session,
+) -> bool:
+    if user is None:
+        return False
+    if getattr(user, "is_admin", False) or getattr(user, "is_super_admin", False):
+        return True
+    if match is None:
+        return False
+    participating_club_ids = {match.home_club_id, match.away_club_id} - {None, ""}
+    if not participating_club_ids:
+        return False
+
+    try:
+        from sqlalchemy import func
+        from app.owner_console.models import OwnerClubState
+
+        owned_state = session.scalar(
+            select(func.count(OwnerClubState.id)).where(
+                OwnerClubState.owner_user_id == user.id,
+                OwnerClubState.club_id.in_(participating_club_ids),
+            )
+        )
+        if owned_state and owned_state > 0:
+            return True
+    except Exception:
+        pass
+
+    try:
+        from sqlalchemy import func
+        from app.models.club_profile import ClubProfile
+
+        owned_profile = session.scalar(
+            select(func.count(ClubProfile.id)).where(
+                ClubProfile.owner_user_id == user.id,
+                ClubProfile.id.in_(participating_club_ids),
+            )
+        )
+        if owned_profile and owned_profile > 0:
+            return True
+    except Exception:
+        pass
+
+    try:
+        return _has_sporting_tactical_delegation(
+            str(user.id),
+            {str(cid) for cid in participating_club_ids if cid},
+            session,
+        )
+    except Exception:
+        return False
+
+
 def _attach_presentation(
     view_state: MatchViewStateView,
     *,
@@ -64,6 +223,7 @@ def _attach_presentation(
     presentation_service: MatchViewerPresentationService,
     metadata_json: dict[str, object] | None = None,
     match: CompetitionMatch | None = None,
+    include_coach_notes: bool = False,
 ) -> MatchViewStateView:
     return view_state.model_copy(
         update={
@@ -72,6 +232,7 @@ def _attach_presentation(
                 view_state=view_state,
                 metadata_json=metadata_json,
                 match=match,
+                include_coach_notes=include_coach_notes,
             )
         }
     )
@@ -338,12 +499,14 @@ def read_match_viewer_timeline(
     match_key: str,
     request: Request,
     mode: MatchMode = Query(default=MatchMode.STANDARD),
+    target_duration_seconds: int | None = Query(default=None, ge=60, le=900),
     session: Session = Depends(get_session),
     service: MatchTimelineService = Depends(get_match_timeline_service),
     scaling_service: MatchViewerScalingService = Depends(get_match_viewer_scaling_service),
     integrity_service: MatchIntegrityService = Depends(get_match_integrity_service),
     presentation_service: MatchViewerPresentationService = Depends(get_match_viewer_presentation_service),
     ad_engine: AdDecisionEngine = Depends(get_ad_decision_engine),
+    current_user: User | None = Depends(get_optional_current_user),
 ) -> MatchViewStateView:
     resolved = _resolve_match_viewer_context(
         match_key=match_key,
@@ -361,17 +524,23 @@ def read_match_viewer_timeline(
         try:
             secured = integrity_service.build_viewer_session(
                 match_id=match_key,
-                view_state=scaling_service.transform(resolved.canonical_view, mode=mode),
+                view_state=scaling_service.transform(
+                    resolved.canonical_view,
+                    mode=mode,
+                    target_duration_seconds=target_duration_seconds,
+                ),
                 fairness_metadata=resolved.fairness_metadata,
                 mode=mode,
                 canonical_view_state=resolved.canonical_view,
             )
+            can_view_coach_notes = _is_owner_or_manager(current_user, resolved.match, session)
             secured = _attach_presentation(
                 secured,
                 match_key=match_key,
                 presentation_service=presentation_service,
                 metadata_json=resolved.metadata_json,
                 match=resolved.match,
+                include_coach_notes=can_view_coach_notes,
             )
             return _attach_monetization(
                 secured,
@@ -384,12 +553,18 @@ def read_match_viewer_timeline(
         except MatchIntegrityViolation as exc:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.detail) from exc
 
+    can_view_coach_notes = _is_owner_or_manager(current_user, resolved.match, session)
     transformed = _attach_presentation(
-        scaling_service.transform(resolved.canonical_view, mode=mode),
+        scaling_service.transform(
+            resolved.canonical_view,
+            mode=mode,
+            target_duration_seconds=target_duration_seconds,
+        ),
         match_key=match_key,
         presentation_service=presentation_service,
         metadata_json=resolved.metadata_json,
         match=resolved.match,
+        include_coach_notes=can_view_coach_notes,
     )
     return _attach_monetization(
         transformed,
@@ -413,6 +588,7 @@ def read_match_viewer_session(
     integrity_service: MatchIntegrityService = Depends(get_match_integrity_service),
     presentation_service: MatchViewerPresentationService = Depends(get_match_viewer_presentation_service),
     ad_engine: AdDecisionEngine = Depends(get_ad_decision_engine),
+    current_user: User | None = Depends(get_optional_current_user),
 ) -> MatchViewerSessionView:
     resolved = _resolve_match_viewer_context(
         match_key=match_key,
@@ -436,12 +612,14 @@ def read_match_viewer_session(
             continuation_token=token,
             canonical_view_state=resolved.canonical_view,
         )
+        can_view_coach_notes = _is_owner_or_manager(current_user, resolved.match, session)
         secured = _attach_presentation(
             secured,
             match_key=match_key,
             presentation_service=presentation_service,
             metadata_json=resolved.metadata_json,
             match=resolved.match,
+            include_coach_notes=can_view_coach_notes,
         )
         return MatchViewerSessionView.model_validate(
             _attach_monetization(
