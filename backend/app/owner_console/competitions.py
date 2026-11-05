@@ -247,6 +247,15 @@ def standings(session: Session, comp: OwnerCompetition) -> list[dict[str, Any]]:
 
 
 def match_dict(m: OwnerMatch, full: bool = False) -> dict[str, Any]:
+    narrative = dict(m.narrative_json or {})
+    persisted_tv = narrative.get("tv_revenue")
+    if persisted_tv is None:
+        persisted_tv = narrative.get("tv_revenue_gtex")
+    if persisted_tv is None:
+        persisted_tv = narrative.get("home_tv_revenue_gtex")
+    if persisted_tv is None:
+        persisted_tv = narrative.get("away_tv_revenue_gtex")
+    tv_revenue_val = int(persisted_tv) if persisted_tv is not None else None
     data = {
         "id": m.id,
         "competition_id": m.competition_id,
@@ -258,9 +267,14 @@ def match_dict(m: OwnerMatch, full: bool = False) -> dict[str, Any]:
         "status": m.status,
         "home_goals": m.home_goals,
         "away_goals": m.away_goals,
+        "attendance": narrative.get("attendance"),
+        "stadium_capacity": narrative.get("stadium_capacity"),
+        "capacity_utilization_pct": narrative.get("capacity_utilization_pct"),
+        "gate_receipts_gtex": narrative.get("gate_receipts_gtex"),
+        "tv_revenue": tv_revenue_val,
+        "tv_revenue_gtex": tv_revenue_val,
         "played_at": m.played_at.isoformat() if m.played_at else None,
     }
-    data["tv_revenue"] = 250 + 50 * 8
     if full:
         data["events"] = m.events_json
         data["narrative"] = m.narrative_json
@@ -700,7 +714,14 @@ def _start(session: Session, comp: OwnerCompetition) -> None:
     session.flush()
 
 
-def _side(session: Session, entry: OwnerCompetitionEntry, mentality: str | None, lineup_mode: str) -> dict[str, Any]:
+def _side(
+    session: Session,
+    entry: OwnerCompetitionEntry,
+    mentality: str | None,
+    lineup_mode: str,
+    *,
+    is_home: bool | None = None,
+) -> dict[str, Any]:
     if entry.is_ai:
         return {
             "name": entry.club_name,
@@ -710,22 +731,42 @@ def _side(session: Session, entry: OwnerCompetitionEntry, mentality: str | None,
             "manager": None,
             "state": None,
             "xi": [],
+            "campus_effects": {},
         }
+    from app.owner_console import prestige_campus_comms
+
     state = get_state(session, entry.club_id)
+    campus_effects = (
+        prestige_campus_comms.compute_authoritative_campus_effects(session, state, reconcile=True)
+        if state is not None
+        else {}
+    )
     players = [player_dict(p) for p in squad(session, entry.club_id)]
-    strength = club_strength(players, state.manager_json or {}, state.facilities_json or {})
-    value = strength["strength"] - (6 if lineup_mode == "rotate" else 0)
+    strength = club_strength(
+        players,
+        (state.manager_json if state else None) or {},
+        (state.facilities_json if state else None) or {},
+        campus_effects=campus_effects,
+    )
+    venue_bonus = 0.0
+    if is_home is True:
+        venue_bonus = float(campus_effects.get("home_advantage_bonus", 0)) * 0.25
+    elif is_home is False:
+        venue_bonus = float(campus_effects.get("away_travel_readiness_pct", 0)) * 0.10
+    value = round(strength["strength"] + venue_bonus - (6 if lineup_mode == "rotate" else 0), 2)
     xi = [p for p in players if p["id"] in strength["xi"]]
     scorers = [p["name"] for p in xi if p["position"].startswith(("forw", "midf", "att"))] or [p["name"] for p in xi]
     return {
         "name": entry.club_name,
         "strength": value,
-        "mentality": mentality or state.mentality,
+        "mentality": mentality or (state.mentality if state else "balanced"),
         "scorers": scorers,
-        "manager": state.manager_json,
+        "manager": state.manager_json if state else None,
         "state": state,
         "xi": strength["xi"],
         "avg_morale": strength["avg_morale"],
+        "avg_fitness": strength.get("avg_fitness", 95.0),
+        "campus_effects": campus_effects,
     }
 
 
@@ -746,16 +787,92 @@ def _apply_result(entry: OwnerCompetitionEntry, gf: int, ga: int) -> None:
 def _post_match_club(
     session: Session, side: dict[str, Any], is_home: bool, gf: int, ga: int, match: OwnerMatch
 ) -> list[str]:
+    from sqlalchemy.orm.attributes import flag_modified
+    from app.owner_console import prestige_campus_comms
+
     state: OwnerClubState = side["state"]
+    side_key = "home" if is_home else "away"
+    existing_narrative = dict(match.narrative_json or {})
+    if match.id and existing_narrative.get(f"{side_key}_settled_club_id") == state.club_id:
+        return list(existing_narrative.get(f"{side_key}_settlement_notes") or [])
+
+    campus_effects = side.get("campus_effects") or prestige_campus_comms.compute_authoritative_campus_effects(
+        session, state, reconcile=True
+    )
     notes = []
     result = 1 if gf > ga else 0 if gf == ga else -1
+
+    stamina_ret_pct = int(campus_effects.get("stamina_retention_pct", 0))
+    away_travel_pct = int(campus_effects.get("away_travel_readiness_pct", 0))
+    injury_red_pct = int(campus_effects.get("injury_reduction_pct", 0))
+    facs_dict = dict(state.facilities_json or {})
+    med_level = int(facs_dict.get("medical", 1) or 1)
+    med_director = dict((facs_dict.get("_executive_staff") or {}).get("medical_director") or {})
+    med_expertise = int(med_director.get("medical_expertise", 10))
+    base_fatigue = 14 + (0 if is_home else max(0, 3 - away_travel_pct // 8))
+    effective_fatigue = max(4, int(round(base_fatigue * (1.0 - min(0.55, stamina_ret_pct / 100.0)))))
+
+    injury_assessments: list[dict[str, Any]] = []
+    match_injuries: list[dict[str, Any]] = []
     for p in squad(session, state.club_id):
-        if p.id in side["xi"]:
+        pers = dict(p.personality_json or {})
+        cur_fitness = int(pers.get("fitness", 95))
+        pre_existing_injured_days = int(p.injured_days or 0)
+        if p.id in side["xi"] and pre_existing_injured_days <= 0:
             p.minutes += 90
             p.morale = int(engine.clamp(p.morale + result * 4 + 1, 0, 100))
+            new_fitness = int(engine.clamp(cur_fitness - effective_fatigue, 25, 100))
+            pers["fitness"] = new_fitness
+            inj_eval = engine.evaluate_player_injury_risk(
+                club_id=state.club_id,
+                player_id=p.id,
+                context_key=f"match:{match.id}",
+                fitness=new_fitness,
+                minutes_load=90,
+                mentality=str(side.get("mentality") or state.mentality or "balanced"),
+                medical_level=med_level,
+                med_director_expertise=med_expertise,
+                campus_injury_reduction_pct=injury_red_pct,
+            )
+            pers["last_injury_risk"] = inj_eval["effective_risk"]
+            pers["unmitigated_injury_risk"] = inj_eval["unmitigated_risk"]
+            pers["last_injury_match_id"] = match.id
+            injury_assessments.append(
+                {
+                    "player_id": p.id,
+                    "player_name": p.name,
+                    "post_match_fitness": new_fitness,
+                    "unmitigated_risk": inj_eval["unmitigated_risk"],
+                    "effective_risk": inj_eval["effective_risk"],
+                    "injury_reduction_pct": inj_eval["injury_reduction_pct"],
+                    "injured": inj_eval["injured"],
+                    "injured_days": inj_eval["injured_days"],
+                }
+            )
+            if inj_eval["injured"]:
+                p.injured_days = inj_eval["injured_days"]
+                if inj_eval.get("injury_type"):
+                    pers["last_injury_type"] = inj_eval["injury_type"]
+                match_injuries.append(
+                    {
+                        "player_id": p.id,
+                        "player_name": p.name,
+                        "injured_days": p.injured_days,
+                        "injury_type": pers.get("last_injury_type"),
+                        "effective_risk": inj_eval["effective_risk"],
+                    }
+                )
+                notes.append(f"Injury: {p.name} ({p.injured_days}d)")
+        elif pre_existing_injured_days > 0:
+            # Preserve existing injury state without overwriting or re-rolling
+            p.injured_days = pre_existing_injured_days
         else:
-            ambition = (p.personality_json or {}).get("ambition", 10) if p.is_regen else 10
+            ambition = pers.get("ambition", 10) if p.is_regen else 10
             p.morale = int(engine.clamp(p.morale - (2 if ambition >= 14 else 0) + result, 0, 100))
+            pers["fitness"] = int(engine.clamp(cur_fitness + 4, 25, 100))
+        p.personality_json = pers
+        flag_modified(p, "personality_json")
+
     state.fans = max(200, state.fans + result * 60 + gf * 15)
     state.prestige = int(engine.clamp(state.prestige + result, 0, 100))
     manager = dict(state.manager_json or {})
@@ -763,31 +880,62 @@ def _post_match_club(
         manager["mood"] = int(engine.clamp(manager.get("mood", 70) + result * 5, 0, 100))
         state.manager_json = manager
     if is_home:
-        gate = int(state.fans * 0.4 * int((state.facilities_json or {}).get("stadium", 1)))
+        stadium_level = int((state.facilities_json or {}).get("stadium", 1))
+        matchday_rev_pct = int(campus_effects.get("matchday_revenue_bonus_pct", 15))
+        vip_hospitality_gtex = int(campus_effects.get("vip_hospitality_flat_gtex", 0))
+        att_info = engine.calculate_match_attendance(
+            fans=state.fans,
+            prestige=state.prestige,
+            stadium_level=stadium_level,
+            campus_effects=campus_effects,
+            gf=gf,
+            ga=ga,
+        )
+        attendance = att_info["attendance"]
+        stadium_capacity = att_info["stadium_capacity"]
+        gate = att_info["gate_receipts_gtex"]
+        match_narrative = dict(match.narrative_json or {})
+        match_narrative.update(
+            {
+                "attendance": attendance,
+                "stadium_capacity": stadium_capacity,
+                "raw_attendance_demand": att_info["raw_demand"],
+                "capacity_utilization_pct": att_info["capacity_utilization_pct"],
+                "sold_out": att_info["sold_out"],
+                "gate_receipts_gtex": gate,
+            }
+        )
+        match.narrative_json = match_narrative
+        flag_modified(match, "narrative_json")
         ledger.record(
             session,
             event_type="gate_receipts",
             source=ledger.WORLD_CLUBS,
             destination=ledger.club_account(state.club_id),
             currency=ledger.GTEX,
-            gross=max(gate, 50),
+            gross=gate,
             club_id=state.club_id,
             user_id=state.owner_user_id,
             related_type="match",
             related_id=match.id,
-            memo=f"Gate receipts vs {match.away_name}",
+            memo=f"Gate receipts vs {match.away_name} (att {attendance:,}/{stadium_capacity:,}, +{matchday_rev_pct}% rev, VIP {vip_hospitality_gtex} GTX)",
         )
-        notes.append(f"Gate receipts {max(gate, 50):,}")
+        notes.append(f"Attendance {attendance:,}/{stadium_capacity:,}")
+        notes.append(f"Gate receipts {gate:,}")
+    sponsor_bonus_pct = int(campus_effects.get("sponsor_revenue_bonus_pct", 0))
     for deal in session.scalars(
         select(OwnerSponsorDeal).where(OwnerSponsorDeal.club_id == state.club_id, OwnerSponsorDeal.status == "active")
     ).all():
+        effective_deal_gross = Decimal(
+            str(max(1, int(round(float(deal.per_match_gross) * (1.0 + sponsor_bonus_pct / 200.0)))))
+        )
         ledger.record(
             session,
             event_type="endorsement_revenue" if deal.player_id else "sponsor_revenue",
             source=ledger.PLATFORM_SPONSORS,
             destination=ledger.club_account(state.club_id),
             currency=ledger.GTEX,
-            gross=deal.per_match_gross,
+            gross=effective_deal_gross,
             fee_bps=3000,
             club_id=state.club_id,
             user_id=state.owner_user_id,
@@ -800,7 +948,8 @@ def _post_match_club(
             deal.status = "completed"
 
     # TV Broadcast Revenue
-    tv_rev = 250 + state.prestige * 8
+    broadcast_bonus_pct = int(campus_effects.get("broadcast_revenue_bonus_pct", 0))
+    tv_rev = int(round((250 + state.prestige * 8) * (1.0 + broadcast_bonus_pct / 100.0)))
     try:
         ledger.record(
             session,
@@ -816,6 +965,13 @@ def _post_match_club(
             memo=f"TV broadcast distribution vs {match.away_name if is_home else match.home_name}",
         )
         notes.append(f"TV revenue {tv_rev:,}")
+        match_narrative = dict(match.narrative_json or {})
+        match_narrative[f"{side_key}_tv_revenue_gtex"] = tv_rev
+        if is_home or "tv_revenue" not in match_narrative:
+            match_narrative["tv_revenue"] = tv_rev
+            match_narrative["tv_revenue_gtex"] = tv_rev
+        match.narrative_json = match_narrative
+        flag_modified(match, "narrative_json")
     except Exception as exc:
         logger.warning("tv_broadcast_revenue recording failed: %s", exc)
 
@@ -864,6 +1020,14 @@ def _post_match_club(
                 notes.append(f"Sponsor win bonus {sponsor_win_clause:,}")
             except Exception as exc:
                 logger.warning("sponsor_win_bonus payout failed: %s", exc)
+
+    final_narrative = dict(match.narrative_json or {})
+    final_narrative[f"{side_key}_injury_assessments"] = injury_assessments
+    final_narrative[f"{side_key}_injuries"] = match_injuries
+    final_narrative[f"{side_key}_settled_club_id"] = state.club_id
+    final_narrative[f"{side_key}_settlement_notes"] = list(notes)
+    match.narrative_json = final_narrative
+    flag_modified(match, "narrative_json")
 
     return notes
 
@@ -1032,12 +1196,14 @@ def play_next(
             home_e,
             mentality if m.home_club_id == club_id else None,
             lineup_mode if m.home_club_id == club_id else "strongest",
+            is_home=True,
         )
         away = _side(
             session,
             away_e,
             mentality if m.away_club_id == club_id else None,
             lineup_mode if m.away_club_id == club_id else "strongest",
+            is_home=False,
         )
         sim = engine.simulate_match(m.id, home, away)
         hg, ag = sim["home_goals"], sim["away_goals"]
@@ -1062,9 +1228,29 @@ def play_next(
             "expected_goals": sim["lambda"],
             "mentality": {"home": home["mentality"], "away": away["mentality"]},
         }
+        if home["state"] is None:
+            ai_att = engine.calculate_match_attendance(
+                fans=int(home["strength"] * 40),
+                prestige=int(home["strength"] * 0.7),
+                stadium_level=1,
+                campus_effects={},
+                gf=hg,
+                ga=ag,
+            )
+            narrative.update(
+                {
+                    "attendance": ai_att["attendance"],
+                    "stadium_capacity": ai_att["stadium_capacity"],
+                    "raw_attendance_demand": ai_att["raw_demand"],
+                    "capacity_utilization_pct": ai_att["capacity_utilization_pct"],
+                    "sold_out": ai_att["sold_out"],
+                    "gate_receipts_gtex": ai_att["gate_receipts_gtex"],
+                }
+            )
         for side_key, side, entry_obj, gf, ga in (("home", home, home_e, hg, ag), ("away", away, away_e, ag, hg)):
             if side["state"] is not None:
                 notes = _post_match_club(session, side, side_key == "home", gf, ga, m)
+                narrative.update(dict(m.narrative_json or {}))
                 expl = engine.explain_match(
                     sim,
                     side_key,
@@ -1077,6 +1263,8 @@ def play_next(
                 )
                 expl["manager_reaction"] = engine.manager_reaction(side["manager"] or {}, expl["result"])
                 expl["revenue_notes"] = notes
+                expl["attendance"] = narrative.get("attendance")
+                expl["stadium_capacity"] = narrative.get("stadium_capacity")
                 narrative[f"{side_key}_owner_view"] = expl
         if comp.format == "knockout":
             winner_home = hg > ag or (hg == ag and sim.get("penalty_winner") == "home")

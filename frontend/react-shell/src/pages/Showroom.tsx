@@ -1,4 +1,4 @@
-import React, { useId, useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -10,7 +10,8 @@ import {
   fmt,
 } from "@/lib/owner";
 import { api } from "@/lib/api";
-import { Loading, Btn } from "@/components/gtex/ui";
+import { publicAssetPath } from "@/lib/publicPath";
+import { Loading } from "@/components/gtex/ui";
 import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
 import {
   Sparkles,
@@ -25,17 +26,26 @@ import {
   LockKeyhole,
   X,
   PackageCheck,
-  ShieldCheck,
   BookOpen,
   Newspaper,
   Inbox,
   Gauge,
-  HelpCircle,
+  Compass,
+  Eye,
+  ShieldCheck,
+  Briefcase,
 } from "lucide-react";
+
+const resolveShowroomMedia = (raw?: string) => {
+  if (!raw) return "";
+  if (raw.startsWith("http") || raw.startsWith("data:")) return raw;
+  const clean = raw.replace(/^\/console\//, "/");
+  return publicAssetPath(clean);
+};
 
 export function Showroom() {
   const { clubId: routeClubId } = useParams<{ clubId?: string }>();
-  const { active, clubs } = useActiveClub();
+  const { active } = useActiveClub();
   const clubId = routeClubId || active?.club_id;
   const refresh = useRefreshOwner();
 
@@ -44,6 +54,7 @@ export function Showroom() {
   const { data: showroomData, isLoading } = useClubShowroom(clubId);
 
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [inspectingItem, setInspectingItem] = useState<any | null>(null);
   const [acquiringItem, setAcquiringItem] = useState<any | null>(null);
   const [giftingItem, setGiftingItem] = useState<any | null>(null);
   const [recipientType, setRecipientType] = useState<"player" | "staff">("player");
@@ -68,6 +79,9 @@ export function Showroom() {
 
   const catalog: any[] = showroomData?.catalog || [];
   const ownedAssets: any[] = showroomData?.owned_assets || [];
+  const officeSummary = showroomData?.owner_office_summary || {};
+  const breakdown = officeSummary?.ownership_breakdown || {};
+  const facLevels = officeSummary?.facilities_levels || clubDetail?.facilities || {};
 
   // Squad and regens from club details or story relationships
   const squad: any[] = useMemo(() => {
@@ -88,22 +102,32 @@ export function Showroom() {
     return squad.find((p: any) => p.id === selectedPlayerId) || eligibleRegens[0] || null;
   }, [squad, eligibleRegens, selectedPlayerId]);
 
-  const clubCash = clubDetail?.economy?.cash_gtex ?? active?.cash ?? 0;
+  const clubCash = officeSummary?.cash_balance_gtex ?? clubDetail?.economy?.cash_gtex ?? active?.cash ?? 0;
   const clubPrestige = showroomData?.club_prestige ?? clubDetail?.health?.prestige ?? 60;
-  const prestigeTierNum = showroomData?.prestige_tier ?? (clubPrestige >= 90 ? 1 : clubPrestige >= 75 ? 2 : clubPrestige >= 55 ? 3 : clubPrestige >= 35 ? 4 : 5);
-  const prestigeTierLabel = prestigeTierNum === 1 ? "Tier 1: Global Superclub" : prestigeTierNum === 2 ? "Tier 2: Continental Challenger" : prestigeTierNum === 3 ? "Tier 3: National Contender" : prestigeTierNum === 4 ? "Tier 4: Regional Pioneer" : "Tier 5: Grassroots Foundation";
+  const prestigeTierLabel =
+    typeof showroomData?.prestige_tier === "string"
+      ? showroomData.prestige_tier
+      : clubPrestige >= 85
+      ? "Tier 1: Global Superclub"
+      : clubPrestige >= 70
+      ? "Tier 2: Continental Challenger"
+      : clubPrestige >= 50
+      ? "Tier 3: National Contender"
+      : "Tier 4: Regional Pioneer";
 
   const keyOf = (it: any) => it?.catalog_key || it?.id || it?.sku || "";
 
   const assetImage = (it: any) =>
-    it?.image_url || it?.previewFile || it?.preview_file || it?.hero_image_url || "";
+    resolveShowroomMedia(
+      it?.high_res_image_url || it?.image_url || it?.previewFile || it?.preview_file || it?.hero_image_url || ""
+    );
 
-  const formatPrice = (it: any) => fmt(it?.price_gtex ?? it?.price ?? 0);
+  const formatPrice = (it: any) => fmt(it?.price_gtex ?? it?.purchase_price_gtex ?? it?.price ?? 0);
 
   const categories = [
     { key: "all", label: "All Prestige" },
     { key: "jet", label: "Fleet Aviation", icon: Plane },
-    { key: "vehicle", label: "Vehicles & Maritime", icon: Car },
+    { key: "vehicle", label: "Vehicles & Transit", icon: Car },
     { key: "watch", label: "Horology", icon: Watch },
     { key: "hospitality", label: "VIP Suites", icon: Building },
     { key: "facility", label: "Infrastructure", icon: Building },
@@ -117,7 +141,10 @@ export function Showroom() {
       return catalog.filter((it: any) => ["hospitality", "suite", "box"].includes(it.category));
     }
     if (selectedCategory === "vehicle") {
-      return catalog.filter((it: any) => ["vehicle", "car", "yacht"].includes(it.category));
+      return catalog.filter((it: any) => ["vehicle", "car", "coach", "yacht"].includes(it.category));
+    }
+    if (selectedCategory === "facility") {
+      return catalog.filter((it: any) => ["facility", "infrastructure"].includes(it.category));
     }
     return catalog.filter((it: any) => it.category === selectedCategory);
   }, [catalog, ownedAssets, selectedCategory]);
@@ -178,7 +205,13 @@ export function Showroom() {
       setGiftingItem(null);
       setSelectedPlayerId("");
       setGiftNote("");
-      setGiftReceipt({ item: giftingItem, player: recipient, note: giftNote.trim(), result: resultData, recipientType });
+      setGiftReceipt({
+        item: giftingItem,
+        player: recipient,
+        note: giftNote.trim(),
+        result: resultData,
+        recipientType,
+      });
       toast.success(
         recipientType === "staff"
           ? `Delivered luxury gift to ${recipient.name} (+15 Mood, +3 Loyalty)!`
@@ -196,35 +229,24 @@ export function Showroom() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-8" data-testid="showroom-screen">
-      {/* Surface Demarcation & Navigation Bridge */}
-      <nav aria-label="Showroom Surface Directory" className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+      {/* Surface Demarcation & Connected Experience Bridge */}
+      <nav aria-label="Showroom Surface Directory" className="grid grid-cols-2 sm:grid-cols-6 gap-2 text-xs">
         <div className="flex items-center gap-2 rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-amber-200 shadow-sm">
           <Sparkles className="h-4 w-4 shrink-0 text-amber-300" />
           <div className="min-w-0">
             <div className="text-[10px] uppercase font-black tracking-wider text-amber-400">Current Surface</div>
-            <div className="truncate font-bold text-white">Owner Showroom</div>
+            <div className="truncate font-bold text-white">Owner&apos;s Office</div>
           </div>
         </div>
         <Link
-          to="/app/story"
-          className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 text-slate-300 hover:border-amber-400/40 hover:text-white transition-colors"
-          data-testid="link-to-story"
+          to="/app/campus"
+          className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-950/30 px-3 py-2 text-emerald-200 hover:border-emerald-400 hover:text-white transition-colors"
+          data-testid="link-to-campus"
         >
-          <BookOpen className="h-4 w-4 shrink-0 text-amber-300" />
+          <Compass className="h-4 w-4 shrink-0 text-emerald-400" />
           <div className="min-w-0">
-            <div className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Club History</div>
-            <div className="truncate font-bold">Club Chronicle</div>
-          </div>
-        </Link>
-        <Link
-          to="/app/newsroom"
-          className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 text-slate-300 hover:border-blue-400/40 hover:text-white transition-colors"
-          data-testid="link-to-newsroom"
-        >
-          <Newspaper className="h-4 w-4 shrink-0 text-blue-400" />
-          <div className="min-w-0">
-            <div className="text-[10px] uppercase font-bold tracking-wider text-slate-500">World Editorial</div>
-            <div className="truncate font-bold">AI Newsroom</div>
+            <div className="text-[10px] uppercase font-bold tracking-wider text-emerald-400">Interactive 3D</div>
+            <div className="truncate font-bold">Campus Builder</div>
           </div>
         </Link>
         <Link
@@ -234,8 +256,30 @@ export function Showroom() {
         >
           <Inbox className="h-4 w-4 shrink-0 text-purple-400" />
           <div className="min-w-0">
-            <div className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Private Desk</div>
+            <div className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Club Comms</div>
             <div className="truncate font-bold">Owner Decisions</div>
+          </div>
+        </Link>
+        <Link
+          to="/app/newsroom"
+          className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 text-slate-300 hover:border-blue-400/40 hover:text-white transition-colors"
+          data-testid="link-to-newsroom"
+        >
+          <Newspaper className="h-4 w-4 shrink-0 text-blue-400" />
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Verified Wire</div>
+            <div className="truncate font-bold">GTEX Newsroom</div>
+          </div>
+        </Link>
+        <Link
+          to="/app/story"
+          className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 text-slate-300 hover:border-amber-400/40 hover:text-white transition-colors"
+          data-testid="link-to-story"
+        >
+          <BookOpen className="h-4 w-4 shrink-0 text-amber-300" />
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Club History</div>
+            <div className="truncate font-bold">Club Chronicle</div>
           </div>
         </Link>
         <Link
@@ -251,19 +295,21 @@ export function Showroom() {
         </Link>
       </nav>
 
-      {/* Editorial Header & Gifting Demarcation Banner */}
+      {/* Flagship Club Owner's Office & Prestige Header */}
       <div className="rounded-2xl border border-gtex-gold/30 bg-gradient-to-br from-gtex-slate via-[#0C1524] to-gtex-midnight p-6 md:p-8 space-y-6 shadow-2xl ring-1 ring-white/5">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-amber-400 text-xs font-black uppercase tracking-[0.2em]">
               <Sparkles className="h-4 w-4" />
-              <span>THE BOARDROOM COLLECTION · AUTHORITATIVE PRESTIGE CATALOGUE</span>
+              <span>CLUB OWNER&apos;S OFFICE · AUTHORITATIVE PRESTIGE & INFRASTRUCTURE SUITE</span>
             </div>
             <h1 className="text-3xl sm:text-5xl font-black uppercase tracking-tight text-white leading-none">
-              Owner Showroom & Luxury Fleet
+              Club Owner&apos;s Office & Prestige
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-3xl leading-relaxed">
-              Acquire executive aviation, maritime assets, and horology through the club treasury. Present luxury milestone gifts directly to academy regens to boost squad morale and trigger verified broadcasts on the GTEX global wire.
+              Manage your club&apos;s executive aviation fleet, luxury vehicles, haute horlogerie, VIP hospitality suites,
+              and 3D campus infrastructure. Present milestone luxury gifts to eligible academy regens and key staff
+              through verified GTEX treasury transactions.
             </p>
           </div>
 
@@ -274,30 +320,64 @@ export function Showroom() {
             </div>
             <div className="rounded-xl border border-gtex-gold/40 bg-gtex-gold/10 px-4 py-2.5 text-right shadow-inner">
               <div className="text-[10px] uppercase tracking-wider text-amber-300 font-bold">Club Prestige Standing</div>
-              <div className="font-mono text-sm font-black text-white">{clubPrestige}/100 · {prestigeTierLabel}</div>
+              <div className="font-mono text-sm font-black text-white">
+                {clubPrestige}/100 · {prestigeTierLabel}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Prestige System Strategic Mechanics */}
-        <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-5 text-xs space-y-3">
-          <div className="flex items-center gap-2 font-black uppercase tracking-wider text-amber-300">
-            <Sparkles size={15} />
-            <span>How Prestige Powers Club Development</span>
+        {/* Legal & Economic Ownership Separation + 3D Campus Snapshot */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-xl border border-emerald-500/30 bg-slate-950/70 p-4">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5" /> Club-Owned Assets
+              </div>
+              <div className="text-2xl font-black text-white mt-1">{breakdown.club_owned_count ?? 0}</div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                Private jets, team coaches, VIP skyboxes & campus wings held on the club balance sheet.
+              </p>
+            </div>
+            <div className="rounded-xl border border-amber-500/30 bg-slate-950/70 p-4">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                <Briefcase className="w-3.5 h-3.5" /> Owner Collection
+              </div>
+              <div className="text-2xl font-black text-white mt-1">{breakdown.owner_personal_count ?? 0}</div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                Executive SUVs, V12 grand tourers & tourbillon watches held in the Owner&apos;s Vault.
+              </p>
+            </div>
+            <div className="rounded-xl border border-purple-500/30 bg-slate-950/70 p-4">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
+                <Gift className="w-3.5 h-3.5" /> Gifted Milestones
+              </div>
+              <div className="text-2xl font-black text-white mt-1">{breakdown.gifted_count ?? 0}</div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                Luxury incentives presented to Academy Regens & Executive Staff.
+              </p>
+            </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px] text-slate-300">
-            <div className="rounded-lg bg-gtex-slate/60 border border-gtex-graphite p-3">
-              <b className="text-amber-300 block mb-0.5">Academy Intake Ceiling</b>
-              Higher Prestige directly raises the max potential of generated regens (+3 to +15 pts).
+
+          <div className="lg:col-span-5 rounded-xl border border-emerald-500/30 bg-slate-950/80 p-4 flex items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="text-[10px] font-black uppercase tracking-wider text-emerald-400">
+                3D Club Campus Masterplan
+              </div>
+              <div className="text-sm font-bold text-white">
+                Stadium L{facLevels.stadium || 1} · Training L{facLevels.training || 1} · Academy L
+                {facLevels.academy || 1} · Medical L{facLevels.medical || 1}
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Place & upgrade 3D stadium stands, pitches, and recovery hubs on the interactive grid.
+              </p>
             </div>
-            <div className="rounded-lg bg-gtex-slate/60 border border-gtex-graphite p-3">
-              <b className="text-cyan-300 block mb-0.5">Player & Regen Pull</b>
-              World-class stars prioritize clubs with high prestige scores in transfer negotiations.
-            </div>
-            <div className="rounded-lg bg-gtex-slate/60 border border-gtex-graphite p-3">
-              <b className="text-purple-300 block mb-0.5">Elite Staff Hiring</b>
-              Bypasses marquee wage premiums when hiring top General Managers and HOYDs.
-            </div>
+            <Link
+              to="/app/campus"
+              className="shrink-0 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-4 py-2.5 text-xs font-black text-slate-950 shadow-lg shadow-emerald-500/20"
+            >
+              Open 3D Builder →
+            </Link>
           </div>
         </div>
 
@@ -309,7 +389,9 @@ export function Showroom() {
               <span className="uppercase tracking-wider text-[11px]">Owner Luxury Gifting (Club GTEX Coin)</span>
             </div>
             <p className="text-slate-300 text-[11px] leading-5">
-              Funded strictly via Club GTEX Coin from the club treasury. Reserved exclusively for academy regens to recognize growth, increase squad morale, generate a personal inbox acknowledgment, and broadcast to the GTEX global wire.
+              Funded strictly via Club GTEX Coin from the club treasury. Player luxury gifts are reserved exclusively
+              for academy regens (`is_regen=true`) to recognize growth, increase squad morale, generate a personal
+              inbox acknowledgment, and broadcast to the GTEX global wire.
             </p>
           </div>
 
@@ -319,7 +401,8 @@ export function Showroom() {
               <span className="uppercase tracking-wider text-[11px]">Community Gifting (FanCoin)</span>
             </div>
             <p className="text-slate-400 text-[11px] leading-5">
-              Supporter-driven digital celebrations (chants, ceremonies, reveals) using FanCoin during match broadcasts. Community fan gifts do not debit club treasury cash or alter internal boardroom contracts.
+              Supporter-driven digital celebrations (chants, ceremonies, reveals) using FanCoin during match broadcasts.
+              Community fan gifts do not debit club treasury cash or alter internal boardroom contracts.
             </p>
           </div>
         </div>
@@ -328,14 +411,14 @@ export function Showroom() {
         <div className="flex items-center gap-2 overflow-x-auto pt-2 no-scrollbar" data-testid="showroom-categories">
           {categories.map((cat) => {
             const Icon = cat.icon;
-            const active = selectedCategory === cat.key;
+            const isActive = selectedCategory === cat.key;
             return (
               <button
                 key={cat.key}
                 onClick={() => setSelectedCategory(cat.key)}
                 data-testid={`showroom-cat-${cat.key}`}
                 className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all ${
-                  active
+                  isActive
                     ? "bg-gtex-gold text-slate-950 font-black shadow-md"
                     : "border border-gtex-graphite bg-gtex-slate/80 text-slate-300 hover:border-gtex-gold/50 hover:text-white"
                 }`}
@@ -353,11 +436,11 @@ export function Showroom() {
         <Cinema3DStage
           scene="luxury_turntable"
           compact
-          title={`3D Luxury Vault · ${filteredItems[0]?.name || "Rose-Gold Tourbillon"}`}
+          title={`3D Luxury Vault · ${filteredItems[0]?.name || "Chronos Tourbillon Piece Unique"}`}
           subtitle={`Interactive 360° 3D Inspection & Gifting Preview · ${active?.club_name || "GTEX FC"}`}
           badgeText="3D SHOWROOM VAULT"
           clubName={active?.club_name || "GTEX FC"}
-          subjectName={filteredItems[0]?.name || "G650 Executive Jet"}
+          subjectName={filteredItems[0]?.name || "GTEX Sovereign 900X Private Jet"}
           assetCategory={filteredItems[0]?.category || "watch"}
           stats={[
             { label: "Valuation", value: `${formatPrice(filteredItems[0])} GTX`, accent: "#F5B83D" },
@@ -366,7 +449,7 @@ export function Showroom() {
         />
       )}
 
-      {/* Catalogue Grid */}
+      {/* Editorial Catalogue Grid (Varied Composition by Asset Class) */}
       {isLoading ? (
         <Loading label="Opening the boardroom showroom catalogue..." />
       ) : filteredItems.length === 0 ? (
@@ -384,8 +467,11 @@ export function Showroom() {
           {filteredItems.map((it: any) => {
             const key = keyOf(it);
             const isJet = it.category === "jet";
+            const isWatch = it.category === "watch";
             const isBusy = busyItem === key || busyItem === `gift:${key}`;
-            const isOwned = ownedAssets.some((oa: any) => keyOf(oa) === key);
+            const isOwned = ownedAssets.some((oa: any) => keyOf(oa) === key || oa.catalog_key === key);
+            const legalClass =
+              it.legal_owner_default === "owner_personal" ? "Owner Vault Asset" : "Club Balance Sheet Asset";
 
             return (
               <article
@@ -393,48 +479,64 @@ export function Showroom() {
                 data-testid={`showroom-item-${key}`}
                 className="group flex flex-col overflow-hidden rounded-2xl border border-[#25354B] bg-[#14243A] gx-card-bezel shadow-xl transition-all duration-300 hover:-translate-y-1 hover:border-[#E5B63F]/70 hover:shadow-[0_20px_50px_rgba(229,182,63,0.22)]"
               >
-                {/* Visual Header */}
-                <div className="relative h-52 overflow-hidden bg-gtex-midnight border-b border-gtex-graphite">
+                {/* Visual Header — Preserves full vehicle / aircraft proportions & watch macro detail */}
+                <div
+                  className={`relative ${
+                    isWatch ? "h-64" : "h-56"
+                  } overflow-hidden bg-slate-950 border-b border-gtex-graphite flex items-center justify-center`}
+                >
                   {assetImage(it) ? (
                     <img
                       src={assetImage(it)}
-                      alt={it.name}
-                      className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                      alt={it.name || it.custom_name}
+                      className={`h-full w-full ${
+                        isWatch ? "object-contain p-2 bg-slate-950" : "object-cover"
+                      } transition-transform duration-700 group-hover:scale-105`}
                       onError={(e) => {
                         (e.currentTarget as HTMLImageElement).style.opacity = "0";
                       }}
                     />
                   ) : (
-                    <div className="flex h-full items-center justify-center bg-gradient-to-br from-slate-900 via-slate-950 to-amber-950/30">
+                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-900 via-slate-950 to-amber-950/30">
                       <Sparkles className="h-12 w-12 text-amber-400/40" />
                     </div>
                   )}
 
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/15 to-transparent pointer-events-none" />
 
-                  {/* Wire notice badge */}
-                  <div className="absolute left-3 top-3">
+                  {/* Wire notice & legal owner badge */}
+                  <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
                     <span
                       className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[9px] font-black uppercase tracking-wider ${
                         isJet
                           ? "border border-amber-300/40 bg-amber-400/20 text-amber-200"
-                          : "border border-slate-700 bg-slate-950/80 text-slate-300"
+                          : "border border-slate-700 bg-slate-950/85 text-slate-300"
                       }`}
                     >
                       {isJet ? <ExternalLink className="h-3 w-3" /> : <LockKeyhole className="h-3 w-3" />}
-                      {isJet ? "Global Wire Notice" : "Private Collection"}
+                      {isJet ? "Global Wire Notice" : legalClass}
                     </span>
                   </div>
 
+                  {/* Quick Inspect Button */}
+                  <button
+                    type="button"
+                    onClick={() => setInspectingItem(it)}
+                    className="absolute right-3 top-3 rounded-lg bg-slate-950/85 border border-white/15 px-2.5 py-1 text-[10px] font-bold text-slate-200 hover:bg-slate-900 flex items-center gap-1"
+                  >
+                    <Eye className="w-3 h-3 text-emerald-400" /> Specs
+                  </button>
+
                   {/* Price pill */}
-                  <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-md bg-gtex-midnight/90 border border-gtex-gold/40 px-3 py-1 font-mono text-xs font-black text-gtex-gold">
+                  <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-md bg-gtex-midnight/95 border border-gtex-gold/40 px-3 py-1 font-mono text-xs font-black text-gtex-gold">
                     <Coins className="h-3.5 w-3.5 text-amber-400" /> {formatPrice(it)} GTX
                   </div>
 
-                  {isOwned && (
+                  {(isOwned || it.gifted_to_player_name) && (
                     <div className="absolute bottom-3 left-3">
                       <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-300">
-                        <CheckCircle className="h-3 w-3" /> Acquired
+                        <CheckCircle className="h-3 w-3" />
+                        {it.gifted_to_player_name ? `Gifted · ${it.gifted_to_player_name}` : "Acquired"}
                       </span>
                     </div>
                   )}
@@ -444,12 +546,31 @@ export function Showroom() {
                 <div className="flex flex-1 flex-col p-5 space-y-4">
                   <div className="space-y-1.5">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
-                      {it.category || "Prestige Asset"}
+                      {it.category || "Prestige Asset"} · {it.model || "Bespoke Edition"}
                     </div>
-                    <h3 className="text-base font-extrabold text-white leading-snug">{it.name}</h3>
-                    <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">
-                      {it.model || it.description || "An exclusive luxury asset for club prestige and squad motivation."}
+                    <h3 className="text-base font-extrabold text-white leading-snug">
+                      {it.name || it.custom_name}
+                    </h3>
+                    <p className="text-xs text-slate-400 leading-relaxed line-clamp-2">
+                      {it.description || "An exclusive luxury asset for club prestige and squad motivation."}
                     </p>
+
+                    {/* Specs Preview Pills */}
+                    {it.specs && (
+                      <div className="grid grid-cols-2 gap-1.5 pt-1">
+                        {Object.entries(it.specs)
+                          .slice(0, 2)
+                          .map(([sk, sv]) => (
+                            <div
+                              key={sk}
+                              className="rounded bg-slate-950/70 border border-white/10 px-2 py-1 text-[10px] truncate"
+                            >
+                              <span className="text-slate-500 uppercase mr-1">{sk}:</span>
+                              <span className="text-slate-200 font-semibold">{String(sv)}</span>
+                            </div>
+                          ))}
+                      </div>
+                    )}
 
                     {/* Prestige, Academy & Pull Badges */}
                     <div className="flex flex-wrap gap-1.5 pt-1">
@@ -518,6 +639,77 @@ export function Showroom() {
         </div>
       )}
 
+      {/* SPECIFICATION INSPECTION MODAL */}
+      {inspectingItem && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-amber-400/40 bg-slate-950 shadow-2xl">
+            <div className="relative h-72 bg-slate-900">
+              <img
+                src={assetImage(inspectingItem)}
+                alt={inspectingItem.name}
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
+              <button
+                type="button"
+                onClick={() => setInspectingItem(null)}
+                className="absolute right-3 top-3 rounded-full border border-white/20 bg-black/60 p-2 text-white hover:bg-black"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <div className="absolute bottom-4 left-5 right-5 flex items-end justify-between">
+                <div>
+                  <div className="text-xs font-black uppercase tracking-wider text-amber-400">
+                    {inspectingItem.category} · {inspectingItem.model}
+                  </div>
+                  <h3 className="text-2xl font-black text-white">{inspectingItem.name}</h3>
+                </div>
+                <div className="font-mono text-xl font-black text-amber-300">
+                  {formatPrice(inspectingItem)} GTX
+                </div>
+              </div>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-300">{inspectingItem.description}</p>
+              {inspectingItem.specs && (
+                <div className="grid grid-cols-2 gap-3">
+                  {Object.entries(inspectingItem.specs).map(([k, v]) => (
+                    <div key={k} className="p-3 rounded-xl bg-slate-900 border border-white/10">
+                      <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">{k}</div>
+                      <div className="text-xs font-bold text-white mt-0.5">{String(v)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setInspectingItem(null)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-700 text-xs font-bold text-slate-300"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = inspectingItem;
+                    setInspectingItem(null);
+                    setAcquiringItem(target);
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black"
+                >
+                  Proceed to Acquisition
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* PURCHASE CONFIRMATION MODAL */}
       {acquiringItem && (
         <div
@@ -554,7 +746,8 @@ export function Showroom() {
 
             <div className="p-6 space-y-4">
               <p className="text-xs text-slate-300 leading-relaxed">
-                Confirm this acquisition. GTEX will validate catalogue parameters, debit the verified price from your club treasury, and record durable ownership.
+                Confirm this acquisition. GTEX will validate catalogue parameters, debit the verified price from your
+                club treasury, and record durable ownership.
               </p>
 
               <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/80 px-4 py-3">
@@ -567,12 +760,17 @@ export function Showroom() {
               {acquiringItem.category === "jet" ? (
                 <div className="flex gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-xs text-amber-200">
                   <ExternalLink className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>Private jet acquisitions publish a verified announcement to the GTEX global newsroom and ticker wire.</span>
+                  <span>
+                    Private jet acquisitions publish a verified announcement to the GTEX global newsroom and ticker
+                    wire.
+                  </span>
                 </div>
               ) : (
                 <div className="flex gap-2 rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-xs text-slate-400">
                   <LockKeyhole className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>This item enters your private club collection; verified dispatches remain scoped to club ownership.</span>
+                  <span>
+                    This item enters your private club collection; verified dispatches remain scoped to club ownership.
+                  </span>
                 </div>
               )}
 
@@ -642,7 +840,11 @@ export function Showroom() {
                 scene="luxury_turntable"
                 compact
                 title={`3D Handover Ceremony · ${giftingItem.name}`}
-                subtitle={`Presenting to ${recipientType === "player" ? (selectedPlayer?.name || "Squad Member") : selectedStaffRole.replace(/_/g, " ").toUpperCase()}`}
+                subtitle={`Presenting to ${
+                  recipientType === "player"
+                    ? selectedPlayer?.name || "Squad Member"
+                    : selectedStaffRole.replace(/_/g, " ").toUpperCase()
+                }`}
                 badgeText="3D GIFT UNBOXING"
                 clubName={active?.club_name || "GTEX FC"}
                 subjectName={giftingItem.name}
@@ -652,7 +854,8 @@ export function Showroom() {
             </div>
             <form onSubmit={handleGift} className="p-6 space-y-4">
               <div className="rounded-xl border border-purple-400/20 bg-purple-400/10 p-3 text-xs leading-relaxed text-purple-200">
-                Luxury incentives can be gifted to an <b>Academy Regen</b> (boosting squad morale) or an <b>Executive Staff / Coach</b> (boosting mood by +15 and organizational loyalty by +3).
+                Luxury incentives can be gifted to an <b>Academy Regen</b> (boosting squad morale) or an{" "}
+                <b>Executive Staff / Coach</b> (boosting mood by +15 and organizational loyalty by +3).
               </div>
 
               {/* Recipient Type Choice */}
@@ -718,15 +921,12 @@ export function Showroom() {
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-xs font-extrabold text-white">{p.name}</div>
                           <div className="text-[10px] text-slate-400">
-                            {p.position || "Player"} · {p.rating ?? p.overall_rating ?? "—"} OVR {p.is_regen ? "· Regen" : ""}
+                            {p.position || "Player"} · {p.rating ?? p.overall_rating ?? "—"} OVR{" "}
+                            {p.is_regen ? "· Regen" : ""}
                           </div>
-                          <div className="text-[9px] font-bold text-emerald-400">
-                            Morale: {p.morale ?? 75}%
-                          </div>
+                          <div className="text-[9px] font-bold text-emerald-400">Morale: {p.morale ?? 75}%</div>
                         </div>
-                        {selectedPlayerId === p.id && (
-                          <CheckCircle className="h-4 w-4 shrink-0 text-purple-300" />
-                        )}
+                        {selectedPlayerId === p.id && <CheckCircle className="h-4 w-4 shrink-0 text-purple-300" />}
                       </button>
                     ))}
                   </div>
@@ -738,11 +938,27 @@ export function Showroom() {
                   </label>
                   <div className="mt-2 grid gap-2 sm:grid-cols-2">
                     {[
-                      { key: "first_team_manager", label: "First-Team Manager", effect: "+15 Mood · +3 Tactical Loyalty" },
-                      { key: "general_manager", label: "General Manager (GM)", effect: "+15 Mood · +3 Commercial Autonomy" },
-                      { key: "head_of_youth_development", label: "Head of Youth Dev (HOYD)", effect: "+15 Mood · +3 Youth Retention" },
+                      {
+                        key: "first_team_manager",
+                        label: "First-Team Manager",
+                        effect: "+15 Mood · +3 Tactical Loyalty",
+                      },
+                      {
+                        key: "general_manager",
+                        label: "General Manager (GM)",
+                        effect: "+15 Mood · +3 Commercial Autonomy",
+                      },
+                      {
+                        key: "head_of_youth_development",
+                        label: "Head of Youth Dev (HOYD)",
+                        effect: "+15 Mood · +3 Youth Retention",
+                      },
                       { key: "chief_scout", label: "Chief Scout", effect: "+15 Mood · +3 Precision Scouting" },
-                      { key: "medical_director", label: "Medical Director", effect: "+15 Mood · +3 Physical Recovery" },
+                      {
+                        key: "medical_director",
+                        label: "Medical Director",
+                        effect: "+15 Mood · +3 Physical Recovery",
+                      },
                     ].map((staff) => (
                       <button
                         type="button"
@@ -900,9 +1116,7 @@ export function Showroom() {
                 <div className="truncate text-sm font-extrabold text-white">
                   {giftReceipt.player?.name || "Academy Regen"}
                 </div>
-                <div className="text-[10px] text-slate-400">
-                  {giftReceipt.player?.position || "Academy Squad"}
-                </div>
+                <div className="text-[10px] text-slate-400">{giftReceipt.player?.position || "Academy Squad"}</div>
                 {Number(giftReceipt.result?.morale_delta || 0) > 0 && (
                   <div className="text-[10px] font-bold text-emerald-300">
                     Morale +{giftReceipt.result.morale_delta} · Confirmed
@@ -942,3 +1156,5 @@ export function Showroom() {
     </div>
   );
 }
+
+export default Showroom;

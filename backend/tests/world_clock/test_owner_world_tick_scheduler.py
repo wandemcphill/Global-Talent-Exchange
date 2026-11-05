@@ -259,7 +259,12 @@ def test_academy_intake_uses_a_separate_sequence_not_world_day(monkeypatch) -> N
         ledger_refs.append(str(kwargs["related_id"]))
 
     def fake_generate(
-        club_id: str, generation_key: int | str, academy_level: int, youth_skill: int, count: int
+        club_id: str,
+        generation_key: int | str,
+        academy_level: int,
+        youth_skill: int,
+        count: int,
+        **_kwargs: object,
     ) -> list[dict]:
         generation_keys.append(generation_key)
         return [

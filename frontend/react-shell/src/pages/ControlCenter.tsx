@@ -40,6 +40,7 @@ import { Btn, Chip, Coin, Empty, Loading, Panel, Stat } from "@/components/gtex/
 import { InboxItem } from "@/components/gtex/InboxItem";
 import { WorldClockCard } from "@/components/gtex/WorldClockCard";
 import { OwnerBriefingPanel } from "@/components/gtex/OwnerBriefingPanel";
+import { ClubOperationsCentre3D } from "@/components/gtex/ClubOperationsCentre3D";
 import { Cinema3DStage, Cinema3DSceneType } from "@/components/gtex/Cinema3DStage";
 import {
   HolographicPlayerCard,
@@ -129,6 +130,7 @@ export function ControlCenter() {
   const [pressTone, setPressTone] = useState<"ambitious" | "calm" | "assertive" | "defiant">("assertive");
   const [pressStatement, setPressStatement] = useState("We are laser-focused on continental glory and tactical discipline.");
   const [submittingPress, setSubmittingPress] = useState(false);
+  const [selectedOpsDestination, setSelectedOpsDestination] = useState<string>("executive_office");
 
   const handleHoldPressConference = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -488,8 +490,21 @@ export function ControlCenter() {
       {/* 2b. AUTHORITATIVE WORLD TIME + PERSISTED-EVENT DAILY BRIEFING */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <WorldClockCard />
-        <OwnerBriefingPanel clubId={activeClubProfile.club_id} initialData={data.daily_briefing} />
+        <OwnerBriefingPanel
+          clubId={activeClubProfile.club_id}
+          initialData={data.daily_briefing}
+          onSelectDestination={(destKey) => setSelectedOpsDestination(destKey)}
+          onDecisionExecuted={refresh}
+        />
       </div>
+
+      {/* 2b-ii. PHASE 2.3 LIVING CLUB MANAGEMENT CENTRE (INTERACTIVE 3D DAILY OPERATIONS HUB) */}
+      <ClubOperationsCentre3D
+        clubId={activeClubProfile.club_id}
+        selectedDestinationKey={selectedOpsDestination}
+        onSelectDestinationKey={(destKey) => setSelectedOpsDestination(destKey)}
+        onHubUpdated={refresh}
+      />
 
       {/* 2c. ECOSYSTEM REVENUE & PRE-MATCH WIN BONUS */}
       <section className="rounded-2xl border border-gtex-graphite bg-gtex-slate/80 p-6 shadow-xl space-y-4" data-testid="ecosystem-revenue-card">
