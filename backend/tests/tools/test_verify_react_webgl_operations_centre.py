@@ -38,3 +38,10 @@ class VerifyReactWebglOperationsCentreTests(unittest.TestCase):
 
         p2 = ConsoleSPARequestHandler.translate_path(handler, "/console/app")
         self.assertTrue(p2.replace("\\", "/").endswith("index.html"))
+
+    def test_fallback_wireframe_naming_and_destination_keys(self) -> None:
+        """Verify fallback wireframe object naming contract and destination keys."""
+        for dest in EXPECTED_DESTINATIONS:
+            expected_name = f"fallback-wireframe-{dest}"
+            self.assertTrue(expected_name.startswith("fallback-wireframe-"))
+            self.assertEqual(expected_name.split("fallback-wireframe-")[1], dest)

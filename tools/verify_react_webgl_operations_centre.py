@@ -139,7 +139,7 @@ def run_verification(headless: bool = True) -> int:
         page = context.new_page()
 
         page_errors = []
-        page.on("pageerror", lambda err: page_errors.append(str(err)))
+        page.on("pageerror", lambda err: page_errors.append(f"[page] {err}"))
 
         # Setup API interception
         CORS_HEADERS = {
@@ -298,6 +298,7 @@ def run_verification(headless: bool = True) -> int:
         print("\n--- Test 2: Asset Failure Warning & Wireframe Fallback Mesh ---")
         context_fail = browser.new_context(viewport={"width": 1600, "height": 1000}, device_scale_factor=1.25)
         page_fail = context_fail.new_page()
+        page_fail.on("pageerror", lambda err: page_errors.append(f"[page_fail] {err}"))
         page_fail.route("**/api/**", handle_api)
         page_fail.route("http://localhost:8000/**", handle_api)
         page_fail.route("http://127.0.0.1:8000/**", handle_api)
@@ -330,6 +331,35 @@ def run_verification(headless: bool = True) -> int:
         btn_fallback.click()
         print("[PASS] Fallback wireframe destination is selectable and interactive.")
 
+        # Reliable assertion for the actual fallback wireframe mesh in the Three.js scene
+        fallback_mesh_info = page_fail.evaluate("""() => {
+                const api = window.__GTEX_OPERATIONS_3D__;
+                if (!api || !api.roomGroups) return null;
+                const grp = api.roomGroups.get("finance_commercial_office");
+                if (!grp) return null;
+                const mesh = grp.children.find(
+                    (c) => c.name === "fallback-wireframe-finance_commercial_office" || c.userData?.isFallbackWireframe
+                );
+                if (!mesh) return null;
+                return {
+                    name: mesh.name,
+                    isMesh: Boolean(mesh.isMesh),
+                    isWireframe: Boolean(mesh.material && mesh.material.wireframe),
+                    visible: Boolean(mesh.visible),
+                    position: [mesh.position.x, mesh.position.y, mesh.position.z],
+                    userData: mesh.userData,
+                };
+            }""")
+        print(f"  [SCENE AUDIT] Fallback mesh in Three.js scene: {fallback_mesh_info}")
+        assert fallback_mesh_info is not None, "Fallback wireframe mesh was NOT found in Three.js scene group!"
+        assert fallback_mesh_info["isMesh"] is True, "Fallback scene object is not a THREE.Mesh"
+        assert fallback_mesh_info["isWireframe"] is True, "Fallback mesh material is not wireframe"
+        assert fallback_mesh_info["visible"] is True, "Fallback mesh is not visible"
+        assert (
+            fallback_mesh_info["userData"].get("isFallbackWireframe") is True
+        ), "Fallback mesh missing isFallbackWireframe"
+        print("[PASS] Confirmed procedural wireframe mesh is added to Three.js scene with wireframe material.")
+
         # -------------------------------------------------------------
         # TEST 3: 2D Floorplan Fallback Switch & Navigation
         # -------------------------------------------------------------
@@ -357,6 +387,18 @@ def run_verification(headless: bool = True) -> int:
         toggle_btn.click()
         page.wait_for_selector('[data-testid="club-operations-3d-canvas"]', timeout=5000)
         print("[PASS] Successfully restored 3D WebGL viewport.")
+
+        # Fail verification if unexpected JavaScript page errors occurred on either page context
+        if page_errors:
+            print(f"\n[FAIL] Unexpected JavaScript page errors encountered ({len(page_errors)}):")
+            for pe in page_errors:
+                print(f"  - {pe}")
+            context_fail.close()
+            context.close()
+            browser.close()
+            server.shutdown()
+            return 1
+        print("[PASS] Zero unhandled JavaScript page errors detected across all browser contexts.")
 
         context_fail.close()
         context.close()

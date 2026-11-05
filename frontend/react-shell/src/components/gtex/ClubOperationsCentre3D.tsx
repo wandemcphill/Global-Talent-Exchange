@@ -448,8 +448,9 @@ export function ClubOperationsCentre3D({
             emissiveIntensity: 0.2,
           });
           const fallbackMesh = new THREE.Mesh(fallbackGeo, fallbackMat);
+          fallbackMesh.name = `fallback-wireframe-${dest.destination_key}`;
           fallbackMesh.position.set(0, 1.4, -1.5);
-          fallbackMesh.userData = { destinationKey: dest.destination_key };
+          fallbackMesh.userData = { destinationKey: dest.destination_key, isFallbackWireframe: true };
           fallbackMesh.castShadow = true;
           fallbackMesh.receiveShadow = true;
           pickables.push(fallbackMesh);
@@ -509,6 +510,15 @@ export function ClubOperationsCentre3D({
 
     setWebglStatus("ready");
 
+    if (typeof window !== "undefined") {
+      (window as unknown as { __GTEX_OPERATIONS_3D__?: unknown }).__GTEX_OPERATIONS_3D__ = {
+        scene,
+        roomGroups: roomGroupsRef.current,
+        camera,
+        renderer,
+      };
+    }
+
     let animFrameId = 0;
     const animate = () => {
       animFrameId = requestAnimationFrame(animate);
@@ -546,6 +556,9 @@ export function ClubOperationsCentre3D({
       envTex.dispose();
       pmrem.dispose();
       renderer.dispose();
+      if (typeof window !== "undefined") {
+        delete (window as unknown as { __GTEX_OPERATIONS_3D__?: unknown }).__GTEX_OPERATIONS_3D__;
+      }
     };
   }, [renderMode, destinations.length, lightingMode]);
 
