@@ -1782,6 +1782,7 @@ class CreateClubDirectiveRequest(BaseModel):
     directive_key: str = Field(min_length=1, max_length=64)
     title: str = Field(min_length=1, max_length=160)
     instruction: str = Field(min_length=1, max_length=2000)
+    objective_key: str | None = Field(default=None, min_length=1, max_length=64)
     deadline_days: int | None = Field(default=7, ge=1, le=365)
     target_scope: str | None = Field(default=None, max_length=64)
     target_scope_id: str | None = Field(default=None, max_length=64)
@@ -1859,6 +1860,7 @@ def post_create_club_directive(
             directive_key=payload.directive_key,
             title=payload.title,
             instruction=payload.instruction,
+            objective_key=payload.objective_key,
             deadline_days=payload.deadline_days,
             target_scope=payload.target_scope,
             target_scope_id=payload.target_scope_id,
