@@ -140,9 +140,9 @@ export class SpatialInterpolator {
       this.frames.sort((a, b) => a.time_seconds - b.time_seconds);
     }
 
-    // Limit buffer to recent 600 frames (~10 minutes at 1 tick/sec)
-    if (this.frames.length > 600) {
-      this.frames.splice(0, this.frames.length - 600);
+    // Retain up to 2,400 frames so full 10-minute (600s) broadcasts can seek & replay across the entire match
+    if (this.frames.length > 2400) {
+      this.frames.splice(0, this.frames.length - 2400);
     }
   }
 
@@ -333,6 +333,32 @@ export class SpatialInterpolator {
       }
     }
 
+    // Foot-to-ball dribble stride lead: prevent ground ball from clipping inside the carrier's ankles
+    if (
+      !isDirectionFlip &&
+      frameA.ball.owner_player_id &&
+      frameA.ball.owner_player_id === frameB.ball.owner_player_id &&
+      ballY < 0.35
+    ) {
+      const carrier = interpolatedPlayers.find((p) => p.player_id === frameA.ball.owner_player_id);
+      if (carrier) {
+        const dx = ballX - carrier.position3D[0];
+        const dz = ballZ - carrier.position3D[2];
+        const distToCarrier = Math.hypot(dx, dz);
+        if (distToCarrier < 0.36) {
+          const strideTouchLead = 0.38 + Math.sin(alpha * Math.PI * 2) * 0.11;
+          ballX = Math.max(
+            PITCH_BOUNDS.minX,
+            Math.min(PITCH_BOUNDS.maxX, carrier.position3D[0] + Math.cos(carrier.facingAngleRad) * strideTouchLead)
+          );
+          ballZ = Math.max(
+            PITCH_BOUNDS.minZ,
+            Math.min(PITCH_BOUNDS.maxZ, carrier.position3D[2] + Math.sin(carrier.facingAngleRad) * strideTouchLead)
+          );
+        }
+      }
+    }
+
     return {
       time_seconds: queryTimeSeconds,
       clock_minute: activeFrame.clock_minute,
@@ -401,7 +427,7 @@ export class SpatialInterpolator {
     };
   }
 
-  private frameToInterpolated(frame: SpectatorSafeFrameView): InterpolatedMatchState {
+  private frameToInterpolated(frame: SpectatorSafeFrameView): InterpolatedPlayerState["position3D"] extends unknown ? InterpolatedMatchState : never {
     const ball3D = pitchTo3D(frame.ball.position, frame.ball.height, frame.home_attacks_right);
     return {
       time_seconds: frame.time_seconds,

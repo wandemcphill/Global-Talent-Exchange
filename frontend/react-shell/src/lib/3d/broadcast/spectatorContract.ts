@@ -111,6 +111,7 @@ export interface SpectatorSafeMatchView {
   match_label: string;
   venue_name?: string;
   competition_name?: string;
+  duration_seconds?: number;
   frames: SpectatorSafeFrameView[];
   events: SpectatorSafeEventView[];
   is_owner_or_manager: boolean;
@@ -126,6 +127,9 @@ export interface MatchViewStateDTO {
   match_id: string;
   canonical_match_id?: string;
   source?: string;
+  venue_name?: string;
+  competition_name?: string;
+  duration_seconds?: number;
   home_team?: Partial<SpectatorSafeTeamView>;
   away_team?: Partial<SpectatorSafeTeamView>;
   frames?: Partial<SpectatorSafeFrameView>[];

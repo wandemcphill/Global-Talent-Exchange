@@ -129,6 +129,14 @@ export class StadiumArenaEnvironment {
     this.buildGrandstands();
     this.buildCrowd(options.attendancePct ?? 94);
     this.buildFloodlightsAndEnvironment(scene);
+
+    // Freeze world matrices on all static stadium architecture to eliminate 180+ per-frame matrix multiplications
+    this.group.updateMatrixWorld(true);
+    this.group.traverse((obj) => {
+      if (obj !== this.group) {
+        obj.matrixAutoUpdate = false;
+      }
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -451,15 +459,24 @@ export class StadiumArenaEnvironment {
       platform.position.y = 0.075;
       dugoutGroup.add(platform);
 
-      // Curved canopy roof (half-cylinder)
-      const canopyGeo = new THREE.CylinderGeometry(1.4, 1.4, 11, 16, 1, true, 0, Math.PI);
-      const canopyMat = new THREE.MeshPhysicalMaterial({
-        color: 0x0f172a,
-        transparent: true,
-        opacity: 0.45,
-        roughness: 0.1,
-        transmission: 0.6,
-      });
+      // Curved canopy roof (half-cylinder) — uses MeshStandardMaterial/MeshLambertMaterial instead of
+      // MeshPhysicalMaterial(transmission) to prevent Three.js from executing a costly second full-scene render pass.
+      const canopySegments = this.qualityTier === "low" ? 8 : 12;
+      const canopyGeo = new THREE.CylinderGeometry(1.4, 1.4, 11, canopySegments, 1, true, 0, Math.PI);
+      const canopyMat =
+        this.qualityTier === "low"
+          ? new THREE.MeshLambertMaterial({
+              color: 0x0f172a,
+              transparent: true,
+              opacity: 0.5,
+            })
+          : new THREE.MeshStandardMaterial({
+              color: 0x0f172a,
+              transparent: true,
+              opacity: 0.48,
+              roughness: 0.15,
+              metalness: 0.75,
+            });
       this.disposables.push(canopyGeo, canopyMat);
       const canopy = new THREE.Mesh(canopyGeo, canopyMat);
       canopy.rotation.z = Math.PI / 2;
@@ -467,34 +484,38 @@ export class StadiumArenaEnvironment {
       canopy.position.set(0, 1.4, 0);
       dugoutGroup.add(canopy);
 
-      // Aluminum frame ribs
-      const ribMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.7 });
-      this.disposables.push(ribMat);
-      for (let i = -5; i <= 5; i += 2.5) {
-        const ribGeo = new THREE.TorusGeometry(1.42, 0.03, 8, 16, Math.PI);
-        this.disposables.push(ribGeo);
-        const rib = new THREE.Mesh(ribGeo, ribMat);
-        rib.rotation.y = Math.PI / 2;
-        rib.position.set(i, 1.4, 0);
-        dugoutGroup.add(rib);
+      // Aluminum frame ribs (shared geometry across ribs; skipped on low quality tier)
+      if (this.qualityTier !== "low") {
+        const ribMat = new THREE.MeshLambertMaterial({ color: 0x94a3b8 });
+        const ribGeo = new THREE.TorusGeometry(1.42, 0.03, 6, 12, Math.PI);
+        this.disposables.push(ribMat, ribGeo);
+        for (let i = -5; i <= 5; i += 2.5) {
+          const rib = new THREE.Mesh(ribGeo, ribMat);
+          rib.rotation.y = Math.PI / 2;
+          rib.position.set(i, 1.4, 0);
+          dugoutGroup.add(rib);
+        }
       }
 
-      // 14 Bucket Seats
+      // 14 Bucket Seats batched into a single InstancedMesh (1 draw call instead of 14, no shadow pass overhead)
       const seatColor = isHome
         ? new THREE.Color(this.homeTeam.primary_color)
         : new THREE.Color(this.awayTeam.primary_color);
       const seatMat = new THREE.MeshLambertMaterial({ color: seatColor });
-      this.disposables.push(seatMat);
-
       const seatGeo = new THREE.BoxGeometry(0.5, 0.6, 0.45);
-      this.disposables.push(seatGeo);
+      this.disposables.push(seatMat, seatGeo);
+
+      const seatInstanced = new THREE.InstancedMesh(seatGeo, seatMat, 14);
+      seatInstanced.castShadow = false;
+      seatInstanced.receiveShadow = false;
+      const seatMatrix = new THREE.Matrix4();
       for (let s = 0; s < 14; s++) {
         const sx = -4.5 + s * 0.7;
-        const seat = new THREE.Mesh(seatGeo, seatMat);
-        seat.position.set(sx, 0.45, -0.2);
-        seat.castShadow = true;
-        dugoutGroup.add(seat);
+        seatMatrix.makeTranslation(sx, 0.45, -0.2);
+        seatInstanced.setMatrixAt(s, seatMatrix);
       }
+      seatInstanced.instanceMatrix.needsUpdate = true;
+      dugoutGroup.add(seatInstanced);
 
       this.stadiumGroup.add(dugoutGroup);
     };
@@ -648,24 +669,26 @@ export class StadiumArenaEnvironment {
     // Neon accent edge
     ctx.fillStyle = "#00e5ff";
     ctx.fillRect(0, 0, this.adCanvas.width, 3);
+    ctx.fillStyle = "#10b981";
+    ctx.fillRect(0, this.adCanvas.height - 3, this.adCanvas.width, 3);
 
-    // Sponsor brand slogans
+    // Sponsor brand slogans rendered once into the tileable 1024x64 texture;
+    // runtime scrolling shifts UV offset.x on the GPU without CPU-to-GPU texImage2D stalls.
     const slogans = [
       "GTEX GLOBAL TALENT EXCHANGE",
       "APEX REGEN TOURNAMENT ARENA",
       "CHRONOS TOURBILLON — OFFICIAL TIMEKEEPER",
       "SOVEREIGN EXECUTIVE FLEET",
-      "GTEX LIVING CLUB DYNASTY",
     ];
 
-    ctx.font = "bold 20px 'Segoe UI', Inter, sans-serif";
+    ctx.font = "bold 19px 'Segoe UI', Inter, sans-serif";
     ctx.textBaseline = "middle";
 
-    let xCursor = 30 - this.adScrollOffset;
+    let xCursor = 18;
     slogans.forEach((slogan, idx) => {
       ctx.fillStyle = idx % 2 === 0 ? "#00E676" : "#38BDF8";
       ctx.fillText(slogan, xCursor, 34);
-      xCursor += ctx.measureText(slogan).width + 60;
+      xCursor += 252;
     });
 
     if (this.adTexture) {
@@ -680,23 +703,37 @@ export class StadiumArenaEnvironment {
     const halfL = FIFA_PITCH_DIMENSIONS.length / 2;
     const halfW = FIFA_PITCH_DIMENSIONS.width / 2;
 
-    const concreteMat = new THREE.MeshStandardMaterial({
-      color: 0x1e293b,
-      roughness: 0.85,
-    });
-    const vipGlassMat = new THREE.MeshPhysicalMaterial({
-      color: 0x0f172a,
-      roughness: 0.1,
-      metalness: 0.9,
-      transmission: 0.5,
-      transparent: true,
-      opacity: 0.7,
-    });
-    const roofMat = new THREE.MeshStandardMaterial({
-      color: 0x090d16,
-      metalness: 0.4,
-      roughness: 0.5,
-    });
+    const concreteMat =
+      this.qualityTier === "low"
+        ? new THREE.MeshLambertMaterial({ color: 0x1e293b })
+        : new THREE.MeshStandardMaterial({
+            color: 0x1e293b,
+            roughness: 0.85,
+          });
+    // Use MeshStandardMaterial / MeshLambertMaterial instead of MeshPhysicalMaterial(transmission)
+    // to avoid triggering Three.js's costly second full-scene opaque render pass.
+    const vipGlassMat =
+      this.qualityTier === "low"
+        ? new THREE.MeshLambertMaterial({
+            color: 0x0f172a,
+            transparent: true,
+            opacity: 0.72,
+          })
+        : new THREE.MeshStandardMaterial({
+            color: 0x0f172a,
+            roughness: 0.12,
+            metalness: 0.85,
+            transparent: true,
+            opacity: 0.72,
+          });
+    const roofMat =
+      this.qualityTier === "low"
+        ? new THREE.MeshLambertMaterial({ color: 0x090d16 })
+        : new THREE.MeshStandardMaterial({
+            color: 0x090d16,
+            metalness: 0.4,
+            roughness: 0.5,
+          });
     this.disposables.push(concreteMat, vipGlassMat, roofMat);
 
     // A. West Grandstand (Main Stand: positioned behind the TV broadcast camera gantry at z = 56 so it never occludes the pitch)
@@ -711,19 +748,21 @@ export class StadiumArenaEnvironment {
       lower.position.set(0, 3, 0);
       standGroup.add(lower);
 
-      // VIP Hospitality Skybox Floor
-      const vipGeo = new THREE.BoxGeometry(FIFA_PITCH_DIMENSIONS.length + 6, 4, 10);
-      this.disposables.push(vipGeo);
-      const vip = new THREE.Mesh(vipGeo, vipGlassMat);
-      vip.position.set(0, 8, 4);
-      standGroup.add(vip);
+      if (this.qualityTier !== "low") {
+        // VIP Hospitality Skybox Floor
+        const vipGeo = new THREE.BoxGeometry(FIFA_PITCH_DIMENSIONS.length + 6, 4, 10);
+        this.disposables.push(vipGeo);
+        const vip = new THREE.Mesh(vipGeo, vipGlassMat);
+        vip.position.set(0, 8, 4);
+        standGroup.add(vip);
 
-      // Upper Tier Rake
-      const upperGeo = new THREE.BoxGeometry(FIFA_PITCH_DIMENSIONS.length + 14, 8, 14);
-      this.disposables.push(upperGeo);
-      const upper = new THREE.Mesh(upperGeo, concreteMat);
-      upper.position.set(0, 14, 10);
-      standGroup.add(upper);
+        // Upper Tier Rake
+        const upperGeo = new THREE.BoxGeometry(FIFA_PITCH_DIMENSIONS.length + 14, 8, 14);
+        this.disposables.push(upperGeo);
+        const upper = new THREE.Mesh(upperGeo, concreteMat);
+        upper.position.set(0, 14, 10);
+        standGroup.add(upper);
+      }
 
       // Cantilevered Roof Canopy (set behind broadcast camera gantry)
       const roofGeo = new THREE.BoxGeometry(FIFA_PITCH_DIMENSIONS.length + 18, 1.2, 22);
@@ -747,11 +786,13 @@ export class StadiumArenaEnvironment {
       lower.position.set(0, 3, 0);
       standGroup.add(lower);
 
-      const upperGeo = new THREE.BoxGeometry(FIFA_PITCH_DIMENSIONS.length + 12, 9, 14);
-      this.disposables.push(upperGeo);
-      const upper = new THREE.Mesh(upperGeo, concreteMat);
-      upper.position.set(0, 10.5, -6);
-      standGroup.add(upper);
+      if (this.qualityTier !== "low") {
+        const upperGeo = new THREE.BoxGeometry(FIFA_PITCH_DIMENSIONS.length + 12, 9, 14);
+        this.disposables.push(upperGeo);
+        const upper = new THREE.Mesh(upperGeo, concreteMat);
+        upper.position.set(0, 10.5, -6);
+        standGroup.add(upper);
+      }
 
       const roofGeo = new THREE.BoxGeometry(FIFA_PITCH_DIMENSIONS.length + 16, 1.2, 26);
       this.disposables.push(roofGeo);
@@ -827,34 +868,34 @@ export class StadiumArenaEnvironment {
     const halfW = FIFA_PITCH_DIMENSIONS.width / 2;
     const homeColor = new THREE.Color(this.homeTeam.primary_color);
     const awayColor = new THREE.Color(this.awayTeam.primary_color);
+    const accentColor = new THREE.Color(this.homeTeam.accent_color || "#ffffff");
 
     const homeCrowdMat = new THREE.MeshLambertMaterial({ color: homeColor });
     const awayCrowdMat = new THREE.MeshLambertMaterial({ color: awayColor });
     const neutralCrowdMat = new THREE.MeshLambertMaterial({ color: 0x475569 });
-    this.disposables.push(homeCrowdMat, awayCrowdMat, neutralCrowdMat);
+    const bannerMat = new THREE.MeshBasicMaterial({ color: accentColor });
+    this.disposables.push(homeCrowdMat, awayCrowdMat, neutralCrowdMat, bannerMat);
 
-    // In Low/Medium quality tier: use optimized batched tiered block strips
-    // In High/Ultra quality tier: use denser tiered spectator tiers
-    const crowdBlockGeo = new THREE.BoxGeometry(pLengthScale(halfL), 1.6, 2.4);
+    const crowdBlockGeo = new THREE.BoxGeometry(halfL * 1.8 * Math.max(0.65, attendancePct / 100), 1.6, 2.4);
     this.disposables.push(crowdBlockGeo);
-
-    function pLengthScale(hl: number) {
-      return hl * 1.8;
-    }
 
     // West Stand Crowd (Predominantly Home, behind broadcast gantry)
     const westCrowdLower = new THREE.Mesh(crowdBlockGeo, homeCrowdMat);
     westCrowdLower.position.set(0, 5.5, halfW + 30);
-    const westCrowdUpper = new THREE.Mesh(crowdBlockGeo, neutralCrowdMat);
-    westCrowdUpper.position.set(0, 16.5, halfW + 40);
-    this.crowdGroup.add(westCrowdLower, westCrowdUpper);
+    this.crowdGroup.add(westCrowdLower);
 
     // East Stand Crowd (Home & General Spectators)
     const eastCrowdLower = new THREE.Mesh(crowdBlockGeo, homeCrowdMat);
     eastCrowdLower.position.set(0, 5.5, -(halfW + 15));
-    const eastCrowdUpper = new THREE.Mesh(crowdBlockGeo, homeCrowdMat);
-    eastCrowdUpper.position.set(0, 13.5, -(halfW + 21));
-    this.crowdGroup.add(eastCrowdLower, eastCrowdUpper);
+    this.crowdGroup.add(eastCrowdLower);
+
+    if (this.qualityTier !== "low") {
+      const westCrowdUpper = new THREE.Mesh(crowdBlockGeo, neutralCrowdMat);
+      westCrowdUpper.position.set(0, 16.5, halfW + 40);
+      const eastCrowdUpper = new THREE.Mesh(crowdBlockGeo, homeCrowdMat);
+      eastCrowdUpper.position.set(0, 13.5, -(halfW + 21));
+      this.crowdGroup.add(westCrowdUpper, eastCrowdUpper);
+    }
 
     // North Stand Kop Crowd (100% Home Ultras)
     const kopCrowdGeo = new THREE.BoxGeometry(3.0, 7.0, FIFA_PITCH_DIMENSIONS.width + 4);
@@ -869,6 +910,15 @@ export class StadiumArenaEnvironment {
     const awayCrowd = new THREE.Mesh(awayCrowdGeo, awayCrowdMat);
     awayCrowd.position.set(halfL + 15, 7.5, 0);
     this.crowdGroup.add(awayCrowd);
+
+    // High quality tier adds supporter banner tifo strips along the East & Kop fascias
+    if (this.qualityTier === "high" || this.qualityTier === "ultra") {
+      const tifoGeo = new THREE.BoxGeometry(halfL * 1.4, 0.75, 0.25);
+      this.disposables.push(tifoGeo);
+      const eastTifo = new THREE.Mesh(tifoGeo, bannerMat);
+      eastTifo.position.set(0, 9.2, -(halfW + 10.2));
+      this.crowdGroup.add(eastTifo);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -879,13 +929,25 @@ export class StadiumArenaEnvironment {
     const pylonDistZ = FIFA_PITCH_DIMENSIONS.width / 2 + 18;
     const pylonH = 36;
 
-    const mastMat = new THREE.MeshStandardMaterial({
-      color: 0x334155,
-      metalness: 0.6,
-      roughness: 0.4,
-    });
+    const mastMat =
+      this.qualityTier === "low"
+        ? new THREE.MeshLambertMaterial({ color: 0x334155 })
+        : new THREE.MeshStandardMaterial({
+            color: 0x334155,
+            metalness: 0.6,
+            roughness: 0.4,
+          });
     const headMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    this.disposables.push(mastMat, headMat);
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: 0xe0f2fe,
+      transparent: true,
+      opacity: this.qualityTier === "low" ? 0.08 : 0.16,
+      depthWrite: false,
+    });
+    const mastGeo = new THREE.CylinderGeometry(0.5, 1.2, pylonH, 6);
+    const gantryGeo = new THREE.BoxGeometry(5.0, 3.2, 0.6);
+    const haloGeo = new THREE.PlaneGeometry(7.2, 4.6);
+    this.disposables.push(mastMat, headMat, glowMat, mastGeo, gantryGeo, haloGeo);
 
     const corners = [
       [-pylonDistX, -pylonDistZ],
@@ -899,15 +961,11 @@ export class StadiumArenaEnvironment {
       pGroup.position.set(px, 0, pz);
 
       // Steel Lattice Mast
-      const mastGeo = new THREE.CylinderGeometry(0.5, 1.2, pylonH, 6);
-      this.disposables.push(mastGeo);
       const mast = new THREE.Mesh(mastGeo, mastMat);
       mast.position.y = pylonH / 2;
       pGroup.add(mast);
 
       // Light Gantry Bank (4x4 matrix)
-      const gantryGeo = new THREE.BoxGeometry(5.0, 3.2, 0.6);
-      this.disposables.push(gantryGeo);
       const gantry = new THREE.Mesh(gantryGeo, headMat);
       gantry.position.set(0, pylonH, 0);
       gantry.lookAt(0, 0, 0);
@@ -915,25 +973,24 @@ export class StadiumArenaEnvironment {
 
       this.lightingGroup.add(pGroup);
 
-      // Directional Spotlight Cone aimed at pitch center
-      const spot = new THREE.SpotLight(0xf8fafc, 0.55, 140, Math.PI / 4, 0.4, 1.2);
-      spot.position.set(px, pylonH, pz);
-      spot.target.position.set(px * 0.25, 0, pz * 0.25);
-      this.lightingGroup.add(spot);
-      this.lightingGroup.add(spot.target);
+      // Emissive Floodlight Glare Halo (avoids evaluating 4 extra per-pixel SpotLight shaders across 217k vertices)
+      const halo = new THREE.Mesh(haloGeo, glowMat);
+      halo.position.set(px * 0.96, pylonH - 0.4, pz * 0.96);
+      halo.lookAt(0, 0, 0);
+      this.lightingGroup.add(halo);
     });
 
     // Atmospheric Stadium Skybox Dusk Fog
-    scene.fog = new THREE.FogExp2(0x060a14, 0.0065);
+    scene.fog = new THREE.FogExp2(0x060a14, this.qualityTier === "low" ? 0.005 : 0.0065);
   }
 
   // ---------------------------------------------------------------------------
-  // Real-Time Update Tick (LED Scrolling, Flags, Shadows)
+  // Real-Time Update Tick (GPU UV Offset LED Scrolling — Zero CPU Canvas Re-Upload)
   // ---------------------------------------------------------------------------
   public update(deltaSec: number): void {
-    if (this.adCanvas && this.adContext) {
-      this.adScrollOffset = (this.adScrollOffset + deltaSec * 35) % 800;
-      this.renderAdCanvasContent();
+    this.adScrollOffset = (this.adScrollOffset + deltaSec * 35) % 800;
+    if (this.adTexture) {
+      this.adTexture.offset.x = (this.adTexture.offset.x + deltaSec * 0.042) % 1.0;
     }
   }
 

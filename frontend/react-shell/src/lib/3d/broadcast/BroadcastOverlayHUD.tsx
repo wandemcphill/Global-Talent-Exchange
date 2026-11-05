@@ -11,23 +11,23 @@
 
 import React, { useMemo } from "react";
 import {
-  Camera,
   Layers,
-  Radio,
   Tv,
   Eye,
-  Shield,
   Volume2,
   VolumeX,
   Sparkles,
-  ChevronRight,
+  Maximize2,
+  Minimize2,
+  RotateCcw,
+  Sliders,
 } from "lucide-react";
 import { ManualCameraMode } from "./CameraDirector";
 import {
   InterpolatedMatchState,
-  InterpolatedPlayerState,
 } from "./SpatialInterpolator";
 import { SpectatorSafeTeamView } from "./spectatorContract";
+import type { DeviceQualityTier } from "../GtexSceneTypes";
 
 export interface BroadcastOverlayHUDProps {
   matchState: InterpolatedMatchState | null;
@@ -42,6 +42,14 @@ export interface BroadcastOverlayHUDProps {
   is2DActive?: boolean;
   audioMuted?: boolean;
   onToggleAudio?: () => void;
+  qualityTier?: DeviceQualityTier;
+  onSelectQualityTier?: (tier: "high" | "medium" | "low") => void;
+  isTheatreMode?: boolean;
+  onToggleTheatreMode?: () => void;
+  minimalHud?: boolean;
+  onToggleMinimalHud?: () => void;
+  isReplayActive?: boolean;
+  onTriggerReplay?: () => void;
   className?: string;
 }
 
@@ -58,6 +66,14 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = ({
   is2DActive = false,
   audioMuted = false,
   onToggleAudio,
+  qualityTier = "high",
+  onSelectQualityTier,
+  isTheatreMode = false,
+  onToggleTheatreMode,
+  minimalHud = false,
+  onToggleMinimalHud,
+  isReplayActive = false,
+  onTriggerReplay,
   className = "",
 }) => {
   const clockDisplay = useMemo(() => {
@@ -136,22 +152,104 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = ({
           </div>
         </div>
 
-        {/* Audio & Match Label Header */}
-        <div className="pointer-events-auto hidden sm:flex items-center gap-2">
-          {typeof viewerCount === "number" && viewerCount > 0 && (
-            <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-slate-950/80 px-2.5 py-1.5 text-xs font-mono text-slate-300 backdrop-blur-md">
+        {/* Audio, Quality Tier, Replay & Match Theatre Controls */}
+        <div className="pointer-events-auto flex flex-wrap items-center gap-2">
+          {isReplayActive && (
+            <div
+              data-testid="broadcast-replay-badge"
+              className="flex items-center gap-1.5 rounded-lg border border-amber-400/60 bg-amber-500/20 px-2.5 py-1.5 text-xs font-black uppercase tracking-wider text-amber-300 shadow-lg backdrop-blur-md animate-pulse"
+            >
+              <RotateCcw className="size-3.5 text-amber-400" />
+              <span>INSTANT REPLAY</span>
+            </div>
+          )}
+          {typeof viewerCount === "number" && viewerCount > 0 && !minimalHud && (
+            <div className="hidden md:flex items-center gap-1.5 rounded-lg border border-white/10 bg-slate-950/80 px-2.5 py-1.5 text-xs font-mono text-slate-300 backdrop-blur-md">
               <Eye className="size-3.5 text-emerald-400" />
               <span>{viewerCount >= 1000 ? `${(viewerCount / 1000).toFixed(1)}k` : viewerCount}</span>
             </div>
           )}
-          <div className="rounded-lg border border-white/10 bg-slate-950/80 px-3 py-1.5 text-xs font-semibold text-slate-300 backdrop-blur-md">
-            <span className="text-emerald-400 font-bold">GTEX ARENA</span> · {matchLabel}
-          </div>
+          {!minimalHud && (
+            <div className="hidden sm:block rounded-lg border border-white/10 bg-slate-950/80 px-3 py-1.5 text-xs font-semibold text-slate-300 backdrop-blur-md">
+              <span className="text-emerald-400 font-bold">GTEX ARENA</span> · {matchLabel}
+            </div>
+          )}
+          {onSelectQualityTier && !minimalHud && (
+            <div
+              data-testid="quality-profile-selector"
+              className="hidden sm:flex items-center gap-0.5 rounded-lg border border-white/15 bg-slate-950/85 p-0.5 text-[10px] font-bold uppercase backdrop-blur-md"
+              title="Graphics Quality Profile"
+            >
+              <Sliders className="size-3 text-slate-400 mx-1" />
+              {(["high", "medium", "low"] as const).map((tier) => (
+                <button
+                  key={tier}
+                  type="button"
+                  data-testid={`quality-tier-${tier}`}
+                  onClick={() => onSelectQualityTier(tier)}
+                  className={`rounded px-1.5 py-0.5 transition-colors ${
+                    qualityTier === tier
+                      ? "bg-emerald-500 text-slate-950 font-black"
+                      : "text-slate-300 hover:bg-white/10"
+                  }`}
+                >
+                  {tier === "medium" ? "MED" : tier.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          )}
+          {onTriggerReplay && (
+            <button
+              type="button"
+              data-testid="trigger-replay-button"
+              onClick={onTriggerReplay}
+              className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wider transition-colors backdrop-blur-md ${
+                isReplayActive
+                  ? "border-amber-400 bg-amber-500 text-slate-950"
+                  : "border-white/15 bg-slate-950/80 text-amber-300 hover:bg-white/10"
+              }`}
+              title="Instant 8s Action Replay"
+            >
+              <RotateCcw className="size-3.5" />
+              <span className="hidden md:inline">{isReplayActive ? "LIVE" : "REPLAY"}</span>
+            </button>
+          )}
+          {onToggleMinimalHud && (
+            <button
+              type="button"
+              data-testid="toggle-minimal-hud-button"
+              onClick={onToggleMinimalHud}
+              className={`rounded-lg border px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors backdrop-blur-md ${
+                minimalHud
+                  ? "border-cyan-400/60 bg-cyan-500/20 text-cyan-300"
+                  : "border-white/10 bg-slate-950/80 text-slate-300 hover:bg-white/10"
+              }`}
+              title="Toggle Clean Broadcast HUD"
+            >
+              {minimalHud ? "FULL HUD" : "CLEAN HUD"}
+            </button>
+          )}
+          {onToggleTheatreMode && (
+            <button
+              type="button"
+              data-testid="toggle-theatre-mode-button"
+              onClick={onToggleTheatreMode}
+              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wider transition-colors backdrop-blur-md ${
+                isTheatreMode
+                  ? "border-emerald-400 bg-emerald-500 text-slate-950"
+                  : "border-white/15 bg-slate-950/80 text-white hover:bg-white/10"
+              }`}
+              title={isTheatreMode ? "Exit Full-Screen Match Theatre" : "Enter Full-Screen 16:9 Match Theatre"}
+            >
+              {isTheatreMode ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5 text-emerald-400" />}
+              <span>{isTheatreMode ? "EXIT THEATRE" : "THEATRE"}</span>
+            </button>
+          )}
           {onToggleAudio && (
             <button
               type="button"
               onClick={onToggleAudio}
-              className="flex size-9 items-center justify-center rounded-lg border border-white/10 bg-slate-950/80 text-white hover:bg-white/10 transition-colors"
+              className="flex size-8 items-center justify-center rounded-lg border border-white/10 bg-slate-950/80 text-white hover:bg-white/10 transition-colors"
               title={audioMuted ? "Unmute Match Audio" : "Mute Match Audio"}
             >
               {audioMuted ? <VolumeX className="size-4 text-red-400" /> : <Volume2 className="size-4 text-emerald-400" />}
@@ -184,7 +282,9 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = ({
         {/* Tactical Minimap Radar (105m x 68m pitch miniature) */}
         <div
           data-testid="tactical-minimap-radar"
-          className="pointer-events-auto relative h-20 w-32 overflow-hidden rounded-lg border border-white/20 bg-emerald-950/80 shadow-2xl backdrop-blur-md"
+          className={`pointer-events-auto relative h-20 w-32 overflow-hidden rounded-lg border border-white/20 bg-emerald-950/80 shadow-2xl backdrop-blur-md transition-opacity ${
+            minimalHud ? "opacity-45 hover:opacity-100" : "opacity-100"
+          }`}
         >
           {/* Halfway line & center circle */}
           <div className="absolute inset-y-0 left-1/2 w-px bg-white/30" />
@@ -240,6 +340,17 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = ({
               }`}
             >
               DIRECTOR
+            </button>
+            <button
+              type="button"
+              onClick={() => onSelectCameraMode("closeup_action")}
+              className={`rounded-lg px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider transition-colors ${
+                cameraMode === "closeup_action"
+                  ? "bg-emerald-500 text-slate-950 shadow-sm"
+                  : "text-slate-300 hover:bg-white/10"
+              }`}
+            >
+              ACTION CAM
             </button>
             <button
               type="button"

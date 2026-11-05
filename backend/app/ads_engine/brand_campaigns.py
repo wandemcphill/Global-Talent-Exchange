@@ -26,6 +26,14 @@ from app.ads_engine.brand_schemas import (
     PublicMusicPromotionView,
 )
 from app.auth.dependencies import get_current_admin, get_current_user, get_optional_current_user, get_session
+from app.core.ecosystem_events import (
+    EcosystemActor,
+    EcosystemDomain,
+    EcosystemEvent,
+    EcosystemEventPriority,
+    EcosystemSubject,
+    gtex_ecosystem_bus,
+)
 from app.models.brand_ad_campaign import BrandAdCampaign
 from app.models.brand_advertising import BrandAdEvent, BrandAdReviewEvent, BrandAdvertiserProfile
 from app.models.user import User
@@ -379,6 +387,40 @@ def admin_review_brand_campaign(
             to_status=campaign.status,
         )
     )
+
+    # Ecosystem Event Architecture Integration for music campaigns
+    if campaign.campaign_type == "music":
+        event_name = (
+            "campaign_activated"
+            if payload.action == "approve"
+            else ("campaign_expired" if payload.action == "archive" else "campaign_suspended")
+        )
+        try:
+            gtex_ecosystem_bus.publish(
+                session,
+                EcosystemEvent(
+                    domain=EcosystemDomain.MUSIC_PROMOTION,
+                    name=event_name,
+                    payload={
+                        "campaign_id": campaign.id,
+                        "brand_name": campaign.brand_name,
+                        "music_title": campaign.music_title,
+                        "music_artist_name": campaign.music_artist_name,
+                        "action": payload.action,
+                    },
+                    actor=EcosystemActor(actor_id=admin.id, roles=("admin",)),
+                    subject=EcosystemSubject(
+                        subject_id=campaign.id,
+                        subject_type="music_campaign",
+                        title=campaign.music_title or campaign.headline,
+                    ),
+                    priority=EcosystemEventPriority.HIGH if payload.action == "approve" else EcosystemEventPriority.NORMAL,
+                ),
+            )
+        except Exception:
+            # Event publishing failure must not block admin campaign review
+            pass
+
     session.commit()
     session.refresh(campaign)
     return campaign
@@ -413,6 +455,35 @@ def admin_verify_music_rights(
             to_status=f"rights_verified:{campaign.music_rights_verified}",
         )
     )
+
+    # Ecosystem Event Architecture Integration for music rights verification
+    rights_event_name = "rights_approved" if payload.music_rights_verified else "campaign_suspended"
+    try:
+        gtex_ecosystem_bus.publish(
+            session,
+            EcosystemEvent(
+                domain=EcosystemDomain.MUSIC_PROMOTION,
+                name=rights_event_name,
+                payload={
+                    "campaign_id": campaign.id,
+                    "brand_name": campaign.brand_name,
+                    "music_title": campaign.music_title,
+                    "music_artist_name": campaign.music_artist_name,
+                    "rights_holder": payload.music_rights_holder,
+                    "rights_verified": payload.music_rights_verified,
+                },
+                actor=EcosystemActor(actor_id=admin.id, roles=("admin",)),
+                subject=EcosystemSubject(
+                    subject_id=campaign.id,
+                    subject_type="music_campaign",
+                    title=campaign.music_title or campaign.headline,
+                ),
+                priority=EcosystemEventPriority.HIGH,
+            ),
+        )
+    except Exception:
+        pass
+
     session.commit()
     session.refresh(campaign)
     return campaign

@@ -499,6 +499,7 @@ def read_match_viewer_timeline(
     match_key: str,
     request: Request,
     mode: MatchMode = Query(default=MatchMode.STANDARD),
+    target_duration_seconds: int | None = Query(default=None, ge=60, le=900),
     session: Session = Depends(get_session),
     service: MatchTimelineService = Depends(get_match_timeline_service),
     scaling_service: MatchViewerScalingService = Depends(get_match_viewer_scaling_service),
@@ -523,7 +524,11 @@ def read_match_viewer_timeline(
         try:
             secured = integrity_service.build_viewer_session(
                 match_id=match_key,
-                view_state=scaling_service.transform(resolved.canonical_view, mode=mode),
+                view_state=scaling_service.transform(
+                    resolved.canonical_view,
+                    mode=mode,
+                    target_duration_seconds=target_duration_seconds,
+                ),
                 fairness_metadata=resolved.fairness_metadata,
                 mode=mode,
                 canonical_view_state=resolved.canonical_view,
@@ -550,7 +555,11 @@ def read_match_viewer_timeline(
 
     can_view_coach_notes = _is_owner_or_manager(current_user, resolved.match, session)
     transformed = _attach_presentation(
-        scaling_service.transform(resolved.canonical_view, mode=mode),
+        scaling_service.transform(
+            resolved.canonical_view,
+            mode=mode,
+            target_duration_seconds=target_duration_seconds,
+        ),
         match_key=match_key,
         presentation_service=presentation_service,
         metadata_json=resolved.metadata_json,

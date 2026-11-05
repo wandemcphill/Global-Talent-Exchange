@@ -13,6 +13,7 @@ import { api } from "@/lib/api";
 import { publicAssetPath } from "@/lib/publicPath";
 import { Loading } from "@/components/gtex/ui";
 import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
+import { GtexSceneViewport } from "@/lib/3d";
 import {
   Sparkles,
   Plane,
@@ -433,8 +434,8 @@ export function Showroom() {
 
       {/* 3D Bespoke Luxury Vault & Interactive 360 Turntable */}
       {filteredItems.length > 0 && (
-        <Cinema3DStage
-          scene="luxury_turntable"
+        <GtexSceneViewport
+          sceneId="luxury_turntable"
           compact
           title={`3D Luxury Vault · ${filteredItems[0]?.name || "Chronos Tourbillon Piece Unique"}`}
           subtitle={`Interactive 360° 3D Inspection & Gifting Preview · ${active?.club_name || "GTEX FC"}`}
@@ -836,8 +837,8 @@ export function Showroom() {
             </div>
 
             <div className="px-6 pt-4">
-              <Cinema3DStage
-                scene="luxury_turntable"
+              <GtexSceneViewport
+                sceneId="luxury_turntable"
                 compact
                 title={`3D Handover Ceremony · ${giftingItem.name}`}
                 subtitle={`Presenting to ${

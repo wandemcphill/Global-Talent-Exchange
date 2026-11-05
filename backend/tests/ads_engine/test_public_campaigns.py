@@ -107,3 +107,65 @@ def test_public_feed_rejects_unknown_placement() -> None:
     with client:
         response = client.get("/public/ads/campaigns", params={"placement": "unknown-placement"})
         assert response.status_code == 422
+
+
+def test_public_music_promotions_and_audio_telemetry_events() -> None:
+    client, factory = _client()
+    now = datetime.now(UTC)
+    cid_verified = "11111111-2222-3333-4444-555555555555"
+    cid_unverified = "99999999-8888-7777-6666-555555555555"
+
+    # Add verified music campaign and unverified music campaign
+    with factory() as session:
+        session.add_all([
+            _campaign(
+                campaign_id=cid_verified,
+                placement="music_track",
+                campaign_type="music",
+                now=now,
+                music_target_type="track",
+                music_target_id="track_101",
+                music_title="Lagos Nights",
+                music_artist_name="Kazeem",
+                music_rights_verified=True,
+                music_rights_holder="AfroBeats Universal",
+                destination_url="https://open.spotify.com/track/101",
+            ),
+            _campaign(
+                campaign_id=cid_unverified,
+                placement="music_track",
+                campaign_type="music",
+                now=now,
+                music_target_type="track",
+                music_target_id="track_102",
+                music_title="Bootleg Song",
+                music_artist_name="Unknown Artist",
+                music_rights_verified=False,
+                destination_url="https://open.spotify.com/track/102",
+            ),
+        ])
+        session.commit()
+
+    with client:
+        # 1. /public/ads/music/promotions only returns rights-verified campaigns
+        res = client.get("/public/ads/music/promotions")
+        assert res.status_code == 200
+        data = res.json()
+        assert len(data["promotions"]) == 1
+        assert data["promotions"][0]["campaign_id"] == cid_verified
+        assert data["promotions"][0]["track_title"] == "Lagos Nights"
+        assert data["promotions"][0]["music_rights_verified"] is True
+
+        # 2. Audio telemetry events accepted: play_requested, play_started, milestone_50, completed
+        for event_type in ["play_requested", "play_started", "milestone_25", "milestone_50", "completed", "muted"]:
+            ev_res = client.post(
+                "/public/ads/events",
+                json={
+                    "campaign_id": cid_verified,
+                    "event_type": event_type,
+                    "idempotency_key": f"test-key-{event_type}-001",
+                    "metadata_json": {"source": "gtex_audio_manager", "progress_ms": 50000},
+                },
+            )
+            assert ev_res.status_code == 200, f"Failed for {event_type}: {ev_res.text}"
+            assert ev_res.json()["accepted"] is True

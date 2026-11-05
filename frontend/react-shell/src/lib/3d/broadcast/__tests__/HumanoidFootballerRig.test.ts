@@ -161,4 +161,64 @@ describe("HumanoidFootballerRig & GLB Asset Verification", () => {
 
     gkRig.dispose();
   });
+
+  it("shares read-only GPU BufferAttributes across rigs, switches High/Medium/Low materials, and locks root drift", () => {
+    const rigA = new HumanoidFootballerRig({
+      playerId: "atlas_10",
+      side: "home",
+      shirtNumber: 10,
+      label: "Bellingham",
+      role: "MID",
+      isGoalkeeper: false,
+      primaryColor: "#10263F",
+      secondaryColor: "#F2B632",
+      accentColor: "#26D07C",
+      goalkeeperColor: "#FFB800",
+    });
+    const rigB = new HumanoidFootballerRig({
+      playerId: "rio_9",
+      side: "away",
+      shirtNumber: 9,
+      label: "Awoniyi",
+      role: "FWD",
+      isGoalkeeper: false,
+      primaryColor: "#1D3557",
+      secondaryColor: "#E63946",
+      accentColor: "#F1FAEE",
+      goalkeeperColor: "#10B981",
+    });
+
+    // Shared position/normal/skinIndex/skinWeight BufferAttribute references across rigs
+    expect(rigA.skinnedMesh.geometry.attributes.position).toBe(
+      rigB.skinnedMesh.geometry.attributes.position
+    );
+    expect(rigA.skinnedMesh.geometry.attributes.skinIndex).toBe(
+      rigB.skinnedMesh.geometry.attributes.skinIndex
+    );
+    // Independent per-player kit/appearance color attribute
+    expect(rigA.skinnedMesh.geometry.attributes.color).not.toBe(
+      rigB.skinnedMesh.geometry.attributes.color
+    );
+    expect(rigA.skinnedMesh.frustumCulled).toBe(true);
+    expect(rigA.skinnedMesh.geometry.boundingSphere).toBeDefined();
+
+    // High tier uses MeshStandardMaterial; Medium/Low uses MeshLambertMaterial
+    expect(rigA.skinnedMesh.material).toBeInstanceOf(THREE.MeshStandardMaterial);
+    rigA.update({
+      deltaSec: 0.12,
+      targetState: "header",
+      position3D: [10, 0, 0],
+      facingAngleRad: 0,
+      speedRatio: 0.5,
+      hasPossession: true,
+      ballPosition3D: [10.4, 2.1, 0],
+      cameraPosition3D: [0, 22, 38],
+      qualityTier: "medium",
+    });
+    expect(rigA.skinnedMesh.material).toBeInstanceOf(THREE.MeshLambertMaterial);
+    expect(rigA.modelContainer.position.y).toBeGreaterThan(0.05);
+
+    rigA.dispose();
+    rigB.dispose();
+  });
 });

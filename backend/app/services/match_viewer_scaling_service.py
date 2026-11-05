@@ -56,6 +56,8 @@ class MatchViewerScalingService:
         self,
         view_state: MatchViewStateView,
         mode: MatchMode = MatchMode.STANDARD,
+        *,
+        target_duration_seconds: int | None = None,
     ) -> MatchViewStateView:
         authoritative_events = [event for event in view_state.events if not self._is_presentation_only(event)]
         event_ids = {event.event_id for event in authoritative_events}
@@ -63,7 +65,10 @@ class MatchViewerScalingService:
             frame for frame in view_state.frames if frame.active_event_id is None or frame.active_event_id in event_ids
         ]
         base_duration = self._base_duration(view_state)
-        target_duration = self._target_duration(authoritative_events, frame_count=len(base_frames), mode=mode)
+        if target_duration_seconds is not None:
+            target_duration = max(60, min(900, int(target_duration_seconds)))
+        else:
+            target_duration = self._target_duration(authoritative_events, frame_count=len(base_frames), mode=mode)
         scaled_events = self._scale_authoritative_events(
             authoritative_events,
             base_duration=base_duration,

@@ -13,7 +13,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
-from app.owner_console import alerts, competitions as comps
+from app.owner_console import alerts, competitions as comps, delegation_service
+from app.owner_console.delegation_service import DelegationError
 from app.owner_console import ledger, money, service, storytelling
 from app.owner_console.models import (
     IntegrityFlag,
@@ -41,6 +42,9 @@ def _run(session: Session, fn, *args, **kwargs):
     except OwnerError as exc:
         session.rollback()
         raise HTTPException(status_code=exc.status, detail={"code": exc.code, "detail": exc.detail}) from exc
+    except DelegationError as exc:
+        session.rollback()
+        raise HTTPException(status_code=exc.status_code, detail={"code": exc.code, "detail": exc.message}) from exc
 
 
 class ManagerSnapshot(BaseModel):
@@ -106,6 +110,55 @@ class DelegationPolicyRequest(BaseModel):
     gm_transfer_autonomy: bool = True
     hoyd_youth_contracts: bool = True
     manager_tactics_autonomy: bool = True
+
+
+class DelegationModeRequest(BaseModel):
+    mode: str = "balanced"
+
+
+class DelegationActivityUpdateRequest(BaseModel):
+    activity_key: str
+    responsible_role: str
+    authority_level: str = "delegated_with_limits"
+    requires_owner_approval: bool = False
+    requires_joint_approval: bool = False
+    joint_role: str | None = None
+
+
+class DelegationThresholdsRequest(BaseModel):
+    thresholds: dict[str, float]
+
+
+class DelegationSuspensionRequest(BaseModel):
+    suspend: bool
+    reason: str | None = None
+
+
+class DelegationOverrideRequest(BaseModel):
+    activity_key: str
+    override_role: str = "owner"
+    reason: str = "Owner emergency intervention"
+    expires_at_iso: str | None = None
+
+
+class DelegatedDecisionProposalRequest(BaseModel):
+    activity_key: str
+    proposed_by_role: str
+    title: str
+    summary: str
+    financial_amount_gtex: float | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class DelegatedDecisionResolveRequest(BaseModel):
+    action: str = "approve"
+    decision_note: str | None = None
+
+
+class AuthorityEvaluationRequest(BaseModel):
+    activity_key: str
+    financial_amount_gtex: float | None = None
+    proposed_by_role: str | None = None
 
 
 class StaffChatRequest(BaseModel):
@@ -1316,6 +1369,353 @@ def update_delegation(
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
     return _run(session, service.update_delegation_policy, session, user.id, club_id, payload.model_dump())
+
+
+# ---------- Club Authority & Delegation Foundation ----------
+
+
+@router.get("/clubs/{club_id}/authority/policy")
+def get_club_authority_policy(
+    club_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    policy = _run(session, delegation_service.get_or_create_delegation_policy, session, club_id, user.id)
+    return {
+        "club_id": policy.club_id,
+        "mode": policy.mode,
+        "is_suspended": policy.is_suspended,
+        "suspension_reason": policy.suspension_reason,
+        "financial_thresholds": policy.financial_thresholds_json,
+        "activity_assignments": policy.activity_assignments_json,
+        "reserved_decisions": policy.reserved_decisions_json,
+        "temporary_overrides": policy.temporary_overrides_json,
+        "created_at": policy.created_at.isoformat() if policy.created_at else None,
+        "updated_at": policy.updated_at.isoformat() if policy.updated_at else None,
+    }
+
+
+@router.get("/clubs/{club_id}/authority/org-structure")
+def get_club_org_structure(
+    club_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(session, delegation_service.get_club_org_structure, session, club_id, user.id)
+
+
+@router.post("/clubs/{club_id}/authority/mode")
+def set_club_delegation_mode(
+    club_id: str,
+    payload: DelegationModeRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    policy = _run(session, delegation_service.set_management_configuration, session, club_id, user.id, payload.mode)
+    return {
+        "club_id": policy.club_id,
+        "mode": policy.mode,
+        "is_suspended": policy.is_suspended,
+        "financial_thresholds": policy.financial_thresholds_json,
+        "activity_assignments": policy.activity_assignments_json,
+    }
+
+
+@router.put("/clubs/{club_id}/authority/activity")
+def update_club_activity_delegation(
+    club_id: str,
+    payload: DelegationActivityUpdateRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    policy = _run(
+        session,
+        delegation_service.update_activity_assignment,
+        session,
+        club_id,
+        user.id,
+        payload.activity_key,
+        payload.responsible_role,
+        payload.authority_level,
+        payload.requires_owner_approval,
+        payload.requires_joint_approval,
+        payload.joint_role,
+    )
+    return {"status": "updated", "activity_assignments": policy.activity_assignments_json}
+
+
+@router.put("/clubs/{club_id}/authority/thresholds")
+def update_club_authority_thresholds(
+    club_id: str,
+    payload: DelegationThresholdsRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    policy = _run(
+        session,
+        delegation_service.update_financial_thresholds,
+        session,
+        club_id,
+        user.id,
+        payload.thresholds,
+    )
+    return {"status": "updated", "financial_thresholds": policy.financial_thresholds_json}
+
+
+@router.post("/clubs/{club_id}/authority/suspension")
+def toggle_club_delegation_suspension(
+    club_id: str,
+    payload: DelegationSuspensionRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    policy = _run(
+        session,
+        delegation_service.toggle_delegation_suspension,
+        session,
+        club_id,
+        user.id,
+        payload.suspend,
+        payload.reason,
+    )
+    return {
+        "is_suspended": policy.is_suspended,
+        "suspension_reason": policy.suspension_reason,
+        "status": "suspended" if policy.is_suspended else "restored",
+    }
+
+
+@router.post("/clubs/{club_id}/authority/override")
+def apply_club_delegation_override(
+    club_id: str,
+    payload: DelegationOverrideRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    policy = _run(
+        session,
+        delegation_service.set_temporary_override,
+        session,
+        club_id,
+        user.id,
+        payload.activity_key,
+        payload.override_role,
+        payload.reason,
+        payload.expires_at_iso,
+    )
+    return {"status": "override_applied", "temporary_overrides": policy.temporary_overrides_json}
+
+
+@router.delete("/clubs/{club_id}/authority/override/{activity_key}")
+def remove_club_delegation_override(
+    club_id: str,
+    activity_key: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    policy = _run(
+        session,
+        delegation_service.remove_temporary_override,
+        session,
+        club_id,
+        user.id,
+        activity_key,
+    )
+    return {"status": "override_removed", "temporary_overrides": policy.temporary_overrides_json}
+
+
+@router.get("/clubs/{club_id}/authority/decisions")
+def get_club_authority_decisions(
+    club_id: str,
+    status: str | None = Query(default=None),
+    domain: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=100),
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    decisions = _run(
+        session,
+        delegation_service.get_club_decision_history,
+        session,
+        club_id,
+        user.id,
+        status_filter=status,
+        domain_filter=domain,
+        limit=limit,
+    )
+    return {
+        "club_id": club_id,
+        "decisions": [
+            {
+                "id": d.id,
+                "activity_key": d.activity_key,
+                "domain": d.domain,
+                "proposed_by_role": d.proposed_by_role,
+                "proposed_by_staff_name": d.proposed_by_staff_name,
+                "title": d.title,
+                "summary": d.summary,
+                "financial_amount_gtex": float(d.financial_amount_gtex) if d.financial_amount_gtex is not None else None,
+                "requires_owner_approval": d.requires_owner_approval,
+                "approval_reason": d.approval_reason,
+                "status": d.status,
+                "outcome_text": d.outcome_text,
+                "decision_note": d.decision_note,
+                "payload": d.payload_json,
+                "staff_competence_rating": d.staff_competence_rating,
+                "staff_impact": d.staff_impact_json,
+                "created_at": d.created_at.isoformat() if d.created_at else None,
+                "resolved_at": d.resolved_at.isoformat() if d.resolved_at else None,
+            }
+            for d in decisions
+        ],
+    }
+
+
+@router.get("/clubs/{club_id}/authority/escalations")
+def get_club_authority_escalations(
+    club_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    escalations = _run(
+        session,
+        delegation_service.get_pending_escalations,
+        session,
+        club_id,
+        user.id,
+    )
+    return {
+        "club_id": club_id,
+        "pending_count": len(escalations),
+        "escalations": [
+            {
+                "id": d.id,
+                "activity_key": d.activity_key,
+                "domain": d.domain,
+                "proposed_by_role": d.proposed_by_role,
+                "proposed_by_staff_name": d.proposed_by_staff_name,
+                "title": d.title,
+                "summary": d.summary,
+                "financial_amount_gtex": float(d.financial_amount_gtex) if d.financial_amount_gtex is not None else None,
+                "approval_reason": d.approval_reason,
+                "status": d.status,
+                "payload": d.payload_json,
+                "staff_competence_rating": d.staff_competence_rating,
+                "staff_impact": d.staff_impact_json,
+                "created_at": d.created_at.isoformat() if d.created_at else None,
+            }
+            for d in escalations
+        ],
+    }
+
+
+@router.post("/clubs/{club_id}/authority/propose")
+def propose_club_delegated_action(
+    club_id: str,
+    payload: DelegatedDecisionProposalRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    decision = _run(
+        session,
+        delegation_service.propose_delegated_decision,
+        session,
+        club_id,
+        payload.activity_key,
+        payload.proposed_by_role,
+        payload.title,
+        payload.summary,
+        financial_amount_gtex=payload.financial_amount_gtex,
+        payload=payload.payload,
+        user_id=user.id,
+    )
+    return {
+        "decision_id": decision.id,
+        "status": decision.status,
+        "requires_owner_approval": decision.requires_owner_approval,
+        "approval_reason": decision.approval_reason,
+        "outcome_text": decision.outcome_text,
+    }
+
+
+@router.post("/clubs/{club_id}/authority/decisions/{decision_id}/resolve")
+def resolve_club_delegated_decision(
+    club_id: str,
+    decision_id: str,
+    payload: DelegatedDecisionResolveRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    decision = _run(
+        session,
+        delegation_service.resolve_delegated_decision,
+        session,
+        club_id,
+        user.id,
+        decision_id,
+        payload.action,
+        decision_note=payload.decision_note,
+    )
+    return {
+        "decision_id": decision.id,
+        "status": decision.status,
+        "outcome_text": decision.outcome_text,
+        "resolved_at": decision.resolved_at.isoformat() if decision.resolved_at else None,
+    }
+
+
+@router.get("/clubs/{club_id}/authority/decisions/{decision_id}/audit-trail")
+def get_club_decision_audit_trail(
+    club_id: str,
+    decision_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    logs = _run(
+        session,
+        delegation_service.get_decision_audit_trail,
+        session,
+        club_id,
+        user.id,
+        decision_id,
+    )
+    return {
+        "club_id": club_id,
+        "decision_id": decision_id,
+        "audit_trail": [
+            {
+                "id": log.id,
+                "action": log.action,
+                "actor_id": log.actor_id,
+                "previous_status": log.previous_status,
+                "new_status": log.new_status,
+                "decision_note": log.decision_note,
+                "snapshot": log.snapshot_json,
+                "created_at": log.created_at.isoformat() if log.created_at else None,
+            }
+            for log in logs
+        ],
+    }
+
+
+@router.post("/clubs/{club_id}/authority/evaluate")
+def evaluate_club_action_authority(
+    club_id: str,
+    payload: AuthorityEvaluationRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    res = _run(
+        session,
+        delegation_service.evaluate_action_authority,
+        session,
+        club_id,
+        user.id,
+        payload.activity_key,
+        financial_amount_gtex=payload.financial_amount_gtex,
+        proposed_by_role=payload.proposed_by_role,
+    )
+    return res.to_dict()
 
 
 # ---------- Daily AI Briefing & Boardroom Chat ----------

@@ -34,15 +34,18 @@ import { Showroom } from "@/pages/Showroom";
 import ClubCampus from "@/pages/ClubCampus";
 import Jackpot from "@/pages/Jackpot";
 import AppearanceStudio from "@/pages/AppearanceStudio";
+import ClubAuthorityPage from "@/pages/ClubAuthorityPage";
 import { SkinProvider } from "@/lib/skin-engine";
 import { ROUTER_BASENAME } from "@/lib/publicPath";
 import { GtexAdvertisingProvider } from "@/components/advertising/GtexAdvertising";
+import { GtexAudioProvider } from "@/lib/audio";
 
 export default function App() {
   return (
     <AuthProvider>
       <SkinProvider>
-      <BrowserRouter basename={ROUTER_BASENAME}>
+        <GtexAudioProvider>
+          <BrowserRouter basename={ROUTER_BASENAME}>
         <Routes>
           <Route path="/" element={<GtexAdvertisingProvider><Landing /></GtexAdvertisingProvider>} />
           <Route path="/login" element={<GtexAdvertisingProvider><AuthPage mode="login" /></GtexAdvertisingProvider>} />
@@ -80,6 +83,10 @@ export default function App() {
             <Route path="clubs/sale-market" element={<Navigate to="/app/market?tab=club-sales" replace />} />
             <Route path="national" element={<NationalTeam />} />
             <Route path="finance" element={<Finance />} />
+            <Route path="governance" element={<ClubAuthorityPage />} />
+            <Route path="clubs/:clubId/governance" element={<ClubAuthorityPage />} />
+            <Route path="authority" element={<ClubAuthorityPage />} />
+            <Route path="clubs/:clubId/authority" element={<ClubAuthorityPage />} />
             <Route path="jackpot" element={<Jackpot />} />
             <Route path="creator-access" element={<CreatorAccess />} />
             <Route path="advertising" element={<AdvertiserAds />} />
@@ -94,6 +101,7 @@ export default function App() {
         </Routes>
       </BrowserRouter>
       <Toaster theme="dark" position="top-right" richColors />
+      </GtexAudioProvider>
     </SkinProvider>
     </AuthProvider>
   );

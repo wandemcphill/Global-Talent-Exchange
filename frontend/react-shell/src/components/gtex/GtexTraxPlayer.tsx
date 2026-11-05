@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { gtexAudio } from "@/lib/audio";
 import {
   Disc3,
   ExternalLink,
@@ -308,6 +309,18 @@ export function GtexTraxTopBarControl() {
   useEffect(() => {
     const nextCtx = inferContextFromPath(pathname);
     setActiveContext(nextCtx);
+  }, [pathname]);
+
+  // Coordinate with Central Audio Session Manager (user_music channel priority)
+  useEffect(() => {
+    if (isPlaying && !isMuted) {
+      gtexAudio.registerActiveChannelSource("user_music", "gtex_trax_player");
+    } else {
+      gtexAudio.unregisterActiveChannelSource("user_music", "gtex_trax_player");
+    }
+    return () => {
+      gtexAudio.unregisterActiveChannelSource("user_music", "gtex_trax_player");
+    };
   }, [pathname]);
 
   // Show EA FC Trax-style Now Playing Broadcast Chyron when track changes while playing

@@ -61,8 +61,17 @@ const BOOT_COLOR_PALETTE = [
   "#CCFF00", // Volt neon
   "#FF2A54", // Crimson predator
   "#00E5FF", // Electric cyan
-  "#F8FAFC", // Classic white-gold
+  "#F8FAFC", // Pearl white-gold
+  "#F59E0B", // Solar gold
+  "#A855F7", // Hyper violet
 ] as const;
+
+// Pre-allocated scratch math primitives to eliminate per-frame GC pressure across 22 players
+const _scratchQuat = new THREE.Quaternion();
+const _axisX = new THREE.Vector3(1, 0, 0);
+const _axisY = new THREE.Vector3(0, 1, 0);
+const _axisZ = new THREE.Vector3(0, 0, 1);
+const _defaultBoundingSphere = new THREE.Sphere(new THREE.Vector3(0, 95, 0), 195);
 
 export const HAIR_STYLE_VARIANTS = [
   "buzz_fade",
@@ -244,7 +253,38 @@ export function classifyAnatomicalZone(
 }
 
 /**
- * Applies kit and player appearance colors to a `SkinnedMesh` geometry's `color` attribute.
+ * Creates a lightweight BufferGeometry that shares read-only vertex attributes
+ * (position, normal, uv, skinIndex, skinWeight, index) on the GPU across all 22 players
+ * while allowing each player rig to have its own independent `color` BufferAttribute.
+ */
+export function createSharedAttributeGeometry(sourceGeo: THREE.BufferGeometry): THREE.BufferGeometry {
+  const sharedGeo = new THREE.BufferGeometry();
+  const sharedNames = ["position", "normal", "uv", "skinIndex", "skinWeight"] as const;
+  for (const attrName of sharedNames) {
+    const attr = sourceGeo.getAttribute(attrName);
+    if (attr) {
+      sharedGeo.setAttribute(attrName, attr);
+    }
+  }
+  if (sourceGeo.index) {
+    sharedGeo.setIndex(sourceGeo.index);
+  }
+  if (!sourceGeo.userData.bindPositionArray && sourceGeo.attributes.position) {
+    const posArr = sourceGeo.attributes.position.array as ArrayLike<number>;
+    const copy = new Float32Array(posArr.length);
+    copy.set(posArr);
+    sourceGeo.userData.bindPositionArray = copy;
+  }
+  sharedGeo.userData.bindPositionArray = sourceGeo.userData.bindPositionArray;
+  sharedGeo.boundingSphere = _defaultBoundingSphere;
+  return sharedGeo;
+}
+
+/**
+ * Applies kit and player appearance colors to a `SkinnedMesh` geometry's `color` attribute,
+ * including U2A-007 visual refinements: facial features (eyes, eyebrows, nose/jaw contour),
+ * kit collar/cuffs/stripes, captain's armband, goalkeeper forearm padding & latex gloves,
+ * and two-tone pro football boots with carbon soleplates/studs.
  */
 export function applyKitColorsToSkinnedGeometry(
   geometry: THREE.BufferGeometry,
@@ -257,16 +297,24 @@ export function applyKitColorsToSkinnedGeometry(
 
   const profile = resolvePlayerAppearanceProfile(config);
   const skinColor = new THREE.Color(profile.skinToneHex);
+  const skinHighlight = skinColor.clone().multiplyScalar(1.07);
+  const skinShadow = skinColor.clone().multiplyScalar(0.86);
+  const eyeFeatureColor = new THREE.Color("#141821");
   const hairColor = new THREE.Color(profile.hairColorHex);
   const bootColor = new THREE.Color(profile.bootColorHex);
+  const bootSoleColor = new THREE.Color("#0F172A");
 
   const jerseyPrimary = new THREE.Color(config.isGoalkeeper ? config.goalkeeperColor : config.primaryColor);
+  const jerseySecondary = new THREE.Color(config.secondaryColor || config.primaryColor);
   const jerseyTrim = new THREE.Color(config.accentColor || "#FFFFFF");
   const shortsColor = new THREE.Color(
     config.isGoalkeeper ? config.goalkeeperColor : config.secondaryColor || config.primaryColor
   );
   const socksColor = new THREE.Color(config.primaryColor);
   const glovesColor = config.isGoalkeeper ? new THREE.Color(config.accentColor || "#F8FAFC") : skinColor;
+  const gkPaddingColor = jerseyPrimary.clone().multiplyScalar(0.72);
+  const captainBandColor = new THREE.Color("#FACC15");
+  const isCaptain = !config.isGoalkeeper && (config.shirtNumber === 4 || config.shirtNumber === 6 || config.shirtNumber === 10);
 
   let colorAttr = geometry.attributes.color as THREE.BufferAttribute | undefined;
   if (!colorAttr || colorAttr.count !== posAttr.count) {
@@ -281,44 +329,153 @@ export function applyKitColorsToSkinnedGeometry(
     geometry.userData.bindPositionArray = bindPosArray;
   }
 
+  const outArr = colorAttr.array as Float32Array;
   for (let i = 0; i < posAttr.count; i++) {
     const bIdx = skinIdxAttr.getX(i);
     const boneName = bones[bIdx]?.name || "Spine";
     const bx = bindPosArray[i * 3];
     const by = bindPosArray[i * 3 + 1];
     const bz = bindPosArray[i * 3 + 2];
+    const absX = Math.abs(bx);
 
     const zone = classifyAnatomicalZone(boneName, bx, by, bz, profile.hairStyle, profile.hasFacialHair);
-    let targetColor = jerseyPrimary;
+    let r = jerseyPrimary.r;
+    let g = jerseyPrimary.g;
+    let b = jerseyPrimary.b;
 
     switch (zone) {
-      case AnatomicalZone.SKIN:
-        targetColor = config.isGoalkeeper && boneName.includes("ForeArm") ? jerseyPrimary : skinColor;
+      case AnatomicalZone.SKIN: {
+        if (config.isGoalkeeper && boneName.includes("ForeArm")) {
+          // Goalkeeper long-sleeve tech jersey with padded elbow protection zone
+          const c = by >= 106.0 && by <= 115.0 ? gkPaddingColor : jerseyPrimary;
+          r = c.r;
+          g = c.g;
+          b = c.b;
+        } else if (boneName === "Head") {
+          // Facial feature detailing on front face (eyes, brow ridge, nose highlight, jawline shadow)
+          if (bz > 5.2 && by >= 161.2 && by <= 163.4 && absX >= 1.5 && absX <= 4.3) {
+            r = eyeFeatureColor.r;
+            g = eyeFeatureColor.g;
+            b = eyeFeatureColor.b;
+          } else if (bz > 5.0 && by > 163.4 && by <= 164.8 && absX >= 1.3 && absX <= 4.8) {
+            r = hairColor.r;
+            g = hairColor.g;
+            b = hairColor.b;
+          } else if (bz > 6.5 && by >= 158.0 && by <= 162.8 && absX < 1.3) {
+            r = skinHighlight.r;
+            g = skinHighlight.g;
+            b = skinHighlight.b;
+          } else if (by < 154.0 || bz < -1.0) {
+            r = skinShadow.r;
+            g = skinShadow.g;
+            b = skinShadow.b;
+          } else {
+            r = skinColor.r;
+            g = skinColor.g;
+            b = skinColor.b;
+          }
+        } else {
+          r = skinColor.r;
+          g = skinColor.g;
+          b = skinColor.b;
+        }
         break;
-      case AnatomicalZone.JERSEY_PRIMARY:
-        targetColor = jerseyPrimary;
+      }
+      case AnatomicalZone.JERSEY_PRIMARY: {
+        // Captain's armband on left upper sleeve
+        if (isCaptain && boneName.includes("LeftArm") && by >= 122.5 && by <= 129.0) {
+          r = captainBandColor.r;
+          g = captainBandColor.g;
+          b = captainBandColor.b;
+        } else if (boneName.includes("Arm") && by > 136.5 && Math.abs(bz) < 2.2) {
+          // Shoulder/sleeve piping stripe
+          r = jerseyTrim.r;
+          g = jerseyTrim.g;
+          b = jerseyTrim.b;
+        } else if ((boneName === "Spine" || boneName === "Spine1" || boneName === "Spine2") && absX > 13.8) {
+          // Athletic torso side-panel trim
+          r = jerseySecondary.r * 0.92;
+          g = jerseySecondary.g * 0.92;
+          b = jerseySecondary.b * 0.92;
+        } else {
+          r = jerseyPrimary.r;
+          g = jerseyPrimary.g;
+          b = jerseyPrimary.b;
+        }
         break;
+      }
       case AnatomicalZone.JERSEY_TRIM:
-        targetColor = jerseyTrim;
+        r = jerseyTrim.r;
+        g = jerseyTrim.g;
+        b = jerseyTrim.b;
         break;
-      case AnatomicalZone.SHORTS:
-        targetColor = shortsColor;
+      case AnatomicalZone.SHORTS: {
+        // Shorts lateral stripe & hem band
+        if (by <= 48.2 || absX > 15.8) {
+          r = jerseyTrim.r;
+          g = jerseyTrim.g;
+          b = jerseyTrim.b;
+        } else {
+          r = shortsColor.r;
+          g = shortsColor.g;
+          b = shortsColor.b;
+        }
         break;
-      case AnatomicalZone.SOCKS:
-        targetColor = socksColor;
+      }
+      case AnatomicalZone.SOCKS: {
+        // Pro sock turnover hoop band
+        if (by >= 18.8 && by <= 20.6) {
+          r = jerseyTrim.r;
+          g = jerseyTrim.g;
+          b = jerseyTrim.b;
+        } else {
+          r = socksColor.r;
+          g = socksColor.g;
+          b = socksColor.b;
+        }
         break;
-      case AnatomicalZone.BOOTS:
-        targetColor = bootColor;
+      }
+      case AnatomicalZone.BOOTS: {
+        // Two-tone pro boot: carbon soleplate/studs (< 2.6cm), heel/midfoot stripe, and bright vamp upper
+        if (by < 2.6) {
+          r = bootSoleColor.r;
+          g = bootSoleColor.g;
+          b = bootSoleColor.b;
+        } else if (bz >= -1.0 && bz <= 2.8 && by >= 3.6 && by <= 6.2) {
+          r = jerseyTrim.r;
+          g = jerseyTrim.g;
+          b = jerseyTrim.b;
+        } else {
+          r = bootColor.r;
+          g = bootColor.g;
+          b = bootColor.b;
+        }
         break;
+      }
       case AnatomicalZone.HAIR:
-        targetColor = hairColor;
+        r = hairColor.r;
+        g = hairColor.g;
+        b = hairColor.b;
         break;
-      case AnatomicalZone.GLOVES:
-        targetColor = glovesColor;
+      case AnatomicalZone.GLOVES: {
+        // Goalkeeper wrist strap vs latex palm/backhand
+        if (config.isGoalkeeper && by >= 89.5 && by <= 94.0) {
+          r = bootSoleColor.r;
+          g = bootSoleColor.g;
+          b = bootSoleColor.b;
+        } else {
+          r = glovesColor.r;
+          g = glovesColor.g;
+          b = glovesColor.b;
+        }
         break;
+      }
     }
 
-    colorAttr.setXYZ(i, targetColor.r, targetColor.g, targetColor.b);
+    const outIdx = i * 3;
+    outArr[outIdx] = r;
+    outArr[outIdx + 1] = g;
+    outArr[outIdx + 2] = b;
   }
 
   colorAttr.needsUpdate = true;
@@ -837,26 +994,51 @@ export class HumanoidFootballerRig {
     this.transitionToState("idle", true);
   }
 
+  private currentQualityTier: DeviceQualityTier = "high";
+
+  private createKitMaterial(qualityTier: DeviceQualityTier): THREE.Material {
+    if (qualityTier === "medium" || qualityTier === "low") {
+      return new THREE.MeshLambertMaterial({
+        name: `KitMaterial_${this.playerId}`,
+        vertexColors: true,
+      });
+    }
+    return new THREE.MeshStandardMaterial({
+      name: `KitMaterial_${this.playerId}`,
+      vertexColors: true,
+      roughness: 0.58,
+      metalness: 0.08,
+    });
+  }
+
+  public setQualityTier(qualityTier: DeviceQualityTier): void {
+    if (this.currentQualityTier === qualityTier) return;
+    const prevWasLambert = this.currentQualityTier === "medium" || this.currentQualityTier === "low";
+    const nextIsLambert = qualityTier === "medium" || qualityTier === "low";
+    this.currentQualityTier = qualityTier;
+    if (prevWasLambert !== nextIsLambert && this.skinnedMesh) {
+      const oldMat = this.skinnedMesh.material as THREE.Material;
+      this.skinnedMesh.material = this.createKitMaterial(qualityTier);
+      oldMat.dispose();
+    }
+  }
+
   private buildCanonicalSynchronousRig(): void {
     const { bones, boneByName, skeleton, rootBone } = createCanonical26BoneSkeleton();
     this.skeleton = skeleton;
     this.boneByName = boneByName;
 
-    const geo = getCanonicalHumanoidBufferGeometry();
+    const baseGeo = getCanonicalHumanoidBufferGeometry();
+    const geo = createSharedAttributeGeometry(baseGeo);
     applyKitColorsToSkinnedGeometry(geo, bones, this.kitConfig);
 
-    const mat = new THREE.MeshStandardMaterial({
-      name: `KitMaterial_${this.playerId}`,
-      vertexColors: true,
-      roughness: 0.62,
-      metalness: 0.08,
-    });
+    const mat = this.createKitMaterial(this.currentQualityTier);
 
     this.skinnedMesh = new THREE.SkinnedMesh(geo, mat);
     this.skinnedMesh.name = "HumanoidSkinnedMesh";
     this.skinnedMesh.castShadow = true;
-    this.skinnedMesh.receiveShadow = true;
-    this.skinnedMesh.frustumCulled = false;
+    this.skinnedMesh.receiveShadow = false;
+    this.skinnedMesh.frustumCulled = true;
 
     this.modelContainer.add(rootBone);
     this.modelContainer.add(this.skinnedMesh);
@@ -873,21 +1055,17 @@ export class HumanoidFootballerRig {
     this.skeleton = skeleton;
     this.boneByName = boneByName;
 
-    const geo = asset.geometry.clone();
+    // Share read-only position/normal/uv/skinIndex/skinWeight/index VBOs across all 22 rigs
+    const geo = createSharedAttributeGeometry(asset.geometry);
     applyKitColorsToSkinnedGeometry(geo, bones, this.kitConfig);
 
-    const mat = new THREE.MeshStandardMaterial({
-      name: `KitMaterial_${this.playerId}`,
-      vertexColors: true,
-      roughness: 0.62,
-      metalness: 0.08,
-    });
+    const mat = this.createKitMaterial(this.currentQualityTier);
 
     this.skinnedMesh = new THREE.SkinnedMesh(geo, mat);
     this.skinnedMesh.name = "Player";
     this.skinnedMesh.castShadow = true;
-    this.skinnedMesh.receiveShadow = true;
-    this.skinnedMesh.frustumCulled = false;
+    this.skinnedMesh.receiveShadow = false;
+    this.skinnedMesh.frustumCulled = true;
 
     this.modelContainer.add(rootBone);
     this.modelContainer.add(this.skinnedMesh);
@@ -948,20 +1126,27 @@ export class HumanoidFootballerRig {
   private setupAnimationMixer(mixerRoot: THREE.Object3D): void {
     this.mixer = new THREE.AnimationMixer(mixerRoot);
     this.actionsByState.clear();
+    // Lazily instantiate AnimationActions on demand via getOrCreateAction()
+    this.getOrCreateAction("idle");
+  }
 
-    for (const state of ALL_FOOTBALL_ANIMATION_STATES) {
-      const clip = this.clipLibrary.get(state);
-      if (!clip) continue;
-      const meta = FOOTBALL_ANIMATION_STATE_META[state];
-      const action = this.mixer.clipAction(clip);
-      if (meta.loop) {
-        action.setLoop(THREE.LoopRepeat, Infinity);
-      } else {
-        action.setLoop(THREE.LoopOnce, 1);
-        action.clampWhenFinished = true;
-      }
-      this.actionsByState.set(state, action);
+  private getOrCreateAction(state: FootballAnimationState): THREE.AnimationAction | undefined {
+    let action = this.actionsByState.get(state);
+    if (action) return action;
+
+    const clip = this.clipLibrary.get(state) || this.clipLibrary.get("idle");
+    if (!clip) return undefined;
+
+    const meta = FOOTBALL_ANIMATION_STATE_META[state] || FOOTBALL_ANIMATION_STATE_META.idle;
+    action = this.mixer.clipAction(clip);
+    if (meta.loop) {
+      action.setLoop(THREE.LoopRepeat, Infinity);
+    } else {
+      action.setLoop(THREE.LoopOnce, 1);
+      action.clampWhenFinished = true;
     }
+    this.actionsByState.set(state, action);
+    return action;
   }
 
   public transitionToState(nextState: FootballAnimationState, immediate: boolean = false): void {
@@ -969,9 +1154,16 @@ export class HumanoidFootballerRig {
       return;
     }
 
-    const prevAction = this.actionsByState.get(this.currentState);
-    const nextAction = this.actionsByState.get(nextState) || this.actionsByState.get("idle");
+    const prevAction = this.getOrCreateAction(this.currentState);
+    const nextAction = this.getOrCreateAction(nextState) || this.getOrCreateAction("idle");
     if (!nextAction) return;
+
+    // Stop any older faded-out actions so AnimationMixer only evaluates active clips
+    this.actionsByState.forEach((act) => {
+      if (act !== prevAction && act !== nextAction && act.isRunning()) {
+        act.stop();
+      }
+    });
 
     const meta = FOOTBALL_ANIMATION_STATE_META[nextState] || FOOTBALL_ANIMATION_STATE_META.idle;
 
@@ -1033,6 +1225,7 @@ export class HumanoidFootballerRig {
       qualityTier = "high",
     } = params;
 
+    this.setQualityTier(qualityTier);
     this.timeInCurrentStateSec += deltaSec;
 
     if (targetState !== this.currentState) {
@@ -1045,11 +1238,13 @@ export class HumanoidFootballerRig {
     const activeAction = this.actionsByState.get(this.currentState);
     if (activeAction) {
       const meta = FOOTBALL_ANIMATION_STATE_META[this.currentState];
+      const clampedSpeed = Math.min(1.0, Math.max(0.0, speedRatio));
       if (meta.category === "locomotion" && this.currentState !== "idle") {
-        const cadenceScale = 0.8 + Math.min(1.0, Math.max(0.0, speedRatio)) * 0.55;
+        // Velocity-locked stride cadence eliminates foot sliding on turf
+        const cadenceScale = 0.85 + clampedSpeed * 0.58;
         activeAction.setEffectiveTimeScale(cadenceScale);
       } else if (this.currentState === "dribble") {
-        const cadenceScale = 0.9 + Math.min(1.0, Math.max(0.0, speedRatio)) * 0.45;
+        const cadenceScale = 0.92 + clampedSpeed * 0.48;
         activeAction.setEffectiveTimeScale(cadenceScale);
       } else {
         activeAction.setEffectiveTimeScale(1.0);
@@ -1104,6 +1299,7 @@ export class HumanoidFootballerRig {
         this.applyProceduralPostureAdjustments(
           position3D,
           facingAngleRad,
+          speedRatio,
           angularVelocityRad,
           ballPosition3D
         );
@@ -1116,12 +1312,35 @@ export class HumanoidFootballerRig {
   private applyProceduralPostureAdjustments(
     position3D: [number, number, number],
     facingAngleRad: number,
+    speedRatio: number,
     angularVelocityRad: number,
     ballPosition3D: [number, number, number]
   ): void {
     const hipsBone = this.boneByName.get("Hips");
     const headBone = this.boneByName.get("Head");
     const spine1Bone = this.boneByName.get("Spine1");
+
+    // Lock horizontal root-bone drift during locomotion/dribbling so feet stay grounded on pitch coordinates
+    if (hipsBone) {
+      const meta = FOOTBALL_ANIMATION_STATE_META[this.currentState];
+      if (meta.category === "locomotion" || this.currentState === "dribble") {
+        hipsBone.position.x = 0;
+        hipsBone.position.z = 0;
+      }
+    }
+
+    // Smooth aerial jump elevation arc for headers, aerial challenges, and high goalkeeper catches/punches
+    if (
+      this.currentState === "jumping_challenge" ||
+      this.currentState === "volley" ||
+      this.currentState === "gk_dive_high" ||
+      this.currentState === "gk_punch"
+    ) {
+      const jumpPhase = Math.min(1.0, this.timeInCurrentStateSec / 0.55);
+      this.modelContainer.position.y = Math.sin(jumpPhase * Math.PI) * 0.42;
+    } else {
+      this.modelContainer.position.y = 0;
+    }
 
     // Directional goalkeeper dive lateral orientation toward incoming shot trajectory
     if (
@@ -1139,15 +1358,29 @@ export class HumanoidFootballerRig {
       if (Math.abs(lateralOffset) > 0.25) {
         const diveSign = lateralOffset >= 0 ? 1 : -1;
         const diveTilt = Math.min(0.45, Math.abs(lateralOffset) * 0.12) * diveSign;
-        const diveQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), diveTilt);
-        hipsBone.quaternion.multiply(diveQuat);
+        _scratchQuat.setFromAxisAngle(_axisZ, diveTilt);
+        hipsBone.quaternion.multiply(_scratchQuat);
       }
     }
 
-    if (spine1Bone && Math.abs(angularVelocityRad) > 0.1) {
-      const bankAngle = Math.max(-0.22, Math.min(0.22, angularVelocityRad * 0.08));
-      const bankQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), bankAngle);
-      spine1Bone.quaternion.multiply(bankQuat);
+    if (spine1Bone) {
+      // Natural forward athletic torso lean during sprint/run/dribble
+      if (
+        this.currentState === "sprint" ||
+        this.currentState === "run" ||
+        this.currentState === "accelerate" ||
+        this.currentState === "dribble"
+      ) {
+        const forwardLean = Math.min(0.15, Math.max(0.03, speedRatio * 0.14));
+        _scratchQuat.setFromAxisAngle(_axisX, forwardLean);
+        spine1Bone.quaternion.multiply(_scratchQuat);
+      }
+
+      if (Math.abs(angularVelocityRad) > 0.1) {
+        const bankAngle = Math.max(-0.22, Math.min(0.22, angularVelocityRad * 0.08));
+        _scratchQuat.setFromAxisAngle(_axisZ, bankAngle);
+        spine1Bone.quaternion.multiply(_scratchQuat);
+      }
     }
 
     if (headBone) {
@@ -1160,8 +1393,8 @@ export class HumanoidFootballerRig {
         while (relYaw > Math.PI) relYaw -= 2 * Math.PI;
         while (relYaw < -Math.PI) relYaw += 2 * Math.PI;
         const clampedYaw = Math.max(-0.55, Math.min(0.55, relYaw * 0.45));
-        const lookQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), clampedYaw);
-        headBone.quaternion.multiply(lookQuat);
+        _scratchQuat.setFromAxisAngle(_axisY, clampedYaw);
+        headBone.quaternion.multiply(_scratchQuat);
       }
     }
   }

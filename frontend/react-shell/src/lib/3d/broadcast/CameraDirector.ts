@@ -18,6 +18,7 @@
 export type ManualCameraMode =
   | "director_auto"
   | "tactical_high"
+  | "closeup_action"
   | "endzone_home"
   | "endzone_away"
   | "dugout_cam"
@@ -82,6 +83,13 @@ export class CameraDirector {
         position: [0, 68, 30],
         target: [0, 0, 0],
         fov: 45,
+      };
+    } else if (this.manualMode === "closeup_action") {
+      const sideOffset = ballX >= 0 ? -9.5 : 9.5;
+      this.targetPose = {
+        position: [ballX + sideOffset, 5.8, Math.min(34, ballZ + 14.5)],
+        target: [ballX, Math.max(0.8, ballY + 0.6), ballZ],
+        fov: 32,
       };
     } else if (this.manualMode === "endzone_home") {
       this.targetPose = {
@@ -176,12 +184,12 @@ export class CameraDirector {
 
         case "broadcast":
         default: {
-          // Standard elevated sideline camera smoothly panning along touchline
-          const trackingX = Math.max(-30, Math.min(30, ballX * 0.6));
+          // Wider 16:9 elevated sideline broadcast camera smoothly panning along touchline
+          const trackingX = Math.max(-32, Math.min(32, ballX * 0.62));
           this.targetPose = {
-            position: [trackingX, 30, 56],
-            target: [ballX * 0.4, ballY * 0.3, ballZ * 0.3],
-            fov: 38,
+            position: [trackingX, 30, 58],
+            target: [ballX * 0.45, ballY * 0.25, ballZ * 0.25],
+            fov: 42,
           };
           break;
         }

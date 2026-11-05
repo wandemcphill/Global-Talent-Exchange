@@ -236,7 +236,20 @@ class BrandCampaignReviewRequest(CommonSchema):
 
 class BrandCampaignEventRequest(CommonSchema):
     campaign_id: str = Field(min_length=36, max_length=36)
-    event_type: Literal["impression", "click"]
+    event_type: Literal[
+        "impression",
+        "click",
+        "play_requested",
+        "play_started",
+        "milestone_25",
+        "milestone_50",
+        "milestone_75",
+        "completed",
+        "skipped",
+        "play_blocked",
+        "interrupted",
+        "muted",
+    ]
     idempotency_key: str = Field(min_length=8, max_length=96)
     metadata_json: dict[str, Any] = Field(default_factory=dict)
 
