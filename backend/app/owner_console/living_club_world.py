@@ -52,42 +52,120 @@ DIRECTIVE_DEPARTMENTS = (
 # authoritative backend condition is met. The UI catalogue mirrors these keys.
 DIRECTIVE_COMPLETION_OBJECTIVES: dict[str, dict[str, dict[str, str]]] = {
     "manager": {
-        "change_team_mentality": {"label": "Change team mentality", "completion_check": "tactical_mentality_updated"},
-        "change_formation": {"label": "Change team formation", "completion_check": "tactical_formation_updated"},
-        "improve_squad_morale": {"label": "Improve squad morale", "completion_check": "squad_morale_improved"},
-        "complete_competitive_fixture": {"label": "Complete a competitive fixture", "completion_check": "competitive_fixture_completed"},
-        "upgrade_training_facility": {"label": "Upgrade the training facility", "completion_check": "training_facility_upgraded"},
+        "change_team_mentality": {
+            "label": "Change team mentality",
+            "completion_check": "tactical_mentality_updated",
+        },
+        "change_formation": {
+            "label": "Change team formation",
+            "completion_check": "tactical_formation_updated",
+        },
+        "improve_squad_morale": {
+            "label": "Improve squad morale",
+            "completion_check": "squad_morale_improved",
+        },
+        "complete_competitive_fixture": {
+            "label": "Complete a competitive fixture",
+            "completion_check": "competitive_fixture_completed",
+        },
+        "upgrade_training_facility": {
+            "label": "Upgrade the training facility",
+            "completion_check": "training_facility_upgraded",
+        },
     },
     "medical": {
-        "reduce_injury_burden": {"label": "Reduce squad injury burden", "completion_check": "injury_rehabilitation_days_reduced"},
-        "clear_injured_player": {"label": "Clear an injured player for training", "completion_check": "injured_player_cleared_for_training"},
-        "activate_recovery_protocol": {"label": "Activate the light-recovery protocol", "completion_check": "recovery_workload_protocol_activated"},
-        "upgrade_medical_facility": {"label": "Upgrade the medical facility", "completion_check": "medical_facility_upgraded"},
-        "improve_squad_conditioning": {"label": "Improve squad conditioning", "completion_check": "squad_conditioning_improved"},
-        "reduce_squad_fatigue": {"label": "Reduce squad workload fatigue", "completion_check": "squad_fatigue_reduced"},
+        "reduce_injury_burden": {
+            "label": "Reduce squad injury burden",
+            "completion_check": "injury_rehabilitation_days_reduced",
+        },
+        "clear_injured_player": {
+            "label": "Clear an injured player for training",
+            "completion_check": "injured_player_cleared_for_training",
+        },
+        "activate_recovery_protocol": {
+            "label": "Activate the light-recovery protocol",
+            "completion_check": "recovery_workload_protocol_activated",
+        },
+        "upgrade_medical_facility": {
+            "label": "Upgrade the medical facility",
+            "completion_check": "medical_facility_upgraded",
+        },
+        "improve_squad_conditioning": {
+            "label": "Improve squad conditioning",
+            "completion_check": "squad_conditioning_improved",
+        },
+        "reduce_squad_fatigue": {
+            "label": "Reduce squad workload fatigue",
+            "completion_check": "squad_fatigue_reduced",
+        },
     },
     "academy": {
-        "induct_youth_prospects": {"label": "Induct youth prospects", "completion_check": "academy_intake_inducted"},
-        "promote_academy_prospect": {"label": "Promote an academy prospect", "completion_check": "academy_prospect_promoted"},
-        "extend_youth_contracts": {"label": "Extend youth contracts", "completion_check": "youth_contract_extended"},
-        "develop_regen_ratings": {"label": "Develop academy player ratings", "completion_check": "regen_rating_developed"},
-        "upgrade_academy_facility": {"label": "Upgrade the academy facility", "completion_check": "academy_facility_upgraded"},
+        "induct_youth_prospects": {
+            "label": "Induct youth prospects",
+            "completion_check": "academy_intake_inducted",
+        },
+        "promote_academy_prospect": {
+            "label": "Promote an academy prospect",
+            "completion_check": "academy_prospect_promoted",
+        },
+        "extend_youth_contracts": {
+            "label": "Extend youth contracts",
+            "completion_check": "youth_contract_extended",
+        },
+        "develop_regen_ratings": {
+            "label": "Develop academy player ratings",
+            "completion_check": "regen_rating_developed",
+        },
+        "upgrade_academy_facility": {
+            "label": "Upgrade the academy facility",
+            "completion_check": "academy_facility_upgraded",
+        },
     },
     "finance": {
-        "sign_commercial_sponsor": {"label": "Sign a commercial sponsor", "completion_check": "commercial_sponsor_signed"},
-        "increase_treasury_balance": {"label": "Increase the club treasury balance", "completion_check": "treasury_balance_increased"},
-        "complete_sponsor_review": {"label": "Complete a sponsor review", "completion_check": "commercial_sponsor_review_completed"},
-        "upgrade_revenue_infrastructure": {"label": "Upgrade commercial or stadium infrastructure", "completion_check": "revenue_infrastructure_upgraded"},
+        "sign_commercial_sponsor": {
+            "label": "Sign a commercial sponsor",
+            "completion_check": "commercial_sponsor_signed",
+        },
+        "increase_treasury_balance": {
+            "label": "Increase the club treasury balance",
+            "completion_check": "treasury_balance_increased",
+        },
+        "complete_sponsor_review": {
+            "label": "Complete a sponsor review",
+            "completion_check": "commercial_sponsor_review_completed",
+        },
+        "upgrade_revenue_infrastructure": {
+            "label": "Upgrade commercial or stadium infrastructure",
+            "completion_check": "revenue_infrastructure_upgraded",
+        },
     },
     "scouting": {
-        "expand_scouting_watchlist": {"label": "Expand the scouting watchlist", "completion_check": "scouting_watchlist_expanded"},
-        "recruit_squad_player": {"label": "Recruit a player into the squad", "completion_check": "player_recruited_to_squad"},
+        "expand_scouting_watchlist": {
+            "label": "Expand the scouting watchlist",
+            "completion_check": "scouting_watchlist_expanded",
+        },
+        "recruit_squad_player": {
+            "label": "Recruit a player into the squad",
+            "completion_check": "player_recruited_to_squad",
+        },
     },
     "executive": {
-        "advance_campus_project": {"label": "Advance a campus project", "completion_check": "campus_infrastructure_advanced"},
-        "increase_club_prestige": {"label": "Increase club prestige", "completion_check": "club_prestige_increased"},
-        "appoint_executive_staff": {"label": "Appoint an executive staff member", "completion_check": "executive_staff_appointed"},
-        "execute_operational_decision": {"label": "Execute an operational decision", "completion_check": "operational_decision_executed"},
+        "advance_campus_project": {
+            "label": "Start or advance a campus project",
+            "completion_check": "campus_infrastructure_advanced",
+        },
+        "increase_club_prestige": {
+            "label": "Increase club prestige",
+            "completion_check": "club_prestige_increased",
+        },
+        "appoint_executive_staff": {
+            "label": "Appoint an executive staff member",
+            "completion_check": "executive_staff_appointed",
+        },
+        "execute_operational_decision": {
+            "label": "Execute an operational decision",
+            "completion_check": "operational_decision_executed",
+        },
     },
 }
 
@@ -2458,7 +2536,8 @@ def get_living_world_timeline(
                 "title": f"Directive: {d.title}",
                 "description": (
                     f"Target: {d.department.title()} Department. "
-                    f"Completion objective: {(d.consequences_json or {}).get('objective_label') or 'Manual verification required'}. "
+                    f"Completion objective: "
+                    f"{(d.consequences_json or {}).get('objective_label') or 'Manual verification required'}. "
                     f"{d.instruction}"
                 ),
                 "world_day": d.issued_day,
