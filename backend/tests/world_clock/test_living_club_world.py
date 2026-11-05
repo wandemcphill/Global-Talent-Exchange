@@ -459,6 +459,7 @@ def test_departmental_directive_lifecycle():
         directive_key="accelerate_recovery",
         title="Accelerate Hydrotherapy Protocols",
         instruction="Prioritize non-contact rehab for first-team players ahead of cup tie",
+        objective_key="reduce_injury_burden",
         deadline_days=3,
     )
     assert dir_payload["status"] == "active"
@@ -577,6 +578,7 @@ def test_departmental_directive_lifecycle():
         directive_key="vacant_rehab_protocol",
         title="Rehab Protocol Without Medical Director",
         instruction="Attempt rehab directive while medical director post is vacant",
+        objective_key="reduce_injury_burden",
         deadline_days=2,
     )
     # Even if the injured player recovers on day 11, vacant medical department cannot verify/complete directive
@@ -600,6 +602,66 @@ def test_departmental_directive_lifecycle():
     assert vacant_dir.status == "expired"
     assert vacant_dir.completed_at is None
     assert living_club_world.get_relationship_for_department(session, vacant_state.club_id, "medical_director") is None
+
+
+def test_directive_completion_requires_the_selected_objective():
+    """A different improvement in the same department must not satisfy a directive."""
+    session = _session()
+    state = _seed_club(session, club_id="club-objective-match", user_id="user-objective-match")
+
+    with pytest.raises(owner_service.OwnerError) as invalid_objective:
+        living_club_world.issue_department_directive(
+            session,
+            state.owner_user_id,
+            state.club_id,
+            department="finance",
+            directive_key="wrong-department-objective",
+            title="Invalid objective",
+            instruction="This objective belongs to another department",
+            objective_key="change_team_mentality",
+        )
+    assert invalid_objective.value.status == 400
+    assert invalid_objective.value.code == "invalid_directive_objective"
+
+    payload = living_club_world.issue_department_directive(
+        session,
+        state.owner_user_id,
+        state.club_id,
+        department="manager",
+        directive_key="change-mentality-only",
+        title="Adopt a more attacking mentality",
+        instruction="Change the first-team mentality to attacking",
+        objective_key="change_team_mentality",
+        deadline_days=5,
+    )
+    directive = session.get(OwnerClubDirective, payload["id"])
+    assert directive is not None
+
+    # Change formation only. This is a genuine manager-department change, but not
+    # the selected objective and must not complete the directive or grant rewards.
+    facilities = dict(state.facilities_json or {})
+    facilities["_tactical_formation"] = "4-4-2"
+    state.facilities_json = facilities
+    flag_modified(state, "facilities_json")
+    session.commit()
+
+    living_club_world.process_world_day_events(session, state, campus_effects={})
+    session.refresh(directive)
+    assert directive.status == "active"
+    assert directive.completed_at is None
+    assert directive.consequences_json["verification_status"] == "pending"
+    assert directive.consequences_json["reward_granted"] is False
+    assert directive.consequences_json["evidence"]["objective_key"] == "change_team_mentality"
+    assert directive.consequences_json["evidence"]["matched_checks"] == []
+
+    # Only the selected authoritative condition completes it.
+    state.mentality = "attacking"
+    session.commit()
+    living_club_world.process_world_day_events(session, state, campus_effects={})
+    session.refresh(directive)
+    assert directive.status == "completed"
+    assert directive.consequences_json["evidence"]["matched_checks"] == ["tactical_mentality_updated:attacking"]
+    assert directive.consequences_json["reward_granted"] is True
 
 
 def test_vacant_staff_positions_and_staff_replacement_isolation():
@@ -862,7 +924,7 @@ def test_unified_timeline_filtering_and_pagination():
     state = _seed_club(session)
 
     # Create multiple events, directives, and significant relationship shifts across days 10..14
-    living_club_world.create_club_event(
+    tactical_event, _ = living_club_world.create_club_event(
         session,
         state.club_id,
         category="tactical",
@@ -873,6 +935,7 @@ def test_unified_timeline_filtering_and_pagination():
         world_day=10,
         actions=[{"key": "endorse_tactics", "label": "Endorse", "style": "primary"}],
     )
+    tactical_event.status = "awaiting_decision"
     living_club_world.issue_department_directive(
         session,
         state.owner_user_id,
@@ -945,11 +1008,13 @@ def test_unified_timeline_filtering_and_pagination():
     assert culture_tl["total_count"] >= 1
     assert all(i["category"] == "culture" and i["kind"] == "relationship_shift" for i in culture_tl["items"])
 
-    # Filter by status="active" excludes resolved relationship shifts
+    # Filter by status="active" includes actionable awaiting_decision events, but excludes resolved history
     active_tl = living_club_world.get_living_world_timeline(
         session, state.owner_user_id, state.club_id, status="active"
     )
-    assert all(i["status"] == "active" for i in active_tl["items"])
+    assert all(i["status"] in {"active", "awaiting_decision"} for i in active_tl["items"])
+    assert any(i["id"] == tactical_event.id and i["status"] == "awaiting_decision" for i in active_tl["items"])
+    assert all(i["kind"] != "relationship_shift" for i in active_tl["items"])
 
 
 def test_player_fatigue_and_contract_event_triggers():
