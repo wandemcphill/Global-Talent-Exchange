@@ -1418,7 +1418,7 @@ def issue_department_directive(
             "verification_status": "pending",
             "reward_granted": False,
             "objective_key": objective_key,
-            "objective_label": objective["label"] if objective else "Manual verification required",
+            "objective_label": objective["label"] if objective else "No measurable completion objective selected",
             "completion_check": objective["completion_check"] if objective else None,
             "baseline_snapshot": baseline_snapshot,
         },
@@ -2537,7 +2537,7 @@ def get_living_world_timeline(
                 "description": (
                     f"Target: {d.department.title()} Department. "
                     f"Completion objective: "
-                    f"{(d.consequences_json or {}).get('objective_label') or 'Manual verification required'}. "
+                    f"{(d.consequences_json or {}).get('objective_label') or 'No measurable completion objective selected'}. "
                     f"{d.instruction}"
                 ),
                 "world_day": d.issued_day,
