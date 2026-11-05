@@ -190,8 +190,8 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
 
     // 1. Scene, Camera, Renderer
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color("#060a12");
-    scene.fog = new THREE.FogExp2("#060a12", 0.007);
+    scene.background = new THREE.Color("#07101e");
+    scene.fog = new THREE.FogExp2("#07101e", 0.0022);
 
     const camera = new THREE.PerspectiveCamera(38, width / height, 0.5, 300);
     camera.position.set(0, 32, 55);
@@ -230,11 +230,11 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     // -------------------------------------------------------------------------
     // 2. Comprehensive Stadium & Pitch Environment (Milestone 2 Expansion)
     // -------------------------------------------------------------------------
-    const hemiLight = new THREE.HemisphereLight(0xa5c4d4, 0x144222, 0.65);
+    const hemiLight = new THREE.HemisphereLight(0xdbeafe, 0x1e5631, 1.15);
     scene.add(hemiLight);
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 0.85);
-    keyLight.position.set(20, 50, 40);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.35);
+    keyLight.position.set(20, 55, 42);
     if (renderer.shadowMap.enabled) {
       keyLight.castShadow = true;
       keyLight.shadow.mapSize.width = 1024;
@@ -247,6 +247,10 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       keyLight.shadow.camera.bottom = -40;
     }
     scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0xf1f5f9, 0.72);
+    fillLight.position.set(-25, 42, -38);
+    scene.add(fillLight);
 
     const stadiumArena = new StadiumArenaEnvironment(scene, {
       homeTeam: safeViewRef.current.home_team,

@@ -2,8 +2,9 @@
  * GTEX Unit 2A (U2A-006) — Humanoid Footballer GLB Asset Compiler
  *
  * Compiles the canonical rigged humanoid footballer model (`Player_Mobile_Mesh.fbx`,
- * 9,888 vertices, 26-bone Mixamo Humanoid skeleton) and its motion-capture FBX
- * animation library into a single WebGL-ready binary glTF asset:
+ * 9,888 vertices, 26-bone Mixamo Humanoid skeleton) and its 29 motion-capture FBX
+ * animation clips (retargeted from `Animations/Avatar.fbx` T-Pose to `Player_Mobile_Mesh.fbx`
+ * world-aligned A-Pose bind matrices) into a single WebGL-ready binary glTF asset:
  *   `public/models/footballer/gtex_humanoid_footballer.glb`
  *
  * Also copies supporting kit/AO texture maps into `public/models/footballer/textures/`.
@@ -76,9 +77,13 @@ function loadFBX(filePath) {
   );
 }
 
-// 1. Load Rigged Humanoid Mesh
+// 1. Load Rigged Humanoid Mesh (`Player_Mobile_Mesh.fbx`) & Source Animation Avatar (`Animations/Avatar.fbx`)
 const playerRoot = loadFBX(path.join(sourceDir, "PlayerModel/Player_Mobile_Mesh.fbx"));
 playerRoot.name = "GTEXHumanoidFootballerRoot";
+playerRoot.updateMatrixWorld(true);
+
+const avatarRoot = loadFBX(path.join(sourceDir, "Animations/Avatar.fbx"));
+avatarRoot.updateMatrixWorld(true);
 
 let skinnedMesh = null;
 playerRoot.traverse((child) => {
@@ -104,7 +109,6 @@ const posAttr = skinnedMesh.geometry.attributes.position;
 const skinIdxAttr = skinnedMesh.geometry.attributes.skinIndex;
 const colors = new Float32Array(posAttr.count * 3);
 const bones = skinnedMesh.skeleton.bones;
-const validBoneNames = new Set(bones.map((b) => b.name));
 
 for (let i = 0; i < posAttr.count; i++) {
   const bIdx = skinIdxAttr.getX(i);
@@ -146,7 +150,91 @@ for (let i = 0; i < posAttr.count; i++) {
 }
 skinnedMesh.geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
 
-// 2. Load and sanitize motion-capture FBX clips
+// 2. Build Exact Avatar-to-Mesh World-Quaternion & Segment-Vector Retargeting Tables
+const meshBonesByName = new Map();
+bones.forEach((b) => meshBonesByName.set(b.name, b));
+
+const avatarBonesByName = new Map();
+avatarRoot.traverse((b) => {
+  if (b.name && meshBonesByName.has(b.name)) {
+    avatarBonesByName.set(b.name, b);
+  }
+});
+
+const DIRECTION_BONE_PAIRS = {
+  Hips: ["Hips", "Spine"],
+  Spine: ["Spine", "Spine1"],
+  Spine1: ["Spine1", "Spine2"],
+  Spine2: ["Spine2", "Neck"],
+  Neck: ["Neck", "Head"],
+  Head: ["Neck", "Head"],
+  LeftShoulder: ["LeftShoulder", "LeftArm"],
+  LeftArm: ["LeftArm", "LeftForeArm"],
+  LeftForeArm: ["LeftForeArm", "LeftHand"],
+  LeftHand: ["LeftForeArm", "LeftHand"],
+  RightShoulder: ["RightShoulder", "RightArm"],
+  RightArm: ["RightArm", "RightForeArm"],
+  RightForeArm: ["RightForeArm", "RightHand"],
+  RightHand: ["RightForeArm", "RightHand"],
+  LeftUpLeg: ["LeftUpLeg", "LeftLeg"],
+  LeftLeg: ["LeftLeg", "LeftFoot"],
+  LeftFoot: ["LeftFoot", "LeftToeBase"],
+  LeftToeBase: ["LeftFoot", "LeftToeBase"],
+  RightUpLeg: ["RightUpLeg", "RightLeg"],
+  RightLeg: ["RightLeg", "RightFoot"],
+  RightFoot: ["RightFoot", "RightToeBase"],
+  RightToeBase: ["RightFoot", "RightToeBase"],
+};
+
+const qSrcAligned = new Map();
+const qDstBind = new Map();
+
+for (const [name, mb] of meshBonesByName.entries()) {
+  const ab = avatarBonesByName.get(name);
+  const wqDst = new THREE.Quaternion();
+  mb.getWorldQuaternion(wqDst);
+  qDstBind.set(name, wqDst.clone());
+
+  if (!ab) {
+    qSrcAligned.set(name, wqDst.clone());
+    continue;
+  }
+
+  const wqSrc = new THREE.Quaternion();
+  ab.getWorldQuaternion(wqSrc);
+
+  const pair = DIRECTION_BONE_PAIRS[name];
+  if (
+    pair &&
+    meshBonesByName.has(pair[0]) &&
+    meshBonesByName.has(pair[1]) &&
+    avatarBonesByName.has(pair[0]) &&
+    avatarBonesByName.has(pair[1])
+  ) {
+    const mp0 = new THREE.Vector3().setFromMatrixPosition(meshBonesByName.get(pair[0]).matrixWorld);
+    const mp1 = new THREE.Vector3().setFromMatrixPosition(meshBonesByName.get(pair[1]).matrixWorld);
+    const uDst = mp1.clone().sub(mp0).normalize();
+
+    const ap0 = new THREE.Vector3().setFromMatrixPosition(avatarBonesByName.get(pair[0]).matrixWorld);
+    const ap1 = new THREE.Vector3().setFromMatrixPosition(avatarBonesByName.get(pair[1]).matrixWorld);
+    const uSrc = ap1.clone().sub(ap0).normalize();
+
+    const rPose = new THREE.Quaternion().setFromUnitVectors(uSrc, uDst);
+    qSrcAligned.set(name, rPose.multiply(wqSrc));
+  } else {
+    qSrcAligned.set(name, wqSrc.clone());
+  }
+}
+
+// Save avatar rest pose so we can reset between clips
+const avatarRestLocalPos = new Map();
+const avatarRestLocalQuat = new Map();
+for (const [name, ab] of avatarBonesByName.entries()) {
+  avatarRestLocalPos.set(name, ab.position.clone());
+  avatarRestLocalQuat.set(name, ab.quaternion.clone());
+}
+
+// 3. Load and retarget all 29 motion-capture FBX clips onto Player_Mobile_Mesh's skeleton
 const mocapSources = [
   { clipName: "mocap_idle", file: "Animations/Locomotion/Idle.fbx", maxDuration: 3.0 },
   { clipName: "mocap_walk", file: "Animations/Locomotion/Walk/Walk Forward.fbx" },
@@ -179,58 +267,153 @@ const mocapSources = [
   { clipName: "mocap_gk_miss", file: "Animations/Actions/GKMiss.fbx" },
 ];
 
-function sanitizeAndResampleClip(rawClip, targetName, maxDuration) {
+const animatedBoneNames = [
+  "Hips",
+  "Spine",
+  "Spine1",
+  "Spine2",
+  "Neck",
+  "Head",
+  "LeftShoulder",
+  "LeftArm",
+  "LeftForeArm",
+  "LeftHand",
+  "RightShoulder",
+  "RightArm",
+  "RightForeArm",
+  "RightHand",
+  "LeftUpLeg",
+  "LeftLeg",
+  "LeftFoot",
+  "LeftToeBase",
+  "RightUpLeg",
+  "RightLeg",
+  "RightFoot",
+  "RightToeBase",
+];
+
+function retargetAndResampleClip(rawClip, targetName, maxDuration) {
   const duration = maxDuration ? Math.min(rawClip.duration, maxDuration) : rawClip.duration;
-  const sanitizedTracks = [];
 
-  for (const track of rawClip.tracks) {
-    const [boneName, prop] = track.name.split(".");
-    if (!validBoneNames.has(boneName)) continue;
+  // Reset avatar bones to rest pose
+  for (const [name, ab] of avatarBonesByName.entries()) {
+    ab.position.copy(avatarRestLocalPos.get(name));
+    ab.quaternion.copy(avatarRestLocalQuat.get(name));
+  }
+  avatarRoot.updateMatrixWorld(true);
 
-    // Only keep Hips.position and bone quaternion tracks
-    if (prop !== "quaternion" && !(boneName === "Hips" && prop === "position")) {
-      continue;
+  const mixer = new THREE.AnimationMixer(avatarRoot);
+  const action = mixer.clipAction(rawClip);
+  action.play();
+
+  // Sample at 24 Hz (plus exact endpoint)
+  const sampleFps = 24;
+  const numSteps = Math.max(2, Math.ceil(duration * sampleFps));
+  const sampleTimes = [];
+  for (let s = 0; s <= numSteps; s++) {
+    sampleTimes.push(Number(Math.min(duration, (s / numSteps) * duration).toFixed(4)));
+  }
+
+  const hipsPositions = [];
+  const quatValuesByBone = new Map();
+  for (const name of animatedBoneNames) {
+    quatValuesByBone.set(name, []);
+  }
+
+  let x0 = null;
+  let z0 = null;
+  const avatarHips = avatarBonesByName.get("Hips");
+
+  // Keep a temporary clone of mesh bone world quaternions during parent-to-child evaluation
+  const computedWorldQuats = new Map();
+
+  for (const t of sampleTimes) {
+    mixer.setTime(t);
+    avatarRoot.updateMatrixWorld(true);
+
+    if (x0 === null) {
+      x0 = avatarHips.position.x;
+      z0 = avatarHips.position.z;
     }
 
-    const itemSize = prop === "quaternion" ? 4 : 3;
-    const times = [];
-    const values = [];
+    const rawDx = avatarHips.position.x - x0;
+    const rawDz = avatarHips.position.z - z0;
+    // Scale vertical Hips height from Avatar rest (90cm) to Player_Mobile_Mesh bind (100cm)
+    const scaledY = avatarHips.position.y * (100.0 / 90.0);
+    const clampedX = Math.max(-12, Math.min(12, rawDx));
+    const clampedZ = Math.max(-12, Math.min(12, rawDz));
+    hipsPositions.push(Number(clampedX.toFixed(2)), Number(scaledY.toFixed(2)), Number(clampedZ.toFixed(2)));
 
-    const x0 = prop === "position" && track.values.length >= 3 ? track.values[0] : 0;
-    const z0 = prop === "position" && track.values.length >= 3 ? track.values[2] : 0;
+    computedWorldQuats.clear();
+    for (const b of bones) {
+      const ab = avatarBonesByName.get(b.name);
+      if (!ab || !quatValuesByBone.has(b.name)) {
+        const parentWq = b.parent && computedWorldQuats.has(b.parent.name)
+          ? computedWorldQuats.get(b.parent.name)
+          : new THREE.Quaternion();
+        computedWorldQuats.set(b.name, parentWq.clone());
+        continue;
+      }
 
-    // Subsample every 2nd keyframe (or keep endpoints) to keep binary compact while preserving 100% smooth curves
-    for (let k = 0; k < track.times.length; k++) {
-      const t = track.times[k];
-      if (t > duration + 0.001) break;
-      if (k > 0 && k < track.times.length - 1 && k % 2 === 1) continue;
+      const wqSrcAnim = new THREE.Quaternion();
+      ab.getWorldQuaternion(wqSrcAnim);
+      const wqAlignedInv = qSrcAligned.get(b.name).clone().invert();
+      const wqDstTarget = wqSrcAnim.clone().multiply(wqAlignedInv).multiply(qDstBind.get(b.name));
+      computedWorldQuats.set(b.name, wqDstTarget.clone());
 
-      times.push(Number(t.toFixed(4)));
-      if (prop === "position") {
-        // Lock horizontal root drift so authoritative pitch coordinates remain the sole position authority
-        const rawDx = track.values[k * 3] - x0;
-        const rawY = track.values[k * 3 + 1];
-        const rawDz = track.values[k * 3 + 2] - z0;
-        const clampedX = Math.max(-12, Math.min(12, rawDx));
-        const clampedZ = Math.max(-12, Math.min(12, rawDz));
-        values.push(Number(clampedX.toFixed(2)), Number(rawY.toFixed(2)), Number(clampedZ.toFixed(2)));
+      let localQuat = wqDstTarget.clone();
+      if (b.parent && computedWorldQuats.has(b.parent.name)) {
+        const parentWqInv = computedWorldQuats.get(b.parent.name).clone().invert();
+        localQuat = parentWqInv.multiply(wqDstTarget);
+      }
+      localQuat.normalize();
+
+      const arr = quatValuesByBone.get(b.name);
+      if (arr.length === 0) {
+        // Anchor frame 0 in the positive-w hemisphere (shortest path from bind pose [0,0,0,1])
+        if (localQuat.w < 0) {
+          localQuat.set(-localQuat.x, -localQuat.y, -localQuat.z, -localQuat.w);
+        }
       } else {
-        for (let c = 0; c < 4; c++) {
-          values.push(Number(track.values[k * 4 + c].toFixed(4)));
+        // Enforce C0 quaternion hemisphere continuity with previous keyframe
+        const prevIdx = arr.length - 4;
+        const dot =
+          arr[prevIdx] * localQuat.x +
+          arr[prevIdx + 1] * localQuat.y +
+          arr[prevIdx + 2] * localQuat.z +
+          arr[prevIdx + 3] * localQuat.w;
+        if (dot < 0) {
+          localQuat.set(-localQuat.x, -localQuat.y, -localQuat.z, -localQuat.w);
         }
       }
-    }
 
-    if (times.length >= 2) {
-      if (prop === "quaternion") {
-        sanitizedTracks.push(new THREE.QuaternionKeyframeTrack(track.name, times, values));
-      } else {
-        sanitizedTracks.push(new THREE.VectorKeyframeTrack(track.name, times, values));
-      }
+      arr.push(
+        Number(localQuat.x.toFixed(4)),
+        Number(localQuat.y.toFixed(4)),
+        Number(localQuat.z.toFixed(4)),
+        Number(localQuat.w.toFixed(4))
+      );
     }
   }
 
-  return new THREE.AnimationClip(targetName, duration, sanitizedTracks);
+  mixer.stopAllAction();
+
+  // Reset mesh bones to clean bind pose before export
+  for (const b of bones) {
+    b.quaternion.set(0, 0, 0, 1);
+  }
+  bones[0].position.set(0, 100, 0);
+  playerRoot.updateMatrixWorld(true);
+
+  const tracks = [new THREE.VectorKeyframeTrack("Hips.position", sampleTimes, hipsPositions)];
+  for (const name of animatedBoneNames) {
+    const qVals = quatValuesByBone.get(name);
+    if (qVals && qVals.length === sampleTimes.length * 4) {
+      tracks.push(new THREE.QuaternionKeyframeTrack(`${name}.quaternion`, sampleTimes, qVals));
+    }
+  }
+
+  return new THREE.AnimationClip(targetName, duration, tracks);
 }
 
 const exportedClips = [];
@@ -238,12 +421,12 @@ for (const src of mocapSources) {
   const fullPath = path.join(sourceDir, src.file);
   const fbxObj = loadFBX(fullPath);
   if (fbxObj.animations && fbxObj.animations[0]) {
-    const cleanClip = sanitizeAndResampleClip(fbxObj.animations[0], src.clipName, src.maxDuration);
+    const cleanClip = retargetAndResampleClip(fbxObj.animations[0], src.clipName, src.maxDuration);
     exportedClips.push(cleanClip);
   }
 }
 
-console.log(`Compiled ${exportedClips.length} sanitized mocap clips for 26-bone skeleton.`);
+console.log(`Compiled and retargeted ${exportedClips.length} mocap clips from Avatar.fbx -> Player_Mobile_Mesh.fbx.`);
 
 const exporter = new GLTFExporter();
 const outGlbPath = path.join(outDir, "gtex_humanoid_footballer.glb");

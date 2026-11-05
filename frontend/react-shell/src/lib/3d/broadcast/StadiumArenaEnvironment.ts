@@ -699,10 +699,10 @@ export class StadiumArenaEnvironment {
     });
     this.disposables.push(concreteMat, vipGlassMat, roofMat);
 
-    // A. West Grandstand (Main Stand: Lower Bowl + VIP Skyboxes + Upper Tier + Roof)
+    // A. West Grandstand (Main Stand: positioned behind the TV broadcast camera gantry at z = 56 so it never occludes the pitch)
     const buildWestMainStand = () => {
       const standGroup = new THREE.Group();
-      standGroup.position.set(0, 0, halfW + 16);
+      standGroup.position.set(0, 0, halfW + 34);
 
       // Lower Tier Tiered Rake
       const lowerGeo = new THREE.BoxGeometry(FIFA_PITCH_DIMENSIONS.length + 10, 6, 12);
@@ -725,11 +725,11 @@ export class StadiumArenaEnvironment {
       upper.position.set(0, 14, 10);
       standGroup.add(upper);
 
-      // Cantilevered Roof Canopy
-      const roofGeo = new THREE.BoxGeometry(FIFA_PITCH_DIMENSIONS.length + 18, 1.2, 28);
+      // Cantilevered Roof Canopy (set behind broadcast camera gantry)
+      const roofGeo = new THREE.BoxGeometry(FIFA_PITCH_DIMENSIONS.length + 18, 1.2, 22);
       this.disposables.push(roofGeo);
       const roof = new THREE.Mesh(roofGeo, roofMat);
-      roof.position.set(0, 22, 2);
+      roof.position.set(0, 24, 8);
       roof.rotation.x = 0.08;
       standGroup.add(roof);
 
@@ -842,11 +842,11 @@ export class StadiumArenaEnvironment {
       return hl * 1.8;
     }
 
-    // West Stand Crowd (Predominantly Home)
+    // West Stand Crowd (Predominantly Home, behind broadcast gantry)
     const westCrowdLower = new THREE.Mesh(crowdBlockGeo, homeCrowdMat);
-    westCrowdLower.position.set(0, 5.5, halfW + 15);
+    westCrowdLower.position.set(0, 5.5, halfW + 30);
     const westCrowdUpper = new THREE.Mesh(crowdBlockGeo, neutralCrowdMat);
-    westCrowdUpper.position.set(0, 16.5, halfW + 24);
+    westCrowdUpper.position.set(0, 16.5, halfW + 40);
     this.crowdGroup.add(westCrowdLower, westCrowdUpper);
 
     // East Stand Crowd (Home & General Spectators)
