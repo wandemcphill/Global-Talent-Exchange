@@ -982,7 +982,10 @@ export function ClubOperationsCentre3D({
                 <span className="text-[11px] text-slate-400">· {activeDestination.staff_lead.name}</span>
               </div>
 
-              <div className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-white/15 bg-slate-950/85 px-2.5 py-1 text-[10px] font-bold text-slate-300 backdrop-blur-md">
+              <div
+                data-testid="glb-asset-status"
+                className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-white/15 bg-slate-950/85 px-2.5 py-1 text-[10px] font-bold text-slate-300 backdrop-blur-md"
+              >
                 <span>
                   {renderMode === "3d"
                     ? `WebGL ${webglStatus === "ready" ? "Active" : "Init"} · ${loadedGlbCount}/${destinations.length} GLB Assets Loaded`

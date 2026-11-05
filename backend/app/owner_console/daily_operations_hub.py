@@ -111,7 +111,7 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
         med_name = str(med.get("name") or "Medical Director")
         med_label = "Medical Director"
         med_status = "appointed"
-        med_expertise = _safe_int(med.get("medical_expertise"), 16)
+        med_expertise = _safe_int(med.get("medical_expertise"), 10)
         med_salary = _safe_int(med.get("salary_gtex", med.get("salary", 300)), 300)
         med_mood = _safe_int(med.get("mood"), 84)
         med_loyalty = _safe_int(med.get("loyalty"), 16)

@@ -2124,7 +2124,17 @@ def test_phase2_3_medical_director_appointment_and_healing_calculations():
     unappointed_heal_rate = med_sec_unappointed["rehabilitation_status"]["daily_injury_heal_days"]
     assert unappointed_heal_rate == 8
 
-    # 2. Appoint an authoritative Medical Director with expertise 18 in _executive_staff
+    # Compare directly with service.tick_club formula for unappointed state
+    campus_fx = prestige_campus_comms.compute_authoritative_campus_effects(session, state, reconcile=True)
+    unappointed_tick_heal = (
+        1
+        + int(facs.get("medical", 1)) // 2
+        + max(0, int(dict(exec_staff.get("medical_director") or {}).get("medical_expertise", 10)) // 5)
+        + int(campus_fx.get("rehab_daily_bonus_days", 0))
+    )
+    assert unappointed_heal_rate == unappointed_tick_heal
+
+    # 2. Appoint an authoritative Medical Director with expertise explicitly stored (18)
     exec_staff["medical_director"] = {
         "name": "Dr. Fatima Al-Mansoor",
         "role": "medical_director",
@@ -2157,6 +2167,15 @@ def test_phase2_3_medical_director_appointment_and_healing_calculations():
     assert appointed_heal_rate == 9
     assert appointed_heal_rate == unappointed_heal_rate + 1
 
+    # Compare directly with service.tick_club formula for appointed state with explicit expertise
+    appointed_tick_heal = (
+        1
+        + int(facs.get("medical", 1)) // 2
+        + max(0, int(exec_staff["medical_director"].get("medical_expertise", 10)) // 5)
+        + int(campus_fx.get("rehab_daily_bonus_days", 0))
+    )
+    assert appointed_heal_rate == appointed_tick_heal
+
     # Verify simulation synchronization with service.tick_club
     regens = service.academy_intake(session, user_id, club_id)
     regens[0].injured_days = 12
@@ -2165,6 +2184,51 @@ def test_phase2_3_medical_director_appointment_and_healing_calculations():
     service.tick_club(session, state)
     # 12 - 9 = 3 days remaining after tick
     assert regens[0].injured_days == 3
+
+    # 3. Appointed Medical Director whose expertise field is MISSING in stored profile
+    exec_staff["medical_director"] = {
+        "name": "Dr. Chidi Obi",
+        "role": "medical_director",
+        "role_label": "Medical Director",
+        # Explicitly omit 'medical_expertise'
+        "salary_gtex": 350,
+        "mood": 80,
+        "loyalty": 14,
+        "signature_trait": "General Practitioner",
+    }
+    facs["_executive_staff"] = exec_staff
+    state.facilities_json = facs
+    flag_modified(state, "facilities_json")
+    session.commit()
+
+    briefing_missing = daily_operations_hub.build_authoritative_daily_briefing(
+        session, user_id, club_id, force_refresh=True
+    )
+    med_sec_missing = briefing_missing["medical_directors_report"]
+    med_profile_missing = med_sec_missing["staff_profile"]
+
+    assert med_profile_missing["is_appointed"] is True
+    assert med_profile_missing["status"] == "appointed"
+    assert med_profile_missing["name"] == "Dr. Chidi Obi"
+    # Both briefing and service.tick_club MUST default to 10
+    assert med_profile_missing["medical_expertise"] == 10
+    missing_heal_rate = med_sec_missing["rehabilitation_status"]["daily_injury_heal_days"]
+
+    missing_tick_heal = (
+        1
+        + int(facs.get("medical", 1)) // 2
+        + max(0, int(exec_staff["medical_director"].get("medical_expertise", 10)) // 5)
+        + int(campus_fx.get("rehab_daily_bonus_days", 0))
+    )
+    assert missing_heal_rate == missing_tick_heal
+    assert missing_heal_rate == 8  # 1 + 1 + 2 + 4 = 8
+
+    # Verify tick_club execution with missing expertise profile
+    regens[0].injured_days = 10
+    session.commit()
+    service.tick_club(session, state)
+    # 10 - 8 = 2 days remaining after tick
+    assert regens[0].injured_days == 2
 
 
 def test_phase2_3_medical_injury_dossier_recorded_and_unrecorded_classifications():
