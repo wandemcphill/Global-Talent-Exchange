@@ -1,22 +1,28 @@
 from __future__ import annotations
 
 import asyncio
+import time
+from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+import pytest
+from starlette.websockets import WebSocketDisconnect
 
+from app.auth.dependencies import get_current_user
 from app.broadcast.broadcast_models import ScoreUpdate, SpectatorEvent, TournamentEvent
 from app.broadcast.spectator_gateway import BroadcastRuntime, router
 
-
-from app.auth.dependencies import get_current_user
-from types import SimpleNamespace
 
 def _build_app() -> FastAPI:
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
-        id="viewer-test", is_admin=False, is_super_admin=False
+        id="viewer-test",
+        username="VerifiedSupporter",
+        display_name="VerifiedSupporter",
+        is_admin=False,
+        is_super_admin=False,
     )
     app.state.broadcast_runtime = BroadcastRuntime(
         redis_url=None,
@@ -137,7 +143,6 @@ def test_spectator_gateway_redacts_confidential_tactics_and_prevents_spoofing_an
     app.state.broadcast_runtime.rate_limit_window_seconds = 10.0
     client = TestClient(app)
 
-    # Guest attempting to impersonate 'Club Owner' via display_name query param
     with client.websocket_connect("/ws/spectate/match-sec-1?display_name=Club%20Owner") as guest_ws:
         snap = _receive_until_type(guest_ws, "snapshot")
         assert snap["display_name"] == "Spectator", "Impersonating guest display_name must be neutralized"
@@ -149,7 +154,7 @@ def test_spectator_gateway_redacts_confidential_tactics_and_prevents_spoofing_an
             _receive_until_type(peer_ws, "viewer_count")
             _receive_until_type(guest_ws, "viewer_count")
 
-            # 1. Public WebSocket payload redaction: publish event containing confidential coach_notes & internal_tactics
+            # 1. Public WebSocket payload redaction
             asyncio.run(
                 app.state.broadcast_runtime.match_room_manager.publish(
                     "match-sec-1",
@@ -199,7 +204,6 @@ def test_spectator_gateway_redacts_confidential_tactics_and_prevents_spoofing_an
                     "message": "<script>alert('xss')</script>",
                 }
             )
-            # Send 2 more valid reactions to hit the 3-message rate limit (1 chat + 1 dropped script + 1 reaction = 3)
             guest_ws.send_json({"type": "reaction", "reaction": "🔥"})
             rx_ev = _receive_until_type(peer_ws, "reaction")
             _receive_until_type(guest_ws, "reaction")
@@ -209,3 +213,280 @@ def test_spectator_gateway_redacts_confidential_tactics_and_prevents_spoofing_an
             guest_ws.send_json({"type": "reaction", "reaction": "👏"})
             rate_ev = _receive_until_type(guest_ws, "rate_limit")
             assert rate_ev["payload"]["code"] == "rate_limit_exceeded"
+
+
+def test_public_spectator_events_never_expose_account_ids_or_connection_ids() -> None:
+    """
+    Regression Test (Vulnerabilities 1 & 5):
+    Verifies that:
+    - _snapshot_from_presence() and all public spectator snapshots redact active_user_ids ([]).
+    - Neither authenticated nor unauthenticated spectator events expose account IDs (user_id,
+      account_id, owner_user_id) or internal connection IDs (connection_id, client_id, socket_id).
+    - Authoritative internal backend presence still tracks authenticated user_id internally.
+    """
+    app = _build_app()
+    client = TestClient(app)
+
+    ticket_resp = client.post("/matches/match-privacy-1/spectate-ticket")
+    assert ticket_resp.status_code == 200
+    ticket = ticket_resp.json()["ticket"]
+
+    with client.websocket_connect(f"/ws/spectate/match-privacy-1?ticket={ticket}") as auth_ws:
+        auth_snap = _receive_until_type(auth_ws, "snapshot")
+        auth_vc = _receive_until_type(auth_ws, "viewer_count")
+
+        assert auth_snap["user_id"] is None
+        assert auth_snap["payload"]["authenticated"] is True
+        assert "connection_id" not in auth_snap["payload"]
+        assert auth_snap["snapshot"]["active_user_ids"] == []
+        assert auth_vc["snapshot"]["active_user_ids"] == []
+
+        # Confirm internal presence service still preserves authoritative user_id for backend processing
+        internal_presence = asyncio.run(
+            app.state.broadcast_runtime.presence_service.get_match_presence("match-privacy-1")
+        )
+        assert internal_presence.active_user_ids == ["viewer-test"]
+
+        # Public REST spectator presence endpoint also redacts active_user_ids for non-admin callers
+        rest_presence = client.get("/matches/match-privacy-1/spectators")
+        assert rest_presence.status_code == 200
+        assert rest_presence.json()["active_user_ids"] == []
+
+        with client.websocket_connect("/ws/spectate/match-privacy-1?display_name=AnonFan") as anon_ws:
+            anon_snap = _receive_until_type(anon_ws, "snapshot")
+            anon_vc = _receive_until_type(anon_ws, "viewer_count")
+            auth_vc_2 = _receive_until_type(auth_ws, "viewer_count")
+
+            assert anon_snap["user_id"] is None
+            assert anon_snap["snapshot"]["active_user_ids"] == []
+            assert anon_vc["snapshot"]["active_user_ids"] == []
+            assert auth_vc_2["snapshot"]["active_user_ids"] == []
+
+            # Authenticated user sends reaction and chat; verify zero account IDs or connection IDs leak
+            auth_ws.send_json({"type": "reaction", "reaction": "⚽"})
+            rx_on_anon = _receive_until_type(anon_ws, "reaction")
+            rx_on_auth = _receive_until_type(auth_ws, "reaction")
+            for rx in (rx_on_anon, rx_on_auth):
+                assert rx["user_id"] is None
+                assert rx["display_name"] == "VerifiedSupporter"
+                assert rx["payload"]["authenticated"] is True
+                assert "connection_id" not in rx["payload"]
+                assert "account_id" not in rx["payload"]
+
+            auth_ws.send_json({"type": "chat_message", "message": "Great buildup play!"})
+            chat_on_anon = _receive_until_type(anon_ws, "chat_message")
+            chat_on_auth = _receive_until_type(auth_ws, "chat_message")
+            for ch in (chat_on_anon, chat_on_auth):
+                assert ch["user_id"] is None
+                assert ch["display_name"] == "VerifiedSupporter"
+                assert ch["payload"]["authenticated"] is True
+                assert "connection_id" not in ch["payload"]
+
+            # Publish a server event embedded with sensitive account/connection identifiers; verify sanitization
+            asyncio.run(
+                app.state.broadcast_runtime.match_room_manager.publish(
+                    "match-privacy-1",
+                    SpectatorEvent(
+                        type="frame",
+                        match_id="match-privacy-1",
+                        user_id="leaked-user-99",
+                        payload={
+                            "frame": {"frame_id": "f-200", "time_seconds": 44.0},
+                            "user_id": "nested-user-99",
+                            "account_id": "acc-99",
+                            "owner_user_id": "owner-99",
+                            "connection_id": "conn-secret-123",
+                            "client_id": "client-secret-456",
+                            "socket_id": "sock-secret-789",
+                            "active_user_ids": ["viewer-test", "owner-99"],
+                        },
+                    ),
+                    delay_seconds=0,
+                )
+            )
+            sanitized_frame = _receive_until_type(anon_ws, "frame")
+            assert sanitized_frame["user_id"] is None
+            for forbidden_key in (
+                "user_id",
+                "account_id",
+                "owner_user_id",
+                "connection_id",
+                "client_id",
+                "socket_id",
+            ):
+                assert forbidden_key not in sanitized_frame["payload"]
+            assert sanitized_frame["payload"]["active_user_ids"] == []
+
+
+def test_match_and_tournament_heartbeats_are_connection_specific_and_rate_limited() -> None:
+    """
+    Regression Test (Vulnerabilities 2 & 3):
+    Verifies that:
+    - Match and tournament heartbeats respond ONLY to the sender connection (never broadcast to the room).
+    - A second spectator in the same match or tournament room never receives another spectator's heartbeat.
+    - Heartbeat messages are subject to per-connection rate limiting and contain no connection_id.
+    """
+    app = _build_app()
+    app.state.broadcast_runtime.rate_limit_max_messages = 2
+    app.state.broadcast_runtime.rate_limit_window_seconds = 10.0
+    client = TestClient(app)
+
+    # 1. Match room heartbeat isolation & rate limiting
+    with client.websocket_connect("/ws/spectate/match-hb-isolation?display_name=SpecOne") as ws_one:
+        _receive_until_type(ws_one, "snapshot")
+        _receive_until_type(ws_one, "viewer_count")
+
+        with client.websocket_connect("/ws/spectate/match-hb-isolation?display_name=SpecTwo") as ws_two:
+            _receive_until_type(ws_two, "snapshot")
+            _receive_until_type(ws_two, "viewer_count")
+            _receive_until_type(ws_one, "viewer_count")
+
+            # SpecOne sends ping #1 -> only SpecOne receives heartbeat
+            ws_one.send_json({"type": "ping"})
+            hb_one = _receive_until_type(ws_one, "heartbeat")
+            assert hb_one["match_id"] == "match-hb-isolation"
+            assert hb_one["user_id"] is None
+            assert hb_one["payload"] == {"status": "ok"}
+            assert "connection_id" not in hb_one["payload"]
+
+            # SpecOne sends ping #2 -> allowed (2/2 in window)
+            ws_one.send_json({"type": "ping"})
+            hb_two = _receive_until_type(ws_one, "heartbeat")
+            assert hb_two["payload"] == {"status": "ok"}
+
+            # SpecOne sends ping #3 -> rate limited!
+            ws_one.send_json({"type": "ping"})
+            rl_event = _receive_until_type(ws_one, "rate_limit")
+            assert rl_event["payload"]["code"] == "rate_limit_exceeded"
+            assert "connection_id" not in rl_event["payload"]
+
+            # Prove SpecTwo received NONE of SpecOne's heartbeats or rate_limit events:
+            # Publish a score_update and verify the very next message on ws_two is score_update
+            asyncio.run(
+                app.state.broadcast_runtime.match_room_manager.publish(
+                    "match-hb-isolation",
+                    SpectatorEvent(
+                        type="score_update",
+                        match_id="match-hb-isolation",
+                        score_update=ScoreUpdate(match_id="match-hb-isolation", score="1-0", home_score=1, away_score=0),
+                    ),
+                    delay_seconds=0,
+                )
+            )
+            next_on_two = ws_two.receive_json()
+            assert next_on_two["type"] == "score_update", (
+                f"Expected score_update as next message on second spectator, got {next_on_two['type']!r}"
+            )
+
+    # 2. Tournament room heartbeat isolation & rate limiting
+    with client.websocket_connect("/ws/tournament/tourney-hb-isolation?display_name=TourneyOne") as t_one:
+        _receive_until_type(t_one, "tournament_snapshot")
+
+        with client.websocket_connect("/ws/tournament/tourney-hb-isolation?display_name=TourneyTwo") as t_two:
+            _receive_until_type(t_two, "tournament_snapshot")
+
+            t_one.send_json({"type": "ping"})
+            t_hb_1 = _receive_until_type(t_one, "heartbeat")
+            assert t_hb_1["tournament_id"] == "tourney-hb-isolation"
+            assert t_hb_1["payload"] == {"status": "ok"}
+            assert "connection_id" not in t_hb_1["payload"]
+
+            t_one.send_json({"type": "ping"})
+            t_hb_2 = _receive_until_type(t_one, "heartbeat")
+            assert t_hb_2["payload"] == {"status": "ok"}
+
+            # 3rd tournament ping exceeds rate limit
+            t_one.send_json({"type": "ping"})
+            t_rl = _receive_until_type(t_one, "rate_limit")
+            assert t_rl["payload"]["code"] == "rate_limit_exceeded"
+            assert "connection_id" not in t_rl["payload"]
+
+            # Prove TourneyTwo never received TourneyOne's heartbeats
+            asyncio.run(
+                app.state.broadcast_runtime.tournament_hub.publish(
+                    "tourney-hb-isolation",
+                    TournamentEvent(
+                        type="score_update",
+                        tournament_id="tourney-hb-isolation",
+                        match_id="m-77",
+                        featured_match_id="m-77",
+                    ),
+                    delay_seconds=0,
+                )
+            )
+            next_on_t_two = t_two.receive_json()
+            assert next_on_t_two["type"] == "score_update", (
+                f"Expected score_update as next message on second tournament spectator, got {next_on_t_two['type']!r}"
+            )
+
+
+def test_websocket_rejects_url_bearer_tokens_and_enforces_ticket_scope_expiry_and_replay() -> None:
+    """
+    Regression Test (Vulnerability 4):
+    Verifies that:
+    - Bearer tokens in WebSocket URL query parameters (?token=...) are rejected with code 4401.
+    - Short-lived, single-use, match-scoped tickets enforce:
+      1. Scope validation (wrong match_id or tournament scope rejected).
+      2. Single-use replay protection (reusing a redeemed ticket rejected).
+      3. Expiry validation (expired ticket rejected).
+    """
+    app = _build_app()
+    client = TestClient(app)
+
+    # 1. Raw bearer token in WebSocket URL is strictly rejected
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client.websocket_connect("/ws/spectate/match-auth-99?token=eyJhbGciOiJIUzI1NiJ9.secret"):
+            pass
+    assert exc_info.value.code == 4401
+
+    with pytest.raises(WebSocketDisconnect) as exc_info_t:
+        with client.websocket_connect("/ws/tournament/tourney-auth-99?token=eyJhbGciOiJIUzI1NiJ9.secret"):
+            pass
+    assert exc_info_t.value.code == 4401
+
+    # 2. Issue a valid match-scoped ticket for match-auth-99
+    resp = client.post("/matches/match-auth-99/spectate-ticket")
+    assert resp.status_code == 200
+    ticket_data = resp.json()
+    ticket = ticket_data["ticket"]
+    assert ticket_data["match_id"] == "match-auth-99"
+    assert ticket_data["scope_type"] == "match"
+
+    # 3. Scope validation: using a ticket scoped to match-auth-99 on match-other-100 is rejected
+    with pytest.raises(WebSocketDisconnect) as wrong_match_exc:
+        with client.websocket_connect(f"/ws/spectate/match-other-100?ticket={ticket}"):
+            pass
+    assert wrong_match_exc.value.code == 4401
+
+    # Scope validation: using a match ticket on a tournament WebSocket is rejected
+    with pytest.raises(WebSocketDisconnect) as wrong_type_exc:
+        with client.websocket_connect(f"/ws/tournament/match-auth-99?ticket={ticket}"):
+            pass
+    assert wrong_type_exc.value.code == 4401
+
+    # 4. Valid first-time redemption on the scoped match succeeds
+    with client.websocket_connect(f"/ws/spectate/match-auth-99?ticket={ticket}") as valid_ws:
+        snap = _receive_until_type(valid_ws, "snapshot")
+        assert snap["payload"]["authenticated"] is True
+        assert snap["display_name"] == "VerifiedSupporter"
+        assert snap["user_id"] is None
+
+    # 5. Replay protection: reusing the same ticket a second time is rejected
+    with pytest.raises(WebSocketDisconnect) as replay_exc:
+        with client.websocket_connect(f"/ws/spectate/match-auth-99?ticket={ticket}"):
+            pass
+    assert replay_exc.value.code == 4401
+
+    # 6. Expiry enforcement: issue a ticket with a 10ms TTL, wait 30ms, and confirm rejection
+    expired_issue = app.state.broadcast_runtime.issue_spectator_ticket(
+        user_id="viewer-test",
+        display_name="VerifiedSupporter",
+        scope_type="match",
+        scope_id="match-auth-99",
+        ttl_seconds=0.01,
+    )
+    time.sleep(0.03)
+    with pytest.raises(WebSocketDisconnect) as expired_exc:
+        with client.websocket_connect(f"/ws/spectate/match-auth-99?ticket={expired_issue['ticket']}"):
+            pass
+    assert expired_exc.value.code == 4401

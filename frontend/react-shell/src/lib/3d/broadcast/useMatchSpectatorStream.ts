@@ -41,9 +41,9 @@ export interface UseMatchSpectatorStreamOptions {
   wsUrl?: string;
   /** Optional viewer display name */
   displayName?: string;
-  /** Optional authentication bearer token */
-  token?: string;
-  /** Max reconnection attempts before entering error state (default: 8) */
+  /** Optional short-lived, single-use, match-scoped spectator ticket (issued via POST /matches/{id}/spectate-ticket) */
+  ticket?: string;
+  /** Optional Max reconnection attempts before entering error state (default: 8) */
   maxReconnectAttempts?: number;
   /** Callback triggered when a new sanitized frame is received and verified */
   onFrameReceived?: (frame: SpectatorSafeFrameView) => void;
@@ -79,7 +79,7 @@ export function useMatchSpectatorStream(
     enabled = true,
     wsUrl,
     displayName,
-    token,
+    ticket,
     maxReconnectAttempts = 8,
     onFrameReceived,
     onEventReceived,
@@ -120,9 +120,25 @@ export function useMatchSpectatorStream(
   // Resolve Canonical Match Key
   const canonicalId = resolveCanonicalMatchKey(matchId);
 
-  // Build the target WebSocket URL
+  // Build the target WebSocket URL (strictly forbids bearer tokens in query parameters)
   const resolveTargetWsUrl = useCallback(() => {
-    if (wsUrl) return wsUrl;
+    if (wsUrl) {
+      try {
+        const parsed = new URL(wsUrl);
+        parsed.searchParams.delete("token");
+        parsed.searchParams.delete("access_token");
+        parsed.searchParams.delete("bearer");
+        if (displayName && !parsed.searchParams.has("display_name")) {
+          parsed.searchParams.set("display_name", displayName);
+        }
+        if (ticket) {
+          parsed.searchParams.set("ticket", ticket);
+        }
+        return parsed.toString();
+      } catch {
+        return wsUrl.replace(/([?&])(token|access_token|bearer)=[^&]*(&|$)/gi, "$1").replace(/[?&]$/, "");
+      }
+    }
     if (typeof window === "undefined") return "";
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -132,11 +148,11 @@ export function useMatchSpectatorStream(
     if (displayName) {
       url.searchParams.set("display_name", displayName);
     }
-    if (token) {
-      url.searchParams.set("token", token);
+    if (ticket) {
+      url.searchParams.set("ticket", ticket);
     }
     return url.toString();
-  }, [wsUrl, canonicalId, matchId, displayName, token]);
+  }, [wsUrl, canonicalId, matchId, displayName, ticket]);
 
   // Clean disconnect
   const cleanupSocket = useCallback(() => {

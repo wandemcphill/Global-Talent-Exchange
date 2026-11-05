@@ -303,4 +303,27 @@ describe("useMatchSpectatorStream", () => {
     expect(latestResult?.connectionStatus).toBe("connected");
     expect(onResyncRequired).toHaveBeenCalledTimes(1);
   });
+
+  it("never places bearer tokens in WebSocket URLs and supports short-lived match-scoped tickets", () => {
+    act(() => {
+      root.render(
+        <StreamConsumer
+          options={{
+            matchId: "match-sec-ticket-1",
+            wsUrl: "ws://localhost:8000/ws/spectate/match-sec-ticket-1?token=secret-jwt-bearer-token&access_token=leak",
+            displayName: "TacticalViewer",
+            ticket: "st_short_lived_single_use_99",
+          }}
+        />
+      );
+    });
+
+    expect(MockWebSocket.instances.length).toBe(1);
+    const socketUrl = MockWebSocket.instances[0].url;
+    expect(socketUrl).not.toContain("token=");
+    expect(socketUrl).not.toContain("secret-jwt-bearer-token");
+    expect(socketUrl).not.toContain("access_token=");
+    expect(socketUrl).toContain("ticket=st_short_lived_single_use_99");
+    expect(socketUrl).toContain("display_name=TacticalViewer");
+  });
 });

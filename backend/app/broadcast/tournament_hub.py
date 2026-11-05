@@ -12,7 +12,7 @@ import redis.asyncio as redis_asyncio
 from pydantic import BaseModel
 from redis.exceptions import RedisError
 
-from app.broadcast.match_room_manager import RoomClient
+from app.broadcast.match_room_manager import RoomClient, sanitize_public_spectator_payload
 from app.core.event_backbone import make_json_safe
 
 logger = logging.getLogger(__name__)
@@ -208,8 +208,10 @@ class TournamentBroadcastHub:
 
     def _normalize_message(self, message: dict[str, Any] | BaseModel) -> dict[str, Any]:
         if isinstance(message, BaseModel):
-            return dict(message.model_dump(mode="json"))
-        return dict(make_json_safe(message))
+            raw_dict = dict(message.model_dump(mode="json"))
+        else:
+            raw_dict = dict(make_json_safe(message))
+        return sanitize_public_spectator_payload(raw_dict)
 
     def _resolved_delay(self, payload: dict[str, Any]) -> float:
         message_type = str(payload.get("type") or "").strip().lower()

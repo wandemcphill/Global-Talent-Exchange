@@ -25,24 +25,40 @@ _CONFIDENTIAL_BROADCAST_KEYS: frozenset[str] = frozenset(
         "confidential_tactics",
         "opponent_exploit_notes",
         "deterministic_seed",
+        "active_user_ids",
+        "account_id",
+        "owner_user_id",
+        "host_user_id",
+        "actor_user_id",
+        "sender_user_id",
+        "connection_id",
+        "client_id",
+        "socket_id",
+        "ws_id",
+        "session_id",
     }
 )
 
 
-def sanitize_public_spectator_payload(value: Any) -> Any:
-    """Recursively strips confidential coaching notes and internal tactical telemetry from public broadcast payloads."""
+def sanitize_public_spectator_payload(value: Any, *, _is_root: bool = True) -> Any:
+    """Recursively strips confidential tactics, account identifiers, and internal connection IDs from public spectator payloads."""
     if isinstance(value, dict):
         cleaned: dict[str, Any] = {}
         for k, v in value.items():
             key_str = str(k)
-            if key_str in _CONFIDENTIAL_BROADCAST_KEYS:
-                if key_str == "coach_notes":
-                    cleaned[key_str] = []
+            if key_str in {"coach_notes", "active_user_ids"}:
+                cleaned[key_str] = []
                 continue
-            cleaned[key_str] = sanitize_public_spectator_payload(v)
+            if key_str == "user_id":
+                if _is_root:
+                    cleaned[key_str] = None
+                continue
+            if key_str in _CONFIDENTIAL_BROADCAST_KEYS:
+                continue
+            cleaned[key_str] = sanitize_public_spectator_payload(v, _is_root=False)
         return cleaned
     if isinstance(value, list):
-        return [sanitize_public_spectator_payload(item) for item in value]
+        return [sanitize_public_spectator_payload(item, _is_root=False) for item in value]
     return value
 
 

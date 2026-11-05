@@ -4,15 +4,16 @@ import asyncio
 from contextlib import suppress
 from dataclasses import dataclass, field
 import os
+import re
+import secrets
+import time
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect, status
 
 from app.auth.dependencies import get_current_user
 from app.auth.security import TokenError, decode_access_token
 from app.broadcast.broadcast_models import MatchSnapshot, SpectatorEvent, SpectatorPresenceView, TournamentEvent
-import re
-import time
 from app.broadcast.match_room_manager import (
     MatchRoomManager,
     RoomClient,
@@ -37,6 +38,17 @@ class ResolvedViewer:
 
 
 @dataclass(slots=True)
+class SpectatorTicketRecord:
+    ticket_id: str
+    user_id: str
+    display_name: str | None
+    scope_type: str
+    scope_id: str
+    expires_at: float
+    used: bool = False
+
+
+@dataclass(slots=True)
 class BroadcastRuntime:
     redis_url: str | None
     delay_seconds: int = 3
@@ -45,9 +57,11 @@ class BroadcastRuntime:
     max_queue_size: int = 256
     rate_limit_max_messages: int = 5
     rate_limit_window_seconds: float = 5.0
+    ticket_ttl_seconds: float = 30.0
     presence_service: PresenceService = field(init=False)
     match_room_manager: MatchRoomManager = field(init=False)
     tournament_hub: TournamentBroadcastHub = field(init=False)
+    _tickets: dict[str, SpectatorTicketRecord] = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
         self.presence_service = PresenceService(
@@ -64,6 +78,67 @@ class BroadcastRuntime:
             delay_seconds=self.delay_seconds,
             max_queue_size=self.max_queue_size,
         )
+
+    def issue_spectator_ticket(
+        self,
+        *,
+        user_id: str,
+        display_name: str | None,
+        scope_type: str,
+        scope_id: str,
+        ttl_seconds: float | None = None,
+    ) -> dict[str, Any]:
+        now = time.monotonic()
+        # Prune expired or used tickets
+        expired_keys = [
+            k for k, rec in self._tickets.items() if rec.used or now >= rec.expires_at
+        ]
+        for k in expired_keys:
+            self._tickets.pop(k, None)
+
+        ttl = float(self.ticket_ttl_seconds if ttl_seconds is None else ttl_seconds)
+        ticket_id = secrets.token_urlsafe(32)
+        self._tickets[ticket_id] = SpectatorTicketRecord(
+            ticket_id=ticket_id,
+            user_id=str(user_id),
+            display_name=display_name,
+            scope_type=str(scope_type).strip().lower(),
+            scope_id=str(scope_id).strip(),
+            expires_at=now + max(ttl, 0.001),
+            used=False,
+        )
+        return {
+            "ticket": ticket_id,
+            "scope_type": str(scope_type).strip().lower(),
+            "scope_id": str(scope_id).strip(),
+            "expires_in": max(int(ttl), 1),
+        }
+
+    def redeem_spectator_ticket(
+        self,
+        ticket: str,
+        *,
+        expected_scope_type: str,
+        expected_scope_id: str,
+    ) -> ResolvedViewer | None:
+        cleaned = str(ticket or "").strip()
+        if not cleaned:
+            return None
+        record = self._tickets.get(cleaned)
+        if record is None:
+            return None
+        now = time.monotonic()
+        if record.used or now >= record.expires_at:
+            self._tickets.pop(cleaned, None)
+            return None
+        if (
+            record.scope_type != str(expected_scope_type).strip().lower()
+            or record.scope_id != str(expected_scope_id).strip()
+        ):
+            return None
+        record.used = True
+        self._tickets.pop(cleaned, None)
+        return ResolvedViewer(user_id=record.user_id, display_name=record.display_name)
 
     async def match_snapshot(self, match_id: str, *, metadata: dict[str, Any] | None = None) -> MatchSnapshot:
         presence = await self.presence_service.get_match_presence(match_id)
@@ -123,22 +198,90 @@ def ensure_broadcast_runtime(app) -> BroadcastRuntime:
     return runtime
 
 
+@router.post("/matches/{match_id}/spectate-ticket")
+async def create_match_spectate_ticket(
+    match_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Issues a short-lived, single-use, match-scoped WebSocket ticket so bearer tokens never appear in URLs."""
+    user_id = str(getattr(current_user, "id", "") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required.")
+    display_name = (
+        str(getattr(current_user, "display_name", None) or getattr(current_user, "username", None) or "").strip()
+        or None
+    )
+    runtime = ensure_broadcast_runtime(request.app)
+    issued = runtime.issue_spectator_ticket(
+        user_id=user_id,
+        display_name=display_name,
+        scope_type="match",
+        scope_id=match_id,
+    )
+    return {
+        "ticket": issued["ticket"],
+        "match_id": match_id,
+        "scope_type": "match",
+        "expires_in": issued["expires_in"],
+    }
+
+
+@router.post("/tournaments/{tournament_id}/spectate-ticket")
+async def create_tournament_spectate_ticket(
+    tournament_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Issues a short-lived, single-use, tournament-scoped WebSocket ticket."""
+    user_id = str(getattr(current_user, "id", "") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required.")
+    display_name = (
+        str(getattr(current_user, "display_name", None) or getattr(current_user, "username", None) or "").strip()
+        or None
+    )
+    runtime = ensure_broadcast_runtime(request.app)
+    issued = runtime.issue_spectator_ticket(
+        user_id=user_id,
+        display_name=display_name,
+        scope_type="tournament",
+        scope_id=tournament_id,
+    )
+    return {
+        "ticket": issued["ticket"],
+        "tournament_id": tournament_id,
+        "scope_type": "tournament",
+        "expires_in": issued["expires_in"],
+    }
+
+
 @router.get("/matches/{match_id}/spectators", response_model=SpectatorPresenceView)
 async def get_match_spectators(
     match_id: str,
     request: Request,
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> SpectatorPresenceView:
-    # SpectatorPresenceView carries active_user_ids, i.e. the identity of every
-    # account currently watching. That is not public data.
     runtime = ensure_broadcast_runtime(request.app)
-    return await runtime.presence_service.get_match_presence(match_id)
+    presence = await runtime.presence_service.get_match_presence(match_id)
+    if not (getattr(current_user, "is_admin", False) or getattr(current_user, "is_super_admin", False)):
+        return presence.model_copy(update={"active_user_ids": []})
+    return presence
 
 
 @router.websocket("/ws/spectate/{match_id}")
 async def spectate_match(websocket: WebSocket, match_id: str) -> None:
     runtime = ensure_broadcast_runtime(websocket.scope["app"])
-    resolved_viewer = _resolve_optional_viewer(websocket)
+    auth_ok, resolved_viewer, reject_reason = _authenticate_spectator_websocket(
+        websocket,
+        runtime=runtime,
+        scope_type="match",
+        scope_id=match_id,
+    )
+    if not auth_ok:
+        await websocket.close(code=4401, reason=reject_reason or "Unauthorized spectator handshake.")
+        return
+
     await websocket.accept()
 
     client = runtime.match_room_manager.build_client(
@@ -150,14 +293,19 @@ async def spectate_match(websocket: WebSocket, match_id: str) -> None:
     presence = await runtime.presence_service.register_viewer(match_id, client.connection_id, client.user_id)
     snapshot = await runtime.match_snapshot(match_id)
     await websocket.send_json(
-        SpectatorEvent(
-            type="snapshot",
-            match_id=match_id,
-            user_id=client.user_id,
-            display_name=client.display_name,
-            snapshot=snapshot,
-            payload={"channel": runtime.match_room_manager.channel_for_match(match_id)},
-        ).model_dump(mode="json")
+        sanitize_public_spectator_payload(
+            SpectatorEvent(
+                type="snapshot",
+                match_id=match_id,
+                user_id=None,
+                display_name=client.display_name,
+                snapshot=snapshot,
+                payload={
+                    "channel": runtime.match_room_manager.channel_for_match(match_id),
+                    "authenticated": bool(client.user_id),
+                },
+            ).model_dump(mode="json")
+        )
     )
     await runtime.match_room_manager.publish(
         match_id,
@@ -199,7 +347,16 @@ async def spectate_match(websocket: WebSocket, match_id: str) -> None:
 @router.websocket("/ws/tournament/{tournament_id}")
 async def stream_tournament(websocket: WebSocket, tournament_id: str) -> None:
     runtime = ensure_broadcast_runtime(websocket.scope["app"])
-    resolved_viewer = _resolve_optional_viewer(websocket)
+    auth_ok, resolved_viewer, reject_reason = _authenticate_spectator_websocket(
+        websocket,
+        runtime=runtime,
+        scope_type="tournament",
+        scope_id=tournament_id,
+    )
+    if not auth_ok:
+        await websocket.close(code=4401, reason=reject_reason or "Unauthorized tournament spectator handshake.")
+        return
+
     await websocket.accept()
 
     client = runtime.match_room_manager.build_client(
@@ -209,26 +366,24 @@ async def stream_tournament(websocket: WebSocket, tournament_id: str) -> None:
     )
     await runtime.tournament_hub.join_room(tournament_id, client)
     await websocket.send_json(
-        TournamentEvent(
-            type="tournament_snapshot",
-            tournament_id=tournament_id,
-            featured_match_id=await runtime.tournament_hub.featured_match_id(tournament_id),
-            payload={"viewer_count": await runtime.tournament_hub.room_viewer_count(tournament_id)},
-        ).model_dump(mode="json")
+        sanitize_public_spectator_payload(
+            TournamentEvent(
+                type="tournament_snapshot",
+                tournament_id=tournament_id,
+                featured_match_id=await runtime.tournament_hub.featured_match_id(tournament_id),
+                payload={
+                    "viewer_count": await runtime.tournament_hub.room_viewer_count(tournament_id),
+                    "authenticated": bool(client.user_id),
+                },
+            ).model_dump(mode="json")
+        )
     )
 
     sender_task = asyncio.create_task(_drain_client_queue(client), name=f"tournament-sender-{client.connection_id}")
     try:
         while True:
             message = await websocket.receive_json()
-            if str(message.get("type") or "").strip().lower() == "ping":
-                await runtime.tournament_hub.broadcast(
-                    tournament_id,
-                    TournamentEvent(
-                        type="heartbeat", tournament_id=tournament_id, payload={"connection_id": client.connection_id}
-                    ),
-                    delay_seconds=0,
-                )
+            await _handle_tournament_client_message(runtime, tournament_id, client, message)
     except WebSocketDisconnect:
         return
     finally:
@@ -288,6 +443,51 @@ def _check_client_rate_limit(runtime: BroadcastRuntime, client: RoomClient) -> b
     return True
 
 
+def _enqueue_private_event(client: RoomClient, payload: dict[str, Any]) -> None:
+    safe_payload = sanitize_public_spectator_payload(payload)
+    if client.queue.full():
+        with suppress(asyncio.QueueEmpty):
+            client.queue.get_nowait()
+    with suppress(asyncio.QueueFull):
+        client.queue.put_nowait(safe_payload)
+
+
+async def _handle_tournament_client_message(
+    runtime: BroadcastRuntime,
+    tournament_id: str,
+    client: RoomClient,
+    message: Any,
+) -> None:
+    if not isinstance(message, dict):
+        return
+    message_type = str(message.get("type") or "").strip().lower()
+    if message_type not in {"ping", "heartbeat"}:
+        return
+
+    if not _check_client_rate_limit(runtime, client):
+        _enqueue_private_event(
+            client,
+            TournamentEvent(
+                type="rate_limit",
+                tournament_id=tournament_id,
+                payload={
+                    "code": "rate_limit_exceeded",
+                    "detail": "Message rate limit exceeded.",
+                },
+            ).model_dump(mode="json"),
+        )
+        return
+
+    _enqueue_private_event(
+        client,
+        TournamentEvent(
+            type="heartbeat",
+            tournament_id=tournament_id,
+            payload={"status": "ok"},
+        ).model_dump(mode="json"),
+    )
+
+
 async def _handle_spectator_client_message(
     runtime: BroadcastRuntime,
     match_id: str,
@@ -297,32 +497,36 @@ async def _handle_spectator_client_message(
     if not isinstance(message, dict):
         return
     message_type = str(message.get("type") or "").strip().lower()
-    if message_type == "ping":
-        await runtime.match_room_manager.broadcast(
-            match_id,
-            SpectatorEvent(type="heartbeat", match_id=match_id, payload={"connection_id": client.connection_id}),
-            delay_seconds=0,
-        )
-        return
-
-    if message_type not in {"reaction", "chat_message"}:
+    if message_type not in {"ping", "heartbeat", "reaction", "chat_message"}:
         return
 
     if not _check_client_rate_limit(runtime, client):
-        with suppress(asyncio.QueueFull):
-            client.queue.put_nowait(
-                SpectatorEvent(
-                    type="rate_limit",
-                    match_id=match_id,
-                    user_id=client.user_id,
-                    display_name=client.display_name,
-                    payload={
-                        "code": "rate_limit_exceeded",
-                        "detail": "Message rate limit exceeded.",
-                        "connection_id": client.connection_id,
-                    },
-                ).model_dump(mode="json")
-            )
+        _enqueue_private_event(
+            client,
+            SpectatorEvent(
+                type="rate_limit",
+                match_id=match_id,
+                user_id=None,
+                display_name=client.display_name,
+                payload={
+                    "code": "rate_limit_exceeded",
+                    "detail": "Message rate limit exceeded.",
+                },
+            ).model_dump(mode="json"),
+        )
+        return
+
+    if message_type in {"ping", "heartbeat"}:
+        await runtime.presence_service.heartbeat_viewer(match_id, client.connection_id, client.user_id)
+        _enqueue_private_event(
+            client,
+            SpectatorEvent(
+                type="heartbeat",
+                match_id=match_id,
+                user_id=None,
+                payload={"status": "ok"},
+            ).model_dump(mode="json"),
+        )
         return
 
     if message_type == "reaction":
@@ -333,7 +537,6 @@ async def _handle_spectator_client_message(
         if not reaction:
             return
         payload: dict[str, Any] = {
-            "connection_id": client.connection_id,
             "authenticated": bool(client.user_id),
         }
         app = client.websocket.scope.get("app")
@@ -359,7 +562,7 @@ async def _handle_spectator_client_message(
             SpectatorEvent(
                 type="reaction",
                 match_id=match_id,
-                user_id=client.user_id,
+                user_id=None,
                 display_name=client.display_name,
                 reaction=reaction,
                 payload=payload,
@@ -380,11 +583,10 @@ async def _handle_spectator_client_message(
             SpectatorEvent(
                 type="chat_message",
                 match_id=match_id,
-                user_id=client.user_id,
+                user_id=None,
                 display_name=client.display_name,
                 message=chat_message,
                 payload={
-                    "connection_id": client.connection_id,
                     "authenticated": bool(client.user_id),
                 },
             ),
@@ -393,32 +595,72 @@ async def _handle_spectator_client_message(
         return
 
 
-def _resolve_optional_viewer(websocket: WebSocket) -> ResolvedViewer:
-    token = websocket.query_params.get("token")
-    authorization = websocket.headers.get("authorization")
-    if authorization and authorization.lower().startswith("bearer "):
-        token = authorization.split(" ", maxsplit=1)[1].strip()
+def _authenticate_spectator_websocket(
+    websocket: WebSocket,
+    *,
+    runtime: BroadcastRuntime,
+    scope_type: str,
+    scope_id: str,
+) -> tuple[bool, ResolvedViewer, str | None]:
+    # 1. Explicitly reject raw bearer tokens in WebSocket URL query parameters
+    for forbidden_param in ("token", "access_token", "bearer"):
+        if websocket.query_params.get(forbidden_param) is not None:
+            return (
+                False,
+                ResolvedViewer(user_id=None, display_name=None),
+                "Bearer tokens are not permitted in WebSocket URLs; use a short-lived spectator ticket.",
+            )
+
     guest_display_name = _fallback_display_name(websocket, is_authenticated=False)
-    if token is None or not token.strip():
-        return ResolvedViewer(user_id=None, display_name=guest_display_name)
+
+    # 2. Validate short-lived, single-use, scope-bound spectator ticket if provided
+    raw_ticket = websocket.query_params.get("ticket")
+    if raw_ticket is not None:
+        redeemed = runtime.redeem_spectator_ticket(
+            raw_ticket,
+            expected_scope_type=scope_type,
+            expected_scope_id=scope_id,
+        )
+        if redeemed is None:
+            return (
+                False,
+                ResolvedViewer(user_id=None, display_name=None),
+                "Invalid, expired, wrong-scope, or replayed spectator ticket.",
+            )
+        resolved_name = redeemed.display_name or _fallback_display_name(websocket, is_authenticated=True)
+        return (True, ResolvedViewer(user_id=redeemed.user_id, display_name=resolved_name), None)
+
+    # 3. Optional non-URL authentication via HttpOnly cookie or Authorization header
+    non_url_token: str | None = None
+    cookie_token = websocket.cookies.get("gtex_access_token") or websocket.cookies.get("access_token")
+    if cookie_token and cookie_token.strip():
+        non_url_token = cookie_token.strip()
+    else:
+        authorization = websocket.headers.get("authorization")
+        if authorization and authorization.lower().startswith("bearer "):
+            non_url_token = authorization.split(" ", maxsplit=1)[1].strip()
+
+    if not non_url_token:
+        return (True, ResolvedViewer(user_id=None, display_name=guest_display_name), None)
+
     try:
-        payload = decode_access_token(token.strip())
+        payload = decode_access_token(non_url_token)
     except TokenError:
-        return ResolvedViewer(user_id=None, display_name=guest_display_name)
+        return (True, ResolvedViewer(user_id=None, display_name=guest_display_name), None)
     subject = str(payload.get("sub") or "").strip()
     if not subject:
-        return ResolvedViewer(user_id=None, display_name=guest_display_name)
+        return (True, ResolvedViewer(user_id=None, display_name=guest_display_name), None)
     session_factory = getattr(websocket.scope["app"].state, "session_factory", None)
     if session_factory is None:
         token_name = str(payload.get("display_name") or payload.get("username") or "").strip()
         resolved_name = token_name or _fallback_display_name(websocket, is_authenticated=True)
-        return ResolvedViewer(user_id=subject, display_name=resolved_name)
+        return (True, ResolvedViewer(user_id=subject, display_name=resolved_name), None)
     with session_factory() as session:
         user = session.get(User, subject)
         if user is None or not user.is_active:
-            return ResolvedViewer(user_id=None, display_name=guest_display_name)
+            return (True, ResolvedViewer(user_id=None, display_name=guest_display_name), None)
         resolved_name = (user.display_name or user.username or "").strip() or None
-        return ResolvedViewer(user_id=user.id, display_name=resolved_name)
+        return (True, ResolvedViewer(user_id=user.id, display_name=resolved_name), None)
 
 
 def _fallback_display_name(websocket: WebSocket, *, is_authenticated: bool = False) -> str | None:
@@ -441,7 +683,7 @@ def _snapshot_from_presence(match_id: str, presence: SpectatorPresenceView) -> M
         match_id=match_id,
         viewer_count=presence.active_viewers,
         peak_viewers=presence.peak_viewers,
-        active_user_ids=presence.active_user_ids,
+        active_user_ids=[],
     )
 
 
