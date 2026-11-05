@@ -618,7 +618,7 @@ export function parseHumanoidFootballerGLBBuffer(glbBuffer: ArrayBuffer): Promis
       );
       templateMesh.name = gltf.meshes[0].name || "Player";
       templateMesh.add(rootBone);
-      templateMesh.bind(skeleton);
+      templateMesh.bind(skeleton, new THREE.Matrix4());
 
       // 3. Reconstruct Motion-Capture AnimationClips from animations[]
       const mocapClips: THREE.AnimationClip[] = [];
@@ -855,7 +855,7 @@ export class HumanoidFootballerRig {
 
     this.modelContainer.add(rootBone);
     this.modelContainer.add(this.skinnedMesh);
-    this.skinnedMesh.bind(this.skeleton);
+    this.skinnedMesh.bind(this.skeleton, new THREE.Matrix4());
 
     this.attachShirtNumberBadge();
     this.setupAnimationMixer(this.modelContainer);
@@ -886,7 +886,7 @@ export class HumanoidFootballerRig {
 
     this.modelContainer.add(rootBone);
     this.modelContainer.add(this.skinnedMesh);
-    this.skinnedMesh.bind(this.skeleton);
+    this.skinnedMesh.bind(this.skeleton, new THREE.Matrix4());
 
     this.clipLibrary = asset.clipLibrary;
     this.isUsingGLBMesh = true;
