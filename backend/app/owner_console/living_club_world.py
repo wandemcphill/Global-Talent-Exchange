@@ -48,6 +48,49 @@ DIRECTIVE_DEPARTMENTS = (
     "executive",
 )
 
+# A directive can complete only when its explicitly selected objective's
+# authoritative backend condition is met. The UI catalogue mirrors these keys.
+DIRECTIVE_COMPLETION_OBJECTIVES: dict[str, dict[str, dict[str, str]]] = {
+    "manager": {
+        "change_team_mentality": {"label": "Change team mentality", "completion_check": "tactical_mentality_updated"},
+        "change_formation": {"label": "Change team formation", "completion_check": "tactical_formation_updated"},
+        "improve_squad_morale": {"label": "Improve squad morale", "completion_check": "squad_morale_improved"},
+        "complete_competitive_fixture": {"label": "Complete a competitive fixture", "completion_check": "competitive_fixture_completed"},
+        "upgrade_training_facility": {"label": "Upgrade the training facility", "completion_check": "training_facility_upgraded"},
+    },
+    "medical": {
+        "reduce_injury_burden": {"label": "Reduce squad injury burden", "completion_check": "injury_rehabilitation_days_reduced"},
+        "clear_injured_player": {"label": "Clear an injured player for training", "completion_check": "injured_player_cleared_for_training"},
+        "activate_recovery_protocol": {"label": "Activate the light-recovery protocol", "completion_check": "recovery_workload_protocol_activated"},
+        "upgrade_medical_facility": {"label": "Upgrade the medical facility", "completion_check": "medical_facility_upgraded"},
+        "improve_squad_conditioning": {"label": "Improve squad conditioning", "completion_check": "squad_conditioning_improved"},
+        "reduce_squad_fatigue": {"label": "Reduce squad workload fatigue", "completion_check": "squad_fatigue_reduced"},
+    },
+    "academy": {
+        "induct_youth_prospects": {"label": "Induct youth prospects", "completion_check": "academy_intake_inducted"},
+        "promote_academy_prospect": {"label": "Promote an academy prospect", "completion_check": "academy_prospect_promoted"},
+        "extend_youth_contracts": {"label": "Extend youth contracts", "completion_check": "youth_contract_extended"},
+        "develop_regen_ratings": {"label": "Develop academy player ratings", "completion_check": "regen_rating_developed"},
+        "upgrade_academy_facility": {"label": "Upgrade the academy facility", "completion_check": "academy_facility_upgraded"},
+    },
+    "finance": {
+        "sign_commercial_sponsor": {"label": "Sign a commercial sponsor", "completion_check": "commercial_sponsor_signed"},
+        "increase_treasury_balance": {"label": "Increase the club treasury balance", "completion_check": "treasury_balance_increased"},
+        "complete_sponsor_review": {"label": "Complete a sponsor review", "completion_check": "commercial_sponsor_review_completed"},
+        "upgrade_revenue_infrastructure": {"label": "Upgrade commercial or stadium infrastructure", "completion_check": "revenue_infrastructure_upgraded"},
+    },
+    "scouting": {
+        "expand_scouting_watchlist": {"label": "Expand the scouting watchlist", "completion_check": "scouting_watchlist_expanded"},
+        "recruit_squad_player": {"label": "Recruit a player into the squad", "completion_check": "player_recruited_to_squad"},
+    },
+    "executive": {
+        "advance_campus_project": {"label": "Advance a campus project", "completion_check": "campus_infrastructure_advanced"},
+        "increase_club_prestige": {"label": "Increase club prestige", "completion_check": "club_prestige_increased"},
+        "appoint_executive_staff": {"label": "Appoint an executive staff member", "completion_check": "executive_staff_appointed"},
+        "execute_operational_decision": {"label": "Execute an operational decision", "completion_check": "operational_decision_executed"},
+    },
+}
+
 DEPARTMENT_TO_ROOM_MAP = {
     "manager": "managers_office",
     "medical": "medical_department",
@@ -857,6 +900,8 @@ def format_directive_dict(dir_row: OwnerClubDirective) -> dict[str, Any]:
         "deadline_day": dir_row.deadline_day,
         "acknowledged_by": dir_row.acknowledged_by,
         "acknowledgement_text": dir_row.acknowledgement_text,
+        "objective_key": (dir_row.consequences_json or {}).get("objective_key"),
+        "objective_label": (dir_row.consequences_json or {}).get("objective_label"),
         "consequences": dir_row.consequences_json or {},
         "completed_at": dir_row.completed_at.isoformat() if dir_row.completed_at else None,
         "created_at": dir_row.created_at.isoformat() if dir_row.created_at else None,
@@ -1028,6 +1073,25 @@ def _evaluate_directive_completion(
             },
         )
 
+    objective_key = str(consequences.get("objective_key") or "")
+    objective = DIRECTIVE_COMPLETION_OBJECTIVES.get(directive.department, {}).get(objective_key)
+    if not objective:
+        return (
+            False,
+            0,
+            {
+                "verified": False,
+                "reason": "completion_objective_required",
+                "department": directive.department,
+                "lead_role": lead_role_id,
+                "lead_person_id": lead_slot["person_id"],
+                "lead_name": lead_slot["name"],
+                "lead_status": lead_slot["status"],
+                "objective_key": objective_key or None,
+                "matched_checks": [],
+            },
+        )
+
     current = _capture_directive_baseline_snapshot(
         session,
         state,
@@ -1139,12 +1203,22 @@ def _evaluate_directive_completion(
         if current["resolved_decisions_count"] > baseline.get("resolved_decisions_count", 0):
             matched_checks.append("operational_decision_executed")
 
-    is_fulfilled = len(matched_checks) > 0
+    required_check = objective["completion_check"]
+    # Dynamic tactical values are recorded as "check:value"; all other checks
+    # must match exactly. Unrelated department changes cannot satisfy this directive.
+    matched_checks = [
+        check for check in matched_checks
+        if check == required_check or check.startswith(f"{required_check}:")
+    ]
+    is_fulfilled = bool(matched_checks)
     progress_pct = 100 if is_fulfilled else 0
     evidence = {
         "verified": is_fulfilled,
-        "reason": "verified_department_outcome" if is_fulfilled else "awaiting_authoritative_department_outcome",
+        "reason": "verified_directive_objective" if is_fulfilled else "awaiting_selected_objective",
         "department": dept,
+        "objective_key": objective_key,
+        "objective_label": objective["label"],
+        "required_completion_check": required_check,
         "lead_role": lead_role_id,
         "lead_person_id": lead_slot["person_id"],
         "lead_name": lead_slot["name"],
@@ -1164,6 +1238,7 @@ def issue_department_directive(
     title: str,
     instruction: str,
     *,
+    objective_key: str | None = None,
     deadline_days: int | None = 7,
     target_scope: str | None = None,
     target_scope_id: str | None = None,
@@ -1174,6 +1249,14 @@ def issue_department_directive(
             "invalid_directive_department",
             400,
             f"Invalid department '{department}'. Must be one of {DIRECTIVE_DEPARTMENTS}.",
+        )
+
+    objective = DIRECTIVE_COMPLETION_OBJECTIVES.get(department, {}).get(str(objective_key or ""))
+    if objective_key and not objective:
+        raise service.OwnerError(
+            "invalid_directive_objective",
+            400,
+            f"Objective '{objective_key}' is not supported by the {department} department.",
         )
 
     squad_players = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
@@ -1256,6 +1339,9 @@ def issue_department_directive(
             "progress_pct": 0,
             "verification_status": "pending",
             "reward_granted": False,
+            "objective_key": objective_key,
+            "objective_label": objective["label"] if objective else "Manual verification required",
+            "completion_check": objective["completion_check"] if objective else None,
             "baseline_snapshot": baseline_snapshot,
         },
     )
@@ -2370,7 +2456,11 @@ def get_living_world_timeline(
                 "category": "executive",
                 "severity": "important",
                 "title": f"Directive: {d.title}",
-                "description": f"Target: {d.department.title()} Department. {d.instruction}",
+                "description": (
+                    f"Target: {d.department.title()} Department. "
+                    f"Completion objective: {(d.consequences_json or {}).get('objective_label') or 'Manual verification required'}. "
+                    f"{d.instruction}"
+                ),
                 "world_day": d.issued_day,
                 "status": d.status,
                 "participants": [{"role": d.department, "name": d.acknowledged_by or d.department}],
@@ -2409,7 +2499,11 @@ def get_living_world_timeline(
         for item in unified_items
         if (not category or item["category"] == category)
         and (not severity or item["severity"] == severity)
-        and (not status or item["status"] == status)
+        and (
+            not status
+            or (status == "active" and item["status"] in {"active", "awaiting_decision"})
+            or (status != "active" and item["status"] == status)
+        )
     ]
 
     filtered_items.sort(
