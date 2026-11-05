@@ -55,6 +55,8 @@ export interface LivingWorldDirective {
   deadline_day?: number | null;
   acknowledged_by?: string | null;
   acknowledgement_text?: string | null;
+  objective_key?: string | null;
+  objective_label?: string | null;
   consequences: Record<string, any>;
   completed_at?: string | null;
   created_at?: string | null;
