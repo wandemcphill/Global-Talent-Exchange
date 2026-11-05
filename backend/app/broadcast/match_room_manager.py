@@ -18,6 +18,34 @@ from app.core.event_backbone import make_json_safe
 logger = logging.getLogger(__name__)
 
 
+_CONFIDENTIAL_BROADCAST_KEYS: frozenset[str] = frozenset(
+    {
+        "coach_notes",
+        "internal_tactics",
+        "confidential_tactics",
+        "opponent_exploit_notes",
+        "deterministic_seed",
+    }
+)
+
+
+def sanitize_public_spectator_payload(value: Any) -> Any:
+    """Recursively strips confidential coaching notes and internal tactical telemetry from public broadcast payloads."""
+    if isinstance(value, dict):
+        cleaned: dict[str, Any] = {}
+        for k, v in value.items():
+            key_str = str(k)
+            if key_str in _CONFIDENTIAL_BROADCAST_KEYS:
+                if key_str == "coach_notes":
+                    cleaned[key_str] = []
+                continue
+            cleaned[key_str] = sanitize_public_spectator_payload(v)
+        return cleaned
+    if isinstance(value, list):
+        return [sanitize_public_spectator_payload(item) for item in value]
+    return value
+
+
 @dataclass(eq=False, slots=True)
 class RoomClient:
     connection_id: str
@@ -26,6 +54,7 @@ class RoomClient:
     queue: asyncio.Queue[dict[str, Any]]
     user_id: str | None = None
     display_name: str | None = None
+    message_timestamps: list[float] = field(default_factory=list)
 
     def __hash__(self) -> int:
         return hash(self.connection_id)
@@ -218,8 +247,10 @@ class MatchRoomManager:
 
     def _normalize_message(self, message: dict[str, Any] | BaseModel) -> dict[str, Any]:
         if isinstance(message, BaseModel):
-            return dict(message.model_dump(mode="json"))
-        return dict(make_json_safe(message))
+            raw_dict = dict(message.model_dump(mode="json"))
+        else:
+            raw_dict = dict(make_json_safe(message))
+        return sanitize_public_spectator_payload(raw_dict)
 
     def _resolved_delay(self, payload: dict[str, Any]) -> float:
         message_type = str(payload.get("type") or "").strip().lower()

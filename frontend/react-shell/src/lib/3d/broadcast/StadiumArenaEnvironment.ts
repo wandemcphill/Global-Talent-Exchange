@@ -43,7 +43,7 @@
 import * as THREE from "three";
 import { FIFA_PITCH_DIMENSIONS, PITCH_LANDMARKS } from "./matchCoordinates";
 import { SpectatorSafeTeamView } from "./spectatorContract";
-import { DeviceQualityTier } from "../GtexSceneRegistry";
+import type { DeviceQualityTier } from "../GtexSceneTypes";
 
 export interface StadiumArenaOptions {
   homeTeam?: SpectatorSafeTeamView;
@@ -866,7 +866,7 @@ export class StadiumArenaEnvironment {
     // South Stand Crowd (Away Supporter Block)
     const awayCrowdGeo = new THREE.BoxGeometry(3.0, 6.0, FIFA_PITCH_DIMENSIONS.width + 4);
     this.disposables.push(awayCrowdGeo);
-    const awayCrowd = new THREE.Mesh(awayCrowdGeo, awayColor);
+    const awayCrowd = new THREE.Mesh(awayCrowdGeo, awayCrowdMat);
     awayCrowd.position.set(halfL + 15, 7.5, 0);
     this.crowdGroup.add(awayCrowd);
   }

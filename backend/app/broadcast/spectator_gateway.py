@@ -11,7 +11,13 @@ from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 from app.auth.dependencies import get_current_user
 from app.auth.security import TokenError, decode_access_token
 from app.broadcast.broadcast_models import MatchSnapshot, SpectatorEvent, SpectatorPresenceView, TournamentEvent
-from app.broadcast.match_room_manager import MatchRoomManager, RoomClient
+import re
+import time
+from app.broadcast.match_room_manager import (
+    MatchRoomManager,
+    RoomClient,
+    sanitize_public_spectator_payload,
+)
 from app.broadcast.presence_service import PresenceService
 from app.broadcast.tournament_hub import TournamentBroadcastHub
 from app.models.user import User
@@ -37,6 +43,8 @@ class BroadcastRuntime:
     viewer_ttl_seconds: int = 45
     heartbeat_interval_seconds: int = 15
     max_queue_size: int = 256
+    rate_limit_max_messages: int = 5
+    rate_limit_window_seconds: float = 5.0
     presence_service: PresenceService = field(init=False)
     match_room_manager: MatchRoomManager = field(init=False)
     tournament_hub: TournamentBroadcastHub = field(init=False)
@@ -59,12 +67,13 @@ class BroadcastRuntime:
 
     async def match_snapshot(self, match_id: str, *, metadata: dict[str, Any] | None = None) -> MatchSnapshot:
         presence = await self.presence_service.get_match_presence(match_id)
+        safe_metadata = sanitize_public_spectator_payload(dict(metadata or {}))
         return MatchSnapshot(
             match_id=match_id,
             viewer_count=presence.active_viewers,
             peak_viewers=presence.peak_viewers,
-            active_user_ids=presence.active_user_ids,
-            metadata=dict(metadata or {}),
+            active_user_ids=[],
+            metadata=safe_metadata,
         )
 
     async def aclose(self) -> None:
@@ -244,6 +253,41 @@ async def _heartbeat_presence(runtime: BroadcastRuntime, match_id: str, client: 
         await runtime.presence_service.heartbeat_viewer(match_id, client.connection_id, client.user_id)
 
 
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f]")
+_DISALLOWED_MARKUP_RE = re.compile(r"(<\s*/?\s*script|javascript:|<[^>]+>)", re.IGNORECASE)
+_IMPERSONATION_TOKENS: frozenset[str] = frozenset(
+    {
+        "admin",
+        "administrator",
+        "system",
+        "official",
+        "moderator",
+        "club owner",
+        "owner",
+        "gtex official",
+        "gtex admin",
+    }
+)
+
+
+def _sanitize_text_content(raw: str, *, max_length: int) -> str:
+    cleaned = _CONTROL_CHARS_RE.sub("", raw).strip()
+    cleaned = _DISALLOWED_MARKUP_RE.sub("", cleaned).strip()
+    return cleaned[:max_length]
+
+
+def _check_client_rate_limit(runtime: BroadcastRuntime, client: RoomClient) -> bool:
+    now = time.monotonic()
+    window = max(float(runtime.rate_limit_window_seconds), 0.1)
+    max_msgs = max(int(runtime.rate_limit_max_messages), 1)
+    cutoff = now - window
+    client.message_timestamps = [ts for ts in client.message_timestamps if ts > cutoff]
+    if len(client.message_timestamps) >= max_msgs:
+        return False
+    client.message_timestamps.append(now)
+    return True
+
+
 async def _handle_spectator_client_message(
     runtime: BroadcastRuntime,
     match_id: str,
@@ -253,11 +297,45 @@ async def _handle_spectator_client_message(
     if not isinstance(message, dict):
         return
     message_type = str(message.get("type") or "").strip().lower()
+    if message_type == "ping":
+        await runtime.match_room_manager.broadcast(
+            match_id,
+            SpectatorEvent(type="heartbeat", match_id=match_id, payload={"connection_id": client.connection_id}),
+            delay_seconds=0,
+        )
+        return
+
+    if message_type not in {"reaction", "chat_message"}:
+        return
+
+    if not _check_client_rate_limit(runtime, client):
+        with suppress(asyncio.QueueFull):
+            client.queue.put_nowait(
+                SpectatorEvent(
+                    type="rate_limit",
+                    match_id=match_id,
+                    user_id=client.user_id,
+                    display_name=client.display_name,
+                    payload={
+                        "code": "rate_limit_exceeded",
+                        "detail": "Message rate limit exceeded.",
+                        "connection_id": client.connection_id,
+                    },
+                ).model_dump(mode="json")
+            )
+        return
+
     if message_type == "reaction":
-        reaction = str(message.get("reaction") or "").strip()
+        raw_reaction = str(message.get("reaction") or "")
+        if _DISALLOWED_MARKUP_RE.search(raw_reaction):
+            return
+        reaction = _sanitize_text_content(raw_reaction, max_length=8)
         if not reaction:
             return
-        payload = {"connection_id": client.connection_id}
+        payload: dict[str, Any] = {
+            "connection_id": client.connection_id,
+            "authenticated": bool(client.user_id),
+        }
         app = client.websocket.scope.get("app")
         ticketing_runtime = getattr(getattr(app, "state", None), "ticketing_runtime", None) if app is not None else None
         if ticketing_runtime is not None and client.user_id:
@@ -283,14 +361,18 @@ async def _handle_spectator_client_message(
                 match_id=match_id,
                 user_id=client.user_id,
                 display_name=client.display_name,
-                reaction=reaction[:8],
+                reaction=reaction,
                 payload=payload,
             ),
             delay_seconds=0,
         )
         return
+
     if message_type == "chat_message":
-        chat_message = str(message.get("message") or "").strip()
+        raw_chat = str(message.get("message") or "")
+        if _DISALLOWED_MARKUP_RE.search(raw_chat):
+            return
+        chat_message = _sanitize_text_content(raw_chat, max_length=280)
         if not chat_message:
             return
         await runtime.match_room_manager.publish(
@@ -300,18 +382,15 @@ async def _handle_spectator_client_message(
                 match_id=match_id,
                 user_id=client.user_id,
                 display_name=client.display_name,
-                message=chat_message[:500],
-                payload={"connection_id": client.connection_id},
+                message=chat_message,
+                payload={
+                    "connection_id": client.connection_id,
+                    "authenticated": bool(client.user_id),
+                },
             ),
             delay_seconds=0,
         )
         return
-    if message_type == "ping":
-        await runtime.match_room_manager.broadcast(
-            match_id,
-            SpectatorEvent(type="heartbeat", match_id=match_id, payload={"connection_id": client.connection_id}),
-            delay_seconds=0,
-        )
 
 
 def _resolve_optional_viewer(websocket: WebSocket) -> ResolvedViewer:
@@ -319,32 +398,42 @@ def _resolve_optional_viewer(websocket: WebSocket) -> ResolvedViewer:
     authorization = websocket.headers.get("authorization")
     if authorization and authorization.lower().startswith("bearer "):
         token = authorization.split(" ", maxsplit=1)[1].strip()
-    display_name = _fallback_display_name(websocket)
+    guest_display_name = _fallback_display_name(websocket, is_authenticated=False)
     if token is None or not token.strip():
-        return ResolvedViewer(user_id=None, display_name=display_name)
+        return ResolvedViewer(user_id=None, display_name=guest_display_name)
     try:
         payload = decode_access_token(token.strip())
     except TokenError:
-        return ResolvedViewer(user_id=None, display_name=display_name)
+        return ResolvedViewer(user_id=None, display_name=guest_display_name)
     subject = str(payload.get("sub") or "").strip()
     if not subject:
-        return ResolvedViewer(user_id=None, display_name=display_name)
+        return ResolvedViewer(user_id=None, display_name=guest_display_name)
     session_factory = getattr(websocket.scope["app"].state, "session_factory", None)
     if session_factory is None:
-        return ResolvedViewer(user_id=subject, display_name=display_name)
+        token_name = str(payload.get("display_name") or payload.get("username") or "").strip()
+        resolved_name = token_name or _fallback_display_name(websocket, is_authenticated=True)
+        return ResolvedViewer(user_id=subject, display_name=resolved_name)
     with session_factory() as session:
         user = session.get(User, subject)
         if user is None or not user.is_active:
-            return ResolvedViewer(user_id=None, display_name=display_name)
-        resolved_name = (user.display_name or user.username or display_name or "").strip() or None
+            return ResolvedViewer(user_id=None, display_name=guest_display_name)
+        resolved_name = (user.display_name or user.username or "").strip() or None
         return ResolvedViewer(user_id=user.id, display_name=resolved_name)
 
 
-def _fallback_display_name(websocket: WebSocket) -> str | None:
-    value = str(websocket.query_params.get("display_name") or websocket.query_params.get("name") or "").strip()
-    if not value:
+def _fallback_display_name(websocket: WebSocket, *, is_authenticated: bool = False) -> str | None:
+    raw = str(websocket.query_params.get("display_name") or websocket.query_params.get("name") or "").strip()
+    cleaned = _sanitize_text_content(raw, max_length=40)
+    if not cleaned:
         return None
-    return value[:80]
+    if not is_authenticated:
+        normalized = re.sub(r"[^a-z0-9 ]+", " ", cleaned.lower()).strip()
+        if normalized in _IMPERSONATION_TOKENS or any(
+            normalized.startswith(f"{tok} ") or normalized.endswith(f" {tok}")
+            for tok in _IMPERSONATION_TOKENS
+        ):
+            return "Spectator"
+    return cleaned
 
 
 def _snapshot_from_presence(match_id: str, presence: SpectatorPresenceView) -> MatchSnapshot:

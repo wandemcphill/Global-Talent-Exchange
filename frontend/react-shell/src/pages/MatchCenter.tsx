@@ -37,6 +37,7 @@ import { Btn, Chip, Loading, Panel } from "@/components/gtex/ui";
 import { Cinema3DStage, Cinema3DSceneType } from "@/components/gtex/Cinema3DStage";
 import { MatchPitchLiveScene } from "@/lib/3d/broadcast/MatchPitchLiveScene";
 import { useMatchSpectatorStream } from "@/lib/3d/broadcast/useMatchSpectatorStream";
+import { buildFiveMinuteHumanoidMatchFixture } from "@/lib/3d/broadcast/HumanoidMatchPrototypeFixture";
 import { HolographicPlayerCard } from "@/components/gtex/ApexWidgets";
 import { MatchdayLineupBroadcast, useClubMatchdaySheet, type MatchdaySquadMember } from "@/components/gtex/MatchdayLineupBroadcast";
 import { useSkin } from "@/lib/skin-engine";
@@ -1969,28 +1970,19 @@ export default function MatchCenter() {
   const clubId = params.get("club") || activeClub?.club_id || "";
   const { getModuleView, setModuleView } = useSkin();
   const matchView = getModuleView("match_center");
-  const { data: m, isLoading } = useQuery({
-    queryKey: ["match", id],
-    queryFn: async () => (await api.get(`/owner/matches/${id}`)).data,
-    enabled: !!id,
-  });
+  // 3D WebGL Broadcast View vs 2D Tactical Pitch View Toggle
+  const [view3DBroadcast, setView3DBroadcast] = useState<boolean>(true);
 
-  const { data: liveState } = useQuery({
-    queryKey: ["match-live-state", id],
-    queryFn: async () => (await api.get(`/matches/${id}/state`)).data,
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (!data) return 2500;
-      return data.phase === "full_time" || data.status === "FT" ? false : 2500;
-    },
-    enabled: !!id,
-  });
-
+  const modeParam = params.get("mode");
   const { data: viewerData, refetch: refetchViewerData } = useQuery({
-    queryKey: ["match-viewer", id],
+    queryKey: ["match-viewer", id, modeParam],
     queryFn: async () => {
+      if (id === "u2a-006-showcase") {
+        return buildFiveMinuteHumanoidMatchFixture(300);
+      }
       try {
-        return (await api.get(`/match-viewer/${id}`)).data;
+        const suffix = modeParam ? `?mode=${encodeURIComponent(modeParam)}` : "";
+        return (await api.get(`/match-viewer/${id}${suffix}`)).data;
       } catch {
         return null;
       }
@@ -1999,26 +1991,94 @@ export default function MatchCenter() {
     retry: false,
   });
 
+  const { data: m, isLoading } = useQuery({
+    queryKey: ["match", id, modeParam],
+    queryFn: async () => {
+      if (id === "u2a-006-showcase") {
+        const showcase = buildFiveMinuteHumanoidMatchFixture(300);
+        return {
+          match_id: showcase.match_id,
+          id: showcase.match_id,
+          home_club_id: showcase.home_team.team_id,
+          away_club_id: showcase.away_team.team_id,
+          home_name: showcase.home_team.team_name,
+          away_name: showcase.away_team.team_name,
+          venue_name: showcase.venue_name,
+          status: "LIVE",
+          round: 1,
+          events: showcase.events,
+          frames: showcase.frames,
+          home_team: showcase.home_team,
+          away_team: showcase.away_team,
+          duration_seconds: (showcase as any).duration_seconds ?? 300,
+        };
+      }
+      try {
+        return (await api.get(`/owner/matches/${id}`)).data;
+      } catch {
+        const suffix = modeParam ? `?mode=${encodeURIComponent(modeParam)}` : "";
+        const viewer = (await api.get(`/match-viewer/${id}${suffix}`)).data;
+        if (viewer && viewer.match_id) {
+          return {
+            match_id: viewer.match_id,
+            id: viewer.match_id,
+            home_club_id: viewer.home_team?.team_id || "home-club",
+            away_club_id: viewer.away_team?.team_id || "away-club",
+            home_name: viewer.home_team?.team_name || "Home XI",
+            away_name: viewer.away_team?.team_name || "Away XI",
+            venue_name: viewer.venue_name || "GTEX National Arena",
+            status: "LIVE",
+            round: 1,
+            events: viewer.events || [],
+            frames: viewer.frames || [],
+            home_team: viewer.home_team,
+            away_team: viewer.away_team,
+            duration_seconds: viewer.duration_seconds,
+          };
+        }
+        throw new Error("Match not found");
+      }
+    },
+    enabled: !!id,
+  });
+
+  const { data: liveState } = useQuery({
+    queryKey: ["match-live-state", id],
+    queryFn: async () => {
+      try {
+        return (await api.get(`/matches/${id}/state`)).data;
+      } catch {
+        return null;
+      }
+    },
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data) return false;
+      return data.phase === "full_time" || data.status === "FT" ? false : 2500;
+    },
+    enabled: !!id && id !== "u2a-006-showcase",
+    retry: false,
+  });
+
   const spectatorStream = useMatchSpectatorStream({
     matchId: id || "",
-    enabled: Boolean(id && (params.get("live") || view3DBroadcast)),
+    enabled: Boolean(id && id !== "u2a-006-showcase" && (params.get("live") || view3DBroadcast)),
     onResyncRequired: () => {
       refetchViewerData();
     },
   });
 
-  // 3D WebGL Broadcast View vs 2D Tactical Pitch View Toggle
-  const [view3DBroadcast, setView3DBroadcast] = useState<boolean>(true);
-
   // Clock & Playback Controls
   const [localMinute, setLocalMinute] = useState(params.get("live") ? 0 : 120);
   const [isPaused, setIsPaused] = useState(false);
-  const [speed, setSpeed] = useState(1.0);
+  const [speed, setSpeed] = useState(Number(params.get("speed")) || 1.0);
   const [audioAtmosphere, setAudioAtmosphere] = useState(false);
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<"pitch" | "lineups" | "tactics" | "pre_match" | "post_match" | "commentary">("pitch");
-  const [showKickoffLineups, setShowKickoffLineups] = useState<boolean>(Boolean(params.get("live")));
+  const [showKickoffLineups, setShowKickoffLineups] = useState<boolean>(
+    Boolean(params.get("live") && params.get("dismissWalkout") !== "1")
+  );
 
   // Pitch Overlay & Camera Perspective Toggles
   const [showHeatmap, setShowHeatmap] = useState(false);
@@ -2484,8 +2544,11 @@ export default function MatchCenter() {
                 matchViewState={viewerData || m}
                 isLive={Boolean(params.get("live"))}
                 viewerCount={spectatorStream.viewerCount}
+                qualityTier={(params.get("tier") as any) || "high"}
                 playbackSpeed={speed}
                 isPaused={isPaused}
+                liveFrame={spectatorStream.lastFrame}
+                liveEvents={spectatorStream.recentEvents}
                 onToggle2DCompanion={() => setView3DBroadcast(false)}
               />
             ) : (

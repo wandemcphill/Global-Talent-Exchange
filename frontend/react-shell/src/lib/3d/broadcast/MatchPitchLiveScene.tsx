@@ -21,17 +21,20 @@ import { BroadcastOverlayHUD } from "./BroadcastOverlayHUD";
 import {
   SpectatorSafeMatchView,
   SpectatorSafeFrameView,
+  SpectatorSafeEventView,
   SpectatorSafeTeamView,
+  MatchViewerContractInput,
   sanitizeForSpectator,
 } from "./spectatorContract";
-import { DeviceQualityTier, QUALITY_PROFILES } from "../GtexSceneRegistry";
+import { QUALITY_PROFILES } from "../GtexSceneRegistry";
+import type { DeviceQualityTier } from "../GtexSceneTypes";
 import { StadiumArenaEnvironment } from "./StadiumArenaEnvironment";
 import { HumanoidFootballerRig } from "./HumanoidFootballerRig";
 import { FootballAnimationStateMachine } from "./FootballAnimationStateMachine";
 
 export interface MatchPitchLiveSceneProps {
-  /** Authoritative raw or sanitized match view state */
-  matchViewState: SpectatorSafeMatchView | Record<string, unknown>;
+  /** Strongly typed match viewer contract input (DTO or sanitized view) */
+  matchViewState: MatchViewerContractInput;
   /** Verified owner or manager flag (determines confidential coach note visibility) */
   isOwnerOrManager?: boolean;
   /** Whether the match is actively broadcasting live */
@@ -46,6 +49,10 @@ export interface MatchPitchLiveSceneProps {
   playbackSpeed?: number;
   /** Whether playback is currently paused */
   isPaused?: boolean;
+  /** Optional live frame streamed over WebSocket */
+  liveFrame?: SpectatorSafeFrameView | null;
+  /** Optional live events streamed over WebSocket */
+  liveEvents?: SpectatorSafeEventView[];
   /** Callback when time advances (for scrubbing sync) */
   onTimeUpdate?: (timeSeconds: number) => void;
   /** Fallback toggle callback when user selects 2D tactical view */
@@ -65,6 +72,8 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   playbackTimeSeconds: externalTime,
   playbackSpeed = 1.0,
   isPaused = false,
+  liveFrame = null,
+  liveEvents = [],
   onTimeUpdate,
   onToggle2DCompanion,
   className = "",
@@ -82,10 +91,12 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     return sanitizeForSpectator(matchViewState, isOwnerOrManager);
   }, [matchViewState, isOwnerOrManager]);
 
-  // Spatial interpolator instance
-  const interpolator = useMemo(() => {
-    return new SpatialInterpolator(safeView.frames);
-  }, [safeView.frames]);
+  // Persistent SpatialInterpolator & FootballAnimationStateMachine instances
+  const interpolator = useMemo(() => new SpatialInterpolator(safeView.frames), []);
+  const animationStateMachine = useMemo(
+    () => new FootballAnimationStateMachine(safeView.events),
+    []
+  );
 
   // Camera director instance
   const cameraDirector = useMemo(() => new CameraDirector(), []);
@@ -98,9 +109,53 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
 
   const [currentMatchState, setCurrentMatchState] = useState<InterpolatedMatchState | null>(null);
 
+  // Refs for mutable props so the Three.js WebGL context is never torn down on playback state changes
+  const safeViewRef = useRef<SpectatorSafeMatchView>(safeView);
+  const isLiveRef = useRef<boolean>(isLive);
+  const playbackSpeedRef = useRef<number>(playbackSpeed);
+  const isPausedRef = useRef<boolean>(isPaused);
+  const onTimeUpdateRef = useRef<typeof onTimeUpdate>(onTimeUpdate);
+  const localTimeRef = useRef<number>(currentTime);
+
+  useEffect(() => {
+    safeViewRef.current = safeView;
+    interpolator.setFrames(safeView.frames);
+  }, [safeView, interpolator]);
+
+  useEffect(() => {
+    const mergedEvents =
+      liveEvents && liveEvents.length > 0
+        ? [...safeView.events, ...liveEvents]
+        : safeView.events;
+    animationStateMachine.setEvents(mergedEvents);
+  }, [safeView.events, liveEvents, animationStateMachine]);
+
+  useEffect(() => {
+    if (liveFrame) {
+      interpolator.appendFrame(liveFrame);
+    }
+  }, [liveFrame, interpolator]);
+
+  useEffect(() => {
+    isLiveRef.current = isLive;
+  }, [isLive]);
+
+  useEffect(() => {
+    playbackSpeedRef.current = playbackSpeed;
+  }, [playbackSpeed]);
+
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
+
+  useEffect(() => {
+    onTimeUpdateRef.current = onTimeUpdate;
+  }, [onTimeUpdate]);
+
   // Sync external scrubber changes
   useEffect(() => {
-    if (typeof externalTime === "number" && Math.abs(externalTime - currentTime) > 0.5) {
+    if (typeof externalTime === "number" && Math.abs(externalTime - localTimeRef.current) > 0.5) {
+      localTimeRef.current = externalTime;
       setCurrentTime(externalTime);
     }
   }, [externalTime]);
@@ -194,11 +249,25 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     scene.add(keyLight);
 
     const stadiumArena = new StadiumArenaEnvironment(scene, {
-      homeTeam: safeView.home_team,
-      awayTeam: safeView.away_team,
+      homeTeam: safeViewRef.current.home_team,
+      awayTeam: safeViewRef.current.away_team,
       qualityTier,
-      stadiumName: safeView.venue_name || "GTEX National Arena",
+      stadiumName: safeViewRef.current.venue_name || "GTEX National Arena",
     });
+
+    // Query physical GPU renderer info from WebGL context
+    let gpuVendor = "WebGL";
+    let gpuRenderer = "WebGL Hardware Renderer";
+    try {
+      const glCtx = renderer.getContext();
+      const dbgExt = glCtx.getExtension("WEBGL_debug_renderer_info");
+      if (dbgExt) {
+        gpuVendor = String(glCtx.getParameter(dbgExt.UNMASKED_VENDOR_WEBGL) || gpuVendor);
+        gpuRenderer = String(glCtx.getParameter(dbgExt.UNMASKED_RENDERER_WEBGL) || gpuRenderer);
+      }
+    } catch {
+      // Ignore if debug extension is unavailable
+    }
 
     // -------------------------------------------------------------------------
     // 4. Rigged Humanoid Footballer System (Pool of 22 Players + State Machine)
@@ -208,7 +277,6 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     scene.add(playersGroup);
 
     const playerRigs = new Map<string, HumanoidFootballerRig>();
-    const animationStateMachine = new FootballAnimationStateMachine(safeView.events);
 
     const getOrCreatePlayerRig = (
       playerId: string,
@@ -222,7 +290,8 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         return playerRigs.get(playerId)!;
       }
 
-      const teamView = side === "home" ? safeView.home_team : safeView.away_team;
+      const currentSafeView = safeViewRef.current;
+      const teamView = side === "home" ? currentSafeView.home_team : currentSafeView.away_team;
       const rig = new HumanoidFootballerRig({
         playerId,
         side,
@@ -271,37 +340,90 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     scene.add(ballShadowMesh);
 
     // -------------------------------------------------------------------------
-    // 6. Animation / Render Loop
+    // 6. Animation / Render Loop + Real Browser Hardware Telemetry
     // -------------------------------------------------------------------------
     let animationFrameId: number;
     let lastTimestamp = performance.now();
-    let localTime = currentTime;
+    const frameDeltaSamplesMs: number[] = [];
+    const observedStatesHistory = new Set<string>();
+    const observedCameraPresetsHistory = new Set<string>();
+    let lastUiStateUpdateMs = 0;
+
+    if (typeof window !== "undefined") {
+      (window as any).__GTEX_BROADCAST_CONTROL__ = {
+        seekTo: (timeSec: number) => {
+          localTimeRef.current = timeSec;
+          setCurrentTime(timeSec);
+        },
+        setCameraMode: (mode: ManualCameraMode) => {
+          setCameraMode(mode);
+        },
+        getPlayerRigsSummary: () => {
+          const out: Array<Record<string, unknown>> = [];
+          playerRigs.forEach((rig) => {
+            out.push({
+              playerId: rig.options.playerId,
+              side: rig.options.side,
+              shirtNumber: rig.options.shirtNumber,
+              label: rig.options.label,
+              role: rig.options.role,
+              isGoalkeeper: rig.options.isGoalkeeper,
+              currentState: rig.getCurrentState(),
+              lodLevel: rig.getLODLevel(),
+              appearance: rig.appearance,
+              position: [
+                Number(rig.rootGroup.position.x.toFixed(2)),
+                Number(rig.rootGroup.position.y.toFixed(2)),
+                Number(rig.rootGroup.position.z.toFixed(2)),
+              ],
+            });
+          });
+          return out;
+        },
+      };
+    }
 
     const renderLoop = (now: number) => {
       animationFrameId = requestAnimationFrame(renderLoop);
 
-      const deltaSec = Math.min(0.1, (now - lastTimestamp) / 1000);
+      const rawDeltaMs = Math.max(0.1, now - lastTimestamp);
+      const deltaSec = Math.min(0.1, rawDeltaMs / 1000);
       lastTimestamp = now;
+
+      if (rawDeltaMs < 250) {
+        frameDeltaSamplesMs.push(rawDeltaMs);
+        if (frameDeltaSamplesMs.length > 3600) {
+          frameDeltaSamplesMs.shift();
+        }
+      }
 
       // Update stadium dynamics (scrolling LED ad boards, flag flutter)
       stadiumArena.update(deltaSec);
 
       // Advance time if live or playing
-      if (!isPaused) {
-        localTime += deltaSec * playbackSpeed;
+      if (!isPausedRef.current) {
+        localTimeRef.current += deltaSec * playbackSpeedRef.current;
         const endTime = interpolator.getEndTime();
-        if (endTime > 0 && localTime > endTime) {
-          localTime = isLive ? endTime : interpolator.getStartTime();
+        if (endTime > 0 && localTimeRef.current > endTime) {
+          localTimeRef.current = isLiveRef.current ? endTime : interpolator.getStartTime();
         }
-        setCurrentTime(localTime);
-        onTimeUpdate?.(localTime);
+        onTimeUpdateRef.current?.(localTimeRef.current);
       }
+
+      const localTime = localTimeRef.current;
 
       // Query interpolated match state at localTime
       const state = interpolator.interpolate(localTime);
-      setCurrentMatchState(state);
+      if (now - lastUiStateUpdateMs >= 80 || !state) {
+        lastUiStateUpdateMs = now;
+        setCurrentTime(localTime);
+        setCurrentMatchState(state);
+      }
+
+      const activeStatesSnapshot: Record<string, string> = {};
 
       if (state) {
+        observedCameraPresetsHistory.add(state.camera_preset);
         const activeEvent = animationStateMachine.getEventById(state.active_event_id);
 
         // Update Camera first so LOD distance checks use the exact current camera pose
@@ -390,6 +512,10 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
             cameraPosition3D: pose.position,
             qualityTier,
           });
+
+          const resolvedState = rig.getCurrentState();
+          activeStatesSnapshot[p.player_id] = resolvedState;
+          observedStatesHistory.add(resolvedState);
         }
 
         // Hide inactive/substituted player rigs
@@ -402,6 +528,58 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
 
       if (renderer) {
         renderer.render(scene, camera);
+
+        if (typeof window !== "undefined" && frameDeltaSamplesMs.length > 0) {
+          const sorted = [...frameDeltaSamplesMs].sort((a, b) => a - b);
+          const sumMs = sorted.reduce((a, b) => a + b, 0);
+          const avgFrameMs = sumMs / sorted.length;
+          const p50Ms = sorted[Math.floor(sorted.length * 0.5)] || avgFrameMs;
+          const p95Ms = sorted[Math.floor(sorted.length * 0.95)] || avgFrameMs;
+          const p99Ms = sorted[Math.floor(sorted.length * 0.99)] || avgFrameMs;
+          const worstOnePctSlice = sorted.slice(Math.max(0, Math.floor(sorted.length * 0.99)));
+          const worstOnePctAvgMs =
+            worstOnePctSlice.reduce((a, b) => a + b, 0) / Math.max(1, worstOnePctSlice.length);
+          const perfMem = (performance as any).memory;
+
+          (window as any).__GTEX_BROADCAST_TELEMETRY__ = {
+            gpuVendor,
+            gpuRenderer,
+            canvasWidth: renderer.domElement.width,
+            canvasHeight: renderer.domElement.height,
+            clientWidth: container.clientWidth,
+            clientHeight: container.clientHeight,
+            pixelRatio: renderer.getPixelRatio(),
+            qualityTier,
+            frameCount: frameDeltaSamplesMs.length,
+            avgFps: Number((1000 / Math.max(0.1, avgFrameMs)).toFixed(1)),
+            onePercentLowFps: Number((1000 / Math.max(0.1, worstOnePctAvgMs)).toFixed(1)),
+            p50FrameMs: Number(p50Ms.toFixed(2)),
+            p95FrameMs: Number(p95Ms.toFixed(2)),
+            p99FrameMs: Number(p99Ms.toFixed(2)),
+            drawCalls: renderer.info.render.calls,
+            triangles: renderer.info.render.triangles,
+            geometries: renderer.info.memory.geometries,
+            textures: renderer.info.memory.textures,
+            jsHeapUsedMb: perfMem
+              ? Number((perfMem.usedJSHeapSize / (1024 * 1024)).toFixed(2))
+              : null,
+            jsHeapTotalMb: perfMem
+              ? Number((perfMem.totalJSHeapSize / (1024 * 1024)).toFixed(2))
+              : null,
+            currentTime: Number(localTime.toFixed(2)),
+            durationSeconds: interpolator.getEndTime(),
+            activeRigCount: playerRigs.size,
+            cameraPreset: state?.camera_preset || "broadcast",
+            clockLabel: `${state?.clock_minute ?? 0}'`,
+            score: {
+              home: state?.home_score ?? 0,
+              away: state?.away_score ?? 0,
+            },
+            activeAnimationStates: activeStatesSnapshot,
+            observedStatesHistory: Array.from(observedStatesHistory),
+            observedCameraPresetsHistory: Array.from(observedCameraPresetsHistory),
+          };
+        }
       }
     };
 
@@ -443,7 +621,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         }
       }
     };
-  }, [safeView, qualityTier, interpolator, cameraDirector, isLive, playbackSpeed, isPaused]);
+  }, [qualityTier, cameraDirector, interpolator, animationStateMachine]);
 
   // Handle 2D companion mode toggle
   const handleToggle2D = useCallback(() => {

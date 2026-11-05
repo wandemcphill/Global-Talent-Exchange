@@ -41,6 +41,8 @@ export interface InterpolatedPlayerState {
   angular_velocity_rad?: number;
   acceleration_ratio?: number;
   just_received_ball?: boolean;
+  is_releasing_ball?: boolean;
+  is_receiving_ball?: boolean;
   stamina_pct?: number;
 }
 
@@ -271,7 +273,11 @@ export class SpatialInterpolator {
       if (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
       const angularVelocity = duration > 0.01 ? angleDiff / duration : 0;
       const accelerationRatio = duration > 0.01 ? (speedB - speedA) / duration : 0;
-      const justReceived = Boolean(!pA.has_possession && pB.has_possession && alpha >= 0.2 && alpha <= 0.85);
+      const ownedA = Boolean(pA.has_possession || frameA.ball.owner_player_id === pA.player_id);
+      const ownedB = Boolean(pB.has_possession || frameB.ball.owner_player_id === pA.player_id);
+      const isReleasing = Boolean(ownedA && !ownedB && alpha < 0.55);
+      const isReceiving = Boolean(!ownedA && ownedB && alpha >= 0.35 && alpha < 0.8);
+      const justReceived = Boolean(!ownedA && ownedB && alpha >= 0.2 && alpha <= 0.9);
 
       interpolatedPlayers.push({
         player_id: pA.player_id,
@@ -296,8 +302,35 @@ export class SpatialInterpolator {
         angular_velocity_rad: angularVelocity,
         acceleration_ratio: accelerationRatio,
         just_received_ball: justReceived,
+        is_releasing_ball: isReleasing,
+        is_receiving_ball: isReceiving,
         stamina_pct: pB.stamina_pct ?? pA.stamina_pct,
       });
+    }
+
+    // Personal-space collision avoidance pass: prevent humanoid player meshes from clipping through each other
+    const MIN_SEPARATION_M = 0.78;
+    for (let iter = 0; iter < 2; iter++) {
+      for (let i = 0; i < interpolatedPlayers.length; i++) {
+        const pi = interpolatedPlayers[i];
+        if (pi.active === false) continue;
+        for (let j = i + 1; j < interpolatedPlayers.length; j++) {
+          const pj = interpolatedPlayers[j];
+          if (pj.active === false) continue;
+          const dx = pj.position3D[0] - pi.position3D[0];
+          const dz = pj.position3D[2] - pi.position3D[2];
+          const dist = Math.hypot(dx, dz);
+          if (dist < MIN_SEPARATION_M) {
+            const overlap = (MIN_SEPARATION_M - dist) * 0.5;
+            const nx = dist > 0.001 ? dx / dist : Math.cos((i + j) * 1.1);
+            const nz = dist > 0.001 ? dz / dist : Math.sin((i + j) * 1.1);
+            pi.position3D[0] = Math.max(PITCH_BOUNDS.minX, Math.min(PITCH_BOUNDS.maxX, pi.position3D[0] - nx * overlap));
+            pi.position3D[2] = Math.max(PITCH_BOUNDS.minZ, Math.min(PITCH_BOUNDS.maxZ, pi.position3D[2] - nz * overlap));
+            pj.position3D[0] = Math.max(PITCH_BOUNDS.minX, Math.min(PITCH_BOUNDS.maxX, pj.position3D[0] + nx * overlap));
+            pj.position3D[2] = Math.max(PITCH_BOUNDS.minZ, Math.min(PITCH_BOUNDS.maxZ, pj.position3D[2] + nz * overlap));
+          }
+        }
+      }
     }
 
     return {

@@ -39,11 +39,16 @@ describe("HumanoidFootballerRig & GLB Asset Verification", () => {
     expect(rig.skinnedMesh.geometry.attributes.skinWeight).toBeDefined();
     expect(rig.skinnedMesh.geometry.attributes.color).toBeDefined();
 
-    // Check Spine2 shirt number badge attachment
+    // Check Spine2 shirt number badge attachment (both back and front chest badges)
     const spine2 = rig.boneByName.get("Spine2");
     expect(spine2).toBeDefined();
     const badge = spine2!.children.find((c) => c.name === "ShirtNumberBadge_9");
+    const frontBadge = spine2!.children.find((c) => c.name === "FrontChestNumberBadge_9");
     expect(badge).toBeDefined();
+    expect(frontBadge).toBeDefined();
+    expect(rig.appearanceProfile.heightCm).toBeGreaterThanOrEqual(172);
+    expect(rig.appearanceProfile.heightCm).toBeLessThanOrEqual(194);
+    expect(rig.appearanceProfile.skinToneHex).toMatch(/^#[0-9A-Fa-f]{6}$/);
 
     // Step animation states and verify bone transformations update cleanly
     for (const state of ["walk", "run", "sprint", "dribble", "shoot", "goal_celebration"] as const) {

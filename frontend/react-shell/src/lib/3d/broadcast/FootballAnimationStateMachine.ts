@@ -33,7 +33,7 @@ export interface HumanoidBoneSpec {
   name: string;
   parent: string | null;
   /** Bind-pose local offset relative to parent in centimeters (scale 0.01 = meters) */
-  bindLocalPosCm: [number, number, number];
+  bindLocalPosCm: readonly [number, number, number];
 }
 
 export const GTEX_HUMANOID_BONE_SPECS: readonly HumanoidBoneSpec[] = [
@@ -566,8 +566,31 @@ function buildQuatTrack(
   eulers: Array<[number, number, number]>
 ): THREE.QuaternionKeyframeTrack {
   const values: number[] = [];
-  for (const [rx, ry, rz] of eulers) {
-    values.push(...eulerToQuatArray(rx, ry, rz));
+  for (let i = 0; i < eulers.length; i++) {
+    const [rx, ry, rz] = eulers[i];
+    let [qx, qy, qz, qw] = eulerToQuatArray(rx, ry, rz);
+    if (i === 0) {
+      if (qw < 0) {
+        qx = -qx;
+        qy = -qy;
+        qz = -qz;
+        qw = -qw;
+      }
+    } else {
+      const prevIdx = (i - 1) * 4;
+      const dot =
+        values[prevIdx] * qx +
+        values[prevIdx + 1] * qy +
+        values[prevIdx + 2] * qz +
+        values[prevIdx + 3] * qw;
+      if (dot < 0) {
+        qx = -qx;
+        qy = -qy;
+        qz = -qz;
+        qw = -qw;
+      }
+    }
+    values.push(qx, qy, qz, qw);
   }
   return new THREE.QuaternionKeyframeTrack(`${boneName}.quaternion`, times, values);
 }
@@ -1607,6 +1630,7 @@ export class FootballAnimationStateMachine {
       // Goalkeeper distribution (wind-up in possession or kick/throw release into flight)
       if (
         player.animation_state === "pass" ||
+        player.is_releasing_ball ||
         ((evType === "pass" || evType === "set_piece") &&
           isPrimaryActor &&
           (stage === "pre" || stage === "event"))
@@ -1675,6 +1699,7 @@ export class FootballAnimationStateMachine {
     if (
       player.animation_state === "pass" ||
       player.animation_state === "set_piece" ||
+      player.is_releasing_ball ||
       ((evType === "pass" || evType === "attack" || evType === "set_piece") &&
         isPrimaryActor &&
         (stage === "pre" || stage === "event"))
@@ -1706,6 +1731,10 @@ export class FootballAnimationStateMachine {
       if (ball.owner_player_id === player.player_id || stage === "post") {
         return "first_touch";
       }
+    }
+
+    if (player.is_receiving_ball && distanceToBall <= 10.0) {
+      return "receive_ball";
     }
 
     if (player.just_received_ball) {

@@ -24,7 +24,7 @@ import {
   FootballAnimationState,
   GTEX_HUMANOID_BONE_SPECS,
 } from "./FootballAnimationStateMachine";
-import { DeviceQualityTier } from "../GtexSceneRegistry";
+import type { DeviceQualityTier } from "../GtexSceneTypes";
 
 // -----------------------------------------------------------------------------
 // 1. Anatomical Kit Zones & Appearance Palettes
@@ -64,6 +64,28 @@ const BOOT_COLOR_PALETTE = [
   "#F8FAFC", // Classic white-gold
 ] as const;
 
+export const HAIR_STYLE_VARIANTS = [
+  "buzz_fade",
+  "high_top",
+  "classic_crop",
+  "long_curls",
+  "shaved_beard",
+] as const;
+
+export type HairStyleVariant = (typeof HAIR_STYLE_VARIANTS)[number];
+
+export interface PlayerAppearanceProfile {
+  playerId: string;
+  skinToneHex: string;
+  hairColorHex: string;
+  hairStyle: HairStyleVariant;
+  hasFacialHair: boolean;
+  bootColorHex: string;
+  heightCm: number;
+  heightScale: number;
+  buildScale: number;
+}
+
 export interface HumanoidKitConfig {
   playerId: string;
   side: "home" | "away";
@@ -75,6 +97,10 @@ export interface HumanoidKitConfig {
   secondaryColor: string;
   accentColor: string;
   goalkeeperColor: string;
+  heightCm?: number;
+  skinToneHex?: string;
+  hairColorHex?: string;
+  hairStyle?: HairStyleVariant;
 }
 
 export type AnimationLODLevel = "full" | "medium" | "far";
@@ -92,17 +118,87 @@ function hashPlayerSeed(playerId: string): number {
   return Math.abs(h);
 }
 
+export function resolvePlayerAppearanceProfile(config: HumanoidKitConfig): PlayerAppearanceProfile {
+  const seed = hashPlayerSeed(config.playerId);
+  const skinToneHex = config.skinToneHex || SKIN_TONE_PALETTE[seed % SKIN_TONE_PALETTE.length];
+  const hairColorHex = config.hairColorHex || HAIR_COLOR_PALETTE[(seed >> 3) % HAIR_COLOR_PALETTE.length];
+  const bootColorHex = BOOT_COLOR_PALETTE[(seed >> 6) % BOOT_COLOR_PALETTE.length];
+  const hairStyle = config.hairStyle || HAIR_STYLE_VARIANTS[(seed >> 9) % HAIR_STYLE_VARIANTS.length];
+  const hasFacialHair = hairStyle === "shaved_beard" || ((seed >> 12) % 3) === 0;
+
+  // Role-informed stature & physique (base mesh = 178 cm)
+  const roleUpper = (config.role || "MID").toUpperCase();
+  let baseHeightCm = 179;
+  let baseBuild = 1.0;
+  if (config.isGoalkeeper || roleUpper === "GK") {
+    baseHeightCm = 189 + (seed % 6); // 189 - 194 cm
+    baseBuild = 1.04;
+  } else if (roleUpper.includes("CB") || roleUpper === "DEF") {
+    baseHeightCm = 185 + (seed % 6); // 185 - 190 cm
+    baseBuild = 1.05;
+  } else if (roleUpper === "ST" || roleUpper === "CF") {
+    baseHeightCm = 182 + (seed % 8); // 182 - 189 cm
+    baseBuild = 1.03;
+  } else if (roleUpper.includes("W") || roleUpper === "AM") {
+    baseHeightCm = 172 + (seed % 7); // 172 - 178 cm
+    baseBuild = 0.96;
+  } else {
+    baseHeightCm = 176 + (seed % 8); // 176 - 183 cm
+    baseBuild = 0.99 + ((seed % 5) - 2) * 0.015;
+  }
+
+  const heightCm = config.heightCm || baseHeightCm;
+  const heightScale = Number((heightCm / 178.0).toFixed(3));
+  const buildScale = Number(baseBuild.toFixed(3));
+
+  return {
+    playerId: config.playerId,
+    skinToneHex,
+    hairColorHex,
+    hairStyle,
+    hasFacialHair,
+    bootColorHex,
+    heightCm,
+    heightScale,
+    buildScale,
+  };
+}
+
 /**
  * Classifies a vertex in bind-pose centimeters (`Y in [0..178]`) and bound bone name
- * into one of the 8 anatomical kit/appearance zones.
+ * into one of the 8 anatomical kit/appearance zones, taking hairstyle & beard variation into account.
  */
 export function classifyAnatomicalZone(
   boneName: string,
   bindX: number,
   bindY: number,
-  bindZ: number
+  bindZ: number,
+  hairStyle: HairStyleVariant = "classic_crop",
+  hasFacialHair: boolean = false
 ): AnatomicalZone {
   if (boneName === "Head") {
+    // Facial hair / beard / jawline goatee zone on lower front face
+    if (hasFacialHair && bindY >= 152.2 && bindY <= 158.0 && bindZ > 3.2 && Math.abs(bindX) < 5.8) {
+      return AnatomicalZone.HAIR;
+    }
+    if (hairStyle === "shaved_beard") {
+      if (bindY > 172.5) return AnatomicalZone.HAIR;
+      return AnatomicalZone.SKIN;
+    }
+    if (hairStyle === "high_top") {
+      if (bindY > 166.5 || (bindY > 162.0 && bindZ < -2.0)) return AnatomicalZone.HAIR;
+      return AnatomicalZone.SKIN;
+    }
+    if (hairStyle === "long_curls") {
+      if (bindY > 165.0 || (bindY > 156.5 && bindZ < -0.5) || (bindY > 161.0 && Math.abs(bindX) > 5.5)) {
+        return AnatomicalZone.HAIR;
+      }
+      return AnatomicalZone.SKIN;
+    }
+    if (hairStyle === "buzz_fade") {
+      if (bindY > 169.5 || (bindY > 163.5 && bindZ < -2.5)) return AnatomicalZone.HAIR;
+      return AnatomicalZone.SKIN;
+    }
     if (bindY > 168.2 || (bindY > 160.5 && bindZ < -1.2)) {
       return AnatomicalZone.HAIR;
     }
@@ -159,10 +255,10 @@ export function applyKitColorsToSkinnedGeometry(
   const skinIdxAttr = geometry.attributes.skinIndex;
   if (!posAttr || !skinIdxAttr) return;
 
-  const seed = hashPlayerSeed(config.playerId);
-  const skinColor = new THREE.Color(SKIN_TONE_PALETTE[seed % SKIN_TONE_PALETTE.length]);
-  const hairColor = new THREE.Color(HAIR_COLOR_PALETTE[(seed >> 3) % HAIR_COLOR_PALETTE.length]);
-  const bootColor = new THREE.Color(BOOT_COLOR_PALETTE[(seed >> 6) % BOOT_COLOR_PALETTE.length]);
+  const profile = resolvePlayerAppearanceProfile(config);
+  const skinColor = new THREE.Color(profile.skinToneHex);
+  const hairColor = new THREE.Color(profile.hairColorHex);
+  const bootColor = new THREE.Color(profile.bootColorHex);
 
   const jerseyPrimary = new THREE.Color(config.isGoalkeeper ? config.goalkeeperColor : config.primaryColor);
   const jerseyTrim = new THREE.Color(config.accentColor || "#FFFFFF");
@@ -192,7 +288,7 @@ export function applyKitColorsToSkinnedGeometry(
     const by = bindPosArray[i * 3 + 1];
     const bz = bindPosArray[i * 3 + 2];
 
-    const zone = classifyAnatomicalZone(boneName, bx, by, bz);
+    const zone = classifyAnatomicalZone(boneName, bx, by, bz, profile.hairStyle, profile.hasFacialHair);
     let targetColor = jerseyPrimary;
 
     switch (zone) {
@@ -655,7 +751,16 @@ export class HumanoidFootballerRig {
   public boneByName = new Map<string, THREE.Bone>();
   public mixer!: THREE.AnimationMixer;
 
+  public readonly appearanceProfile: PlayerAppearanceProfile;
   private kitConfig: HumanoidKitConfig;
+
+  public get options(): HumanoidKitConfig {
+    return this.kitConfig;
+  }
+
+  public get appearance(): PlayerAppearanceProfile {
+    return this.appearanceProfile;
+  }
   private clipLibrary: Map<FootballAnimationState, THREE.AnimationClip>;
   private actionsByState = new Map<FootballAnimationState, THREE.AnimationAction>();
   private currentState: FootballAnimationState = "idle";
@@ -666,10 +771,12 @@ export class HumanoidFootballerRig {
   private isUsingGLBMesh: boolean = false;
   private groundRingMesh: THREE.Mesh;
   private backNumberMesh: THREE.Mesh | null = null;
+  private frontNumberMesh: THREE.Mesh | null = null;
 
   constructor(kitConfig: HumanoidKitConfig) {
     this.playerId = kitConfig.playerId;
     this.kitConfig = kitConfig;
+    this.appearanceProfile = resolvePlayerAppearanceProfile(kitConfig);
 
     this.rootGroup = new THREE.Group();
     this.rootGroup.name = `HumanoidPlayer_${kitConfig.playerId}`;
@@ -678,13 +785,18 @@ export class HumanoidFootballerRig {
       side: kitConfig.side,
       role: kitConfig.role,
       shirtNumber: kitConfig.shirtNumber,
+      appearanceProfile: this.appearanceProfile,
       isHumanoidRig: true,
     };
 
-    // Container scaled from centimeters (177.4cm) to FIFA pitch meters (1.774m)
+    // Container scaled from centimeters (178cm) to FIFA pitch meters with player-specific stature & physique
     this.modelContainer = new THREE.Group();
     this.modelContainer.name = "HumanoidModelCmScale";
-    this.modelContainer.scale.setScalar(0.01);
+    this.modelContainer.scale.set(
+      0.01 * this.appearanceProfile.buildScale,
+      0.01 * this.appearanceProfile.heightScale,
+      0.01 * this.appearanceProfile.buildScale
+    );
     this.rootGroup.add(this.modelContainer);
 
     this.clipLibrary = getDefaultFootballClipLibrary();
@@ -805,12 +917,12 @@ export class HumanoidFootballerRig {
       this.kitConfig.accentColor || "#FFFFFF"
     );
 
-    const badgeGeo = new THREE.PlaneGeometry(18, 18);
+    const badgeGeo = new THREE.PlaneGeometry(22, 22);
     const badgeMat = new THREE.MeshBasicMaterial({
       color: numTex ? 0xffffff : new THREE.Color(this.kitConfig.accentColor || "#FFFFFF"),
       map: numTex || null,
       transparent: true,
-      opacity: numTex ? 0.95 : 0.85,
+      opacity: numTex ? 0.96 : 0.85,
       side: THREE.DoubleSide,
       depthWrite: false,
     });
@@ -820,6 +932,12 @@ export class HumanoidFootballerRig {
     this.backNumberMesh.position.set(0, 4.0, -16.8);
     this.backNumberMesh.rotation.y = Math.PI;
     spine2.add(this.backNumberMesh);
+
+    const frontGeo = new THREE.PlaneGeometry(11, 11);
+    this.frontNumberMesh = new THREE.Mesh(frontGeo, badgeMat);
+    this.frontNumberMesh.name = `FrontChestNumberBadge_${this.kitConfig.shirtNumber}`;
+    this.frontNumberMesh.position.set(0, 5.5, 16.4);
+    spine2.add(this.frontNumberMesh);
   }
 
   private setupAnimationMixer(mixerRoot: THREE.Object3D): void {
@@ -996,8 +1114,30 @@ export class HumanoidFootballerRig {
     angularVelocityRad: number,
     ballPosition3D: [number, number, number]
   ): void {
+    const hipsBone = this.boneByName.get("Hips");
     const headBone = this.boneByName.get("Head");
     const spine1Bone = this.boneByName.get("Spine1");
+
+    // Directional goalkeeper dive lateral orientation toward incoming shot trajectory
+    if (
+      hipsBone &&
+      (this.currentState === "gk_dive_high" ||
+        this.currentState === "gk_dive_low" ||
+        this.currentState === "gk_parry")
+    ) {
+      const dx = ballPosition3D[0] - position3D[0];
+      const dz = ballPosition3D[2] - position3D[2];
+      // Lateral component perpendicular to goalkeeper facing direction
+      const forwardX = Math.cos(facingAngleRad);
+      const forwardZ = Math.sin(facingAngleRad);
+      const lateralOffset = -dx * forwardZ + dz * forwardX;
+      if (Math.abs(lateralOffset) > 0.25) {
+        const diveSign = lateralOffset >= 0 ? 1 : -1;
+        const diveTilt = Math.min(0.45, Math.abs(lateralOffset) * 0.12) * diveSign;
+        const diveQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), diveTilt);
+        hipsBone.quaternion.multiply(diveQuat);
+      }
+    }
 
     if (spine1Bone && Math.abs(angularVelocityRad) > 0.1) {
       const bankAngle = Math.max(-0.22, Math.min(0.22, angularVelocityRad * 0.08));
@@ -1034,6 +1174,9 @@ export class HumanoidFootballerRig {
     if (this.backNumberMesh) {
       this.backNumberMesh.geometry.dispose();
       (this.backNumberMesh.material as THREE.Material).dispose();
+    }
+    if (this.frontNumberMesh) {
+      this.frontNumberMesh.geometry.dispose();
     }
   }
 }

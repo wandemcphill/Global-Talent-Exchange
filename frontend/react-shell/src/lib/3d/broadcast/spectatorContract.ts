@@ -119,6 +119,65 @@ export interface SpectatorSafeMatchView {
 }
 
 /**
+ * Strongly typed backend MatchViewStateDTO contract accepted at the viewer boundary
+ * before sanitization into SpectatorSafeMatchView.
+ */
+export interface MatchViewStateDTO {
+  match_id: string;
+  canonical_match_id?: string;
+  source?: string;
+  home_team?: Partial<SpectatorSafeTeamView>;
+  away_team?: Partial<SpectatorSafeTeamView>;
+  frames?: Partial<SpectatorSafeFrameView>[];
+  events?: Partial<SpectatorSafeEventView>[];
+  presentation_package?: {
+    match_label?: string;
+    context?: {
+      venue_name?: string;
+      competition_name?: string;
+    };
+    home?: {
+      coach_name?: string;
+      crest?: { image_url?: string };
+    };
+    away?: {
+      coach_name?: string;
+      crest?: { image_url?: string };
+    };
+    coach_notes?: string[];
+  } | null;
+  metadata_json?: {
+    canonical_match_id?: string;
+  } | null;
+  match?: {
+    canonical_match_id?: string;
+  } | null;
+}
+
+/**
+ * Typed contract input for 3D Match Broadcast components (no untyped Record<string, unknown>).
+ */
+export type MatchViewerContractInput = SpectatorSafeMatchView | MatchViewStateDTO;
+
+/**
+ * Runtime validation boundary verifying an incoming payload conforms to MatchViewerContractInput.
+ */
+export function isValidMatchViewerInput(input: unknown): input is MatchViewerContractInput {
+  if (!input || typeof input !== "object") return false;
+  const candidate = input as { match_id?: unknown; frames?: unknown; events?: unknown };
+  if (typeof candidate.match_id !== "string" && typeof candidate.match_id !== "undefined") {
+    return false;
+  }
+  if (candidate.frames !== undefined && !Array.isArray(candidate.frames)) {
+    return false;
+  }
+  if (candidate.events !== undefined && !Array.isArray(candidate.events)) {
+    return false;
+  }
+  return true;
+}
+
+/**
  * Resolves the canonical CompetitionMatch ID from an arbitrary match identifier.
  * Reconciles OwnerMatch IDs (Issue #352) with platform CompetitionMatch records.
  */
@@ -149,15 +208,16 @@ export function resolveCanonicalMatchKey(rawId: string, matchPayload?: any): str
  * - Public match events, scorelines, and spatial player/ball coordinates are preserved.
  */
 export function sanitizeForSpectator(
-  rawState: any,
+  rawState: MatchViewerContractInput | unknown,
   isOwnerOrManager: boolean = false
 ): SpectatorSafeMatchView {
-  const matchId = String(rawState?.match_id || "").trim();
-  const canonicalId = resolveCanonicalMatchKey(matchId, rawState);
+  const validSource: any = isValidMatchViewerInput(rawState) ? rawState : {};
+  const matchId = String(validSource?.match_id || "").trim();
+  const canonicalId = resolveCanonicalMatchKey(matchId, validSource);
 
-  const rawHome = rawState?.home_team || {};
-  const rawAway = rawState?.away_team || {};
-  const rawPres = rawState?.presentation_package || {};
+  const rawHome = validSource?.home_team || {};
+  const rawAway = validSource?.away_team || {};
+  const rawPres = validSource?.presentation_package || {};
 
   const homeTeam: SpectatorSafeTeamView = {
     team_id: String(rawHome.team_id || "home"),

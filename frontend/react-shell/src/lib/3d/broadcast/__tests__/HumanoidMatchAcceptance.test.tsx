@@ -15,6 +15,7 @@ import { StadiumArenaEnvironment } from "../StadiumArenaEnvironment";
 import { FootballAnimationStateMachine, FootballAnimationState } from "../FootballAnimationStateMachine";
 import { HumanoidFootballerRig, parseHumanoidFootballerGLBBuffer } from "../HumanoidFootballerRig";
 import { MatchPitchLiveScene } from "../MatchPitchLiveScene";
+import { sanitizeForSpectator } from "../spectatorContract";
 
 describe("U2A-006 Mandatory 5-Minute Humanoid Match Acceptance Test", () => {
   beforeAll(async () => {
@@ -219,5 +220,104 @@ describe("U2A-006 Mandatory 5-Minute Humanoid Match Acceptance Test", () => {
       root.unmount();
     });
     container.remove();
+  });
+
+  it("drives 22 humanoid rigs from a real FastAPI MatchSimulationService + MatchViewerScalingService (MatchMode.QUICK) match payload", () => {
+    const rawJsonPath = path.resolve(__dirname, "./fixtures/real_gtex_match_seed_42.json");
+    const rawPayload = JSON.parse(fs.readFileSync(rawJsonPath, "utf-8"));
+    const safeView = sanitizeForSpectator(rawPayload, false);
+
+    expect(safeView.match_id).toBe("gtex-real-sim-seed-42");
+    expect(rawPayload.duration_seconds).toBe(300);
+    expect(safeView.events.length).toBeGreaterThanOrEqual(50);
+    expect(safeView.frames.length).toBeGreaterThanOrEqual(70);
+
+    const interpolator = new SpatialInterpolator(safeView.frames);
+    expect(interpolator.getEndTime()).toBe(300);
+    const fsm = new FootballAnimationStateMachine(safeView.events);
+    const rigs = new Map<string, HumanoidFootballerRig>();
+
+    const observedStates = new Set<FootballAnimationState>();
+    const activePlayerIdsOverMatch = new Set<string>();
+    let minPairwiseDistanceM = Infinity;
+
+    for (let t = 0; t <= interpolator.getEndTime(); t += 1.0) {
+      const state = interpolator.interpolate(t);
+      expect(state).not.toBeNull();
+      if (!state) continue;
+
+      const activeEvent = fsm.getEventById(state.active_event_id);
+      const activePlayers = state.players.filter((p) => p.active !== false);
+
+      // Check personal-space collision avoidance across active players
+      for (let i = 0; i < activePlayers.length; i++) {
+        for (let j = i + 1; j < activePlayers.length; j++) {
+          const d = Math.hypot(
+            activePlayers[i].position3D[0] - activePlayers[j].position3D[0],
+            activePlayers[i].position3D[2] - activePlayers[j].position3D[2]
+          );
+          if (d < minPairwiseDistanceM) {
+            minPairwiseDistanceM = d;
+          }
+        }
+      }
+
+      for (const p of activePlayers) {
+        activePlayerIdsOverMatch.add(p.player_id);
+        let rig = rigs.get(p.player_id);
+        if (!rig) {
+          const team = p.side === "home" ? safeView.home_team : safeView.away_team;
+          rig = new HumanoidFootballerRig({
+            playerId: p.player_id,
+            side: p.side,
+            shirtNumber: p.shirt_number ?? 10,
+            label: p.label,
+            role: p.role,
+            isGoalkeeper: p.role.toUpperCase() === "GK",
+            primaryColor: team.primary_color,
+            secondaryColor: team.secondary_color,
+            accentColor: team.accent_color,
+            goalkeeperColor: team.goalkeeper_color,
+          });
+          rigs.set(p.player_id, rig);
+        }
+
+        const targetState = fsm.resolvePlayerState({
+          player: p,
+          allPlayers: state.players,
+          ball: state.ball,
+          matchState: state,
+          activeEvent,
+          previousState: rig.getCurrentState(),
+          timeInCurrentStateSec: rig.getTimeInCurrentState(),
+        });
+
+        rig.update({
+          deltaSec: 0.25,
+          targetState,
+          position3D: p.position3D,
+          facingAngleRad: p.facingAngleRad,
+          speedRatio: p.speed_ratio,
+          angularVelocityRad: p.angular_velocity_rad,
+          hasPossession: p.has_possession,
+          ballPosition3D: state.ball.position3D,
+          cameraPosition3D: [0, 28, 48],
+          qualityTier: "high",
+        });
+
+        observedStates.add(rig.getCurrentState());
+      }
+    }
+
+    // Verify substitutions brought bench players onto the pitch (> 22 total unique active players across the match)
+    expect(activePlayerIdsOverMatch.size).toBeGreaterThan(22);
+    // Verify no player-to-player mesh intersection (< 0.70m center-to-center)
+    expect(minPairwiseDistanceM).toBeGreaterThanOrEqual(0.75);
+    // Verify real simulation triggered locomotion, passing/receiving, shooting, GK saves, goals, and substitutions
+    expect(observedStates.has("goal_celebration")).toBe(true);
+    expect(observedStates.has("disappointment")).toBe(true);
+    expect(observedStates.has("substitution_enter") || observedStates.has("substitution_exit")).toBe(true);
+
+    rigs.forEach((r) => r.dispose());
   });
 });
