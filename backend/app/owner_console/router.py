@@ -1772,3 +1772,113 @@ def post_execute_operational_decision(
         action=action,
         note=note,
     )
+
+
+# ---------- Living Club World (Phase 2.4 Events, Relationships & Social Simulation) ----------
+
+
+class CreateClubDirectiveRequest(BaseModel):
+    department: str = Field(min_length=1, max_length=32)
+    directive_key: str = Field(min_length=1, max_length=64)
+    title: str = Field(min_length=1, max_length=160)
+    instruction: str = Field(min_length=1, max_length=2000)
+    deadline_days: int | None = Field(default=7, ge=1, le=365)
+    target_scope: str | None = Field(default=None, max_length=64)
+    target_scope_id: str | None = Field(default=None, max_length=64)
+
+
+class ResolveClubEventRequest(BaseModel):
+    action: str = Field(min_length=1, max_length=64)
+    note: str | None = Field(default=None, max_length=1000)
+
+
+@router.get("/clubs/{club_id}/living-world/timeline")
+def get_living_world_timeline_view(
+    club_id: str,
+    category: str | None = None,
+    severity: str | None = None,
+    status: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_club_world
+
+    return _run(
+        session,
+        living_club_world.get_living_world_timeline,
+        session,
+        user.id,
+        club_id,
+        category=category,
+        severity=severity,
+        status=status,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/clubs/{club_id}/living-world/relationships")
+def get_living_world_relationships_view(
+    club_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_club_world, service
+    from app.owner_console.models import OwnerSquadPlayer
+
+    state = service.require_state(session, club_id, user.id)
+    squad_players = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
+    living_club_world.ensure_default_relationships(session, state, squad_players)
+    rels = living_club_world.get_club_relationships(session, club_id)
+    return {"club_id": club_id, "relationships": rels}
+
+
+@router.post("/clubs/{club_id}/living-world/directives")
+def post_create_club_directive(
+    club_id: str,
+    payload: CreateClubDirectiveRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_club_world, service
+
+    service.require_state(session, club_id, user.id)
+    return _run(
+        session,
+        living_club_world.issue_department_directive,
+        session,
+        user.id,
+        club_id,
+        department=payload.department,
+        directive_key=payload.directive_key,
+        title=payload.title,
+        instruction=payload.instruction,
+        deadline_days=payload.deadline_days,
+        target_scope=payload.target_scope,
+        target_scope_id=payload.target_scope_id,
+    )
+
+
+@router.post("/clubs/{club_id}/living-world/events/{event_id}/resolve")
+def post_resolve_club_event(
+    club_id: str,
+    event_id: str,
+    payload: ResolveClubEventRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_club_world, service
+
+    service.require_state(session, club_id, user.id)
+    return _run(
+        session,
+        living_club_world.resolve_club_event,
+        session,
+        user.id,
+        club_id,
+        event_id=event_id,
+        action=payload.action,
+        resolution_note=payload.note,
+    )

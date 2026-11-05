@@ -218,6 +218,10 @@ def test_persistence_migrations_create_expected_tables(tmp_path) -> None:
     assert inspector.has_table("agent_learning_state")
     assert inspector.has_table("agent_wallets")
     assert inspector.has_table("agent_performance_logs")
+    assert inspector.has_table("owner_club_events")
+    assert inspector.has_table("owner_club_relationships")
+    assert inspector.has_table("owner_club_relationship_history")
+    assert inspector.has_table("owner_club_directives")
 
 
 def test_auth_session_rebuild_migration_handles_preexisting_table(tmp_path) -> None:

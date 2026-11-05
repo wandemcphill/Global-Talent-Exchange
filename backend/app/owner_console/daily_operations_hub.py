@@ -9,7 +9,16 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
-from app.owner_console import competitions as comps, engine, ledger, money, prestige_campus_comms, service, storytelling
+from app.owner_console import (
+    competitions as comps,
+    engine,
+    ledger,
+    living_club_world,
+    money,
+    prestige_campus_comms,
+    service,
+    storytelling,
+)
 from app.owner_console.models import (
     OwnerBroadcastEvent,
     OwnerClubState,
@@ -2018,6 +2027,88 @@ def get_club_operations_hub(
         },
     ]
 
+    from app.owner_console import living_club_world
+    from app.owner_console.models import OwnerClubEvent, OwnerClubDirective
+
+    squad_players = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
+    living_club_world.ensure_default_relationships(session, state, squad_players)
+    all_rels = living_club_world.get_club_relationships(session, club_id)
+    all_active_events = list(
+        session.scalars(
+            select(OwnerClubEvent)
+            .where(
+                OwnerClubEvent.club_id == club_id,
+                OwnerClubEvent.status.in_(["active", "awaiting_decision"]),
+            )
+            .order_by(OwnerClubEvent.world_day.desc(), OwnerClubEvent.created_at.desc())
+        ).all()
+    )
+    all_active_directives = list(
+        session.scalars(
+            select(OwnerClubDirective)
+            .where(
+                OwnerClubDirective.club_id == club_id,
+                OwnerClubDirective.status == "active",
+            )
+            .order_by(OwnerClubDirective.issued_day.desc())
+        ).all()
+    )
+
+    formatted_active_events = [living_club_world.format_event_dict(e) for e in all_active_events]
+    formatted_active_directives = [living_club_world.format_directive_dict(d) for d in all_active_directives]
+
+    dept_to_category = {
+        "managers_office": ("tactical", "squad"),
+        "medical_department": ("medical",),
+        "academy_department": ("academy",),
+        "finance_commercial_office": ("financial",),
+        "general_managers_office": ("executive", "squad"),
+        "executive_office": ("executive", "culture"),
+    }
+    dept_to_directive_dept = {
+        "managers_office": "manager",
+        "medical_department": "medical",
+        "academy_department": "academy",
+        "finance_commercial_office": "finance",
+        "general_managers_office": "scouting",
+        "executive_office": "executive",
+    }
+    dept_to_staff_role = {
+        "managers_office": "first_team_manager",
+        "medical_department": "medical_director",
+        "academy_department": "head_of_youth_development",
+        "finance_commercial_office": "general_manager",
+        "general_managers_office": "chief_scout",
+        "executive_office": "general_manager",
+    }
+
+    department_activity = {}
+    for dest in destinations:
+        d_key = dest["destination_key"]
+        cats = dept_to_category.get(d_key, ("executive",))
+        dir_dept = dept_to_directive_dept.get(d_key, "executive")
+        s_role = dept_to_staff_role.get(d_key, "general_manager")
+
+        room_events = [e for e in formatted_active_events if e["category"] in cats]
+        room_directives = [d for d in formatted_active_directives if d["department"] == dir_dept]
+        room_rel = next(
+            (r for r in all_rels if r["participant_b_id"] == s_role or r["participant_a_id"] == s_role), None
+        )
+
+        dest["active_events"] = room_events
+        dest["active_events_count"] = len(room_events)
+        dest["active_directives"] = room_directives
+        dest["active_directives_count"] = len(room_directives)
+        dest["relationship"] = room_rel
+        dest["activity_score"] = len(room_events) * 2 + len(room_directives) * 3 + dest.get("alert_count", 0)
+
+        department_activity[d_key] = {
+            "events_count": len(room_events),
+            "directives_count": len(room_directives),
+            "activity_score": dest["activity_score"],
+            "has_critical": any(e["severity"] == "critical" for e in room_events),
+        }
+
     actionable_decisions_payload = {
         "department_decisions": [d for d in actionable_decisions if d.get("source_type") != "inbox_item"],
         "inbox_decisions": open_inbox_decisions,
@@ -2045,6 +2136,14 @@ def get_club_operations_hub(
         "operational_timeline": timeline_events,
         "operational_timeline_summary": operational_timeline,
         "decision_history": combined_history[:25],
+        "living_world": {
+            "active_events_count": len(formatted_active_events),
+            "active_events": formatted_active_events[:20],
+            "active_directives_count": len(formatted_active_directives),
+            "active_directives": formatted_active_directives,
+            "relationships": all_rels,
+            "department_activity": department_activity,
+        },
     }
 
 
@@ -2150,8 +2249,39 @@ def execute_owner_operational_decision(
                 f"Proposal rejected by Club Owner ({target_rec.get('proposer_name')} mood -3). No funds committed."
             )
             resolution_label = "rejected"
+            living_club_world.apply_relationship_delta(
+                session,
+                club_id,
+                "owner",
+                "owner",
+                "Club Owner",
+                "staff",
+                proposer_role,
+                str(target_rec.get("proposer_name") or "Department Head"),
+                delta_trust=-3,
+                delta_tension=5,
+                reason=f"Rejected proposal: {target_rec.get('title')}",
+                source_event_id=decision_id,
+                world_day=world_day,
+            )
         else:
             resolution_label = "approved"
+            living_club_world.apply_relationship_delta(
+                session,
+                club_id,
+                "owner",
+                "owner",
+                "Club Owner",
+                "staff",
+                proposer_role,
+                str(target_rec.get("proposer_name") or "Department Head"),
+                delta_trust=5,
+                delta_respect=4,
+                delta_tension=-4,
+                reason=f"Approved proposal: {target_rec.get('title')}",
+                source_event_id=decision_id,
+                world_day=world_day,
+            )
             if op_key == "pledge_win_bonus":
                 amt = _safe_int(payload.get("amount_gtex"), 1200)
                 res = service.pledge_win_bonus(

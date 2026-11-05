@@ -39,9 +39,16 @@ import {
   clubBriefingResolveDilemmaEndpoint,
   clubExecuteOperationalDecisionEndpoint,
   clubOperationsHubEndpoint,
+  clubLivingWorldTimelineEndpoint,
+  clubCreateDirectiveEndpoint,
+  clubResolveEventEndpoint,
   type ClubOperationsHubPayload,
   type OperationalRecommendation,
   type OperationsHubDestination,
+  type LivingWorldEvent,
+  type LivingWorldDirective,
+  type LivingWorldRelationship,
+  type LivingWorldTimelineItem,
 } from "@/lib/ownerBriefing";
 
 function detectWebGLAvailable(): boolean {
@@ -100,6 +107,15 @@ export function ClubOperationsCentre3D({
   const [winBonusAmount, setWinBonusAmount] = useState<number>(450);
   const [staffMessageText, setStaffMessageText] = useState<string>("");
   const [sendingChat, setSendingChat] = useState<boolean>(false);
+
+  // Phase 2.4 Living World state
+  const [showTimelineDrawer, setShowTimelineDrawer] = useState<boolean>(false);
+  const [timelineCategoryFilter, setTimelineCategoryFilter] = useState<string>("all");
+  const [showDirectiveModal, setShowDirectiveModal] = useState<boolean>(false);
+  const [directiveTitle, setDirectiveTitle] = useState<string>("");
+  const [directiveInstruction, setDirectiveInstruction] = useState<string>("");
+  const [directiveDeadline, setDirectiveDeadline] = useState<number>(7);
+  const [busyEventId, setBusyEventId] = useState<string | null>(null);
 
   const {
     data: hub,
@@ -757,6 +773,53 @@ export function ClubOperationsCentre3D({
     }
   };
 
+  const handleIssueDirective = async () => {
+    if (!directiveTitle.trim() || !directiveInstruction.trim()) {
+      toast.error("Please enter both title and instruction for the directive.");
+      return;
+    }
+    const deptMap: Record<string, string> = {
+      managers_office: "manager",
+      medical_department: "medical",
+      academy_department: "academy",
+      finance_commercial_office: "finance",
+      general_managers_office: "scouting",
+      executive_office: "executive",
+    };
+    const targetDept = deptMap[activeDestination.destination_key] || "executive";
+    try {
+      await api.post(clubCreateDirectiveEndpoint(clubId), {
+        department: targetDept,
+        directive_key: `dir_${Date.now()}`,
+        title: directiveTitle.trim(),
+        instruction: directiveInstruction.trim(),
+        deadline_days: directiveDeadline,
+      });
+      setDirectiveTitle("");
+      setDirectiveInstruction("");
+      setShowDirectiveModal(false);
+      await invalidateAll();
+      toast.success(`Directive issued to ${activeDestination.staff_lead.name}`);
+    } catch (err) {
+      toast.error(errMsg(err));
+    }
+  };
+
+  const handleResolveEvent = async (eventId: string, actionKey: string) => {
+    setBusyEventId(`${eventId}:${actionKey}`);
+    try {
+      await api.post(clubResolveEventEndpoint(clubId, eventId), {
+        action: actionKey,
+      });
+      await invalidateAll();
+      toast.success("Living world event action executed");
+    } catch (err) {
+      toast.error(errMsg(err));
+    } finally {
+      setBusyEventId(null);
+    }
+  };
+
   if (isLoading && !hub) {
     return (
       <section
@@ -839,6 +902,16 @@ export function ClubOperationsCentre3D({
             <span>{renderMode === "3d" ? "2D Floorplan" : "3D WebGL HQ"}</span>
           </button>
 
+          <button
+            type="button"
+            data-testid="toggle-living-world-timeline"
+            onClick={() => setShowTimelineDrawer((v) => !v)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-purple-400/40 bg-purple-950/50 px-3 py-1.5 text-xs font-bold uppercase text-purple-200 hover:bg-purple-900/60"
+          >
+            <Activity size={13} />
+            <span>Living World ({hub?.living_world?.active_events_count || 0})</span>
+          </button>
+
           <Link
             to="/app/campus"
             className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-950/40 px-3 py-1.5 text-xs font-bold uppercase text-emerald-200 hover:bg-emerald-900/50"
@@ -879,11 +952,22 @@ export function ClubOperationsCentre3D({
                   {DESTINATION_ICONS[dest.destination_key] || <Building2 size={14} />}
                   <span className="truncate">{dest.short_label}</span>
                 </span>
-                {dest.open_decisions_count > 0 && (
-                  <span className="gx-mono rounded-full bg-amber-500/20 border border-amber-400/50 px-1.5 py-0.2 text-[10px] font-black text-amber-300">
-                    {dest.open_decisions_count}
-                  </span>
-                )}
+                <div className="flex items-center gap-1">
+                  {((dest.active_events_count || 0) > 0 || (dest.active_directives_count || 0) > 0) && (
+                    <span
+                      data-testid={`dest-activity-badge-${dest.destination_key}`}
+                      className="flex items-center gap-1 rounded-full bg-cyan-500/20 border border-cyan-400/50 px-1.5 py-0.2 text-[9px] font-bold text-cyan-300"
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                      {(dest.active_events_count || 0) + (dest.active_directives_count || 0)}
+                    </span>
+                  )}
+                  {dest.open_decisions_count > 0 && (
+                    <span className="gx-mono rounded-full bg-amber-500/20 border border-amber-400/50 px-1.5 py-0.2 text-[10px] font-black text-amber-300">
+                      {dest.open_decisions_count}
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="mt-2">
                 <p className="text-[11px] font-bold text-white truncate">{dest.staff_lead.name}</p>
@@ -1121,6 +1205,177 @@ export function ClubOperationsCentre3D({
               <h3 className="mt-1 text-lg font-black text-white">{rpt.title || activeDestination.subtitle}</h3>
               <p className="mt-1 text-xs leading-relaxed text-slate-300">{rpt.summary}</p>
             </div>
+
+            {/* Phase 2.4 Staff Relationship Health Inspector Card */}
+            {activeDestination.relationship && (
+              <div
+                data-testid={`relationship-card-${activeDestination.destination_key}`}
+                className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2.5"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Users size={12} className="text-sky-400" />
+                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-200">
+                      Executive Relationship · {activeDestination.relationship.participant_b_name}
+                    </span>
+                  </div>
+                  <span className="rounded-full bg-sky-950/80 border border-sky-400/40 px-2 py-0.5 text-[10px] font-bold text-sky-300">
+                    {activeDestination.relationship.status_label}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[10px]">
+                  <div>
+                    <div className="flex justify-between text-slate-400 mb-0.5">
+                      <span>Trust</span>
+                      <span className="text-emerald-300 font-bold">{activeDestination.relationship.trust}%</span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${activeDestination.relationship.trust}%` }} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-slate-400 mb-0.5">
+                      <span>Respect</span>
+                      <span className="text-sky-300 font-bold">{activeDestination.relationship.respect}%</span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+                      <div className="h-full bg-sky-500 rounded-full" style={{ width: `${activeDestination.relationship.respect}%` }} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-slate-400 mb-0.5">
+                      <span>Affinity</span>
+                      <span className="text-purple-300 font-bold">{activeDestination.relationship.affinity}%</span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+                      <div className="h-full bg-purple-500 rounded-full" style={{ width: `${activeDestination.relationship.affinity}%` }} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-slate-400 mb-0.5">
+                      <span>Tension</span>
+                      <span className={`font-bold ${activeDestination.relationship.tension >= 50 ? "text-rose-400" : "text-amber-300"}`}>
+                        {activeDestination.relationship.tension}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${activeDestination.relationship.tension >= 50 ? "bg-rose-500" : "bg-amber-500"}`}
+                        style={{ width: `${activeDestination.relationship.tension}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Phase 2.4 Departmental Directives Card */}
+            <div
+              data-testid={`department-directives-${activeDestination.destination_key}`}
+              className="rounded-xl border border-sky-500/20 bg-sky-950/20 p-3 space-y-2.5"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Activity size={12} className="text-sky-400" />
+                  <span className="text-[11px] font-black uppercase tracking-wider text-sky-300">
+                    Active Directives ({activeDestination.active_directives?.length || 0})
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  data-testid="open-dispatch-directive-button"
+                  onClick={() => setShowDirectiveModal(true)}
+                  className="rounded border border-sky-400/40 bg-sky-500/20 px-2 py-0.5 text-[10px] font-bold text-sky-200 hover:bg-sky-500/30"
+                >
+                  + Issue Directive
+                </button>
+              </div>
+              {(activeDestination.active_directives?.length || 0) === 0 ? (
+                <p className="text-[10px] text-slate-400 italic">No active directives for this department.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {activeDestination.active_directives?.map((dir) => (
+                    <div key={dir.id} className="rounded-lg border border-white/10 bg-black/40 p-2 text-[11px] space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-white">{dir.title}</span>
+                        <span className="rounded bg-sky-900/60 px-1.5 py-0.2 text-[9px] font-bold text-sky-300 uppercase">
+                          Target Day {dir.deadline_day}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-300 leading-snug">{dir.instruction}</p>
+                      {dir.acknowledgement_text && (
+                        <p className="text-[9px] text-slate-400 italic bg-white/5 rounded p-1">
+                          "{dir.acknowledgement_text}"
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Phase 2.4 Living World Department Events */}
+            {(activeDestination.active_events?.length || 0) > 0 && (
+              <div
+                data-testid={`department-events-${activeDestination.destination_key}`}
+                className="rounded-xl border border-indigo-500/30 bg-indigo-950/20 p-3 space-y-2.5"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles size={12} className="text-indigo-400" />
+                    <span className="text-[11px] font-black uppercase tracking-wider text-indigo-300">
+                      Living Club Events ({activeDestination.active_events?.length || 0})
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-400">Authoritative</span>
+                </div>
+                <div className="space-y-2">
+                  {activeDestination.active_events?.map((ev) => (
+                    <div
+                      key={ev.id}
+                      data-testid={`department-event-${ev.id}`}
+                      className="rounded-lg border border-white/10 bg-black/50 p-2.5 space-y-1.5"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-white">{ev.title}</span>
+                        <span
+                          className={`rounded px-1.5 py-0.2 text-[9px] font-black uppercase ${
+                            ev.severity === "critical"
+                              ? "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                              : ev.severity === "important"
+                              ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                              : "bg-slate-700/40 text-slate-300"
+                          }`}
+                        >
+                          {ev.severity}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">{ev.description}</p>
+                      {ev.actions?.length > 0 && (
+                        <div className="flex items-center justify-end gap-1.5 pt-1">
+                          {ev.actions.map((act) => (
+                            <button
+                              key={act.key}
+                              type="button"
+                              data-testid={`event-action-${ev.id}-${act.key}`}
+                              disabled={Boolean(busyEventId)}
+                              onClick={() => handleResolveEvent(ev.id, act.key)}
+                              className={`rounded px-2.5 py-1 text-[10px] font-bold uppercase transition ${
+                                act.style === "primary"
+                                  ? "border border-indigo-500/50 bg-indigo-600/30 text-indigo-200 hover:bg-indigo-600/50"
+                                  : "border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+                              }`}
+                            >
+                              {busyEventId === `${ev.id}:${act.key}` ? "…" : act.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Department-Specific Actionable Decisions Queue */}
             {openDeptDecisions.length > 0 && (
@@ -1756,6 +2011,190 @@ export function ClubOperationsCentre3D({
           </div>
         </div>
       </div>
+      {/* Phase 2.4 Directive Dispatcher Modal */}
+      {showDirectiveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div
+            data-testid="directive-dispatcher-modal"
+            className="w-full max-w-md rounded-2xl border border-sky-400/40 bg-slate-950 p-5 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div>
+                <h4 className="text-sm font-black uppercase tracking-wider text-white">
+                  Dispatch Department Directive
+                </h4>
+                <p className="text-[11px] text-slate-400">
+                  Target: {activeDestination.label} ({activeDestination.staff_lead.name})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDirectiveModal(false)}
+                className="rounded p-1 text-slate-400 hover:text-white"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Directive Title
+                </label>
+                <input
+                  type="text"
+                  data-testid="directive-title-input"
+                  value={directiveTitle}
+                  onChange={(e) => setDirectiveTitle(e.target.value)}
+                  placeholder="e.g. Prioritize Muscular Rehabilitation"
+                  className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:border-sky-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Detailed Operational Instruction
+                </label>
+                <textarea
+                  data-testid="directive-instruction-input"
+                  value={directiveInstruction}
+                  onChange={(e) => setDirectiveInstruction(e.target.value)}
+                  rows={3}
+                  placeholder="Outline expectations, resources, and specific milestones for this department..."
+                  className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:border-sky-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Target Deadline (World Days)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={directiveDeadline}
+                  onChange={(e) => setDirectiveDeadline(Number(e.target.value))}
+                  className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-1.5 text-xs text-white focus:border-sky-400 focus:outline-none"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setShowDirectiveModal(false)}
+                className="rounded px-3 py-1.5 text-xs font-bold text-slate-300 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                data-testid="submit-directive-button"
+                onClick={handleIssueDirective}
+                className="rounded-lg border border-sky-400/50 bg-sky-600/30 px-4 py-1.5 text-xs font-black uppercase text-sky-200 hover:bg-sky-600/50"
+              >
+                Issue Directive
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Phase 2.4 Living World Timeline Slide-Over Drawer */}
+      {showTimelineDrawer && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
+          <div
+            data-testid="living-world-timeline-drawer"
+            className="h-full w-full max-w-lg border-l border-white/15 bg-slate-950 p-6 shadow-2xl flex flex-col justify-between overflow-y-auto"
+          >
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2">
+                  <Activity size={16} className="text-purple-400" />
+                  <h3 className="text-sm font-black uppercase tracking-wider text-white">
+                    Living Club World Timeline
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  data-testid="close-timeline-drawer"
+                  onClick={() => setShowTimelineDrawer(false)}
+                  className="rounded p-1 text-slate-400 hover:text-white"
+                >
+                  <XCircle size={18} />
+                </button>
+              </div>
+
+              {/* Category Filter Pills */}
+              <div className="flex flex-wrap gap-1.5">
+                {["all", "tactical", "medical", "academy", "financial", "squad", "executive"].map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setTimelineCategoryFilter(cat)}
+                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase transition ${
+                      timelineCategoryFilter === cat
+                        ? "bg-purple-600/30 border border-purple-400/50 text-purple-200"
+                        : "bg-white/5 border border-white/10 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+
+              {/* Event stream */}
+              <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
+                {(hub?.living_world?.active_events || [])
+                  .filter((ev) => timelineCategoryFilter === "all" || ev.category === timelineCategoryFilter)
+                  .map((ev) => (
+                    <div
+                      key={ev.id}
+                      data-testid={`timeline-item-${ev.id}`}
+                      className="rounded-xl border border-white/10 bg-black/40 p-3.5 space-y-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase text-purple-300">
+                          Day {ev.world_day} · {ev.category}
+                        </span>
+                        <span
+                          className={`rounded px-1.5 py-0.2 text-[9px] font-black uppercase ${
+                            ev.severity === "critical"
+                              ? "bg-rose-500/20 text-rose-300"
+                              : ev.severity === "important"
+                              ? "bg-amber-500/20 text-amber-300"
+                              : "bg-slate-700/40 text-slate-300"
+                          }`}
+                        >
+                          {ev.severity}
+                        </span>
+                      </div>
+                      <h4 className="text-xs font-bold text-white">{ev.title}</h4>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">{ev.description}</p>
+                      {ev.actions?.length > 0 && ev.status === "active" && (
+                        <div className="flex items-center justify-end gap-1.5 pt-1">
+                          {ev.actions.map((act) => (
+                            <button
+                              key={act.key}
+                              type="button"
+                              disabled={Boolean(busyEventId)}
+                              onClick={() => handleResolveEvent(ev.id, act.key)}
+                              className="rounded border border-purple-500/40 bg-purple-600/30 px-2.5 py-1 text-[10px] font-bold uppercase text-purple-200 hover:bg-purple-600/50"
+                            >
+                              {act.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            </div>
+            <div className="pt-4 border-t border-white/10 text-center">
+              <span className="text-[10px] text-slate-500">
+                Authoritative GTEX Simulation · World Day {hub?.club.world_day || 1}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

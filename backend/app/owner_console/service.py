@@ -1831,11 +1831,17 @@ def tick_club(
         session.add(item)
     snapshot_value(session, state)
     session.flush()
+
+    from app.owner_console import living_club_world
+
+    living_world_summary = living_club_world.process_world_day_events(session, state, campus_effects)
+
     return {
         "world_day": state.world_day,
         "new_items": len(items),
         "growth": growth_report,
         "campus_effects": campus_effects,
+        "living_world": living_world_summary,
         "medical_recovery": {
             "healed_players_count": healed_players_count,
             "daily_injury_heal_days": daily_injury_heal_days,
@@ -1872,15 +1878,52 @@ def resolve_item(session: Session, user_id: str, item_id: str, action: str) -> O
 
     player = session.get(OwnerSquadPlayer, payload["player_id"]) if payload.get("player_id") else None
     kind = item.kind
+    from app.owner_console import living_club_world
+
+    mgr_name = (state.manager_json or {}).get("name", "First-Team Manager") if state else "First-Team Manager"
+    w_day = int(state.world_day or 1) if state else 1
+
     if kind == "facility_request":
         if action == "approve":
             result = upgrade_facility(session, user_id, item.club_id, payload["facility"])
             manager = dict(state.manager_json or {})
             mood(4)
             outcome = f"{payload['facility'].title()} upgraded to level {result['level']}. {result['effect']} Manager mood up."
+            if item.club_id:
+                living_club_world.apply_relationship_delta(
+                    session,
+                    item.club_id,
+                    "owner",
+                    "owner",
+                    "Club Owner",
+                    "staff",
+                    "first_team_manager",
+                    mgr_name,
+                    delta_trust=5,
+                    delta_tension=-6,
+                    reason=f"Approved facility upgrade: {payload['facility']}",
+                    source_event_id=item.id,
+                    world_day=w_day,
+                )
         else:
             mood(-10)
             outcome = "Request rejected. The manager is frustrated (mood -10) and growth stays limited by the current facility."
+            if item.club_id:
+                living_club_world.apply_relationship_delta(
+                    session,
+                    item.club_id,
+                    "owner",
+                    "owner",
+                    "Club Owner",
+                    "staff",
+                    "first_team_manager",
+                    mgr_name,
+                    delta_trust=-4,
+                    delta_tension=8,
+                    reason=f"Rejected facility upgrade: {payload['facility']}",
+                    source_event_id=item.id,
+                    world_day=w_day,
+                )
     elif kind == "manager_request":
         if action == "approve":
             mood(8)
