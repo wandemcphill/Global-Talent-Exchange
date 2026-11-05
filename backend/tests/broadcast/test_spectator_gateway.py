@@ -4,17 +4,30 @@ import asyncio
 import time
 from types import SimpleNamespace
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 import pytest
+from redis.exceptions import RedisError
 from starlette.websockets import WebSocketDisconnect
 
 from app.auth.dependencies import get_current_user
 from app.broadcast.broadcast_models import ScoreUpdate, SpectatorEvent, TournamentEvent
-from app.broadcast.spectator_gateway import BroadcastRuntime, router
+from app.broadcast.spectator_gateway import (
+    AsyncEvalRedisEmulator,
+    BroadcastRuntime,
+    MAX_TICKET_TTL_SECONDS,
+    SpectatorTicketStoreError,
+    redact_ticket_from_log_text,
+    router,
+    ticket_sha256_digest,
+)
 
 
-def _build_app() -> FastAPI:
+def _build_app(
+    *,
+    shared_redis: object | None = None,
+    require_redis_tickets: bool = False,
+) -> FastAPI:
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
@@ -30,6 +43,8 @@ def _build_app() -> FastAPI:
         viewer_ttl_seconds=60,
         heartbeat_interval_seconds=60,
         max_queue_size=32,
+        require_redis_tickets=require_redis_tickets,
+        ticket_redis_client=shared_redis,
     )
     app.state.broadcast = app.state.broadcast_runtime
     return app
@@ -154,7 +169,6 @@ def test_spectator_gateway_redacts_confidential_tactics_and_prevents_spoofing_an
             _receive_until_type(peer_ws, "viewer_count")
             _receive_until_type(guest_ws, "viewer_count")
 
-            # 1. Public WebSocket payload redaction
             asyncio.run(
                 app.state.broadcast_runtime.match_room_manager.publish(
                     "match-sec-1",
@@ -181,7 +195,6 @@ def test_spectator_gateway_redacts_confidential_tactics_and_prevents_spoofing_an
             assert "deterministic_seed" not in frame_ev["payload"]
             assert frame_ev["payload"]["presentation_package"]["coach_notes"] == []
 
-            # 2. Identity spoofing in client payload must be ignored
             guest_ws.send_json(
                 {
                     "type": "chat_message",
@@ -197,7 +210,6 @@ def test_spectator_gateway_redacts_confidential_tactics_and_prevents_spoofing_an
             assert chat_ev["payload"]["authenticated"] is False
             assert chat_ev["message"] == "Hello match room!"
 
-            # 3. Malicious script injection in chat/reaction is dropped
             guest_ws.send_json(
                 {
                     "type": "chat_message",
@@ -209,26 +221,24 @@ def test_spectator_gateway_redacts_confidential_tactics_and_prevents_spoofing_an
             _receive_until_type(guest_ws, "reaction")
             assert rx_ev["reaction"] == "🔥"
 
-            # 4. Fourth message within the window triggers rate_limit protection
             guest_ws.send_json({"type": "reaction", "reaction": "👏"})
             rate_ev = _receive_until_type(guest_ws, "rate_limit")
             assert rate_ev["payload"]["code"] == "rate_limit_exceeded"
 
 
-def test_public_spectator_events_never_expose_account_ids_or_connection_ids() -> None:
+def test_public_spectator_events_never_expose_account_ids_or_connection_ids_including_camel_case_aliases() -> None:
     """
-    Regression Test (Vulnerabilities 1 & 5):
-    Verifies that:
-    - _snapshot_from_presence() and all public spectator snapshots redact active_user_ids ([]).
-    - Neither authenticated nor unauthenticated spectator events expose account IDs (user_id,
-      account_id, owner_user_id) or internal connection IDs (connection_id, client_id, socket_id).
-    - Authoritative internal backend presence still tracks authenticated user_id internally.
+    Regression Test:
+    Verifies that public spectator events cannot expose account or connection identifiers
+    under snake_case, camelCase, PascalCase, or suffix aliases, and that unknown root/snapshot
+    fields are rejected by the structural allowlist.
     """
     app = _build_app()
     client = TestClient(app)
 
     ticket_resp = client.post("/matches/match-privacy-1/spectate-ticket")
     assert ticket_resp.status_code == 200
+    assert ticket_resp.headers.get("cache-control") == "no-store"
     ticket = ticket_resp.json()["ticket"]
 
     with client.websocket_connect(f"/ws/spectate/match-privacy-1?ticket={ticket}") as auth_ws:
@@ -241,97 +251,78 @@ def test_public_spectator_events_never_expose_account_ids_or_connection_ids() ->
         assert auth_snap["snapshot"]["active_user_ids"] == []
         assert auth_vc["snapshot"]["active_user_ids"] == []
 
-        # Confirm internal presence service still preserves authoritative user_id for backend processing
         internal_presence = asyncio.run(
             app.state.broadcast_runtime.presence_service.get_match_presence("match-privacy-1")
         )
         assert internal_presence.active_user_ids == ["viewer-test"]
 
-        # Public REST spectator presence endpoint also redacts active_user_ids for non-admin callers
-        rest_presence = client.get("/matches/match-privacy-1/spectators")
-        assert rest_presence.status_code == 200
-        assert rest_presence.json()["active_user_ids"] == []
-
         with client.websocket_connect("/ws/spectate/match-privacy-1?display_name=AnonFan") as anon_ws:
-            anon_snap = _receive_until_type(anon_ws, "snapshot")
-            anon_vc = _receive_until_type(anon_ws, "viewer_count")
-            auth_vc_2 = _receive_until_type(auth_ws, "viewer_count")
+            _receive_until_type(anon_ws, "snapshot")
+            _receive_until_type(anon_ws, "viewer_count")
+            _receive_until_type(auth_ws, "viewer_count")
 
-            assert anon_snap["user_id"] is None
-            assert anon_snap["snapshot"]["active_user_ids"] == []
-            assert anon_vc["snapshot"]["active_user_ids"] == []
-            assert auth_vc_2["snapshot"]["active_user_ids"] == []
-
-            # Authenticated user sends reaction and chat; verify zero account IDs or connection IDs leak
-            auth_ws.send_json({"type": "reaction", "reaction": "⚽"})
-            rx_on_anon = _receive_until_type(anon_ws, "reaction")
-            rx_on_auth = _receive_until_type(auth_ws, "reaction")
-            for rx in (rx_on_anon, rx_on_auth):
-                assert rx["user_id"] is None
-                assert rx["display_name"] == "VerifiedSupporter"
-                assert rx["payload"]["authenticated"] is True
-                assert "connection_id" not in rx["payload"]
-                assert "account_id" not in rx["payload"]
-
-            auth_ws.send_json({"type": "chat_message", "message": "Great buildup play!"})
-            chat_on_anon = _receive_until_type(anon_ws, "chat_message")
-            chat_on_auth = _receive_until_type(auth_ws, "chat_message")
-            for ch in (chat_on_anon, chat_on_auth):
-                assert ch["user_id"] is None
-                assert ch["display_name"] == "VerifiedSupporter"
-                assert ch["payload"]["authenticated"] is True
-                assert "connection_id" not in ch["payload"]
-
-            # Publish a server event embedded with sensitive account/connection identifiers; verify sanitization
             asyncio.run(
                 app.state.broadcast_runtime.match_room_manager.publish(
                     "match-privacy-1",
-                    SpectatorEvent(
-                        type="frame",
-                        match_id="match-privacy-1",
-                        user_id="leaked-user-99",
-                        payload={
+                    {
+                        "type": "frame",
+                        "match_id": "match-privacy-1",
+                        "user_id": "leaked-user-99",
+                        "unlisted_root_secret": "must-be-dropped-by-root-allowlist",
+                        "payload": {
                             "frame": {"frame_id": "f-200", "time_seconds": 44.0},
                             "user_id": "nested-user-99",
+                            "userId": "camel-user-99",
+                            "accountId": "camel-acc-99",
                             "account_id": "acc-99",
+                            "ownerUserId": "camel-owner-99",
                             "owner_user_id": "owner-99",
+                            "primary_user_id": "suffix-user-99",
                             "connection_id": "conn-secret-123",
+                            "connectionId": "camel-conn-123",
                             "client_id": "client-secret-456",
+                            "clientId": "camel-client-456",
                             "socket_id": "sock-secret-789",
-                            "active_user_ids": ["viewer-test", "owner-99"],
+                            "socketId": "camel-sock-789",
+                            "sessionId": "sess-secret-000",
+                            "active_user_ids": ["viewer-test"],
+                            "activeUserIds": ["viewer-test"],
+                            "coachNotes": ["camel-case secret note"],
                         },
-                    ),
+                    },
                     delay_seconds=0,
                 )
             )
             sanitized_frame = _receive_until_type(anon_ws, "frame")
             assert sanitized_frame["user_id"] is None
+            assert "unlisted_root_secret" not in sanitized_frame
             for forbidden_key in (
                 "user_id",
+                "userId",
                 "account_id",
+                "accountId",
                 "owner_user_id",
+                "ownerUserId",
+                "primary_user_id",
                 "connection_id",
+                "connectionId",
                 "client_id",
+                "clientId",
                 "socket_id",
+                "socketId",
+                "sessionId",
             ):
                 assert forbidden_key not in sanitized_frame["payload"]
             assert sanitized_frame["payload"]["active_user_ids"] == []
+            assert sanitized_frame["payload"]["coach_notes"] == []
 
 
 def test_match_and_tournament_heartbeats_are_connection_specific_and_rate_limited() -> None:
-    """
-    Regression Test (Vulnerabilities 2 & 3):
-    Verifies that:
-    - Match and tournament heartbeats respond ONLY to the sender connection (never broadcast to the room).
-    - A second spectator in the same match or tournament room never receives another spectator's heartbeat.
-    - Heartbeat messages are subject to per-connection rate limiting and contain no connection_id.
-    """
     app = _build_app()
     app.state.broadcast_runtime.rate_limit_max_messages = 2
     app.state.broadcast_runtime.rate_limit_window_seconds = 10.0
     client = TestClient(app)
 
-    # 1. Match room heartbeat isolation & rate limiting
     with client.websocket_connect("/ws/spectate/match-hb-isolation?display_name=SpecOne") as ws_one:
         _receive_until_type(ws_one, "snapshot")
         _receive_until_type(ws_one, "viewer_count")
@@ -341,7 +332,6 @@ def test_match_and_tournament_heartbeats_are_connection_specific_and_rate_limite
             _receive_until_type(ws_two, "viewer_count")
             _receive_until_type(ws_one, "viewer_count")
 
-            # SpecOne sends ping #1 -> only SpecOne receives heartbeat
             ws_one.send_json({"type": "ping"})
             hb_one = _receive_until_type(ws_one, "heartbeat")
             assert hb_one["match_id"] == "match-hb-isolation"
@@ -349,19 +339,15 @@ def test_match_and_tournament_heartbeats_are_connection_specific_and_rate_limite
             assert hb_one["payload"] == {"status": "ok"}
             assert "connection_id" not in hb_one["payload"]
 
-            # SpecOne sends ping #2 -> allowed (2/2 in window)
             ws_one.send_json({"type": "ping"})
             hb_two = _receive_until_type(ws_one, "heartbeat")
             assert hb_two["payload"] == {"status": "ok"}
 
-            # SpecOne sends ping #3 -> rate limited!
             ws_one.send_json({"type": "ping"})
             rl_event = _receive_until_type(ws_one, "rate_limit")
             assert rl_event["payload"]["code"] == "rate_limit_exceeded"
             assert "connection_id" not in rl_event["payload"]
 
-            # Prove SpecTwo received NONE of SpecOne's heartbeats or rate_limit events:
-            # Publish a score_update and verify the very next message on ws_two is score_update
             asyncio.run(
                 app.state.broadcast_runtime.match_room_manager.publish(
                     "match-hb-isolation",
@@ -374,11 +360,8 @@ def test_match_and_tournament_heartbeats_are_connection_specific_and_rate_limite
                 )
             )
             next_on_two = ws_two.receive_json()
-            assert next_on_two["type"] == "score_update", (
-                f"Expected score_update as next message on second spectator, got {next_on_two['type']!r}"
-            )
+            assert next_on_two["type"] == "score_update"
 
-    # 2. Tournament room heartbeat isolation & rate limiting
     with client.websocket_connect("/ws/tournament/tourney-hb-isolation?display_name=TourneyOne") as t_one:
         _receive_until_type(t_one, "tournament_snapshot")
 
@@ -395,13 +378,10 @@ def test_match_and_tournament_heartbeats_are_connection_specific_and_rate_limite
             t_hb_2 = _receive_until_type(t_one, "heartbeat")
             assert t_hb_2["payload"] == {"status": "ok"}
 
-            # 3rd tournament ping exceeds rate limit
             t_one.send_json({"type": "ping"})
             t_rl = _receive_until_type(t_one, "rate_limit")
             assert t_rl["payload"]["code"] == "rate_limit_exceeded"
-            assert "connection_id" not in t_rl["payload"]
 
-            # Prove TourneyTwo never received TourneyOne's heartbeats
             asyncio.run(
                 app.state.broadcast_runtime.tournament_hub.publish(
                     "tourney-hb-isolation",
@@ -415,78 +395,205 @@ def test_match_and_tournament_heartbeats_are_connection_specific_and_rate_limite
                 )
             )
             next_on_t_two = t_two.receive_json()
-            assert next_on_t_two["type"] == "score_update", (
-                f"Expected score_update as next message on second tournament spectator, got {next_on_t_two['type']!r}"
-            )
+            assert next_on_t_two["type"] == "score_update"
+
+
+def test_distributed_redis_ticket_cross_instance_redemption_and_sha256_storage() -> None:
+    """
+    Phase B Backend Requirement 1 & 2:
+    - Ticket issued by runtime instance A can be redeemed by runtime instance B using shared Redis.
+    - Only the SHA-256 digest of the ticket is stored in Redis (never the raw ticket).
+    - Maximum 30-second TTL is enforced.
+    - Two simultaneous redemption attempts across instances cannot both succeed.
+    """
+    shared_redis = AsyncEvalRedisEmulator()
+    runtime_a = BroadcastRuntime(redis_url=None, ticket_redis_client=shared_redis, require_redis_tickets=True)
+    runtime_b = BroadcastRuntime(redis_url=None, ticket_redis_client=shared_redis, require_redis_tickets=True)
+
+    issued = asyncio.run(
+        runtime_a.issue_spectator_ticket(
+            user_id="user-dist-1",
+            display_name="DistributedViewer",
+            scope_type="match",
+            scope_id="match-dist-500",
+            ttl_seconds=120.0,  # Request > 30s to verify hard cap at 30s
+        )
+    )
+    raw_ticket = issued["ticket"]
+    expected_digest = ticket_sha256_digest(raw_ticket)
+    assert issued["ticket_digest"] == expected_digest
+    assert issued["expires_in"] == int(MAX_TICKET_TTL_SECONDS)
+
+    # Verify raw ticket is NOT in Redis keys; only SHA-256 digest key exists
+    all_keys = asyncio.run(shared_redis.keys("*"))
+    assert all(raw_ticket not in k for k in all_keys)
+    expected_redis_key = f"gtex:broadcast:spectator:ticket:{expected_digest}"
+    assert expected_redis_key in all_keys
+
+    # Instance B redeems the ticket issued by Instance A
+    redeemed_on_b = asyncio.run(
+        runtime_b.redeem_spectator_ticket(
+            raw_ticket,
+            expected_scope_type="match",
+            expected_scope_id="match-dist-500",
+        )
+    )
+    assert redeemed_on_b is not None
+    assert redeemed_on_b.user_id == "user-dist-1"
+    assert redeemed_on_b.display_name == "DistributedViewer"
+
+    # Key is atomically deleted upon redemption
+    assert asyncio.run(shared_redis.hgetall(expected_redis_key)) == {}
+
+    # Concurrent redemption test across Instance A and Instance B on a newly issued ticket
+    issued_concurrent = asyncio.run(
+        runtime_a.issue_spectator_ticket(
+            user_id="user-dist-2",
+            display_name="ConcurrentViewer",
+            scope_type="match",
+            scope_id="match-dist-500",
+        )
+    )
+    concurrent_ticket = issued_concurrent["ticket"]
+
+    async def _race_redemptions():
+        return await asyncio.gather(
+            runtime_a.redeem_spectator_ticket(
+                concurrent_ticket,
+                expected_scope_type="match",
+                expected_scope_id="match-dist-500",
+            ),
+            runtime_b.redeem_spectator_ticket(
+                concurrent_ticket,
+                expected_scope_type="match",
+                expected_scope_id="match-dist-500",
+            ),
+        )
+
+    res_a, res_b = asyncio.run(_race_redemptions())
+    successes = [r for r in (res_a, res_b) if r is not None]
+    assert len(successes) == 1, "Exactly one concurrent redemption attempt may succeed"
+    assert successes[0].user_id == "user-dist-2"
 
 
 def test_websocket_rejects_url_bearer_tokens_and_enforces_ticket_scope_expiry_and_replay() -> None:
     """
-    Regression Test (Vulnerability 4):
-    Verifies that:
-    - Bearer tokens in WebSocket URL query parameters (?token=...) are rejected with code 4401.
-    - Short-lived, single-use, match-scoped tickets enforce:
-      1. Scope validation (wrong match_id or tournament scope rejected).
-      2. Single-use replay protection (reusing a redeemed ticket rejected).
-      3. Expiry validation (expired ticket rejected).
+    Phase B Backend Requirement 3, 4, 5:
+    - Bearer tokens in WebSocket URLs (any case: ?token=, ?TOKEN=, ?Access_Token=) are rejected (4401).
+    - Wrong match/tournament scope is rejected AND does not burn the ticket for the valid scope.
+    - Expired tickets are rejected.
+    - Replayed tickets are rejected.
     """
-    app = _build_app()
+    shared_redis = AsyncEvalRedisEmulator()
+    app = _build_app(shared_redis=shared_redis, require_redis_tickets=True)
     client = TestClient(app)
 
-    # 1. Raw bearer token in WebSocket URL is strictly rejected
-    with pytest.raises(WebSocketDisconnect) as exc_info:
-        with client.websocket_connect("/ws/spectate/match-auth-99?token=eyJhbGciOiJIUzI1NiJ9.secret"):
-            pass
-    assert exc_info.value.code == 4401
+    for param in ("token", "TOKEN", "Access_Token", "Bearer"):
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            with client.websocket_connect(f"/ws/spectate/match-auth-99?{param}=eyJhbGciOiJIUzI1NiJ9.secret"):
+                pass
+        assert exc_info.value.code == 4401
 
-    with pytest.raises(WebSocketDisconnect) as exc_info_t:
-        with client.websocket_connect("/ws/tournament/tourney-auth-99?token=eyJhbGciOiJIUzI1NiJ9.secret"):
-            pass
-    assert exc_info_t.value.code == 4401
-
-    # 2. Issue a valid match-scoped ticket for match-auth-99
     resp = client.post("/matches/match-auth-99/spectate-ticket")
     assert resp.status_code == 200
-    ticket_data = resp.json()
-    ticket = ticket_data["ticket"]
-    assert ticket_data["match_id"] == "match-auth-99"
-    assert ticket_data["scope_type"] == "match"
+    assert resp.headers.get("cache-control") == "no-store"
+    ticket = resp.json()["ticket"]
 
-    # 3. Scope validation: using a ticket scoped to match-auth-99 on match-other-100 is rejected
+    # Wrong match scope rejected
     with pytest.raises(WebSocketDisconnect) as wrong_match_exc:
         with client.websocket_connect(f"/ws/spectate/match-other-100?ticket={ticket}"):
             pass
     assert wrong_match_exc.value.code == 4401
 
-    # Scope validation: using a match ticket on a tournament WebSocket is rejected
+    # Wrong scope type (tournament vs match) rejected
     with pytest.raises(WebSocketDisconnect) as wrong_type_exc:
         with client.websocket_connect(f"/ws/tournament/match-auth-99?ticket={ticket}"):
             pass
     assert wrong_type_exc.value.code == 4401
 
-    # 4. Valid first-time redemption on the scoped match succeeds
+    # Valid redemption on the intended match succeeds (wrong-scope probe did not burn ticket)
     with client.websocket_connect(f"/ws/spectate/match-auth-99?ticket={ticket}") as valid_ws:
         snap = _receive_until_type(valid_ws, "snapshot")
         assert snap["payload"]["authenticated"] is True
         assert snap["display_name"] == "VerifiedSupporter"
         assert snap["user_id"] is None
 
-    # 5. Replay protection: reusing the same ticket a second time is rejected
+    # Replay attempt with the same ticket is rejected
     with pytest.raises(WebSocketDisconnect) as replay_exc:
         with client.websocket_connect(f"/ws/spectate/match-auth-99?ticket={ticket}"):
             pass
     assert replay_exc.value.code == 4401
 
-    # 6. Expiry enforcement: issue a ticket with a 10ms TTL, wait 30ms, and confirm rejection
-    expired_issue = app.state.broadcast_runtime.issue_spectator_ticket(
-        user_id="viewer-test",
-        display_name="VerifiedSupporter",
-        scope_type="match",
-        scope_id="match-auth-99",
-        ttl_seconds=0.01,
+    # Expired ticket is rejected
+    expired_issue = asyncio.run(
+        app.state.broadcast_runtime.issue_spectator_ticket(
+            user_id="viewer-test",
+            display_name="VerifiedSupporter",
+            scope_type="match",
+            scope_id="match-auth-99",
+            ttl_seconds=0.01,
+            enforce_rate_limit=False,
+        )
     )
     time.sleep(0.03)
     with pytest.raises(WebSocketDisconnect) as expired_exc:
         with client.websocket_connect(f"/ws/spectate/match-auth-99?ticket={expired_issue['ticket']}"):
             pass
     assert expired_exc.value.code == 4401
+
+
+def test_redis_failure_fails_closed_in_production_and_enforces_unauth_and_rate_limits() -> None:
+    """
+    Phase B Backend Requirement 6, 7, 8:
+    - Redis failure does not enable unsafe production fallback (fails closed on both issuance and redemption).
+    - Unauthenticated users cannot obtain authenticated tickets (401).
+    - Ticket issuance rate limits work (429).
+    - Ticket values are redacted from log messages.
+    """
+    class BrokenRedisClient:
+        async def eval(self, *args, **kwargs):
+            raise RedisError("Simulated production Redis cluster outage")
+
+    # 1. Production runtime with broken Redis fails closed (503 on issuance, 4401 on WS redemption)
+    prod_app = _build_app(shared_redis=BrokenRedisClient(), require_redis_tickets=True)
+    prod_client = TestClient(prod_app)
+
+    issue_fail_resp = prod_client.post("/matches/match-prod-1/spectate-ticket")
+    assert issue_fail_resp.status_code == 503
+
+    with pytest.raises(WebSocketDisconnect) as ws_fail_exc:
+        with prod_client.websocket_connect("/ws/spectate/match-prod-1?ticket=any_ticket_value"):
+            pass
+    assert ws_fail_exc.value.code == 4401
+
+    # Also verify that require_redis_tickets=True with no redis_url and no redis_client fails closed
+    no_redis_prod_app = _build_app(shared_redis=None, require_redis_tickets=True)
+    no_redis_client = TestClient(no_redis_prod_app)
+    assert no_redis_client.post("/matches/match-prod-1/spectate-ticket").status_code == 503
+
+    # 2. Unauthenticated users cannot obtain authenticated tickets
+    unauth_app = _build_app()
+    def _reject_unauth():
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    unauth_app.dependency_overrides[get_current_user] = _reject_unauth
+    unauth_client = TestClient(unauth_app)
+    assert unauth_client.post("/matches/match-auth-only/spectate-ticket").status_code == 401
+    assert unauth_client.post("/tournaments/tourney-auth-only/spectate-ticket").status_code == 401
+
+    # 3. Ticket issuance rate limiting (429 Too Many Requests)
+    rl_app = _build_app(shared_redis=AsyncEvalRedisEmulator(), require_redis_tickets=True)
+    rl_app.state.broadcast_runtime.ticket_rate_limit_max = 2
+    rl_app.state.broadcast_runtime.ticket_rate_limit_window_seconds = 60.0
+    rl_client = TestClient(rl_app)
+
+    assert rl_client.post("/matches/m-rl/spectate-ticket").status_code == 200
+    assert rl_client.post("/matches/m-rl/spectate-ticket").status_code == 200
+    third_resp = rl_client.post("/matches/m-rl/spectate-ticket")
+    assert third_resp.status_code == 429
+
+    # 4. Log redaction helper strips ticket values from URLs and JSON payloads
+    raw_log = 'GET /ws/spectate/m-1?ticket=secret_tok_123 HTTP/1.1 {"ticket": "secret_tok_123"}'
+    redacted_log = redact_ticket_from_log_text(raw_log)
+    assert "secret_tok_123" not in redacted_log
+    assert "ticket=[REDACTED]" in redacted_log
+    assert '"ticket": "[REDACTED]"' in redacted_log

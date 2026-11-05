@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -31,7 +31,7 @@ import {
   VolumeX,
   Zap,
 } from "lucide-react";
-import { api, errMsg } from "@/lib/api";
+import { api, errMsg, tokens } from "@/lib/api";
 import { useActiveClub, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Loading, Panel } from "@/components/gtex/ui";
 import { Cinema3DStage, Cinema3DSceneType } from "@/components/gtex/Cinema3DStage";
@@ -2060,9 +2060,17 @@ export default function MatchCenter() {
     retry: false,
   });
 
+  const isViewerAuthenticated = Boolean(tokens.get());
+  const requestSpectatorTicket = useCallback(async (targetMatchId: string): Promise<string | null> => {
+    const res = await api.post(`/matches/${encodeURIComponent(targetMatchId)}/spectate-ticket`);
+    return res.data?.ticket ?? null;
+  }, []);
+
   const spectatorStream = useMatchSpectatorStream({
     matchId: id || "",
     enabled: Boolean(id && id !== "u2a-006-showcase" && (params.get("live") || view3DBroadcast)),
+    isAuthenticated: isViewerAuthenticated,
+    requestTicket: isViewerAuthenticated ? requestSpectatorTicket : undefined,
     onResyncRequired: () => {
       refetchViewerData();
     },

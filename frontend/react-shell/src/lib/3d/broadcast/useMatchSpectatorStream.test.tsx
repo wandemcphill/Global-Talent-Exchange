@@ -15,7 +15,7 @@ class MockWebSocket {
   static CLOSED = 3;
 
   url: string;
-  readyState: number = 0; // 0 = CONNECTING, 1 = OPEN, 2 = CLOSING, 3 = CLOSED
+  readyState: number = 0;
   onopen: (() => void) | null = null;
   onmessage: ((event: { data: string }) => void) | null = null;
   onclose: (() => void) | null = null;
@@ -75,7 +75,6 @@ describe("useMatchSpectatorStream", () => {
     (global as any).WebSocket = originalWebSocket;
   });
 
-  // Test Harness Component
   let latestResult: UseMatchSpectatorStreamResult | null = null;
 
   function StreamConsumer({ options }: { options: UseMatchSpectatorStreamOptions }) {
@@ -88,13 +87,14 @@ describe("useMatchSpectatorStream", () => {
     );
   }
 
-  it("initiates connection to canonical spectator websocket URL", () => {
-    act(() => {
+  it("allows guest spectators to connect without requiring authentication tickets", async () => {
+    await act(async () => {
       root.render(
         <StreamConsumer
           options={{
-            matchId: "match-test-99",
-            wsUrl: "ws://localhost:8000/ws/spectate/match-test-99",
+            matchId: "match-guest-99",
+            isAuthenticated: false,
+            wsUrl: "ws://localhost:8000/ws/spectate/match-guest-99",
           }}
         />
       );
@@ -102,10 +102,10 @@ describe("useMatchSpectatorStream", () => {
 
     expect(MockWebSocket.instances.length).toBe(1);
     const mockSocket = MockWebSocket.instances[0];
-    expect(mockSocket.url).toBe("ws://localhost:8000/ws/spectate/match-test-99");
+    expect(mockSocket.url).toBe("ws://localhost:8000/ws/spectate/match-guest-99");
+    expect(mockSocket.url).not.toContain("ticket=");
     expect(latestResult?.connectionStatus).toBe("connecting");
 
-    // Simulate open
     act(() => {
       mockSocket.triggerOpen();
     });
@@ -113,15 +113,16 @@ describe("useMatchSpectatorStream", () => {
     expect(latestResult?.connectionStatus).toBe("connected");
   });
 
-  it("handles incoming snapshot and updates spectator viewer count and score", () => {
+  it("handles incoming snapshot and updates spectator viewer count and score", async () => {
     const onViewerCountUpdate = jest.fn();
     const onScoreUpdate = jest.fn();
 
-    act(() => {
+    await act(async () => {
       root.render(
         <StreamConsumer
           options={{
             matchId: "match-100",
+            isAuthenticated: false,
             wsUrl: "ws://localhost:8000/ws/spectate/match-100",
             onViewerCountUpdate,
             onScoreUpdate,
@@ -135,7 +136,6 @@ describe("useMatchSpectatorStream", () => {
       mockSocket.triggerOpen();
     });
 
-    // Send snapshot event
     act(() => {
       mockSocket.triggerMessage({
         type: "snapshot",
@@ -169,14 +169,15 @@ describe("useMatchSpectatorStream", () => {
     });
   });
 
-  it("ingests frames through deduplicator and suppresses duplicate frames", () => {
+  it("ingests frames through deduplicator and suppresses duplicate frames", async () => {
     const onFrameReceived = jest.fn();
 
-    act(() => {
+    await act(async () => {
       root.render(
         <StreamConsumer
           options={{
             matchId: "match-101",
+            isAuthenticated: false,
             wsUrl: "ws://localhost:8000/ws/spectate/match-101",
             onFrameReceived,
           }}
@@ -203,7 +204,6 @@ describe("useMatchSpectatorStream", () => {
       ball: { position: { x: 50, y: 50 }, height: 0, state: "rolling" },
     };
 
-    // First arrival
     act(() => {
       mockSocket.triggerMessage({
         type: "frame",
@@ -215,7 +215,6 @@ describe("useMatchSpectatorStream", () => {
     expect(onFrameReceived).toHaveBeenCalledTimes(1);
     expect(latestResult?.lastFrame?.frame_id).toBe("frame-seq-1");
 
-    // Duplicate arrival of same frame_id
     act(() => {
       mockSocket.triggerMessage({
         type: "frame",
@@ -224,16 +223,16 @@ describe("useMatchSpectatorStream", () => {
       });
     });
 
-    // Should still be called only once
     expect(onFrameReceived).toHaveBeenCalledTimes(1);
   });
 
-  it("sends non-mutating client reaction and chat messages", () => {
-    act(() => {
+  it("sends non-mutating client reaction and chat messages", async () => {
+    await act(async () => {
       root.render(
         <StreamConsumer
           options={{
             matchId: "match-102",
+            isAuthenticated: false,
             wsUrl: "ws://localhost:8000/ws/spectate/match-102",
           }}
         />
@@ -261,40 +260,58 @@ describe("useMatchSpectatorStream", () => {
     });
   });
 
-  it("requests resynchronization callback on connection recovery", () => {
+  it("requests a fresh single-use ticket on initial connection and obtains a new ticket on reconnect", async () => {
     const onResyncRequired = jest.fn();
+    let ticketCounter = 0;
+    const requestTicket = jest.fn(async (targetMatchId: string) => {
+      ticketCounter += 1;
+      return `single_use_ticket_${targetMatchId}_${ticketCounter}`;
+    });
 
-    act(() => {
+    await act(async () => {
       root.render(
         <StreamConsumer
           options={{
-            matchId: "match-103",
-            wsUrl: "ws://localhost:8000/ws/spectate/match-103",
+            matchId: "match-auth-103",
+            isAuthenticated: true,
+            requestTicket,
+            wsUrl: "ws://localhost:8000/ws/spectate/match-auth-103?TOKEN=leaked-jwt&Access_Token=leaked2",
             onResyncRequired,
           }}
         />
       );
     });
 
+    expect(requestTicket).toHaveBeenCalledTimes(1);
+    expect(requestTicket).toHaveBeenCalledWith("match-auth-103");
+    expect(MockWebSocket.instances.length).toBe(1);
+
     const firstSocket = MockWebSocket.instances[0];
+    expect(firstSocket.url).toContain("ticket=single_use_ticket_match-auth-103_1");
+    expect(firstSocket.url.toLowerCase()).not.toContain("token=");
+    expect(firstSocket.url.toLowerCase()).not.toContain("access_token=");
+    expect(firstSocket.url).not.toContain("leaked-jwt");
+
     act(() => {
       firstSocket.triggerOpen();
     });
+    expect(latestResult?.connectionStatus).toBe("connected");
 
-    // Simulate drop
+    // Simulate connection drop and manual reconnect
     act(() => {
       firstSocket.close();
     });
-
     expect(latestResult?.connectionStatus).toBe("reconnecting");
 
-    // Manually trigger reconnect or trigger second socket
-    act(() => {
+    await act(async () => {
       latestResult?.reconnect();
     });
 
+    expect(requestTicket).toHaveBeenCalledTimes(2);
+    expect(MockWebSocket.instances.length).toBe(2);
     const secondSocket = MockWebSocket.instances[1];
-    expect(secondSocket).toBeDefined();
+    expect(secondSocket.url).toContain("ticket=single_use_ticket_match-auth-103_2");
+    expect(secondSocket.url).not.toContain("single_use_ticket_match-auth-103_1");
 
     act(() => {
       secondSocket.triggerOpen();
@@ -304,26 +321,69 @@ describe("useMatchSpectatorStream", () => {
     expect(onResyncRequired).toHaveBeenCalledTimes(1);
   });
 
-  it("never places bearer tokens in WebSocket URLs and supports short-lived match-scoped tickets", () => {
-    act(() => {
+  it("does not silently downgrade to guest connection when authenticated ticket issuance fails or replays", async () => {
+    const failingRequestTicket = jest.fn(async () => {
+      throw new Error("Ticket issuance endpoint 401/503");
+    });
+
+    await act(async () => {
       root.render(
         <StreamConsumer
           options={{
-            matchId: "match-sec-ticket-1",
-            wsUrl: "ws://localhost:8000/ws/spectate/match-sec-ticket-1?token=secret-jwt-bearer-token&access_token=leak",
-            displayName: "TacticalViewer",
-            ticket: "st_short_lived_single_use_99",
+            matchId: "match-auth-fail-1",
+            isAuthenticated: true,
+            requestTicket: failingRequestTicket,
+            wsUrl: "ws://localhost:8000/ws/spectate/match-auth-fail-1",
           }}
         />
       );
     });
 
+    expect(failingRequestTicket).toHaveBeenCalledTimes(1);
+    expect(MockWebSocket.instances.length).toBe(0);
+    expect(latestResult?.connectionStatus).toBe("error");
+  });
+
+  it("prevents concurrent reconnect calls from racing while a ticket request is in flight", async () => {
+    let resolveTicket: ((val: string) => void) | null = null;
+    const slowRequestTicket = jest.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveTicket = resolve;
+        })
+    );
+
+    await act(async () => {
+      root.render(
+        <StreamConsumer
+          options={{
+            matchId: "match-race-1",
+            isAuthenticated: true,
+            requestTicket: slowRequestTicket,
+            wsUrl: "ws://localhost:8000/ws/spectate/match-race-1",
+          }}
+        />
+      );
+    });
+
+    expect(slowRequestTicket).toHaveBeenCalledTimes(1);
+
+    // Trigger multiple reconnects while first ticket request is still in flight
+    act(() => {
+      latestResult?.reconnect();
+      latestResult?.reconnect();
+    });
+
+    // Must not fire duplicate concurrent ticket requests
+    expect(slowRequestTicket).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      if (resolveTicket) {
+        resolveTicket("atomic_ticket_1");
+      }
+    });
+
     expect(MockWebSocket.instances.length).toBe(1);
-    const socketUrl = MockWebSocket.instances[0].url;
-    expect(socketUrl).not.toContain("token=");
-    expect(socketUrl).not.toContain("secret-jwt-bearer-token");
-    expect(socketUrl).not.toContain("access_token=");
-    expect(socketUrl).toContain("ticket=st_short_lived_single_use_99");
-    expect(socketUrl).toContain("display_name=TacticalViewer");
+    expect(MockWebSocket.instances[0].url).toContain("ticket=atomic_ticket_1");
   });
 });

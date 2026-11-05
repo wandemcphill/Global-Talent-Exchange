@@ -76,6 +76,16 @@ export interface GtexSceneViewportProps extends Partial<Cinema3DStageProps> {
   sceneId: string;
   /** Optional quality tier override (if omitted, auto-detected from device) */
   qualityTier?: DeviceQualityTier;
+  /** Optional quality preset alias */
+  qualityPreset?: DeviceQualityTier | string;
+  /** Optional auto-rotation toggle for showcase/boardroom stages */
+  autoRotate?: boolean;
+  /** Optional camera/stage control visibility toggle */
+  showControls?: boolean;
+  /** Optional custom title override */
+  customTitle?: string;
+  /** Optional custom subtitle override */
+  customSubtitle?: string;
   /** Force conventional 2D fallback interface even when WebGL is available */
   forceFallback2D?: boolean;
   /** Force WebGL container mode (useful for test environments without GPU hardware) */

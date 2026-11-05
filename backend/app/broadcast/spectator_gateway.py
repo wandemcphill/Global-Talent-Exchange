@@ -3,17 +3,35 @@ from __future__ import annotations
 import asyncio
 from contextlib import suppress
 from dataclasses import dataclass, field
+import hashlib
+import logging
 import os
 import re
 import secrets
 import time
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Request,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
+import redis.asyncio as redis_asyncio
+from redis.exceptions import RedisError
 
 from app.auth.dependencies import get_current_user
 from app.auth.security import TokenError, decode_access_token
-from app.broadcast.broadcast_models import MatchSnapshot, SpectatorEvent, SpectatorPresenceView, TournamentEvent
+from app.broadcast.broadcast_models import (
+    MatchSnapshot,
+    SpectatorEvent,
+    SpectatorPresenceView,
+    TournamentEvent,
+)
 from app.broadcast.match_room_manager import (
     MatchRoomManager,
     RoomClient,
@@ -23,12 +41,198 @@ from app.broadcast.presence_service import PresenceService
 from app.broadcast.tournament_hub import TournamentBroadcastHub
 from app.models.user import User
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["broadcast"])
 
 _DELAY_ENV = "GTE_BROADCAST_DELAY_SECONDS"
 _PRESENCE_TTL_ENV = "GTE_BROADCAST_PRESENCE_TTL_SECONDS"
 _HEARTBEAT_ENV = "GTE_BROADCAST_HEARTBEAT_INTERVAL_SECONDS"
 _QUEUE_ENV = "GTE_BROADCAST_MAX_PENDING_MESSAGES"
+_APP_ENV_VARS = ("GTE_APP_ENV", "APP_ENV", "ENVIRONMENT")
+
+MAX_TICKET_TTL_SECONDS: float = 30.0
+
+_TICKET_QUERY_LOG_RE = re.compile(r'''([?&]ticket=)[^&\s"']+''', re.IGNORECASE)
+_TICKET_JSON_LOG_RE = re.compile(r'("ticket"\s*:\s*")[^"]+(")', re.IGNORECASE)
+
+
+def redact_ticket_from_log_text(text: str) -> str:
+    """Redacts spectator ticket values from URLs and JSON payloads in log messages."""
+    redacted = _TICKET_QUERY_LOG_RE.sub(r"\1[REDACTED]", str(text))
+    return _TICKET_JSON_LOG_RE.sub(r"\1[REDACTED]\2", redacted)
+
+
+class SpectatorTicketLogRedactionFilter(logging.Filter):
+    """Logging filter that prevents raw spectator tickets from appearing in app or access logs."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.msg, str):
+            record.msg = redact_ticket_from_log_text(record.msg)
+        if record.args:
+            if isinstance(record.args, tuple):
+                record.args = tuple(
+                    redact_ticket_from_log_text(arg) if isinstance(arg, str) else arg
+                    for arg in record.args
+                )
+            elif isinstance(record.args, dict):
+                record.args = {
+                    k: redact_ticket_from_log_text(v) if isinstance(v, str) else v
+                    for k, v in record.args.items()
+                }
+        return True
+
+
+for _log_name in (__name__, "uvicorn.access", "fastapi"):
+    _target_logger = logging.getLogger(_log_name)
+    if not any(isinstance(f, SpectatorTicketLogRedactionFilter) for f in _target_logger.filters):
+        _target_logger.addFilter(SpectatorTicketLogRedactionFilter())
+
+
+def ticket_sha256_digest(raw_ticket: str) -> str:
+    """Computes the hex-encoded SHA-256 digest of a spectator ticket."""
+    return hashlib.sha256(str(raw_ticket).strip().encode("utf-8")).hexdigest()
+
+
+class SpectatorTicketStoreError(RuntimeError):
+    """Raised when the authoritative Redis ticket store is unavailable in a protected runtime."""
+
+
+class SpectatorTicketRateLimitError(RuntimeError):
+    """Raised when a user exceeds the spectator ticket issuance rate limit."""
+
+
+_STORE_TICKET_LUA = """
+redis.call("HSET", KEYS[1],
+    "user_id", ARGV[1],
+    "display_name", ARGV[2],
+    "scope_type", ARGV[3],
+    "scope_id", ARGV[4],
+    "expires_at_ms", ARGV[5]
+)
+redis.call("PEXPIRE", KEYS[1], tonumber(ARGV[6]))
+return 1
+"""
+
+_REDEEM_TICKET_LUA = """
+if redis.call("EXISTS", KEYS[1]) == 0 then
+    return nil
+end
+local expires_at_ms = tonumber(redis.call("HGET", KEYS[1], "expires_at_ms") or "0")
+local now_ms = tonumber(ARGV[1])
+if now_ms >= expires_at_ms then
+    redis.call("DEL", KEYS[1])
+    return nil
+end
+local scope_type = redis.call("HGET", KEYS[1], "scope_type")
+local scope_id = redis.call("HGET", KEYS[1], "scope_id")
+if scope_type ~= ARGV[2] or scope_id ~= ARGV[3] then
+    return nil
+end
+local user_id = redis.call("HGET", KEYS[1], "user_id")
+local display_name = redis.call("HGET", KEYS[1], "display_name") or ""
+redis.call("DEL", KEYS[1])
+return {user_id, display_name}
+"""
+
+_RATE_LIMIT_TICKET_LUA = """
+local current = redis.call("INCR", KEYS[1])
+if current == 1 then
+    redis.call("PEXPIRE", KEYS[1], tonumber(ARGV[1]))
+end
+if current > tonumber(ARGV[2]) then
+    return 0
+end
+return 1
+"""
+
+
+class AsyncEvalRedisEmulator:
+    """
+    Thread/coroutine-safe atomic Redis Lua evaluator for test environments without a live Redis daemon.
+    Can be shared across multiple BroadcastRuntime instances to test distributed multi-worker ticket
+    redemption, while executing the exact same atomic HSET/PEXPIRE/HGET/DEL/INCR semantics.
+    Never used when require_redis=True or in production/staging environments.
+    """
+
+    def __init__(self) -> None:
+        self._hashes: dict[str, dict[str, str]] = {}
+        self._counters: dict[str, int] = {}
+        self._expires_at_ms: dict[str, int] = {}
+        self._lock = asyncio.Lock()
+
+    def _now_ms(self) -> int:
+        return int(time.time() * 1000)
+
+    def _evict_if_expired(self, key: str, now_ms: int) -> None:
+        exp = self._expires_at_ms.get(key)
+        if exp is not None and now_ms >= exp:
+            self._hashes.pop(key, None)
+            self._counters.pop(key, None)
+            self._expires_at_ms.pop(key, None)
+
+    async def eval(self, script: str, numkeys: int, *keys_and_args: Any) -> Any:
+        async with self._lock:
+            now_ms = self._now_ms()
+            keys = [str(k) for k in keys_and_args[:numkeys]]
+            argv = [str(a) for a in keys_and_args[numkeys:]]
+            key = keys[0]
+            self._evict_if_expired(key, now_ms)
+
+            if script == _STORE_TICKET_LUA:
+                self._hashes[key] = {
+                    "user_id": argv[0],
+                    "display_name": argv[1],
+                    "scope_type": argv[2],
+                    "scope_id": argv[3],
+                    "expires_at_ms": argv[4],
+                }
+                ttl_ms = max(1, int(argv[5]))
+                self._expires_at_ms[key] = now_ms + ttl_ms
+                return 1
+
+            if script == _REDEEM_TICKET_LUA:
+                record = self._hashes.get(key)
+                if record is None:
+                    return None
+                req_now_ms = int(argv[0])
+                exp_ms = int(record.get("expires_at_ms") or "0")
+                if req_now_ms >= exp_ms:
+                    self._hashes.pop(key, None)
+                    self._expires_at_ms.pop(key, None)
+                    return None
+                if record.get("scope_type") != argv[1] or record.get("scope_id") != argv[2]:
+                    return None
+                user_id = record.get("user_id") or ""
+                display_name = record.get("display_name") or ""
+                self._hashes.pop(key, None)
+                self._expires_at_ms.pop(key, None)
+                return [user_id, display_name]
+
+            if script == _RATE_LIMIT_TICKET_LUA:
+                window_ms = max(1, int(argv[0]))
+                max_allowed = max(1, int(argv[1]))
+                current = self._counters.get(key, 0) + 1
+                self._counters[key] = current
+                if current == 1:
+                    self._expires_at_ms[key] = now_ms + window_ms
+                return 0 if current > max_allowed else 1
+
+            raise RedisError("Unsupported script in AsyncEvalRedisEmulator")
+
+    async def hgetall(self, key: str) -> dict[str, str]:
+        async with self._lock:
+            self._evict_if_expired(key, self._now_ms())
+            return dict(self._hashes.get(key, {}))
+
+    async def keys(self, pattern: str = "*") -> list[str]:
+        async with self._lock:
+            now_ms = self._now_ms()
+            for k in list(self._expires_at_ms.keys()):
+                self._evict_if_expired(k, now_ms)
+            return list(self._hashes.keys()) + list(self._counters.keys())
+
+    async def aclose(self) -> None:
+        return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,14 +242,166 @@ class ResolvedViewer:
 
 
 @dataclass(slots=True)
-class SpectatorTicketRecord:
-    ticket_id: str
-    user_id: str
-    display_name: str | None
-    scope_type: str
-    scope_id: str
-    expires_at: float
-    used: bool = False
+class RedisSpectatorTicketStore:
+    redis_url: str | None = None
+    prefix: str = "gtex:broadcast:spectator"
+    default_ttl_seconds: float = MAX_TICKET_TTL_SECONDS
+    require_redis: bool = False
+    redis_client: Any = None
+    _owned_redis: redis_asyncio.Redis | None = field(init=False, default=None)
+    _test_emulator: AsyncEvalRedisEmulator | None = field(init=False, default=None)
+
+    def _is_redis_mandatory(self) -> bool:
+        if self.require_redis or bool(self.redis_url):
+            return True
+        for env_key in _APP_ENV_VARS:
+            env_val = str(os.getenv(env_key, "") or "").strip().lower()
+            if env_val in {"production", "prod", "staging"}:
+                return True
+        return False
+
+    async def _get_backend(self) -> Any:
+        if self.redis_client is not None:
+            return self.redis_client
+        if self.redis_url:
+            if self._owned_redis is None:
+                self._owned_redis = redis_asyncio.Redis.from_url(self.redis_url, decode_responses=True)
+            return self._owned_redis
+        if self._is_redis_mandatory():
+            raise SpectatorTicketStoreError(
+                "Authoritative Redis ticket store is required in production/staging but redis_url is not configured."
+            )
+        if self._test_emulator is None:
+            self._test_emulator = AsyncEvalRedisEmulator()
+        return self._test_emulator
+
+    def ticket_key_from_digest(self, digest: str) -> str:
+        return f"{self.prefix}:ticket:{digest}"
+
+    def rate_limit_key(self, user_id: str) -> str:
+        return f"{self.prefix}:ticket_rl:{user_id}"
+
+    async def check_issuance_rate_limit(
+        self,
+        user_id: str,
+        *,
+        max_tickets: int,
+        window_seconds: float,
+    ) -> bool:
+        backend = await self._get_backend()
+        window_ms = max(100, int(round(max(float(window_seconds), 0.1) * 1000)))
+        limit = max(1, int(max_tickets))
+        try:
+            allowed = await backend.eval(
+                _RATE_LIMIT_TICKET_LUA,
+                1,
+                self.rate_limit_key(user_id),
+                str(window_ms),
+                str(limit),
+            )
+            return bool(int(allowed or 0) == 1)
+        except (RedisError, OSError, RuntimeError) as exc:
+            logger.error("broadcast.ticket.rate_limit_store_error error=%s", type(exc).__name__)
+            raise SpectatorTicketStoreError("Ticket rate-limit backend unavailable.") from exc
+
+    async def issue_ticket(
+        self,
+        *,
+        user_id: str,
+        display_name: str | None,
+        scope_type: str,
+        scope_id: str,
+        ttl_seconds: float | None = None,
+    ) -> dict[str, Any]:
+        backend = await self._get_backend()
+        requested_ttl = float(self.default_ttl_seconds if ttl_seconds is None else ttl_seconds)
+        effective_ttl = min(max(requested_ttl, 0.001), MAX_TICKET_TTL_SECONDS)
+        ttl_ms = max(1, min(int(round(effective_ttl * 1000)), int(MAX_TICKET_TTL_SECONDS * 1000)))
+        now_ms = int(time.time() * 1000)
+        expires_at_ms = now_ms + ttl_ms
+
+        raw_ticket = secrets.token_urlsafe(32)
+        digest = ticket_sha256_digest(raw_ticket)
+        redis_key = self.ticket_key_from_digest(digest)
+        normalized_scope_type = str(scope_type).strip().lower()
+        normalized_scope_id = str(scope_id).strip()
+
+        try:
+            await backend.eval(
+                _STORE_TICKET_LUA,
+                1,
+                redis_key,
+                str(user_id).strip(),
+                str(display_name or "").strip(),
+                normalized_scope_type,
+                normalized_scope_id,
+                str(expires_at_ms),
+                str(ttl_ms),
+            )
+        except (RedisError, OSError, RuntimeError) as exc:
+            logger.error("broadcast.ticket.issue_failed scope=%s:%s error=%s", normalized_scope_type, normalized_scope_id, type(exc).__name__)
+            raise SpectatorTicketStoreError("Failed to persist spectator ticket in Redis.") from exc
+
+        return {
+            "ticket": raw_ticket,
+            "ticket_digest": digest,
+            "scope_type": normalized_scope_type,
+            "scope_id": normalized_scope_id,
+            "expires_in": max(1, min(int(round(effective_ttl)), int(MAX_TICKET_TTL_SECONDS))),
+        }
+
+    async def redeem_ticket(
+        self,
+        raw_ticket: str,
+        *,
+        expected_scope_type: str,
+        expected_scope_id: str,
+    ) -> ResolvedViewer | None:
+        cleaned = str(raw_ticket or "").strip()
+        if not cleaned:
+            return None
+        try:
+            backend = await self._get_backend()
+        except SpectatorTicketStoreError:
+            # Fail closed when Redis is mandatory/unavailable
+            return None
+
+        digest = ticket_sha256_digest(cleaned)
+        redis_key = self.ticket_key_from_digest(digest)
+        now_ms = int(time.time() * 1000)
+        normalized_scope_type = str(expected_scope_type).strip().lower()
+        normalized_scope_id = str(expected_scope_id).strip()
+
+        try:
+            result = await backend.eval(
+                _REDEEM_TICKET_LUA,
+                1,
+                redis_key,
+                str(now_ms),
+                normalized_scope_type,
+                normalized_scope_id,
+            )
+        except (RedisError, OSError, RuntimeError) as exc:
+            logger.error("broadcast.ticket.redeem_failed scope=%s:%s error=%s", normalized_scope_type, normalized_scope_id, type(exc).__name__)
+            # Fail closed on Redis errors
+            return None
+
+        if not result or not isinstance(result, (list, tuple)) or len(result) < 1:
+            return None
+        user_id = str(result[0] or "").strip()
+        if not user_id:
+            return None
+        display_name = str(result[1] or "").strip() if len(result) > 1 else ""
+        return ResolvedViewer(user_id=user_id, display_name=display_name or None)
+
+    async def aclose(self) -> None:
+        if self._owned_redis is not None:
+            try:
+                await self._owned_redis.aclose()
+            except RedisError:
+                pass
+            finally:
+                self._owned_redis = None
 
 
 @dataclass(slots=True)
@@ -57,11 +413,15 @@ class BroadcastRuntime:
     max_queue_size: int = 256
     rate_limit_max_messages: int = 5
     rate_limit_window_seconds: float = 5.0
-    ticket_ttl_seconds: float = 30.0
+    ticket_ttl_seconds: float = MAX_TICKET_TTL_SECONDS
+    ticket_rate_limit_max: int = 10
+    ticket_rate_limit_window_seconds: float = 60.0
+    require_redis_tickets: bool = False
+    ticket_redis_client: Any = None
     presence_service: PresenceService = field(init=False)
     match_room_manager: MatchRoomManager = field(init=False)
     tournament_hub: TournamentBroadcastHub = field(init=False)
-    _tickets: dict[str, SpectatorTicketRecord] = field(init=False, default_factory=dict)
+    ticket_store: RedisSpectatorTicketStore = field(init=False)
 
     def __post_init__(self) -> None:
         self.presence_service = PresenceService(
@@ -78,8 +438,14 @@ class BroadcastRuntime:
             delay_seconds=self.delay_seconds,
             max_queue_size=self.max_queue_size,
         )
+        self.ticket_store = RedisSpectatorTicketStore(
+            redis_url=self.redis_url,
+            default_ttl_seconds=min(float(self.ticket_ttl_seconds), MAX_TICKET_TTL_SECONDS),
+            require_redis=self.require_redis_tickets,
+            redis_client=self.ticket_redis_client,
+        )
 
-    def issue_spectator_ticket(
+    async def issue_spectator_ticket(
         self,
         *,
         user_id: str,
@@ -87,62 +453,49 @@ class BroadcastRuntime:
         scope_type: str,
         scope_id: str,
         ttl_seconds: float | None = None,
+        enforce_rate_limit: bool = True,
     ) -> dict[str, Any]:
-        now = time.monotonic()
-        # Prune expired or used tickets
-        expired_keys = [
-            k for k, rec in self._tickets.items() if rec.used or now >= rec.expires_at
-        ]
-        for k in expired_keys:
-            self._tickets.pop(k, None)
+        self.ticket_store.require_redis = self.require_redis_tickets
+        if self.ticket_redis_client is not None:
+            self.ticket_store.redis_client = self.ticket_redis_client
 
-        ttl = float(self.ticket_ttl_seconds if ttl_seconds is None else ttl_seconds)
-        ticket_id = secrets.token_urlsafe(32)
-        self._tickets[ticket_id] = SpectatorTicketRecord(
-            ticket_id=ticket_id,
-            user_id=str(user_id),
+        if enforce_rate_limit:
+            allowed = await self.ticket_store.check_issuance_rate_limit(
+                user_id,
+                max_tickets=self.ticket_rate_limit_max,
+                window_seconds=self.ticket_rate_limit_window_seconds,
+            )
+            if not allowed:
+                raise SpectatorTicketRateLimitError("Ticket issuance rate limit exceeded.")
+
+        effective_ttl = self.ticket_ttl_seconds if ttl_seconds is None else ttl_seconds
+        return await self.ticket_store.issue_ticket(
+            user_id=user_id,
             display_name=display_name,
-            scope_type=str(scope_type).strip().lower(),
-            scope_id=str(scope_id).strip(),
-            expires_at=now + max(ttl, 0.001),
-            used=False,
+            scope_type=scope_type,
+            scope_id=scope_id,
+            ttl_seconds=effective_ttl,
         )
-        return {
-            "ticket": ticket_id,
-            "scope_type": str(scope_type).strip().lower(),
-            "scope_id": str(scope_id).strip(),
-            "expires_in": max(int(ttl), 1),
-        }
 
-    def redeem_spectator_ticket(
+    async def redeem_spectator_ticket(
         self,
         ticket: str,
         *,
         expected_scope_type: str,
         expected_scope_id: str,
     ) -> ResolvedViewer | None:
-        cleaned = str(ticket or "").strip()
-        if not cleaned:
-            return None
-        record = self._tickets.get(cleaned)
-        if record is None:
-            return None
-        now = time.monotonic()
-        if record.used or now >= record.expires_at:
-            self._tickets.pop(cleaned, None)
-            return None
-        if (
-            record.scope_type != str(expected_scope_type).strip().lower()
-            or record.scope_id != str(expected_scope_id).strip()
-        ):
-            return None
-        record.used = True
-        self._tickets.pop(cleaned, None)
-        return ResolvedViewer(user_id=record.user_id, display_name=record.display_name)
+        self.ticket_store.require_redis = self.require_redis_tickets
+        if self.ticket_redis_client is not None:
+            self.ticket_store.redis_client = self.ticket_redis_client
+        return await self.ticket_store.redeem_ticket(
+            ticket,
+            expected_scope_type=expected_scope_type,
+            expected_scope_id=expected_scope_id,
+        )
 
     async def match_snapshot(self, match_id: str, *, metadata: dict[str, Any] | None = None) -> MatchSnapshot:
         presence = await self.presence_service.get_match_presence(match_id)
-        safe_metadata = sanitize_public_spectator_payload(dict(metadata or {}))
+        safe_metadata = sanitize_public_spectator_payload(dict(metadata or {}), _is_root=False)
         return MatchSnapshot(
             match_id=match_id,
             viewer_count=presence.active_viewers,
@@ -156,6 +509,7 @@ class BroadcastRuntime:
             self.presence_service.aclose(),
             self.match_room_manager.aclose(),
             self.tournament_hub.aclose(),
+            self.ticket_store.aclose(),
             return_exceptions=True,
         )
 
@@ -175,9 +529,22 @@ def shutdown_broadcast_runtime(app, _context) -> None:
     loop.create_task(runtime.aclose())
 
 
+def _is_protected_app_env(app: Any) -> bool:
+    settings = getattr(getattr(app, "state", None), "settings", None)
+    app_env = str(getattr(settings, "app_env", "") or "").strip().lower()
+    if app_env in {"production", "prod", "staging"}:
+        return True
+    for env_key in _APP_ENV_VARS:
+        if str(os.getenv(env_key, "") or "").strip().lower() in {"production", "prod", "staging"}:
+            return True
+    return False
+
+
 def ensure_broadcast_runtime(app) -> BroadcastRuntime:
     runtime = getattr(app.state, "broadcast_runtime", None)
     if runtime is not None:
+        if _is_protected_app_env(app):
+            runtime.require_redis_tickets = True
         return runtime
 
     settings = getattr(app.state, "settings", None)
@@ -192,6 +559,7 @@ def ensure_broadcast_runtime(app) -> BroadcastRuntime:
             15,
         ),
         max_queue_size=_setting_or_env(settings, "broadcast_max_pending_messages", _QUEUE_ENV, 256),
+        require_redis_tickets=_is_protected_app_env(app),
     )
     app.state.broadcast_runtime = runtime
     app.state.broadcast = runtime
@@ -202,9 +570,15 @@ def ensure_broadcast_runtime(app) -> BroadcastRuntime:
 async def create_match_spectate_ticket(
     match_id: str,
     request: Request,
+    response: Response,
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Issues a short-lived, single-use, match-scoped WebSocket ticket so bearer tokens never appear in URLs."""
+    """Issues a short-lived (<=30s), single-use, match-scoped WebSocket ticket stored as SHA-256 in Redis."""
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+
+    if current_user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required.")
     user_id = str(getattr(current_user, "id", "") or "").strip()
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required.")
@@ -213,12 +587,24 @@ async def create_match_spectate_ticket(
         or None
     )
     runtime = ensure_broadcast_runtime(request.app)
-    issued = runtime.issue_spectator_ticket(
-        user_id=user_id,
-        display_name=display_name,
-        scope_type="match",
-        scope_id=match_id,
-    )
+    try:
+        issued = await runtime.issue_spectator_ticket(
+            user_id=user_id,
+            display_name=display_name,
+            scope_type="match",
+            scope_id=match_id,
+        )
+    except SpectatorTicketRateLimitError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Ticket issuance rate limit exceeded.",
+        ) from exc
+    except SpectatorTicketStoreError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Spectator ticket service temporarily unavailable.",
+        ) from exc
+
     return {
         "ticket": issued["ticket"],
         "match_id": match_id,
@@ -231,9 +617,15 @@ async def create_match_spectate_ticket(
 async def create_tournament_spectate_ticket(
     tournament_id: str,
     request: Request,
+    response: Response,
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Issues a short-lived, single-use, tournament-scoped WebSocket ticket."""
+    """Issues a short-lived (<=30s), single-use, tournament-scoped WebSocket ticket stored as SHA-256 in Redis."""
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+
+    if current_user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required.")
     user_id = str(getattr(current_user, "id", "") or "").strip()
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required.")
@@ -242,12 +634,24 @@ async def create_tournament_spectate_ticket(
         or None
     )
     runtime = ensure_broadcast_runtime(request.app)
-    issued = runtime.issue_spectator_ticket(
-        user_id=user_id,
-        display_name=display_name,
-        scope_type="tournament",
-        scope_id=tournament_id,
-    )
+    try:
+        issued = await runtime.issue_spectator_ticket(
+            user_id=user_id,
+            display_name=display_name,
+            scope_type="tournament",
+            scope_id=tournament_id,
+        )
+    except SpectatorTicketRateLimitError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Ticket issuance rate limit exceeded.",
+        ) from exc
+    except SpectatorTicketStoreError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Spectator ticket service temporarily unavailable.",
+        ) from exc
+
     return {
         "ticket": issued["ticket"],
         "tournament_id": tournament_id,
@@ -272,7 +676,7 @@ async def get_match_spectators(
 @router.websocket("/ws/spectate/{match_id}")
 async def spectate_match(websocket: WebSocket, match_id: str) -> None:
     runtime = ensure_broadcast_runtime(websocket.scope["app"])
-    auth_ok, resolved_viewer, reject_reason = _authenticate_spectator_websocket(
+    auth_ok, resolved_viewer, reject_reason = await _authenticate_spectator_websocket(
         websocket,
         runtime=runtime,
         scope_type="match",
@@ -347,7 +751,7 @@ async def spectate_match(websocket: WebSocket, match_id: str) -> None:
 @router.websocket("/ws/tournament/{tournament_id}")
 async def stream_tournament(websocket: WebSocket, tournament_id: str) -> None:
     runtime = ensure_broadcast_runtime(websocket.scope["app"])
-    auth_ok, resolved_viewer, reject_reason = _authenticate_spectator_websocket(
+    auth_ok, resolved_viewer, reject_reason = await _authenticate_spectator_websocket(
         websocket,
         runtime=runtime,
         scope_type="tournament",
@@ -595,16 +999,30 @@ async def _handle_spectator_client_message(
         return
 
 
-def _authenticate_spectator_websocket(
+_FORBIDDEN_WS_QUERY_KEYS: frozenset[str] = frozenset(
+    {
+        "token",
+        "access_token",
+        "accesstoken",
+        "bearer",
+        "auth_token",
+        "authtoken",
+        "authorization",
+        "jwt",
+    }
+)
+
+
+async def _authenticate_spectator_websocket(
     websocket: WebSocket,
     *,
     runtime: BroadcastRuntime,
     scope_type: str,
     scope_id: str,
 ) -> tuple[bool, ResolvedViewer, str | None]:
-    # 1. Explicitly reject raw bearer tokens in WebSocket URL query parameters
-    for forbidden_param in ("token", "access_token", "bearer"):
-        if websocket.query_params.get(forbidden_param) is not None:
+    # 1. Case-insensitively reject any raw bearer token in WebSocket URL query parameters
+    for query_key in websocket.query_params.keys():
+        if str(query_key).strip().lower() in _FORBIDDEN_WS_QUERY_KEYS:
             return (
                 False,
                 ResolvedViewer(user_id=None, display_name=None),
@@ -613,10 +1031,15 @@ def _authenticate_spectator_websocket(
 
     guest_display_name = _fallback_display_name(websocket, is_authenticated=False)
 
-    # 2. Validate short-lived, single-use, scope-bound spectator ticket if provided
-    raw_ticket = websocket.query_params.get("ticket")
+    # 2. Validate short-lived, single-use, scope-bound spectator ticket via Redis if provided
+    raw_ticket = None
+    for k, v in websocket.query_params.items():
+        if str(k).strip().lower() == "ticket":
+            raw_ticket = v
+            break
+
     if raw_ticket is not None:
-        redeemed = runtime.redeem_spectator_ticket(
+        redeemed = await runtime.redeem_spectator_ticket(
             raw_ticket,
             expected_scope_type=scope_type,
             expected_scope_id=scope_id,

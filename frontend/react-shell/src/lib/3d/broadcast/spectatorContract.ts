@@ -246,7 +246,7 @@ export function sanitizeForSpectator(
   };
 
   // Sanitize frames
-  const rawFrames: any[] = Array.isArray(rawState?.frames) ? rawState.frames : [];
+  const rawFrames: any[] = Array.isArray(validSource?.frames) ? validSource.frames : [];
   const frames: SpectatorSafeFrameView[] = rawFrames.map((f, idx) => ({
     frame_id: String(f.frame_id || `frame_${idx}`),
     time_seconds: Math.max(0, Number(f.time_seconds) || 0),
@@ -324,7 +324,7 @@ export function sanitizeForSpectator(
   }));
 
   // Sanitize events
-  const rawEvents: any[] = Array.isArray(rawState?.events) ? rawState.events : [];
+  const rawEvents: any[] = Array.isArray(validSource?.events) ? validSource.events : [];
   const events: SpectatorSafeEventView[] = rawEvents.map((e, idx) => ({
     event_id: String(e.event_id || `event_${idx}`),
     sequence: Math.max(0, Number(e.sequence) || idx),
@@ -355,7 +355,7 @@ export function sanitizeForSpectator(
   const safeView: SpectatorSafeMatchView = {
     match_id: matchId,
     canonical_match_id: canonicalId,
-    source: String(rawState?.source || "live_match_hub"),
+    source: String(validSource?.source || "live_match_hub"),
     home_team: homeTeam,
     away_team: awayTeam,
     match_label: String(rawPres.match_label || `${homeTeam.team_name} vs ${awayTeam.team_name}`),

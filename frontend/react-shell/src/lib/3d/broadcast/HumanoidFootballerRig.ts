@@ -522,11 +522,16 @@ export function parseHumanoidFootballerGLBBuffer(glbBuffer: ArrayBuffer): Promis
       }
 
       const jsonBytes = new Uint8Array(glbBuffer, 20, jsonChunkLength);
-      const Decoder =
-        typeof TextDecoder !== "undefined"
-          ? TextDecoder
-          : (require("util").TextDecoder as typeof TextDecoder);
-      const jsonText = new Decoder("utf-8").decode(jsonBytes);
+      let jsonText = "";
+      if (typeof TextDecoder !== "undefined") {
+        jsonText = new TextDecoder("utf-8").decode(jsonBytes);
+      } else if (typeof (globalThis as any).TextDecoder !== "undefined") {
+        jsonText = new (globalThis as any).TextDecoder("utf-8").decode(jsonBytes);
+      } else {
+        for (let i = 0; i < jsonBytes.length; i++) {
+          jsonText += String.fromCharCode(jsonBytes[i]);
+        }
+      }
       const gltf = JSON.parse(jsonText);
 
       const binChunkHeaderOffset = 20 + jsonChunkLength;
