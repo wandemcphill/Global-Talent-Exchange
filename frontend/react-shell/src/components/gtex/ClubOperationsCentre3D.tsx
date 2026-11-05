@@ -72,6 +72,56 @@ const DESTINATION_ICONS: Record<string, React.ReactNode> = {
   finance_commercial_office: <Coins size={15} />,
 };
 
+const DIRECTIVE_DEPARTMENT_BY_DESTINATION: Record<string, string> = {
+  managers_office: "manager",
+  medical_department: "medical",
+  academy_department: "academy",
+  finance_commercial_office: "finance",
+  general_managers_office: "scouting",
+  executive_office: "executive",
+};
+
+const DIRECTIVE_OBJECTIVES_BY_DEPARTMENT: Record<string, Array<{ key: string; label: string }>> = {
+  manager: [
+    { key: "change_team_mentality", label: "Change team mentality" },
+    { key: "change_formation", label: "Change team formation" },
+    { key: "improve_squad_morale", label: "Improve squad morale" },
+    { key: "complete_competitive_fixture", label: "Complete a competitive fixture" },
+    { key: "upgrade_training_facility", label: "Upgrade the training facility" },
+  ],
+  medical: [
+    { key: "reduce_injury_burden", label: "Reduce squad injury burden" },
+    { key: "clear_injured_player", label: "Clear an injured player for training" },
+    { key: "activate_recovery_protocol", label: "Activate the light-recovery protocol" },
+    { key: "upgrade_medical_facility", label: "Upgrade the medical facility" },
+    { key: "improve_squad_conditioning", label: "Improve squad conditioning" },
+    { key: "reduce_squad_fatigue", label: "Reduce squad workload fatigue" },
+  ],
+  academy: [
+    { key: "induct_youth_prospects", label: "Induct youth prospects" },
+    { key: "promote_academy_prospect", label: "Promote an academy prospect" },
+    { key: "extend_youth_contracts", label: "Extend youth contracts" },
+    { key: "develop_regen_ratings", label: "Develop academy player ratings" },
+    { key: "upgrade_academy_facility", label: "Upgrade the academy facility" },
+  ],
+  finance: [
+    { key: "sign_commercial_sponsor", label: "Sign a commercial sponsor" },
+    { key: "increase_treasury_balance", label: "Increase the club treasury balance" },
+    { key: "complete_sponsor_review", label: "Complete a sponsor review" },
+    { key: "upgrade_revenue_infrastructure", label: "Upgrade commercial or stadium infrastructure" },
+  ],
+  scouting: [
+    { key: "expand_scouting_watchlist", label: "Expand the scouting watchlist" },
+    { key: "recruit_squad_player", label: "Recruit a player into the squad" },
+  ],
+  executive: [
+    { key: "advance_campus_project", label: "Advance a campus project" },
+    { key: "increase_club_prestige", label: "Increase club prestige" },
+    { key: "appoint_executive_staff", label: "Appoint an executive staff member" },
+    { key: "execute_operational_decision", label: "Execute an operational decision" },
+  ],
+};
+
 const OVERVIEW_CAMERA_POS: [number, number, number] = [0, 34, 42];
 const OVERVIEW_CAMERA_TARGET: [number, number, number] = [0, 1.5, 0];
 
@@ -119,6 +169,7 @@ export function ClubOperationsCentre3D({
   const [showDirectiveModal, setShowDirectiveModal] = useState<boolean>(false);
   const [directiveTitle, setDirectiveTitle] = useState<string>("");
   const [directiveInstruction, setDirectiveInstruction] = useState<string>("");
+  const [directiveObjectiveKey, setDirectiveObjectiveKey] = useState<string>("");
   const [directiveDeadline, setDirectiveDeadline] = useState<number>(7);
   const [busyEventId, setBusyEventId] = useState<string | null>(null);
 
@@ -173,6 +224,8 @@ export function ClubOperationsCentre3D({
     () => destinations.find((d) => d.destination_key === activeDestKey) || destinations[0],
     [destinations, activeDestKey]
   );
+  const activeDirectiveDepartment = DIRECTIVE_DEPARTMENT_BY_DESTINATION[activeDestination?.destination_key || ""] || "executive";
+  const directiveObjectiveOptions = DIRECTIVE_OBJECTIVES_BY_DEPARTMENT[activeDirectiveDepartment] || [];
 
   // Sync hotspot when switching destination
   useEffect(() => {
@@ -181,6 +234,7 @@ export function ClubOperationsCentre3D({
     } else {
       setActiveHotspotId(null);
     }
+    setDirectiveObjectiveKey("");
   }, [activeDestination?.destination_key]);
 
   // Three.js refs
@@ -819,25 +873,23 @@ export function ClubOperationsCentre3D({
       toast.error("Please enter both title and instruction for the directive.");
       return;
     }
-    const deptMap: Record<string, string> = {
-      managers_office: "manager",
-      medical_department: "medical",
-      academy_department: "academy",
-      finance_commercial_office: "finance",
-      general_managers_office: "scouting",
-      executive_office: "executive",
-    };
-    const targetDept = deptMap[activeDestination.destination_key] || "executive";
+    if (!directiveObjectiveKey) {
+      toast.error("Select a measurable completion objective for this directive.");
+      return;
+    }
+    const targetDept = activeDirectiveDepartment;
     try {
       await api.post(clubCreateDirectiveEndpoint(clubId), {
         department: targetDept,
         directive_key: `dir_${Date.now()}`,
+        objective_key: directiveObjectiveKey,
         title: directiveTitle.trim(),
         instruction: directiveInstruction.trim(),
         deadline_days: directiveDeadline,
       });
       setDirectiveTitle("");
       setDirectiveInstruction("");
+      setDirectiveObjectiveKey("");
       setShowDirectiveModal(false);
       await invalidateAll();
       toast.success(`Directive issued to ${activeDestination.staff_lead.name}`);
@@ -2108,6 +2160,28 @@ export function ClubOperationsCentre3D({
               </div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Measurable Completion Objective
+                </label>
+                <select
+                  data-testid="directive-objective-select"
+                  value={directiveObjectiveKey}
+                  onChange={(e) => setDirectiveObjectiveKey(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-1.5 text-xs text-white focus:border-sky-400 focus:outline-none"
+                >
+                  <option value="">Select the exact outcome this directive must achieve</option>
+                  {directiveObjectiveOptions.map((objective) => (
+                    <option key={objective.key} value={objective.key}>
+                      {objective.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+                  The directive is completed only when GTEX verifies this selected outcome in the club's stored data.
+                  Other improvements in the department do not count.
+                </p>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   Target Deadline (World Days)
                 </label>
                 <input
@@ -2132,7 +2206,8 @@ export function ClubOperationsCentre3D({
                 type="button"
                 data-testid="submit-directive-button"
                 onClick={handleIssueDirective}
-                className="rounded-lg border border-sky-400/50 bg-sky-600/30 px-4 py-1.5 text-xs font-black uppercase text-sky-200 hover:bg-sky-600/50"
+                disabled={!directiveObjectiveKey}
+                className="rounded-lg border border-sky-400/50 bg-sky-600/30 px-4 py-1.5 text-xs font-black uppercase text-sky-200 hover:bg-sky-600/50 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Issue Directive
               </button>
