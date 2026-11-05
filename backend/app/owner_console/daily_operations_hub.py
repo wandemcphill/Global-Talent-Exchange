@@ -48,129 +48,188 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
     facs = dict(state.facilities_json or {})
     exec_staff = dict(facs.get("_executive_staff") or {})
     mgr = dict(state.manager_json or engine.manager_profile(engine.DEFAULT_MANAGER))
-    gm = dict(
-        exec_staff.get("general_manager")
-        or {
-            "name": "Dayo Adeleke",
-            "role": "general_manager",
-            "role_label": "General Manager",
-            "mood": 78,
-            "loyalty": 14,
-            "negotiation": 15,
-            "financial_discipline": 15,
-            "personal_agenda": "Maximize sponsor yield & wage-to-turnover discipline",
-            "secret_trait": "Clause Architect",
-        }
-    )
-    hoyd = dict(
-        exec_staff.get("head_of_youth_development")
-        or {
-            "name": "Femi Ogunleye",
-            "role": "head_of_youth_development",
-            "role_label": "Head of Youth Development",
-            "mood": 82,
-            "loyalty": 15,
-            "youth_development": 16,
-            "personal_agenda": "Fast-track academy wonderkids & senior pathway integration",
-            "secret_trait": "Bloodline Whisperer",
-        }
-    )
-    med = dict(
-        exec_staff.get("medical_director")
-        or {
-            "name": "Dr. Amara Okafor",
-            "role": "medical_director",
-            "role_label": "Medical Director",
-            "mood": 84,
-            "loyalty": 16,
-            "medical_expertise": 16,
-            "personal_agenda": "Zero-tolerance sports science load management",
-            "secret_trait": "Strict Recovery Veto",
-        }
-    )
-    scout = dict(
-        exec_staff.get("chief_scout")
-        or {
-            "name": "Kelechi Nwosu",
-            "role": "chief_scout",
-            "role_label": "Chief Scout",
-            "mood": 76,
-            "loyalty": 13,
-            "scouting_reach": 15,
-            "personal_agenda": "Uncover unheralded continental wonderkids",
-            "secret_trait": "Underground Agent Network",
-        }
-    )
+
+    # General Manager
+    gm_raw = exec_staff.get("general_manager")
+    gm_appointed = bool(gm_raw and isinstance(gm_raw, dict) and gm_raw.get("name"))
+    if gm_appointed:
+        gm = dict(gm_raw)
+        gm_name = str(gm.get("name") or "General Manager")
+        gm_label = "General Manager"
+        gm_status = "appointed"
+        gm_negotiation = _safe_int(gm.get("negotiation"), 15)
+        gm_discipline = _safe_int(gm.get("financial_discipline"), 15)
+        gm_salary = _safe_int(gm.get("salary_gtex", gm.get("salary", 350)), 350)
+        gm_mood = _safe_int(gm.get("mood"), 78)
+        gm_loyalty = _safe_int(gm.get("loyalty"), 14)
+        gm_agenda = str(gm.get("personal_agenda") or "Maximize sponsor yield & wage-to-turnover discipline")
+        gm_trait = str(gm.get("signature_trait") or gm.get("special_trait") or "Clause Architect")
+    else:
+        gm = {}
+        gm_name = "Vacant (Provisional Operations Lead)"
+        gm_label = "General Manager (Vacant)"
+        gm_status = "vacant"
+        gm_negotiation = 10
+        gm_discipline = 10
+        gm_salary = 0
+        gm_mood = 70
+        gm_loyalty = 10
+        gm_agenda = "Maintain baseline administrative routines until a permanent General Manager is appointed"
+        gm_trait = "Provisional Caretaker"
+
+    # Head of Youth Development
+    hoyd_raw = exec_staff.get("head_of_youth_development")
+    hoyd_appointed = bool(hoyd_raw and isinstance(hoyd_raw, dict) and hoyd_raw.get("name"))
+    if hoyd_appointed:
+        hoyd = dict(hoyd_raw)
+        hoyd_name = str(hoyd.get("name") or "Head of Youth Development")
+        hoyd_label = "Head of Youth Development"
+        hoyd_status = "appointed"
+        hoyd_youth = _safe_int(hoyd.get("youth_development"), 15)
+        hoyd_salary = _safe_int(hoyd.get("salary_gtex", hoyd.get("salary", 300)), 300)
+        hoyd_mood = _safe_int(hoyd.get("mood"), 82)
+        hoyd_loyalty = _safe_int(hoyd.get("loyalty"), 15)
+        hoyd_agenda = str(hoyd.get("personal_agenda") or "Fast-track academy wonderkids & senior pathway integration")
+        hoyd_trait = str(hoyd.get("signature_trait") or hoyd.get("special_trait") or "Bloodline Whisperer")
+    else:
+        hoyd = {}
+        hoyd_name = "Vacant (Provisional Academy Coordinator)"
+        hoyd_label = "Head of Youth Development (Vacant)"
+        hoyd_status = "vacant"
+        hoyd_youth = 10
+        hoyd_salary = 0
+        hoyd_mood = 70
+        hoyd_loyalty = 10
+        hoyd_agenda = "Coordinate basic youth drills until a dedicated Head of Youth Development is appointed"
+        hoyd_trait = "Provisional Caretaker"
+
+    # Medical Director
+    med_raw = exec_staff.get("medical_director")
+    med_appointed = bool(med_raw and isinstance(med_raw, dict) and med_raw.get("name"))
+    if med_appointed:
+        med = dict(med_raw)
+        med_name = str(med.get("name") or "Medical Director")
+        med_label = "Medical Director"
+        med_status = "appointed"
+        med_expertise = _safe_int(med.get("medical_expertise"), 16)
+        med_salary = _safe_int(med.get("salary_gtex", med.get("salary", 300)), 300)
+        med_mood = _safe_int(med.get("mood"), 84)
+        med_loyalty = _safe_int(med.get("loyalty"), 16)
+        med_agenda = str(med.get("personal_agenda") or "Zero-tolerance sports science load management")
+        med_trait = str(med.get("signature_trait") or med.get("special_trait") or "Strict Recovery Veto")
+    else:
+        med = {}
+        med_name = "Vacant (Provisional Medical Caretaker)"
+        med_label = "Medical Director (Vacant)"
+        med_status = "vacant"
+        med_expertise = 10
+        med_salary = 0
+        med_mood = 70
+        med_loyalty = 10
+        med_agenda = "Interim triage & basic athlete first-aid until a Medical Director is appointed"
+        med_trait = "Provisional Caretaker"
+
+    # Chief Scout
+    scout_raw = exec_staff.get("chief_scout")
+    scout_appointed = bool(scout_raw and isinstance(scout_raw, dict) and scout_raw.get("name"))
+    if scout_appointed:
+        scout = dict(scout_raw)
+        scout_name = str(scout.get("name") or "Chief Scout")
+        scout_label = "Chief Scout"
+        scout_status = "appointed"
+        scout_reach = _safe_int(scout.get("scouting_reach"), 15)
+        scout_salary = _safe_int(scout.get("salary_gtex", scout.get("salary", 250)), 250)
+        scout_mood = _safe_int(scout.get("mood"), 76)
+        scout_loyalty = _safe_int(scout.get("loyalty"), 13)
+        scout_agenda = str(scout.get("personal_agenda") or "Uncover unheralded continental wonderkids")
+        scout_trait = str(scout.get("signature_trait") or scout.get("special_trait") or "Underground Agent Network")
+    else:
+        scout = {}
+        scout_name = "Vacant (Regional Scout Pool)"
+        scout_label = "Chief Scout (Vacant)"
+        scout_status = "vacant"
+        scout_reach = 10
+        scout_salary = 0
+        scout_mood = 70
+        scout_loyalty = 10
+        scout_agenda = "Monitor local domestic fixture lists until a Chief Scout is appointed"
+        scout_trait = "Provisional Caretaker"
+
+    mgr_name = str(mgr.get("name") or mgr.get("display_name") or "First-Team Manager")
+
     return {
         "first_team_manager": {
             "role_key": "first_team_manager",
             "role_label": "First-Team Manager",
-            "name": str(mgr.get("name") or mgr.get("display_name") or "First-Team Manager"),
+            "name": mgr_name,
+            "status": "appointed",
+            "is_appointed": True,
             "mood": _safe_int(mgr.get("mood"), 75),
             "loyalty": _safe_int(mgr.get("loyalty"), 12),
             "temperament": str(mgr.get("temperament") or "ambitious"),
             "tactical_preference": str(mgr.get("tactical_preference") or "Balanced Possession"),
             "youth_development": _safe_int(mgr.get("youth_development"), 12),
+            "salary_gtex": _safe_int(mgr.get("salary_gtex", 500), 500),
             "personal_agenda": str(mgr.get("personal_agenda") or "Win silverware & enforce high-press identity"),
-            "secret_trait": str(mgr.get("secret_trait") or "Touchline Firebrand"),
-            "portrait_url": storytelling.resolve_player_portrait_url(
-                None, "staff_mgr", str(mgr.get("name") or "Manager")
-            ),
+            "signature_trait": str(mgr.get("signature_trait") or mgr.get("special_trait") or "Touchline Firebrand"),
+            "portrait_url": storytelling.resolve_player_portrait_url(None, "staff_mgr", mgr_name),
         },
         "general_manager": {
             "role_key": "general_manager",
-            "role_label": "General Manager",
-            "name": str(gm.get("name") or "Dayo Adeleke"),
-            "mood": _safe_int(gm.get("mood"), 78),
-            "loyalty": _safe_int(gm.get("loyalty"), 14),
-            "negotiation": _safe_int(gm.get("negotiation"), 15),
-            "financial_discipline": _safe_int(gm.get("financial_discipline"), 15),
-            "personal_agenda": str(gm.get("personal_agenda") or "Maximize sponsor yield & wage-to-turnover discipline"),
-            "secret_trait": str(gm.get("secret_trait") or "Clause Architect"),
-            "portrait_url": storytelling.resolve_player_portrait_url(
-                None, "staff_gm", str(gm.get("name") or "Dayo Adeleke")
-            ),
+            "role_label": gm_label,
+            "name": gm_name,
+            "status": gm_status,
+            "is_appointed": gm_appointed,
+            "mood": gm_mood,
+            "loyalty": gm_loyalty,
+            "negotiation": gm_negotiation,
+            "financial_discipline": gm_discipline,
+            "salary_gtex": gm_salary,
+            "personal_agenda": gm_agenda,
+            "signature_trait": gm_trait,
+            "portrait_url": storytelling.resolve_player_portrait_url(None, "staff_gm", gm_name),
         },
         "head_of_youth_development": {
             "role_key": "head_of_youth_development",
-            "role_label": "Head of Youth Development",
-            "name": str(hoyd.get("name") or "Femi Ogunleye"),
-            "mood": _safe_int(hoyd.get("mood"), 82),
-            "loyalty": _safe_int(hoyd.get("loyalty"), 15),
-            "youth_development": _safe_int(hoyd.get("youth_development"), 16),
-            "personal_agenda": str(
-                hoyd.get("personal_agenda") or "Fast-track academy wonderkids & senior pathway integration"
-            ),
-            "secret_trait": str(hoyd.get("secret_trait") or "Bloodline Whisperer"),
-            "portrait_url": storytelling.resolve_player_portrait_url(
-                None, "staff_hoyd", str(hoyd.get("name") or "Femi Ogunleye")
-            ),
+            "role_label": hoyd_label,
+            "name": hoyd_name,
+            "status": hoyd_status,
+            "is_appointed": hoyd_appointed,
+            "mood": hoyd_mood,
+            "loyalty": hoyd_loyalty,
+            "youth_development": hoyd_youth,
+            "salary_gtex": hoyd_salary,
+            "personal_agenda": hoyd_agenda,
+            "signature_trait": hoyd_trait,
+            "portrait_url": storytelling.resolve_player_portrait_url(None, "staff_hoyd", hoyd_name),
         },
         "medical_director": {
             "role_key": "medical_director",
-            "role_label": "Medical Director",
-            "name": str(med.get("name") or "Dr. Amara Okafor"),
-            "mood": _safe_int(med.get("mood"), 84),
-            "loyalty": _safe_int(med.get("loyalty"), 16),
-            "medical_expertise": _safe_int(med.get("medical_expertise"), 16),
-            "personal_agenda": str(med.get("personal_agenda") or "Zero-tolerance sports science load management"),
-            "secret_trait": str(med.get("secret_trait") or "Strict Recovery Veto"),
-            "portrait_url": storytelling.resolve_player_portrait_url(
-                None, "staff_med", str(med.get("name") or "Amara Okafor")
-            ),
+            "role_label": med_label,
+            "name": med_name,
+            "status": med_status,
+            "is_appointed": med_appointed,
+            "mood": med_mood,
+            "loyalty": med_loyalty,
+            "medical_expertise": med_expertise,
+            "salary_gtex": med_salary,
+            "personal_agenda": med_agenda,
+            "signature_trait": med_trait,
+            "portrait_url": storytelling.resolve_player_portrait_url(None, "staff_med", med_name),
         },
         "chief_scout": {
             "role_key": "chief_scout",
-            "role_label": "Chief Scout",
-            "name": str(scout.get("name") or "Kelechi Nwosu"),
-            "mood": _safe_int(scout.get("mood"), 76),
-            "loyalty": _safe_int(scout.get("loyalty"), 13),
-            "scouting_reach": _safe_int(scout.get("scouting_reach"), 15),
-            "personal_agenda": str(scout.get("personal_agenda") or "Uncover unheralded continental wonderkids"),
-            "secret_trait": str(scout.get("secret_trait") or "Underground Agent Network"),
-            "portrait_url": storytelling.resolve_player_portrait_url(
-                None, "staff_scout", str(scout.get("name") or "Kelechi Nwosu")
-            ),
+            "role_label": scout_label,
+            "name": scout_name,
+            "status": scout_status,
+            "is_appointed": scout_appointed,
+            "mood": scout_mood,
+            "loyalty": scout_loyalty,
+            "scouting_reach": scout_reach,
+            "salary_gtex": scout_salary,
+            "personal_agenda": scout_agenda,
+            "signature_trait": scout_trait,
+            "portrait_url": storytelling.resolve_player_portrait_url(None, "staff_scout", scout_name),
         },
     }
 
@@ -1101,7 +1160,8 @@ def build_authoritative_daily_briefing(
         inj_d = _safe_int(p.injured_days, 0)
         est_world_days = int(math.ceil(inj_d / max(1, daily_injury_heal_days)))
         pers = dict(p.personality_json or {})
-        injury_type = str(pers.get("last_injury_type") or "Muscular Strain")
+        raw_injury_type = pers.get("last_injury_type")
+        injury_type = str(raw_injury_type).strip() if raw_injury_type else "Injury type not recorded"
         injured_dossiers.append(
             {
                 "id": p.id,

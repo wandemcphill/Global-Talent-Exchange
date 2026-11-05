@@ -102,7 +102,7 @@ def _accessor_bytes(doc: dict[str, Any], binary: bytes, index: int) -> tuple[byt
                 raise ValueError(f"accessor {index} sparse data references missing bufferView {bv}")
             view = views[bv]
             start, size = int(view.get("byteOffset", 0)), int(view.get("byteLength", 0))
-            sparse_bytes = binary[start:start + size]
+            sparse_bytes = binary[start : start + size]
             if start < 0 or size < 0 or len(sparse_bytes) != size:
                 raise ValueError(f"accessor {index} sparse data exceeds BIN chunk")
             payload += sparse_bytes

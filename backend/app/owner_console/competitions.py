@@ -851,11 +851,14 @@ def _post_match_club(
             )
             if inj_eval["injured"]:
                 p.injured_days = inj_eval["injured_days"]
+                if inj_eval.get("injury_type"):
+                    pers["last_injury_type"] = inj_eval["injury_type"]
                 match_injuries.append(
                     {
                         "player_id": p.id,
                         "player_name": p.name,
                         "injured_days": p.injured_days,
+                        "injury_type": pers.get("last_injury_type"),
                         "effective_risk": inj_eval["effective_risk"],
                     }
                 )

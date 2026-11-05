@@ -1002,9 +1002,18 @@ def evaluate_player_injury_risk(
     roll = round(rng.random(), 4)
     injured = bool(fit_val < 70 and roll < effective_risk)
     injured_days = 0
+    injury_type = None
     if injured:
         raw_days = 5 + max(0, (70 - fit_val) // 5) + rng.randint(0, 4)
         injured_days = max(1, int(round(raw_days * reduction_factor)))
+        if injured_days >= 10:
+            injury_type = "Severe Ankle Ligament Sprain"
+        elif injured_days >= 7:
+            injury_type = "Hamstring Grade-2 Tear"
+        elif injured_days >= 4:
+            injury_type = "Quadriceps Strain"
+        else:
+            injury_type = "Calf Contusion / Dead Leg"
 
     return {
         "minutes_load": load_clamped,
@@ -1014,6 +1023,7 @@ def evaluate_player_injury_risk(
         "roll": roll,
         "injured": injured,
         "injured_days": injured_days,
+        "injury_type": injury_type,
     }
 
 

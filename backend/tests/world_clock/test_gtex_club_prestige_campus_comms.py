@@ -2000,7 +2000,7 @@ def test_phase2_3_living_club_management_centre_six_destinations_and_decision_ex
         id="intruder-user-999",
         email="intruder@example.com",
         username="intruder",
-        password_hash="hashed",
+        password_hash="hashed",  # pragma: allowlist secret
         role=UserRole.SCOUT,
     )
     session.add(other_user)
@@ -2090,3 +2090,118 @@ def test_phase2_3_living_club_management_centre_six_destinations_and_decision_ex
     assert target_med_dec["decision_id"] in history_ids
     assert fin_dec["decision_id"] in history_ids
     assert mgr_dec["decision_id"] in history_ids
+
+
+def test_phase2_3_medical_director_appointment_and_healing_calculations():
+    from app.owner_console import daily_operations_hub
+    from sqlalchemy.orm.attributes import flag_modified
+
+    session = _session()
+    state = _seed_club(session, prestige=70, cash=150_000)
+    user_id = state.owner_user_id
+    club_id = state.club_id
+
+    # 1. Unappointed Medical Director (role is vacant in _executive_staff)
+    facs = dict(state.facilities_json or {})
+    exec_staff = dict(facs.get("_executive_staff") or {})
+    exec_staff.pop("medical_director", None)
+    facs["_executive_staff"] = exec_staff
+    facs["medical"] = 2
+    state.facilities_json = facs
+    flag_modified(state, "facilities_json")
+    session.commit()
+
+    briefing_unappointed = daily_operations_hub.build_authoritative_daily_briefing(session, user_id, club_id)
+    med_sec_unappointed = briefing_unappointed["medical_directors_report"]
+    med_profile = med_sec_unappointed["staff_profile"]
+
+    assert med_profile["is_appointed"] is False
+    assert med_profile["status"] == "vacant"
+    assert "Vacant" in med_profile["name"]
+    assert med_profile["medical_expertise"] == 10
+    assert med_profile["salary_gtex"] == 0
+    # Formula: 1 + medical//2 (2//2=1) + med_bonus (10//5=2) + rehab_campus_bonus (4) = 8
+    unappointed_heal_rate = med_sec_unappointed["rehabilitation_status"]["daily_injury_heal_days"]
+    assert unappointed_heal_rate == 8
+
+    # 2. Appoint an authoritative Medical Director with expertise 18 in _executive_staff
+    exec_staff["medical_director"] = {
+        "name": "Dr. Fatima Al-Mansoor",
+        "role": "medical_director",
+        "role_label": "Medical Director",
+        "medical_expertise": 18,
+        "salary_gtex": 450,
+        "mood": 88,
+        "loyalty": 17,
+        "personal_agenda": "Biomechanics & Soft-Tissue Optimization",
+        "signature_trait": "Hyperbaric Specialist",
+    }
+    facs["_executive_staff"] = exec_staff
+    state.facilities_json = facs
+    flag_modified(state, "facilities_json")
+    session.commit()
+
+    briefing_appointed = daily_operations_hub.build_authoritative_daily_briefing(
+        session, user_id, club_id, force_refresh=True
+    )
+    med_sec_appointed = briefing_appointed["medical_directors_report"]
+    med_profile_app = med_sec_appointed["staff_profile"]
+
+    assert med_profile_app["is_appointed"] is True
+    assert med_profile_app["status"] == "appointed"
+    assert med_profile_app["name"] == "Dr. Fatima Al-Mansoor"
+    assert med_profile_app["medical_expertise"] == 18
+    assert med_profile_app["salary_gtex"] == 450
+    # Formula: 1 + 1 (facility) + med_bonus (18//5=3) + rehab_campus_bonus (4) = 9
+    appointed_heal_rate = med_sec_appointed["rehabilitation_status"]["daily_injury_heal_days"]
+    assert appointed_heal_rate == 9
+    assert appointed_heal_rate == unappointed_heal_rate + 1
+
+    # Verify simulation synchronization with service.tick_club
+    regens = service.academy_intake(session, user_id, club_id)
+    regens[0].injured_days = 12
+    session.commit()
+
+    service.tick_club(session, state)
+    # 12 - 9 = 3 days remaining after tick
+    assert regens[0].injured_days == 3
+
+
+def test_phase2_3_medical_injury_dossier_recorded_and_unrecorded_classifications():
+    from app.owner_console import daily_operations_hub
+    from sqlalchemy.orm.attributes import flag_modified
+
+    session = _session()
+    state = _seed_club(session, prestige=74, cash=180_000)
+    user_id = state.owner_user_id
+    club_id = state.club_id
+
+    regens = service.academy_intake(session, user_id, club_id)
+    assert len(regens) >= 2
+
+    # Player 0 has an authoritative persisted injury classification
+    regens[0].injured_days = 9
+    p0_pers = dict(regens[0].personality_json or {})
+    p0_pers["last_injury_type"] = "Severe Ankle Ligament Sprain"
+    regens[0].personality_json = p0_pers
+    flag_modified(regens[0], "personality_json")
+
+    # Player 1 has injured_days > 0 but NO classification in personality_json (unrecorded)
+    regens[1].injured_days = 4
+    p1_pers = dict(regens[1].personality_json or {})
+    p1_pers.pop("last_injury_type", None)
+    regens[1].personality_json = p1_pers
+    flag_modified(regens[1], "personality_json")
+    session.commit()
+
+    briefing = daily_operations_hub.build_authoritative_daily_briefing(session, user_id, club_id, force_refresh=True)
+    dossiers = {d["id"]: d for d in briefing["medical_directors_report"]["injured_players"]}
+
+    # Recorded player exposes the exact persisted diagnosis
+    assert dossiers[regens[0].id]["injury_type"] == "Severe Ankle Ligament Sprain"
+    assert dossiers[regens[0].id]["injured_days"] == 9
+
+    # Unrecorded player displays authoritative unrecorded state without inventing a diagnosis
+    assert dossiers[regens[1].id]["injury_type"] == "Injury type not recorded"
+    assert dossiers[regens[1].id]["injury_type"] != "Muscular Strain"
+    assert dossiers[regens[1].id]["injured_days"] == 4

@@ -30,9 +30,11 @@ import {
   Activity,
   History,
   Sliders,
+  AlertTriangle,
 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmt } from "@/lib/owner";
+import { publicUrl } from "@/lib/publicPath";
 import {
   clubBriefingResolveDilemmaEndpoint,
   clubExecuteOperationalDecisionEndpoint,
@@ -90,6 +92,7 @@ export function ClubOperationsCentre3D({
   const [renderMode, setRenderMode] = useState<"3d" | "2d">(() => (detectWebGLAvailable() ? "3d" : "2d"));
   const [webglStatus, setWebglStatus] = useState<"initializing" | "ready" | "fallback">("initializing");
   const [loadedGlbCount, setLoadedGlbCount] = useState<number>(0);
+  const [failedGlbModels, setFailedGlbModels] = useState<string[]>([]);
 
   // Interactive department action states
   const [busyDecisionId, setBusyDecisionId] = useState<string | null>(null);
@@ -388,7 +391,8 @@ export function ClubOperationsCentre3D({
       }
 
       // Load Certified Production GLB Model as Architectural Wing Monument behind/integrated with the Room
-      const glbUrl = dest.glb_model || "/models/campus/club_hq.glb";
+      const rawGlbUrl = dest.glb_model || "/models/campus/club_hq.glb";
+      const glbUrl = publicUrl(rawGlbUrl);
       loader.load(
         glbUrl,
         (gltf) => {
@@ -428,8 +432,28 @@ export function ClubOperationsCentre3D({
           setLoadedGlbCount(loadedModels);
         },
         undefined,
-        () => {
-          // Graceful fallback if asset is offline in test environment
+        (err) => {
+          if (!mounted) return;
+          console.warn(`[ClubOperationsCentre3D] Failed to load GLB for ${dest.destination_key}: ${glbUrl}`, err);
+          setFailedGlbModels((prev) => (prev.includes(dest.destination_key) ? prev : [...prev, dest.destination_key]));
+
+          // Procedural wireframe fallback mesh so destination remains interactive and visible
+          const fallbackGeo = new THREE.BoxGeometry(4.2, 2.8, 3.2);
+          const fallbackMat = new THREE.MeshStandardMaterial({
+            color: accent,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.7,
+            emissive: accent,
+            emissiveIntensity: 0.2,
+          });
+          const fallbackMesh = new THREE.Mesh(fallbackGeo, fallbackMat);
+          fallbackMesh.position.set(0, 1.4, -1.5);
+          fallbackMesh.userData = { destinationKey: dest.destination_key };
+          fallbackMesh.castShadow = true;
+          fallbackMesh.receiveShadow = true;
+          pickables.push(fallbackMesh);
+          group.add(fallbackMesh);
         }
       );
 
@@ -961,11 +985,24 @@ export function ClubOperationsCentre3D({
               <div className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-white/15 bg-slate-950/85 px-2.5 py-1 text-[10px] font-bold text-slate-300 backdrop-blur-md">
                 <span>
                   {renderMode === "3d"
-                    ? `WebGL ${webglStatus === "ready" ? "Active" : "Init"} · ${loadedGlbCount}/6 GLB Wings`
+                    ? `WebGL ${webglStatus === "ready" ? "Active" : "Init"} · ${loadedGlbCount}/${destinations.length} GLB Assets Loaded`
                     : "2D Blueprint Active"}
                 </span>
               </div>
             </div>
+
+            {/* GLB Asset Warning Banner */}
+            {failedGlbModels.length > 0 && (
+              <div
+                data-testid="glb-asset-warning"
+                className="pointer-events-auto absolute inset-x-3 top-14 flex items-center gap-2 rounded-xl border border-amber-500/50 bg-amber-950/90 px-3 py-1.5 text-xs text-amber-200 backdrop-blur-md z-10"
+              >
+                <AlertTriangle size={14} className="text-amber-400 shrink-0" />
+                <span>
+                  {failedGlbModels.length} 3D model asset(s) unavailable; procedural wireframe fallback active for {failedGlbModels.join(", ")}.
+                </span>
+              </div>
+            )}
 
             {/* Interactive Room Hotspots Bar at Bottom of Viewport */}
             <div className="pointer-events-none absolute inset-x-3 bottom-3 flex flex-wrap items-center justify-between gap-2">

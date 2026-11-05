@@ -211,23 +211,21 @@ export function OwnerBriefingPanel({
   const {
     data: fetchedData,
     isLoading,
+    isError,
+    error,
     refetch,
   } = useQuery({
     queryKey: ["owner-daily-briefing", clubId],
     queryFn: async () => {
       if (!clubId) return null;
-      try {
-        const { data } = await api.get(clubBriefingEndpoint(clubId));
-        return data as DailyBriefing;
-      } catch {
-        return null;
-      }
+      const { data } = await api.get(clubBriefingEndpoint(clubId));
+      return data as DailyBriefing;
     },
     enabled: Boolean(clubId),
     initialData: initialData || undefined,
   });
 
-  const briefing = fetchedData || initialData;
+  const briefing = fetchedData || initialData || null;
 
   const handleGenerate = async () => {
     if (!clubId) return;
@@ -299,6 +297,73 @@ export function OwnerBriefingPanel({
     );
   }
 
+  if (isError && !briefing) {
+    return (
+      <section className={SHELL} data-testid="owner-briefing">
+        <div className="flex items-center gap-2">
+          <Newspaper size={16} className="text-amber-300" />
+          <h2 className="gx-eyebrow !m-0">Owner daily briefing</h2>
+        </div>
+        <div
+          role="alert"
+          data-testid="owner-briefing-error-state"
+          className="mt-4 rounded-xl border border-rose-500/30 bg-rose-950/20 p-4 space-y-3"
+        >
+          <div className="flex items-start gap-2.5 text-sm text-rose-300">
+            <AlertTriangle size={18} className="mt-0.5 shrink-0 text-rose-400" aria-hidden="true" />
+            <div>
+              <p className="font-bold">Failed to load owner daily briefing</p>
+              <p className="mt-1 text-xs text-rose-300/80">
+                {errMsg(error) || "The club operations service is temporarily unreachable or returned an error."}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            data-testid="briefing-error-retry-btn"
+            onClick={() => refetch()}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-rose-400/40 bg-rose-900/40 px-3 py-1.5 text-xs font-bold uppercase text-rose-200 hover:bg-rose-900/60 transition"
+          >
+            <RefreshCw size={13} />
+            <span>Retry Briefing Request</span>
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  if (!isLoading && !isError && !briefing) {
+    return (
+      <section className={SHELL} data-testid="owner-briefing">
+        <div className="flex items-center gap-2">
+          <Newspaper size={16} className="text-amber-300" />
+          <h2 className="gx-eyebrow !m-0">Owner daily briefing</h2>
+        </div>
+        <div
+          data-testid="owner-briefing-empty-state"
+          className="mt-4 rounded-xl border border-dashed border-white/15 p-5 text-center space-y-3"
+        >
+          <p className="text-sm font-bold uppercase text-slate-100">No Briefing Compiled Yet</p>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            No daily briefing has been compiled for this club yet. You can compile a fresh briefing from all 6 operational departments.
+          </p>
+          {clubId && (
+            <button
+              type="button"
+              data-testid="compile-briefing-empty-btn"
+              onClick={handleGenerate}
+              disabled={busyGenerating}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-sky-400/40 bg-sky-950/60 px-3.5 py-1.5 text-xs font-bold uppercase text-sky-200 hover:bg-sky-900/60 transition"
+            >
+              <RefreshCw size={13} className={busyGenerating ? "animate-spin" : ""} />
+              <span>{busyGenerating ? "Compiling…" : "Compile Daily Briefing"}</span>
+            </button>
+          )}
+        </div>
+      </section>
+    );
+  }
+
   const sections: StaffBriefingSection[] = briefing?.sections || [];
   const metrics = briefing?.metrics;
   const dilemma = briefing?.boardroom_dilemma;
@@ -341,6 +406,29 @@ export function OwnerBriefingPanel({
           </button>
         )}
       </div>
+
+      {/* Stale Cache Banner if update failed but previous data is available */}
+      {isError && briefing && (
+        <div
+          role="status"
+          data-testid="owner-briefing-stale-banner"
+          className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/40 bg-amber-950/40 px-3.5 py-2 text-xs text-amber-200"
+        >
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={15} className="text-amber-400 shrink-0" aria-hidden="true" />
+            <span>Showing cached briefing data; the latest update request failed.</span>
+          </div>
+          <button
+            type="button"
+            data-testid="briefing-retry-btn"
+            onClick={() => refetch()}
+            className="inline-flex items-center gap-1 rounded bg-amber-500/20 border border-amber-400/40 px-2 py-0.5 text-[11px] font-bold text-amber-200 hover:bg-amber-500/30 transition"
+          >
+            <RefreshCw size={11} />
+            <span>Retry</span>
+          </button>
+        </div>
+      )}
 
       {briefing?.headline && (
         <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-3.5">

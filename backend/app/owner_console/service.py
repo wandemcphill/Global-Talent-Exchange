@@ -1535,6 +1535,8 @@ def tick_club(
             effective_injury_risks.append(inj_eval["effective_risk"])
             if inj_eval["injured"]:
                 p.injured_days = inj_eval["injured_days"]
+                if inj_eval.get("injury_type"):
+                    pers_fit["last_injury_type"] = inj_eval["injury_type"]
                 new_training_injuries_count += 1
         if cur_fitness < 100:
             pers_fit["fitness"] = int(engine.clamp(cur_fitness + daily_fitness_gain, 0, 100))
