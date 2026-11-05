@@ -1805,18 +1805,20 @@ def get_living_world_timeline_view(
 ) -> dict[str, Any]:
     from app.owner_console import living_club_world
 
-    return _run(
-        session,
-        living_club_world.get_living_world_timeline,
-        session,
-        user.id,
-        club_id,
-        category=category,
-        severity=severity,
-        status=status,
-        limit=limit,
-        offset=offset,
-    )
+    def _op() -> dict[str, Any]:
+        service.require_state(session, club_id, user.id)
+        return living_club_world.get_living_world_timeline(
+            session,
+            user.id,
+            club_id,
+            category=category,
+            severity=severity,
+            status=status,
+            limit=limit,
+            offset=offset,
+        )
+
+    return _run(session, _op)
 
 
 @router.get("/clubs/{club_id}/living-world/relationships")
@@ -1825,14 +1827,17 @@ def get_living_world_relationships_view(
     user=Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
-    from app.owner_console import living_club_world, service
+    from app.owner_console import living_club_world
     from app.owner_console.models import OwnerSquadPlayer
 
-    state = service.require_state(session, club_id, user.id)
-    squad_players = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
-    living_club_world.ensure_default_relationships(session, state, squad_players)
-    rels = living_club_world.get_club_relationships(session, club_id)
-    return {"club_id": club_id, "relationships": rels}
+    def _op() -> dict[str, Any]:
+        state = service.require_state(session, club_id, user.id)
+        squad_players = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
+        living_club_world.ensure_default_relationships(session, state, squad_players)
+        rels = living_club_world.get_club_relationships(session, club_id)
+        return {"club_id": club_id, "relationships": rels}
+
+    return _run(session, _op)
 
 
 @router.post("/clubs/{club_id}/living-world/directives")
@@ -1842,23 +1847,24 @@ def post_create_club_directive(
     user=Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
-    from app.owner_console import living_club_world, service
+    from app.owner_console import living_club_world
 
-    service.require_state(session, club_id, user.id)
-    return _run(
-        session,
-        living_club_world.issue_department_directive,
-        session,
-        user.id,
-        club_id,
-        department=payload.department,
-        directive_key=payload.directive_key,
-        title=payload.title,
-        instruction=payload.instruction,
-        deadline_days=payload.deadline_days,
-        target_scope=payload.target_scope,
-        target_scope_id=payload.target_scope_id,
-    )
+    def _op() -> dict[str, Any]:
+        service.require_state(session, club_id, user.id)
+        return living_club_world.issue_department_directive(
+            session,
+            user.id,
+            club_id,
+            department=payload.department,
+            directive_key=payload.directive_key,
+            title=payload.title,
+            instruction=payload.instruction,
+            deadline_days=payload.deadline_days,
+            target_scope=payload.target_scope,
+            target_scope_id=payload.target_scope_id,
+        )
+
+    return _run(session, _op)
 
 
 @router.post("/clubs/{club_id}/living-world/events/{event_id}/resolve")
@@ -1869,16 +1875,17 @@ def post_resolve_club_event(
     user=Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
-    from app.owner_console import living_club_world, service
+    from app.owner_console import living_club_world
 
-    service.require_state(session, club_id, user.id)
-    return _run(
-        session,
-        living_club_world.resolve_club_event,
-        session,
-        user.id,
-        club_id,
-        event_id=event_id,
-        action=payload.action,
-        resolution_note=payload.note,
-    )
+    def _op() -> dict[str, Any]:
+        service.require_state(session, club_id, user.id)
+        return living_club_world.resolve_club_event(
+            session,
+            user.id,
+            club_id,
+            event_id=event_id,
+            action=payload.action,
+            resolution_note=payload.note,
+        )
+
+    return _run(session, _op)

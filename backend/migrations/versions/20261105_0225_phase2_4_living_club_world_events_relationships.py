@@ -71,9 +71,16 @@ def upgrade() -> None:
             sa.Column("metadata_json", sa.JSON(), nullable=False),
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+            sa.UniqueConstraint("club_id", "pairing_key", name="uq_owner_club_relationships_club_pairing"),
         )
         op.create_index("ix_owner_club_relationships_club_id", "owner_club_relationships", ["club_id"])
         op.create_index("ix_owner_club_relationships_pairing_key", "owner_club_relationships", ["pairing_key"])
+        op.create_index(
+            "uq_owner_club_relationships_club_pairing_idx",
+            "owner_club_relationships",
+            ["club_id", "pairing_key"],
+            unique=True,
+        )
         op.create_index(
             "ix_owner_club_relationships_participant_a_id", "owner_club_relationships", ["participant_a_id"]
         )

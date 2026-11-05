@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Integer, Numeric, String, Text, func
+from sqlalchemy import JSON, Boolean, Date, DateTime, Integer, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, UUIDPrimaryKeyMixin, utcnow
@@ -370,6 +370,7 @@ class OwnerClubEvent(UUIDPrimaryKeyMixin, Base):
 
 class OwnerClubRelationship(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "owner_club_relationships"
+    __table_args__ = (UniqueConstraint("club_id", "pairing_key", name="uq_owner_club_relationships_club_pairing"),)
 
     club_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     pairing_key: Mapped[str] = mapped_column(String(160), nullable=False, index=True)

@@ -2091,9 +2091,7 @@ def get_club_operations_hub(
 
         room_events = [e for e in formatted_active_events if e["category"] in cats]
         room_directives = [d for d in formatted_active_directives if d["department"] == dir_dept]
-        room_rel = next(
-            (r for r in all_rels if r["participant_b_id"] == s_role or r["participant_a_id"] == s_role), None
-        )
+        room_rel = living_club_world.get_relationship_for_department(session, club_id, s_role)
 
         dest["active_events"] = room_events
         dest["active_events_count"] = len(room_events)

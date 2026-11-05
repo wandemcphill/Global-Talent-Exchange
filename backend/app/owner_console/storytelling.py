@@ -2221,7 +2221,7 @@ def resolve_briefing_dilemma(session: Session, user_id: str, club_id: str, choic
     outcome_notes: list[str] = []
     from app.owner_console import living_club_world
 
-    gm_name = (exec_staff.get("general_manager") or {}).get("name", "Dayo Adeleke")
+    gm_name = (exec_staff.get("general_manager") or {}).get("name") or "General Manager (Vacant)"
     mgr_name = mgr.get("name", "First-Team Manager")
     w_day = int(state.world_day or 1)
 

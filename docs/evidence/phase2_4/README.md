@@ -11,20 +11,20 @@
 
 ## 1. Executive Summary & Architecture
 
-Phase 2.4 advances GTEX from an operational management interface into a persistent, living football world. Club personnel (First-Team Manager, General Manager, Head of Youth Development, Medical Director, and squad players) now possess dynamic bilateral relationships with the owner and each other, react to club results and operational choices, receive executive directives, and experience life events driven by the authoritative world clock.
+Phase 2.4 advances GTEX from an operational management interface into a persistent, living football world. Appointed club personnel (`first_team_manager`, `general_manager`, `head_of_youth_development`, `medical_director`, `chief_scout`) and squad players possess dynamic bilateral relationships with the owner and each other, react to club results and operational choices, receive executive directives, and experience simulation-grounded events driven by the authoritative world clock.
 
 ```mermaid
 graph TD
     subgraph World Clock & Simulation Heartbeat
         A[service.tick_club] --> B[living_club_world.process_world_day_events]
-        B --> C[Evaluate Campus & Squad States]
+        B --> C[Evaluate Campus, Staff Roster & Squad States]
         B --> D[Generate Idempotent Events: owner_club_events]
         B --> E[Advance Departmental Directives: owner_club_directives]
     end
 
     subgraph Dynamic Relationship Framework
         F[Owner Decisions & Communications] --> G[living_club_world.apply_relationship_delta]
-        G --> H[owner_club_relationships: Trust / Respect / Affinity / Tension [0-100]]
+        G --> H["owner_club_relationships: Unique (club_id, pairing_key)"]
         G --> I[owner_club_relationship_history: Immutable Audit Trail]
         H --> J[Department Lead Status: Harmonious / Strong / Stable / Strained / Volatile]
     end
@@ -35,7 +35,7 @@ graph TD
         M --> N[Department Activity Badges]
         M --> O[Relationship Health Inspector Card]
         M --> P[Departmental Directive Dispatcher]
-        M --> Q[Living World Timeline Slide-Over Drawer]
+        M --> Q[Unified Living World Timeline Drawer]
         M --> R[2D Architectural Floorplan Parity Fallback]
     end
 ```
@@ -44,49 +44,55 @@ graph TD
 
 ## 2. Core Systems Delivered
 
-### System A — Persistent Club Event Engine
-- **Table:** `owner_club_events`
+### System A — Persistent Club Event Engine (`owner_club_events`)
 - **Seven Authoritative Categories:** `executive`, `tactical`, `squad`, `academy`, `medical`, `financial`, `culture`.
 - **Statuses:** `created`, `active`, `awaiting_decision`, `resolved`, `expired`.
-- **Deterministic Idempotency Key:** `evt:{club_id}:{world_day}:{category}:{source_type}:{source_id}` ensures zero event duplication across repeated ticks on the same world day.
-- **Consequence Execution:** Interactive decisions execute simulation consequences (e.g., funding rehabilitation shifts medical recovery timelines and improves medical director trust).
+- **Deterministic Idempotency Key:** `evt:{club_id}:{world_day}:...` guarantees zero event duplication across repeated world ticks on the same day.
+- **Strict Action Validation & Atomic Resolution:**
+  - `resolve_club_event()` validates club ownership via `service.require_state(session, club_id, user_id)`, rejects already-resolved events with `409 Conflict` (`event_already_resolved`), validates that the submitted action is declared in the event's `actions_json` (`invalid_event_action`, `400`), and verifies that `(event.event_type, action)` is supported by the backend handler table `ALLOWED_ACTIONS_BY_EVENT_TYPE` (`unsupported_event_action`, `400`).
+  - Rejected actions leave event status, player morale, relationships, and all gameplay state unchanged.
 
-### System B — Personality & Relationship Framework
-- **Tables:** `owner_club_relationships` and `owner_club_relationship_history`
-- **Bilateral Metrics:** `trust`, `respect`, `affinity`, `tension` clamped strictly between 0 and 100.
-- **Normalized Keys:** `club_id:min_id:max_id` prevents duplicate inverted pairing records.
-- **Calculated Statuses:**
-  - `Volatile`: Tension >= 70 or Trust <= 25
-  - `Strained`: Tension >= 50 or Trust <= 40
-  - `Harmonious`: Trust >= 80, Respect >= 75, Tension <= 25
-  - `Strong`: Trust >= 65, Respect >= 60, Tension <= 40
-  - `Stable`: Default baseline
-- **Audit Trail:** Every delta logs the previous state, new state, net deltas, source, and reason.
+### System B — Personality, Vacancy-Aware Staff Identity & Relationship Framework
+- **Tables:** `owner_club_relationships` and `owner_club_relationship_history`.
+- **Migrations:**
+  - `20261105_0225_phase2_4_living_club_world_events_relationships.py`
+  - `20261105_0226_phase2_4_relationship_pair_uniqueness.py`
+- **Database Uniqueness & Concurrency Safety:**
+  - Enforces `UniqueConstraint("club_id", "pairing_key", name="uq_owner_club_relationships_club_pairing")`.
+  - Canonical bidirectional normalization (`normalize_pairing(a, b)`) ensures `(A, B)` and `(B, A)` resolve to the exact same `pairing_key` and participant ordering.
+  - `get_or_create_relationship()` wraps inserts in a nested transaction (`session.begin_nested()`) and recovers from `IntegrityError` by selecting the existing row.
+  - `deduplicate_club_relationships()` reconciles any legacy duplicate/reversed pairings while re-pointing and preserving 100% of `owner_club_relationship_history` rows.
+- **Vacancy & Staff Replacement Isolation:**
+  - `resolve_club_staff_roster(state)` reads strictly from appointed records in `state.facilities_json["_executive_staff"]` and `state.manager_json`.
+  - Unappointed positions are represented as vacant (`is_appointed=False`, `person_id=None`) and never fabricate employee names or relationships.
+  - Appointed staff relationships are keyed to the individual (`f"{role_key}:{person_uid}"`). When a staff member is dismissed or replaced, `reconcile_staff_relationships()` archives the predecessor's relationship (`status="former"`) with its history intact and creates a fresh baseline relationship for the new appointee.
 
-### System C — Living Club Communications & Departmental Directives
-- **Table:** `owner_club_directives`
-- **Directive Lifecycle:** Owners can issue directives directly from the 3D WebGL Operations Centre to any department lead (`manager`, `medical`, `academy`, `finance`, `scouting`, `executive`).
-- **Progress Tracking:** Directives track target deadlines and progress percentages.
-- **Staff Communications:** Direct chat messages and tone dynamically impact relationship trust and respect.
+### System C — Living Club Communications & Departmental Directives (`owner_club_directives`)
+- **Directive Lifecycle:** Owners can issue directives to `manager`, `medical`, `academy`, `finance`, `scouting`, or `executive`.
+- **Vacant Department Handling:** Directives issued to a department with a vacant lead are logged by the provisional department desk (`Vacant (<Role> Unappointed)`) without fabricating a staff relationship.
 
-### System D — Player & Staff Life Events
-- Generated during world clock ticks:
-  - Contract milestone approach (e.g. key starter enters final 6 months).
-  - High fatigue and workload alerts from the medical department.
-  - Youth academy breakthroughs from the HOYD.
-  - Squad tactical concerns from the First-Team Manager.
+### System D — Authoritative Player & Staff Event Triggers (`process_world_day_events`)
+- All generated events are grounded strictly in real persisted club, squad, and ledger data:
+  1. `treasury_low_reserves` (`financial`): Triggered when `ledger.balance(club_account) < 1,500` GTEX (`review_sponsors`, `acknowledge`).
+  2. `player_recovery_cleared` (`medical`): Triggered when an active player completes rehabilitation (`injured_days == 0` and `last_training_workload_tier == "rehabilitation"`) (`praise_medical`, `acknowledge`).
+  3. `injury_crisis_alert` (`medical`): Triggered when `>= 3` active players are injured (`reduce_workload`, `acknowledge`).
+  4. `high_fatigue_workload_alert` (`medical`): Triggered when a healthy active player has stored `personality_json["fitness"] < 70` or `personality_json["fatigue"] >= 70` (`rest_player`, `acknowledge`).
+  5. `regen_prospect_spotlight` (`academy`): Triggered when an active academy regen reaches `rating >= 62` (`praise_prospect`, `acknowledge`).
+  6. `contract_expiry_warning` (`executive`): Triggered when an active player has stored `0 < personality_json["contract_months_remaining"] <= 6` (`open_renewal_talks`, `acknowledge`).
+  7. `squad_morale_dip` (`squad`): Triggered when an active player has `morale < 45` (`encourage_player`, `ignore`).
+  8. `managerial_tension_alert` (`tactical`): Triggered when the active `owner <-> first_team_manager` relationship reaches `tension >= 50` (`back_manager`, `demand_results`).
 
-### System E — Owner's Living Club Timeline
-- REST Endpoint: `GET /owner/clubs/{club_id}/living-world/timeline`
-- Full aggregation of events, directives, and relationship milestones.
-- Filtering by category, severity, and status.
+### System E — Unified Living Club Timeline & Ownership Isolation
+- **REST Endpoints:**
+  - `GET /owner/clubs/{club_id}/living-world/timeline`
+  - `GET /owner/clubs/{club_id}/living-world/relationships`
+  - `POST /owner/clubs/{club_id}/living-world/directives`
+  - `POST /owner/clubs/{club_id}/living-world/events/{event_id}/resolve`
+- **Authorization:** Every endpoint and underlying service method enforces `service.require_state(session, club_id, user.id)` inside `_run(session, ...)`, returning `403 Forbidden` (`not_club_owner`) for unauthorized users and `404 Not Found` (`club_not_initialized`) for unknown clubs.
+- **Unified Filtering & Pagination:** `get_living_world_timeline()` combines events (`kind="event"`), directives (`kind="directive"`), and significant relationship shifts (`kind="relationship_shift"`) into a single chronological sequence, applies `category`, `severity`, and `status` filters uniformly across all item kinds, and applies `offset` and `limit` to the unified sequence. `total_count` (and `total_events_count`) reports the total filtered items across the unified timeline, accompanied by `counts_by_kind`.
 
 ### System F — WebGL Operations Centre & 2D Floorplan Parity
-- **Activity Badges:** Destination tabs display animated cyan badges showing active events and directives count.
-- **Relationship Card:** Department inspector renders live trust, respect, affinity, and tension meters.
-- **Directive Modal:** Allows issuing custom operational directives to department heads.
-- **Timeline Drawer:** Slide-over drawer with category filters (`all`, `tactical`, `medical`, `academy`, `financial`, `squad`, `executive`) and action execution buttons.
-- **Asset Fallback Parity:** Preserved 100% 6/6 GLB asset loading, procedural wireframe fallback on error, and 2D architectural blueprint toggle.
+- Preserves 100% 6/6 GLB asset loading under `/console`, procedural wireframe fallback on error, and 2D architectural blueprint toggle while surfacing department activity badges, relationship health cards, directive dispatching, and the timeline drawer.
 
 ---
 
@@ -94,13 +100,11 @@ graph TD
 
 | Verification Suite | Test Count | Result |
 | :--- | :---: | :---: |
-| Backend Living Club World Tests (`test_living_club_world.py`) | 7 | **PASS** |
+| Backend Living Club World Tests (`test_living_club_world.py`) | 11 | **PASS** |
 | Backend Prestige & Campus Comms Tests (`test_gtex_club_prestige_campus_comms.py`) | 28 | **PASS** |
 | Database Migration Integrity Tests (`test_migrations.py`) | 5 | **PASS** |
 | Frontend React Shell Unit Tests (`npm test`) | 129 | **PASS** (18/18 suites) |
 | React WebGL Browser Playwright Verification (`verify_react_webgl_operations_centre.py`) | 3 | **PASS** (All 6 GLBs, Wireframe Fallback, 2D Floorplan) |
 | React WebGL Contract & Unit Tests (`test_verify_react_webgl_operations_centre.py`) | 4 | **PASS** |
-| Black Formatting Check | 10 files | **PASS** |
-| Ruff Linting Check | 10 files | **PASS** |
-| Secret Scan (`detect-secrets`) | All changed files | **PASS** |
-| Changed Quality Gate (`run_changed_quality.py`) | All configured gates | **PASS** |
+| P7-FEV Browser Verification (`mobile`, `tablet`, `desktop` parallel matrix) | 48 | **PASS** |
+| Black, Ruff & Changed Quality Gate (`run_changed_quality.py`) | All changed files | **PASS** |

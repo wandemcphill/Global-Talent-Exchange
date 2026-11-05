@@ -1216,7 +1216,10 @@ export function ClubOperationsCentre3D({
                   <div className="flex items-center gap-1.5">
                     <Users size={12} className="text-sky-400" />
                     <span className="text-[11px] font-black uppercase tracking-wider text-slate-200">
-                      Executive Relationship · {activeDestination.relationship.participant_b_name}
+                      Executive Relationship ·{" "}
+                      {activeDestination.relationship.participant_a_type === "owner"
+                        ? activeDestination.relationship.participant_b_name
+                        : activeDestination.relationship.participant_a_name}
                     </span>
                   </div>
                   <span className="rounded-full bg-sky-950/80 border border-sky-400/40 px-2 py-0.5 text-[10px] font-bold text-sky-300">

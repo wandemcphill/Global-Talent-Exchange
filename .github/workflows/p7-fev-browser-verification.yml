@@ -11,9 +11,13 @@ on:
 
 jobs:
   browser-verification:
-    name: Playwright browser verification
+    name: Playwright browser verification (${{ matrix.project }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [mobile, tablet, desktop]
 
     steps:
       - name: Checkout
@@ -83,6 +87,7 @@ jobs:
           GTEX_E2E_DESIGN_LAB: "1"
         run: >-
           npx playwright test
+          --project=${{ matrix.project }}
           tests/p7_fe_audio_shell.spec.mjs
           tests/p7_fe_authed_shell.spec.mjs
           tests/p7_fe_club_squad.spec.mjs
@@ -94,7 +99,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gtex-p7-fev-browser-evidence
+          name: gtex-p7-fev-browser-evidence-${{ matrix.project }}
           path: qa/playwright/test-results/
           if-no-files-found: warn
           retention-days: 14
