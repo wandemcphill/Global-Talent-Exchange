@@ -26,7 +26,7 @@ import {
   MatchViewerContractInput,
   sanitizeForSpectator,
 } from "./spectatorContract";
-import { QUALITY_PROFILES } from "../GtexSceneRegistry";
+import { GtexSceneRegistry, QUALITY_PROFILES } from "../GtexSceneRegistry";
 import type { DeviceQualityTier } from "../GtexSceneTypes";
 import { StadiumArenaEnvironment } from "./StadiumArenaEnvironment";
 import { HumanoidFootballerRig } from "./HumanoidFootballerRig";
@@ -57,6 +57,12 @@ export interface MatchPitchLiveSceneProps {
   onTimeUpdate?: (timeSeconds: number) => void;
   /** Fallback toggle callback when user selects 2D tactical view */
   onToggle2DCompanion?: () => void;
+  /** Whether Full-Screen 16:9 Match Theatre mode is active */
+  isTheatreMode?: boolean;
+  /** Callback when user toggles Full-Screen Match Theatre mode */
+  onToggleTheatreMode?: () => void;
+  /** Callback when user changes graphics quality profile */
+  onQualityTierChange?: (tier: DeviceQualityTier) => void;
   /** Additional container CSS class */
   className?: string;
   /** Test identifier */
@@ -68,7 +74,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   isOwnerOrManager = false,
   isLive = true,
   viewerCount,
-  qualityTier = "high",
+  qualityTier: propQualityTier = "high",
   playbackTimeSeconds: externalTime,
   playbackSpeed = 1.0,
   isPaused = false,
@@ -76,6 +82,9 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   liveEvents = [],
   onTimeUpdate,
   onToggle2DCompanion,
+  isTheatreMode: externalTheatreMode,
+  onToggleTheatreMode,
+  onQualityTierChange,
   className = "",
   testId = "match-pitch-live-scene",
 }) => {
@@ -85,6 +94,33 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   const [cameraMode, setCameraMode] = useState<ManualCameraMode>("director_auto");
   const [is2DActive, setIs2DActive] = useState<boolean>(false);
   const [audioMuted, setAudioMuted] = useState<boolean>(false);
+  const [qualityTier, setQualityTierState] = useState<DeviceQualityTier>(propQualityTier);
+  const [internalTheatreMode, setInternalTheatreMode] = useState<boolean>(false);
+  const [minimalHud, setMinimalHud] = useState<boolean>(false);
+  const [isReplayActive, setIsReplayActive] = useState<boolean>(false);
+  const replayReturnTimeRef = useRef<number | null>(null);
+
+  const isTheatreMode = externalTheatreMode ?? internalTheatreMode;
+
+  useEffect(() => {
+    setQualityTierState(propQualityTier);
+  }, [propQualityTier]);
+
+  const handleSelectQualityTier = useCallback(
+    (tier: "high" | "medium" | "low") => {
+      setQualityTierState(tier);
+      onQualityTierChange?.(tier);
+    },
+    [onQualityTierChange]
+  );
+
+  const handleToggleTheatre = useCallback(() => {
+    if (onToggleTheatreMode) {
+      onToggleTheatreMode();
+    } else {
+      setInternalTheatreMode((prev) => !prev);
+    }
+  }, [onToggleTheatreMode]);
 
   // Sanitize spectator-safe match view state
   const safeView: SpectatorSafeMatchView = useMemo(() => {
@@ -349,6 +385,12 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     let animationFrameId: number;
     let lastTimestamp = performance.now();
     const frameDeltaSamplesMs: number[] = [];
+    let frameDeltaSumMs = 0;
+    let telemetryTick = 0;
+    let cachedP50Ms = 16.6;
+    let cachedP95Ms = 16.6;
+    let cachedP99Ms = 16.6;
+    let cachedWorstOnePctAvgMs = 16.6;
     const observedStatesHistory = new Set<string>();
     const observedCameraPresetsHistory = new Set<string>();
     let lastUiStateUpdateMs = 0;
@@ -361,6 +403,27 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         },
         setCameraMode: (mode: ManualCameraMode) => {
           setCameraMode(mode);
+        },
+        setQualityTier: (tier: "high" | "medium" | "low") => {
+          handleSelectQualityTier(tier);
+        },
+        setTheatreMode: (enabled: boolean) => {
+          setInternalTheatreMode(enabled);
+        },
+        triggerReplay: () => {
+          const liveNow = localTimeRef.current;
+          replayReturnTimeRef.current = liveNow;
+          const rewindTo = Math.max(interpolator.getStartTime(), liveNow - 8.0);
+          localTimeRef.current = rewindTo;
+          setCurrentTime(rewindTo);
+          setIsReplayActive(true);
+          setCameraMode("closeup_action");
+        },
+        resetTelemetry: () => {
+          frameDeltaSamplesMs.length = 0;
+          frameDeltaSumMs = 0;
+          telemetryTick = 0;
+          lastTimestamp = performance.now();
         },
         getPlayerRigsSummary: () => {
           const out: Array<Record<string, unknown>> = [];
@@ -396,17 +459,27 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
 
       if (rawDeltaMs < 250) {
         frameDeltaSamplesMs.push(rawDeltaMs);
+        frameDeltaSumMs += rawDeltaMs;
         if (frameDeltaSamplesMs.length > 3600) {
-          frameDeltaSamplesMs.shift();
+          const removed = frameDeltaSamplesMs.shift() || 0;
+          frameDeltaSumMs -= removed;
         }
       }
 
-      // Update stadium dynamics (scrolling LED ad boards, flag flutter)
+      // Update stadium dynamics (GPU UV offset LED ad boards)
       stadiumArena.update(deltaSec);
 
       // Advance time if live or playing
       if (!isPausedRef.current) {
-        localTimeRef.current += deltaSec * playbackSpeedRef.current;
+        const effectiveSpeed =
+          replayReturnTimeRef.current !== null ? Math.min(0.85, playbackSpeedRef.current) : playbackSpeedRef.current;
+        localTimeRef.current += deltaSec * effectiveSpeed;
+        if (replayReturnTimeRef.current !== null && localTimeRef.current >= replayReturnTimeRef.current) {
+          localTimeRef.current = replayReturnTimeRef.current;
+          replayReturnTimeRef.current = null;
+          setIsReplayActive(false);
+          setCameraMode("director_auto");
+        }
         const endTime = interpolator.getEndTime();
         if (endTime > 0 && localTimeRef.current > endTime) {
           localTimeRef.current = isLiveRef.current ? endTime : interpolator.getStartTime();
@@ -418,7 +491,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
 
       // Query interpolated match state at localTime
       const state = interpolator.interpolate(localTime);
-      if (now - lastUiStateUpdateMs >= 80 || !state) {
+      if (now - lastUiStateUpdateMs >= 100 || !state) {
         lastUiStateUpdateMs = now;
         setCurrentTime(localTime);
         setCurrentMatchState(state);
@@ -534,62 +607,74 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         renderer.render(scene, camera);
 
         if (typeof window !== "undefined" && frameDeltaSamplesMs.length > 0) {
-          const sorted = [...frameDeltaSamplesMs].sort((a, b) => a - b);
-          const sumMs = sorted.reduce((a, b) => a + b, 0);
-          const avgFrameMs = sumMs / sorted.length;
-          const p50Ms = sorted[Math.floor(sorted.length * 0.5)] || avgFrameMs;
-          const p95Ms = sorted[Math.floor(sorted.length * 0.95)] || avgFrameMs;
-          const p99Ms = sorted[Math.floor(sorted.length * 0.99)] || avgFrameMs;
-          const worstOnePctSlice = sorted.slice(Math.max(0, Math.floor(sorted.length * 0.99)));
-          const worstOnePctAvgMs =
-            worstOnePctSlice.reduce((a, b) => a + b, 0) / Math.max(1, worstOnePctSlice.length);
-          const perfMem = (performance as any).memory;
+          telemetryTick++;
+          const sampleCount = frameDeltaSamplesMs.length;
+          const avgFrameMs = frameDeltaSumMs / sampleCount;
 
-          (window as any).__GTEX_BROADCAST_TELEMETRY__ = {
-            gpuVendor,
-            gpuRenderer,
-            canvasWidth: renderer.domElement.width,
-            canvasHeight: renderer.domElement.height,
-            clientWidth: container.clientWidth,
-            clientHeight: container.clientHeight,
-            pixelRatio: renderer.getPixelRatio(),
-            qualityTier,
-            frameCount: frameDeltaSamplesMs.length,
-            avgFps: Number((1000 / Math.max(0.1, avgFrameMs)).toFixed(1)),
-            onePercentLowFps: Number((1000 / Math.max(0.1, worstOnePctAvgMs)).toFixed(1)),
-            p50FrameMs: Number(p50Ms.toFixed(2)),
-            p95FrameMs: Number(p95Ms.toFixed(2)),
-            p99FrameMs: Number(p99Ms.toFixed(2)),
-            drawCalls: renderer.info.render.calls,
-            triangles: renderer.info.render.triangles,
-            geometries: renderer.info.memory.geometries,
-            textures: renderer.info.memory.textures,
-            jsHeapUsedMb: perfMem
-              ? Number((perfMem.usedJSHeapSize / (1024 * 1024)).toFixed(2))
-              : null,
-            jsHeapTotalMb: perfMem
-              ? Number((perfMem.totalJSHeapSize / (1024 * 1024)).toFixed(2))
-              : null,
-            currentTime: Number(localTime.toFixed(2)),
-            durationSeconds: interpolator.getEndTime(),
-            activeRigCount: playerRigs.size,
-            cameraPreset: state?.camera_preset || "broadcast",
-            clockLabel: `${state?.clock_minute ?? 0}'`,
-            score: {
-              home: state?.home_score ?? 0,
-              away: state?.away_score ?? 0,
-            },
-            activeAnimationStates: activeStatesSnapshot,
-            observedStatesHistory: Array.from(observedStatesHistory),
-            observedCameraPresetsHistory: Array.from(observedCameraPresetsHistory),
-          };
+          // Throttle O(N log N) percentile sorting to once every 15 frames (~250ms) to avoid per-frame CPU/GC stalls
+          if (telemetryTick % 15 === 1 || sampleCount <= 5) {
+            const sorted = frameDeltaSamplesMs.slice().sort((a, b) => a - b);
+            cachedP50Ms = sorted[Math.floor(sampleCount * 0.5)] || avgFrameMs;
+            cachedP95Ms = sorted[Math.floor(sampleCount * 0.95)] || avgFrameMs;
+            cachedP99Ms = sorted[Math.floor(sampleCount * 0.99)] || avgFrameMs;
+            const worstSliceStart = Math.max(0, Math.floor(sampleCount * 0.99));
+            let worstSum = 0;
+            let worstCount = 0;
+            for (let wi = worstSliceStart; wi < sampleCount; wi++) {
+              worstSum += sorted[wi];
+              worstCount++;
+            }
+            cachedWorstOnePctAvgMs = worstCount > 0 ? worstSum / worstCount : avgFrameMs;
+          }
+
+          if (telemetryTick % 5 === 1 || sampleCount <= 5) {
+            const perfMem = (performance as any).memory;
+            (window as any).__GTEX_BROADCAST_TELEMETRY__ = {
+              gpuVendor,
+              gpuRenderer,
+              canvasWidth: renderer.domElement.width,
+              canvasHeight: renderer.domElement.height,
+              clientWidth: container.clientWidth,
+              clientHeight: container.clientHeight,
+              pixelRatio: renderer.getPixelRatio(),
+              qualityTier,
+              frameCount: sampleCount,
+              avgFps: Number((1000 / Math.max(0.1, avgFrameMs)).toFixed(1)),
+              onePercentLowFps: Number((1000 / Math.max(0.1, cachedWorstOnePctAvgMs)).toFixed(1)),
+              p50FrameMs: Number(cachedP50Ms.toFixed(2)),
+              p95FrameMs: Number(cachedP95Ms.toFixed(2)),
+              p99FrameMs: Number(cachedP99Ms.toFixed(2)),
+              drawCalls: renderer.info.render.calls,
+              triangles: renderer.info.render.triangles,
+              geometries: renderer.info.memory.geometries,
+              textures: renderer.info.memory.textures,
+              jsHeapUsedMb: perfMem
+                ? Number((perfMem.usedJSHeapSize / (1024 * 1024)).toFixed(2))
+                : null,
+              jsHeapTotalMb: perfMem
+                ? Number((perfMem.totalJSHeapSize / (1024 * 1024)).toFixed(2))
+                : null,
+              currentTime: Number(localTime.toFixed(2)),
+              durationSeconds: interpolator.getEndTime(),
+              activeRigCount: playerRigs.size,
+              cameraPreset: state?.camera_preset || "broadcast",
+              clockLabel: `${state?.clock_minute ?? 0}'`,
+              score: {
+                home: state?.home_score ?? 0,
+                away: state?.away_score ?? 0,
+              },
+              activeAnimationStates: activeStatesSnapshot,
+              observedStatesHistory: Array.from(observedStatesHistory),
+              observedCameraPresetsHistory: Array.from(observedCameraPresetsHistory),
+            };
+          }
         }
       }
     };
 
     animationFrameId = requestAnimationFrame(renderLoop);
 
-    // Resize observer
+    // Resize observer for both window and 16:9 / Theatre container transitions
     const handleResize = () => {
       if (!container || !renderer) return;
       const w = container.clientWidth;
@@ -601,11 +686,17 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       }
     };
     window.addEventListener("resize", handleResize);
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(handleResize);
+      resizeObserver.observe(container);
+    }
 
     // Cleanup on unmount
     return () => {
       cancelAnimationFrame(animationFrameId);
       window.removeEventListener("resize", handleResize);
+      resizeObserver?.disconnect();
       canvasElement.removeEventListener("webglcontextlost", handleContextLost);
       canvasElement.removeEventListener("webglcontextrestored", handleContextRestored);
 
@@ -625,13 +716,31 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         }
       }
     };
-  }, [qualityTier, cameraDirector, interpolator, animationStateMachine]);
+  }, [qualityTier, cameraDirector, interpolator, animationStateMachine, handleSelectQualityTier]);
 
   // Handle 2D companion mode toggle
   const handleToggle2D = useCallback(() => {
     setIs2DActive((prev) => !prev);
     onToggle2DCompanion?.();
   }, [onToggle2DCompanion]);
+
+  // Handle 8-second Action Replay toggle
+  const handleTriggerReplay = useCallback(() => {
+    if (isReplayActive && replayReturnTimeRef.current !== null) {
+      localTimeRef.current = replayReturnTimeRef.current;
+      replayReturnTimeRef.current = null;
+      setIsReplayActive(false);
+      setCameraMode("director_auto");
+    } else {
+      const liveNow = localTimeRef.current;
+      replayReturnTimeRef.current = liveNow;
+      const rewindTo = Math.max(interpolator.getStartTime(), liveNow - 8.0);
+      localTimeRef.current = rewindTo;
+      setCurrentTime(rewindTo);
+      setIsReplayActive(true);
+      setCameraMode("closeup_action");
+    }
+  }, [isReplayActive, interpolator]);
 
   // ---------------------------------------------------------------------------
   // Fallback presentation when WebGL is unavailable or user toggles 2D
@@ -713,37 +822,69 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           is2DActive={true}
           audioMuted={audioMuted}
           onToggleAudio={() => setAudioMuted((m) => !m)}
+          qualityTier={qualityTier}
+          onSelectQualityTier={handleSelectQualityTier}
+          isTheatreMode={isTheatreMode}
+          onToggleTheatreMode={handleToggleTheatre}
+          minimalHud={minimalHud}
+          onToggleMinimalHud={() => setMinimalHud((h) => !h)}
+          isReplayActive={isReplayActive}
+          onTriggerReplay={handleTriggerReplay}
         />
       </div>
     );
   }
 
   // ---------------------------------------------------------------------------
-  // Primary 3D WebGL Broadcast Canvas
+  // Primary 16:9 3D WebGL Broadcast Viewport & Full-Screen Match Theatre
   // ---------------------------------------------------------------------------
   return (
     <div
       data-testid={testId}
-      className={`relative h-[560px] w-full overflow-hidden rounded-xl border border-white/10 bg-slate-950 shadow-2xl ${className}`}
+      data-theatre-mode={isTheatreMode ? "true" : "false"}
+      className={
+        isTheatreMode
+          ? "fixed inset-0 z-50 flex items-center justify-center bg-black"
+          : `relative aspect-video min-h-[360px] w-full overflow-hidden rounded-xl border border-white/10 bg-slate-950 shadow-2xl ${className}`
+      }
     >
-      {/* Three.js Canvas Mount */}
-      <div ref={mountRef} className="h-full w-full" />
+      <div
+        className={
+          isTheatreMode
+            ? "relative aspect-video max-h-screen w-full max-w-[177.78vh] overflow-hidden bg-slate-950 shadow-2xl"
+            : "relative h-full w-full"
+        }
+      >
+        {/* Three.js Canvas Mount */}
+        <div ref={mountRef} className="h-full w-full" />
 
-      {/* Broadcast Overlay HUD */}
-      <BroadcastOverlayHUD
-        matchState={currentMatchState}
-        homeTeam={safeView.home_team}
-        awayTeam={safeView.away_team}
-        matchLabel={safeView.match_label}
-        isLive={isLive}
-        viewerCount={viewerCount}
-        cameraMode={cameraMode}
-        onSelectCameraMode={setCameraMode}
-        onToggle2DFallback={handleToggle2D}
-        is2DActive={false}
-        audioMuted={audioMuted}
-        onToggleAudio={() => setAudioMuted((m) => !m)}
-      />
+        {/* Broadcast Overlay HUD */}
+        <BroadcastOverlayHUD
+          matchState={currentMatchState}
+          homeTeam={safeView.home_team}
+          awayTeam={safeView.away_team}
+          matchLabel={safeView.match_label}
+          isLive={isLive}
+          viewerCount={viewerCount}
+          cameraMode={cameraMode}
+          onSelectCameraMode={setCameraMode}
+          onToggle2DFallback={handleToggle2D}
+          is2DActive={false}
+          audioMuted={audioMuted}
+          onToggleAudio={() => setAudioMuted((m) => !m)}
+          qualityTier={qualityTier}
+          onSelectQualityTier={handleSelectQualityTier}
+          isTheatreMode={isTheatreMode}
+          onToggleTheatreMode={handleToggleTheatre}
+          minimalHud={minimalHud}
+          onToggleMinimalHud={() => setMinimalHud((h) => !h)}
+          isReplayActive={isReplayActive}
+          onTriggerReplay={handleTriggerReplay}
+        />
+      </div>
     </div>
   );
 };
+
+// Register renderer in GtexSceneRegistry for generic decoupled viewport resolution
+GtexSceneRegistry.registerRenderer("stadium_match_broadcast", MatchPitchLiveScene);

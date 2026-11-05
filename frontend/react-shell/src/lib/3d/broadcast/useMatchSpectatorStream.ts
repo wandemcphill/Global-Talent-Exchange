@@ -133,9 +133,9 @@ export function useMatchSpectatorStream(
   const manualDisconnectRef = useRef<boolean>(false);
   const isReconnectingRef = useRef<boolean>(false);
 
-  // Concurrency and single-use ticket tracking
+  // Concurrency and single-use ticket tracking with operation-scoped fetch tracking
   const connectSeqRef = useRef<number>(0);
-  const inFlightTicketRef = useRef<boolean>(false);
+  const activeTicketFetchOpIdRef = useRef<number | null>(null);
   const consumedTicketsRef = useRef<Set<string>>(new Set());
 
   // Keep callback refs fresh to avoid reconnect churn
@@ -230,7 +230,7 @@ export function useMatchSpectatorStream(
       }
 
       // Prevent concurrent reconnect operations from racing to acquire/consume tickets
-      if (inFlightTicketRef.current && !fromManualReconnect) {
+      if (activeTicketFetchOpIdRef.current !== null && !fromManualReconnect) {
         return;
       }
 
@@ -249,10 +249,12 @@ export function useMatchSpectatorStream(
           setConnectionStatus("error");
           return;
         }
-        inFlightTicketRef.current = true;
+        activeTicketFetchOpIdRef.current = opId;
         try {
           const issued = await requestTicketRef.current(canonicalId || matchId);
-          inFlightTicketRef.current = false;
+          if (activeTicketFetchOpIdRef.current === opId) {
+            activeTicketFetchOpIdRef.current = null;
+          }
 
           // Abort if superseded by a newer connect/disconnect while awaiting ticket
           if (opId !== connectSeqRef.current || manualDisconnectRef.current) {
@@ -268,7 +270,9 @@ export function useMatchSpectatorStream(
           consumedTicketsRef.current.add(trimmedTicket);
           activeTicket = trimmedTicket;
         } catch {
-          inFlightTicketRef.current = false;
+          if (activeTicketFetchOpIdRef.current === opId) {
+            activeTicketFetchOpIdRef.current = null;
+          }
           if (opId !== connectSeqRef.current || manualDisconnectRef.current) {
             return;
           }
@@ -440,7 +444,7 @@ export function useMatchSpectatorStream(
     return () => {
       manualDisconnectRef.current = true;
       connectSeqRef.current += 1;
-      inFlightTicketRef.current = false;
+      activeTicketFetchOpIdRef.current = null;
       cleanupSocket();
     };
   }, [connect, cleanupSocket]);
@@ -472,7 +476,7 @@ export function useMatchSpectatorStream(
   }, []);
 
   const manualReconnect = useCallback(() => {
-    if (inFlightTicketRef.current) {
+    if (activeTicketFetchOpIdRef.current !== null) {
       return;
     }
     isReconnectingRef.current = true;
@@ -484,7 +488,7 @@ export function useMatchSpectatorStream(
   const manualDisconnect = useCallback(() => {
     manualDisconnectRef.current = true;
     connectSeqRef.current += 1;
-    inFlightTicketRef.current = false;
+    activeTicketFetchOpIdRef.current = null;
     cleanupSocket();
     setConnectionStatus("disconnected");
   }, [cleanupSocket]);

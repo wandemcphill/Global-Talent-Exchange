@@ -37,7 +37,7 @@ import { Btn, Chip, Loading, Panel } from "@/components/gtex/ui";
 import { Cinema3DStage, Cinema3DSceneType } from "@/components/gtex/Cinema3DStage";
 import { MatchPitchLiveScene } from "@/lib/3d/broadcast/MatchPitchLiveScene";
 import { useMatchSpectatorStream } from "@/lib/3d/broadcast/useMatchSpectatorStream";
-import { buildFiveMinuteHumanoidMatchFixture } from "@/lib/3d/broadcast/HumanoidMatchPrototypeFixture";
+import { loadFiveMinuteShowcaseFixture } from "@/lib/3d/broadcast/showcaseLoader";
 import { HolographicPlayerCard } from "@/components/gtex/ApexWidgets";
 import { MatchdayLineupBroadcast, useClubMatchdaySheet, type MatchdaySquadMember } from "@/components/gtex/MatchdayLineupBroadcast";
 import { useSkin } from "@/lib/skin-engine";
@@ -1970,19 +1970,31 @@ export default function MatchCenter() {
   const clubId = params.get("club") || activeClub?.club_id || "";
   const { getModuleView, setModuleView } = useSkin();
   const matchView = getModuleView("match_center");
-  // 3D WebGL Broadcast View vs 2D Tactical Pitch View Toggle
+  // 3D WebGL Broadcast View vs 2D Tactical Pitch View Toggle & Full-Screen 16:9 Match Theatre
   const [view3DBroadcast, setView3DBroadcast] = useState<boolean>(true);
+  const [isTheatreMode, setIsTheatreMode] = useState<boolean>(
+    params.get("theatre") === "1" || params.get("theatre") === "true"
+  );
 
   const modeParam = params.get("mode");
+  const durationParam = params.get("duration");
+  const showcaseDurationSec = Number(durationParam) > 0 ? Number(durationParam) : 300;
+  const viewerQuerySuffix = useMemo(() => {
+    const q = new URLSearchParams();
+    if (modeParam) q.set("mode", modeParam);
+    if (durationParam) q.set("target_duration_seconds", durationParam);
+    const qs = q.toString();
+    return qs ? `?${qs}` : "";
+  }, [modeParam, durationParam]);
+
   const { data: viewerData, refetch: refetchViewerData } = useQuery({
-    queryKey: ["match-viewer", id, modeParam],
+    queryKey: ["match-viewer", id, modeParam, durationParam],
     queryFn: async () => {
       if (id === "u2a-006-showcase") {
-        return buildFiveMinuteHumanoidMatchFixture(300);
+        return await loadFiveMinuteShowcaseFixture(showcaseDurationSec);
       }
       try {
-        const suffix = modeParam ? `?mode=${encodeURIComponent(modeParam)}` : "";
-        return (await api.get(`/match-viewer/${id}${suffix}`)).data;
+        return (await api.get(`/match-viewer/${id}${viewerQuerySuffix}`)).data;
       } catch {
         return null;
       }
@@ -1992,10 +2004,11 @@ export default function MatchCenter() {
   });
 
   const { data: m, isLoading } = useQuery({
-    queryKey: ["match", id, modeParam],
+    queryKey: ["match", id, modeParam, durationParam],
     queryFn: async () => {
       if (id === "u2a-006-showcase") {
-        const showcase = buildFiveMinuteHumanoidMatchFixture(300);
+        const showcase = await loadFiveMinuteShowcaseFixture(showcaseDurationSec);
+        if (!showcase) return null;
         return {
           match_id: showcase.match_id,
           id: showcase.match_id,
@@ -2010,14 +2023,13 @@ export default function MatchCenter() {
           frames: showcase.frames,
           home_team: showcase.home_team,
           away_team: showcase.away_team,
-          duration_seconds: (showcase as any).duration_seconds ?? 300,
+          duration_seconds: (showcase as any).duration_seconds ?? showcaseDurationSec,
         };
       }
       try {
         return (await api.get(`/owner/matches/${id}`)).data;
       } catch {
-        const suffix = modeParam ? `?mode=${encodeURIComponent(modeParam)}` : "";
-        const viewer = (await api.get(`/match-viewer/${id}${suffix}`)).data;
+        const viewer = (await api.get(`/match-viewer/${id}${viewerQuerySuffix}`)).data;
         if (viewer && viewer.match_id) {
           return {
             match_id: viewer.match_id,
@@ -2447,7 +2459,7 @@ export default function MatchCenter() {
                 ))}
               </div>
 
-              {/* 3D WebGL Broadcast / 2D Tactical Toggle */}
+              {/* 3D WebGL Broadcast / 2D Tactical Toggle & 16:9 Match Theatre Launch */}
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
@@ -2461,6 +2473,21 @@ export default function MatchCenter() {
                 >
                   <Tv size={11} className={view3DBroadcast ? "text-cyan-400" : "text-slate-400"} />
                   <span>{view3DBroadcast ? "3D BROADCAST" : "2D PITCH"}</span>
+                </button>
+                <button
+                  type="button"
+                  data-testid="enter-match-theatre-button"
+                  onClick={() => {
+                    setView3DBroadcast(true);
+                    setIsTheatreMode((t) => !t);
+                  }}
+                  className={`flex items-center gap-1.5 rounded-sm px-2.5 py-1 text-[10px] font-black tracking-wider transition-colors ${
+                    isTheatreMode
+                      ? "border border-emerald-400 bg-emerald-500 text-slate-950"
+                      : "border border-emerald-400/50 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25"
+                  }`}
+                >
+                  <span>{isTheatreMode ? "EXIT 16:9 THEATRE" : "16:9 MATCH THEATRE"}</span>
                 </button>
               </div>
 
@@ -2552,12 +2579,17 @@ export default function MatchCenter() {
                 matchViewState={viewerData || m}
                 isLive={Boolean(params.get("live"))}
                 viewerCount={spectatorStream.viewerCount}
-                qualityTier={(params.get("tier") as any) || "high"}
+                qualityTier={(params.get("tier") as any) || (params.get("quality") as any) || "high"}
                 playbackSpeed={speed}
                 isPaused={isPaused}
                 liveFrame={spectatorStream.lastFrame}
                 liveEvents={spectatorStream.recentEvents}
-                onToggle2DCompanion={() => setView3DBroadcast(false)}
+                isTheatreMode={isTheatreMode}
+                onToggleTheatreMode={() => setIsTheatreMode((t) => !t)}
+                onToggle2DCompanion={() => {
+                  setIsTheatreMode(false);
+                  setView3DBroadcast(false);
+                }}
               />
             ) : (
               <Pitch2DView

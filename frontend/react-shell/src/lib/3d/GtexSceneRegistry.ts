@@ -1,3 +1,4 @@
+import type React from "react";
 /**
  * GTEX Living Football Ecosystem — Shared WebGL 3D Experience Framework
  * Official GtexSceneRegistry: Central catalog of reusable 3D environments,
@@ -404,6 +405,22 @@ const INITIAL_SCENE_CATALOG: GtexSceneDescriptor[] = [
 class SceneRegistryStore {
   private scenes = new Map<string, GtexSceneDescriptor>();
   private qualityOverride: DeviceQualityTier | null = null;
+  private customRenderers = new Map<string, React.ComponentType<any>>();
+
+  /** Register a custom component renderer for a scene ID (decoupling viewports from concrete scenes) */
+  public registerRenderer(sceneId: string, renderer: React.ComponentType<any>): void {
+    this.customRenderers.set(sceneId, renderer);
+  }
+
+  /** Retrieve a custom component renderer for a scene ID */
+  public getRenderer(sceneId: string): React.ComponentType<any> | undefined {
+    return this.customRenderers.get(sceneId);
+  }
+
+  /** Unregister a custom component renderer */
+  public unregisterRenderer(sceneId: string): void {
+    this.customRenderers.delete(sceneId);
+  }
 
   constructor() {
     this.initDefaultCatalog();
@@ -538,6 +555,7 @@ class SceneRegistryStore {
   /** Reset registry to default baseline (for unit tests) */
   public resetToDefaults(): void {
     this.scenes.clear();
+    this.customRenderers.clear();
     this.qualityOverride = null;
     this.initDefaultCatalog();
   }

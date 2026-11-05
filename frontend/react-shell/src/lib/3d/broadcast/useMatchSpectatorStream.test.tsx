@@ -386,4 +386,74 @@ describe("useMatchSpectatorStream", () => {
     expect(MockWebSocket.instances.length).toBe(1);
     expect(MockWebSocket.instances[0].url).toContain("ticket=atomic_ticket_1");
   });
+
+
+  it("discards stale ticket responses if disconnect occurs or a newer connection starts before ticket resolution", async () => {
+    let resolveFirstTicket: ((val: string) => void) | null = null;
+    let resolveSecondTicket: ((val: string) => void) | null = null;
+    let callCount = 0;
+
+    const requestTicket = jest.fn(() => {
+      callCount += 1;
+      const count = callCount;
+      return new Promise<string>((resolve) => {
+        if (count === 1) {
+          resolveFirstTicket = resolve;
+        } else {
+          resolveSecondTicket = resolve;
+        }
+      });
+    });
+
+    await act(async () => {
+      root.render(
+        <StreamConsumer
+          options={{
+            matchId: "match-stale-race-1",
+            isAuthenticated: true,
+            requestTicket,
+            wsUrl: "ws://localhost:8000/ws/spectate/match-stale-race-1",
+          }}
+        />
+      );
+    });
+
+    expect(requestTicket).toHaveBeenCalledTimes(1);
+    expect(latestResult?.connectionStatus).toBe("connecting");
+
+    // User calls disconnect while ticket 1 is in-flight
+    act(() => {
+      latestResult?.disconnect();
+    });
+    expect(latestResult?.connectionStatus).toBe("disconnected");
+
+    // Stale ticket 1 resolves AFTER disconnect
+    await act(async () => {
+      if (resolveFirstTicket) {
+        resolveFirstTicket("stale_ticket_1");
+      }
+    });
+
+    // Stale ticket 1 resolution must NOT open a WebSocket or change status away from disconnected
+    expect(MockWebSocket.instances.length).toBe(0);
+    expect(latestResult?.connectionStatus).toBe("disconnected");
+
+    // Now user reconnects, starting operation 2
+    await act(async () => {
+      latestResult?.reconnect();
+    });
+    expect(requestTicket).toHaveBeenCalledTimes(2);
+
+    // Ticket 2 resolves
+    await act(async () => {
+      if (resolveSecondTicket) {
+        resolveSecondTicket("valid_ticket_2");
+      }
+    });
+
+    // Only ticket 2 opens a WebSocket
+    expect(MockWebSocket.instances.length).toBe(1);
+    expect(MockWebSocket.instances[0].url).toContain("ticket=valid_ticket_2");
+    expect(MockWebSocket.instances[0].url).not.toContain("stale_ticket_1");
+  });
 });

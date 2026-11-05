@@ -135,13 +135,20 @@ return {user_id, display_name}
 """
 
 _RATE_LIMIT_TICKET_LUA = """
-local current = redis.call("INCR", KEYS[1])
-if current == 1 then
-    redis.call("PEXPIRE", KEYS[1], tonumber(ARGV[1]))
-end
-if current > tonumber(ARGV[2]) then
+local key = KEYS[1]
+local now_ms = tonumber(ARGV[1])
+local window_ms = tonumber(ARGV[2])
+local max_allowed = tonumber(ARGV[3])
+local member_id = ARGV[4]
+
+local cutoff_ms = now_ms - window_ms
+redis.call("ZREMRANGEBYSCORE", key, "-inf", cutoff_ms)
+local current = tonumber(redis.call("ZCARD", key))
+if current >= max_allowed then
     return 0
 end
+redis.call("ZADD", key, now_ms, member_id)
+redis.call("PEXPIRE", key, window_ms)
 return 1
 """
 
@@ -157,6 +164,7 @@ class AsyncEvalRedisEmulator:
     def __init__(self) -> None:
         self._hashes: dict[str, dict[str, str]] = {}
         self._counters: dict[str, int] = {}
+        self._sorted_sets: dict[str, list[tuple[int, str]]] = {}
         self._expires_at_ms: dict[str, int] = {}
         self._lock = asyncio.Lock()
 
@@ -168,6 +176,7 @@ class AsyncEvalRedisEmulator:
         if exp is not None and now_ms >= exp:
             self._hashes.pop(key, None)
             self._counters.pop(key, None)
+            self._sorted_sets.pop(key, None)
             self._expires_at_ms.pop(key, None)
 
     async def eval(self, script: str, numkeys: int, *keys_and_args: Any) -> Any:
@@ -209,13 +218,20 @@ class AsyncEvalRedisEmulator:
                 return [user_id, display_name]
 
             if script == _RATE_LIMIT_TICKET_LUA:
-                window_ms = max(1, int(argv[0]))
-                max_allowed = max(1, int(argv[1]))
-                current = self._counters.get(key, 0) + 1
-                self._counters[key] = current
-                if current == 1:
-                    self._expires_at_ms[key] = now_ms + window_ms
-                return 0 if current > max_allowed else 1
+                req_now_ms = int(argv[0])
+                window_ms = max(1, int(argv[1]))
+                max_allowed = max(1, int(argv[2]))
+                member_id = argv[3]
+                cutoff_ms = req_now_ms - window_ms
+                entries = self._sorted_sets.setdefault(key, [])
+                entries = [item for item in entries if item[0] > cutoff_ms]
+                if len(entries) >= max_allowed:
+                    self._sorted_sets[key] = entries
+                    return 0
+                entries.append((req_now_ms, member_id))
+                self._sorted_sets[key] = entries
+                self._expires_at_ms[key] = req_now_ms + window_ms
+                return 1
 
             raise RedisError("Unsupported script in AsyncEvalRedisEmulator")
 
@@ -229,7 +245,7 @@ class AsyncEvalRedisEmulator:
             now_ms = self._now_ms()
             for k in list(self._expires_at_ms.keys()):
                 self._evict_if_expired(k, now_ms)
-            return list(self._hashes.keys()) + list(self._counters.keys())
+            return list(self._hashes.keys()) + list(self._counters.keys()) + list(self._sorted_sets.keys())
 
     async def aclose(self) -> None:
         return None
@@ -289,15 +305,19 @@ class RedisSpectatorTicketStore:
         window_seconds: float,
     ) -> bool:
         backend = await self._get_backend()
+        now_ms = int(time.time() * 1000)
         window_ms = max(100, int(round(max(float(window_seconds), 0.1) * 1000)))
         limit = max(1, int(max_tickets))
+        member_id = f"{now_ms}:{secrets.token_hex(8)}"
         try:
             allowed = await backend.eval(
                 _RATE_LIMIT_TICKET_LUA,
                 1,
                 self.rate_limit_key(user_id),
+                str(now_ms),
                 str(window_ms),
                 str(limit),
+                member_id,
             )
             return bool(int(allowed or 0) == 1)
         except (RedisError, OSError, RuntimeError) as exc:

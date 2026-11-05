@@ -8,7 +8,6 @@ import React, { useMemo, useState, useEffect } from "react";
 import { GtexSceneRegistry, QUALITY_PROFILES } from "./GtexSceneRegistry";
 import { DeviceQualityTier, GtexSceneViewportProps } from "./GtexSceneTypes";
 import { Cinema3DStage, Cinema3DSceneType } from "@/components/gtex/Cinema3DStage";
-import { MatchPitchLiveScene } from "./broadcast/MatchPitchLiveScene";
 import {
   Sparkles,
   Layers,
@@ -215,12 +214,23 @@ export const GtexSceneViewport: React.FC<GtexSceneViewportProps> = ({
       data-target-fps={activeQuality.targetFps}
       data-pixel-ratio={activeQuality.pixelRatio}
     >
-      {/* Underlying 3D Stage Delegation */}
-      {descriptor.id === "stadium_match_broadcast" && cinemaProps.matchViewState ? (
-        <MatchPitchLiveScene
-          matchViewState={cinemaProps.matchViewState}
-          qualityTier={selectedTier}
-        />
+      {/* Underlying 3D Stage Delegation via Registry or Props */}
+      {(() => {
+        const CustomRenderer = GtexSceneRegistry.getRenderer(descriptor.id);
+        if (CustomRenderer && cinemaProps.matchViewState) {
+          return (
+            <CustomRenderer
+              matchViewState={cinemaProps.matchViewState}
+              qualityTier={selectedTier}
+              {...cinemaProps}
+            />
+          );
+        }
+        return null;
+      })() || (children ? (
+        <div className="relative overflow-hidden rounded-xl bg-slate-950">
+          {children}
+        </div>
       ) : descriptor.renderBackend === "cinema_volumetric" || descriptor.cinemaSceneType ? (
         <Cinema3DStage
           scene={resolvedSceneType}
@@ -228,10 +238,6 @@ export const GtexSceneViewport: React.FC<GtexSceneViewportProps> = ({
           subtitle={cinemaProps.subtitle || descriptor.description}
           {...cinemaProps}
         />
-      ) : children ? (
-        <div className="relative overflow-hidden rounded-xl bg-slate-950">
-          {children}
-        </div>
       ) : (
         <Cinema3DStage
           scene="stadium_sponsor"
@@ -239,7 +245,7 @@ export const GtexSceneViewport: React.FC<GtexSceneViewportProps> = ({
           subtitle={cinemaProps.subtitle || descriptor.description}
           {...cinemaProps}
         />
-      )}
+      ))}
     </div>
   );
 };

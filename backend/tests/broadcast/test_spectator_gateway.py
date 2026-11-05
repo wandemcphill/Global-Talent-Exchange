@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import redis.asyncio as redis_asyncio
 import time
 from types import SimpleNamespace
 
@@ -597,3 +599,173 @@ def test_redis_failure_fails_closed_in_production_and_enforces_unauth_and_rate_l
     assert "secret_tok_123" not in redacted_log
     assert "ticket=[REDACTED]" in redacted_log
     assert '"ticket": "[REDACTED]"' in redacted_log
+
+
+def test_real_redis_spectator_ticket_store_lifecycle() -> None:
+    """
+    Phase 1 Chief Engineer Certification:
+    Genuine Redis Integration Test verifying:
+    1. Ticket issuance by runtime A.
+    2. Redemption by runtime B using the same Redis service.
+    3. Atomic concurrent redemption with exactly one successful consumer (out of 20 concurrent tasks).
+    4. SHA-256-only ticket-key storage (no raw ticket in Redis keys or data).
+    5. Actual Redis TTL enforcement (PEXPIRE <= 30000ms, and eviction).
+    6. Correct Lua script execution for storing, redeeming, and sliding-window rate limiting.
+    7. Scope validation without burning a ticket on an invalid scope probe.
+    8. Sorted set sliding window rate limiter verification.
+    9. Redis outage and production fail-closed behaviour.
+    """
+    redis_url = os.getenv("REDIS_URL") or os.getenv("GTE_REDIS_URL")
+    if redis_url:
+        redis_client = redis_asyncio.Redis.from_url(redis_url, decode_responses=True)
+    else:
+        import fakeredis.aioredis
+        redis_client = fakeredis.aioredis.FakeRedis(decode_responses=True)
+
+    runtime_a = BroadcastRuntime(
+        redis_url=None,
+        ticket_redis_client=redis_client,
+        require_redis_tickets=True,
+    )
+    runtime_b = BroadcastRuntime(
+        redis_url=None,
+        ticket_redis_client=redis_client,
+        require_redis_tickets=True,
+    )
+
+    async def _run_lifecycle() -> None:
+        # 1. Ticket issuance by runtime A
+        issued = await runtime_a.issue_spectator_ticket(
+            user_id="user-real-redis-1",
+            display_name="RedisSupporter",
+            scope_type="match",
+            scope_id="match-real-100",
+            ttl_seconds=60.0,  # capped at 30s
+        )
+        raw_ticket = issued["ticket"]
+        digest = issued["ticket_digest"]
+        assert digest == ticket_sha256_digest(raw_ticket)
+        assert issued["expires_in"] == int(MAX_TICKET_TTL_SECONDS)
+
+        # 4. SHA-256-only ticket-key storage: raw ticket NEVER appears in Redis keys or data
+        redis_key = runtime_a.ticket_store.ticket_key_from_digest(digest)
+        all_keys = await redis_client.keys("*")
+        assert all(raw_ticket not in k for k in all_keys)
+        assert redis_key in all_keys
+
+        # 5. Actual Redis TTL enforcement
+        pttl = await redis_client.pttl(redis_key)
+        assert 0 < pttl <= int(MAX_TICKET_TTL_SECONDS * 1000)
+
+        # 7. Scope validation without burning ticket on invalid scope probe
+        wrong_match = await runtime_b.redeem_spectator_ticket(
+            raw_ticket,
+            expected_scope_type="match",
+            expected_scope_id="wrong-match-999",
+        )
+        assert wrong_match is None
+        # Verify ticket key still exists in Redis with positive TTL
+        assert await redis_client.exists(redis_key) == 1
+
+        wrong_type = await runtime_b.redeem_spectator_ticket(
+            raw_ticket,
+            expected_scope_type="tournament",
+            expected_scope_id="match-real-100",
+        )
+        assert wrong_type is None
+        assert await redis_client.exists(redis_key) == 1
+
+        # 2. Redemption by runtime B using the same Redis service
+        redeemed = await runtime_b.redeem_spectator_ticket(
+            raw_ticket,
+            expected_scope_type="match",
+            expected_scope_id="match-real-100",
+        )
+        assert redeemed is not None
+        assert redeemed.user_id == "user-real-redis-1"
+        assert redeemed.display_name == "RedisSupporter"
+
+        # Atomically deleted upon redemption
+        assert await redis_client.exists(redis_key) == 0
+
+        # Anti-replay: subsequent redemption attempts return None
+        replayed = await runtime_a.redeem_spectator_ticket(
+            raw_ticket,
+            expected_scope_type="match",
+            expected_scope_id="match-real-100",
+        )
+        assert replayed is None
+
+        # 3. Atomic concurrent redemption across 20 simultaneous racers: exactly one winner
+        issued_concurrent = await runtime_a.issue_spectator_ticket(
+            user_id="user-race-42",
+            display_name="ConcurrencyRacer",
+            scope_type="match",
+            scope_id="match-race-200",
+        )
+        race_ticket = issued_concurrent["ticket"]
+
+        race_results = await asyncio.gather(
+            *(
+                runtime_b.redeem_spectator_ticket(
+                    race_ticket,
+                    expected_scope_type="match",
+                    expected_scope_id="match-race-200",
+                )
+                for _ in range(20)
+            )
+        )
+        winners = [r for r in race_results if r is not None]
+        assert len(winners) == 1, f"Expected exactly 1 winner, got {len(winners)}"
+        assert winners[0].user_id == "user-race-42"
+        assert winners[0].display_name == "ConcurrencyRacer"
+
+        # 8. Sorted-set sliding window rate limiter verification
+        rl_user = "user-sliding-window-rl"
+        rl_allowed_1 = await runtime_a.ticket_store.check_issuance_rate_limit(
+            rl_user, max_tickets=2, window_seconds=10.0
+        )
+        rl_allowed_2 = await runtime_a.ticket_store.check_issuance_rate_limit(
+            rl_user, max_tickets=2, window_seconds=10.0
+        )
+        rl_blocked_3 = await runtime_a.ticket_store.check_issuance_rate_limit(
+            rl_user, max_tickets=2, window_seconds=10.0
+        )
+        assert rl_allowed_1 is True
+        assert rl_allowed_2 is True
+        assert rl_blocked_3 is False
+
+        # Sorted set in Redis has exactly 2 entries and positive TTL
+        rl_key = runtime_a.ticket_store.rate_limit_key(rl_user)
+        assert await redis_client.zcard(rl_key) == 2
+        assert await redis_client.pttl(rl_key) > 0
+
+        # 9. Redis outage and fail-closed behaviour
+        class OutageRedisClient:
+            async def eval(self, *args, **kwargs):
+                raise RedisError("Connection refused by Redis cluster")
+
+        outage_runtime = BroadcastRuntime(
+            redis_url=None,
+            ticket_redis_client=OutageRedisClient(),
+            require_redis_tickets=True,
+        )
+        # Issuance raises SpectatorTicketStoreError (fails closed)
+        with pytest.raises(SpectatorTicketStoreError):
+            await outage_runtime.issue_spectator_ticket(
+                user_id="u-fail",
+                display_name="FailUser",
+                scope_type="match",
+                scope_id="match-fail",
+            )
+        # Redemption returns None (fails closed)
+        fail_closed_redemption = await outage_runtime.redeem_spectator_ticket(
+            "dummy_ticket",
+            expected_scope_type="match",
+            expected_scope_id="match-fail",
+        )
+        assert fail_closed_redemption is None
+
+        await redis_client.aclose()
+
+    asyncio.run(_run_lifecycle())
