@@ -8,6 +8,7 @@
 - **Initial Phase 2.3 PR Head:** `60dbf3855cd241e3017743f541fdc03f09391934`
 - **Independent Review Head Commit:** `2344fe7c93d892fbbf20a475c900055189df7260`
 - **Tested Implementation & Correction Head:** `e7ba0d6083b0b3a57acdce98fac01d8c6be3af95`
+- **Certified Application-Code & CI Head:** `6e8e9752cbdbe49f5c080357926aa1fc545eb0f9`
 - **Certification Date:** November 5, 2026
 
 ---
@@ -55,7 +56,7 @@ To ensure transparent auditing, the following commit lineage is recorded:
 2. **Initial PR #382 Head:** `60dbf3855cd241e3017743f541fdc03f09391934`
 3. **Independent Review Head:** `2344fe7c93d892fbbf20a475c900055189df7260` (verified passing initial review gates)
 4. **Tested Implementation & Correction Head:** `e7ba0d6083b0b3a57acdce98fac01d8c6be3af95` (contains medical parity default 10, missing-field regression tests, dedicated React WebGL verification tool, and initial report)
-5. **Final CI Closure & Verification Gate Commit:** (this commit, introducing `.github/workflows/react-webgl-operations-centre.yml`, strengthened Three.js scene fallback assertions, zero unhandled JavaScript page error guards, and accurate CI accounting).
+5. **Final CI Closure & Verification Gate Commit (certified application-code head):** `6e8e9752cbdbe49f5c080357926aa1fc545eb0f9` (introduces `.github/workflows/react-webgl-operations-centre.yml`, strengthened Three.js scene fallback assertions, zero unhandled JavaScript page-error guards, and accurate CI accounting). This README update is a documentation-only follow-up; it does not change the certified application code.
 
 ---
 
@@ -72,7 +73,7 @@ To ensure transparent auditing, the following commit lineage is recorded:
   3. **Appointed with Missing Expertise:** Confirms Dr. Chidi Obi (profile without `medical_expertise`) defaults to 10. Both briefing and `service.tick_club` formula yield heal rate 8. Verifies world-clock tick reduces injury days from 10 to 2 (10 - 8 = 2).
 
 ### Deliverable 2 — Dedicated React WebGL & GLB Asset Verification
-- **Required GitHub Actions CI Job:** `.github/workflows/react-webgl-operations-centre.yml`
+- **Dedicated PR-triggered GitHub Actions CI job:** `.github/workflows/react-webgl-operations-centre.yml`
   - Job: `react-webgl-verification` ("React WebGL operations-centre verification")
   - Builds the React production bundle for `/console`.
   - Installs Playwright browser dependencies (Chromium).
@@ -112,7 +113,7 @@ To maintain clear engineering boundaries, the two distinct frontend verification
 | **P7-FEV Browser Matrix** | Playwright / Flutter Web | Flutter mobile & tablet client shell, audio, and match views | Flutter web-server on port 7357 (`--dart-define=GTE_BACKEND_MODE=live`) |
 | **React WebGL Operations Centre** | Playwright / Three.js | Living Management Centre 3D WebGL viewport, 6/6 GLBs, 2D floorplan fallback | React shell production bundle served under `/console` |
 
-### P7-FEV Flutter Browser Matrix Stability Analysis (Run 42043658032)
+### P7-FEV Flutter Browser Matrix Stability Analysis (Run 42050347144)
 - **Passed:** 38 tests passed.
 - **Flaky Tests (4):**
   1. `[mobile] > tests/p7_fe_audio_shell.spec.mjs:24:1 > Audio settings and soundtrack OS shell load without visual or layout errors`
@@ -149,30 +150,49 @@ The 9 production visual verification screenshots are archived in this evidence d
 
 ---
 
-## 6. Authoritative CI Run Results for PR Head `e7ba0d60`
+## 6. Authoritative CI Run Results for Certified Application-Code Head `6e8e9752`
 
-The exact workflow runs and jobs executed against commit `e7ba0d6083b0b3a57acdce98fac01d8c6be3af95`:
+The following GitHub Actions runs were executed against the exact certified application-code commit `6e8e9752cbdbe49f5c080357926aa1fc545eb0f9`. Job-level conclusions were checked directly; a successful parent workflow is not used to relabel skipped jobs as passed.
 
-| Workflow & Job Name | Run ID | Status | Duration | Scope / Verification Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| **Quality Gates** (`quality-gates`) | [42043658035](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42043658035/job/127300732407) | **Passed** | 1m 9s | Black, Ruff, detect-secrets, reality audit, contract audit |
-| **CI: backend-tests** | [42043657723](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42043657723/job/127300732336) | **Passed** | 2m 14s | World clock, campus comms, medical parity regression tests |
-| **CI: backend-app-contract-tests** | [42043657723](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42043657723/job/127300732445) | **Passed** | 2m 52s | Owner console & API contract validation |
-| **CI: backend-migration-integrity** | [42043657723](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42043657723/job/127300732817) | **Passed** | 1m 42s | Alembic database migration integrity |
-| **CI: backend-live-playback-tests** | [42043657723](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42043657723/job/127300732324) | **Passed** | 1m 19s | Match simulation and playback |
-| **CI: backend-payment-regressions** | [42043657723](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42043657723/job/127300732845) | **Passed** | 1m 4s | Ledger transaction regressions |
-| **CI: backend-referral-durability** | [42043657723](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42043657723/job/127300732420) | **Passed** | 44s | Referral state persistence |
-| **CI: backend-highlight-regressions** | [42043657723](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42043657723/job/127300732215) | **Passed** | 47s | Match event highlights |
-| **CI: frontend-tests** | [42043657723](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42043657723/job/127300732397) | **Passed** | 8m 42s | Flutter analyzer and unit/widget test suite |
-| **CI: frontend-android-build** | [42043657723](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42043657723/job/127300732129) | **Passed** | 5m 28s | Flutter Android client build |
-| **CI: frontend-route-integrity** | [42043657723](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42043657723/job/127300732402) | **Passed** | 1m 1s | Route integrity validation |
-| **CI: frontend-live-fallback** | [42043657723](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42043657723/job/127300732660) | **Passed** | 1m 3s | Fallback regression suite |
-| **CI: deploy-staging** | [42043657723](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42043657723/job/127305716132) | **Skipped** | 0s | *Intentionally skipped on pull request; restricted to `push` on `main`* |
-| **CI: unity-android-build** | [42043657723](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42043657723/job/127300735472) | **Skipped** | 0s | *Intentionally skipped on web-only PR* |
-| **CI: unity-windows-build** | [42043657723](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42043657723/job/127300733891) | **Skipped** | 0s | *Intentionally skipped on web-only PR* |
-| **CI: unity-android-export** | [42043657723](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42043657723/job/127300735613) | **Skipped** | 0s | *Intentionally skipped on web-only PR* |
-| **Phase A Economic Regressions** | [42043658085](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42043658085/job/127300732058) | **Passed** | 2m 47s | Authoritative economic simulation suite |
-| **React Shell Build** | [42043658029](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42043658029/job/127300732038) | **Passed** | 1m 10s | React shell build and unit tests |
-| **Deploy Production Web Build** | [42043658054](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42043658054/job/127300732884) | **Passed** | 1m 36s | Web client production bundle |
-| **Vercel Preview Deployment** | [Preview](https://vercel.com/fliptrybeng-6840s-projects/global-talent-exchange/7R236sY8HE4gTTtS2q9PESvNdwV4) | **Passed** | — | Vercel deployment completed successfully |
-| **React WebGL Operations Centre** | `.github/workflows/react-webgl-operations-centre.yml` | **Verified Locally** | 25s | 3 browser tests passed (6/6 GLBs, fallback mesh in scene, 2D floorplan) |
+| Workflow & Job Name | Run / Job | Status | Scope / Verification Notes |
+| :--- | :--- | :--- | :--- |
+| **Quality Gates** (`quality-gates`) | [Run 42050347120 · Job 127324473081](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42050347120/job/127324473081) | **Passed** | Black, Ruff, detect-secrets, reality and contract audits |
+| **React WebGL Operations Centre** (`react-webgl-verification`) | [Run 42050347373 · Job 127324474074](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42050347373/job/127324474074) | **Passed** | Production React build under `/console`; Playwright Chromium; six GLBs; failure warning and actual wireframe mesh assertions; 2D floorplan; zero unhandled JavaScript page errors; Python unit/contract tests |
+| **P7-FEV Browser Verification** | [Run 42050347144 · Job 127324472198](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42050347144/job/127324472198) | **Passed** | Flutter Playwright matrix: 38 passed, 4 tests passed on retry, 6 intentionally skipped notification-fixture tests |
+| **CI: backend-tests** | [Run 42050347029 · Job 127324472926](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42050347029/job/127324472926) | **Passed** | Backend test suite, including world-clock and campus regressions |
+| **CI: backend-app-contract-tests** | [Run 42050347029 · Job 127324473964](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42050347029/job/127324473964) | **Passed** | Owner console and API contracts |
+| **CI: backend-migration-integrity** | [Run 42050347029 · Job 127324473787](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42050347029/job/127324473787) | **Passed** | Database migration integrity |
+| **CI: backend-live-playback-tests** | [Run 42050347029 · Job 127324473890](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42050347029/job/127324473890) | **Passed** | Match simulation and playback regressions |
+| **CI: backend-payment-regressions** | [Run 42050347029 · Job 127324473555](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42050347029/job/127324473555) | **Passed** | Payment and ledger regressions |
+| **CI: backend-referral-durability** | [Run 42050347029 · Job 127324473281](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42050347029/job/127324473281) | **Passed** | Referral state persistence |
+| **CI: backend-highlight-regressions** | [Run 42050347029 · Job 127324473559](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42050347029/job/127324473559) | **Passed** | Match event highlight regressions |
+| **CI: frontend-tests** | [Run 42050347029 · Job 127324473763](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42050347029/job/127324473763) | **Passed** | Flutter analyzer and unit/widget test suite |
+| **CI: frontend-android-build** | [Run 42050347029 · Job 127324473371](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42050347029/job/127324473371) | **Passed** | Flutter Android client build |
+| **CI: frontend-route-integrity-regressions** | [Run 42050347029 · Job 127324473740](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42050347029/job/127324473740) | **Passed** | Client route integrity |
+| **CI: frontend-live-fallback-regressions** | [Run 42050347029 · Job 127324473480](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42050347029/job/127324473480) | **Passed** | Live-mode fallback regressions |
+| **Phase A Economic Regressions** | [Run 42050347136 · Job 127324472939](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42050347136/job/127324472939) | **Passed** | Authoritative economic simulation suite |
+| **React Shell Build** | [Run 42050346959 · Job 127324471519](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42050346959/job/127324471519) | **Passed** | React shell production build |
+| **Cloudflare Pages Web Build** | [Run 42050346994 · Job 127324471313](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42050346994/job/127324471313) | **Passed** | GTEX React web build for `playgtex.app` |
+| **Final Platform Certification** | [Run 42050347175 · Job 127324474703](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42050347175/job/127324474703) | **Passed** | Final platform certification workflow |
+
+### Explicitly skipped jobs
+
+These jobs completed with GitHub Actions conclusion `skipped`; they are not counted as passing checks:
+
+| Job | Run / Job | Status | Reason |
+| :--- | :--- | :--- | :--- |
+| `deploy-staging` | [Run 42050347029 · Job 127330680858](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42050347029/job/127330680858) | **Skipped** | Pull-request event; staging deployment is restricted to pushes to `main` |
+| `unity-android-build` | [Run 42050347029 · Job 127324475423](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42050347029/job/127324475423) | **Skipped** | Web-only pull-request scope |
+| `unity-windows-build` | [Run 42050347029 · Job 127324476121](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42050347029/job/127324476121) | **Skipped** | Web-only pull-request scope |
+| `unity-android-export-embed-compile` | [Run 42050347029 · Job 127324476262](https://github.com/wandemcphill/Global-Talent-Exchange/actions/runs/42050347029/job/127324476262) | **Skipped** | Web-only pull-request scope |
+
+**Certification boundary:** The passing results above certify the application-code head `6e8e9752cbdbe49f5c080357926aa1fc545eb0f9`. The README correction is documentation-only. It does not alter application code, and it must not be represented as a fresh application-code test run.
+
+---
+
+## 7. PR State & Scope Constraints
+
+- **PR #382:** Open and unmerged at the time this report was prepared. Final merge authorization remains with the repository owner.
+- **Phase scope:** Phase 2.4 has not been started.
+- **Asset and identity integrity:** No legends, real-player records, regen portraits, player mappings, or Cloudinary regen facebank entries were altered as part of this certification work.
+- **Deployment boundary:** Staging deployment was skipped for this pull-request event; the CI results do not claim that staging was deployed.
