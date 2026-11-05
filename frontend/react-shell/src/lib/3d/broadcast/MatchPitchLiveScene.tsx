@@ -26,6 +26,8 @@ import {
 } from "./spectatorContract";
 import { DeviceQualityTier, QUALITY_PROFILES } from "../GtexSceneRegistry";
 import { StadiumArenaEnvironment } from "./StadiumArenaEnvironment";
+import { HumanoidFootballerRig } from "./HumanoidFootballerRig";
+import { FootballAnimationStateMachine } from "./FootballAnimationStateMachine";
 
 export interface MatchPitchLiveSceneProps {
   /** Authoritative raw or sanitized match view state */
@@ -199,69 +201,44 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     });
 
     // -------------------------------------------------------------------------
-    // 4. Player Meshes (Pool of 22 Players)
+    // 4. Rigged Humanoid Footballer System (Pool of 22 Players + State Machine)
     // -------------------------------------------------------------------------
     const playersGroup = new THREE.Group();
+    playersGroup.name = "HumanoidPlayersGroup";
     scene.add(playersGroup);
 
-    const playerMeshes = new Map<string, THREE.Group>();
+    const playerRigs = new Map<string, HumanoidFootballerRig>();
+    const animationStateMachine = new FootballAnimationStateMachine(safeView.events);
 
-    const getOrCreatePlayerMesh = (
+    const getOrCreatePlayerRig = (
       playerId: string,
       side: "home" | "away",
       shirtNum: number = 10,
+      label: string = "Player",
+      role: string = "MID",
       isGK: boolean = false
-    ): THREE.Group => {
-      if (playerMeshes.has(playerId)) {
-        return playerMeshes.get(playerId)!;
+    ): HumanoidFootballerRig => {
+      if (playerRigs.has(playerId)) {
+        return playerRigs.get(playerId)!;
       }
 
-      const pGroup = new THREE.Group();
-
-      // Team colors
-      const primaryHex = side === "home" ? safeView.home_team.primary_color : safeView.away_team.primary_color;
-      const gkHex = side === "home" ? safeView.home_team.goalkeeper_color : safeView.away_team.goalkeeper_color;
-      const jerseyColor = new THREE.Color(isGK ? gkHex : primaryHex);
-      const shortsColor = new THREE.Color(side === "home" ? safeView.home_team.secondary_color : safeView.away_team.secondary_color);
-
-      // Torso / Jersey
-      const torsoGeo = new THREE.CylinderGeometry(0.32, 0.28, 0.9, 12);
-      const torsoMat = new THREE.MeshLambertMaterial({ color: jerseyColor });
-      const torsoMesh = new THREE.Mesh(torsoGeo, torsoMat);
-      torsoMesh.position.y = 1.05;
-      torsoMesh.castShadow = true;
-      pGroup.add(torsoMesh);
-
-      // Head
-      const headGeo = new THREE.SphereGeometry(0.2, 10, 10);
-      const headMat = new THREE.MeshLambertMaterial({ color: 0xf5d0b5 });
-      const headMesh = new THREE.Mesh(headGeo, headMat);
-      headMesh.position.y = 1.65;
-      pGroup.add(headMesh);
-
-      // Shorts / Legs
-      const shortsGeo = new THREE.CylinderGeometry(0.28, 0.26, 0.4, 10);
-      const shortsMat = new THREE.MeshLambertMaterial({ color: shortsColor });
-      const shortsMesh = new THREE.Mesh(shortsGeo, shortsMat);
-      shortsMesh.position.y = 0.55;
-      pGroup.add(shortsMesh);
-
-      // Ground Marker Ring (subtle player shadow/ring)
-      const ringGeo = new THREE.RingGeometry(0.35, 0.42, 16);
-      const ringMat = new THREE.MeshBasicMaterial({
-        color: jerseyColor,
-        side: THREE.DoubleSide,
-        transparent: true,
-        opacity: 0.6,
+      const teamView = side === "home" ? safeView.home_team : safeView.away_team;
+      const rig = new HumanoidFootballerRig({
+        playerId,
+        side,
+        shirtNumber: shirtNum,
+        label,
+        role,
+        isGoalkeeper: isGK,
+        primaryColor: teamView.primary_color,
+        secondaryColor: teamView.secondary_color,
+        accentColor: teamView.accent_color,
+        goalkeeperColor: teamView.goalkeeper_color,
       });
-      const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-      ringMesh.rotation.x = -Math.PI / 2;
-      ringMesh.position.y = 0.03;
-      pGroup.add(ringMesh);
 
-      playersGroup.add(pGroup);
-      playerMeshes.set(playerId, pGroup);
-      return pGroup;
+      playersGroup.add(rig.rootGroup);
+      playerRigs.set(playerId, rig);
+      return rig;
     };
 
     // -------------------------------------------------------------------------
@@ -325,39 +302,9 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       setCurrentMatchState(state);
 
       if (state) {
-        // Update Ball
-        const [bx, by, bz] = state.ball.position3D;
-        ballMesh.position.set(bx, by + ballRadius, bz);
+        const activeEvent = animationStateMachine.getEventById(state.active_event_id);
 
-        // Update ball drop shadow
-        ballShadowMesh.position.set(bx, 0.03, bz);
-        const shadowScale = Math.max(0.4, 1.0 - by * 0.15);
-        ballShadowMesh.scale.set(shadowScale, shadowScale, 1);
-        (ballShadowMesh.material as THREE.MeshBasicMaterial).opacity = Math.max(
-          0.1,
-          0.6 - by * 0.1
-        );
-
-        // Update Players
-        const activeIds = new Set<string>();
-        for (const p of state.players) {
-          activeIds.add(p.player_id);
-          const isGK = p.role === "GK";
-          const pMesh = getOrCreatePlayerMesh(p.player_id, p.side, p.shirt_number, isGK);
-
-          pMesh.visible = true;
-          pMesh.position.set(p.position3D[0], 0, p.position3D[2]);
-          pMesh.rotation.y = p.facingAngleRad;
-        }
-
-        // Hide inactive/substituted player meshes
-        playerMeshes.forEach((mesh, id) => {
-          if (!activeIds.has(id)) {
-            mesh.visible = false;
-          }
-        });
-
-        // Update Camera
+        // Update Camera first so LOD distance checks use the exact current camera pose
         const scorer = state.players.find((p) => p.animation_state === "celebrate");
         const scorerPos = scorer ? scorer.position3D : null;
         const pose = cameraDirector.update(
@@ -371,6 +318,86 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         camera.lookAt(pose.target[0], pose.target[1], pose.target[2]);
         camera.fov = pose.fov;
         camera.updateProjectionMatrix();
+
+        // Update Ball (with dribble stride lead offset when controlled at player's feet)
+        let [bx, by, bz] = state.ball.position3D;
+        const ballOwner = state.players.find(
+          (p) => p.has_possession || state.ball.owner_player_id === p.player_id
+        );
+        if (ballOwner && state.ball.state === "controlled" && by < 0.25) {
+          const distToOwner = Math.hypot(bx - ballOwner.position3D[0], bz - ballOwner.position3D[2]);
+          if (distToOwner < 0.35) {
+            const strideLead = 0.42 + Math.sin(localTime * 9.5) * 0.08 * ballOwner.speed_ratio;
+            bx = ballOwner.position3D[0] + Math.cos(ballOwner.facingAngleRad) * strideLead;
+            bz = ballOwner.position3D[2] + Math.sin(ballOwner.facingAngleRad) * strideLead;
+          }
+        }
+
+        ballMesh.position.set(bx, by + ballRadius, bz);
+        if (state.ball.spin) {
+          ballMesh.rotation.x += state.ball.spin[0] * deltaSec * 8.0;
+          ballMesh.rotation.y += state.ball.spin[1] * deltaSec * 8.0;
+          ballMesh.rotation.z += state.ball.spin[2] * deltaSec * 8.0;
+        } else if (state.ball.state !== "idle") {
+          ballMesh.rotation.x += deltaSec * 4.5;
+          ballMesh.rotation.z -= deltaSec * 3.2;
+        }
+
+        // Update ball drop shadow
+        ballShadowMesh.position.set(bx, 0.03, bz);
+        const shadowScale = Math.max(0.4, 1.0 - by * 0.15);
+        ballShadowMesh.scale.set(shadowScale, shadowScale, 1);
+        (ballShadowMesh.material as THREE.MeshBasicMaterial).opacity = Math.max(
+          0.1,
+          0.6 - by * 0.1
+        );
+
+        // Update 22 Rigged Humanoid Players & Skeletal Animations
+        const activeIds = new Set<string>();
+        for (const p of state.players) {
+          if (p.active === false) continue;
+          activeIds.add(p.player_id);
+          const isGK = p.role.toUpperCase() === "GK" || p.role.toLowerCase() === "goalkeeper";
+          const rig = getOrCreatePlayerRig(
+            p.player_id,
+            p.side,
+            p.shirt_number ?? 10,
+            p.label,
+            p.role,
+            isGK
+          );
+
+          rig.rootGroup.visible = true;
+          const targetAnimState = animationStateMachine.resolvePlayerState({
+            player: p,
+            allPlayers: state.players,
+            ball: state.ball,
+            matchState: state,
+            activeEvent,
+            previousState: rig.getCurrentState(),
+            timeInCurrentStateSec: rig.getTimeInCurrentState(),
+          });
+
+          rig.update({
+            deltaSec,
+            targetState: targetAnimState,
+            position3D: p.position3D,
+            facingAngleRad: p.facingAngleRad,
+            speedRatio: p.speed_ratio,
+            angularVelocityRad: p.angular_velocity_rad,
+            hasPossession: p.has_possession,
+            ballPosition3D: [bx, by, bz],
+            cameraPosition3D: pose.position,
+            qualityTier,
+          });
+        }
+
+        // Hide inactive/substituted player rigs
+        playerRigs.forEach((rig, id) => {
+          if (!activeIds.has(id)) {
+            rig.rootGroup.visible = false;
+          }
+        });
       }
 
       if (renderer) {
@@ -401,6 +428,8 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       canvasElement.removeEventListener("webglcontextrestored", handleContextRestored);
 
       // Dispose Three.js objects
+      playerRigs.forEach((rig) => rig.dispose());
+      playerRigs.clear();
       scene.clear();
       stadiumArena.dispose();
       ballGeo.dispose();

@@ -29,11 +29,19 @@ export interface InterpolatedPlayerState {
   shirt_number?: number;
   label: string;
   role: string;
+  line?: string;
+  state?: string;
+  active?: boolean;
+  highlighted?: boolean;
   position3D: [number, number, number]; // [X, Y, Z] in meters
   facingAngleRad: number; // Rotation around Y axis in radians
   animation_state: string;
   speed_ratio: number;
   has_possession: boolean;
+  angular_velocity_rad?: number;
+  acceleration_ratio?: number;
+  just_received_ball?: boolean;
+  stamina_pct?: number;
 }
 
 export interface InterpolatedBallState {
@@ -41,6 +49,7 @@ export interface InterpolatedBallState {
   height: number;
   state: string;
   owner_player_id?: string | null;
+  velocity?: [number, number, number];
   spin?: [number, number, number];
 }
 
@@ -48,6 +57,7 @@ export interface InterpolatedMatchState {
   time_seconds: number;
   clock_minute: number;
   phase: string;
+  stage?: string;
   home_score: number;
   away_score: number;
   home_attacks_right: boolean;
@@ -55,6 +65,12 @@ export interface InterpolatedMatchState {
   camera_preset: string;
   active_event_id?: string | null;
   event_banner?: string | null;
+  celebration_team_id?: string | null;
+  possession_phase?: string;
+  transition_state?: string;
+  danger_zone?: string | null;
+  pressure_index?: number;
+  frame_tags?: string[];
   players: InterpolatedPlayerState[];
   ball: InterpolatedBallState;
 }
@@ -244,9 +260,18 @@ export class SpatialInterpolator {
       }
 
       const facing = lerpAngle(angleA, angleB, alpha);
+      const speedA = pA.speed_ratio ?? 0;
+      const speedB = pB.speed_ratio ?? speedA;
       const speed = pA.speed_ratio !== undefined && pB.speed_ratio !== undefined
-        ? pA.speed_ratio + (pB.speed_ratio - pA.speed_ratio) * alpha
+        ? speedA + (speedB - speedA) * alpha
         : (pB.speed_ratio ?? pA.speed_ratio ?? 0);
+
+      let angleDiff = normalizeAngle(angleB) - normalizeAngle(angleA);
+      if (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+      if (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+      const angularVelocity = duration > 0.01 ? angleDiff / duration : 0;
+      const accelerationRatio = duration > 0.01 ? (speedB - speedA) / duration : 0;
+      const justReceived = Boolean(!pA.has_possession && pB.has_possession && alpha >= 0.2 && alpha <= 0.85);
 
       interpolatedPlayers.push({
         player_id: pA.player_id,
@@ -255,6 +280,10 @@ export class SpatialInterpolator {
         shirt_number: pA.shirt_number ?? pB.shirt_number,
         label: pA.label || pB.label,
         role: pA.role || pB.role,
+        line: pA.line || pB.line,
+        state: alpha >= 0.5 ? (pB.state || pA.state || "idle") : (pA.state || "idle"),
+        active: alpha >= 0.5 ? pB.active !== false : pA.active !== false,
+        highlighted: Boolean(alpha >= 0.5 ? pB.highlighted : pA.highlighted),
         position3D: [
           Math.max(PITCH_BOUNDS.minX, Math.min(PITCH_BOUNDS.maxX, px)),
           0,
@@ -264,6 +293,10 @@ export class SpatialInterpolator {
         animation_state: alpha >= 0.5 ? (pB.animation_state || pA.animation_state || "idle") : (pA.animation_state || "idle"),
         speed_ratio: Math.max(0, Math.min(1, speed)),
         has_possession: Boolean(alpha >= 0.5 ? pB.has_possession : pA.has_possession),
+        angular_velocity_rad: angularVelocity,
+        acceleration_ratio: accelerationRatio,
+        just_received_ball: justReceived,
+        stamina_pct: pB.stamina_pct ?? pA.stamina_pct,
       });
     }
 
@@ -271,6 +304,7 @@ export class SpatialInterpolator {
       time_seconds: queryTimeSeconds,
       clock_minute: activeFrame.clock_minute,
       phase: activeFrame.phase,
+      stage: activeFrame.stage || "event",
       home_score: activeFrame.home_score,
       away_score: activeFrame.away_score,
       home_attacks_right: activeFrame.home_attacks_right,
@@ -278,12 +312,21 @@ export class SpatialInterpolator {
       camera_preset: activeFrame.camera_preset,
       active_event_id: activeFrame.active_event_id,
       event_banner: activeFrame.event_banner,
+      celebration_team_id: activeFrame.celebration_team_id,
+      possession_phase: activeFrame.possession_phase,
+      transition_state: activeFrame.transition_state,
+      danger_zone: activeFrame.danger_zone,
+      pressure_index: activeFrame.pressure_index,
+      frame_tags: activeFrame.frame_tags,
       players: interpolatedPlayers,
       ball: {
         position3D: [ballX, ballY, ballZ],
         height: ballY,
         state: activeFrame.ball.state,
         owner_player_id: activeFrame.ball.owner_player_id,
+        velocity: activeFrame.ball.velocity
+          ? [activeFrame.ball.velocity.x, activeFrame.ball.velocity.y, activeFrame.ball.velocity.z]
+          : undefined,
         spin: activeFrame.ball.spin
           ? [activeFrame.ball.spin.x, activeFrame.ball.spin.y, activeFrame.ball.spin.z]
           : undefined,
@@ -309,11 +352,19 @@ export class SpatialInterpolator {
       shirt_number: p.shirt_number,
       label: p.label,
       role: p.role,
+      line: p.line,
+      state: p.state || "idle",
+      active: p.active !== false,
+      highlighted: Boolean(p.highlighted),
       position3D: p3d,
       facingAngleRad: angle,
       animation_state: p.animation_state || "idle",
       speed_ratio: p.speed_ratio || 0,
       has_possession: Boolean(p.has_possession),
+      angular_velocity_rad: 0,
+      acceleration_ratio: 0,
+      just_received_ball: false,
+      stamina_pct: p.stamina_pct,
     };
   }
 
@@ -323,6 +374,7 @@ export class SpatialInterpolator {
       time_seconds: frame.time_seconds,
       clock_minute: frame.clock_minute,
       phase: frame.phase,
+      stage: frame.stage || "event",
       home_score: frame.home_score,
       away_score: frame.away_score,
       home_attacks_right: frame.home_attacks_right,
@@ -330,12 +382,21 @@ export class SpatialInterpolator {
       camera_preset: frame.camera_preset,
       active_event_id: frame.active_event_id,
       event_banner: frame.event_banner,
+      celebration_team_id: frame.celebration_team_id,
+      possession_phase: frame.possession_phase,
+      transition_state: frame.transition_state,
+      danger_zone: frame.danger_zone,
+      pressure_index: frame.pressure_index,
+      frame_tags: frame.frame_tags,
       players: frame.players.map((p) => this.playerToInterpolated(p, frame.home_attacks_right)),
       ball: {
         position3D: ball3D,
         height: ball3D[1],
         state: frame.ball.state,
         owner_player_id: frame.ball.owner_player_id,
+        velocity: frame.ball.velocity
+          ? [frame.ball.velocity.x, frame.ball.velocity.y, frame.ball.velocity.z]
+          : undefined,
         spin: frame.ball.spin
           ? [frame.ball.spin.x, frame.ball.spin.y, frame.ball.spin.z]
           : undefined,

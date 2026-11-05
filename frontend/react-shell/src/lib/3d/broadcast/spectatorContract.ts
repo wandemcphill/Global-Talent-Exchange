@@ -29,9 +29,16 @@ export interface SpectatorSafePlayerTelemetry {
   shirt_number?: number;
   label: string;
   role: string;
+  line?: string;
+  state?: string;
+  active?: boolean;
+  highlighted?: boolean;
   position: { x: number; y: number };
+  anchor_position?: { x: number; y: number };
   animation_state?: string;
   speed_ratio?: number;
+  blend_factor?: number;
+  stamina_pct?: number;
   has_possession?: boolean;
   facing?: { x: number; y: number };
   velocity?: { x: number; y: number };
@@ -51,6 +58,7 @@ export interface SpectatorSafeFrameView {
   time_seconds: number;
   clock_minute: number;
   phase: string;
+  stage?: string;
   home_score: number;
   away_score: number;
   home_attacks_right: boolean;
@@ -58,6 +66,13 @@ export interface SpectatorSafeFrameView {
   camera_preset: string;
   active_event_id?: string | null;
   event_banner?: string | null;
+  celebration_team_id?: string | null;
+  possession_phase?: string;
+  transition_state?: string;
+  danger_zone?: string | null;
+  pressure_index?: number;
+  frame_tags?: string[];
+  flag_animation?: boolean;
   players: SpectatorSafePlayerTelemetry[];
   ball: SpectatorSafeBallTelemetry;
 }
@@ -69,13 +84,22 @@ export interface SpectatorSafeEventView {
   minute: number;
   added_time: number;
   clock_label: string;
+  time_seconds?: number;
   home_score: number;
   away_score: number;
   banner_text: string;
   commentary: string;
   team_id?: string | null;
   team_name?: string | null;
+  primary_player_id?: string | null;
   primary_player_name?: string | null;
+  secondary_player_id?: string | null;
+  secondary_player_name?: string | null;
+  highlighted_player_ids?: string[];
+  playback_profile?: string;
+  miss_variant?: string | null;
+  flags?: string[];
+  duration_ms?: number;
 }
 
 export interface SpectatorSafeMatchView {
@@ -168,6 +192,7 @@ export function sanitizeForSpectator(
     time_seconds: Math.max(0, Number(f.time_seconds) || 0),
     clock_minute: Math.max(0, Number(f.clock_minute) || 0),
     phase: String(f.phase || "open_play"),
+    stage: f.stage ? String(f.stage) : "event",
     home_score: Math.max(0, Number(f.home_score) || 0),
     away_score: Math.max(0, Number(f.away_score) || 0),
     home_attacks_right: f.home_attacks_right !== false,
@@ -175,6 +200,13 @@ export function sanitizeForSpectator(
     camera_preset: String(f.camera_preset || "broadcast"),
     active_event_id: f.active_event_id ? String(f.active_event_id) : null,
     event_banner: f.event_banner ? String(f.event_banner) : null,
+    celebration_team_id: f.celebration_team_id ? String(f.celebration_team_id) : null,
+    possession_phase: f.possession_phase ? String(f.possession_phase) : "build_up",
+    transition_state: f.transition_state ? String(f.transition_state) : "stable",
+    danger_zone: f.danger_zone ? String(f.danger_zone) : null,
+    pressure_index: typeof f.pressure_index === "number" ? Math.max(0, Math.min(1, f.pressure_index)) : 0,
+    frame_tags: Array.isArray(f.frame_tags) ? f.frame_tags.map((t: any) => String(t)) : [],
+    flag_animation: Boolean(f.flag_animation),
     players: Array.isArray(f.players)
       ? f.players.map((p: any) => ({
           player_id: String(p.player_id),
@@ -183,12 +215,24 @@ export function sanitizeForSpectator(
           shirt_number: p.shirt_number ? Number(p.shirt_number) : undefined,
           label: String(p.label || "Player"),
           role: String(p.role || "MID"),
+          line: p.line ? String(p.line) : undefined,
+          state: p.state ? String(p.state) : "idle",
+          active: p.active !== false,
+          highlighted: Boolean(p.highlighted),
           position: {
             x: Math.max(0, Math.min(100, Number(p.position?.x) || 50)),
             y: Math.max(0, Math.min(100, Number(p.position?.y) || 50)),
           },
+          anchor_position: p.anchor_position
+            ? {
+                x: Math.max(0, Math.min(100, Number(p.anchor_position.x) || 50)),
+                y: Math.max(0, Math.min(100, Number(p.anchor_position.y) || 50)),
+              }
+            : undefined,
           animation_state: p.animation_state ? String(p.animation_state) : "idle",
           speed_ratio: Math.max(0, Math.min(1, Number(p.speed_ratio) || 0)),
+          blend_factor: typeof p.blend_factor === "number" ? Math.max(0, Math.min(1, p.blend_factor)) : undefined,
+          stamina_pct: typeof p.stamina_pct === "number" ? Math.max(0, Math.min(100, p.stamina_pct)) : undefined,
           has_possession: Boolean(p.has_possession),
           facing: p.facing ? { x: Number(p.facing.x) || 0, y: Number(p.facing.y) || 0 } : undefined,
           velocity: p.velocity ? { x: Number(p.velocity.x) || 0, y: Number(p.velocity.y) || 0 } : undefined,
@@ -228,13 +272,24 @@ export function sanitizeForSpectator(
     minute: Math.max(0, Number(e.minute) || 0),
     added_time: Math.max(0, Number(e.added_time) || 0),
     clock_label: String(e.clock_label || `${e.minute || 0}'`),
+    time_seconds: typeof e.time_seconds === "number" ? Math.max(0, e.time_seconds) : undefined,
     home_score: Math.max(0, Number(e.home_score) || 0),
     away_score: Math.max(0, Number(e.away_score) || 0),
     banner_text: String(e.banner_text || ""),
     commentary: String(e.commentary || ""),
     team_id: e.team_id ? String(e.team_id) : null,
     team_name: e.team_name ? String(e.team_name) : null,
+    primary_player_id: e.primary_player_id ? String(e.primary_player_id) : null,
     primary_player_name: e.primary_player_name ? String(e.primary_player_name) : null,
+    secondary_player_id: e.secondary_player_id ? String(e.secondary_player_id) : null,
+    secondary_player_name: e.secondary_player_name ? String(e.secondary_player_name) : null,
+    highlighted_player_ids: Array.isArray(e.highlighted_player_ids)
+      ? e.highlighted_player_ids.map((id: any) => String(id))
+      : [],
+    playback_profile: e.playback_profile ? String(e.playback_profile) : "neutral",
+    miss_variant: e.miss_variant ? String(e.miss_variant) : null,
+    flags: Array.isArray(e.flags) ? e.flags.map((fl: any) => String(fl)) : [],
+    duration_ms: typeof e.duration_ms === "number" ? e.duration_ms : 500,
   }));
 
   const safeView: SpectatorSafeMatchView = {
