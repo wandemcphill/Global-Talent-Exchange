@@ -49,7 +49,8 @@ graph TD
 - **Statuses:** `created`, `active`, `awaiting_decision`, `resolved`, `expired`.
 - **Deterministic Idempotency Key:** `evt:{club_id}:{world_day}:...` guarantees zero event duplication across repeated world ticks on the same day.
 - **Strict Action Validation & Atomic Resolution:**
-  - `resolve_club_event()` validates club ownership via `service.require_state(session, club_id, user_id)`, rejects already-resolved events with `409 Conflict` (`event_already_resolved`), validates that the submitted action is declared in the event's `actions_json` (`invalid_event_action`, `400`), and verifies that `(event.event_type, action)` is supported by the backend handler table `ALLOWED_ACTIONS_BY_EVENT_TYPE` (`unsupported_event_action`, `400`).
+  - `resolve_club_event()` acquires a pessimistic row lock via `select(OwnerClubEvent)...with_for_update().execution_options(populate_existing=True)`, validates club ownership via `service.require_state(session, club_id, user_id)`, checks that the event is in `active` or `awaiting_decision` status, performs an atomic conditional transition updating status to `resolving`, and rejects concurrent or duplicate resolution requests with `409 Conflict` (`event_already_resolved`).
+  - Validates that the submitted action is declared in the event's `actions_json` (`invalid_event_action`, `400`), and verifies that `(event.event_type, action)` is supported by the backend handler table `ALLOWED_ACTIONS_BY_EVENT_TYPE` (`unsupported_event_action`, `400`).
   - Rejected actions leave event status, player morale, relationships, and all gameplay state unchanged.
 
 ### System B — Personality, Vacancy-Aware Staff Identity & Relationship Framework
@@ -58,25 +59,27 @@ graph TD
   - `20261105_0225_phase2_4_living_club_world_events_relationships.py`
   - `20261105_0226_phase2_4_relationship_pair_uniqueness.py`
 - **Database Uniqueness & Concurrency Safety:**
-  - Enforces `UniqueConstraint("club_id", "pairing_key", name="uq_owner_club_relationships_club_pairing")`.
+  - Enforces `UniqueConstraint("club_id", "pairing_key", name="uq_owner_club_relationships_club_pairing")` without redundant duplicate indexes (clean migration 0225).
   - Canonical bidirectional normalization (`normalize_pairing(a, b)`) ensures `(A, B)` and `(B, A)` resolve to the exact same `pairing_key` and participant ordering.
   - `get_or_create_relationship()` wraps inserts in a nested transaction (`session.begin_nested()`) and recovers from `IntegrityError` by selecting the existing row.
-  - `deduplicate_club_relationships()` reconciles any legacy duplicate/reversed pairings while re-pointing and preserving 100% of `owner_club_relationship_history` rows.
+  - `deduplicate_club_relationships()` (and migration 0226) reconciles any legacy duplicate/reversed pairings, preserves authoritative latest relationship metrics (`trust`, `respect`, `affinity`, `tension`) onto the surviving canonical row, and re-points 100% of `owner_club_relationship_history` rows.
 - **Vacancy & Staff Replacement Isolation:**
   - `resolve_club_staff_roster(state)` reads strictly from appointed records in `state.facilities_json["_executive_staff"]` and `state.manager_json`.
   - Unappointed positions are represented as vacant (`is_appointed=False`, `person_id=None`) and never fabricate employee names or relationships.
   - Appointed staff relationships are keyed to the individual (`f"{role_key}:{person_uid}"`). When a staff member is dismissed or replaced, `reconcile_staff_relationships()` archives the predecessor's relationship (`status="former"`) with its history intact and creates a fresh baseline relationship for the new appointee.
 
 ### System C — Living Club Communications & Departmental Directives (`owner_club_directives`)
-- **Directive Lifecycle:** Owners can issue directives to `manager`, `medical`, `academy`, `finance`, `scouting`, or `executive`.
-- **Vacant Department Handling:** Directives issued to a department with a vacant lead are logged by the provisional department desk (`Vacant (<Role> Unappointed)`) without fabricating a staff relationship.
+- **Authoritative Directive Completion Semantics:** Directives are no longer auto-completed simply when a deadline is reached. Active directives capture baseline snapshot data (`_capture_directive_baseline_snapshot`) upon issuance and are rigorously evaluated against authoritative domain conditions (`_evaluate_directive_completion`) across all 6 departments (e.g. medical clearance of target player or >=2 squad players, tactical drill fitness improvements, academy graduation, financial revenue generation).
+- **Progress & Verification Persistence:** Evaluation progress, baseline metrics, current readings, and verification status (`in_progress`, `verified_completed`, `unfulfilled`) are persisted in `consequences_json`.
+- **Appointed Lead Gate & Expiration:** Directives only award relationship improvements when verified completed by an appointed department lead (`lead_slot["is_appointed"] == True`). When the deadline is reached without fulfilling the authoritative condition, the directive is marked `expired` with zero positive relationship reward and a `directive_expired` log event.
+- **Vacant Department Handling:** Directives issued to a department with a vacant lead are held without progress until a lead is appointed, preventing fabricated completions.
 
 ### System D — Authoritative Player & Staff Event Triggers (`process_world_day_events`)
 - All generated events are grounded strictly in real persisted club, squad, and ledger data:
   1. `treasury_low_reserves` (`financial`): Triggered when `ledger.balance(club_account) < 1,500` GTEX (`review_sponsors`, `acknowledge`).
   2. `player_recovery_cleared` (`medical`): Triggered when an active player completes rehabilitation (`injured_days == 0` and `last_training_workload_tier == "rehabilitation"`) (`praise_medical`, `acknowledge`).
   3. `injury_crisis_alert` (`medical`): Triggered when `>= 3` active players are injured (`reduce_workload`, `acknowledge`).
-  4. `high_fatigue_workload_alert` (`medical`): Triggered when a healthy active player has stored `personality_json["fitness"] < 70` or `personality_json["fatigue"] >= 70` (`rest_player`, `acknowledge`).
+  4. `high_fatigue_workload_alert` (`medical`): Distinctly isolates high workload fatigue from low conditioning. Accurately reports workload fatigue reading (`fatigue/100`) and stored conditioning (`fitness%`) without misattributing fatigue to low fitness (`rest_player`, `acknowledge`).
   5. `regen_prospect_spotlight` (`academy`): Triggered when an active academy regen reaches `rating >= 62` (`praise_prospect`, `acknowledge`).
   6. `contract_expiry_warning` (`executive`): Triggered when an active player has stored `0 < personality_json["contract_months_remaining"] <= 6` (`open_renewal_talks`, `acknowledge`).
   7. `squad_morale_dip` (`squad`): Triggered when an active player has `morale < 45` (`encourage_player`, `ignore`).
@@ -100,11 +103,12 @@ graph TD
 
 | Verification Suite | Test Count | Result |
 | :--- | :---: | :---: |
-| Backend Living Club World Tests (`test_living_club_world.py`) | 11 | **PASS** |
+| Backend Living Club World Tests (`test_living_club_world.py`) | 14 | **PASS** (Including PostgreSQL Concurrency Row Locking) |
 | Backend Prestige & Campus Comms Tests (`test_gtex_club_prestige_campus_comms.py`) | 28 | **PASS** |
-| Database Migration Integrity Tests (`test_migrations.py`) | 5 | **PASS** |
-| Frontend React Shell Unit Tests (`npm test`) | 129 | **PASS** (18/18 suites) |
-| React WebGL Browser Playwright Verification (`verify_react_webgl_operations_centre.py`) | 3 | **PASS** (All 6 GLBs, Wireframe Fallback, 2D Floorplan) |
+| Database Migration Integrity Tests (`test_migrations.py`) | 5 | **PASS** (PostgreSQL 18 Upgrades to 0226) |
+| Frontend React Living World Timeline Tests (`ClubOperationsCentre3D.timeline.test.tsx`) | 6 | **PASS** (Unified Drawer, Filters, Pagination, Resolution) |
+| Frontend React Shell Unit Tests (`npm test`) | 135 | **PASS** (19/19 suites) |
+| React WebGL Browser Playwright Verification (`verify_react_webgl_operations_centre.py`) | 4 | **PASS** (All 6 GLBs, Wireframe Fallback, 2D Floorplan, Living World Timeline Drawer) |
 | React WebGL Contract & Unit Tests (`test_verify_react_webgl_operations_centre.py`) | 4 | **PASS** |
 | P7-FEV Browser Verification (`mobile`, `tablet`, `desktop` parallel matrix) | 48 | **PASS** |
 | Black, Ruff & Changed Quality Gate (`run_changed_quality.py`) | All changed files | **PASS** |

@@ -105,6 +105,7 @@ def _seed_club(
             password_hash="hash",  # pragma: allowlist secret
         )
         session.add(user)
+        session.flush()
 
     profile = ClubProfile(
         id=club_id,
@@ -431,9 +432,25 @@ def test_event_resolution_action_validation_and_atomicity():
 
 
 def test_departmental_directive_lifecycle():
+    """Verifies P1 Directive Completion Semantics:
+    1. Directive completes only when its real backend completion condition is satisfied.
+    2. Repeated world ticks do not duplicate completion events or relationship rewards.
+    3. Directive reaching deadline without completion becomes 'expired' with zero positive relationship reward.
+    4. Vacant department never automatically completes a directive.
+    """
     session = _session()
     state = _seed_club(session)
 
+    # Ensure baseline relationships exist
+    squad_players = list(
+        session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == state.club_id)).all()
+    )
+    living_club_world.ensure_default_relationships(session, state, squad_players)
+    med_rel_before = living_club_world.get_relationship_for_department(session, state.club_id, "medical_director")
+    assert med_rel_before is not None
+    initial_med_trust = med_rel_before["trust"]
+
+    # 1. Issue medical directive on day 10 with deadline day 13
     dir_payload = living_club_world.issue_department_directive(
         session,
         state.owner_user_id,
@@ -442,23 +459,147 @@ def test_departmental_directive_lifecycle():
         directive_key="accelerate_recovery",
         title="Accelerate Hydrotherapy Protocols",
         instruction="Prioritize non-contact rehab for first-team players ahead of cup tie",
-        deadline_days=2,
+        deadline_days=3,
     )
     assert dir_payload["status"] == "active"
     assert "Dr. Chidi Obi" in dir_payload["acknowledged_by"]
-    assert dir_payload["deadline_day"] == 12
+    assert dir_payload["deadline_day"] == 13
 
-    state.world_day = 12
+    # Advance to day 11 WITHOUT fulfilling condition -> remains active, not completed
+    state.world_day = 11
     living_club_world.process_world_day_events(session, state, campus_effects={})
-
     directive = session.get(OwnerClubDirective, dir_payload["id"])
     assert directive is not None
+    assert directive.status == "active"
+    assert directive.completed_at is None
+    assert directive.consequences_json["verification_status"] == "pending"
+
+    # Now fulfill the authoritative medical condition (injured player progresses in recovery)
+    p3 = session.get(OwnerSquadPlayer, f"p3-{state.club_id}")
+    assert p3 is not None
+    p3.injured_days = 1  # reduced from baseline injured_days=2
+    session.commit()
+
+    living_club_world.process_world_day_events(session, state, campus_effects={})
+    session.refresh(directive)
     assert directive.status == "completed"
     assert directive.completed_at is not None
+    assert directive.consequences_json["verification_status"] == "verified_completed"
+    assert directive.consequences_json["progress_pct"] == 100
+    assert directive.consequences_json["reward_granted"] is True
 
-    med_rel = living_club_world.get_relationship_for_department(session, state.club_id, "medical_director")
-    assert med_rel is not None
-    assert med_rel["trust"] > 65
+    med_rel_after = living_club_world.get_relationship_for_department(session, state.club_id, "medical_director")
+    assert med_rel_after is not None
+    # +3 on directive acknowledgment +4 on verified directive completion = +7 total
+    assert med_rel_after["trust"] == initial_med_trust + 7
+
+    # 2. Repeated world ticks on days 12 and 13 must NOT duplicate completion events or rewards
+    state.world_day = 12
+    living_club_world.process_world_day_events(session, state, campus_effects={})
+    state.world_day = 13
+    living_club_world.process_world_day_events(session, state, campus_effects={})
+
+    med_rel_repeated = living_club_world.get_relationship_for_department(session, state.club_id, "medical_director")
+    assert med_rel_repeated is not None
+    assert med_rel_repeated["trust"] == med_rel_after["trust"]
+    completion_events = list(
+        session.scalars(
+            select(OwnerClubEvent).where(
+                OwnerClubEvent.club_id == state.club_id,
+                OwnerClubEvent.event_type == "directive_completed",
+                OwnerClubEvent.source_id == directive.id,
+            )
+        ).all()
+    )
+    assert len(completion_events) == 1
+
+    # 3. Unfulfilled directive reaching deadline becomes 'expired' with NO positive relationship reward
+    unfulfilled_payload = living_club_world.issue_department_directive(
+        session,
+        state.owner_user_id,
+        state.club_id,
+        department="academy",
+        directive_key="expand_youth_pathway",
+        title="Promote Two U18 Prospects",
+        instruction="Upgrade youth pathway or promote academy prospects before deadline",
+        deadline_days=2,
+    )
+    assert unfulfilled_payload["deadline_day"] == 15
+    hoyd_rel_issued = living_club_world.get_relationship_for_department(
+        session, state.club_id, "head_of_youth_development"
+    )
+    assert hoyd_rel_issued is not None
+    hoyd_trust_issued = hoyd_rel_issued["trust"]
+    hoyd_respect_issued = hoyd_rel_issued["respect"]
+
+    # Advance to deadline day 15 without any academy upgrade, regen promotion, or youth rating gain
+    state.world_day = 15
+    living_club_world.process_world_day_events(session, state, campus_effects={})
+
+    expired_dir = session.get(OwnerClubDirective, unfulfilled_payload["id"])
+    assert expired_dir is not None
+    assert expired_dir.status == "expired"
+    assert expired_dir.completed_at is None
+    assert expired_dir.consequences_json["verification_status"] == "expired_unfulfilled"
+    assert expired_dir.consequences_json["reward_granted"] is False
+
+    hoyd_rel_after = living_club_world.get_relationship_for_department(
+        session, state.club_id, "head_of_youth_development"
+    )
+    assert hoyd_rel_after is not None
+    # No completion reward (+6 trust, +5 respect) granted on expiry
+    assert hoyd_rel_after["trust"] <= hoyd_trust_issued
+    assert hoyd_rel_after["respect"] <= hoyd_respect_issued
+
+    expired_events = list(
+        session.scalars(
+            select(OwnerClubEvent).where(
+                OwnerClubEvent.club_id == state.club_id,
+                OwnerClubEvent.event_type == "directive_expired",
+                OwnerClubEvent.source_id == expired_dir.id,
+            )
+        ).all()
+    )
+    assert len(expired_events) == 1
+
+    # 4. Vacant department NEVER automatically completes its directive even if underlying metrics improve
+    vacant_state = _seed_club(
+        session,
+        club_id="club-vacant-dir",
+        user_id="user-vacant-dir",
+        appoint_executive_staff=False,
+    )
+    vacant_dir_payload = living_club_world.issue_department_directive(
+        session,
+        vacant_state.owner_user_id,
+        vacant_state.club_id,
+        department="medical",
+        directive_key="vacant_rehab_protocol",
+        title="Rehab Protocol Without Medical Director",
+        instruction="Attempt rehab directive while medical director post is vacant",
+        deadline_days=2,
+    )
+    # Even if the injured player recovers on day 11, vacant medical department cannot verify/complete directive
+    vacant_p3 = session.get(OwnerSquadPlayer, f"p3-{vacant_state.club_id}")
+    assert vacant_p3 is not None
+    vacant_p3.injured_days = 0
+    session.commit()
+
+    vacant_state.world_day = 11
+    living_club_world.process_world_day_events(session, vacant_state, campus_effects={})
+    vacant_dir = session.get(OwnerClubDirective, vacant_dir_payload["id"])
+    assert vacant_dir is not None
+    assert vacant_dir.status == "active"
+    assert vacant_dir.consequences_json["evidence"]["lead_status"] == "vacant"
+    assert vacant_dir.consequences_json["evidence"]["reason"] == "department_lead_vacant"
+
+    # At deadline day 12, vacant department directive expires rather than completing
+    vacant_state.world_day = 12
+    living_club_world.process_world_day_events(session, vacant_state, campus_effects={})
+    session.refresh(vacant_dir)
+    assert vacant_dir.status == "expired"
+    assert vacant_dir.completed_at is None
+    assert living_club_world.get_relationship_for_department(session, vacant_state.club_id, "medical_director") is None
 
 
 def test_vacant_staff_positions_and_staff_replacement_isolation():
@@ -651,6 +792,10 @@ def test_relationship_deduplication_preserves_history_and_conflict_recovery():
         participant_b_id=f"p1-{state.club_id}",
         participant_b_name="Tunde Bakare",
         trust=60,
+        respect=55,
+        affinity=50,
+        tension=25,
+        updated_at=datetime(2026, 11, 5, 10, 0, tzinfo=timezone.utc),
     )
     rel2 = OwnerClubRelationship(
         id="rel-reversed-dup-1",
@@ -662,7 +807,11 @@ def test_relationship_deduplication_preserves_history_and_conflict_recovery():
         participant_b_type="owner",
         participant_b_id="owner",
         participant_b_name="Club Owner",
-        trust=65,
+        trust=78,
+        respect=81,
+        affinity=72,
+        tension=9,
+        updated_at=datetime(2026, 11, 5, 12, 0, tzinfo=timezone.utc),
     )
     session.add_all([rel1, rel2])
     session.flush()
@@ -680,14 +829,22 @@ def test_relationship_deduplication_preserves_history_and_conflict_recovery():
         club_id=state.club_id,
         world_day=11,
         reason="Second interaction on duplicate row",
-        delta_trust=5,
-        snapshot_json={"trust": 65},
+        delta_trust=18,
+        snapshot_json={"trust": 78},
     )
     session.add_all([h1, h2])
     session.commit()
 
     removed = living_club_world.deduplicate_club_relationships(session, state.club_id)
     assert removed == 1
+
+    # Authoritative latest metrics from rel2 are preserved on surviving canonical relationship rel1
+    surviving = session.get(OwnerClubRelationship, "rel-canon-1")
+    assert surviving is not None
+    assert surviving.trust == 78
+    assert surviving.respect == 81
+    assert surviving.affinity == 72
+    assert surviving.tension == 9
 
     # Both history entries are preserved and re-pointed to the surviving canonical relationship
     all_hist = list(
@@ -923,3 +1080,413 @@ def test_api_ownership_isolation_and_authorization():
     resp_404 = client.get("/owner/clubs/nonexistent-club-999/living-world/timeline")
     assert resp_404.status_code == 404
     assert resp_404.json()["detail"]["code"] == "club_not_found"
+
+
+def test_high_fatigue_alert_with_healthy_fitness():
+    """Verifies P2: high fatigue (>= 70) while fitness remains healthy (>= 70) accurately reports the fatigue metric."""
+    session = _session()
+    state = _seed_club(session, club_id="club-fatigue-healthy-1", user_id="user-fatigue-healthy-1")
+
+    p1 = session.get(OwnerSquadPlayer, f"p1-{state.club_id}")
+    assert p1 is not None
+    p1.personality_json = {
+        "leadership": 16,
+        "fitness": 88,  # healthy conditioning (>= 70)
+        "fatigue": 78,  # elevated fatigue (>= 70)
+    }
+    flag_modified(p1, "personality_json")
+    session.commit()
+
+    res = living_club_world.process_world_day_events(session, state, campus_effects={})
+    fatigue_evt = next(
+        (
+            e
+            for e in res["active_events"]
+            if e["event_type"] == "high_fatigue_workload_alert" and e["source_id"] == p1.id
+        ),
+        None,
+    )
+    assert fatigue_evt is not None
+    assert fatigue_evt["consequences"]["trigger_metric"] == "fatigue"
+    assert fatigue_evt["consequences"]["fatigue"] == 78
+    assert fatigue_evt["consequences"]["fitness"] == 88
+    assert "78/100" in fatigue_evt["description"]
+    assert "Conditioning 88%" in fatigue_evt["description"]
+    # Must NEVER report the fatigue reading (78) as a fitness percentage or claim low conditioning
+    assert "78% conditioning" not in fatigue_evt["description"]
+    assert "conditioning has dropped" not in fatigue_evt["description"]
+
+
+def test_migration_0226_reconciles_duplicates_preserving_history_and_latest_metrics():
+    """Verifies P2 Migration 0226: starts with pre-0226 relationship schema, seeds duplicate and reversed pairings
+    with different relationship metrics and history records on both, runs migration 0226, and verifies:
+    - One canonical relationship remains
+    - All history records remain attached to the surviving relationship
+    - The authoritative latest relationship values (trust, respect, affinity, tension) are preserved
+    - A raw duplicate DB insert is rejected by the unique constraint/index
+    """
+    import importlib.util
+    from pathlib import Path
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    import sqlalchemy as sa
+
+    eng = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    with eng.begin() as conn:
+        conn.execute(sa.text("""
+                CREATE TABLE owner_club_relationships (
+                    id VARCHAR(64) PRIMARY KEY,
+                    club_id VARCHAR(64) NOT NULL,
+                    pairing_key VARCHAR(160) NOT NULL,
+                    participant_a_type VARCHAR(32) NOT NULL,
+                    participant_a_id VARCHAR(64) NOT NULL,
+                    participant_a_name VARCHAR(120) NOT NULL,
+                    participant_b_type VARCHAR(32) NOT NULL,
+                    participant_b_id VARCHAR(64) NOT NULL,
+                    participant_b_name VARCHAR(120) NOT NULL,
+                    trust INTEGER NOT NULL DEFAULT 60,
+                    respect INTEGER NOT NULL DEFAULT 60,
+                    affinity INTEGER NOT NULL DEFAULT 55,
+                    tension INTEGER NOT NULL DEFAULT 15,
+                    status VARCHAR(32) NOT NULL DEFAULT 'active',
+                    metadata_json JSON,
+                    created_at TIMESTAMP NOT NULL,
+                    updated_at TIMESTAMP NOT NULL
+                )
+                """))
+        conn.execute(sa.text("""
+                CREATE TABLE owner_club_relationship_history (
+                    id VARCHAR(64) PRIMARY KEY,
+                    relationship_id VARCHAR(64) NOT NULL,
+                    club_id VARCHAR(64) NOT NULL,
+                    world_day INTEGER NOT NULL DEFAULT 1,
+                    reason VARCHAR(240) NOT NULL,
+                    delta_trust INTEGER NOT NULL DEFAULT 0,
+                    delta_respect INTEGER NOT NULL DEFAULT 0,
+                    delta_affinity INTEGER NOT NULL DEFAULT 0,
+                    delta_tension INTEGER NOT NULL DEFAULT 0,
+                    snapshot_json JSON,
+                    source_event_id VARCHAR(64),
+                    created_at TIMESTAMP NOT NULL
+                )
+                """))
+
+        # Seed older forward pairing and newer reversed pairing with different metrics
+        conn.execute(sa.text("""
+                INSERT INTO owner_club_relationships (
+                    id, club_id, pairing_key,
+                    participant_a_type, participant_a_id, participant_a_name,
+                    participant_b_type, participant_b_id, participant_b_name,
+                    trust, respect, affinity, tension, status, metadata_json,
+                    created_at, updated_at
+                ) VALUES
+                (
+                    'rel-mig-older', 'club-mig-1', 'club-mig-1:owner:player-1',
+                    'owner', 'owner', 'Club Owner',
+                    'player', 'player-1', 'Tunde Bakare',
+                    52, 55, 48, 30, 'active', '{}',
+                    '2026-11-05 09:00:00', '2026-11-05 10:00:00'
+                ),
+                (
+                    'rel-mig-newer-reversed', 'club-mig-1', 'club-mig-1:player-1:owner',
+                    'player', 'player-1', 'Tunde Bakare',
+                    'owner', 'owner', 'Club Owner',
+                    84, 79, 73, 8, 'active', '{}',
+                    '2026-11-05 09:30:00', '2026-11-05 11:30:00'
+                )
+                """))
+        conn.execute(sa.text("""
+                INSERT INTO owner_club_relationship_history (
+                    id, relationship_id, club_id, world_day, reason,
+                    delta_trust, delta_respect, delta_affinity, delta_tension,
+                    snapshot_json, created_at
+                ) VALUES
+                (
+                    'hist-mig-1', 'rel-mig-older', 'club-mig-1', 10, 'Initial contract talk',
+                    -8, -5, -7, 15, '{"trust": 52}', '2026-11-05 10:00:00'
+                ),
+                (
+                    'hist-mig-2', 'rel-mig-newer-reversed', 'club-mig-1', 11, 'Resolved contract dispute',
+                    32, 24, 25, -22, '{"trust": 84}', '2026-11-05 11:30:00'
+                )
+                """))
+
+        # Load and execute migration 0226 upgrade()
+        mig_path = (
+            Path(__file__).resolve().parents[2]
+            / "migrations"
+            / "versions"
+            / "20261105_0226_phase2_4_relationship_pair_uniqueness.py"
+        )
+        spec = importlib.util.spec_from_file_location("mig_0226", mig_path)
+        assert spec is not None and spec.loader is not None
+        mig_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mig_mod)
+
+        ctx = MigrationContext.configure(conn)
+        with Operations.context(ctx):
+            mig_mod.upgrade()
+
+        # 1. Verify exactly one canonical relationship remains
+        rel_rows = conn.execute(
+            sa.text(
+                "SELECT id, pairing_key, trust, respect, affinity, tension FROM owner_club_relationships WHERE club_id = 'club-mig-1'"
+            )
+        ).fetchall()
+        assert len(rel_rows) == 1
+        surviving = rel_rows[0]
+        assert surviving.id == "rel-mig-older"
+        assert surviving.pairing_key == "club-mig-1:owner:player-1"
+
+        # 2. Verify authoritative latest metrics from rel-mig-newer-reversed are preserved
+        assert surviving.trust == 84
+        assert surviving.respect == 79
+        assert surviving.affinity == 73
+        assert surviving.tension == 8
+
+        # 3. Verify all history records remain attached to the surviving canonical relationship
+        hist_rows = conn.execute(
+            sa.text(
+                "SELECT id, relationship_id FROM owner_club_relationship_history WHERE club_id = 'club-mig-1' ORDER BY id"
+            )
+        ).fetchall()
+        assert len(hist_rows) == 2
+        assert {h.relationship_id for h in hist_rows} == {"rel-mig-older"}
+
+        # 4. Verify raw duplicate insert is rejected by the unique index/constraint
+        with pytest.raises(IntegrityError):
+            with conn.begin_nested():
+                conn.execute(sa.text("""
+                        INSERT INTO owner_club_relationships (
+                            id, club_id, pairing_key,
+                            participant_a_type, participant_a_id, participant_a_name,
+                            participant_b_type, participant_b_id, participant_b_name,
+                            trust, respect, affinity, tension, status, metadata_json,
+                            created_at, updated_at
+                        ) VALUES (
+                            'rel-mig-dup-attempt', 'club-mig-1', 'club-mig-1:owner:player-1',
+                            'owner', 'owner', 'Club Owner',
+                            'player', 'player-1', 'Tunde Bakare',
+                            60, 60, 55, 15, 'active', '{}',
+                            '2026-11-05 12:00:00', '2026-11-05 12:00:00'
+                        )
+                        """))
+
+
+def _find_pg_bin(exe_name: str) -> str | None:
+    import glob
+    import shutil
+
+    found = shutil.which(exe_name)
+    if found:
+        return found
+    candidates = [
+        *glob.glob(f"C:/Program Files/PostgreSQL/*/bin/{exe_name}.exe"),
+        *glob.glob(f"/usr/lib/postgresql/*/bin/{exe_name}"),
+    ]
+    return sorted(candidates)[-1] if candidates else None
+
+
+@pytest.fixture()
+def postgres_engine(tmp_path):
+    """Provides a real PostgreSQL SQLAlchemy engine for row-locking concurrency tests.
+    Uses GTE_TEST_POSTGRES_URL if provided; otherwise initializes an ephemeral local PostgreSQL cluster.
+    """
+    import os
+    import socket
+    import subprocess
+    import uuid
+    import sqlalchemy as sa
+
+    env_url = os.environ.get("GTE_TEST_POSTGRES_URL", "").strip()
+    if env_url:
+        base_eng = create_engine(env_url, isolation_level="AUTOCOMMIT")
+        schema_name = f"test_p24_{uuid.uuid4().hex[:8]}"
+        with base_eng.connect() as conn:
+            conn.execute(sa.text(f'CREATE SCHEMA "{schema_name}"'))
+        eng = create_engine(
+            env_url,
+            connect_args={"options": f"-c search_path={schema_name}"},
+        )
+        try:
+            yield eng
+        finally:
+            eng.dispose()
+            with base_eng.connect() as conn:
+                conn.execute(sa.text(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE'))
+            base_eng.dispose()
+        return
+
+    initdb_bin = _find_pg_bin("initdb")
+    pg_ctl_bin = _find_pg_bin("pg_ctl")
+    if not initdb_bin or not pg_ctl_bin:
+        pytest.skip("PostgreSQL binaries (initdb/pg_ctl) not available and GTE_TEST_POSTGRES_URL not set")
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+
+    pgdata = tmp_path / "pgdata"
+    logfile = tmp_path / "postgres.log"
+    subprocess.run(
+        [initdb_bin, "-D", str(pgdata), "-U", "postgres", "-A", "trust", "-E", "UTF8", "--no-locale"],
+        check=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    subprocess.run(
+        [pg_ctl_bin, "-D", str(pgdata), "-l", str(logfile), "-o", f"-F -p {port} -h 127.0.0.1", "-w", "start"],
+        check=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    url = f"postgresql+psycopg://postgres@127.0.0.1:{port}/postgres"
+    eng = create_engine(url, pool_size=5, max_overflow=5)
+    try:
+        yield eng
+    finally:
+        eng.dispose()
+        subprocess.run(
+            [pg_ctl_bin, "-D", str(pgdata), "-m", "immediate", "-w", "stop"],
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+
+def test_concurrent_postgres_event_resolution_no_duplicate_consequences(postgres_engine):
+    """Verifies P1 Concurrent Event Resolution Protection on PostgreSQL:
+    Uses two independent SQLAlchemy sessions and two concurrent requests attempting to resolve the same event:
+    - Exactly one request succeeds
+    - The competing request receives a 409 conflict (event_already_resolved)
+    - Exactly one consequence execution occurs (player morale +15 once, not +30)
+    - Exactly one set of relationship-history changes is recorded
+    - The event ends in a consistent 'resolved' state
+    """
+    import threading
+
+    Base.metadata.create_all(
+        postgres_engine,
+        tables=[
+            User.__table__,
+            ClubProfile.__table__,
+            AuditLog.__table__,
+            EventOutbox.__table__,
+            LedgerAccount.__table__,
+            LedgerTransaction.__table__,
+            LedgerEntry.__table__,
+            LedgerBalanceProjection.__table__,
+            WorldClockState.__table__,
+            *OWNER_CONSOLE_TABLES,
+        ],
+    )
+    factory = sessionmaker(bind=postgres_engine, autoflush=False, expire_on_commit=False)
+
+    setup_session = factory()
+    setup_session.add(
+        WorldClockState(
+            id=DEFAULT_CLOCK_ID,
+            epoch_real_utc=WORLD_NOW,
+            virtual_start_time=WORLD_NOW,
+            progression_rate=1.0,
+            is_paused=False,
+            paused_at_virtual_time=None,
+            virtual_months_per_season=12,
+            metadata_json={"canonical": True},
+        )
+    )
+    setup_session.commit()
+
+    state = _seed_club(setup_session, club_id="club-pg-conc-1", user_id="user-pg-conc-1")
+    living_club_world.process_world_day_events(setup_session, state, campus_effects={})
+    setup_session.commit()
+
+    morale_event = setup_session.scalar(
+        select(OwnerClubEvent).where(
+            OwnerClubEvent.club_id == state.club_id,
+            OwnerClubEvent.event_type == "squad_morale_dip",
+        )
+    )
+    assert morale_event is not None
+    event_id = morale_event.id
+    player_id = morale_event.source_id
+    user_id = state.owner_user_id
+    club_id = state.club_id
+    setup_session.close()
+
+    barrier = threading.Barrier(2)
+    results: list[dict] = []
+    errors: list[owner_service.OwnerError] = []
+    unexpected_errors: list[Exception] = []
+    lock = threading.Lock()
+
+    def _worker(worker_idx: int) -> None:
+        worker_session = factory()
+        try:
+            barrier.wait(timeout=10.0)
+            res = living_club_world.resolve_club_event(
+                worker_session,
+                user_id,
+                club_id,
+                event_id,
+                action="encourage_player",
+                resolution_note=f"Concurrent worker {worker_idx}",
+            )
+            worker_session.commit()
+            with lock:
+                results.append(res)
+        except owner_service.OwnerError as exc:
+            worker_session.rollback()
+            with lock:
+                errors.append(exc)
+        except Exception as exc:  # pragma: no cover
+            worker_session.rollback()
+            with lock:
+                unexpected_errors.append(exc)
+        finally:
+            worker_session.close()
+
+    t1 = threading.Thread(target=_worker, args=(1,))
+    t2 = threading.Thread(target=_worker, args=(2,))
+    t1.start()
+    t2.start()
+    t1.join(timeout=15.0)
+    t2.join(timeout=15.0)
+
+    assert not unexpected_errors, f"Unexpected worker errors: {unexpected_errors}"
+    assert len(results) == 1, f"Expected 1 success, got {len(results)}"
+    assert len(errors) == 1, f"Expected 1 conflict error, got {len(errors)}"
+    assert errors[0].status == 409
+    assert errors[0].code == "event_already_resolved"
+
+    verify_session = factory()
+    try:
+        final_event = verify_session.get(OwnerClubEvent, event_id)
+        assert final_event is not None
+        assert final_event.status == "resolved"
+        assert final_event.resolution_action == "encourage_player"
+        assert final_event.resolved_at is not None
+
+        player = verify_session.get(OwnerSquadPlayer, player_id)
+        assert player is not None
+        # Initial morale was 35; encourage_player adds +15 exactly once -> 50 (never 65)
+        assert player.morale == 50
+
+        rel_history = list(
+            verify_session.scalars(
+                select(OwnerClubRelationshipHistory).where(
+                    OwnerClubRelationshipHistory.club_id == club_id,
+                    OwnerClubRelationshipHistory.source_event_id == event_id,
+                )
+            ).all()
+        )
+        assert len(rel_history) == 1
+    finally:
+        verify_session.close()

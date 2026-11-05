@@ -75,7 +75,29 @@ export interface LivingWorldTimelineItem {
   resolved_at?: string | null;
   resolution_action?: string | null;
   resolution_note?: string | null;
+  acknowledged_by?: string | null;
+  acknowledgement_text?: string | null;
+  deadline_day?: number | null;
+  delta_trust?: number | null;
+  delta_respect?: number | null;
+  delta_affinity?: number | null;
+  delta_tension?: number | null;
+  reason?: string | null;
   created_at?: string | null;
+}
+
+export interface LivingWorldTimelineResponse {
+  club_id: string;
+  total_count: number;
+  total_events_count: number;
+  counts_by_kind?: {
+    event: number;
+    directive: number;
+    relationship_shift: number;
+  };
+  limit: number;
+  offset: number;
+  items: LivingWorldTimelineItem[];
 }
 
 export interface LivingWorldPayload {

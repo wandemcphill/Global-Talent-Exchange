@@ -4,7 +4,7 @@ import logging
 import re
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
@@ -17,6 +17,9 @@ from app.owner_console.models import (
     OwnerClubRelationship,
     OwnerClubRelationshipHistory,
     OwnerClubState,
+    OwnerMatch,
+    OwnerScoutingWatchlist,
+    OwnerSponsorDeal,
     OwnerSquadPlayer,
 )
 
@@ -95,6 +98,7 @@ ALLOWED_ACTIONS_BY_EVENT_TYPE: dict[str, set[str]] = {
     "tactical_readiness_briefing": {"endorse_tactics", "acknowledge"},
     "directive_dispatched": {"acknowledge"},
     "directive_completed": {"acknowledge"},
+    "directive_expired": {"acknowledge"},
 }
 
 
@@ -265,7 +269,7 @@ def pairing_key(club_id: str, part_a_id: str, part_b_id: str) -> str:
 
 
 def deduplicate_club_relationships(session: Session, club_id: str | None = None) -> int:
-    """Inspects and reconciles any duplicate or reversed participant relationship pairs while preserving history."""
+    """Inspects and reconciles any duplicate or reversed participant relationship pairs while preserving history and latest metrics."""
     stmt = select(OwnerClubRelationship).order_by(
         OwnerClubRelationship.created_at.asc(),
         OwnerClubRelationship.id.asc(),
@@ -275,15 +279,22 @@ def deduplicate_club_relationships(session: Session, club_id: str | None = None)
 
     rows = list(session.scalars(stmt).all())
     seen: dict[tuple[str, str], OwnerClubRelationship] = {}
+    latest_ts_by_pair: dict[tuple[str, str], Any] = {}
     removed_count = 0
 
-    for row in rows:
+    for idx, row in enumerate(rows):
         p1, p2 = normalize_pairing(row.participant_a_id, row.participant_b_id)
         canonical_key = f"{row.club_id}:{p1}:{p2}"
         pair_tuple = (row.club_id, canonical_key)
+        row_sort_ts = (
+            row.updated_at or row.created_at,
+            row.created_at,
+            idx,
+        )
 
         if pair_tuple not in seen:
             seen[pair_tuple] = row
+            latest_ts_by_pair[pair_tuple] = row_sort_ts
             if row.pairing_key != canonical_key or row.participant_a_id != p1:
                 if row.participant_a_id != p1:
                     row.participant_a_type, row.participant_b_type = row.participant_b_type, row.participant_a_type
@@ -292,6 +303,20 @@ def deduplicate_club_relationships(session: Session, club_id: str | None = None)
                 row.pairing_key = canonical_key
         else:
             canonical_rel = seen[pair_tuple]
+            prev_best_ts = latest_ts_by_pair[pair_tuple]
+            # Preserve the authoritative latest relationship metrics when merging duplicate rows
+            is_newer = True
+            if prev_best_ts[0] is not None and row_sort_ts[0] is not None:
+                is_newer = row_sort_ts >= prev_best_ts
+            if is_newer:
+                canonical_rel.trust = row.trust
+                canonical_rel.respect = row.respect
+                canonical_rel.affinity = row.affinity
+                canonical_rel.tension = row.tension
+                if row.updated_at is not None:
+                    canonical_rel.updated_at = row.updated_at
+                latest_ts_by_pair[pair_tuple] = row_sort_ts
+
             hist_rows = list(
                 session.scalars(
                     select(OwnerClubRelationshipHistory).where(OwnerClubRelationshipHistory.relationship_id == row.id)
@@ -839,6 +864,297 @@ def format_directive_dict(dir_row: OwnerClubDirective) -> dict[str, Any]:
     }
 
 
+def _capture_directive_baseline_snapshot(
+    session: Session,
+    state: OwnerClubState,
+    squad_players: list[OwnerSquadPlayer],
+    roster: dict[str, dict[str, Any]],
+    *,
+    target_scope: str | None = None,
+    target_scope_id: str | None = None,
+) -> dict[str, Any]:
+    """Captures an authoritative snapshot of club, squad, facility, and ledger state when a directive is issued or evaluated."""
+    club_id = state.club_id
+    facs = dict(state.facilities_json or {})
+    active_players = [p for p in squad_players if p.status == "active"]
+    regens = [p for p in active_players if p.is_regen]
+
+    club_cash_gtex = int(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX))
+    active_sponsors_count = int(
+        session.scalar(
+            select(func.count())
+            .select_from(OwnerSponsorDeal)
+            .where(OwnerSponsorDeal.club_id == club_id, OwnerSponsorDeal.status == "active")
+        )
+        or 0
+    )
+    watchlist_count = int(
+        session.scalar(
+            select(func.count()).select_from(OwnerScoutingWatchlist).where(OwnerScoutingWatchlist.club_id == club_id)
+        )
+        or 0
+    )
+    matches_played = int(
+        session.scalar(
+            select(func.count())
+            .select_from(OwnerMatch)
+            .where(
+                ((OwnerMatch.home_club_id == club_id) | (OwnerMatch.away_club_id == club_id)),
+                OwnerMatch.status == "completed",
+            )
+        )
+        or 0
+    )
+
+    first_team_regens_count = sum(1 for p in regens if (p.personality_json or {}).get("squad_status") == "first_team")
+    improved_youth_contracts_count = sum(
+        1
+        for p in regens
+        if (p.personality_json or {}).get("contract_tier") in ("improved_youth", "scholar_extended", "senior_prospect")
+        or int((p.personality_json or {}).get("contract_years", 0)) >= 3
+        or int((p.personality_json or {}).get("contract_renewal_talks_opened_day", 0)) > 0
+    )
+    total_regen_rating = sum(int(p.rating or 0) for p in regens)
+    max_regen_rating = max((int(p.rating or 0) for p in regens), default=0)
+
+    injured_count = sum(1 for p in active_players if int(p.injured_days or 0) > 0)
+    total_injured_days = sum(int(p.injured_days or 0) for p in active_players)
+    fitness_values = [int((p.personality_json or {}).get("fitness", 95)) for p in active_players]
+    min_fitness = min(fitness_values, default=95)
+    avg_fitness = int(sum(fitness_values) / max(1, len(fitness_values)))
+    avg_morale = int(sum(int(p.morale or 70) for p in active_players) / max(1, len(active_players)))
+    max_fatigue = max((int((p.personality_json or {}).get("fatigue", 0)) for p in active_players), default=0)
+
+    campus_projects = list(facs.get("_campus_projects") or [])
+    completed_campus_stages = sum(int(proj.get("stage_index", 0)) for proj in campus_projects if isinstance(proj, dict))
+    decision_history = list(facs.get("_operational_decision_history") or [])
+
+    snapshot: dict[str, Any] = {
+        "world_day": int(state.world_day or 1),
+        "club_cash_gtex": club_cash_gtex,
+        "prestige": int(state.prestige or 0),
+        "mentality": str(state.mentality or "balanced"),
+        "formation": str(facs.get("_tactical_formation") or "4-3-3"),
+        "training_intensity": str(facs.get("_training_intensity") or "standard"),
+        "sponsor_review_day": int(facs.get("_treasury_sponsor_review_day") or 0),
+        "active_sponsors_count": active_sponsors_count,
+        "watchlist_count": watchlist_count,
+        "squad_count": len(active_players),
+        "regens_count": len(regens),
+        "first_team_regens_count": first_team_regens_count,
+        "improved_youth_contracts_count": improved_youth_contracts_count,
+        "total_regen_rating": total_regen_rating,
+        "max_regen_rating": max_regen_rating,
+        "injured_count": injured_count,
+        "total_injured_days": total_injured_days,
+        "min_fitness": min_fitness,
+        "avg_fitness": avg_fitness,
+        "avg_morale": avg_morale,
+        "max_fatigue": max_fatigue,
+        "medical_facility_level": int(facs.get("medical", 1)),
+        "academy_facility_level": int(facs.get("academy", 1)),
+        "training_facility_level": int(facs.get("training", 1)),
+        "commercial_facility_level": int(facs.get("commercial", 1)),
+        "stadium_facility_level": int(facs.get("stadium", 1)),
+        "campus_projects_count": len(campus_projects),
+        "completed_campus_stages": completed_campus_stages,
+        "appointed_staff_count": sum(1 for s in roster.values() if s.get("is_appointed")),
+        "matches_played": matches_played,
+        "resolved_decisions_count": len(decision_history),
+    }
+
+    if target_scope == "player" and target_scope_id:
+        target_player = next((p for p in squad_players if p.id == target_scope_id), None)
+        if target_player is not None:
+            t_pers = dict(target_player.personality_json or {})
+            snapshot["target_player"] = {
+                "id": target_player.id,
+                "injured_days": int(target_player.injured_days or 0),
+                "fitness": int(t_pers.get("fitness", 95)),
+                "fatigue": int(t_pers.get("fatigue", 0)),
+                "morale": int(target_player.morale or 70),
+                "rating": int(target_player.rating or 60),
+                "minutes": int(target_player.minutes or 0),
+                "squad_status": str(t_pers.get("squad_status") or "squad"),
+                "contract_renewal_day": int(t_pers.get("contract_renewal_talks_opened_day", 0)),
+            }
+
+    return snapshot
+
+
+def _evaluate_directive_completion(
+    session: Session,
+    state: OwnerClubState,
+    directive: OwnerClubDirective,
+    roster: dict[str, dict[str, Any]],
+    squad_players: list[OwnerSquadPlayer],
+) -> tuple[bool, int, dict[str, Any]]:
+    """Evaluates whether an active departmental directive has genuinely satisfied its authoritative completion conditions.
+
+    Returns (is_fulfilled, progress_pct, evidence_dict).
+    Vacant departments never receive automatic completion.
+    """
+    lead_role_id = DEPARTMENT_TO_ROLE_KEY.get(directive.department, "general_manager")
+    lead_slot = roster.get(lead_role_id)
+
+    # Rule: Vacant departments must NEVER receive automatic success
+    if not lead_slot or not lead_slot.get("is_appointed") or not lead_slot.get("person_id"):
+        return (
+            False,
+            0,
+            {
+                "verified": False,
+                "reason": "department_lead_vacant",
+                "department": directive.department,
+                "lead_role": lead_role_id,
+                "lead_status": "vacant",
+                "matched_checks": [],
+            },
+        )
+
+    consequences = dict(directive.consequences_json or {})
+    baseline = dict(consequences.get("baseline_snapshot") or {})
+    if not baseline:
+        return (
+            False,
+            0,
+            {
+                "verified": False,
+                "reason": "missing_baseline_snapshot",
+                "department": directive.department,
+                "lead_role": lead_role_id,
+                "lead_status": "appointed",
+                "matched_checks": [],
+            },
+        )
+
+    current = _capture_directive_baseline_snapshot(
+        session,
+        state,
+        squad_players,
+        roster,
+        target_scope=directive.target_scope,
+        target_scope_id=directive.target_scope_id,
+    )
+
+    matched_checks: list[str] = []
+    dept = directive.department
+
+    # Target player-specific checks when target_scope == "player"
+    base_tp = baseline.get("target_player")
+    cur_tp = current.get("target_player")
+    if isinstance(base_tp, dict) and isinstance(cur_tp, dict):
+        if dept == "medical":
+            if cur_tp["injured_days"] < base_tp["injured_days"]:
+                matched_checks.append("target_player_injury_reduced")
+            if cur_tp["fitness"] > base_tp["fitness"]:
+                matched_checks.append("target_player_fitness_improved")
+            if base_tp.get("fatigue", 0) > 0 and cur_tp.get("fatigue", 0) < base_tp.get("fatigue", 0):
+                matched_checks.append("target_player_fatigue_reduced")
+        elif dept == "academy":
+            if cur_tp["rating"] > base_tp["rating"]:
+                matched_checks.append("target_player_rating_grown")
+            if cur_tp["squad_status"] == "first_team" and base_tp.get("squad_status") != "first_team":
+                matched_checks.append("target_player_promoted_to_first_team")
+            if cur_tp["contract_renewal_day"] > base_tp.get("contract_renewal_day", 0):
+                matched_checks.append("target_player_contract_progressed")
+        elif dept == "manager":
+            if cur_tp["morale"] > base_tp["morale"]:
+                matched_checks.append("target_player_morale_improved")
+            if cur_tp["minutes"] > base_tp["minutes"]:
+                matched_checks.append("target_player_minutes_increased")
+
+    # Department-wide authoritative completion checks
+    if dept == "medical":
+        if baseline.get("total_injured_days", 0) > 0 and current["total_injured_days"] < baseline["total_injured_days"]:
+            matched_checks.append("injury_rehabilitation_days_reduced")
+        if baseline.get("injured_count", 0) > 0 and current["injured_count"] < baseline["injured_count"]:
+            matched_checks.append("injured_player_cleared_for_training")
+        if current["training_intensity"] == "light_recovery" and baseline.get("training_intensity") != "light_recovery":
+            matched_checks.append("recovery_workload_protocol_activated")
+        if current["medical_facility_level"] > baseline.get("medical_facility_level", 1):
+            matched_checks.append("medical_facility_upgraded")
+        if current["min_fitness"] > baseline.get("min_fitness", 95) or current["avg_fitness"] > baseline.get(
+            "avg_fitness", 95
+        ):
+            matched_checks.append("squad_conditioning_improved")
+        if baseline.get("max_fatigue", 0) > 0 and current["max_fatigue"] < baseline.get("max_fatigue", 0):
+            matched_checks.append("squad_fatigue_reduced")
+
+    elif dept == "academy":
+        if current["regens_count"] > baseline.get("regens_count", 0):
+            matched_checks.append("academy_intake_inducted")
+        if current["first_team_regens_count"] > baseline.get("first_team_regens_count", 0):
+            matched_checks.append("academy_prospect_promoted")
+        if current["improved_youth_contracts_count"] > baseline.get("improved_youth_contracts_count", 0):
+            matched_checks.append("youth_contract_extended")
+        if current["total_regen_rating"] > baseline.get("total_regen_rating", 0) or current[
+            "max_regen_rating"
+        ] > baseline.get("max_regen_rating", 0):
+            matched_checks.append("regen_rating_developed")
+        if current["academy_facility_level"] > baseline.get("academy_facility_level", 1):
+            matched_checks.append("academy_facility_upgraded")
+
+    elif dept == "finance":
+        if current["active_sponsors_count"] > baseline.get("active_sponsors_count", 0):
+            matched_checks.append("commercial_sponsor_signed")
+        if current["club_cash_gtex"] > baseline.get("club_cash_gtex", 0):
+            matched_checks.append("treasury_balance_increased")
+        if current["sponsor_review_day"] >= int(directive.issued_day or 1) and current[
+            "sponsor_review_day"
+        ] > baseline.get("sponsor_review_day", 0):
+            matched_checks.append("commercial_sponsor_review_completed")
+        if current["commercial_facility_level"] > baseline.get("commercial_facility_level", 1) or current[
+            "stadium_facility_level"
+        ] > baseline.get("stadium_facility_level", 1):
+            matched_checks.append("revenue_infrastructure_upgraded")
+
+    elif dept == "scouting":
+        if current["watchlist_count"] > baseline.get("watchlist_count", 0):
+            matched_checks.append("scouting_watchlist_expanded")
+        if current["squad_count"] > baseline.get("squad_count", 0):
+            matched_checks.append("player_recruited_to_squad")
+
+    elif dept == "manager":
+        if current["mentality"] != baseline.get("mentality"):
+            matched_checks.append(f"tactical_mentality_updated:{current['mentality']}")
+        if current["formation"] != baseline.get("formation"):
+            matched_checks.append(f"tactical_formation_updated:{current['formation']}")
+        if current["avg_morale"] > baseline.get("avg_morale", 70):
+            matched_checks.append("squad_morale_improved")
+        if current["matches_played"] > baseline.get("matches_played", 0):
+            matched_checks.append("competitive_fixture_completed")
+        if current["training_facility_level"] > baseline.get("training_facility_level", 1):
+            matched_checks.append("training_facility_upgraded")
+
+    elif dept == "executive":
+        if current["campus_projects_count"] > baseline.get("campus_projects_count", 0) or current[
+            "completed_campus_stages"
+        ] > baseline.get("completed_campus_stages", 0):
+            matched_checks.append("campus_infrastructure_advanced")
+        if current["prestige"] > baseline.get("prestige", 0):
+            matched_checks.append("club_prestige_increased")
+        if current["appointed_staff_count"] > baseline.get("appointed_staff_count", 0):
+            matched_checks.append("executive_staff_appointed")
+        if current["resolved_decisions_count"] > baseline.get("resolved_decisions_count", 0):
+            matched_checks.append("operational_decision_executed")
+
+    is_fulfilled = len(matched_checks) > 0
+    progress_pct = 100 if is_fulfilled else 0
+    evidence = {
+        "verified": is_fulfilled,
+        "reason": "verified_department_outcome" if is_fulfilled else "awaiting_authoritative_department_outcome",
+        "department": dept,
+        "lead_role": lead_role_id,
+        "lead_person_id": lead_slot["person_id"],
+        "lead_name": lead_slot["name"],
+        "lead_status": lead_slot["status"],
+        "matched_checks": matched_checks,
+        "evaluated_at_world_day": int(state.world_day or 1),
+    }
+    return is_fulfilled, progress_pct, evidence
+
+
 def issue_department_directive(
     session: Session,
     user_id: str,
@@ -910,6 +1226,15 @@ def issue_department_directive(
             f"Baseline implementation scheduled for World Day {deadline_day}."
         )
 
+    baseline_snapshot = _capture_directive_baseline_snapshot(
+        session,
+        state,
+        squad_players,
+        roster,
+        target_scope=target_scope,
+        target_scope_id=target_scope_id,
+    )
+
     directive = OwnerClubDirective(
         club_id=club_id,
         department=department,
@@ -928,6 +1253,10 @@ def issue_department_directive(
             "department": department,
             "target_scope": target_scope,
             "lead_status": slot["status"],
+            "progress_pct": 0,
+            "verification_status": "pending",
+            "reward_granted": False,
+            "baseline_snapshot": baseline_snapshot,
         },
     )
     session.add(directive)
@@ -1158,11 +1487,59 @@ def process_world_day_events(
         )
     ]
     if fatigued_healthy_players:
-        fatigued = min(
-            fatigued_healthy_players,
-            key=lambda p: int((p.personality_json or {}).get("fitness", 95)),
-        )
-        cur_fit = int((fatigued.personality_json or {}).get("fitness", 68))
+
+        def _fatigue_alert_priority(player_row: OwnerSquadPlayer) -> tuple[int, int]:
+            p_pers = dict(player_row.personality_json or {})
+            fit_val = int(p_pers.get("fitness", 95))
+            fat_val = int(p_pers.get("fatigue", 0))
+            low_fit_deficit = max(0, 70 - fit_val) if "fitness" in p_pers and fit_val < 70 else 0
+            high_fat_excess = max(0, fat_val - 69) if "fatigue" in p_pers and fat_val >= 70 else 0
+            return (max(low_fit_deficit, high_fat_excess), high_fat_excess)
+
+        fatigued = max(fatigued_healthy_players, key=_fatigue_alert_priority)
+        f_pers = dict(fatigued.personality_json or {})
+        has_low_fitness = "fitness" in f_pers and int(f_pers.get("fitness", 95)) < 70
+        has_high_fatigue = "fatigue" in f_pers and int(f_pers.get("fatigue", 0)) >= 70
+        cur_fit = int(f_pers.get("fitness", 95))
+        cur_fatigue = int(f_pers.get("fatigue", 0))
+
+        if has_high_fatigue and not has_low_fitness:
+            trigger_metric = "fatigue"
+            fatigue_desc = (
+                f"{fatigued.name} ({fatigued.position}) has accumulated a high workload fatigue reading of "
+                f"{cur_fatigue}/100 (Conditioning {cur_fit}%). Sports science staff recommend a recovery rest session."
+            )
+            fatigue_consequences: dict[str, Any] = {
+                "player_id": fatigued.id,
+                "trigger_metric": "fatigue",
+                "fatigue": cur_fatigue,
+                "fitness": cur_fit,
+            }
+        elif has_low_fitness and not has_high_fatigue:
+            trigger_metric = "fitness"
+            fatigue_desc = (
+                f"{fatigued.name} ({fatigued.position}) has dropped to {cur_fit}% match conditioning. "
+                f"Sports science staff recommend a recovery rest session."
+            )
+            fatigue_consequences = {
+                "player_id": fatigued.id,
+                "trigger_metric": "fitness",
+                "fitness": cur_fit,
+            }
+        else:
+            trigger_metric = "fatigue_and_fitness"
+            fatigue_desc = (
+                f"{fatigued.name} ({fatigued.position}) has accumulated a workload fatigue reading of "
+                f"{cur_fatigue}/100 and dropped to {cur_fit}% match conditioning. "
+                f"Sports science staff recommend a recovery rest session."
+            )
+            fatigue_consequences = {
+                "player_id": fatigued.id,
+                "trigger_metric": trigger_metric,
+                "fatigue": cur_fatigue,
+                "fitness": cur_fit,
+            }
+
         evt, created = create_club_event(
             session,
             club_id,
@@ -1170,10 +1547,7 @@ def process_world_day_events(
             event_type="high_fatigue_workload_alert",
             severity="important",
             title=f"Workload Fatigue Warning: {fatigued.name}",
-            description=(
-                f"{fatigued.name} ({fatigued.position}) is showing elevated physical fatigue "
-                f"(Conditioning {cur_fit}%). Sports science staff recommend a recovery rest session."
-            ),
+            description=fatigue_desc,
             world_day=world_day,
             source_type="player",
             source_id=fatigued.id,
@@ -1181,7 +1555,7 @@ def process_world_day_events(
                 {"role": "player", "id": fatigued.id, "name": fatigued.name},
                 {"role": "medical_director", "name": med_slot["name"], "status": med_slot["status"]},
             ],
-            consequences={"player_id": fatigued.id, "fitness": cur_fit},
+            consequences=fatigue_consequences,
             actions=[
                 {"key": "rest_player", "label": "Grant Recovery Rest", "style": "primary"},
                 {"key": "acknowledge", "label": "Acknowledge", "style": "ghost"},
@@ -1357,7 +1731,7 @@ def process_world_day_events(
             if created:
                 new_events.append(evt)
 
-    # 6. Evaluate Active Directives
+    # 6. Evaluate Active Directives Using Authoritative Completion Verification
     active_directives = list(
         session.scalars(
             select(OwnerClubDirective).where(
@@ -1367,12 +1741,28 @@ def process_world_day_events(
         ).all()
     )
     for directive in active_directives:
-        if directive.deadline_day and world_day >= directive.deadline_day:
-            directive.status = "completed"
-            directive.completed_at = utcnow()
+        is_fulfilled, progress_pct, evidence = _evaluate_directive_completion(
+            session, state, directive, roster, players
+        )
+        dir_consequences = dict(directive.consequences_json or {})
+        dir_consequences["progress_pct"] = progress_pct
+        dir_consequences["evidence"] = evidence
+        dir_consequences["last_evaluated_world_day"] = world_day
+
+        if is_fulfilled:
             lead_role = DEPARTMENT_TO_ROLE_KEY.get(directive.department, "general_manager")
             lead_slot = roster.get(lead_role)
-            if lead_slot and lead_slot["is_appointed"] and lead_slot["person_id"]:
+            directive.status = "completed"
+            directive.completed_at = utcnow()
+            dir_consequences["verification_status"] = "verified_completed"
+            dir_consequences["verified_at_world_day"] = world_day
+
+            if (
+                not dir_consequences.get("reward_granted")
+                and lead_slot
+                and lead_slot["is_appointed"]
+                and lead_slot["person_id"]
+            ):
                 apply_relationship_delta(
                     session,
                     club_id,
@@ -1385,9 +1775,15 @@ def process_world_day_events(
                     delta_trust=6,
                     delta_respect=5,
                     delta_tension=-4,
-                    reason=f"Directive '{directive.title}' fulfilled successfully.",
+                    reason=f"Directive '{directive.title}' fulfilled with verified completion evidence.",
                     world_day=world_day,
                 )
+                dir_consequences["reward_granted"] = True
+
+            directive.consequences_json = dir_consequences
+            flag_modified(directive, "consequences_json")
+            directive.updated_at = utcnow()
+
             evt, created = create_club_event(
                 session,
                 club_id,
@@ -1395,16 +1791,62 @@ def process_world_day_events(
                 event_type="directive_completed",
                 severity="routine",
                 title=f"Directive Completed: {directive.title}",
-                description=f"Department {directive.department} has fulfilled Chairman's directive '{directive.instruction}'.",
+                description=(
+                    f"Department {directive.department} fulfilled Chairman's directive '{directive.instruction}' "
+                    f"(verified: {', '.join(evidence.get('matched_checks') or [])})."
+                ),
                 world_day=world_day,
-                source_type="department",
-                source_id=directive.department,
-                consequences={"directive_id": directive.id, "status": "completed"},
+                source_type="directive",
+                source_id=directive.id,
+                consequences={
+                    "directive_id": directive.id,
+                    "status": "completed",
+                    "evidence": evidence,
+                },
                 actions=[{"key": "acknowledge", "label": "Acknowledge", "style": "ghost"}],
-                idempotency_key=f"evt:{club_id}:{world_day}:dir_done:{directive.id}",
+                idempotency_key=f"evt:{club_id}:dir_done:{directive.id}",
             )
             if created:
                 new_events.append(evt)
+
+        elif directive.deadline_day is not None and world_day >= directive.deadline_day:
+            directive.status = "expired"
+            dir_consequences["verification_status"] = "expired_unfulfilled"
+            dir_consequences["expired_at_world_day"] = world_day
+            dir_consequences["reward_granted"] = False
+            directive.consequences_json = dir_consequences
+            flag_modified(directive, "consequences_json")
+            directive.updated_at = utcnow()
+
+            evt, created = create_club_event(
+                session,
+                club_id,
+                category="executive",
+                event_type="directive_expired",
+                severity="important",
+                title=f"Directive Expired Unfulfilled: {directive.title}",
+                description=(
+                    f"Directive '{directive.title}' assigned to {directive.department} reached its World Day "
+                    f"{directive.deadline_day} deadline without verified completion evidence "
+                    f"({evidence.get('reason', 'unverified')})."
+                ),
+                world_day=world_day,
+                source_type="directive",
+                source_id=directive.id,
+                consequences={
+                    "directive_id": directive.id,
+                    "status": "expired",
+                    "evidence": evidence,
+                },
+                actions=[{"key": "acknowledge", "label": "Acknowledge", "style": "ghost"}],
+                idempotency_key=f"evt:{club_id}:dir_expired:{directive.id}",
+            )
+            if created:
+                new_events.append(evt)
+        else:
+            directive.consequences_json = dir_consequences
+            flag_modified(directive, "consequences_json")
+            directive.updated_at = utcnow()
 
     session.flush()
 
@@ -1437,11 +1879,15 @@ def resolve_club_event(
 ) -> dict[str, Any]:
     state = service.require_state(session, club_id, user_id)
 
+    # Acquire a transaction-safe row lock on the event record and force fresh state from DB
     event = session.scalar(
-        select(OwnerClubEvent).where(
+        select(OwnerClubEvent)
+        .where(
             OwnerClubEvent.id == event_id,
             OwnerClubEvent.club_id == club_id,
         )
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     if event is None:
         raise service.OwnerError("event_not_found", 404, "Event not found or does not belong to this club.")
@@ -1472,6 +1918,23 @@ def resolve_club_event(
             "unsupported_event_action",
             400,
             f"Action '{clean_action}' is not supported by backend handler for event type '{event.event_type}'.",
+        )
+
+    # Atomic conditional state transition to claim the event within this transaction
+    claim_result = session.execute(
+        update(OwnerClubEvent)
+        .where(
+            OwnerClubEvent.id == event_id,
+            OwnerClubEvent.club_id == club_id,
+            OwnerClubEvent.status.in_(["active", "awaiting_decision"]),
+        )
+        .values(status="resolving", updated_at=utcnow())
+    )
+    if int(claim_result.rowcount or 0) != 1:
+        raise service.OwnerError(
+            "event_already_resolved",
+            409,
+            "Event cannot be resolved; it was already claimed or resolved by a concurrent request.",
         )
 
     world_day = int(state.world_day or 1)
@@ -1768,6 +2231,7 @@ def resolve_club_event(
                 pers["last_training_workload_tier"] = "rest_recovery"
                 if "fatigue" in pers:
                     pers["fatigue"] = max(0, int(pers["fatigue"]) - 20)
+                    consequences_applied["fatigue"] = pers["fatigue"]
                 player.personality_json = pers
                 player.morale = engine.clamp(player.morale + 4, 0, 100)
                 flag_modified(player, "personality_json")

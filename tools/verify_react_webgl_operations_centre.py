@@ -28,7 +28,7 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from sqlalchemy.orm.attributes import flag_modified  # noqa: E402
-from app.owner_console import daily_operations_hub, ledger, service, storytelling  # noqa: E402
+from app.owner_console import daily_operations_hub, ledger, living_club_world, service, storytelling  # noqa: E402
 from tests.world_clock.test_gtex_club_prestige_campus_comms import _seed_club, _session  # noqa: E402
 
 EXPECTED_DESTINATIONS = [
@@ -93,6 +93,18 @@ def seed_test_database():
         flag_modified(regens[0], "personality_json")
         session.commit()
 
+    # Initialize living world events and directives for timeline verification
+    living_club_world.process_world_day_events(session, state, campus_effects={})
+    living_club_world.issue_department_directive(
+        session,
+        user_id,
+        club_id,
+        department="medical",
+        directive_key="accelerate_rehab",
+        title="Accelerate Hydrotherapy Protocols",
+        instruction="Prioritize hydrotherapy for squad recovery",
+        deadline_days=3,
+    )
     return session, user_id, club_id
 
 
@@ -209,6 +221,60 @@ def run_verification(headless: bool = True) -> int:
                 if path.endswith(f"/owner/clubs/{club_id}"):
                     state = service.get_state(session, club_id)
                     return ok(service.club_profile(session, state))
+                if "/living-world/timeline" in path:
+                    from urllib.parse import parse_qs
+
+                    query = parse_qs(parsed.query)
+                    category = query.get("category", [None])[0]
+                    severity = query.get("severity", [None])[0]
+                    status_param = query.get("status", [None])[0]
+                    limit = int(query.get("limit", [20])[0])
+                    offset = int(query.get("offset", [0])[0])
+                    tl = living_club_world.get_living_world_timeline(
+                        session,
+                        user_id,
+                        club_id,
+                        category=category,
+                        severity=severity,
+                        status=status_param,
+                        limit=limit,
+                        offset=offset,
+                    )
+                    return ok(tl)
+                if "/living-world/relationships" in path:
+                    rels = living_club_world.get_club_relationships(session, club_id)
+                    return ok(
+                        {
+                            "club_id": club_id,
+                            "total_count": len(rels),
+                            "relationships": rels,
+                        }
+                    )
+                if "/living-world/directives" in path and method == "POST":
+                    body = json.loads(request.post_data or "{}")
+                    dir_res = living_club_world.issue_department_directive(
+                        session,
+                        user_id,
+                        club_id,
+                        department=body.get("department", "medical"),
+                        directive_key=body.get("directive_key", "dir_key"),
+                        title=body.get("title", "Directive"),
+                        instruction=body.get("instruction", "Instruction"),
+                    )
+                    return ok(dir_res)
+                if "/living-world/events/" in path and path.endswith("/resolve") and method == "POST":
+                    parts = path.split("/")
+                    ev_id = parts[-2]
+                    body = json.loads(request.post_data or "{}")
+                    res = living_club_world.resolve_club_event(
+                        session,
+                        user_id,
+                        club_id,
+                        event_id=ev_id,
+                        action=body.get("action", "acknowledge"),
+                        resolution_note=body.get("resolution_note"),
+                    )
+                    return ok(res)
                 return ok({"status": "ok"})
             except Exception as exc:
                 return route.fulfill(
@@ -237,6 +303,8 @@ def run_verification(headless: bool = True) -> int:
                     loaded_glbs.append(parsed_url)
 
         page.on("response", track_glb_request)
+        page.on("console", lambda msg: print(f"  [BROWSER CONSOLE {msg.type}] {msg.text}"))
+        page.on("pageerror", lambda err: print(f"  [BROWSER PAGE ERROR] {err}"))
 
         # Seed auth in localStorage
         page.goto(f"{console_url}/", wait_until="domcontentloaded")
@@ -387,6 +455,41 @@ def run_verification(headless: bool = True) -> int:
         toggle_btn.click()
         page.wait_for_selector('[data-testid="club-operations-3d-canvas"]', timeout=5000)
         print("[PASS] Successfully restored 3D WebGL viewport.")
+
+        # -------------------------------------------------------------
+        # TEST 4: Unified Living World Timeline Drawer & Filters
+        # -------------------------------------------------------------
+        print("\n--- Test 4: Unified Living World Timeline Drawer & Filters ---")
+        timeline_btn = page.locator('[data-testid="toggle-living-world-timeline"]')
+        assert timeline_btn.is_visible(), "Timeline toggle button not visible"
+        timeline_btn.click()
+
+        page.wait_for_selector('[data-testid="living-world-timeline-drawer"]', timeout=5000)
+        print("[PASS] Living World Timeline drawer opened.")
+
+        # Verify filters and list rendered
+        page.wait_for_selector('[data-testid="timeline-category-filters"]', timeout=5000)
+        page.wait_for_selector('[data-testid="living-timeline-list"]', timeout=5000)
+        print("[PASS] Timeline filters and event list container rendered.")
+
+        # Test culture filter
+        culture_filter_btn = page.locator('[data-testid="timeline-filter-category-culture"]')
+        if culture_filter_btn.is_visible():
+            culture_filter_btn.click()
+            time.sleep(0.5)
+            print("[PASS] Category filter for 'culture' clicked successfully.")
+
+        # Reset to all categories
+        all_filter_btn = page.locator('[data-testid="timeline-filter-category-all"]')
+        if all_filter_btn.is_visible():
+            all_filter_btn.click()
+            time.sleep(0.5)
+
+        # Close timeline drawer
+        close_btn = page.locator('[data-testid="close-timeline-drawer"]')
+        assert close_btn.is_visible(), "Close timeline drawer button not visible"
+        close_btn.click()
+        print("[PASS] Timeline drawer closed successfully.")
 
         # Fail verification if unexpected JavaScript page errors occurred on either page context
         if page_errors:
