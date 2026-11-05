@@ -1880,3 +1880,213 @@ def test_phase2_2_daily_training_workload_exposure_and_injured_regen_development
     assert injured_regen.personality_json["last_training_workload_tier"] == "rehabilitation"
     assert injured_regen.personality_json["last_training_workload_minutes"] == 0
     assert sum(i_growth["drivers"].values()) < sum(h_growth["drivers"].values()) * 0.25
+
+
+def test_phase2_3_owner_daily_briefing_six_authoritative_sections_and_world_day_idempotency():
+    from sqlalchemy.orm.attributes import flag_modified
+    from app.owner_console import daily_operations_hub
+
+    session = _session()
+    state = _seed_club(session, prestige=68, cash=180_000)
+    regens = service.academy_intake(session, "user-prestige-1", "club-prestige-1")
+    assert len(regens) >= 2
+
+    # Put one player in the medical room (injured_days = 6) and lower fitness on another
+    regens[0].injured_days = 6
+    p0_pers = dict(regens[0].personality_json or {})
+    p0_pers["last_injury_type"] = "Hamstring Grade-1 Strain"
+    regens[0].personality_json = p0_pers
+    flag_modified(regens[0], "personality_json")
+
+    regens[1].morale = 52
+    p1_pers = dict(regens[1].personality_json or {})
+    p1_pers["fitness"] = 76
+    regens[1].personality_json = p1_pers
+    flag_modified(regens[1], "personality_json")
+    session.commit()
+
+    # 1. Generate Daily Briefing via storytelling.get_daily_briefing (which delegates to daily_operations_hub)
+    briefing = storytelling.get_daily_briefing(session, "user-prestige-1", "club-prestige-1")
+    assert briefing["club_id"] == "club-prestige-1"
+    assert briefing["world_day"] == state.world_day
+    assert len(briefing["sections"]) == 6
+
+    # Verify all 6 required sections exist and are grounded in real club state
+    for key in (
+        "executive_briefing",
+        "managers_report",
+        "general_managers_report",
+        "hoyd_report",
+        "medical_directors_report",
+        "financial_commercial_report",
+    ):
+        assert key in briefing, f"Missing briefing section {key}"
+
+    exec_sec = briefing["executive_briefing"]
+    assert exec_sec["financial_position"]["cash_gtex"] == 177_000  # 180k - 3k academy intake
+    assert exec_sec["squad_condition_and_availability"]["injured_players"] == 1
+    assert any(r["risk_id"] == "risk_medical_load" for r in exec_sec["urgent_risks"])
+    assert any(r["risk_id"] == "risk_squad_morale" for r in exec_sec["urgent_risks"])
+
+    med_sec = briefing["medical_directors_report"]
+    assert len(med_sec["injured_players"]) == 1
+    inj_dossier = med_sec["injured_players"][0]
+    assert inj_dossier["id"] == regens[0].id
+    assert inj_dossier["injured_days"] == 6
+    assert inj_dossier["injury_type"] == "Hamstring Grade-1 Strain"
+    assert inj_dossier["estimated_recovery_world_days"] >= 1
+
+    fin_sec = briefing["financial_commercial_report"]
+    assert fin_sec["current_club_balance"]["cash_gtex"] == 177_000
+    assert fin_sec["wage_obligations"]["total_daily_obligations_gtex"] > 0
+    assert fin_sec["matchday_revenue"]["operational_stadium_capacity"] >= 15_000
+
+    # 2. Verify World-Day Idempotency: calling get_daily_briefing again on the same world_day
+    # returns the exact same briefing & department_decisions without duplicating items
+    decision_ids_first = [d["decision_id"] for d in briefing["department_decisions"]]
+    briefing_second = storytelling.get_daily_briefing(session, "user-prestige-1", "club-prestige-1")
+    decision_ids_second = [d["decision_id"] for d in briefing_second["department_decisions"]]
+    assert decision_ids_second == decision_ids_first
+    assert briefing_second["id"] == briefing["id"]
+
+    # 3. Advance the world clock (tick_club) -> new world_day generates a fresh day's briefing
+    old_day = state.world_day
+    service.tick_club(session, state)
+    assert state.world_day == old_day + 1
+
+    briefing_next_day = daily_operations_hub.build_authoritative_daily_briefing(
+        session, "user-prestige-1", "club-prestige-1"
+    )
+    assert briefing_next_day["world_day"] == old_day + 1
+    assert briefing_next_day["id"] == f"briefing:club-prestige-1:{old_day + 1}"
+
+
+def test_phase2_3_living_club_management_centre_six_destinations_and_decision_execution_lifecycle():
+    from decimal import Decimal
+    from sqlalchemy import select
+    from app.owner_console import daily_operations_hub, ledger
+    from app.owner_console.models import LedgerEvent
+    from app.owner_console.service import OwnerError
+
+    session = _session()
+    state = _seed_club(session, prestige=72, cash=200_000)
+    regens = service.academy_intake(session, "user-prestige-1", "club-prestige-1")
+    regens[0].injured_days = 4
+    session.commit()
+
+    # 1. Fetch the Club Operations Hub (Living Club Management Centre payload)
+    hub = daily_operations_hub.get_club_operations_hub(session, "user-prestige-1", "club-prestige-1")
+    assert hub["club"]["club_id"] == "club-prestige-1"
+    dest_keys = [d["destination_key"] for d in hub["destinations"]]
+    assert dest_keys == [
+        "executive_office",
+        "managers_office",
+        "general_managers_office",
+        "academy_department",
+        "medical_department",
+        "finance_commercial_office",
+    ]
+    for dest in hub["destinations"]:
+        assert dest["glb_model"].startswith("/models/campus/")
+        assert len(dest["camera_position"]) == 3
+        assert len(dest["camera_target"]) == 3
+        assert len(dest["hotspots"]) >= 3
+        assert isinstance(dest["report"], dict)
+
+    # 2. Verify non-owner permission check rejects unauthorized user with 403 Forbidden
+    from app.models import User, UserRole
+
+    other_user = User(
+        id="intruder-user-999",
+        email="intruder@example.com",
+        username="intruder",
+        password_hash="hashed",
+        role=UserRole.SCOUT,
+    )
+    session.add(other_user)
+    session.commit()
+
+    open_decisions = hub["actionable_decisions"]["department_decisions"]
+    assert len(open_decisions) >= 4
+    target_med_dec = next(d for d in open_decisions if d["department"] == "medical_department")
+
+    try:
+        daily_operations_hub.execute_owner_operational_decision(
+            session,
+            "intruder-user-999",
+            "club-prestige-1",
+            decision_id=target_med_dec["decision_id"],
+            action="approve",
+        )
+        assert False, "Expected OwnerError(not_club_owner) for non-owner user"
+    except OwnerError as exc:
+        assert exc.code in ("not_owner", "not_club_owner")
+        assert exc.status == 403
+
+    # 3. Execute Medical Department decision (Authoritative Sports-Science Conditioning Protocol)
+    cash_before = float(ledger.balance(session, ledger.club_account(state.club_id), ledger.GTEX))
+    inj_before = regens[0].injured_days
+    exec_res = daily_operations_hub.execute_owner_operational_decision(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        decision_id=target_med_dec["decision_id"],
+        action="approve",
+        note="Approved from 3D Medical Department",
+    )
+    assert exec_res["decision"]["status"] == "approved"
+    assert regens[0].injured_days == max(0, inj_before - 1)
+    cash_after = float(ledger.balance(session, ledger.club_account(state.club_id), ledger.GTEX))
+    assert cash_after == cash_before - target_med_dec["cost_gtex"]
+
+    # Verify authoritative LedgerEvent was recorded
+    med_ledger = session.scalar(
+        select(LedgerEvent).where(
+            LedgerEvent.event_type == "medical_conditioning_protocol",
+            LedgerEvent.related_object_id == target_med_dec["decision_id"],
+        )
+    )
+    assert med_ledger is not None
+    assert int(Decimal(med_ledger.gross_amount)) == target_med_dec["cost_gtex"]
+
+    # 4. Duplicate execution of the same decision must be rejected with HTTP 409 Conflict
+    try:
+        daily_operations_hub.execute_owner_operational_decision(
+            session,
+            "user-prestige-1",
+            "club-prestige-1",
+            decision_id=target_med_dec["decision_id"],
+            action="approve",
+        )
+        assert False, "Expected 409 decision_already_resolved on duplicate execution"
+    except OwnerError as exc:
+        assert exc.code == "decision_already_resolved"
+        assert exc.status == 409
+
+    # 5. Execute Finance & Commercial Sponsor decision and Manager's Office decision, verify persistence in decision_history
+    fin_dec = next(d for d in open_decisions if d["department"] == "finance_commercial_office")
+    fin_res = daily_operations_hub.execute_owner_operational_decision(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        decision_id=fin_dec["decision_id"],
+        action="approve",
+    )
+    assert fin_res["decision"]["status"] == "approved"
+
+    mgr_dec = next(d for d in open_decisions if d["department"] == "managers_office")
+    mgr_res = daily_operations_hub.execute_owner_operational_decision(
+        session,
+        "user-prestige-1",
+        "club-prestige-1",
+        decision_id=mgr_dec["decision_id"],
+        action="reject",
+        note="Deferred until next fixture",
+    )
+    assert mgr_res["decision"]["status"] == "rejected"
+
+    refreshed_hub = mgr_res["operations_hub"]
+    history_ids = [h["decision_id"] for h in refreshed_hub["decision_history"]]
+    assert target_med_dec["decision_id"] in history_ids
+    assert fin_dec["decision_id"] in history_ids
+    assert mgr_dec["decision_id"] in history_ids

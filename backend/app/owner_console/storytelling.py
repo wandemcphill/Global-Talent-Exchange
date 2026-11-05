@@ -993,10 +993,17 @@ def get_club_showroom(session: Session, user_id: str, club_id: str) -> dict[str,
     from app.owner_console import engine
 
     from app.owner_console.prestige_campus_comms import PRESTIGE_VISUAL_MANIFEST
+
     cash_bal = float(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX))
     facs = dict(state.facilities_json or {})
-    club_owned_count = sum(1 for o in owned if not o.get("gifted_to_player_name") and o.get("category") in ("jet", "coach", "suite", "infrastructure"))
-    personal_count = sum(1 for o in owned if not o.get("gifted_to_player_name") and o.get("category") in ("vehicle", "watch"))
+    club_owned_count = sum(
+        1
+        for o in owned
+        if not o.get("gifted_to_player_name") and o.get("category") in ("jet", "coach", "suite", "infrastructure")
+    )
+    personal_count = sum(
+        1 for o in owned if not o.get("gifted_to_player_name") and o.get("category") in ("vehicle", "watch")
+    )
     gifted_count = sum(1 for o in owned if o.get("gifted_to_player_name"))
     return {
         "catalog": items,
@@ -2060,93 +2067,14 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
 
 
 def get_daily_briefing(session: Session, user_id: str, club_id: str, force_refresh: bool = False) -> dict[str, Any]:
-    from sqlalchemy import func
-    from app.owner_console import engine, ledger
+    from app.owner_console import daily_operations_hub
 
-    state = require_state(session, club_id, user_id)
-    world_day = state.world_day
-    cash_bal = float(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX))
-    squad_players = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
-    squad_size = len(squad_players)
-    avg_morale = int(sum(p.morale for p in squad_players) / max(1, squad_size))
-    ready_prospects = sum(1 for p in squad_players if p.is_regen and p.rating >= 58)
-    open_decisions = (
-        session.scalar(
-            select(func.count(OwnerInboxItem.id)).where(
-                OwnerInboxItem.club_id == club_id, OwnerInboxItem.status == "open"
-            )
-        )
-        or 0
+    return daily_operations_hub.build_authoritative_daily_briefing(
+        session,
+        user_id,
+        club_id,
+        force_refresh=force_refresh,
     )
-    tier_label = engine.prestige_tier_label(state.prestige)
-
-    facs = dict(state.facilities_json or {})
-    cached = facs.get("_daily_briefing")
-    if cached and not force_refresh and cached.get("world_day") == world_day and "boardroom_dilemma" in cached:
-        return cached
-
-    gm = (facs.get("_executive_staff") or {}).get("general_manager") or {
-        "name": "Dayo Adeleke",
-        "role_label": "General Manager",
-    }
-    mgr = state.manager_json or engine.manager_profile(engine.DEFAULT_MANAGER)
-    hoyd = (facs.get("_executive_staff") or {}).get("head_of_youth_development") or {
-        "name": "Femi Ogunleye",
-        "role_label": "Head of Youth Development",
-    }
-
-    now_iso = datetime.now(timezone.utc).isoformat()
-    briefing = {
-        "id": f"briefing:{club_id}:{world_day}",
-        "club_id": club_id,
-        "world_day": world_day,
-        "headline": f"Daily Owner Briefing · {state.club_name or 'Club'} ({tier_label})",
-        "summary": f"Treasury stands at {cash_bal:,.0f} GTEX. Squad morale average is {avg_morale}% across {squad_size} players with {ready_prospects} academy talents pushing for senior minutes.",
-        "body": f"Good morning, Director. Here is your daily operational digest for World Day {world_day}. The executive staff has prepared their status reports below.",
-        "created_at": now_iso,
-        "generated_at": now_iso,
-        "metrics": {
-            "cash_gtex": int(cash_bal),
-            "prestige": state.prestige,
-            "prestige_tier": tier_label,
-            "squad_size": squad_size,
-            "avg_morale": avg_morale,
-            "ready_academy_prospects": ready_prospects,
-            "open_decisions": open_decisions,
-        },
-        "sections": [
-            {
-                "role": "General Manager",
-                "sender": gm.get("name", "General Manager"),
-                "title": "Treasury & Commercial Pulse",
-                "summary": f"Club liquidity is stable at {cash_bal:,.0f} GTEX. Commercial partnerships and matchday revenues are on schedule.",
-            },
-            {
-                "role": "First-Team Manager",
-                "sender": mgr.get("name", "First-Team Manager"),
-                "title": "Squad Morale & Match Readiness",
-                "summary": f"First-team dressing room morale is at {avg_morale}%. Tactical cohesion is progressing well toward our next competitive fixture.",
-            },
-            {
-                "role": "Head of Youth Development",
-                "sender": hoyd.get("name", "Head of Youth Development"),
-                "title": "Academy Pipeline & First-Team Readiness",
-                "summary": f"We have {ready_prospects} academy prospects displaying senior-level technical attributes and ready for first-team integration.",
-            },
-        ],
-    }
-
-    if "boardroom_dilemma" not in briefing:
-        briefing["boardroom_dilemma"] = engine.generate_boardroom_dilemma(
-            club_id=club_id,
-            world_day=world_day,
-            gm_name=str(gm.get("name", "General Manager")),
-            manager_name=str(mgr.get("name", "First-Team Manager")),
-            hoyd_name=str(hoyd.get("name", "Head of Youth Development")),
-        )
-    facs["_daily_briefing"] = briefing
-    state.facilities_json = facs
-    return briefing
 
 
 def get_staff_chat_history(session: Session, user_id: str, club_id: str, role: str | None = None) -> dict[str, Any]:
@@ -2383,8 +2311,9 @@ def resolve_briefing_dilemma(session: Session, user_id: str, club_id: str, choic
     state.manager_json = mgr
     session.flush()
 
+    refreshed = get_daily_briefing(session, user_id, club_id, force_refresh=True)
     return {
-        "briefing": briefing,
+        "briefing": refreshed,
         "dilemma": dilemma,
         "outcome": dilemma["resolution_outcome"],
     }

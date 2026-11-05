@@ -1500,7 +1500,6 @@ def submit_takeover(
     return _run(session, service.submit_takeover_bid, session, user.id, club_id, payload.units)
 
 
-
 # ---------- Club Campus Builder (Interactive 3D Grid & Staged Construction) ----------
 
 
@@ -1721,4 +1720,55 @@ def post_newsroom_editorial_status(
         article_id,
         new_status=payload.status,
         editorial_note=payload.editorial_note,
+    )
+
+
+# ---------- Living Club Management Centre (Phase 2.3 Daily Operations & Decisions) ----------
+
+
+class ExecuteOperationalDecisionRequest(BaseModel):
+    action: str = Field(default="approve", min_length=1, max_length=80)
+    note: str = Field(default="", max_length=600)
+
+
+@router.get("/clubs/{club_id}/operations-hub")
+def get_club_operations_hub_view(
+    club_id: str,
+    force_refresh: bool = False,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import daily_operations_hub
+
+    return _run(
+        session,
+        daily_operations_hub.get_club_operations_hub,
+        session,
+        user.id,
+        club_id,
+        force_refresh=force_refresh,
+    )
+
+
+@router.post("/clubs/{club_id}/operations/decisions/{decision_id}/execute")
+def post_execute_operational_decision(
+    club_id: str,
+    decision_id: str,
+    payload: ExecuteOperationalDecisionRequest | None = None,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import daily_operations_hub
+
+    action = payload.action if payload else "approve"
+    note = payload.note if payload else ""
+    return _run(
+        session,
+        daily_operations_hub.execute_owner_operational_decision,
+        session,
+        user.id,
+        club_id,
+        decision_id=decision_id,
+        action=action,
+        note=note,
     )

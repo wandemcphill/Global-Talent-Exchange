@@ -126,21 +126,129 @@ export interface BoardroomDilemma {
 }
 
 export type StaffBriefingSection = {
+  section_key?: string;
   role: string;
   sender: string;
   title: string;
   summary: string;
+  destination_key?: string;
 };
 
 export type BriefingMetrics = {
   cash_gtex?: number;
+  fan_coin?: number;
+  distributable_gtex?: number;
+  club_valuation_gtex?: number;
   prestige?: number;
-  prestige_tier?: number;
+  prestige_tier?: string | number;
   squad_size?: number;
+  available_players?: number;
+  injured_players?: number;
   avg_morale?: number;
+  avg_fitness?: number;
   ready_academy_prospects?: number;
+  academy_prospects_total?: number;
   open_decisions?: number;
+  active_campus_projects?: number;
+  operational_stadium_capacity?: number;
 };
+
+export interface OperationalRecommendation {
+  decision_id: string;
+  world_day: number;
+  department: string;
+  staff_role: string;
+  staff_name: string;
+  title: string;
+  summary: string;
+  action_type: string;
+  cost_gtex: number;
+  effects_preview: string;
+  payload?: Record<string, unknown>;
+  status: "open" | "approved" | "rejected" | "resolved";
+  created_at?: string;
+  resolved_at?: string | null;
+  resolution_outcome?: string | null;
+}
+
+export interface DepartmentStaffProfile {
+  role_key: string;
+  role_label: string;
+  name: string;
+  style?: string;
+  mood?: number;
+  loyalty?: number;
+  specialty?: string;
+}
+
+export interface ExecutiveBriefingSection {
+  section_key: "executive_briefing";
+  role: string;
+  sender: string;
+  title: string;
+  summary: string;
+  financial_position?: {
+    cash_gtex: number;
+    fan_coin: number;
+    distributable_gtex: number;
+    club_valuation_gtex: number;
+    daily_wage_bill_gtex: number;
+    daily_sponsor_income_gtex: number;
+    active_sponsor_name?: string | null;
+  };
+  squad_condition_and_availability?: {
+    squad_size: number;
+    available_players: number;
+    injured_players: number;
+    avg_morale: number;
+    avg_fitness: number;
+    low_morale_count: number;
+    team_strength: number;
+    mentality: string;
+  };
+  recent_match_performance?: {
+    matches_played: number;
+    wins: number;
+    draws: number;
+    losses: number;
+    goals_for: number;
+    goals_against: number;
+    win_rate_pct: number;
+    recent_results: Array<Record<string, unknown>>;
+  };
+  upcoming_fixtures_and_commitments?: Array<Record<string, unknown>>;
+  academy_and_youth_activity?: {
+    academy_level: number;
+    total_youth_players: number;
+    ready_for_first_team: number;
+    high_potential_prospects: number;
+    intake_quality_bonus: number;
+    regen_potential_bonus: number;
+  };
+  medical_and_rehabilitation?: {
+    medical_level: number;
+    injured_count: number;
+    daily_injury_heal_days: number;
+    injury_incidence_reduction_pct: number;
+    daily_fitness_recovery_bonus: number;
+  };
+  stadium_and_campus_operations?: {
+    stadium_level: number;
+    operational_stadium_capacity: number;
+    placed_buildings_count: number;
+    active_construction_count: number;
+    gate_revenue_bonus_pct: number;
+    sponsor_bonus_pct: number;
+  };
+  outstanding_decisions_count?: number;
+  urgent_risks?: Array<{
+    risk_id: string;
+    severity: "high" | "medium" | "low";
+    department: string;
+    title: string;
+    detail: string;
+  }>;
+}
 
 export type DailyBriefing = {
   id?: string;
@@ -153,13 +261,108 @@ export type DailyBriefing = {
   generated_at?: string;
   metrics?: BriefingMetrics;
   sections?: StaffBriefingSection[];
+  executive_briefing?: ExecutiveBriefingSection;
+  managers_report?: Record<string, any>;
+  general_managers_report?: Record<string, any>;
+  hoyd_report?: Record<string, any>;
+  medical_directors_report?: Record<string, any>;
+  financial_commercial_report?: Record<string, any>;
+  department_decisions?: OperationalRecommendation[];
+  decision_history?: Array<Record<string, any>>;
   boardroom_dilemma?: BoardroomDilemma | null;
 };
+
+export interface OperationsHubDestination {
+  destination_key:
+    | "executive_office"
+    | "managers_office"
+    | "general_managers_office"
+    | "academy_department"
+    | "medical_department"
+    | "finance_commercial_office";
+  label: string;
+  short_label: string;
+  subtitle: string;
+  lead_role_key: string;
+  staff_lead: DepartmentStaffProfile;
+  glb_model: string;
+  exterior_glb: string;
+  accent_color: string;
+  position_3d: [number, number, number];
+  camera_position: [number, number, number];
+  camera_target: [number, number, number];
+  hotspots: Array<{
+    id: string;
+    label: string;
+    action: string;
+    offset: [number, number, number];
+  }>;
+  report_section_key: string;
+  report: Record<string, any>;
+  open_decisions: OperationalRecommendation[];
+  open_decisions_count: number;
+  recent_messages: Array<{
+    id?: string;
+    role?: string;
+    sender?: string;
+    message?: string;
+    topic?: string;
+    created_at?: string;
+  }>;
+}
+
+export interface ClubOperationsHubPayload {
+  club: {
+    club_id: string;
+    club_name: string;
+    world_day: number;
+    prestige: number;
+    prestige_tier: string;
+    fans: number;
+    mentality: string;
+    cash_gtex: number;
+    fan_coin: number;
+    club_valuation_gtex: number;
+  };
+  daily_briefing: DailyBriefing;
+  destinations: OperationsHubDestination[];
+  actionable_decisions: {
+    department_decisions: OperationalRecommendation[];
+    inbox_decisions: Array<Record<string, any>>;
+    boardroom_dilemma?: BoardroomDilemma | null;
+    total_open_count: number;
+  };
+  operational_timeline: Array<{
+    id: string;
+    world_day: number;
+    department: string;
+    title: string;
+    detail: string;
+    category: string;
+    created_at: string;
+  }>;
+  decision_history: Array<{
+    history_id: string;
+    decision_id: string;
+    world_day: number;
+    department: string;
+    title: string;
+    action_taken: string;
+    cost_gtex: number;
+    outcome: string;
+    resolved_by_user_id: string;
+    resolved_at: string;
+  }>;
+}
 
 export const clubBriefingEndpoint = (clubId: string) => `/owner/clubs/${encodeURIComponent(clubId)}/briefing`;
 export const clubBriefingGenerateEndpoint = (clubId: string) => `/owner/clubs/${encodeURIComponent(clubId)}/briefing/generate`;
 export const clubBriefingResolveDilemmaEndpoint = (clubId: string) =>
   `/owner/clubs/${encodeURIComponent(clubId)}/briefing/resolve-dilemma`;
+export const clubOperationsHubEndpoint = (clubId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/operations-hub`;
+export const clubExecuteOperationalDecisionEndpoint = (clubId: string, decisionId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/operations/decisions/${encodeURIComponent(decisionId)}/execute`;
 
 /** Resolve what the panel should show. With no published contract this is always `unavailable`. */
 export function useOwnerBriefing(): BriefingViewState {
