@@ -726,6 +726,85 @@ describe("ClubOperationsCentre3D Living World Timeline Integration", () => {
     expect(container?.textContent).toContain("No timeline entries match the active filters");
   });
 
+  test("directive dispatcher requires and submits a structured completion objective", async () => {
+    let directiveUrl = "";
+    let directiveBody: any = null;
+
+    jest.spyOn(api, "get").mockImplementation((url: string) => {
+      if (url.includes("/operations-hub")) {
+        return Promise.resolve({ data: mockHub });
+      }
+      if (url.includes("/living-world/timeline")) {
+        return Promise.resolve({ data: mockTimelineResponse });
+      }
+      return Promise.resolve({ data: {} });
+    });
+    jest.spyOn(api, "post").mockImplementation((url: string, body: any) => {
+      directiveUrl = url;
+      directiveBody = body;
+      return Promise.resolve({ data: { id: "directive-created", status: "active" } });
+    });
+
+    await act(async () => {
+      root!.render(
+        <QueryClientProvider client={queryClient}>
+          <ClubOperationsCentre3D clubId="club-tl-1" />
+        </QueryClientProvider>,
+      );
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    const openButton = container?.querySelector('[data-testid="open-dispatch-directive-button"]') as HTMLButtonElement;
+    expect(openButton).not.toBeNull();
+    await act(async () => {
+      openButton.click();
+    });
+
+    const titleInput = container?.querySelector('[data-testid="directive-title-input"]') as HTMLInputElement;
+    const instructionInput = container?.querySelector(
+      '[data-testid="directive-instruction-input"]',
+    ) as HTMLTextAreaElement;
+    const objectiveSelect = container?.querySelector(
+      '[data-testid="directive-objective-select"]',
+    ) as HTMLSelectElement;
+    const submitButton = container?.querySelector('[data-testid="submit-directive-button"]') as HTMLButtonElement;
+
+    expect(objectiveSelect).not.toBeNull();
+    expect(submitButton.disabled).toBe(true);
+    expect(objectiveSelect.querySelector('option[value="appoint_executive_staff"]')).not.toBeNull();
+
+    const setNativeValue = (element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, value: string) => {
+      const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), "value")?.set;
+      setter?.call(element, value);
+      element.dispatchEvent(new Event("input", { bubbles: true }));
+      element.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+
+    await act(async () => {
+      setNativeValue(titleInput, "Appoint a new executive director");
+      setNativeValue(instructionInput, "Fill the vacant executive staff position with an appointed candidate.");
+      setNativeValue(objectiveSelect, "appoint_executive_staff");
+    });
+    expect(submitButton.disabled).toBe(false);
+
+    await act(async () => {
+      submitButton.click();
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    expect(directiveUrl).toBe("/owner/clubs/club-tl-1/living-world/directives");
+    expect(directiveBody).toMatchObject({
+      department: "executive",
+      objective_key: "appoint_executive_staff",
+      title: "Appoint a new executive director",
+      instruction: "Fill the vacant executive staff position with an appointed candidate.",
+    });
+  });
+
   test("authoritative event action resolution button resolves event via POST endpoint", async () => {
     let resolvedUrl = "";
     let resolvedBody: any = null;
