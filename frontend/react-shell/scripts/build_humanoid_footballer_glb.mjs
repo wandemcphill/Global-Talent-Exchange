@@ -50,10 +50,7 @@ const sourceDir = path.resolve(
 const outDir = path.join(repoRoot, "frontend/react-shell/public/models/footballer");
 const outTexDir = path.join(outDir, "textures");
 
-const requiredSourceFiles = [
-  "PlayerModel/Player_Mobile_Mesh.fbx",
-  "Animations/Avatar.fbx",
-];
+const requiredSourceFiles = ["PlayerModel/Player_Mobile_Mesh.fbx", "Animations/Avatar.fbx"];
 const missingSourceFiles = requiredSourceFiles.filter(
   (file) => !fs.existsSync(path.join(sourceDir, file)),
 );
@@ -133,12 +130,14 @@ for (let i = 0; i < posAttr.count; i++) {
   const bIdx = skinIdxAttr.getX(i);
   const boneName = bones[bIdx]?.name || "Spine";
   const y = posAttr.getY(i);
-  let r = 0.0, g = 0.9, b = 0.46; // default home emerald jersey
+  let r = 0.0,
+    g = 0.9,
+    b = 0.46; // default home emerald jersey
 
   if (boneName === "Head" || boneName === "Neck") {
     if (y > 168.0) {
       r = 0.12;
-      g = 0.10;
+      g = 0.1;
       b = 0.09; // hair
     } else {
       r = 0.88;
