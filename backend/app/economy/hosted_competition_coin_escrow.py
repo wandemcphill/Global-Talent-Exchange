@@ -181,8 +181,12 @@ class HostedCompetitionCoinEscrowService:
         entries = self.wallet_service.append_transaction(
             self.session,
             postings=[
-                LedgerPosting(account=escrow, amount=-escrow_balance, source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD),
-                LedgerPosting(account=host_account, amount=escrow_balance, source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD),
+                LedgerPosting(
+                    account=escrow, amount=-escrow_balance, source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD
+                ),
+                LedgerPosting(
+                    account=host_account, amount=escrow_balance, source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD
+                ),
             ],
             reason=LedgerEntryReason.COMPETITION_REWARD,
             reference=f"hosted-coin-prize-refund:{competition.id}",
@@ -201,7 +205,6 @@ class HostedCompetitionCoinEscrowService:
         competition.host_funding_escrowed_coin = Decimal("0.0000")
         self.session.flush()
         return entries[0].transaction_id
-
 
 
 __all__ = ["HostedCompetitionCoinEscrowError", "HostedCompetitionCoinEscrowService"]
