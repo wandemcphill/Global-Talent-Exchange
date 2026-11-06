@@ -23,7 +23,9 @@ from app.viral.ranking_service import InMemoryViralLeaderboardStore
 from app.wallets.service import LedgerPosting, WalletService
 
 
-def _moment_payload(*, moment_id: str = "moment-1", event_type: str = "goal", final_score: float = 2.4) -> dict[str, object]:
+def _moment_payload(
+    *, moment_id: str = "moment-1", event_type: str = "goal", final_score: float = 2.4
+) -> dict[str, object]:
     return {
         "moment_id": moment_id,
         "match_id": "match-1",
@@ -45,7 +47,9 @@ def _moment_payload(*, moment_id: str = "moment-1", event_type: str = "goal", fi
     }
 
 
-def _build_manager(*, config: AgentRuntimeConfig) -> tuple[CreatorAgentManager, InMemoryEventPublisher, InMemoryViralLeaderboardStore]:
+def _build_manager(
+    *, config: AgentRuntimeConfig
+) -> tuple[CreatorAgentManager, InMemoryEventPublisher, InMemoryViralLeaderboardStore]:
     app = FastAPI()
     publisher = InMemoryEventPublisher()
     leaderboard = InMemoryViralLeaderboardStore()
@@ -54,6 +58,7 @@ def _build_manager(*, config: AgentRuntimeConfig) -> tuple[CreatorAgentManager, 
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+
     @event.listens_for(engine, "connect")
     def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record) -> None:  # type: ignore[no-untyped-def]
         cursor = dbapi_connection.cursor()
@@ -166,7 +171,9 @@ def test_manager_learning_updates_wallet_and_strategy_after_performance_feedback
         )
     )
 
-    manager.handle_event(DomainEvent(name="moments.live.created", payload=_moment_payload(moment_id="moment-3", final_score=2.8)))
+    manager.handle_event(
+        DomainEvent(name="moments.live.created", payload=_moment_payload(moment_id="moment-3", final_score=2.8))
+    )
     response = manager.run_cycle(max_agents=1, trigger="test")
 
     assert response.published_count == 1
@@ -225,7 +232,9 @@ def test_manager_persists_agent_state_and_performance_logs_across_restart() -> N
         )
     )
 
-    manager.handle_event(DomainEvent(name="moments.live.created", payload=_moment_payload(moment_id="moment-persist", final_score=2.9)))
+    manager.handle_event(
+        DomainEvent(name="moments.live.created", payload=_moment_payload(moment_id="moment-persist", final_score=2.9))
+    )
     response = manager.run_cycle(max_agents=1, trigger="persist")
 
     assert response.published_count == 1
