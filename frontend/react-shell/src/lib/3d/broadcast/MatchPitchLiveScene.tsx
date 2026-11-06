@@ -108,6 +108,11 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   const interpolator = useMemo(() => new SpatialInterpolator(safeView.frames || []), [safeView]);
   const cameraDirector = useMemo(() => new CameraDirector(), []);
 
+  // Keep the HUD camera selector connected to the actual Three.js director.
+  useEffect(() => {
+    cameraDirector.setManualMode(cameraMode);
+  }, [cameraDirector, cameraMode]);
+
   // Ingest WebSocket live frame
   useEffect(() => {
     if (liveFrame) {
