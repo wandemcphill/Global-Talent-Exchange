@@ -457,15 +457,7 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
                 if stadium is not None
                 else (int((state.facilities_json or {}).get("stadium")) if state and (state.facilities_json or {}).get("stadium") else None)
             ),
-            "capacity": (
-                int(stadium.capacity)
-                if stadium is not None
-                else (
-                    int((state.facilities_json or {}).get("stadium", 1)) * 10000 + 5000
-                    if state and (state.facilities_json or {}).get("stadium")
-                    else None
-                )
-            ),
+            "capacity": int(stadium.capacity) if stadium is not None else None,
             "theme_key": stadium.theme_key if stadium is not None else None,
             "image_asset": "assets/showroom/arena_imperiale_stadium.webp",
         },
