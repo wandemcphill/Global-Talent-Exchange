@@ -16,7 +16,6 @@ from app.agents.agent_manager import (
 from app.auth.dependencies import get_current_admin
 from app.models.user import User
 
-
 router = APIRouter(prefix="/agents", tags=["agents"])
 
 
