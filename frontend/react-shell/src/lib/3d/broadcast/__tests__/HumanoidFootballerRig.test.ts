@@ -206,7 +206,7 @@ describe("HumanoidFootballerRig & GLB Asset Verification", () => {
     expect(rigA.skinnedMesh.material).toBeInstanceOf(THREE.MeshStandardMaterial);
     rigA.update({
       deltaSec: 0.12,
-      targetState: "header",
+      targetState: "jumping_challenge",
       position3D: [10, 0, 0],
       facingAngleRad: 0,
       speedRatio: 0.5,

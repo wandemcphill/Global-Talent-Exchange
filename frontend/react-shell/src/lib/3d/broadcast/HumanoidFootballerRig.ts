@@ -932,6 +932,7 @@ export class HumanoidFootballerRig {
   private accumulatedLodDeltaSec: number = 0;
   private isUsingGLBMesh: boolean = false;
   private groundRingMesh: THREE.Mesh;
+  private groundShadowMesh: THREE.Mesh;
   private backNumberMesh: THREE.Mesh | null = null;
   private frontNumberMesh: THREE.Mesh | null = null;
 
@@ -974,6 +975,20 @@ export class HumanoidFootballerRig {
       });
     }
 
+    // Soft ground contact shadow disc beneath player boots (avoids 217k-vertex SkinnedMesh shadow depth pass)
+    const shadowGeo = new THREE.CircleGeometry(0.42, 16);
+    const shadowMat = new THREE.MeshBasicMaterial({
+      color: 0x040b06,
+      transparent: true,
+      opacity: 0.42,
+      depthWrite: false,
+    });
+    this.groundShadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
+    this.groundShadowMesh.name = "PlayerGroundShadow";
+    this.groundShadowMesh.rotation.x = -Math.PI / 2;
+    this.groundShadowMesh.position.y = 0.018;
+    this.rootGroup.add(this.groundShadowMesh);
+
     // Subtle ground tactical ring
     const ringGeo = new THREE.RingGeometry(0.34, 0.43, 20);
     const ringColor = new THREE.Color(
@@ -984,6 +999,7 @@ export class HumanoidFootballerRig {
       side: THREE.DoubleSide,
       transparent: true,
       opacity: 0.55,
+      depthWrite: false,
     });
     this.groundRingMesh = new THREE.Mesh(ringGeo, ringMat);
     this.groundRingMesh.name = "PlayerGroundRing";
@@ -1036,7 +1052,7 @@ export class HumanoidFootballerRig {
 
     this.skinnedMesh = new THREE.SkinnedMesh(geo, mat);
     this.skinnedMesh.name = "HumanoidSkinnedMesh";
-    this.skinnedMesh.castShadow = true;
+    this.skinnedMesh.castShadow = false;
     this.skinnedMesh.receiveShadow = false;
     this.skinnedMesh.frustumCulled = true;
 
@@ -1063,7 +1079,7 @@ export class HumanoidFootballerRig {
 
     this.skinnedMesh = new THREE.SkinnedMesh(geo, mat);
     this.skinnedMesh.name = "Player";
-    this.skinnedMesh.castShadow = true;
+    this.skinnedMesh.castShadow = false;
     this.skinnedMesh.receiveShadow = false;
     this.skinnedMesh.frustumCulled = true;
 
@@ -1226,11 +1242,11 @@ export class HumanoidFootballerRig {
     } = params;
 
     this.setQualityTier(qualityTier);
-    this.timeInCurrentStateSec += deltaSec;
 
     if (targetState !== this.currentState) {
       this.transitionToState(targetState, false);
     }
+    this.timeInCurrentStateSec += deltaSec;
 
     this.rootGroup.position.set(position3D[0], position3D[1], position3D[2]);
     this.rootGroup.rotation.y = Math.PI / 2 - facingAngleRad;
@@ -1306,7 +1322,7 @@ export class HumanoidFootballerRig {
       }
     }
 
-    this.skinnedMesh.castShadow = this.lodLevel !== "far" && qualityTier !== "low";
+    this.skinnedMesh.castShadow = false;
   }
 
   private applyProceduralPostureAdjustments(
@@ -1337,9 +1353,13 @@ export class HumanoidFootballerRig {
       this.currentState === "gk_punch"
     ) {
       const jumpPhase = Math.min(1.0, this.timeInCurrentStateSec / 0.55);
-      this.modelContainer.position.y = Math.sin(jumpPhase * Math.PI) * 0.42;
+      const jumpHeight = Math.sin(jumpPhase * Math.PI) * 0.42;
+      this.modelContainer.position.y = jumpHeight;
+      const sScale = Math.max(0.65, 1.0 - jumpHeight * 0.45);
+      this.groundShadowMesh.scale.set(sScale, sScale, 1);
     } else {
       this.modelContainer.position.y = 0;
+      this.groundShadowMesh.scale.set(1, 1, 1);
     }
 
     // Directional goalkeeper dive lateral orientation toward incoming shot trajectory
@@ -1409,6 +1429,8 @@ export class HumanoidFootballerRig {
     }
     this.groundRingMesh.geometry.dispose();
     (this.groundRingMesh.material as THREE.Material).dispose();
+    this.groundShadowMesh.geometry.dispose();
+    (this.groundShadowMesh.material as THREE.Material).dispose();
     if (this.backNumberMesh) {
       this.backNumberMesh.geometry.dispose();
       (this.backNumberMesh.material as THREE.Material).dispose();

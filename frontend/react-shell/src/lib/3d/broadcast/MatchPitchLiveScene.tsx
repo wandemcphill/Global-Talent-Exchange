@@ -252,10 +252,12 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         powerPreference: "high-performance",
       });
       renderer.setSize(width, height);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, qualityTier === "ultra" ? 2.0 : 1.5));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, qualityTier === "ultra" ? 1.5 : 1.0));
       if (qualityTier === "high" || qualityTier === "ultra") {
         renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.shadowMap.type = THREE.BasicShadowMap;
+        renderer.shadowMap.autoUpdate = false;
+        renderer.shadowMap.needsUpdate = true;
       }
       container.appendChild(renderer.domElement);
     } catch {
@@ -376,7 +378,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       metalness: 0.1,
     });
     const ballMesh = new THREE.Mesh(ballGeo, ballMat);
-    ballMesh.castShadow = true;
+    ballMesh.castShadow = false;
     ballGroup.add(ballMesh);
 
     // Ball Drop Shadow Disc on Turf

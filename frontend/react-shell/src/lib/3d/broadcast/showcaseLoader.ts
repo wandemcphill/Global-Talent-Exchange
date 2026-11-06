@@ -1,11 +1,18 @@
 /**
- * GTEX Living Football Ecosystem — Showcase Fixture Loader Boundary (Milestone 1 Clean)
- * In Milestone 1, showcase prototypes are decoupled and return null without requiring Milestone 2 files.
+ * GTEX Living Football Ecosystem — Showcase Fixture Loader Boundary
+ * Decouples Milestone 1 core broadcast and Match Center from Milestone 2 prototype fixtures.
  */
 import type { SpectatorSafeMatchView } from "./spectatorContract";
 
 export async function loadFiveMinuteShowcaseFixture(
-  _durationSeconds: number = 300
+  durationSeconds: number = 300
 ): Promise<SpectatorSafeMatchView | null> {
-  return null;
+  try {
+    const mod = await import(
+      /* webpackChunkName: "u2a-showcase-fixture" */ "./HumanoidMatchPrototypeFixture"
+    );
+    return mod.buildFiveMinuteHumanoidMatchFixture(durationSeconds);
+  } catch {
+    return null;
+  }
 }
