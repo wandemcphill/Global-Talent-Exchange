@@ -85,9 +85,7 @@ def authorize_agent_payout(
     _current_user: User = Depends(get_current_admin),
 ) -> dict[str, bool]:
     try:
-        success = ensure_creator_agent_manager(request.app).authorize_payout(
-            agent_id=agent_id, clip_id=clip_id
-        )
+        success = ensure_creator_agent_manager(request.app).authorize_payout(agent_id=agent_id, clip_id=clip_id)
         return {"authorized": success}
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
