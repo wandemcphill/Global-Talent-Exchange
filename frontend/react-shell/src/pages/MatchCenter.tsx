@@ -2584,6 +2584,7 @@ export default function MatchCenter() {
                 isPaused={isPaused}
                 liveFrame={spectatorStream.lastFrame}
                 liveEvents={spectatorStream.recentEvents}
+                liveScore={spectatorStream.latestScore}
                 isTheatreMode={isTheatreMode}
                 onToggleTheatreMode={() => setIsTheatreMode((t) => !t)}
                 onToggle2DCompanion={() => {
