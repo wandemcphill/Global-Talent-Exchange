@@ -709,7 +709,7 @@ def test_real_redis_spectator_ticket_store_lifecycle() -> None:
             expected_scope_id=f"match-real-{run_id}",
         )
         assert redeemed is not None
-        assert redeemed.user_id == "user-real-redis-1"
+        assert redeemed.user_id == f"user-real-redis-{run_id}"
         assert redeemed.display_name == "RedisSupporter"
 
         # Atomically deleted upon redemption
@@ -744,7 +744,7 @@ def test_real_redis_spectator_ticket_store_lifecycle() -> None:
         )
         winners = [r for r in race_results if r is not None]
         assert len(winners) == 1, f"Expected exactly 1 winner, got {len(winners)}"
-        assert winners[0].user_id == "user-race-42"
+        assert winners[0].user_id == f"user-race-{run_id}"
         assert winners[0].display_name == "ConcurrencyRacer"
 
         # 8. Deterministic sliding-window semantics: expired entries leave the window.
