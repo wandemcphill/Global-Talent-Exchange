@@ -49,6 +49,7 @@ const NAV = [
   { to: "/app/story", label: "Club Story & Dynasty", icon: BookOpen, id: "story", category: "MY CLUB" },
   { to: "/app/trophies", label: "Trophy Cabinet", icon: Trophy, id: "trophies", category: "MY CLUB" },
   { to: "/app/inbox", label: "Boardroom Inbox", icon: Inbox, id: "inbox", category: "MY CLUB" },
+  { to: "/app/governance", label: "Authority & Delegation", icon: Shield, id: "governance", category: "MY CLUB" },
 
   // 3. TRANSFERS
   { to: "/app/transfer-hub", label: "Player Transfers", icon: Compass, id: "transfers", category: "TRANSFERS" },
