@@ -124,7 +124,7 @@ export type PublicClubDossier = {
   academy: {
     level?: number | null;
     capacity?: number | null;
-    prospect_count: number;
+    prospect_count: number | null;
     prospects: Array<{
       id: string;
       name: string;
@@ -222,20 +222,20 @@ export default function PublicClubProfile() {
             },
             stadium: {
               name: legacy.home_venue_name || `${legacy.club_name} Arena`,
-              level: 1,
-              capacity: 25000,
+              level: null,
+              capacity: null,
             },
             facilities: {
-              training_level: 1,
-              academy_level: 1,
-              medical_level: 1,
-              branding_level: 1,
-              youth_recruitment_level: 1,
+              training_level: null,
+              academy_level: null,
+              medical_level: null,
+              branding_level: null,
+              youth_recruitment_level: null,
             },
             academy: {
-              level: 1,
-              capacity: 24,
-              prospect_count: 0,
+              level: null,
+              capacity: null,
+              prospect_count: null,
               prospects: [],
             },
             squad: {
@@ -450,9 +450,9 @@ export default function PublicClubProfile() {
             <div className="border-l-2 border-purple-400 bg-black/40 px-4 py-3 backdrop-blur-sm rounded-r-lg">
               <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Home Ground</p>
               <p className="gx-display mt-0.5 text-2xl font-bold text-white">
-                {stadium?.level ? `Level ${stadium.level}` : "Verified"}
+                {stadium?.level ? `Level ${stadium.level}` : "Not rated"}
               </p>
-              <p className="text-[11px] text-slate-400">{stadium?.capacity ? `${stadium.capacity.toLocaleString()} seats` : "Match arena"}</p>
+              <p className="text-[11px] text-slate-400">{stadium?.capacity ? `${stadium.capacity.toLocaleString()} seats` : "Capacity unavailable"}</p>
             </div>
           </div>
         </div>
@@ -528,7 +528,7 @@ export default function PublicClubProfile() {
                 </div>
                 <div>
                   <span className="text-[10px] uppercase font-bold text-slate-400">Match Pitch</span>
-                  <p className="gx-mono text-lg font-bold text-emerald-400 mt-0.5">Hybrid Turf</p>
+                  <p className="gx-mono text-lg font-bold text-emerald-400 mt-0.5">Not available</p>
                 </div>
                 <div>
                   <span className="text-[10px] uppercase font-bold text-slate-400">Campus Link</span>
@@ -777,15 +777,15 @@ export default function PublicClubProfile() {
                   <School size={16} /> Youth Development Complex
                 </span>
                 <h3 className="gx-display text-2xl font-black uppercase text-white mt-2">
-                  Level {academy?.level || facilities?.academy_level || 1} Academy
+                  {(academy?.level ?? facilities?.academy_level) != null ? `Level ${academy?.level ?? facilities?.academy_level} Academy` : "Academy details unavailable"}
                 </h3>
                 <p className="text-xs text-slate-300 mt-2 leading-relaxed">
                   The proving ground for generational regens and academy intakes. High academy tier accelerates tactical IQ and potential fulfillment.
                 </p>
 
                 <div className="mt-4 space-y-1.5 text-xs text-slate-400">
-                  <p>Capacity Limit: <b className="text-white">{academy?.capacity || 24} prospects</b></p>
-                  <p>Active In Pipeline: <b className="text-emerald-400">{academy?.prospect_count || 0} prospects</b></p>
+                  <p>Capacity Limit: <b className="text-white">{academy?.capacity != null ? `${academy.capacity.toLocaleString()} prospects` : "Not available"}</b></p>
+                  <p>Active In Pipeline: <b className="text-emerald-400">{academy?.prospect_count != null ? `${academy.prospect_count} prospects` : "Not available"}</b></p>
                 </div>
               </div>
 
@@ -818,17 +818,17 @@ export default function PublicClubProfile() {
             {/* Facilities Level Matrix */}
             <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-3 gap-3">
               {[
-                { label: "Training Facility", level: facilities?.training_level ?? 1, icon: Building, color: "text-emerald-400" },
-                { label: "Academy Complex", level: facilities?.academy_level ?? academy?.level ?? 1, icon: School, color: "text-amber-400" },
-                { label: "Medical Centre", level: facilities?.medical_level ?? 1, icon: Stethoscope, color: "text-rose-400" },
-                { label: "Youth Recruitment", level: facilities?.youth_recruitment_level ?? 1, icon: Globe, color: "text-cyan-400" },
-                { label: "Commercial & Branding", level: facilities?.branding_level ?? 1, icon: Palette, color: "text-purple-400" },
-                { label: "Stadium Quality", level: stadium?.level ?? 1, icon: Building, color: "text-blue-400" },
+                { label: "Training Facility", level: facilities?.training_level ?? null, icon: Building, color: "text-emerald-400" },
+                { label: "Academy Complex", level: facilities?.academy_level ?? academy?.level ?? null, icon: School, color: "text-amber-400" },
+                { label: "Medical Centre", level: facilities?.medical_level ?? null, icon: Stethoscope, color: "text-rose-400" },
+                { label: "Youth Recruitment", level: facilities?.youth_recruitment_level ?? null, icon: Globe, color: "text-cyan-400" },
+                { label: "Commercial & Branding", level: facilities?.branding_level ?? null, icon: Palette, color: "text-purple-400" },
+                { label: "Stadium Quality", level: stadium?.level ?? null, icon: Building, color: "text-blue-400" },
               ].map((item) => (
                 <div key={item.label} className="rounded-xl border border-white/5 bg-black/40 p-4 flex flex-col justify-between">
                   <div className="flex items-center justify-between">
                     <item.icon className={item.color} size={18} />
-                    <span className="gx-mono text-xs font-bold text-slate-400">L{item.level}/5</span>
+                    <span className="gx-mono text-xs font-bold text-slate-400">{item.level != null ? `L${item.level}/5` : "Unrated"}</span>
                   </div>
                   <div className="mt-4">
                     <p className="text-[11px] font-bold text-white">{item.label}</p>
@@ -836,7 +836,7 @@ export default function PublicClubProfile() {
                       {[1, 2, 3, 4, 5].map((idx) => (
                         <div
                           key={idx}
-                          className={`h-1 flex-1 rounded-full ${idx <= item.level ? "bg-emerald-400" : "bg-white/10"}`}
+                          className={`h-1 flex-1 rounded-full ${item.level != null && idx <= item.level ? "bg-emerald-400" : "bg-white/10"}`}
                         />
                       ))}
                     </div>
@@ -1001,7 +1001,7 @@ export default function PublicClubProfile() {
         {/* SECTION H: 3D SHOWCASE & INSPECTION */}
         <section aria-label="3D Club Inspection">
           <Cinema3DStage
-            scene="stadium_arena_match"
+            scene="facility_upgrade"
             compact
             enableSocialSalute
             title={`3D Match & Hangar Inspection · ${club.name}`}
@@ -1014,7 +1014,7 @@ export default function PublicClubProfile() {
             quote="Inspect this club's 3D facilities, pitch arena, and matchday presentation."
             stats={[
               { label: "Recorded Honours", value: `${trophies?.length || 0}`, accent: "#F5B83D" },
-              { label: "Stadium Status", value: stadium?.level ? `Tier ${stadium.level}` : "Verified", accent: "#00E676" },
+              { label: "Stadium Status", value: stadium?.level ? `Tier ${stadium.level}` : "Not rated", accent: "#00E676" },
             ]}
           />
         </section>
