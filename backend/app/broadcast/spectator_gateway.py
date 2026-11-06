@@ -155,10 +155,9 @@ return 1
 
 class AsyncEvalRedisEmulator:
     """
-    Thread/coroutine-safe atomic Redis Lua evaluator for test environments without a live Redis daemon.
-    Can be shared across multiple BroadcastRuntime instances to test distributed multi-worker ticket
-    redemption, while executing the exact same atomic HSET/PEXPIRE/HGET/DEL/INCR semantics.
-    Never used when require_redis=True or in production/staging environments.
+    Thread/coroutine-safe in-memory evaluator for unit tests without a live Redis daemon.
+    Can be shared across multiple BroadcastRuntime instances to test multi-worker ticket redemption
+    and sorted-set rate limiting. Never used in production/staging environments.
     """
 
     def __init__(self) -> None:
@@ -303,18 +302,20 @@ class RedisSpectatorTicketStore:
         *,
         max_tickets: int,
         window_seconds: float,
+        now_ms: int | None = None,
     ) -> bool:
+        """Atomically checks a sliding window; now_ms is injectable for deterministic tests."""
         backend = await self._get_backend()
-        now_ms = int(time.time() * 1000)
+        request_time_ms = int(time.time() * 1000) if now_ms is None else int(now_ms)
         window_ms = max(100, int(round(max(float(window_seconds), 0.1) * 1000)))
         limit = max(1, int(max_tickets))
-        member_id = f"{now_ms}:{secrets.token_hex(8)}"
+        member_id = f"{request_time_ms}:{secrets.token_hex(8)}"
         try:
             allowed = await backend.eval(
                 _RATE_LIMIT_TICKET_LUA,
                 1,
                 self.rate_limit_key(user_id),
-                str(now_ms),
+                str(request_time_ms),
                 str(window_ms),
                 str(limit),
                 member_id,
