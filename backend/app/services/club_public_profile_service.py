@@ -188,6 +188,8 @@ def _owner_summary(session: Session, owner_id: str) -> dict[str, Any]:
 def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
     """Return a rich public club dossier, never the owner-only v2 snapshot."""
     club = session.get(ClubProfile, club_id)
+    if club is None:
+        club = session.scalar(select(ClubProfile).where(ClubProfile.slug == club_id))
     if (
         club is None
         or club.visibility != "public"
@@ -348,10 +350,43 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
         people.setdefault(role, {"role": role, "name": executive.name, "rating": None})
 
     state = session.scalar(select(OwnerClubState).where(OwnerClubState.club_id == club.id))
-    if "manager" not in people and state is not None:
-        name = _person_name(state.manager_json)
-        if name:
-            people["manager"] = {"role": "manager", "name": name, "rating": None}
+    if state is not None:
+        exec_staff = (state.facilities_json or {}).get("_executive_staff") or {}
+        if "general_manager" not in people and exec_staff.get("general_manager"):
+            gm_data = exec_staff["general_manager"]
+            people["general_manager"] = {
+                "role": "general_manager",
+                "name": gm_data.get("name") or gm_data.get("display_name"),
+                "rating": gm_data.get("rating"),
+            }
+        if "head_of_youth_development" not in people and exec_staff.get("head_of_youth_development"):
+            hoyd_data = exec_staff["head_of_youth_development"]
+            people["head_of_youth_development"] = {
+                "role": "head_of_youth_development",
+                "name": hoyd_data.get("name") or hoyd_data.get("display_name"),
+                "rating": hoyd_data.get("rating"),
+            }
+        if "coach" not in people and exec_staff.get("first_team_coach"):
+            coach_data = exec_staff["first_team_coach"]
+            people["coach"] = {
+                "role": "coach",
+                "name": coach_data.get("name") or coach_data.get("display_name"),
+                "rating": coach_data.get("rating"),
+            }
+        if "manager" not in people:
+            mgr_data = exec_staff.get("first_team_manager") or state.manager_json
+            name = _person_name(mgr_data)
+            if name:
+                people["manager"] = {
+                    "role": "manager",
+                    "name": name,
+                    "rating": (
+                        mgr_data.get("rating") or mgr_data.get("tactical_rating")
+                        if isinstance(mgr_data, dict)
+                        else None
+                    ),
+                }
+
 
     staff_roles = (
         ("manager", "Manager"),
@@ -412,18 +447,54 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
         },
         "owner": owner,
         "stadium": {
-            "name": (stadium.name if stadium is not None else (club.home_venue_name or "Stadium details unavailable")),
-            "level": int(stadium.level) if stadium is not None else None,
-            "capacity": int(stadium.capacity) if stadium is not None else None,
+            "name": (
+                stadium.name
+                if stadium is not None
+                else (club.home_venue_name or (f"{club.club_name} Arena" if club.club_name else "Stadium details unavailable"))
+            ),
+            "level": (
+                int(stadium.level)
+                if stadium is not None
+                else (int((state.facilities_json or {}).get("stadium")) if state and (state.facilities_json or {}).get("stadium") else None)
+            ),
+            "capacity": (
+                int(stadium.capacity)
+                if stadium is not None
+                else (
+                    int((state.facilities_json or {}).get("stadium", 1)) * 10000 + 5000
+                    if state and (state.facilities_json or {}).get("stadium")
+                    else None
+                )
+            ),
             "theme_key": stadium.theme_key if stadium is not None else None,
             "image_asset": "assets/showroom/arena_imperiale_stadium.webp",
         },
         "facilities": {
-            "training_level": (int(facilities.training_level) if facilities is not None else None),
-            "academy_level": academy_facility_level,
-            "medical_level": (int(facilities.medical_level) if facilities is not None else None),
-            "branding_level": (int(facilities.branding_level) if facilities is not None else None),
-            "youth_recruitment_level": (int(facilities.youth_recruitment_level) if facilities is not None else None),
+            "training_level": (
+                int(facilities.training_level)
+                if facilities is not None
+                else (int((state.facilities_json or {}).get("training")) if state and (state.facilities_json or {}).get("training") else None)
+            ),
+            "academy_level": (
+                academy_facility_level
+                if academy_facility_level is not None
+                else (int((state.facilities_json or {}).get("academy")) if state and (state.facilities_json or {}).get("academy") else None)
+            ),
+            "medical_level": (
+                int(facilities.medical_level)
+                if facilities is not None
+                else (int((state.facilities_json or {}).get("medical")) if state and (state.facilities_json or {}).get("medical") else None)
+            ),
+            "branding_level": (
+                int(facilities.branding_level)
+                if facilities is not None
+                else (int((state.facilities_json or {}).get("commercial")) if state and (state.facilities_json or {}).get("commercial") else None)
+            ),
+            "youth_recruitment_level": (
+                int(facilities.youth_recruitment_level)
+                if facilities is not None
+                else (int((state.facilities_json or {}).get("scouting")) if state and (state.facilities_json or {}).get("scouting") else None)
+            ),
             "academy_image_asset": "assets/showroom/apex_performance_campus.webp",
         },
         "academy": {
@@ -461,15 +532,29 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
         },
         "staff": staff,
         "coach_buses": buses,
-        "trophies": [
-            {
-                "id": trophy.id,
-                "name": trophy.trophy_name,
-                "competition": trophy.competition_source,
-                "season": trophy.season_label,
-            }
-            for trophy in trophies
-        ],
+        "trophies": (
+            [
+                {
+                    "id": trophy.id,
+                    "name": trophy.trophy_name,
+                    "competition": trophy.competition_source,
+                    "season": trophy.season_label,
+                }
+                for trophy in trophies
+            ]
+            if trophies
+            else [
+                {
+                    "id": f"trophy-{idx}",
+                    "name": t.get("name") or t.get("trophy_name", "Honour"),
+                    "competition": t.get("competition") or t.get("competition_source", "GTEX Competition"),
+                    "season": t.get("season") or t.get("season_label", "2026"),
+                }
+                for idx, t in enumerate((state.facilities_json or {}).get("_trophies", []))
+            ]
+            if state and (state.facilities_json or {}).get("_trophies")
+            else []
+        ),
     }
 
 

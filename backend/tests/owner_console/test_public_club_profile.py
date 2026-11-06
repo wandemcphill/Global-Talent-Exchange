@@ -323,3 +323,40 @@ def test_public_dossiers_return_404_for_private_clubs_and_nonexistent_owners(cli
 
     assert client.get(f"/api/clubs/{private_club_id}/public-profile").status_code == 404
     assert client.get("/api/owner/public/profile/nonexistent-owner").status_code == 404
+
+
+def test_public_club_profile_resolves_by_slug_and_id(client, app):
+    with app.state.session_factory() as session:
+        owner_id, club_id = _seed_public_club(session)
+        club = session.get(ClubProfile, club_id)
+        slug = club.slug
+
+    response_by_id = client.get(f"/api/clubs/{club_id}/public-profile")
+    assert response_by_id.status_code == 200
+    assert response_by_id.json()["club"]["id"] == club_id
+
+    response_by_slug = client.get(f"/api/clubs/{slug}/public-profile")
+    assert response_by_slug.status_code == 200
+    assert response_by_slug.json()["club"]["slug"] == slug
+    assert response_by_slug.json()["club"]["id"] == club_id
+
+
+def test_public_club_profile_direct_service(app_session_factory):
+    from app.services.club_public_profile_service import public_club_profile
+
+    with app_session_factory() as session:
+        owner_id, club_id = _seed_public_club(session)
+        club = session.get(ClubProfile, club_id)
+        dossier_by_id = public_club_profile(session, club_id)
+        assert dossier_by_id["club"]["name"] == "Lagos Eclipse FC"
+        assert dossier_by_id["stadium"]["name"] == "Eclipse Arena"
+        assert dossier_by_id["squad"]["best_player"]["name"] == "Samuel Okoro"
+        assert dossier_by_id["squad"]["most_promising_player"]["name"] == "Kaito Mensah"
+        assert len(dossier_by_id["staff"]) == 4
+        staff_by_role = {p["role"]: p["name"] for p in dossier_by_id["staff"]}
+        assert staff_by_role["manager"] == "Ayo Balogun"
+        assert staff_by_role["general_manager"] == "Nneka Manager"
+        assert staff_by_role["head_of_youth_development"] == "Chidi Youth Director"
+
+        dossier_by_slug = public_club_profile(session, club.slug)
+        assert dossier_by_slug["club"]["id"] == club_id
