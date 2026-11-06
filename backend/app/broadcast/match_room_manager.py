@@ -172,6 +172,88 @@ def sanitize_public_spectator_payload(
     return value
 
 
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def adapt_match_stream_message(match_id: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Translate production Redis match publishers into the spectator WebSocket contract.
+
+    MatchStreamService publishes a raw match_event envelope, while LiveMatchTicker
+    publishes a wrapped live_match_state message. Both share this Redis channel.
+    """
+    source_match_id = str(payload.get("match_id") or "").strip()
+    if source_match_id and source_match_id != match_id:
+        return None
+
+    message_type = str(payload.get("type") or payload.get("message_type") or "").strip().lower()
+    if message_type == "live_match_state":
+        return {
+            "type": "score_update",
+            "match_id": match_id,
+            "score_update": {
+                "home_score": _safe_int(payload.get("home_score")),
+                "away_score": _safe_int(payload.get("away_score")),
+                "minute": _safe_int(payload.get("minute")),
+                "status": str(payload.get("phase") or "live"),
+            },
+        }
+
+    if message_type != "match_event":
+        return None
+
+    event_id = str(payload.get("event_id") or "").strip()
+    event_type = str(payload.get("event_type") or "").strip()
+    if not event_id or not event_type:
+        return None
+
+    metadata = payload.get("metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    minute = _safe_int(payload.get("minute"))
+    home_score = _safe_int(payload.get("home_score"))
+    away_score = _safe_int(payload.get("away_score"))
+    commentary = str(payload.get("commentary") or payload.get("source_commentary") or "").strip()
+    event_payload: dict[str, Any] = {
+        "event_id": event_id,
+        "sequence": _safe_int(payload.get("sequence")) if payload.get("sequence") is not None else None,
+        "event_type": event_type,
+        "minute": minute,
+        "added_time": 0,
+        "clock_label": str(payload.get("clock") or f"{minute}'"),
+        "home_score": home_score,
+        "away_score": away_score,
+        "banner_text": commentary or event_type.replace("_", " ").upper(),
+        "commentary": commentary or None,
+        "team_id": payload.get("team_id"),
+        "team_name": payload.get("team"),
+        "primary_player_id": payload.get("player_id"),
+        "primary_player_name": payload.get("player"),
+        "secondary_player_id": payload.get("secondary_player_id"),
+        "secondary_player_name": payload.get("secondary_player"),
+        "flags": ["penalty"] if metadata.get("is_penalty") else [],
+    }
+    event_payload = {key: value for key, value in event_payload.items() if value is not None}
+
+    score_update = {
+        "home_score": home_score,
+        "away_score": away_score,
+        "minute": minute,
+        "status": str(metadata.get("status") or "live"),
+    }
+    return {
+        "type": "match_event",
+        "match_id": match_id,
+        "event_id": event_id,
+        "sequence": event_payload.get("sequence"),
+        "occurred_at": payload.get("published_at"),
+        "score_update": score_update,
+        "payload": event_payload,
+    }
+
+
 @dataclass(eq=False, slots=True)
 class RoomClient:
     connection_id: str
@@ -323,10 +405,17 @@ class MatchRoomManager:
                     envelope = json.loads(raw_payload)
                 except json.JSONDecodeError:
                     continue
+                if not isinstance(envelope, dict):
+                    continue
                 if str(envelope.get("instance_id") or "") == self.instance_id:
                     continue
                 payload = envelope.get("message")
                 if not isinstance(payload, dict):
+                    payload = envelope
+                adapted = adapt_match_stream_message(match_id, payload)
+                if adapted is not None:
+                    payload = adapted
+                elif not isinstance(envelope.get("message"), dict):
                     continue
                 await self.broadcast(match_id, payload, delay_seconds=self._resolved_delay(payload))
         except asyncio.CancelledError:
