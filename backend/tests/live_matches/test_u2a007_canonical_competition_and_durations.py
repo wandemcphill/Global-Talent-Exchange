@@ -129,7 +129,9 @@ def _build_canonical_competition_test_env():
     return app, session_factory
 
 
-def _seed_canonical_competition_fixture(session: Session, canonical_data: dict[str, object]) -> tuple[UserCompetition, CompetitionMatch]:
+def _seed_canonical_competition_fixture(
+    session: Session, canonical_data: dict[str, object]
+) -> tuple[UserCompetition, CompetitionMatch]:
     comp_data = canonical_data["competition"]
     clubs_data = canonical_data["clubs"]
     home_club_data, away_club_data = clubs_data[0], clubs_data[1]
@@ -338,12 +340,8 @@ def test_u2a007_canonical_competition_match_and_exact_durations():
         assert data["frames"][-1]["away_score"] == authoritative_away_score
 
         # 4. Separate authoritative events from presentation_only events
-        auth_events = [
-            ev for ev in data["events"] if "presentation_only" not in (ev.get("flags") or [])
-        ]
-        pres_events = [
-            ev for ev in data["events"] if "presentation_only" in (ev.get("flags") or [])
-        ]
+        auth_events = [ev for ev in data["events"] if "presentation_only" not in (ev.get("flags") or [])]
+        pres_events = [ev for ev in data["events"] if "presentation_only" in (ev.get("flags") or [])]
 
         # Presentation-only events must never be goal/red_card/substitution events or alter score
         for pev in pres_events:
@@ -377,9 +375,7 @@ def test_u2a007_canonical_competition_match_and_exact_durations():
         match_obj = session.get(CompetitionMatch, match_id)
         from app.match_engine.schemas import MatchReplayPayloadView
 
-        replay_payload = MatchReplayPayloadView.model_validate(
-            match_obj.metadata_json["replay_payload"]
-        )
+        replay_payload = MatchReplayPayloadView.model_validate(match_obj.metadata_json["replay_payload"])
         live_hub = ensure_live_match_hub(app, step_interval_seconds=0.01)
         live_hub.start_stream(match_id, replay_payload, target_runtime_seconds=180)
 
@@ -389,9 +385,7 @@ def test_u2a007_canonical_competition_match_and_exact_durations():
         assert initial_msg["match_id"] == match_id
 
     # Save 300s and 600s canonical competition payloads to scratch if directory exists
-    scratch_dir = Path(
-        r"C:\Users\ayomc\.gemini\antigravity\brain\2e247d29-6480-46bb-8d45-7cc27e1fc56f\scratch"
-    )
+    scratch_dir = Path(r"C:\Users\ayomc\.gemini\antigravity\brain\2e247d29-6480-46bb-8d45-7cc27e1fc56f\scratch")
     if scratch_dir.exists():
         for sec in (180, 300, 420, 600):
             (scratch_dir / f"u2a007_canonical_competition_{sec}s.json").write_text(
