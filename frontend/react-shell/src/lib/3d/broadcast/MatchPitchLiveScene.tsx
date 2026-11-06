@@ -30,6 +30,13 @@ import { GtexSceneRegistry } from "../GtexSceneRegistry";
 import type { DeviceQualityTier } from "../GtexSceneTypes";
 import { ProceduralPitchEnvironment } from "./ProceduralPitchEnvironment";
 
+export interface SpectatorLiveScoreUpdate {
+  home_score: number;
+  away_score: number;
+  minute?: number;
+  status?: string;
+}
+
 export interface MatchPitchLiveSceneProps {
   /** Strongly typed match viewer contract input (DTO or sanitized view) */
   matchViewState: MatchViewerContractInput;
@@ -51,6 +58,8 @@ export interface MatchPitchLiveSceneProps {
   liveFrame?: SpectatorSafeFrameView | null;
   /** Optional live events streamed over WebSocket */
   liveEvents?: SpectatorSafeEventView[];
+  /** Latest authoritative score/clock update from the spectator stream */
+  liveScore?: SpectatorLiveScoreUpdate | null;
   /** Callback when time advances (for scrubbing sync) */
   onTimeUpdate?: (timeSeconds: number) => void;
   /** Fallback toggle callback when user selects 2D tactical view */
@@ -78,6 +87,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   isPaused = false,
   liveFrame,
   liveEvents,
+  liveScore,
   onTimeUpdate,
   onToggle2DCompanion,
   isTheatreMode = false,
@@ -107,6 +117,8 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   // Persistent SpatialInterpolator & CameraDirector
   const interpolator = useMemo(() => new SpatialInterpolator(safeView.frames || []), [safeView]);
   const cameraDirector = useMemo(() => new CameraDirector(), []);
+  const liveScoreRef = useRef<SpectatorLiveScoreUpdate | null>(liveScore ?? null);
+  liveScoreRef.current = liveScore ?? null;
 
   // Keep the HUD camera selector connected to the actual Three.js director.
   useEffect(() => {
@@ -231,7 +243,17 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
 
       // Query interpolated match state
       const state = interpolator.interpolate(localTime);
-      setCurrentMatchState(state);
+      const scoreUpdate = liveScoreRef.current;
+      const hudState =
+        state && scoreUpdate
+          ? {
+              ...state,
+              home_score: scoreUpdate.home_score,
+              away_score: scoreUpdate.away_score,
+              clock_minute: scoreUpdate.minute ?? state.clock_minute,
+            }
+          : state;
+      setCurrentMatchState(hudState);
 
       if (state) {
         // Update Ball
@@ -316,6 +338,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       <div ref={mountRef} className="absolute inset-0 size-full" data-testid="match-pitch-canvas-container" />
       <BroadcastOverlayHUD
         matchState={currentMatchState}
+        liveEventBanner={liveEvents?.[0]?.banner_text || liveEvents?.[0]?.commentary || undefined}
         homeTeam={safeView.home_team}
         awayTeam={safeView.away_team}
         matchLabel={`${safeView.home_team.team_name} vs ${safeView.away_team.team_name}`}
