@@ -2255,6 +2255,43 @@ def send_thread_message(
     facs["_club_threads"] = threads
     state.facilities_json = facs
     flag_modified(state, "facilities_json")
+
+    from app.owner_console import living_club_world
+
+    if thread.get("participant_type") == "player":
+        pid = str(thread.get("participant_id"))
+        living_club_world.apply_relationship_delta(
+            session,
+            club_id,
+            "owner",
+            "owner",
+            "Club Owner",
+            "player",
+            pid,
+            p_name,
+            delta_trust=2,
+            delta_affinity=2,
+            delta_tension=-1,
+            reason=f"Direct conversation on {topic}",
+            world_day=world_day,
+        )
+    else:
+        role_key = str(thread.get("participant_id", "general_manager"))
+        living_club_world.apply_relationship_delta(
+            session,
+            club_id,
+            "owner",
+            "owner",
+            "Club Owner",
+            "staff",
+            role_key,
+            p_name,
+            delta_trust=2,
+            delta_respect=2,
+            delta_tension=-1,
+            reason=f"Direct staff consultation on {topic}",
+            world_day=world_day,
+        )
     session.flush()
 
     return {

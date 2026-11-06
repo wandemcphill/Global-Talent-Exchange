@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Integer, Numeric, String, Text, func
+from sqlalchemy import JSON, Boolean, Date, DateTime, Integer, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, UUIDPrimaryKeyMixin, utcnow
@@ -342,6 +342,95 @@ class OwnerScoutingWatchlist(UUIDPrimaryKeyMixin, Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
 
+class OwnerClubEvent(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "owner_club_events"
+
+    club_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False, default="routine")
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="active", index=True)
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False, default="system")
+    source_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    participants_json: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
+    world_day: Mapped[int] = mapped_column(Integer, nullable=False, default=1, index=True)
+    consequences_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, unique=True, index=True)
+    actions_json: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolution_action: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+
+class OwnerClubRelationship(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "owner_club_relationships"
+    __table_args__ = (UniqueConstraint("club_id", "pairing_key", name="uq_owner_club_relationships_club_pairing"),)
+
+    club_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    pairing_key: Mapped[str] = mapped_column(String(160), nullable=False, index=True)
+    participant_a_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    participant_a_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    participant_a_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    participant_b_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    participant_b_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    participant_b_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    trust: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    respect: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    affinity: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    tension: Mapped[int] = mapped_column(Integer, nullable=False, default=20)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="active")
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+
+class OwnerClubRelationshipHistory(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "owner_club_relationship_history"
+
+    relationship_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    club_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    world_day: Mapped[int] = mapped_column(Integer, nullable=False, default=1, index=True)
+    reason: Mapped[str] = mapped_column(String(255), nullable=False)
+    source_event_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    delta_trust: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    delta_respect: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    delta_affinity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    delta_tension: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class OwnerClubDirective(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "owner_club_directives"
+
+    club_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    department: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    directive_key: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(160), nullable=False)
+    instruction: Mapped[str] = mapped_column(Text, nullable=False)
+    target_scope: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    target_scope_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="active", index=True)
+    issued_day: Mapped[int] = mapped_column(Integer, nullable=False, default=1, index=True)
+    deadline_day: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    acknowledged_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    acknowledgement_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    consequences_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+
 OWNER_CONSOLE_TABLES = (
     OwnerClubState.__table__,
     OwnerSquadPlayer.__table__,
@@ -359,4 +448,8 @@ OWNER_CONSOLE_TABLES = (
     OwnerShowroomAsset.__table__,
     OwnerNewsroomArticle.__table__,
     OwnerScoutingWatchlist.__table__,
+    OwnerClubEvent.__table__,
+    OwnerClubRelationship.__table__,
+    OwnerClubRelationshipHistory.__table__,
+    OwnerClubDirective.__table__,
 )

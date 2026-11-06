@@ -2219,6 +2219,12 @@ def resolve_briefing_dilemma(session: Session, user_id: str, club_id: str, choic
             exec_staff[role_key] = st
 
     outcome_notes: list[str] = []
+    from app.owner_console import living_club_world
+
+    gm_name = (exec_staff.get("general_manager") or {}).get("name") or "General Manager (Vacant)"
+    mgr_name = mgr.get("name", "First-Team Manager")
+    w_day = int(state.world_day or 1)
+
     if choice_id == "enforce_gm_wage_cap":
         ledger.record(
             session,
@@ -2238,6 +2244,37 @@ def resolve_briefing_dilemma(session: Session, user_id: str, club_id: str, choic
         outcome_notes.append(
             "Enforced GM's wage discipline (+500 GTEX treasury efficiency, +8 GM mood, -4 Manager mood)."
         )
+        living_club_world.apply_relationship_delta(
+            session,
+            club_id,
+            "owner",
+            "owner",
+            "Club Owner",
+            "staff",
+            "general_manager",
+            gm_name,
+            delta_trust=6,
+            delta_respect=5,
+            delta_tension=-4,
+            reason="Board supported GM wage cap proposal",
+            source_event_id=dilemma.get("dilemma_id"),
+            world_day=w_day,
+        )
+        living_club_world.apply_relationship_delta(
+            session,
+            club_id,
+            "owner",
+            "owner",
+            "Club Owner",
+            "staff",
+            "first_team_manager",
+            mgr_name,
+            delta_trust=-3,
+            delta_tension=6,
+            reason="Board overruled manager transfer target",
+            source_event_id=dilemma.get("dilemma_id"),
+            world_day=w_day,
+        )
     elif choice_id == "back_manager_target":
         for p in squad_players:
             p.morale = int(engine.clamp(p.morale + 6, 0, 100))
@@ -2245,6 +2282,37 @@ def resolve_briefing_dilemma(session: Session, user_id: str, club_id: str, choic
         _shift_exec_mood("general_manager", -4)
         outcome_notes.append(
             "Backed First-Team Manager's squad priority (+6 Squad Morale, +10 Manager mood, -4 GM mood)."
+        )
+        living_club_world.apply_relationship_delta(
+            session,
+            club_id,
+            "owner",
+            "owner",
+            "Club Owner",
+            "staff",
+            "first_team_manager",
+            mgr_name,
+            delta_trust=8,
+            delta_affinity=6,
+            delta_tension=-6,
+            reason="Board backed manager recruitment priority",
+            source_event_id=dilemma.get("dilemma_id"),
+            world_day=w_day,
+        )
+        living_club_world.apply_relationship_delta(
+            session,
+            club_id,
+            "owner",
+            "owner",
+            "Club Owner",
+            "staff",
+            "general_manager",
+            gm_name,
+            delta_trust=-2,
+            delta_tension=4,
+            reason="Board prioritized squad expenditure over wage cap",
+            source_event_id=dilemma.get("dilemma_id"),
+            world_day=w_day,
         )
     elif choice_id == "owner_performance_compromise":
         bal = ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)

@@ -1,3 +1,124 @@
+export interface LivingWorldRelationship {
+  id: string;
+  club_id: string;
+  pairing_key: string;
+  participant_a_type: string;
+  participant_a_id: string;
+  participant_a_name: string;
+  participant_b_type: string;
+  participant_b_id: string;
+  participant_b_name: string;
+  trust: number;
+  respect: number;
+  affinity: number;
+  tension: number;
+  status: string;
+  status_label: string;
+  metadata?: Record<string, any>;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface LivingWorldEvent {
+  id: string;
+  club_id: string;
+  category: "executive" | "tactical" | "squad" | "academy" | "medical" | "financial" | "culture" | string;
+  event_type: string;
+  severity: "routine" | "important" | "critical" | string;
+  status: "created" | "active" | "awaiting_decision" | "resolved" | "expired" | string;
+  source_type: string;
+  source_id?: string | null;
+  title: string;
+  description: string;
+  participants: Array<{ role: string; name: string; id?: string }>;
+  world_day: number;
+  consequences: Record<string, any>;
+  actions: Array<{ key: string; label: string; style?: string }>;
+  idempotency_key?: string | null;
+  resolved_at?: string | null;
+  resolution_action?: string | null;
+  resolution_note?: string | null;
+  created_at?: string | null;
+}
+
+export interface LivingWorldDirective {
+  id: string;
+  club_id: string;
+  department: "manager" | "medical" | "academy" | "finance" | "scouting" | "executive" | string;
+  directive_key: string;
+  title: string;
+  instruction: string;
+  target_scope?: string | null;
+  target_scope_id?: string | null;
+  status: "active" | "completed" | "failed" | "cancelled" | string;
+  issued_day: number;
+  deadline_day?: number | null;
+  acknowledged_by?: string | null;
+  acknowledgement_text?: string | null;
+  objective_key?: string | null;
+  objective_label?: string | null;
+  consequences: Record<string, any>;
+  completed_at?: string | null;
+  created_at?: string | null;
+}
+
+export interface LivingWorldTimelineItem {
+  id: string;
+  kind: "event" | "directive" | "relationship_shift";
+  category: string;
+  severity: string;
+  title: string;
+  description: string;
+  world_day: number;
+  status: string;
+  participants: Array<Record<string, any>>;
+  consequences: Record<string, any>;
+  actions: Array<{ key: string; label: string; style?: string }>;
+  resolved_at?: string | null;
+  resolution_action?: string | null;
+  resolution_note?: string | null;
+  acknowledged_by?: string | null;
+  acknowledgement_text?: string | null;
+  deadline_day?: number | null;
+  delta_trust?: number | null;
+  delta_respect?: number | null;
+  delta_affinity?: number | null;
+  delta_tension?: number | null;
+  reason?: string | null;
+  created_at?: string | null;
+}
+
+export interface LivingWorldTimelineResponse {
+  club_id: string;
+  total_count: number;
+  total_events_count: number;
+  counts_by_kind?: {
+    event: number;
+    directive: number;
+    relationship_shift: number;
+  };
+  limit: number;
+  offset: number;
+  items: LivingWorldTimelineItem[];
+}
+
+export interface LivingWorldPayload {
+  active_events_count: number;
+  active_events: LivingWorldEvent[];
+  active_directives_count: number;
+  active_directives: LivingWorldDirective[];
+  relationships: LivingWorldRelationship[];
+  department_activity: Record<
+    string,
+    {
+      events_count: number;
+      directives_count: number;
+      activity_score: number;
+      has_critical: boolean;
+    }
+  >;
+}
+
 /**
  * Typed boundary for the owner daily briefing.
  *
@@ -309,6 +430,12 @@ export interface OperationsHubDestination {
     topic?: string;
     created_at?: string;
   }>;
+  active_events?: LivingWorldEvent[];
+  active_events_count?: number;
+  active_directives?: LivingWorldDirective[];
+  active_directives_count?: number;
+  relationship?: LivingWorldRelationship | null;
+  activity_score?: number;
 }
 
 export interface ClubOperationsHubPayload {
@@ -353,6 +480,7 @@ export interface ClubOperationsHubPayload {
     resolved_by_user_id: string;
     resolved_at: string;
   }>;
+  living_world?: LivingWorldPayload;
 }
 
 export const clubBriefingEndpoint = (clubId: string) => `/owner/clubs/${encodeURIComponent(clubId)}/briefing`;
@@ -363,7 +491,14 @@ export const clubOperationsHubEndpoint = (clubId: string) =>
   `/owner/clubs/${encodeURIComponent(clubId)}/operations-hub`;
 export const clubExecuteOperationalDecisionEndpoint = (clubId: string, decisionId: string) =>
   `/owner/clubs/${encodeURIComponent(clubId)}/operations/decisions/${encodeURIComponent(decisionId)}/execute`;
-
+export const clubLivingWorldTimelineEndpoint = (clubId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/timeline`;
+export const clubLivingWorldRelationshipsEndpoint = (clubId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/relationships`;
+export const clubCreateDirectiveEndpoint = (clubId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/directives`;
+export const clubResolveEventEndpoint = (clubId: string, eventId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/events/${encodeURIComponent(eventId)}/resolve`;
 /** Resolve what the panel should show. With no published contract this is always `unavailable`. */
 export function useOwnerBriefing(): BriefingViewState {
   if (!OWNER_BRIEFING_ENDPOINT) return { status: "unavailable" };

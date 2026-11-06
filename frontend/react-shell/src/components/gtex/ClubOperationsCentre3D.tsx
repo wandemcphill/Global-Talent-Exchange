@@ -39,9 +39,17 @@ import {
   clubBriefingResolveDilemmaEndpoint,
   clubExecuteOperationalDecisionEndpoint,
   clubOperationsHubEndpoint,
+  clubLivingWorldTimelineEndpoint,
+  clubCreateDirectiveEndpoint,
+  clubResolveEventEndpoint,
   type ClubOperationsHubPayload,
   type OperationalRecommendation,
   type OperationsHubDestination,
+  type LivingWorldEvent,
+  type LivingWorldDirective,
+  type LivingWorldRelationship,
+  type LivingWorldTimelineItem,
+  type LivingWorldTimelineResponse,
 } from "@/lib/ownerBriefing";
 
 function detectWebGLAvailable(): boolean {
@@ -62,6 +70,56 @@ const DESTINATION_ICONS: Record<string, React.ReactNode> = {
   academy_department: <Sprout size={15} />,
   medical_department: <HeartPulse size={15} />,
   finance_commercial_office: <Coins size={15} />,
+};
+
+const DIRECTIVE_DEPARTMENT_BY_DESTINATION: Record<string, string> = {
+  managers_office: "manager",
+  medical_department: "medical",
+  academy_department: "academy",
+  finance_commercial_office: "finance",
+  general_managers_office: "scouting",
+  executive_office: "executive",
+};
+
+const DIRECTIVE_OBJECTIVES_BY_DEPARTMENT: Record<string, Array<{ key: string; label: string }>> = {
+  manager: [
+    { key: "change_team_mentality", label: "Change team mentality" },
+    { key: "change_formation", label: "Change team formation" },
+    { key: "improve_squad_morale", label: "Improve squad morale" },
+    { key: "complete_competitive_fixture", label: "Complete a competitive fixture" },
+    { key: "upgrade_training_facility", label: "Upgrade the training facility" },
+  ],
+  medical: [
+    { key: "reduce_injury_burden", label: "Reduce squad injury burden" },
+    { key: "clear_injured_player", label: "Clear an injured player for training" },
+    { key: "activate_recovery_protocol", label: "Activate the light-recovery protocol" },
+    { key: "upgrade_medical_facility", label: "Upgrade the medical facility" },
+    { key: "improve_squad_conditioning", label: "Improve squad conditioning" },
+    { key: "reduce_squad_fatigue", label: "Reduce squad workload fatigue" },
+  ],
+  academy: [
+    { key: "induct_youth_prospects", label: "Induct youth prospects" },
+    { key: "promote_academy_prospect", label: "Promote an academy prospect" },
+    { key: "extend_youth_contracts", label: "Extend youth contracts" },
+    { key: "develop_regen_ratings", label: "Develop academy player ratings" },
+    { key: "upgrade_academy_facility", label: "Upgrade the academy facility" },
+  ],
+  finance: [
+    { key: "sign_commercial_sponsor", label: "Sign a commercial sponsor" },
+    { key: "increase_treasury_balance", label: "Increase the club treasury balance" },
+    { key: "complete_sponsor_review", label: "Complete a sponsor review" },
+    { key: "upgrade_revenue_infrastructure", label: "Upgrade commercial or stadium infrastructure" },
+  ],
+  scouting: [
+    { key: "expand_scouting_watchlist", label: "Expand the scouting watchlist" },
+    { key: "recruit_squad_player", label: "Recruit a player into the squad" },
+  ],
+  executive: [
+    { key: "advance_campus_project", label: "Start or advance a campus project" },
+    { key: "increase_club_prestige", label: "Increase club prestige" },
+    { key: "appoint_executive_staff", label: "Appoint an executive staff member" },
+    { key: "execute_operational_decision", label: "Execute an operational decision" },
+  ],
 };
 
 const OVERVIEW_CAMERA_POS: [number, number, number] = [0, 34, 42];
@@ -101,6 +159,52 @@ export function ClubOperationsCentre3D({
   const [staffMessageText, setStaffMessageText] = useState<string>("");
   const [sendingChat, setSendingChat] = useState<boolean>(false);
 
+  // Phase 2.4 Living World state
+  const [showTimelineDrawer, setShowTimelineDrawer] = useState<boolean>(false);
+  const [timelineCategoryFilter, setTimelineCategoryFilter] = useState<string>("all");
+  const [timelineSeverityFilter, setTimelineSeverityFilter] = useState<string>("all");
+  const [timelineStatusFilter, setTimelineStatusFilter] = useState<string>("all");
+  const [timelineLimit] = useState<number>(8);
+  const [timelineOffset, setTimelineOffset] = useState<number>(0);
+  const [showDirectiveModal, setShowDirectiveModal] = useState<boolean>(false);
+  const [directiveTitle, setDirectiveTitle] = useState<string>("");
+  const [directiveInstruction, setDirectiveInstruction] = useState<string>("");
+  const [directiveObjectiveKey, setDirectiveObjectiveKey] = useState<string>("");
+  const [directiveDeadline, setDirectiveDeadline] = useState<number>(7);
+  const [busyEventId, setBusyEventId] = useState<string | null>(null);
+
+  const {
+    data: timelineResponse,
+    isLoading: isTimelineLoading,
+    isFetching: isTimelineFetching,
+    isError: isTimelineError,
+    error: timelineErrorObj,
+    refetch: refetchTimeline,
+  } = useQuery<LivingWorldTimelineResponse | null>({
+    queryKey: [
+      "club-living-world-timeline",
+      clubId,
+      timelineCategoryFilter,
+      timelineSeverityFilter,
+      timelineStatusFilter,
+      timelineLimit,
+      timelineOffset,
+    ],
+    queryFn: async () => {
+      if (!clubId) return null;
+      const params: Record<string, string | number> = {
+        limit: timelineLimit,
+        offset: timelineOffset,
+      };
+      if (timelineCategoryFilter !== "all") params.category = timelineCategoryFilter;
+      if (timelineSeverityFilter !== "all") params.severity = timelineSeverityFilter;
+      if (timelineStatusFilter !== "all") params.status = timelineStatusFilter;
+      const { data } = await api.get(clubLivingWorldTimelineEndpoint(clubId), { params });
+      return data as LivingWorldTimelineResponse;
+    },
+    enabled: Boolean(clubId) && showTimelineDrawer,
+  });
+
   const {
     data: hub,
     isLoading,
@@ -120,6 +224,9 @@ export function ClubOperationsCentre3D({
     () => destinations.find((d) => d.destination_key === activeDestKey) || destinations[0],
     [destinations, activeDestKey]
   );
+  const activeDirectiveDepartment =
+    DIRECTIVE_DEPARTMENT_BY_DESTINATION[activeDestination?.destination_key || ""] || "executive";
+  const directiveObjectiveOptions = DIRECTIVE_OBJECTIVES_BY_DEPARTMENT[activeDirectiveDepartment] || [];
 
   // Sync hotspot when switching destination
   useEffect(() => {
@@ -128,6 +235,7 @@ export function ClubOperationsCentre3D({
     } else {
       setActiveHotspotId(null);
     }
+    setDirectiveObjectiveKey("");
   }, [activeDestination?.destination_key]);
 
   // Three.js refs
@@ -564,6 +672,10 @@ export function ClubOperationsCentre3D({
 
   const invalidateAll = async () => {
     await refetch();
+    queryClient.invalidateQueries({ queryKey: ["club-living-world-timeline", clubId] });
+    if (showTimelineDrawer) {
+      await refetchTimeline();
+    }
     queryClient.invalidateQueries({ queryKey: ["owner-daily-briefing", clubId] });
     queryClient.invalidateQueries({ queryKey: ["owner", "control-center"] });
     onHubUpdated?.();
@@ -757,6 +869,51 @@ export function ClubOperationsCentre3D({
     }
   };
 
+  const handleIssueDirective = async () => {
+    if (!directiveTitle.trim() || !directiveInstruction.trim()) {
+      toast.error("Please enter both title and instruction for the directive.");
+      return;
+    }
+    if (!directiveObjectiveKey) {
+      toast.error("Select a measurable completion objective for this directive.");
+      return;
+    }
+    const targetDept = activeDirectiveDepartment;
+    try {
+      await api.post(clubCreateDirectiveEndpoint(clubId), {
+        department: targetDept,
+        directive_key: `dir_${Date.now()}`,
+        objective_key: directiveObjectiveKey,
+        title: directiveTitle.trim(),
+        instruction: directiveInstruction.trim(),
+        deadline_days: directiveDeadline,
+      });
+      setDirectiveTitle("");
+      setDirectiveInstruction("");
+      setDirectiveObjectiveKey("");
+      setShowDirectiveModal(false);
+      await invalidateAll();
+      toast.success(`Directive issued to ${activeDestination.staff_lead.name}`);
+    } catch (err) {
+      toast.error(errMsg(err));
+    }
+  };
+
+  const handleResolveEvent = async (eventId: string, actionKey: string) => {
+    setBusyEventId(`${eventId}:${actionKey}`);
+    try {
+      await api.post(clubResolveEventEndpoint(clubId, eventId), {
+        action: actionKey,
+      });
+      await invalidateAll();
+      toast.success("Living world event action executed");
+    } catch (err) {
+      toast.error(errMsg(err));
+    } finally {
+      setBusyEventId(null);
+    }
+  };
+
   if (isLoading && !hub) {
     return (
       <section
@@ -839,6 +996,16 @@ export function ClubOperationsCentre3D({
             <span>{renderMode === "3d" ? "2D Floorplan" : "3D WebGL HQ"}</span>
           </button>
 
+          <button
+            type="button"
+            data-testid="toggle-living-world-timeline"
+            onClick={() => setShowTimelineDrawer((v) => !v)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-purple-400/40 bg-purple-950/50 px-3 py-1.5 text-xs font-bold uppercase text-purple-200 hover:bg-purple-900/60"
+          >
+            <Activity size={13} />
+            <span>Living World ({hub?.living_world?.active_events_count || 0})</span>
+          </button>
+
           <Link
             to="/app/campus"
             className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-950/40 px-3 py-1.5 text-xs font-bold uppercase text-emerald-200 hover:bg-emerald-900/50"
@@ -879,11 +1046,22 @@ export function ClubOperationsCentre3D({
                   {DESTINATION_ICONS[dest.destination_key] || <Building2 size={14} />}
                   <span className="truncate">{dest.short_label}</span>
                 </span>
-                {dest.open_decisions_count > 0 && (
-                  <span className="gx-mono rounded-full bg-amber-500/20 border border-amber-400/50 px-1.5 py-0.2 text-[10px] font-black text-amber-300">
-                    {dest.open_decisions_count}
-                  </span>
-                )}
+                <div className="flex items-center gap-1">
+                  {((dest.active_events_count || 0) > 0 || (dest.active_directives_count || 0) > 0) && (
+                    <span
+                      data-testid={`dest-activity-badge-${dest.destination_key}`}
+                      className="flex items-center gap-1 rounded-full bg-cyan-500/20 border border-cyan-400/50 px-1.5 py-0.2 text-[9px] font-bold text-cyan-300"
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                      {(dest.active_events_count || 0) + (dest.active_directives_count || 0)}
+                    </span>
+                  )}
+                  {dest.open_decisions_count > 0 && (
+                    <span className="gx-mono rounded-full bg-amber-500/20 border border-amber-400/50 px-1.5 py-0.2 text-[10px] font-black text-amber-300">
+                      {dest.open_decisions_count}
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="mt-2">
                 <p className="text-[11px] font-bold text-white truncate">{dest.staff_lead.name}</p>
@@ -1121,6 +1299,180 @@ export function ClubOperationsCentre3D({
               <h3 className="mt-1 text-lg font-black text-white">{rpt.title || activeDestination.subtitle}</h3>
               <p className="mt-1 text-xs leading-relaxed text-slate-300">{rpt.summary}</p>
             </div>
+
+            {/* Phase 2.4 Staff Relationship Health Inspector Card */}
+            {activeDestination.relationship && (
+              <div
+                data-testid={`relationship-card-${activeDestination.destination_key}`}
+                className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2.5"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Users size={12} className="text-sky-400" />
+                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-200">
+                      Executive Relationship ·{" "}
+                      {activeDestination.relationship.participant_a_type === "owner"
+                        ? activeDestination.relationship.participant_b_name
+                        : activeDestination.relationship.participant_a_name}
+                    </span>
+                  </div>
+                  <span className="rounded-full bg-sky-950/80 border border-sky-400/40 px-2 py-0.5 text-[10px] font-bold text-sky-300">
+                    {activeDestination.relationship.status_label}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[10px]">
+                  <div>
+                    <div className="flex justify-between text-slate-400 mb-0.5">
+                      <span>Trust</span>
+                      <span className="text-emerald-300 font-bold">{activeDestination.relationship.trust}%</span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${activeDestination.relationship.trust}%` }} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-slate-400 mb-0.5">
+                      <span>Respect</span>
+                      <span className="text-sky-300 font-bold">{activeDestination.relationship.respect}%</span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+                      <div className="h-full bg-sky-500 rounded-full" style={{ width: `${activeDestination.relationship.respect}%` }} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-slate-400 mb-0.5">
+                      <span>Affinity</span>
+                      <span className="text-purple-300 font-bold">{activeDestination.relationship.affinity}%</span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+                      <div className="h-full bg-purple-500 rounded-full" style={{ width: `${activeDestination.relationship.affinity}%` }} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-slate-400 mb-0.5">
+                      <span>Tension</span>
+                      <span className={`font-bold ${activeDestination.relationship.tension >= 50 ? "text-rose-400" : "text-amber-300"}`}>
+                        {activeDestination.relationship.tension}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${activeDestination.relationship.tension >= 50 ? "bg-rose-500" : "bg-amber-500"}`}
+                        style={{ width: `${activeDestination.relationship.tension}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Phase 2.4 Departmental Directives Card */}
+            <div
+              data-testid={`department-directives-${activeDestination.destination_key}`}
+              className="rounded-xl border border-sky-500/20 bg-sky-950/20 p-3 space-y-2.5"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Activity size={12} className="text-sky-400" />
+                  <span className="text-[11px] font-black uppercase tracking-wider text-sky-300">
+                    Active Directives ({activeDestination.active_directives?.length || 0})
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  data-testid="open-dispatch-directive-button"
+                  onClick={() => setShowDirectiveModal(true)}
+                  className="rounded border border-sky-400/40 bg-sky-500/20 px-2 py-0.5 text-[10px] font-bold text-sky-200 hover:bg-sky-500/30"
+                >
+                  + Issue Directive
+                </button>
+              </div>
+              {(activeDestination.active_directives?.length || 0) === 0 ? (
+                <p className="text-[10px] text-slate-400 italic">No active directives for this department.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {activeDestination.active_directives?.map((dir) => (
+                    <div key={dir.id} className="rounded-lg border border-white/10 bg-black/40 p-2 text-[11px] space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-white">{dir.title}</span>
+                        <span className="rounded bg-sky-900/60 px-1.5 py-0.2 text-[9px] font-bold text-sky-300 uppercase">
+                          Target Day {dir.deadline_day}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-300 leading-snug">{dir.instruction}</p>
+                      {dir.acknowledgement_text && (
+                        <p className="text-[9px] text-slate-400 italic bg-white/5 rounded p-1">
+                          "{dir.acknowledgement_text}"
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Phase 2.4 Living World Department Events */}
+            {(activeDestination.active_events?.length || 0) > 0 && (
+              <div
+                data-testid={`department-events-${activeDestination.destination_key}`}
+                className="rounded-xl border border-indigo-500/30 bg-indigo-950/20 p-3 space-y-2.5"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles size={12} className="text-indigo-400" />
+                    <span className="text-[11px] font-black uppercase tracking-wider text-indigo-300">
+                      Living Club Events ({activeDestination.active_events?.length || 0})
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-400">Authoritative</span>
+                </div>
+                <div className="space-y-2">
+                  {activeDestination.active_events?.map((ev) => (
+                    <div
+                      key={ev.id}
+                      data-testid={`department-event-${ev.id}`}
+                      className="rounded-lg border border-white/10 bg-black/50 p-2.5 space-y-1.5"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-white">{ev.title}</span>
+                        <span
+                          className={`rounded px-1.5 py-0.2 text-[9px] font-black uppercase ${
+                            ev.severity === "critical"
+                              ? "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                              : ev.severity === "important"
+                              ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                              : "bg-slate-700/40 text-slate-300"
+                          }`}
+                        >
+                          {ev.severity}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">{ev.description}</p>
+                      {ev.actions?.length > 0 && (
+                        <div className="flex items-center justify-end gap-1.5 pt-1">
+                          {ev.actions.map((act) => (
+                            <button
+                              key={act.key}
+                              type="button"
+                              data-testid={`event-action-${ev.id}-${act.key}`}
+                              disabled={Boolean(busyEventId)}
+                              onClick={() => handleResolveEvent(ev.id, act.key)}
+                              className={`rounded px-2.5 py-1 text-[10px] font-bold uppercase transition ${
+                                act.style === "primary"
+                                  ? "border border-indigo-500/50 bg-indigo-600/30 text-indigo-200 hover:bg-indigo-600/50"
+                                  : "border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+                              }`}
+                            >
+                              {busyEventId === `${ev.id}:${act.key}` ? "…" : act.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Department-Specific Actionable Decisions Queue */}
             {openDeptDecisions.length > 0 && (
@@ -1756,6 +2108,415 @@ export function ClubOperationsCentre3D({
           </div>
         </div>
       </div>
+      {/* Phase 2.4 Directive Dispatcher Modal */}
+      {showDirectiveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div
+            data-testid="directive-dispatcher-modal"
+            className="w-full max-w-md rounded-2xl border border-sky-400/40 bg-slate-950 p-5 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div>
+                <h4 className="text-sm font-black uppercase tracking-wider text-white">
+                  Dispatch Department Directive
+                </h4>
+                <p className="text-[11px] text-slate-400">
+                  Target: {activeDestination.label} ({activeDestination.staff_lead.name})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDirectiveModal(false)}
+                className="rounded p-1 text-slate-400 hover:text-white"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Directive Title
+                </label>
+                <input
+                  type="text"
+                  data-testid="directive-title-input"
+                  value={directiveTitle}
+                  onChange={(e) => setDirectiveTitle(e.target.value)}
+                  placeholder="e.g. Prioritize Muscular Rehabilitation"
+                  className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:border-sky-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Detailed Operational Instruction
+                </label>
+                <textarea
+                  data-testid="directive-instruction-input"
+                  value={directiveInstruction}
+                  onChange={(e) => setDirectiveInstruction(e.target.value)}
+                  rows={3}
+                  placeholder="Outline expectations, resources, and specific milestones for this department..."
+                  className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:border-sky-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Measurable Completion Objective
+                </label>
+                <select
+                  data-testid="directive-objective-select"
+                  value={directiveObjectiveKey}
+                  onChange={(e) => setDirectiveObjectiveKey(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-1.5 text-xs text-white focus:border-sky-400 focus:outline-none"
+                >
+                  <option value="">Select the exact outcome this directive must achieve</option>
+                  {directiveObjectiveOptions.map((objective) => (
+                    <option key={objective.key} value={objective.key}>
+                      {objective.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+                  The selected objective is the enforceable completion condition. The instruction adds context;
+                  other improvements in the department do not count.
+                </p>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Target Deadline (World Days)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={directiveDeadline}
+                  onChange={(e) => setDirectiveDeadline(Number(e.target.value))}
+                  className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-1.5 text-xs text-white focus:border-sky-400 focus:outline-none"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setShowDirectiveModal(false)}
+                className="rounded px-3 py-1.5 text-xs font-bold text-slate-300 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                data-testid="submit-directive-button"
+                onClick={handleIssueDirective}
+                disabled={!directiveObjectiveKey}
+                className="rounded-lg border border-sky-400/50 bg-sky-600/30 px-4 py-1.5 text-xs font-black uppercase text-sky-200 hover:bg-sky-600/50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Issue Directive
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Phase 2.4 Living World Timeline Slide-Over Drawer */}
+      {showTimelineDrawer && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
+          <div
+            data-testid="living-world-timeline-drawer"
+            className="h-full w-full max-w-lg border-l border-white/15 bg-slate-950 p-6 shadow-2xl flex flex-col justify-between overflow-y-auto"
+          >
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2">
+                  <Activity size={16} className="text-purple-400" />
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-wider text-white">
+                      Living Club World Timeline
+                    </h3>
+                    <p className="text-[10px] text-slate-400">
+                      Unified events, departmental directives & relationship milestones
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  data-testid="close-timeline-drawer"
+                  onClick={() => setShowTimelineDrawer(false)}
+                  className="rounded p-1 text-slate-400 hover:text-white"
+                >
+                  <XCircle size={18} />
+                </button>
+              </div>
+
+              {/* Category Filter Pills (including culture) */}
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-1.5" data-testid="timeline-category-filters">
+                  {["all", "executive", "tactical", "squad", "academy", "medical", "financial", "culture"].map(
+                    (cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        data-testid={`timeline-filter-category-${cat}`}
+                        onClick={() => {
+                          setTimelineCategoryFilter(cat);
+                          setTimelineOffset(0);
+                        }}
+                        className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase transition ${
+                          timelineCategoryFilter === cat
+                            ? "bg-purple-600/30 border border-purple-400/50 text-purple-200"
+                            : "bg-white/5 border border-white/10 text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    )
+                  )}
+                </div>
+
+                {/* Severity & Status Filters */}
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div>
+                    <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                      Severity
+                    </span>
+                    <div className="flex flex-wrap gap-1" data-testid="timeline-severity-filters">
+                      {["all", "routine", "important", "critical"].map((sev) => (
+                        <button
+                          key={sev}
+                          type="button"
+                          data-testid={`timeline-filter-severity-${sev}`}
+                          onClick={() => {
+                            setTimelineSeverityFilter(sev);
+                            setTimelineOffset(0);
+                          }}
+                          className={`rounded px-2 py-0.5 text-[9px] font-bold uppercase transition ${
+                            timelineSeverityFilter === sev
+                              ? "bg-sky-600/30 border border-sky-400/50 text-sky-200"
+                              : "bg-white/5 border border-white/10 text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          {sev}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                      Status
+                    </span>
+                    <div className="flex flex-wrap gap-1" data-testid="timeline-status-filters">
+                      {["all", "active", "resolved", "completed", "expired"].map((st) => (
+                        <button
+                          key={st}
+                          type="button"
+                          data-testid={`timeline-filter-status-${st}`}
+                          onClick={() => {
+                            setTimelineStatusFilter(st);
+                            setTimelineOffset(0);
+                          }}
+                          className={`rounded px-2 py-0.5 text-[9px] font-bold uppercase transition ${
+                            timelineStatusFilter === st
+                              ? "bg-emerald-600/30 border border-emerald-400/50 text-emerald-200"
+                              : "bg-white/5 border border-white/10 text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          {st}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Unified Timeline Stream States */}
+              {isTimelineLoading && !timelineResponse ? (
+                <div
+                  data-testid="living-timeline-loading"
+                  className="rounded-xl border border-white/10 bg-black/40 p-6 text-center space-y-2"
+                >
+                  <RefreshCw size={16} className="animate-spin mx-auto text-purple-300" />
+                  <p className="text-xs font-bold text-slate-300">Loading unified club timeline…</p>
+                </div>
+              ) : isTimelineError ? (
+                <div
+                  data-testid="living-timeline-error"
+                  className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-4 text-center space-y-2.5"
+                >
+                  <p className="text-xs font-bold text-rose-200">
+                    Unable to load Living Club World timeline: {errMsg(timelineErrorObj)}
+                  </p>
+                  <button
+                    type="button"
+                    data-testid="living-timeline-retry"
+                    onClick={() => refetchTimeline()}
+                    className="rounded-lg border border-rose-400/50 bg-rose-500/20 px-3 py-1 text-[10px] font-black uppercase text-rose-200 hover:bg-rose-500/30"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : (timelineResponse?.items?.length || 0) === 0 ? (
+                <div
+                  data-testid="living-timeline-empty"
+                  className="rounded-xl border border-white/10 bg-black/40 p-6 text-center space-y-1.5"
+                >
+                  <p className="text-xs font-bold text-slate-300">No timeline entries match the active filters.</p>
+                  <p className="text-[11px] text-slate-400">
+                    Adjust category, severity, or status filters to inspect historical events, directives, and relationship milestones.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1" data-testid="living-timeline-list">
+                  {(timelineResponse?.items || []).map((item: LivingWorldTimelineItem) => {
+                    const isActionableEvent =
+                      item.kind === "event" &&
+                      (item.status === "active" || item.status === "awaiting_decision") &&
+                      Array.isArray(item.actions) &&
+                      item.actions.length > 0;
+                    const kindLabel =
+                      item.kind === "directive"
+                        ? "Directive"
+                        : item.kind === "relationship_shift"
+                        ? "Relationship Milestone"
+                        : "Club Event";
+                    return (
+                      <div
+                        key={`${item.kind}-${item.id}`}
+                        data-testid={`timeline-item-${item.id}`}
+                        data-timeline-kind={item.kind}
+                        className="rounded-xl border border-white/10 bg-black/40 p-3.5 space-y-2"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              data-testid={`timeline-kind-badge-${item.id}`}
+                              className={`rounded px-1.5 py-0.5 text-[9px] font-black uppercase ${
+                                item.kind === "directive"
+                                  ? "bg-sky-500/20 text-sky-300 border border-sky-500/40"
+                                  : item.kind === "relationship_shift"
+                                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                                  : "bg-purple-500/20 text-purple-300 border border-purple-500/40"
+                              }`}
+                            >
+                              {kindLabel}
+                            </span>
+                            <span className="text-[10px] font-bold uppercase text-purple-300">
+                              Day {item.world_day} · {item.category}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              data-testid={`timeline-status-${item.id}`}
+                              className={`rounded px-1.5 py-0.2 text-[9px] font-bold uppercase ${
+                                item.status === "active" || item.status === "awaiting_decision"
+                                  ? "bg-cyan-500/20 text-cyan-300"
+                                  : item.status === "expired"
+                                  ? "bg-rose-500/20 text-rose-300"
+                                  : "bg-slate-800 text-slate-300"
+                              }`}
+                            >
+                              {item.status}
+                            </span>
+                            <span
+                              className={`rounded px-1.5 py-0.2 text-[9px] font-black uppercase ${
+                                item.severity === "critical"
+                                  ? "bg-rose-500/20 text-rose-300"
+                                  : item.severity === "important"
+                                  ? "bg-amber-500/20 text-amber-300"
+                                  : "bg-slate-700/40 text-slate-300"
+                              }`}
+                            >
+                              {item.severity}
+                            </span>
+                          </div>
+                        </div>
+                        <h4 className="text-xs font-bold text-white">{item.title}</h4>
+                        <p className="text-[11px] text-slate-300 leading-relaxed">{item.description}</p>
+                        {item.acknowledged_by && (
+                          <p data-testid={`timeline-lead-${item.id}`} className="text-[10px] text-slate-400">
+                            Lead: {item.acknowledged_by}
+                          </p>
+                        )}
+                        {item.resolution_note && item.status !== "active" && (
+                          <p
+                            data-testid={`timeline-note-${item.id}`}
+                            className="text-[10px] text-slate-400 italic bg-white/5 rounded px-2 py-1"
+                          >
+                            {item.resolution_note}
+                          </p>
+                        )}
+                        {isActionableEvent && (
+                          <div className="flex items-center justify-end gap-1.5 pt-1">
+                            {item.actions.map((act) => (
+                              <button
+                                key={act.key}
+                                type="button"
+                                data-testid={`timeline-event-action-${item.id}-${act.key}`}
+                                disabled={Boolean(busyEventId)}
+                                onClick={() => handleResolveEvent(item.id, act.key)}
+                                className="rounded border border-purple-500/40 bg-purple-600/30 px-2.5 py-1 text-[10px] font-bold uppercase text-purple-200 hover:bg-purple-600/50"
+                              >
+                                {act.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Pagination Footer */}
+            <div className="pt-4 border-t border-white/10 space-y-2" data-testid="living-timeline-pagination">
+              {timelineResponse && (
+                <div className="flex items-center justify-between text-[10px] text-slate-400">
+                  <span data-testid="living-timeline-range">
+                    Showing{" "}
+                    {timelineResponse.total_count === 0
+                      ? 0
+                      : timelineOffset + 1}
+                    –
+                    {Math.min(
+                      timelineOffset + (timelineResponse.items?.length || 0),
+                      timelineResponse.total_count
+                    )}{" "}
+                    of {timelineResponse.total_count}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      data-testid="timeline-prev-page"
+                      disabled={timelineOffset <= 0 || isTimelineFetching}
+                      onClick={() => setTimelineOffset((prev) => Math.max(0, prev - timelineLimit))}
+                      className="rounded border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-200 hover:bg-white/10 disabled:opacity-40"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="timeline-next-page"
+                      disabled={
+                        timelineOffset + timelineLimit >= (timelineResponse.total_count || 0) ||
+                        isTimelineFetching
+                      }
+                      onClick={() => setTimelineOffset((prev) => prev + timelineLimit)}
+                      className="rounded border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-200 hover:bg-white/10 disabled:opacity-40"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div className="text-center">
+                <span className="text-[10px] text-slate-500">
+                  Authoritative GTEX Simulation · World Day {hub?.club.world_day || 1}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
