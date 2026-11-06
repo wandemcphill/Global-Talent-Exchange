@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import redis.asyncio as redis_asyncio
 import time
@@ -16,6 +15,7 @@ from starlette.websockets import WebSocketDisconnect
 from app.auth.dependencies import get_current_user
 from app.broadcast.broadcast_models import ScoreUpdate, SpectatorEvent, TournamentEvent
 from app.broadcast.match_room_manager import adapt_match_stream_message
+from app.realtime.match_stream_service import MatchStreamService
 from app.broadcast.spectator_gateway import (
     AsyncEvalRedisEmulator,
     BroadcastRuntime,
@@ -199,27 +199,27 @@ def test_match_stream_service_raw_redis_event_reaches_spectator_websocket() -> N
                 if subscribers and int(subscribers[0][1]) > 0:
                     break
                 await asyncio.sleep(0.05)
-            await redis.publish(
-                channel,
-                json.dumps(
-                    {
-                        "message_type": "match_event",
-                        "match_id": match_id,
-                        "event_id": "goal-event-1",
-                        "sequence": 1,
-                        "event_type": "goal",
-                        "minute": 19,
-                        "clock": "19'",
-                        "home_score": 1,
-                        "away_score": 0,
-                        "commentary": "The home side scores.",
-                        "published_at": "2026-11-06T04:00:00+00:00",
-                    }
-                ),
-            )
             await redis.aclose()
 
+        async def publish_with_match_stream_service() -> None:
+            service = MatchStreamService(redis_url=redis_url)
+            service.publish_event(
+                match_id,
+                {
+                    "event_id": "goal-event-1",
+                    "sequence": 1,
+                    "event_type": "goal",
+                    "minute": 19,
+                    "clock": "19'",
+                    "home_score": 1,
+                    "away_score": 0,
+                    "commentary": "The home side scores.",
+                },
+            )
+            service.close()
+
         asyncio.run(publish_raw_match_stream_event())
+        asyncio.run(publish_with_match_stream_service())
         event = _receive_until_type(websocket, "match_event")
         assert event["payload"]["event_id"] == "goal-event-1"
         assert event["payload"]["event_type"] == "goal"
