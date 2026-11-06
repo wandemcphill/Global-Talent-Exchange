@@ -32,6 +32,22 @@ module.exports = [
       ],
     },
   },
+  // Files ending in .mjs are ECMAScript modules by definition. Keep this
+  // override separate so legacy .js and .cjs files retain script parsing.
+  {
+    files: ["**/*.mjs"],
+    languageOptions: {
+      sourceType: "module",
+    },
+  },
+  // The humanoid GLB compiler is a Node CLI that emits build and verification
+  // output. Keep console output allowed only for this script.
+  {
+    files: ["frontend/react-shell/scripts/build_humanoid_footballer_glb.mjs"],
+    rules: {
+      "no-console": "off",
+    },
+  },
   // Playwright's browser suites are native ES modules. Keeping this narrow
   // prevents their `import` syntax from being parsed as CommonJS while the
   // repository's older JavaScript configuration remains unchanged.
