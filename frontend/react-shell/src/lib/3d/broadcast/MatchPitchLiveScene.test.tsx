@@ -2,9 +2,37 @@ import React, { act } from "react";
 import { createRoot, Root } from "react-dom/client";
 import { MatchPitchLiveScene } from "./MatchPitchLiveScene";
 
+jest.mock("three", () => {
+  const actualThree = jest.requireActual("three");
+  function MockWebGLRenderer(this: any) {
+    const mockCanvas = globalThis.document.createElement("canvas");
+    mockCanvas.setAttribute("data-testid", "mock-three-canvas");
+    this.domElement = mockCanvas;
+    this.setSize = jest.fn();
+    this.setPixelRatio = jest.fn();
+    this.shadowMap = { enabled: false, type: 0, autoUpdate: false, needsUpdate: false };
+    this.getContext = jest.fn().mockReturnValue({
+      getExtension: jest.fn().mockReturnValue(null),
+      getParameter: jest.fn().mockReturnValue("Mock WebGL GPU"),
+    });
+    this.render = jest.fn();
+    this.dispose = jest.fn();
+    this.info = {
+      render: { calls: 0, triangles: 0 },
+      memory: { geometries: 0, textures: 0 },
+    };
+    this.getPixelRatio = jest.fn().mockReturnValue(1);
+  }
+  return {
+    ...actualThree,
+    WebGLRenderer: MockWebGLRenderer,
+  };
+});
+
 describe("MatchPitchLiveScene", () => {
   let container: HTMLDivElement;
   let root: Root;
+  let originalGetContext: any;
 
   const mockViewState = {
     match_id: "match-test-101",
@@ -73,6 +101,16 @@ describe("MatchPitchLiveScene", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
+    originalGetContext = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = jest.fn().mockImplementation((contextId: string) => {
+      if (contextId === "webgl" || contextId === "experimental-webgl") {
+        return {
+          getExtension: jest.fn(),
+          getParameter: jest.fn(),
+        };
+      }
+      return null;
+    }) as any;
   });
 
   afterEach(() => {
@@ -80,6 +118,7 @@ describe("MatchPitchLiveScene", () => {
       root.unmount();
     });
     container.remove();
+    HTMLCanvasElement.prototype.getContext = originalGetContext;
   });
 
   test("renders 3D match scene container and broadcast overlay HUD", async () => {
@@ -96,8 +135,7 @@ describe("MatchPitchLiveScene", () => {
     const sceneEl = container.querySelector("[data-testid='test-pitch-scene']");
     const hudEl = container.querySelector("[data-testid='broadcast-overlay-hud']");
 
-    // In JSDOM without real hardware WebGL, it will render either the WebGL canvas container or fallback
-    expect(sceneEl || container.querySelector("[data-testid='test-pitch-scene-fallback-container']")).not.toBeNull();
+    expect(sceneEl).not.toBeNull();
     expect(hudEl).not.toBeNull();
     expect(container.textContent).toContain("APX");
     expect(container.textContent).toContain("NST");
@@ -131,5 +169,63 @@ describe("MatchPitchLiveScene", () => {
     await act(async () => {
       returnBtn.click();
     });
+
+    // Reconnected 3D
+    expect(container.querySelector("[data-testid='test-pitch-scene']")).not.toBeNull();
+    expect(container.textContent).not.toContain("2D TACTICAL COMPANION MODE");
+  });
+
+  test("reconnects canvas across repeated 3D -> 2D -> 3D transitions", async () => {
+    await act(async () => {
+      root.render(
+        <MatchPitchLiveScene
+          matchViewState={mockViewState}
+          qualityTier="low"
+          testId="test-pitch-scene"
+        />
+      );
+    });
+
+    const toggleBtn1 = container.querySelector("[data-testid='toggle-2d-companion-button']") as HTMLButtonElement;
+    expect(toggleBtn1).not.toBeNull();
+    expect(container.querySelector("canvas")).not.toBeNull();
+
+    // Transition 1: 3D -> 2D
+    await act(async () => {
+      toggleBtn1.click();
+    });
+    expect(container.textContent).toContain("2D TACTICAL COMPANION MODE");
+
+    // Transition 1 return: 2D -> 3D
+    const returnBtn1 = container.querySelector("[data-testid='return-to-3d-broadcast-button']") as HTMLButtonElement;
+    expect(returnBtn1).not.toBeNull();
+    await act(async () => {
+      returnBtn1.click();
+    });
+
+    // Reconnected 3D
+    expect(container.querySelector("[data-testid='test-pitch-scene']")).not.toBeNull();
+    expect(container.querySelector("canvas")).not.toBeNull();
+    const toggleBtn2 = container.querySelector("[data-testid='toggle-2d-companion-button']") as HTMLButtonElement;
+    expect(toggleBtn2).not.toBeNull();
+
+    // Transition 2: 3D -> 2D
+    await act(async () => {
+      toggleBtn2.click();
+    });
+    expect(container.textContent).toContain("2D TACTICAL COMPANION MODE");
+
+    // Transition 2 return: 2D -> 3D
+    const returnBtn2 = container.querySelector("[data-testid='return-to-3d-broadcast-button']") as HTMLButtonElement;
+    expect(returnBtn2).not.toBeNull();
+    await act(async () => {
+      returnBtn2.click();
+    });
+
+    // Reconnected 3D again
+    expect(container.querySelector("[data-testid='test-pitch-scene']")).not.toBeNull();
+    expect(container.querySelector("canvas")).not.toBeNull();
+    expect(container.querySelector("[data-testid='toggle-2d-companion-button']")).not.toBeNull();
+    expect(container.textContent).not.toContain("2D TACTICAL COMPANION MODE");
   });
 });

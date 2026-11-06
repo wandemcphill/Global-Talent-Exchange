@@ -199,11 +199,7 @@ export class SpatialInterpolator {
 
     const duration = frameB.time_seconds - frameA.time_seconds;
 
-    // Handle large network drop or pause gap (> 2.5s)
-    if (duration > 2.5) {
-      return this.frameToInterpolated(queryTimeSeconds >= frameB.time_seconds - 0.5 ? frameB : frameA);
-    }
-
+    // Smoothly interpolate across frames without hard freeze stalls
     // Bounded alpha in [0.0, 1.0]
     const rawAlpha = (queryTimeSeconds - frameA.time_seconds) / duration;
     const alpha = Math.max(0.0, Math.min(1.0, rawAlpha));

@@ -217,6 +217,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   // Three.js WebGL Scene Lifecycle
   // ---------------------------------------------------------------------------
   useEffect(() => {
+    if (is2DActive) return;
     const container = mountRef.current;
     if (!container) return;
 
@@ -487,7 +488,9 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       if (!isPausedRef.current) {
         const effectiveSpeed =
           replayReturnTimeRef.current !== null ? Math.min(0.85, playbackSpeedRef.current) : playbackSpeedRef.current;
-        localTimeRef.current += deltaSec * effectiveSpeed;
+        // Advance timeline smoothly without freeze stalls across large frame gaps
+        const timelineDelta = Math.min(1.0, rawDeltaMs / 1000) * effectiveSpeed;
+        localTimeRef.current += timelineDelta;
         if (replayReturnTimeRef.current !== null && localTimeRef.current >= replayReturnTimeRef.current) {
           localTimeRef.current = replayReturnTimeRef.current;
           replayReturnTimeRef.current = null;
@@ -497,6 +500,8 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         const endTime = interpolator.getEndTime();
         if (endTime > 0 && localTimeRef.current > endTime) {
           localTimeRef.current = isLiveRef.current ? endTime : interpolator.getStartTime();
+        } else if (isLiveRef.current && endTime > 0 && localTimeRef.current < endTime - 3.0) {
+          localTimeRef.current = endTime - 0.5;
         }
         onTimeUpdateRef.current?.(localTimeRef.current);
       }
@@ -740,7 +745,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         }
       }
     };
-  }, [qualityTier, cameraDirector, interpolator, animationStateMachine, handleSelectQualityTier]);
+  }, [qualityTier, cameraDirector, interpolator, animationStateMachine, handleSelectQualityTier, is2DActive]);
 
   // Handle 2D companion mode toggle
   const handleToggle2D = useCallback(() => {

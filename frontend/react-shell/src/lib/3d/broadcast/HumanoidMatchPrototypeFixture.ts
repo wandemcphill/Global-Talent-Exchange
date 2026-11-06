@@ -93,6 +93,10 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
     coach_name: "M. Diallo",
   };
 
+  const scale = durationSeconds / 300;
+  const S = (baseSec: number) => Math.min(durationSeconds, Math.round(baseSec * scale));
+  const M = (sec: number) => Math.min(90, Math.floor((sec / durationSeconds) * 90));
+
   const events: SpectatorSafeEventView[] = [
     {
       event_id: "ev_kickoff",
@@ -117,10 +121,10 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
       event_id: "ev_short_pass_1",
       sequence: 1,
       event_type: "pass",
-      minute: 3,
+      minute: Math.max(1, M(S(12))),
       added_time: 0,
-      clock_label: "3'",
-      time_seconds: 12,
+      clock_label: `${Math.max(1, M(S(12)))}'`,
+      time_seconds: S(12),
       home_score: 0,
       away_score: 0,
       banner_text: "BUILD-UP PASSING COMBINATION",
@@ -137,10 +141,10 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
       event_id: "ev_through_ball_2",
       sequence: 2,
       event_type: "pass",
-      minute: 8,
+      minute: Math.max(1, M(S(28))),
       added_time: 0,
-      clock_label: "8'",
-      time_seconds: 28,
+      clock_label: `${Math.max(1, M(S(28)))}'`,
+      time_seconds: S(28),
       home_score: 0,
       away_score: 0,
       banner_text: "INCISIVE THROUGH BALL",
@@ -158,10 +162,10 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
       event_id: "ev_wing_cross_3",
       sequence: 3,
       event_type: "attack",
-      minute: 16,
+      minute: Math.max(1, M(S(52))),
       added_time: 0,
-      clock_label: "16'",
-      time_seconds: 52,
+      clock_label: `${Math.max(1, M(S(52)))}'`,
+      time_seconds: S(52),
       home_score: 0,
       away_score: 0,
       banner_text: "WHIPPED CROSS & AERIAL CHALLENGE",
@@ -178,10 +182,10 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
       event_id: "ev_shot_save_4",
       sequence: 4,
       event_type: "save",
-      minute: 28,
+      minute: Math.max(1, M(S(88))),
       added_time: 0,
-      clock_label: "28'",
-      time_seconds: 88,
+      clock_label: `${Math.max(1, M(S(88)))}'`,
+      time_seconds: S(88),
       home_score: 0,
       away_score: 0,
       banner_text: "DIVING GOALKEEPER SAVE!",
@@ -198,10 +202,10 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
       event_id: "ev_gk_dist_5",
       sequence: 5,
       event_type: "pass",
-      minute: 32,
+      minute: Math.max(1, M(S(104))),
       added_time: 0,
-      clock_label: "32'",
-      time_seconds: 104,
+      clock_label: `${Math.max(1, M(S(104)))}'`,
+      time_seconds: S(104),
       home_score: 0,
       away_score: 0,
       banner_text: "GOALKEEPER DISTRIBUTION",
@@ -218,10 +222,10 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
       event_id: "ev_tackle_foul_6",
       sequence: 6,
       event_type: "foul",
-      minute: 49,
+      minute: Math.max(1, M(S(156))),
       added_time: 0,
-      clock_label: "49'",
-      time_seconds: 156,
+      clock_label: `${Math.max(1, M(S(156)))}'`,
+      time_seconds: S(156),
       home_score: 0,
       away_score: 0,
       banner_text: "SLIDING TACTICAL CHALLENGE",
@@ -237,10 +241,10 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
       event_id: "ev_long_pass_7",
       sequence: 7,
       event_type: "pass",
-      minute: 60,
+      minute: Math.max(1, M(S(184))),
       added_time: 0,
-      clock_label: "60'",
-      time_seconds: 184,
+      clock_label: `${Math.max(1, M(S(184)))}'`,
+      time_seconds: S(184),
       home_score: 0,
       away_score: 0,
       banner_text: "DIAGONAL SWITCH OF PLAY",
@@ -258,10 +262,10 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
       event_id: "ev_goal_8",
       sequence: 8,
       event_type: "goal",
-      minute: 68,
+      minute: Math.max(1, M(S(210))),
       added_time: 0,
-      clock_label: "68'",
-      time_seconds: 210,
+      clock_label: `${Math.max(1, M(S(210)))}'`,
+      time_seconds: S(210),
       home_score: 1,
       away_score: 0,
       banner_text: "GOAL! LAGOS ATLAS LIONS 1 - 0",
@@ -279,10 +283,10 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
       event_id: "ev_sub_9",
       sequence: 9,
       event_type: "substitution",
-      minute: 78,
+      minute: Math.max(1, M(S(248))),
       added_time: 0,
-      clock_label: "78'",
-      time_seconds: 248,
+      clock_label: `${Math.max(1, M(S(248)))}'`,
+      time_seconds: S(248),
       home_score: 1,
       away_score: 0,
       banner_text: "TACTICAL SUBSTITUTION",
@@ -298,10 +302,10 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
       event_id: "ev_late_save_10",
       sequence: 10,
       event_type: "save",
-      minute: 87,
+      minute: Math.max(1, M(S(278))),
       added_time: 0,
-      clock_label: "87'",
-      time_seconds: 278,
+      clock_label: `${Math.max(1, M(S(278)))}'`,
+      time_seconds: S(278),
       home_score: 1,
       away_score: 0,
       banner_text: "LOW DIVING STOP!",
@@ -320,8 +324,9 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
   const allTemplates = [...HOME_STARTERS_433, ...AWAY_STARTERS_433];
 
   for (let t = 0; t <= durationSeconds; t += 1) {
+    const tau = (t / durationSeconds) * 300;
     const clockMinute = Number(((t / durationSeconds) * 90).toFixed(2));
-    const homeScore = t >= 211 ? 1 : 0;
+    const homeScore = tau >= 211 ? 1 : 0;
     const awayScore = 0;
 
     // Determine active match phase, camera preset, and ball trajectory at second `t`
@@ -340,41 +345,41 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
     let ballOwnerId: string | null = "home_6";
     let primaryActorOverrideState: Record<string, string> = {};
 
-    if (t < 8) {
+    if (tau < 8) {
       // Phase 1: Kickoff & initial walking/jogging
       activeEventId = "ev_kickoff";
-      stage = t < 2 ? "reset" : "event";
-      ballOwnerId = t < 3 ? "home_9" : "home_6";
-      ballX = t < 3 ? 50 : 44;
+      stage = tau < 2 ? "reset" : "event";
+      ballOwnerId = tau < 3 ? "home_9" : "home_6";
+      ballX = tau < 3 ? 50 : 44;
       ballY = 50;
-    } else if (t >= 8 && t < 24) {
+    } else if (tau >= 8 && tau < 24) {
       // Phase 2: Short passing combination (#6 -> #8 -> #10)
       activeEventId = "ev_short_pass_1";
-      stage = t < 14 ? "pre" : t < 19 ? "event" : "post";
-      if (t >= 12 && t <= 15) {
+      stage = tau < 14 ? "pre" : tau < 19 ? "event" : "post";
+      if (tau >= 12 && tau <= 15) {
         ballState = "in_flight";
         ballOwnerId = null;
-        const alpha = (t - 12) / 3;
+        const alpha = (tau - 12) / 3;
         ballX = 45 + alpha * 10;
         ballY = 50 - alpha * 20;
         ballHeight = Math.sin(alpha * Math.PI) * 0.25;
         primaryActorOverrideState["home_6"] = "pass";
       } else {
-        ballOwnerId = t < 12 ? "home_6" : "home_8";
-        ballX = t < 12 ? 45 : 55 + (t - 15) * 0.8;
+        ballOwnerId = tau < 12 ? "home_6" : "home_8";
+        ballX = tau < 12 ? 45 : 55 + (tau - 15) * 0.8;
         ballY = t < 12 ? 50 : 30;
       }
-    } else if (t >= 24 && t < 48) {
+    } else if (tau >= 24 && tau < 48) {
       // Phase 3: Through ball to right winger #7 & high-speed dribble + shield
       activeEventId = "ev_through_ball_2";
       transitionState = "home_break";
       cameraPreset = "attack_push";
       dangerZone = "final_third";
-      if (t >= 27 && t <= 31) {
+      if (tau >= 27 && tau <= 31) {
         stage = "event";
         ballState = "in_flight";
         ballOwnerId = null;
-        const alpha = (t - 27) / 4;
+        const alpha = (tau - 27) / 4;
         ballX = 58 + alpha * 22;
         ballY = 28 - alpha * 12;
         ballHeight = Math.sin(alpha * Math.PI) * 0.35;
@@ -382,20 +387,20 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
       } else {
         stage = "post";
         ballOwnerId = "home_7";
-        ballX = 80 + Math.min(10, (t - 31) * 0.65);
+        ballX = 80 + Math.min(10, (tau - 31) * 0.65);
         ballY = 16;
-        primaryActorOverrideState["home_7"] = t < 42 ? "sprint" : "idle";
+        primaryActorOverrideState["home_7"] = tau < 42 ? "sprint" : "idle";
       }
-    } else if (t >= 48 && t < 72) {
+    } else if (tau >= 48 && tau < 72) {
       // Phase 4: Whipped wide cross & aerial header challenge (#7 -> #9 vs #4)
       activeEventId = "ev_wing_cross_3";
       cameraPreset = "box_zoom";
       dangerZone = "wide_box";
-      if (t >= 51 && t <= 56) {
+      if (tau >= 51 && tau <= 56) {
         stage = "event";
         ballState = "in_flight";
         ballOwnerId = null;
-        const alpha = (t - 51) / 5;
+        const alpha = (tau - 51) / 5;
         ballX = 88 - alpha * 3;
         ballY = 15 + alpha * 35;
         ballHeight = 0.2 + Math.sin(alpha * Math.PI) * 2.15; // High aerial cross > 1.8m
@@ -406,23 +411,23 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
         ballX = 76;
         ballY = 58;
       }
-    } else if (t >= 72 && t < 115) {
+    } else if (tau >= 72 && tau < 115) {
       // Phase 5: Shooting sequence (#10) & Goalkeeper Diving Save (away_1) + Distribution
-      if (t < 100) {
+      if (tau < 100) {
         activeEventId = "ev_shot_save_4";
         cameraPreset = "box_zoom";
         dangerZone = "central_box";
-        if (t < 86) {
+        if (tau < 86) {
           stage = "pre";
           ballOwnerId = "home_10";
           ballX = 78;
           ballY = 54;
-        } else if (t >= 86 && t <= 91) {
+        } else if (tau >= 86 && tau <= 91) {
           stage = "event";
           eventBanner = "DIVING GOALKEEPER SAVE!";
           ballState = "in_flight";
           ballOwnerId = null;
-          const alpha = (t - 86) / 5;
+          const alpha = (tau - 86) / 5;
           ballX = 78 + alpha * 15;
           ballY = 54 - alpha * 4;
           ballHeight = 0.25 + Math.sin(alpha * Math.PI) * 1.45; // High corner shot > 1.1m
@@ -440,11 +445,11 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
         activeEventId = "ev_gk_dist_5";
         possessionSide = "away";
         cameraPreset = "broadcast";
-        stage = t <= 107 ? "event" : "post";
-        if (t >= 103 && t <= 108) {
+        stage = tau <= 107 ? "event" : "post";
+        if (tau >= 103 && tau <= 108) {
           ballState = "in_flight";
           ballOwnerId = null;
-          const alpha = (t - 103) / 5;
+          const alpha = (tau - 103) / 5;
           ballX = 90 - alpha * 38;
           ballY = 50 - alpha * 16;
           ballHeight = Math.sin(alpha * Math.PI) * 2.4;
@@ -455,22 +460,22 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
           ballY = 34;
         }
       }
-    } else if (t >= 115 && t < 175) {
+    } else if (tau >= 115 && tau < 175) {
       // Phase 6: Away counterattack, interception (#6), standing tackle (#4), sliding tackle + foul
-      possessionSide = t < 160 ? "away" : "home";
-      transitionState = t < 145 ? "away_break" : "stable";
-      cameraPreset = t >= 152 && t <= 165 ? "box_zoom" : "broadcast";
-      if (t >= 132 && t <= 138) {
+      possessionSide = tau < 160 ? "away" : "home";
+      transitionState = tau < 145 ? "away_break" : "stable";
+      cameraPreset = tau >= 152 && tau <= 165 ? "box_zoom" : "broadcast";
+      if (tau >= 132 && tau <= 138) {
         // Interception window
         ballState = "in_flight";
         ballOwnerId = null;
         ballX = 46;
         ballY = 48;
         ballHeight = 0.35;
-      } else if (t >= 152 && t <= 166) {
+      } else if (tau >= 152 && tau <= 166) {
         activeEventId = "ev_tackle_foul_6";
-        stage = t <= 159 ? "event" : "post";
-        eventBanner = t <= 162 ? "SLIDING TACTICAL CHALLENGE" : null;
+        stage = tau <= 159 ? "event" : "post";
+        eventBanner = tau <= 162 ? "SLIDING TACTICAL CHALLENGE" : null;
         ballOwnerId = "away_9";
         ballX = 34;
         ballY = 50;
@@ -480,17 +485,17 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
         ballX = possessionSide === "away" ? 42 : 48;
         ballY = 52;
       }
-    } else if (t >= 175 && t < 240) {
+    } else if (tau >= 175 && tau < 240) {
       // Phase 7: Long pass switch (#8 -> #11), Volley Goal (#9) & Goal Celebration
-      if (t < 198) {
+      if (tau < 198) {
         activeEventId = "ev_long_pass_7";
         cameraPreset = "attack_push";
         dangerZone = "final_third";
-        if (t >= 182 && t <= 188) {
+        if (tau >= 182 && tau <= 188) {
           stage = "event";
           ballState = "in_flight";
           ballOwnerId = null;
-          const alpha = (t - 182) / 6;
+          const alpha = (tau - 182) / 6;
           ballX = 52 + alpha * 28;
           ballY = 26 + alpha * 52;
           ballHeight = Math.sin(alpha * Math.PI) * 1.65;
@@ -504,28 +509,28 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
       } else {
         activeEventId = "ev_goal_8";
         dangerZone = "central_box";
-        if (t < 206) {
+        if (tau < 206) {
           stage = "pre";
           cameraPreset = "box_zoom";
           ballState = "in_flight";
           ballOwnerId = null;
-          const alpha = (t - 198) / 8;
+          const alpha = (tau - 198) / 8;
           ballX = 82 + alpha * 4;
           ballY = 76 - alpha * 26;
           ballHeight = 0.4 + Math.sin(alpha * Math.PI) * 1.1;
-        } else if (t >= 206 && t <= 210) {
+        } else if (tau >= 206 && tau <= 210) {
           stage = "event";
           cameraPreset = "box_zoom";
           ballState = "in_flight";
           ballOwnerId = null;
-          const alpha = (t - 206) / 4;
+          const alpha = (tau - 206) / 4;
           ballX = 86 + alpha * 12;
           ballY = 50;
           ballHeight = 0.95 - alpha * 0.4;
           primaryActorOverrideState["home_9"] = "shoot";
           primaryActorOverrideState["away_1"] = "save";
-        } else if (t >= 211 && t <= 228) {
-          stage = t <= 218 ? "decision" : "post";
+        } else if (tau >= 211 && tau <= 228) {
+          stage = tau <= 218 ? "decision" : "post";
           cameraPreset = "goal_celebration";
           celebrationTeamId = "home_lions";
           eventBanner = "GOAL! LAGOS ATLAS LIONS 1 - 0";
@@ -545,29 +550,29 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
       }
     } else {
       // Phase 8 (240s - 300s): Substitution, Late Away Pressure, Shot Block & Low GK Save
-      if (t >= 245 && t <= 256) {
+      if (tau >= 245 && tau <= 256) {
         activeEventId = "ev_sub_9";
         stage = "event";
         eventBanner = "TACTICAL SUBSTITUTION";
         ballOwnerId = "home_6";
         ballX = 50;
         ballY = 48;
-      } else if (t >= 270 && t <= 286) {
+      } else if (tau >= 270 && tau <= 286) {
         activeEventId = "ev_late_save_10";
         possessionSide = "away";
         cameraPreset = "box_zoom";
         dangerZone = "central_box";
-        if (t <= 275) {
+        if (tau <= 275) {
           stage = "pre";
           ballOwnerId = "away_9";
           ballX = 20;
           ballY = 50;
-        } else if (t <= 280) {
+        } else if (tau <= 280) {
           stage = "event";
           eventBanner = "LOW DIVING STOP!";
           ballState = "in_flight";
           ballOwnerId = null;
-          const alpha = (t - 275) / 5;
+          const alpha = (tau - 275) / 5;
           ballX = 20 - alpha * 13;
           ballY = 50 + alpha * 3;
           ballHeight = 0.45; // Low driven shot <= 1.05m -> triggers gk_dive_low!
@@ -584,8 +589,8 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
         possessionSide = "home";
         cameraPreset = "broadcast";
         ballOwnerId = "home_10";
-        ballX = 54 + Math.sin(t * 0.15) * 12;
-        ballY = 50 + Math.cos(t * 0.12) * 14;
+        ballX = 54 + Math.sin(tau * 0.15) * 12;
+        ballY = 50 + Math.cos(tau * 0.12) * 14;
       }
     }
 
@@ -595,30 +600,30 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
       const phaseShift = idx * 0.55;
       const tacticalShiftX = possessionSide === "home" ? 4.5 : -4.5;
 
-      let px = tpl.anchorX + (tpl.role === "GK" ? 0 : tacticalShiftX + Math.sin(t * 0.22 + phaseShift) * 4.2);
-      let py = tpl.anchorY + (tpl.role === "GK" ? Math.sin(t * 0.3) * 1.5 : Math.cos(t * 0.18 + phaseShift) * 3.8);
+      let px = tpl.anchorX + (tpl.role === "GK" ? 0 : tacticalShiftX + Math.sin(tau * 0.22 + phaseShift) * 4.2);
+      let py = tpl.anchorY + (tpl.role === "GK" ? Math.sin(tau * 0.3) * 1.5 : Math.cos(tau * 0.18 + phaseShift) * 3.8);
 
       // Pull active actors toward the ball during their action windows
       if (ballOwnerId === tpl.playerId) {
         px = ballX;
         py = ballY;
-      } else if (t >= 51 && t <= 56 && (tpl.playerId === "home_9" || tpl.playerId === "away_4")) {
+      } else if (tau >= 51 && tau <= 56 && (tpl.playerId === "home_9" || tpl.playerId === "away_4")) {
         // Aerial header challenge convergence
         px = ballX + (tpl.playerId === "home_9" ? -0.4 : 0.4);
         py = ballY;
-      } else if (t >= 132 && t <= 138 && tpl.playerId === "home_6") {
+      } else if (tau >= 132 && tau <= 138 && tpl.playerId === "home_6") {
         // Interception convergence
         px = ballX + 0.8;
         py = ballY;
-      } else if (t >= 152 && t <= 162 && (tpl.playerId === "home_4" || tpl.playerId === "away_9")) {
+      } else if (tau >= 152 && tau <= 162 && (tpl.playerId === "home_4" || tpl.playerId === "away_9")) {
         // Sliding tackle convergence
         px = ballX + (tpl.playerId === "home_4" ? -0.8 : 0.4);
         py = ballY;
-      } else if (t >= 204 && t <= 212 && tpl.playerId === "home_9") {
+      } else if (tau >= 204 && tau <= 212 && tpl.playerId === "home_9") {
         // Goalscorer in the box
         px = 86;
         py = 50;
-      } else if (t >= 272 && t <= 278 && tpl.playerId === "home_5") {
+      } else if (tau >= 272 && tau <= 278 && tpl.playerId === "home_5") {
         // Shot blocker in front of away_9
         px = 17.5;
         py = 50.5;
@@ -637,7 +642,7 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
 
       // Vary speed cycles across the match so walk, jog, run, and sprint are all exercised
       if (tpl.role !== "GK") {
-        const wave = (Math.sin(t * 0.35 + idx) + 1) * 0.5;
+        const wave = (Math.sin(tau * 0.35 + idx) + 1) * 0.5;
         speedRatio = Math.max(speedRatio, Number((0.08 + wave * 0.78).toFixed(3)));
       }
 
