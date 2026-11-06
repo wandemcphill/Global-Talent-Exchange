@@ -51,11 +51,8 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
         return fee_bps
 
     def _policy_provenance(self) -> tuple[str, str]:
-        try:
-            policy = self._active_policy()
-            return policy.rule.rule_key, policy.policy_version
-        except Exception:
-            return "platform-economy-defaults", "v1"
+        policy = self._active_policy()
+        return policy.rule.rule_key, policy.policy_version
 
     def _frozen_platform_fee_bps(self, competition: UserHostedCompetition) -> int:
         raw = str((competition.metadata_json or {}).get("platform_fee_bps") or "").strip()
