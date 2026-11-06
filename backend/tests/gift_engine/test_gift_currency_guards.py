@@ -17,7 +17,6 @@ from app.gift_engine.schemas import (
 from app.models import (
     AdminRewardRule,
     Base,
-    GiftCatalogItem,
     LedgerEntryReason,
     LedgerUnit,
 )
