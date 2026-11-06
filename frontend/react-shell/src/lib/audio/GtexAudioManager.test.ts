@@ -206,4 +206,47 @@ describe("GtexAudioManager", () => {
     // Verified field exists and represents duration, not subjective human cognition
     expect(typeof snap.foregroundAudibleSeconds).toBe("number");
   });
+
+  it("applies central master volume, channel volume, and ducking to remote sponsored audio", async () => {
+    const originalAudio = (globalThis as any).Audio;
+    const mockAudio = {
+      crossOrigin: "",
+      src: "",
+      volume: 1,
+      play: jest.fn().mockResolvedValue(undefined),
+      pause: jest.fn(),
+    };
+    (globalThis as any).Audio = jest.fn(() => mockAudio);
+
+    try {
+      await manager.playSponsoredTrack({
+        campaignId: "camp_remote_ducking_test",
+        title: "Remote Licensed Track",
+        artist: "GTEX Artist",
+        audioUrl: "https://cdn.example.test/licensed-track.mp3",
+        destinationUrl: "https://example.test",
+        rightsVerified: true,
+      });
+
+      expect(mockAudio.volume).toBeCloseTo(0.85 * 0.55);
+
+      manager.setChannelVolume("sponsored_music", 0.4);
+      expect(mockAudio.volume).toBeCloseTo(0.85 * 0.4);
+
+      manager.registerActiveChannelSource("commentary", "remote_track_commentary");
+      expect(mockAudio.volume).toBeCloseTo(0.85 * 0.4 * 0.15);
+
+      manager.setMasterMute(true);
+      expect(mockAudio.volume).toBe(0);
+
+      manager.setMasterMute(false);
+      expect(mockAudio.volume).toBeCloseTo(0.85 * 0.4 * 0.15);
+
+      manager.unregisterActiveChannelSource("commentary", "remote_track_commentary");
+      expect(mockAudio.volume).toBeCloseTo(0.85 * 0.4);
+    } finally {
+      (globalThis as any).Audio = originalAudio;
+    }
+  });
+
 });
