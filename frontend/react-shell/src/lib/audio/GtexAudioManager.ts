@@ -219,6 +219,7 @@ export class GtexAudioManager {
       const target = this.prefs.isMasterMuted ? 0 : clamped;
       this.masterGain.gain.linearRampToValueAtTime(target, this.audioCtx.currentTime + 0.05);
     }
+    this.syncSponsoredAudioElementVolume();
     this.notifySubscribers();
   }
 
@@ -232,6 +233,7 @@ export class GtexAudioManager {
     if (muted && this.sponsoredStatus === "playing" && this.currentSponsoredTrack) {
       this.reportTelemetry("muted", this.currentSponsoredTrack.campaignId);
     }
+    this.syncSponsoredAudioElementVolume();
     this.notifySubscribers();
   }
 
@@ -301,6 +303,29 @@ export class GtexAudioManager {
     return Boolean(set && set.size > 0);
   }
 
+  private activeDuckingRule(channel: AudioChannelType) {
+    if (this.isChannelActive("commentary")) {
+      return DUCKING_POLICIES.commentary_active.find((rule) => rule.targetChannel === channel);
+    }
+    if (this.isChannelActive("conversations")) {
+      return DUCKING_POLICIES.conversations_active.find((rule) => rule.targetChannel === channel);
+    }
+    return undefined;
+  }
+
+  /**
+   * HTMLAudioElement playback bypasses the Web Audio gain graph. Mirror the
+   * central master/channel gains and ducking policy onto that element so remote
+   * sponsored tracks obey the same controls as procedural previews.
+   */
+  private syncSponsoredAudioElementVolume(): void {
+    if (!this.audioEl) return;
+    const duckFactor = this.activeDuckingRule("sponsored_music")?.duckVolumeFactor ?? 1;
+    const muted = this.prefs.isMasterMuted || this.prefs.channelMuted.sponsored_music;
+    const target = muted ? 0 : this.prefs.masterVolume * this.prefs.channelVolumes.sponsored_music * duckFactor;
+    this.audioEl.volume = Math.max(0, Math.min(1, target));
+  }
+
   /**
    * Recalculates effective gain for each channel, applying priority ducking rules.
    */
@@ -315,30 +340,17 @@ export class GtexAudioManager {
       this.sponsoredStatus = "playing";
     }
 
+    this.syncSponsoredAudioElementVolume();
     if (!this.audioCtx) return;
     const now = this.audioCtx.currentTime;
 
     for (const [channel, gainNode] of this.channelGains.entries()) {
       let baseVolume = this.prefs.channelMuted[channel] ? 0 : this.prefs.channelVolumes[channel];
 
-      // Calculate ducking multiplier
-      let duckFactor = 1.0;
-      let fadeDuration = 0.4;
-
-      if (commentaryActive) {
-        const rule = DUCKING_POLICIES.commentary_active.find((r) => r.targetChannel === channel);
-        if (rule) {
-          duckFactor = rule.duckVolumeFactor;
-          fadeDuration = rule.fadeDurationMs / 1000;
-        }
-      } else if (conversationsActive) {
-        const rule = DUCKING_POLICIES.conversations_active.find((r) => r.targetChannel === channel);
-        if (rule) {
-          duckFactor = rule.duckVolumeFactor;
-          fadeDuration = rule.fadeDurationMs / 1000;
-        }
-      }
-
+      // Calculate ducking multiplier using the same policy as remote audio.
+      const rule = this.activeDuckingRule(channel);
+      const duckFactor = rule?.duckVolumeFactor ?? 1.0;
+      const fadeDuration = (rule?.fadeDurationMs ?? 400) / 1000;
       const targetGain = baseVolume * duckFactor;
       try {
         gainNode.gain.cancelScheduledValues(now);
@@ -414,7 +426,7 @@ export class GtexAudioManager {
           this.audioEl.crossOrigin = "anonymous";
         }
         this.audioEl.src = track.audioUrl;
-        this.audioEl.volume = this.prefs.channelMuted.sponsored_music ? 0 : this.prefs.channelVolumes.sponsored_music;
+        this.syncSponsoredAudioElementVolume();
 
         const playPromise = this.audioEl.play();
         if (playPromise !== undefined) {
