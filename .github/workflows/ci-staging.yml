@@ -184,11 +184,9 @@ jobs:
         env:
           REDIS_URL: redis://localhost:6379/0
           GTEX_REQUIRE_REAL_REDIS: "1"
-        run: >
-          python -m pytest
-          backend/tests/broadcast/test_spectator_gateway.py
-          backend/tests/test_match_viewer_route.py
-          -q
+        run: python -m pytest backend/tests/broadcast/test_spectator_gateway.py -q
+      - name: Verify Match Viewer route authorization tests
+        run: python -m pytest backend/tests/test_match_viewer_route.py -q
 
   backend-app-contract-tests:
     runs-on: ubuntu-latest

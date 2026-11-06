@@ -18,7 +18,7 @@ from app.models.base import Base
 from app.models.competition import UserCompetition
 from app.models.competition_match import CompetitionMatch
 from app.models.fast_match import FastMatchEntitlement, FastMatchSession, FastMatchSettlement
-from app.owner_console.models import ClubDelegationPolicy, OwnerClubState
+from app.owner_console.models import OwnerClubState
 from app.replay_archive.persistence import InMemoryReplayArchiveRepository
 from app.replay_archive.policy import SpectatorVisibilityPolicyService
 from app.replay_archive.service import ReplayArchiveService
@@ -50,7 +50,6 @@ def _build_app() -> tuple[FastAPI, sessionmaker[Session]]:
             FastMatchSettlement.__table__,
             FastMatchSession.__table__,
             OwnerClubState.__table__,
-            ClubDelegationPolicy.__table__,
         ],
     )
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
@@ -452,12 +451,7 @@ def test_match_viewer_session_reveals_segments_progressively_without_seed_or_ful
 
 
 def test_match_viewer_spectator_security_enforces_coach_notes_redaction() -> None:
-    """
-    Security Test:
-    Verify that public/unauthenticated spectators and unauthorized users are
-    strictly denied access to confidential coach_notes on the backend, while
-    the authorized club owner receives them.
-    """
+    """Only owners and currently appointed tactical staff on participating clubs see coach notes."""
     from app.auth.dependencies import get_optional_current_user
     from app.owner_console.models import OwnerClubState
 
@@ -465,7 +459,6 @@ def test_match_viewer_spectator_security_enforces_coach_notes_redaction() -> Non
     replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=77))
     base_view = MatchTimelineService().build_from_replay_payload(replay_payload)
 
-    # Insert match with home_club_id="club-apex"
     with session_factory() as session:
         session.add(
             UserCompetition(
@@ -492,7 +485,6 @@ def test_match_viewer_spectator_security_enforces_coach_notes_redaction() -> Non
                 },
             )
         )
-        # Register owner-1 as the owner of club-apex
         session.add(
             OwnerClubState(
                 club_id="club-apex",
@@ -500,40 +492,41 @@ def test_match_viewer_spectator_security_enforces_coach_notes_redaction() -> Non
                 club_name="Apex Lagos",
             )
         )
-        session.commit()
-
-    # 1. Unauthenticated spectator (get_optional_current_user -> None)
-    app.dependency_overrides[get_optional_current_user] = lambda: None
-    with TestClient(app) as client:
-        resp = client.get(f"/api/match-viewer/{replay_payload.match_id}")
-        assert resp.status_code == 200
-        pkg = resp.json()["presentation_package"]
-        assert pkg["coach_notes"] == [], "Public spectator must receive empty coach_notes"
-
-    # 2. Authenticated user who is NOT owner or manager of participating clubs
-    app.dependency_overrides[get_optional_current_user] = lambda: SimpleNamespace(
-        id="random-fan-42", is_admin=False, is_super_admin=False
-    )
-    with TestClient(app) as client:
-        resp = client.get(f"/api/match-viewer/{replay_payload.match_id}")
-        assert resp.status_code == 200
-        pkg = resp.json()["presentation_package"]
-        assert pkg["coach_notes"] == [], "Unauthorized authenticated user must receive empty coach_notes"
-
-    # 3. Rival / third-party club owner (owns club-other, NOT participating in this match)
-    with session_factory() as session:
         session.add(
             OwnerClubState(
                 club_id="club-other",
                 owner_user_id="owner-user-third-party",
                 club_name="Third Party FC",
+                manager_json={
+                    "name": "Coach Other",
+                    "delegate_user_id": "delegate-other-club",
+                },
             )
         )
-        # Configure club-apex with appointed staff and delegation policy
+        session.commit()
+
+    def assert_coach_notes(user_id: str | None, expected: bool) -> None:
+        app.dependency_overrides[get_optional_current_user] = (
+            (lambda: None)
+            if user_id is None
+            else (lambda uid=user_id: SimpleNamespace(id=uid, is_admin=False, is_super_admin=False))
+        )
+        with TestClient(app) as client:
+            response = client.get(f"/api/match-viewer/{replay_payload.match_id}")
+        assert response.status_code == 200
+        notes = response.json()["presentation_package"]["coach_notes"]
+        assert bool(notes) is expected, f"Unexpected coach_notes visibility for {user_id!r}"
+
+    # A public viewer and an unrelated authenticated fan receive no confidential notes.
+    assert_coach_notes(None, False)
+    assert_coach_notes("random-fan-42", False)
+
+    with session_factory() as session:
         apex_state = session.query(OwnerClubState).filter_by(club_id="club-apex").one()
         apex_state.manager_json = {
             "name": "Coach Finidi",
-            "user_id": "delegate-tactical-mgr",
+            "user_id": "manager-user-apex",
+            "delegate_user_id": "delegate-tactical-mgr",
             "rating": 82,
         }
         apex_state.facilities_json = {
@@ -550,104 +543,32 @@ def test_match_viewer_spectator_security_enforces_coach_notes_redaction() -> Non
                 },
             }
         }
-        session.add(
-            ClubDelegationPolicy(
-                club_id="club-apex",
-                owner_user_id="owner-user-apex",
-                mode="balanced",
-                is_suspended=False,
-                activity_assignments_json={
-                    "first_team_tactics": {
-                        "activity_key": "first_team_tactics",
-                        "domain": "sporting",
-                        "responsible_role": "first_team_manager",
-                        "authority_level": "full_autonomy",
-                        "requires_owner_approval": False,
-                    },
-                    "scouting_assignments": {
-                        "activity_key": "scouting_assignments",
-                        "domain": "sporting",
-                        "responsible_role": "chief_scout",
-                        "authority_level": "full_autonomy",
-                        "requires_owner_approval": False,
-                    },
-                },
-                reserved_decisions_json=["financial_planning"],
-                temporary_overrides_json={},
-            )
-        )
-        # Also add a policy on club-other where 'delegate-other-club' has tactical autonomy
-        session.add(
-            ClubDelegationPolicy(
-                club_id="club-other",
-                owner_user_id="owner-user-third-party",
-                mode="delegating",
-                is_suspended=False,
-                activity_assignments_json={
-                    "first_team_tactics": {
-                        "activity_key": "first_team_tactics",
-                        "domain": "sporting",
-                        "responsible_role": "first_team_manager",
-                        "authority_level": "full_autonomy",
-                        "delegate_user_id": "delegate-other-club",
-                    }
-                },
-            )
-        )
         session.commit()
 
-    app.dependency_overrides[get_optional_current_user] = lambda: SimpleNamespace(
-        id="owner-user-third-party", is_admin=False, is_super_admin=False
-    )
-    with TestClient(app) as client:
-        resp = client.get(f"/api/match-viewer/{replay_payload.match_id}")
-        assert resp.status_code == 200
-        assert resp.json()["presentation_package"]["coach_notes"] == [], (
-            "Owner of a non-participating club must NOT receive confidential coach_notes"
-        )
+    # An owner or staff member from a club not playing in this match has no access.
+    assert_coach_notes("owner-user-third-party", False)
+    assert_coach_notes("delegate-other-club", False)
 
-    # 4. Unrelated delegate (medical director / chief scout without tactical authority)
-    for unrelated_delegate_id in ("delegate-medical-only", "delegate-scout-only", "delegate-other-club"):
-        app.dependency_overrides[get_optional_current_user] = lambda uid=unrelated_delegate_id: SimpleNamespace(
-            id=uid, is_admin=False, is_super_admin=False
-        )
-        with TestClient(app) as client:
-            resp = client.get(f"/api/match-viewer/{replay_payload.match_id}")
-            assert resp.status_code == 200
-            assert resp.json()["presentation_package"]["coach_notes"] == [], (
-                f"Unrelated delegate {unrelated_delegate_id} must NOT receive confidential coach_notes"
-            )
+    # Medical and scouting appointments are not tactical appointments.
+    assert_coach_notes("delegate-medical-only", False)
+    assert_coach_notes("delegate-scout-only", False)
 
-    # 5. Authorized sporting/tactical delegate (first_team_manager with active first_team_tactics autonomy)
-    app.dependency_overrides[get_optional_current_user] = lambda: SimpleNamespace(
-        id="delegate-tactical-mgr", is_admin=False, is_super_admin=False
-    )
-    with TestClient(app) as client:
-        resp = client.get(f"/api/match-viewer/{replay_payload.match_id}")
-        assert resp.status_code == 200
-        assert len(resp.json()["presentation_package"]["coach_notes"]) > 0, (
-            "Authorized sporting tactical delegate must receive coach_notes"
-        )
+    # The appointed manager and the explicitly recorded manager delegate may see notes.
+    assert_coach_notes("manager-user-apex", True)
+    assert_coach_notes("delegate-tactical-mgr", True)
 
-    # 6. Suspended delegation revokes tactical delegate access immediately
+    # Replacing the current appointment immediately revokes the former delegate's access.
     with session_factory() as session:
-        pol = session.query(ClubDelegationPolicy).filter_by(club_id="club-apex").one()
-        pol.is_suspended = True
+        apex_state = session.query(OwnerClubState).filter_by(club_id="club-apex").one()
+        apex_state.manager_json = {
+            "name": "New Coach",
+            "user_id": "manager-user-new",
+            "delegate_user_id": "delegate-tactical-new",
+        }
         session.commit()
 
-    with TestClient(app) as client:
-        resp = client.get(f"/api/match-viewer/{replay_payload.match_id}")
-        assert resp.status_code == 200
-        assert resp.json()["presentation_package"]["coach_notes"] == [], (
-            "Suspended delegation must revoke delegate access to coach_notes"
-        )
+    assert_coach_notes("delegate-tactical-mgr", False)
+    assert_coach_notes("delegate-tactical-new", True)
 
-    # 7. Authenticated owner of home club (club-apex) always retains authority
-    app.dependency_overrides[get_optional_current_user] = lambda: SimpleNamespace(
-        id="owner-user-apex", is_admin=False, is_super_admin=False
-    )
-    with TestClient(app) as client:
-        resp = client.get(f"/api/match-viewer/{replay_payload.match_id}")
-        assert resp.status_code == 200
-        pkg = resp.json()["presentation_package"]
-        assert len(pkg["coach_notes"]) > 0, "Authorized club owner must receive confidential coach_notes"
+    # The club owner retains authority after staff changes.
+    assert_coach_notes("owner-user-apex", True)

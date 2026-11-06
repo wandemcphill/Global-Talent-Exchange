@@ -59,10 +59,6 @@ def _protected_runtime_enabled(app) -> bool:
     return environment in {"production", "prod", "staging"}
 
 
-_SPORTING_TACTICAL_ACTIVITIES: tuple[str, ...] = (
-    "first_team_tactics",
-    "training_and_coaching",
-)
 _SPORTING_TACTICAL_ROLES: frozenset[str] = frozenset(
     {
         "first_team_manager",
@@ -72,94 +68,47 @@ _SPORTING_TACTICAL_ROLES: frozenset[str] = frozenset(
 )
 
 
-def _has_sporting_tactical_delegation(
+def _has_sporting_tactical_staff_appointment(
     user_id: str,
     participating_club_ids: set[str],
     session: Session,
 ) -> bool:
-    from datetime import datetime
-    from app.models.base import utcnow
-    from app.owner_console.models import ClubDelegationPolicy, OwnerClubState
+    """Checks only current, persisted appointments on clubs actually playing this match.
 
-    for club_id in participating_club_ids:
-        policy = session.scalar(
-            select(ClubDelegationPolicy).where(ClubDelegationPolicy.club_id == club_id)
-        )
-        if policy is None or policy.is_suspended or policy.mode == "hands_on":
-            continue
+    The owner-console roster is the authoritative source for these roles. No synthetic
+    delegation-policy model or client-supplied role claims are trusted here.
+    """
+    from app.owner_console.models import OwnerClubState
 
-        state = session.scalar(
-            select(OwnerClubState).where(OwnerClubState.club_id == club_id)
-        )
-        appointed_roles: set[str] = set()
-        if state is not None:
-            mgr = state.manager_json if isinstance(state.manager_json, dict) else {}
-            if mgr.get("user_id") == user_id or mgr.get("delegate_user_id") == user_id:
-                appointed_roles.add("first_team_manager")
-            facs = state.facilities_json if isinstance(state.facilities_json, dict) else {}
-            exec_staff = facs.get("_executive_staff")
-            if isinstance(exec_staff, dict):
-                for role_key, staff_info in exec_staff.items():
-                    if isinstance(staff_info, dict) and (
-                        staff_info.get("user_id") == user_id
-                        or staff_info.get("delegate_user_id") == user_id
-                    ):
-                        appointed_roles.add(str(role_key))
-
-        assignments = (
-            policy.activity_assignments_json
-            if isinstance(policy.activity_assignments_json, dict)
-            else {}
-        )
-        reserved = set(policy.reserved_decisions_json or [])
-        overrides = (
-            policy.temporary_overrides_json
-            if isinstance(policy.temporary_overrides_json, dict)
-            else {}
-        )
-
-        for activity_key in _SPORTING_TACTICAL_ACTIVITIES:
-            if activity_key in reserved:
-                continue
-
-            if activity_key in overrides and isinstance(overrides[activity_key], dict):
-                override = overrides[activity_key]
-                expires_at_iso = override.get("expires_at")
-                is_expired = False
-                if expires_at_iso:
-                    try:
-                        exp_dt = datetime.fromisoformat(
-                            str(expires_at_iso).replace("Z", "+00:00")
-                        )
-                        if utcnow() >= exp_dt:
-                            is_expired = True
-                    except (ValueError, TypeError):
-                        is_expired = False
-                if not is_expired:
-                    override_role = str(override.get("override_role") or "owner")
-                    if (
-                        override_role not in _SPORTING_TACTICAL_ROLES
-                        or override_role not in appointed_roles
-                    ):
-                        continue
-
-            rule = assignments.get(activity_key)
-            if not isinstance(rule, dict):
-                continue
-
-            authority_level = str(rule.get("authority_level") or "owner_only")
-            responsible_role = str(rule.get("responsible_role") or "owner")
-            if authority_level not in {"delegated_with_limits", "full_autonomy"}:
-                continue
-            if responsible_role not in _SPORTING_TACTICAL_ROLES:
-                continue
-
-            explicit_delegate_id = rule.get("delegate_user_id") or rule.get("user_id")
-            if explicit_delegate_id == user_id or responsible_role in appointed_roles:
+    states = session.scalars(
+        select(OwnerClubState).where(OwnerClubState.club_id.in_(participating_club_ids))
+    ).all()
+    for state in states:
+        manager = state.manager_json if isinstance(state.manager_json, dict) else {}
+        manager_name = str(manager.get("name") or manager.get("display_name") or "").strip()
+        if manager_name and not manager.get("is_vacant"):
+            if user_id in {
+                str(manager.get("user_id") or ""),
+                str(manager.get("delegate_user_id") or ""),
+            }:
                 return True
 
+        facilities = state.facilities_json if isinstance(state.facilities_json, dict) else {}
+        executive_staff = facilities.get("_executive_staff")
+        if not isinstance(executive_staff, dict):
+            continue
+        for role_key, staff_record in executive_staff.items():
+            if role_key not in _SPORTING_TACTICAL_ROLES or not isinstance(staff_record, dict):
+                continue
+            staff_name = str(staff_record.get("name") or staff_record.get("display_name") or "").strip()
+            if not staff_name or staff_record.get("is_vacant"):
+                continue
+            if user_id in {
+                str(staff_record.get("user_id") or ""),
+                str(staff_record.get("delegate_user_id") or ""),
+            }:
+                return True
     return False
-
 
 def _is_owner_or_manager(
     user: User | None,
@@ -207,12 +156,13 @@ def _is_owner_or_manager(
         pass
 
     try:
-        return _has_sporting_tactical_delegation(
+        return _has_sporting_tactical_staff_appointment(
             str(user.id),
             {str(cid) for cid in participating_club_ids if cid},
             session,
         )
     except Exception:
+        # Any missing, malformed, or unavailable authority record fails closed.
         return False
 
 
