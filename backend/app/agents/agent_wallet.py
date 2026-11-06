@@ -72,9 +72,7 @@ class AgentWalletService:
         return WalletBoostDecision(boost_amount, True, "approved")
 
     def apply_spend(self, wallet: AgentWallet, amount: float) -> AgentWallet:
-        raise RuntimeError(
-            "AgentWallet is a ledger projection only. Use AgentLedgerService for monetary spend."
-        )
+        raise RuntimeError("AgentWallet is a ledger projection only. Use AgentLedgerService for monetary spend.")
 
     def settle(
         self,
