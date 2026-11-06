@@ -566,7 +566,6 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
                     {
                         "id": f"trophy-{idx}",
                         "name": t.get("name") or t.get("trophy_name", "Honour"),
-                        "competition": t.get("competition") or t.get("trophy_name", "Honour"),
                         "competition": t.get("competition") or t.get("competition_source", "GTEX Competition"),
                         "season": t.get("season") or t.get("season_label", "2026"),
                     }
