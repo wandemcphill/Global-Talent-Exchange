@@ -34,6 +34,7 @@ export interface BroadcastOverlayHUDProps {
   homeTeam: SpectatorSafeTeamView;
   awayTeam: SpectatorSafeTeamView;
   matchLabel: string;
+  liveEventBanner?: string;
   isLive?: boolean;
   viewerCount?: number;
   cameraMode: ManualCameraMode;
@@ -58,6 +59,7 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = ({
   homeTeam,
   awayTeam,
   matchLabel,
+  liveEventBanner,
   isLive = true,
   viewerCount,
   cameraMode,
@@ -261,7 +263,7 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = ({
       {/* =====================================================================
           2. CENTER / LOWER-THIRD: Event Toast / Commentary Ticker
           ===================================================================== */}
-      {matchState?.event_banner && (
+      {(liveEventBanner?.trim() || matchState?.event_banner) && (
         <div
           data-testid="broadcast-event-banner"
           className="pointer-events-none mx-auto max-w-lg transform transition-all animate-bounce"
@@ -269,7 +271,7 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = ({
           <div className="flex items-center gap-3 rounded-full border border-amber-400/50 bg-gradient-to-r from-amber-950/95 via-slate-900/95 to-amber-950/95 px-5 py-2.5 shadow-2xl backdrop-blur-md text-white">
             <Sparkles className="size-5 text-amber-400 shrink-0" />
             <div className="text-xs font-bold uppercase tracking-wider text-amber-300">
-              {matchState.event_banner}
+              {liveEventBanner?.trim() || matchState?.event_banner}
             </div>
           </div>
         </div>
