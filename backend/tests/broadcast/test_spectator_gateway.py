@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import redis.asyncio as redis_asyncio
 import time
@@ -14,6 +15,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from app.auth.dependencies import get_current_user
 from app.broadcast.broadcast_models import ScoreUpdate, SpectatorEvent, TournamentEvent
+from app.broadcast.match_room_manager import adapt_match_stream_message
 from app.broadcast.spectator_gateway import (
     AsyncEvalRedisEmulator,
     BroadcastRuntime,
@@ -122,6 +124,106 @@ def test_spectator_gateway_tracks_presence_and_match_events() -> None:
         }
         remaining_viewers = _receive_until_type(first, "viewer_count")
         assert remaining_viewers["snapshot"]["viewer_count"] == 1
+
+
+def test_match_stream_publishers_are_adapted_to_the_spectator_contract() -> None:
+    match_event = adapt_match_stream_message(
+        "match-stream-1",
+        {
+            "message_type": "match_event",
+            "match_id": "match-stream-1",
+            "event_id": "event-9",
+            "sequence": 9,
+            "event_type": "goal",
+            "minute": 63,
+            "clock": "63'",
+            "home_score": 2,
+            "away_score": 1,
+            "team": "Home FC",
+            "player": "Striker",
+            "commentary": "A late goal.",
+            "published_at": "2026-11-06T04:00:00+00:00",
+            "metadata": {"status": "live", "is_penalty": False, "user_id": "private-user"},
+        },
+    )
+    assert match_event is not None
+    assert match_event["type"] == "match_event"
+    assert match_event["match_id"] == "match-stream-1"
+    assert match_event["score_update"]["home_score"] == 2
+    assert match_event["payload"]["event_id"] == "event-9"
+    assert match_event["payload"]["event_type"] == "goal"
+    assert match_event["payload"]["banner_text"] == "A late goal."
+    assert "user_id" not in match_event["payload"]
+
+    ticker_update = adapt_match_stream_message(
+        "match-stream-1",
+        {
+            "type": "live_match_state",
+            "match_id": "match-stream-1",
+            "minute": 72,
+            "phase": "second_half",
+            "home_score": 2,
+            "away_score": 2,
+        },
+    )
+    assert ticker_update == {
+        "type": "score_update",
+        "match_id": "match-stream-1",
+        "score_update": {
+            "home_score": 2,
+            "away_score": 2,
+            "minute": 72,
+            "status": "second_half",
+        },
+    }
+    assert adapt_match_stream_message("another-match", {"message_type": "match_event", "match_id": "match-stream-1"}) is None
+
+
+@pytest.mark.skipif(not os.getenv("REDIS_URL"), reason="requires live Redis")
+def test_match_stream_service_raw_redis_event_reaches_spectator_websocket() -> None:
+    redis_url = os.environ["REDIS_URL"]
+    match_id = f"match-stream-integration-{time.time_ns()}"
+    app = _build_app()
+    app.state.broadcast_runtime.match_room_manager.redis_url = redis_url
+    client = TestClient(app)
+
+    with client.websocket_connect(f"/ws/spectate/{match_id}?display_name=LiveFan") as websocket:
+        _receive_until_type(websocket, "snapshot")
+        _receive_until_type(websocket, "viewer_count")
+
+        async def publish_raw_match_stream_event() -> None:
+            redis = redis_asyncio.Redis.from_url(redis_url, decode_responses=True)
+            channel = f"match:{match_id}:events"
+            for _ in range(40):
+                subscribers = await redis.pubsub_numsub(channel)
+                if subscribers and int(subscribers[0][1]) > 0:
+                    break
+                await asyncio.sleep(0.05)
+            await redis.publish(
+                channel,
+                json.dumps(
+                    {
+                        "message_type": "match_event",
+                        "match_id": match_id,
+                        "event_id": "goal-event-1",
+                        "sequence": 1,
+                        "event_type": "goal",
+                        "minute": 19,
+                        "clock": "19'",
+                        "home_score": 1,
+                        "away_score": 0,
+                        "commentary": "The home side scores.",
+                        "published_at": "2026-11-06T04:00:00+00:00",
+                    }
+                ),
+            )
+            await redis.aclose()
+
+        asyncio.run(publish_raw_match_stream_event())
+        event = _receive_until_type(websocket, "match_event")
+        assert event["payload"]["event_id"] == "goal-event-1"
+        assert event["payload"]["event_type"] == "goal"
+        assert event["score_update"]["home_score"] == 1
 
 
 def test_tournament_gateway_streams_featured_match_updates() -> None:
