@@ -176,7 +176,10 @@ def test_match_stream_publishers_are_adapted_to_the_spectator_contract() -> None
             "status": "second_half",
         },
     }
-    assert adapt_match_stream_message("another-match", {"message_type": "match_event", "match_id": "match-stream-1"}) is None
+    assert (
+        adapt_match_stream_message("another-match", {"message_type": "match_event", "match_id": "match-stream-1"})
+        is None
+    )
 
 
 @pytest.mark.skipif(not os.getenv("REDIS_URL"), reason="requires live Redis")
