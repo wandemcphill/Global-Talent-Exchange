@@ -270,7 +270,7 @@ def test_public_spectator_events_never_expose_account_ids_or_connection_ids_incl
                         "type": "frame",
                         "match_id": "match-privacy-1",
                         "user_id": "leaked-user-99",
-                        "unlisted_root_secret": "must-be-dropped-by-root-allowlist",
+                        "unlisted_root_secret": "must-be-dropped-by-root-allowlist",  # pragma: allowlist secret
                         "payload": {
                             "frame": {"frame_id": "f-200", "time_seconds": 44.0},
                             "user_id": "nested-user-99",
