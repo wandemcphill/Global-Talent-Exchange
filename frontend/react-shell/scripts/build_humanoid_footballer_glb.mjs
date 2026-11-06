@@ -45,7 +45,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(process.env.GTEX_REPO_ROOT || path.join(scriptDir, "../../.."));
 const sourceDir = path.resolve(
   process.env.GTEX_HUMANOID_SOURCE_DIR ||
-    path.join(repoRoot, "Gtex_Test_Migration/Assets/Arts/FootballPlayer")
+    path.join(repoRoot, "Gtex_Test_Migration/Assets/Arts/FootballPlayer"),
 );
 const outDir = path.join(repoRoot, "frontend/react-shell/public/models/footballer");
 const outTexDir = path.join(outDir, "textures");
@@ -54,11 +54,13 @@ const requiredSourceFiles = [
   "PlayerModel/Player_Mobile_Mesh.fbx",
   "Animations/Avatar.fbx",
 ];
-const missingSourceFiles = requiredSourceFiles.filter((file) => !fs.existsSync(path.join(sourceDir, file)));
+const missingSourceFiles = requiredSourceFiles.filter(
+  (file) => !fs.existsSync(path.join(sourceDir, file)),
+);
 if (missingSourceFiles.length > 0) {
   throw new Error(
     `Humanoid source files are missing from ${sourceDir}: ${missingSourceFiles.join(", ")}. ` +
-      "Set GTEX_HUMANOID_SOURCE_DIR to the extracted FootballPlayer source directory."
+      "Set GTEX_HUMANOID_SOURCE_DIR to the extracted FootballPlayer source directory.",
   );
 }
 
@@ -90,7 +92,7 @@ function loadFBX(filePath) {
   const buf = fs.readFileSync(filePath);
   return fbxLoader.parse(
     buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
-    path.dirname(filePath) + "/"
+    path.dirname(filePath) + "/",
   );
 }
 
@@ -135,30 +137,48 @@ for (let i = 0; i < posAttr.count; i++) {
 
   if (boneName === "Head" || boneName === "Neck") {
     if (y > 168.0) {
-      r = 0.12; g = 0.10; b = 0.09; // hair
+      r = 0.12;
+      g = 0.10;
+      b = 0.09; // hair
     } else {
-      r = 0.88; g = 0.68; b = 0.54; // skin
+      r = 0.88;
+      g = 0.68;
+      b = 0.54; // skin
     }
   } else if (
     boneName.includes("ForeArm") ||
     boneName.includes("Hand") ||
     (boneName.includes("Arm") && y < 116.0)
   ) {
-    r = 0.88; g = 0.68; b = 0.54; // forearm/hand skin
+    r = 0.88;
+    g = 0.68;
+    b = 0.54; // forearm/hand skin
   } else if ((boneName === "Hips" && y < 98.0) || (boneName.includes("UpLeg") && y >= 46.0)) {
-    r = 0.96; g = 0.72; b = 0.24; // shorts
+    r = 0.96;
+    g = 0.72;
+    b = 0.24; // shorts
   } else if (boneName.includes("UpLeg") && y < 46.0) {
-    r = 0.88; g = 0.68; b = 0.54; // knee/thigh skin
+    r = 0.88;
+    g = 0.68;
+    b = 0.54; // knee/thigh skin
   } else if (boneName.includes("Leg") && !boneName.includes("UpLeg")) {
     if (y > 24.5) {
-      r = 0.88; g = 0.68; b = 0.54; // knee skin
+      r = 0.88;
+      g = 0.68;
+      b = 0.54; // knee skin
     } else if (y >= 6.8) {
-      r = 0.08; g = 0.78; b = 0.42; // socks
+      r = 0.08;
+      g = 0.78;
+      b = 0.42; // socks
     } else {
-      r = 0.12; g = 0.14; b = 0.18; // boots
+      r = 0.12;
+      g = 0.14;
+      b = 0.18; // boots
     }
   } else if (boneName.includes("Foot") || boneName.includes("Toe")) {
-    r = 0.12; g = 0.14; b = 0.18; // boots
+    r = 0.12;
+    g = 0.14;
+    b = 0.18; // boots
   }
 
   colors[i * 3] = r;
@@ -232,8 +252,12 @@ for (const [name, mb] of meshBonesByName.entries()) {
     const mp1 = new THREE.Vector3().setFromMatrixPosition(meshBonesByName.get(pair[1]).matrixWorld);
     const uDst = mp1.clone().sub(mp0).normalize();
 
-    const ap0 = new THREE.Vector3().setFromMatrixPosition(avatarBonesByName.get(pair[0]).matrixWorld);
-    const ap1 = new THREE.Vector3().setFromMatrixPosition(avatarBonesByName.get(pair[1]).matrixWorld);
+    const ap0 = new THREE.Vector3().setFromMatrixPosition(
+      avatarBonesByName.get(pair[0]).matrixWorld,
+    );
+    const ap1 = new THREE.Vector3().setFromMatrixPosition(
+      avatarBonesByName.get(pair[1]).matrixWorld,
+    );
     const uSrc = ap1.clone().sub(ap0).normalize();
 
     const rPose = new THREE.Quaternion().setFromUnitVectors(uSrc, uDst);
@@ -274,8 +298,16 @@ const mocapSources = [
   { clipName: "mocap_tackled", file: "Animations/Actions/Tackled.fbx" },
   { clipName: "mocap_struggle", file: "Animations/Actions/Struggle.fbx" },
   { clipName: "mocap_throw_in", file: "Animations/Actions/Throw In.fbx" },
-  { clipName: "mocap_gk_idle", file: "Animations/Locomotion/Goalkeeper Idle Normal.fbx", maxDuration: 2.5 },
-  { clipName: "mocap_gk_holding", file: "Animations/Locomotion/Goalkeeper Idle Holding.fbx", maxDuration: 2.2 },
+  {
+    clipName: "mocap_gk_idle",
+    file: "Animations/Locomotion/Goalkeeper Idle Normal.fbx",
+    maxDuration: 2.5,
+  },
+  {
+    clipName: "mocap_gk_holding",
+    file: "Animations/Locomotion/Goalkeeper Idle Holding.fbx",
+    maxDuration: 2.2,
+  },
   { clipName: "mocap_gk_sidestep", file: "Animations/Locomotion/Goalkeeper Sidestep.fbx" },
   { clipName: "mocap_gk_dive_high", file: "Animations/Locomotion/Goalkeeper Diving Save.fbx" },
   { clipName: "mocap_gk_dive_low", file: "Animations/Actions/GK BallSave Low.fbx" },
@@ -359,15 +391,20 @@ function retargetAndResampleClip(rawClip, targetName, maxDuration) {
     const scaledY = avatarHips.position.y * (100.0 / 90.0);
     const clampedX = Math.max(-12, Math.min(12, rawDx));
     const clampedZ = Math.max(-12, Math.min(12, rawDz));
-    hipsPositions.push(Number(clampedX.toFixed(2)), Number(scaledY.toFixed(2)), Number(clampedZ.toFixed(2)));
+    hipsPositions.push(
+      Number(clampedX.toFixed(2)),
+      Number(scaledY.toFixed(2)),
+      Number(clampedZ.toFixed(2)),
+    );
 
     computedWorldQuats.clear();
     for (const b of bones) {
       const ab = avatarBonesByName.get(b.name);
       if (!ab || !quatValuesByBone.has(b.name)) {
-        const parentWq = b.parent && computedWorldQuats.has(b.parent.name)
-          ? computedWorldQuats.get(b.parent.name)
-          : new THREE.Quaternion();
+        const parentWq =
+          b.parent && computedWorldQuats.has(b.parent.name)
+            ? computedWorldQuats.get(b.parent.name)
+            : new THREE.Quaternion();
         computedWorldQuats.set(b.name, parentWq.clone());
         continue;
       }
@@ -408,7 +445,7 @@ function retargetAndResampleClip(rawClip, targetName, maxDuration) {
         Number(localQuat.x.toFixed(4)),
         Number(localQuat.y.toFixed(4)),
         Number(localQuat.z.toFixed(4)),
-        Number(localQuat.w.toFixed(4))
+        Number(localQuat.w.toFixed(4)),
       );
     }
   }
@@ -443,7 +480,9 @@ for (const src of mocapSources) {
   }
 }
 
-console.log(`Compiled and retargeted ${exportedClips.length} mocap clips from Avatar.fbx -> Player_Mobile_Mesh.fbx.`);
+console.log(
+  `Compiled and retargeted ${exportedClips.length} mocap clips from Avatar.fbx -> Player_Mobile_Mesh.fbx.`,
+);
 
 const exporter = new GLTFExporter();
 const outGlbPath = path.join(outDir, "gtex_humanoid_footballer.glb");
@@ -465,18 +504,18 @@ exporter.parse(
           if (c.isSkinnedMesh) verifiedSkinnedMesh = c;
         });
         console.log(
-          `Verified GLB round-trip: SkinnedMesh=${verifiedSkinnedMesh?.name}, vertices=${verifiedSkinnedMesh?.geometry.attributes.position.count}, bones=${verifiedSkinnedMesh?.skeleton.bones.length}, animations=${gltf.animations.length}`
+          `Verified GLB round-trip: SkinnedMesh=${verifiedSkinnedMesh?.name}, vertices=${verifiedSkinnedMesh?.geometry.attributes.position.count}, bones=${verifiedSkinnedMesh?.skeleton.bones.length}, animations=${gltf.animations.length}`,
         );
       },
       (err) => {
         console.error("GLTF verification failed:", err);
         process.exit(1);
-      }
+      },
     );
   },
   (err) => {
     console.error("GLB export failed:", err);
     process.exit(1);
   },
-  { binary: true, animations: exportedClips }
+  { binary: true, animations: exportedClips },
 );
