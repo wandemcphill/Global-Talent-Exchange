@@ -168,10 +168,7 @@ def sanitize_public_spectator_payload(
             )
         return cleaned
     if isinstance(value, list):
-        return [
-            sanitize_public_spectator_payload(item, _is_root=False, _in_snapshot=False)
-            for item in value
-        ]
+        return [sanitize_public_spectator_payload(item, _is_root=False, _in_snapshot=False) for item in value]
     return value
 
 

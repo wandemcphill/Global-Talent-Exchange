@@ -52,7 +52,7 @@ _APP_ENV_VARS = ("GTE_APP_ENV", "APP_ENV", "ENVIRONMENT")
 
 MAX_TICKET_TTL_SECONDS: float = 30.0
 
-_TICKET_QUERY_LOG_RE = re.compile(r'''([?&]ticket=)[^&\s"']+''', re.IGNORECASE)
+_TICKET_QUERY_LOG_RE = re.compile(r"""([?&]ticket=)[^&\s"']+""", re.IGNORECASE)
 _TICKET_JSON_LOG_RE = re.compile(r'("ticket"\s*:\s*")[^"]+(")', re.IGNORECASE)
 
 
@@ -71,13 +71,11 @@ class SpectatorTicketLogRedactionFilter(logging.Filter):
         if record.args:
             if isinstance(record.args, tuple):
                 record.args = tuple(
-                    redact_ticket_from_log_text(arg) if isinstance(arg, str) else arg
-                    for arg in record.args
+                    redact_ticket_from_log_text(arg) if isinstance(arg, str) else arg for arg in record.args
                 )
             elif isinstance(record.args, dict):
                 record.args = {
-                    k: redact_ticket_from_log_text(v) if isinstance(v, str) else v
-                    for k, v in record.args.items()
+                    k: redact_ticket_from_log_text(v) if isinstance(v, str) else v for k, v in record.args.items()
                 }
         return True
 
@@ -360,7 +358,12 @@ class RedisSpectatorTicketStore:
                 str(ttl_ms),
             )
         except (RedisError, OSError, RuntimeError) as exc:
-            logger.error("broadcast.ticket.issue_failed scope=%s:%s error=%s", normalized_scope_type, normalized_scope_id, type(exc).__name__)
+            logger.error(
+                "broadcast.ticket.issue_failed scope=%s:%s error=%s",
+                normalized_scope_type,
+                normalized_scope_id,
+                type(exc).__name__,
+            )
             raise SpectatorTicketStoreError("Failed to persist spectator ticket in Redis.") from exc
 
         return {
@@ -403,7 +406,12 @@ class RedisSpectatorTicketStore:
                 normalized_scope_id,
             )
         except (RedisError, OSError, RuntimeError) as exc:
-            logger.error("broadcast.ticket.redeem_failed scope=%s:%s error=%s", normalized_scope_type, normalized_scope_id, type(exc).__name__)
+            logger.error(
+                "broadcast.ticket.redeem_failed scope=%s:%s error=%s",
+                normalized_scope_type,
+                normalized_scope_id,
+                type(exc).__name__,
+            )
             # Fail closed on Redis errors
             return None
 
@@ -1115,8 +1123,7 @@ def _fallback_display_name(websocket: WebSocket, *, is_authenticated: bool = Fal
     if not is_authenticated:
         normalized = re.sub(r"[^a-z0-9 ]+", " ", cleaned.lower()).strip()
         if normalized in _IMPERSONATION_TOKENS or any(
-            normalized.startswith(f"{tok} ") or normalized.endswith(f" {tok}")
-            for tok in _IMPERSONATION_TOKENS
+            normalized.startswith(f"{tok} ") or normalized.endswith(f" {tok}") for tok in _IMPERSONATION_TOKENS
         ):
             return "Spectator"
     return cleaned

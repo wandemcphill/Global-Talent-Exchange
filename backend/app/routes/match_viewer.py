@@ -80,9 +80,7 @@ def _has_sporting_tactical_staff_appointment(
     """
     from app.owner_console.models import OwnerClubState
 
-    states = session.scalars(
-        select(OwnerClubState).where(OwnerClubState.club_id.in_(participating_club_ids))
-    ).all()
+    states = session.scalars(select(OwnerClubState).where(OwnerClubState.club_id.in_(participating_club_ids))).all()
     for state in states:
         manager = state.manager_json if isinstance(state.manager_json, dict) else {}
         manager_name = str(manager.get("name") or manager.get("display_name") or "").strip()
@@ -109,6 +107,7 @@ def _has_sporting_tactical_staff_appointment(
             }:
                 return True
     return False
+
 
 def _is_owner_or_manager(
     user: User | None,

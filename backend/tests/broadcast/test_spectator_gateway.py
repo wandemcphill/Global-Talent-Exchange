@@ -356,7 +356,9 @@ def test_match_and_tournament_heartbeats_are_connection_specific_and_rate_limite
                     SpectatorEvent(
                         type="score_update",
                         match_id="match-hb-isolation",
-                        score_update=ScoreUpdate(match_id="match-hb-isolation", score="1-0", home_score=1, away_score=0),
+                        score_update=ScoreUpdate(
+                            match_id="match-hb-isolation", score="1-0", home_score=1, away_score=0
+                        ),
                     ),
                     delay_seconds=0,
                 )
@@ -552,6 +554,7 @@ def test_redis_failure_fails_closed_in_production_and_enforces_unauth_and_rate_l
     - Ticket issuance rate limits work (429).
     - Ticket values are redacted from log messages.
     """
+
     class BrokenRedisClient:
         async def eval(self, *args, **kwargs):
             raise RedisError("Simulated production Redis cluster outage")
@@ -575,8 +578,10 @@ def test_redis_failure_fails_closed_in_production_and_enforces_unauth_and_rate_l
 
     # 2. Unauthenticated users cannot obtain authenticated tickets
     unauth_app = _build_app()
+
     def _reject_unauth():
         raise HTTPException(status_code=401, detail="Not authenticated")
+
     unauth_app.dependency_overrides[get_current_user] = _reject_unauth
     unauth_client = TestClient(unauth_app)
     assert unauth_client.post("/matches/match-auth-only/spectate-ticket").status_code == 401
