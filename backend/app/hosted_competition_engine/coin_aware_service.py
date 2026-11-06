@@ -38,8 +38,11 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
         except EconomicPolicyUnavailableError as exc:
             rule = next(iter(AdminEngineService(self.session).list_reward_rules(active_only=True)), None)
             if rule is None:
-                raise HostedCompetitionError(str(exc)) from exc
+                raise HostedCompetitionError(
+                    "No active competition platform fee policy is configured."
+                ) from exc
             from app.economy.economic_policy import EconomicPolicy
+
             return EconomicPolicy(rule=rule, policy_version="legacy-fallback", effective_at=rule.updated_at)
 
     def _active_platform_fee_bps(self) -> int:
@@ -54,7 +57,7 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
             policy = self._active_policy()
             return policy.rule.rule_key, policy.policy_version
         except Exception:
-            return "platform-economy-defaults", "v1" 
+            return "platform-economy-defaults", "v1"
 
     def _frozen_platform_fee_bps(self, competition: UserHostedCompetition) -> int:
         raw = str((competition.metadata_json or {}).get("platform_fee_bps") or "").strip()
