@@ -1,6 +1,10 @@
 name: Temporary PR 384 Prettier formatter
 
 on:
+  pull_request:
+    types: [synchronize]
+    branches:
+      - main
   push:
     branches:
       - gemini/unit-2a-milestone-2-arena-gameplay-readiness
@@ -14,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ github.head_ref || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
