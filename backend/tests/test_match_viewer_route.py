@@ -18,6 +18,7 @@ from app.models.base import Base
 from app.models.competition import UserCompetition
 from app.models.competition_match import CompetitionMatch
 from app.models.fast_match import FastMatchEntitlement, FastMatchSession, FastMatchSettlement
+from app.owner_console.models import OwnerClubState
 from app.replay_archive.persistence import InMemoryReplayArchiveRepository
 from app.replay_archive.policy import SpectatorVisibilityPolicyService
 from app.replay_archive.service import ReplayArchiveService
@@ -48,6 +49,7 @@ def _build_app() -> tuple[FastAPI, sessionmaker[Session]]:
             FastMatchEntitlement.__table__,
             FastMatchSettlement.__table__,
             FastMatchSession.__table__,
+            OwnerClubState.__table__,
         ],
     )
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
@@ -446,3 +448,127 @@ def test_match_viewer_session_reveals_segments_progressively_without_seed_or_ful
     continued_payload = continued.json()
     assert continued_payload["segment_start_seconds"] == initial_payload["segment_end_seconds"]
     assert continued_payload["segment_end_seconds"] > initial_payload["segment_end_seconds"]
+
+
+def test_match_viewer_spectator_security_enforces_coach_notes_redaction() -> None:
+    """Only owners and currently appointed tactical staff on participating clubs see coach notes."""
+    from app.auth.dependencies import get_optional_current_user
+    from app.owner_console.models import OwnerClubState
+
+    app, session_factory = _build_app()
+    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=77))
+    base_view = MatchTimelineService().build_from_replay_payload(replay_payload)
+
+    with session_factory() as session:
+        session.add(
+            UserCompetition(
+                id="competition-sec",
+                host_user_id="host-user-sec",
+                name="Security Test Cup",
+                format="league",
+                currency="coin",
+                metadata_json={},
+            )
+        )
+        session.add(
+            CompetitionMatch(
+                id=replay_payload.match_id,
+                competition_id="competition-sec",
+                round_id="round-1",
+                round_number=1,
+                home_club_id="club-apex",
+                away_club_id="club-rival",
+                status="completed",
+                metadata_json={
+                    "match_viewer": base_view.model_dump(mode="json"),
+                    "replay_payload": replay_payload.model_dump(mode="json"),
+                },
+            )
+        )
+        session.add(
+            OwnerClubState(
+                club_id="club-apex",
+                owner_user_id="owner-user-apex",
+                club_name="Apex Lagos",
+            )
+        )
+        session.add(
+            OwnerClubState(
+                club_id="club-other",
+                owner_user_id="owner-user-third-party",
+                club_name="Third Party FC",
+                manager_json={
+                    "name": "Coach Other",
+                    "delegate_user_id": "delegate-other-club",
+                },
+            )
+        )
+        session.commit()
+
+    def assert_coach_notes(user_id: str | None, expected: bool) -> None:
+        app.dependency_overrides[get_optional_current_user] = (
+            (lambda: None)
+            if user_id is None
+            else (lambda uid=user_id: SimpleNamespace(id=uid, is_admin=False, is_super_admin=False))
+        )
+        with TestClient(app) as client:
+            response = client.get(f"/api/match-viewer/{replay_payload.match_id}")
+        assert response.status_code == 200
+        notes = response.json()["presentation_package"]["coach_notes"]
+        assert bool(notes) is expected, f"Unexpected coach_notes visibility for {user_id!r}"
+
+    # A public viewer and an unrelated authenticated fan receive no confidential notes.
+    assert_coach_notes(None, False)
+    assert_coach_notes("random-fan-42", False)
+
+    with session_factory() as session:
+        apex_state = session.query(OwnerClubState).filter_by(club_id="club-apex").one()
+        apex_state.manager_json = {
+            "name": "Coach Finidi",
+            "user_id": "manager-user-apex",
+            "delegate_user_id": "delegate-tactical-mgr",
+            "rating": 82,
+        }
+        apex_state.facilities_json = {
+            "_executive_staff": {
+                "medical_director": {
+                    "name": "Dr. Bello",
+                    "user_id": "delegate-medical-only",
+                    "rating": 80,
+                },
+                "chief_scout": {
+                    "name": "Scout Kalu",
+                    "user_id": "delegate-scout-only",
+                    "rating": 79,
+                },
+            }
+        }
+        session.commit()
+
+    # An owner or staff member from a club not playing in this match has no access.
+    assert_coach_notes("owner-user-third-party", False)
+    assert_coach_notes("delegate-other-club", False)
+
+    # Medical and scouting appointments are not tactical appointments.
+    assert_coach_notes("delegate-medical-only", False)
+    assert_coach_notes("delegate-scout-only", False)
+
+    # The appointed manager and the explicitly recorded manager delegate may see notes.
+    assert_coach_notes("manager-user-apex", True)
+    assert_coach_notes("delegate-tactical-mgr", True)
+
+    # Replacing the current appointment immediately revokes the former delegate's access.
+    with session_factory() as session:
+        apex_state = session.query(OwnerClubState).filter_by(club_id="club-apex").one()
+        apex_state.manager_json = {
+            "name": "New Coach",
+            "user_id": "manager-user-new",
+            "delegate_user_id": "delegate-tactical-new",
+        }
+        session.commit()
+
+    assert_coach_notes("delegate-tactical-mgr", False)
+    assert_coach_notes("delegate-tactical-new", True)
+
+    # The club owner retains authority after staff changes.
+    assert_coach_notes("owner-user-apex", True)

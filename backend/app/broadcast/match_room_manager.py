@@ -5,6 +5,7 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 import json
 import logging
+import re
 from typing import Any
 from uuid import uuid4
 
@@ -17,6 +18,159 @@ from app.core.event_backbone import make_json_safe
 
 logger = logging.getLogger(__name__)
 
+_CAMEL_BOUNDARY_RE = re.compile(r"([a-z0-9])([A-Z])")
+
+
+def _canonical_field_name(raw_key: str) -> str:
+    s = _CAMEL_BOUNDARY_RE.sub(r"\1_\2", str(raw_key).strip())
+    return re.sub(r"[\s\-]+", "_", s).lower()
+
+
+_EMPTY_LIST_CANONICAL_KEYS: frozenset[str] = frozenset(
+    {
+        "coach_notes",
+        "active_user_ids",
+        "active_users",
+        "viewer_user_ids",
+        "connected_user_ids",
+    }
+)
+
+_CONFIDENTIAL_CANONICAL_KEYS: frozenset[str] = frozenset(
+    {
+        "internal_tactics",
+        "confidential_tactics",
+        "opponent_exploit_notes",
+        "deterministic_seed",
+        "user_id",
+        "account_id",
+        "owner_id",
+        "owner_user_id",
+        "host_user_id",
+        "actor_user_id",
+        "sender_user_id",
+        "viewer_id",
+        "viewer_ids",
+        "connection_id",
+        "client_id",
+        "socket_id",
+        "ws_id",
+        "session_id",
+        "token",
+        "access_token",
+        "refresh_token",
+        "auth_token",
+        "bearer",
+        "ticket",
+        "ticket_id",
+        "ticket_hash",
+        "email",
+        "phone",
+        "ip_address",
+    }
+)
+
+_CONFIDENTIAL_CANONICAL_SUFFIXES: tuple[str, ...] = (
+    "_user_id",
+    "_user_ids",
+    "_account_id",
+    "_account_ids",
+    "_connection_id",
+    "_connection_ids",
+    "_client_id",
+    "_client_ids",
+    "_socket_id",
+    "_ws_id",
+    "_session_id",
+    "_token",
+    "_ticket",
+)
+
+_ALLOWED_PUBLIC_EVENT_ROOT_KEYS: frozenset[str] = frozenset(
+    {
+        "type",
+        "match_id",
+        "tournament_id",
+        "event_id",
+        "occurred_at",
+        "sequence",
+        "user_id",
+        "display_name",
+        "reaction",
+        "message",
+        "snapshot",
+        "score_update",
+        "featured_match_id",
+        "standings",
+        "payload",
+    }
+)
+
+_ALLOWED_PUBLIC_SNAPSHOT_KEYS: frozenset[str] = frozenset(
+    {
+        "match_id",
+        "viewer_count",
+        "peak_viewers",
+        "active_user_ids",
+        "is_live",
+        "featured",
+        "score_update",
+        "metadata",
+    }
+)
+
+
+def _is_forbidden_identifier_key(canonical: str) -> bool:
+    if canonical in _CONFIDENTIAL_CANONICAL_KEYS:
+        return True
+    return any(canonical.endswith(suffix) for suffix in _CONFIDENTIAL_CANONICAL_SUFFIXES)
+
+
+def sanitize_public_spectator_payload(
+    value: Any,
+    *,
+    _is_root: bool = True,
+    _in_snapshot: bool = False,
+) -> Any:
+    """
+    Recursively sanitizes public spectator payloads using:
+    1. Explicit structural allowlists at the event root and snapshot boundaries.
+    2. Case-insensitive / camelCase-aware redaction of all account IDs, connection IDs,
+       session/auth tokens, and confidential coaching tactics in nested payloads.
+    """
+    if isinstance(value, dict):
+        cleaned: dict[str, Any] = {}
+        for k, v in value.items():
+            key_str = str(k)
+            canonical = _canonical_field_name(key_str)
+
+            if _is_root and key_str not in _ALLOWED_PUBLIC_EVENT_ROOT_KEYS:
+                continue
+            if _in_snapshot and key_str not in _ALLOWED_PUBLIC_SNAPSHOT_KEYS:
+                continue
+
+            if canonical in _EMPTY_LIST_CANONICAL_KEYS:
+                cleaned["active_user_ids" if "user" in canonical else "coach_notes"] = []
+                continue
+
+            if canonical == "user_id":
+                if _is_root:
+                    cleaned["user_id"] = None
+                continue
+
+            if _is_forbidden_identifier_key(canonical):
+                continue
+
+            cleaned[key_str] = sanitize_public_spectator_payload(
+                v,
+                _is_root=False,
+                _in_snapshot=(canonical == "snapshot"),
+            )
+        return cleaned
+    if isinstance(value, list):
+        return [sanitize_public_spectator_payload(item, _is_root=False, _in_snapshot=False) for item in value]
+    return value
+
 
 @dataclass(eq=False, slots=True)
 class RoomClient:
@@ -26,6 +180,7 @@ class RoomClient:
     queue: asyncio.Queue[dict[str, Any]]
     user_id: str | None = None
     display_name: str | None = None
+    message_timestamps: list[float] = field(default_factory=list)
 
     def __hash__(self) -> int:
         return hash(self.connection_id)
@@ -218,8 +373,10 @@ class MatchRoomManager:
 
     def _normalize_message(self, message: dict[str, Any] | BaseModel) -> dict[str, Any]:
         if isinstance(message, BaseModel):
-            return dict(message.model_dump(mode="json"))
-        return dict(make_json_safe(message))
+            raw_dict = dict(message.model_dump(mode="json"))
+        else:
+            raw_dict = dict(make_json_safe(message))
+        return sanitize_public_spectator_payload(raw_dict)
 
     def _resolved_delay(self, payload: dict[str, Any]) -> float:
         message_type = str(payload.get("type") or "").strip().lower()
