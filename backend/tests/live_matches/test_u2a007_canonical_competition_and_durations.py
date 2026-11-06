@@ -36,7 +36,6 @@ from app.models.user import User
 from app.routes.match_viewer import router as match_viewer_router
 from app.schemas.match_viewer import MatchMode
 from app.services.competition_auto_runner import CompetitionAutoRunner
-from app.services.match_viewer_scaling_service import MatchViewerScalingService
 from backend.tests.support.secrets import MEDIA_SIGNING_TEST_SECRET, TEST_AUTH_SECRET
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
