@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.admin_engine.service import AdminEngineService
-from app.economy.economic_policy import EconomicPolicyUnavailableError, resolve_economic_policy
+from app.economy.economic_policy import resolve_economic_policy
 from app.economy.pricing_engine import PricingEngine, ServicePriceQuote
 from app.models.base import generate_uuid
 from app.models.user import User
