@@ -92,21 +92,21 @@ const mockStaffData = {
       name: "Finidi George",
       tactical_flexibility: 82,
       personal_agenda: "Win Silverware Now & Demand Tactical Autonomy",
-      secret_trait: "Touchline Firebrand",
+      secret_trait: "Touchline Firebrand", // pragma: allowlist secret — fictional staff-trait test fixture, not a credential
       poaching_risk: "low",
     },
     general_manager: {
       name: "Sunday Oliseh",
       tactical_flexibility: 84,
       personal_agenda: "Build a Self-Sustaining Trading & Commercial Empire",
-      secret_trait: "Ruthless Release-Clause Shark",
+      secret_trait: "Ruthless Release-Clause Shark", // pragma: allowlist secret — fictional staff-trait test fixture, not a credential
       poaching_risk: "low",
     },
     head_of_youth_development: {
       name: "Emmanuel Amuneke",
       tactical_flexibility: 86,
       personal_agenda: "Golden Generation Purist (50%+ Academy XI)",
-      secret_trait: "Favorite-Son Wonderkid Bias",
+      secret_trait: "Favorite-Son Wonderkid Bias", // pragma: allowlist secret — fictional staff-trait test fixture, not a credential
       poaching_risk: "low",
     },
     chief_scout: null,
