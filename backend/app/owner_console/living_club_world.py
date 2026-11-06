@@ -1285,8 +1285,7 @@ def _evaluate_directive_completion(
     # Dynamic tactical values are recorded as "check:value"; all other checks
     # must match exactly. Unrelated department changes cannot satisfy this directive.
     matched_checks = [
-        check for check in matched_checks
-        if check == required_check or check.startswith(f"{required_check}:")
+        check for check in matched_checks if check == required_check or check.startswith(f"{required_check}:")
     ]
     is_fulfilled = bool(matched_checks)
     progress_pct = 100 if is_fulfilled else 0
