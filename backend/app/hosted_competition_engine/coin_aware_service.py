@@ -38,9 +38,7 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
         except EconomicPolicyUnavailableError as exc:
             rule = next(iter(AdminEngineService(self.session).list_reward_rules(active_only=True)), None)
             if rule is None:
-                raise HostedCompetitionError(
-                    "No active competition platform fee policy is configured."
-                ) from exc
+                raise HostedCompetitionError("No active competition platform fee policy is configured.") from exc
             from app.economy.economic_policy import EconomicPolicy
 
             return EconomicPolicy(rule=rule, policy_version="legacy-fallback", effective_at=rule.updated_at)
