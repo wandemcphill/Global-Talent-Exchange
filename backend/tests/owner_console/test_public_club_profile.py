@@ -360,3 +360,22 @@ def test_public_club_profile_direct_service(app_session_factory):
 
         dossier_by_slug = public_club_profile(session, club.slug)
         assert dossier_by_slug["club"]["id"] == club_id
+
+
+def test_public_club_profile_does_not_infer_stadium_capacity_from_facility_level(app_session_factory):
+    from app.services.club_public_profile_service import public_club_profile
+
+    with app_session_factory() as session:
+        _, club_id = _seed_public_club(session)
+        stadium = session.query(ClubStadium).filter_by(club_id=club_id).one()
+        session.delete(stadium)
+        session.flush()
+
+        state = session.query(OwnerClubState).filter_by(club_id=club_id).one()
+        state.facilities_json = {**(state.facilities_json or {}), "stadium": 4}
+        session.flush()
+
+        dossier = public_club_profile(session, club_id)
+
+        assert dossier["stadium"]["level"] == 4
+        assert dossier["stadium"]["capacity"] is None
