@@ -32,6 +32,14 @@ module.exports = [
       ],
     },
   },
+  // Files ending in .mjs are ECMAScript modules by definition. Keep this
+  // override separate so legacy .js and .cjs files retain script parsing.
+  {
+    files: ["**/*.mjs"],
+    languageOptions: {
+      sourceType: "module",
+    },
+  },
   // Playwright's browser suites are native ES modules. Keeping this narrow
   // prevents their `import` syntax from being parsed as CommonJS while the
   // repository's older JavaScript configuration remains unchanged.
