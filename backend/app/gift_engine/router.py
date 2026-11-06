@@ -152,6 +152,20 @@ def _map_transaction(item: GiftTransaction) -> GiftTransactionView:
         competition_id=item.competition_id,
         source_scope=item.source_scope,
         ledger_unit=item.ledger_unit.value,
+        source_ledger_unit=(
+            item.source_ledger_unit.value
+            if hasattr(item.source_ledger_unit, "value")
+            else str(item.source_ledger_unit or "credit")
+        ),
+        destination_ledger_unit=(
+            item.destination_ledger_unit.value
+            if hasattr(item.destination_ledger_unit, "value")
+            else str(item.destination_ledger_unit or "coin")
+        ),
+        economic_conversion_id=item.economic_conversion_id,
+        conversion_rate=item.conversion_rate if hasattr(item, "conversion_rate") else Decimal("1.0000"),
+        fee_policy_rule_key=(item.metadata_json or {}).get("fee_policy_rule_key"),
+        fee_policy_version=(item.metadata_json or {}).get("fee_policy_version"),
         currency_label="Fan Coin" if item.ledger_unit.value == "credit" else "GTEX Coin",
         ledger_transaction_id=item.ledger_transaction_id,
         wallet_debit_ledger_id=item.wallet_debit_ledger_id,
@@ -241,6 +255,11 @@ def _apply_admin_catalog_fields(
     if price is not None:
         item.fancoin_price = price
     if payload.currency is not None:
+        if payload.currency.strip().lower() in {"coin", "gtex_coin"}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="GTEX Coin cannot be used as a gift catalog currency. Gifts must use FanCoin/credit.",
+            )
         item.currency = payload.currency
     if payload.rarity is not None:
         item.rarity = payload.rarity

@@ -38,6 +38,7 @@ class WalletSettlementDecision:
     quality_score: float
     trust_score: float
     decay_multiplier: float
+    payout_eligible: bool = False
 
 
 class AgentWalletService:
@@ -84,8 +85,22 @@ class AgentWalletService:
         trust_score: float,
         repetition_ratio: float,
     ) -> tuple[AgentWallet, WalletSettlementDecision]:
-        raise RuntimeError(
-            "AgentWallet is a ledger projection only. Use AgentLedgerService for settlement and explicit payout authorization."
+        from app.agents.ledger_service import AgentLedgerService
+
+        decision = AgentLedgerService().evaluate_settlement(
+            earnings=earnings,
+            quality_score=quality_score,
+            trust_score=trust_score,
+            repetition_ratio=repetition_ratio,
+        )
+        return wallet, WalletSettlementDecision(
+            realized_earnings=decision.realized_earnings,
+            approved=decision.approved,
+            reason=decision.reason,
+            quality_score=decision.quality_score,
+            trust_score=decision.trust_score,
+            decay_multiplier=decision.decay_multiplier,
+            payout_eligible=False,
         )
 
     @staticmethod

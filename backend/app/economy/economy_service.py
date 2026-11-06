@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.admin_engine.service import AdminEngineService
+from app.economy.economic_policy import EconomicPolicyUnavailableError, resolve_economic_policy
 from app.economy.pricing_engine import PricingEngine, ServicePriceQuote
 from app.models.base import generate_uuid
 from app.models.user import User
@@ -389,14 +390,22 @@ class EconomyService:
     def _resolve_match_entry_fee_bps(self, fee_bps: int | None) -> int:
         if fee_bps is not None:
             return self._validate_fee_bps(fee_bps)
-        rule = AdminEngineService(self.session).get_active_reward_rule()
-        return self._validate_fee_bps(rule.competition_platform_fee_bps if rule is not None else 1000)
+        try:
+            policy = resolve_economic_policy(self.session)
+            return self._validate_fee_bps(policy.competition_platform_fee_bps)
+        except Exception:
+            rule = AdminEngineService(self.session).get_active_reward_rule()
+            return self._validate_fee_bps(rule.competition_platform_fee_bps if rule is not None else 1000)
 
     def _resolve_marketplace_fee_bps(self, fee_bps: int | None) -> int:
         if fee_bps is not None:
             return self._validate_fee_bps(fee_bps)
-        rule = AdminEngineService(self.session).get_active_reward_rule()
-        return self._validate_fee_bps(rule.trading_fee_bps if rule is not None else 2000)
+        try:
+            policy = resolve_economic_policy(self.session)
+            return self._validate_fee_bps(policy.trading_fee_bps)
+        except Exception:
+            rule = AdminEngineService(self.session).get_active_reward_rule()
+            return self._validate_fee_bps(rule.trading_fee_bps if rule is not None else 2000)
 
     def _build_fee_quote(
         self,

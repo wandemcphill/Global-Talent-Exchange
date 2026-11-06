@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from fastapi import FastAPI
 from sqlalchemy import create_engine, event, select
@@ -17,8 +18,9 @@ from app.agents.models import (
 )
 from app.core.events import DomainEvent, InMemoryEventPublisher
 from app.models.base import Base
-from app.models.event_backbone import EventOutbox
+from app.models.wallet import LedgerEntryReason, LedgerUnit
 from app.viral.ranking_service import InMemoryViralLeaderboardStore
+from app.wallets.service import LedgerPosting, WalletService
 
 
 def _moment_payload(*, moment_id: str = "moment-1", event_type: str = "goal", final_score: float = 2.4) -> dict[str, object]:
@@ -58,19 +60,33 @@ def _build_manager(*, config: AgentRuntimeConfig) -> tuple[CreatorAgentManager, 
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
 
-    Base.metadata.create_all(
-        engine,
-        tables=[
-            AgentRecord.__table__,
-            AgentStrategyRecord.__table__,
-            AgentLearningStateRecord.__table__,
-            AgentWalletRecord.__table__,
-            AgentPerformanceLogRecord.__table__,
-            EventOutbox.__table__,
-        ],
-    )
-    app.state.session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    app.state.session_factory = session_factory
     app.state.event_publisher = publisher
+
+    # Fund the system rewards pool so agent earnings settlement can succeed
+    with session_factory() as seed_session:
+        wallet = WalletService()
+        rewards_pool = wallet.ensure_rewards_pool_account(seed_session, LedgerUnit.COIN)
+        clearing = wallet.ensure_named_system_account(
+            seed_session,
+            code="test:coin:rewards_funding",
+            label="Test Rewards Funding",
+            unit=LedgerUnit.COIN,
+            allow_negative=True,
+        )
+        wallet.append_transaction(
+            seed_session,
+            postings=[
+                LedgerPosting(account=clearing, amount=-Decimal("10000.0000")),
+                LedgerPosting(account=rewards_pool, amount=Decimal("10000.0000")),
+            ],
+            reason=LedgerEntryReason.ADJUSTMENT,
+            reference="seed-test-agent-rewards",
+        )
+        seed_session.commit()
+
     manager = CreatorAgentManager(
         app=app,
         event_publisher=publisher,
@@ -175,6 +191,7 @@ def test_manager_learning_updates_wallet_and_strategy_after_performance_feedback
     assert receipt.reward > 0.0
     assert receipt.average_reward > 0.0
     assert receipt.balance > 0.0
+    assert receipt.payout_eligible is False
     assert agent.profile.strategy.avg_duration <= initial_duration
     assert agent.learning_state.preferred_formats[result.primary_format] > 0.0
 
@@ -259,5 +276,17 @@ def test_manager_persists_agent_state_and_performance_logs_across_restart() -> N
 
     assert len(logs) == 1
     assert logs[0].clip_id == result.clip_id
-    assert logs[0].payout_eligible is True
+    assert logs[0].payout_eligible is False
     assert logs[0].quality_score > 0.0
+
+    # Explicit authorization moves payout_eligible to True
+    assert restored.authorize_payout(agent_id=agent_id, clip_id=result.clip_id) is True
+    with app.state.session_factory() as session:
+        log_after = session.scalar(
+            select(AgentPerformanceLogRecord).where(
+                AgentPerformanceLogRecord.agent_id == agent_id,
+                AgentPerformanceLogRecord.clip_id == result.clip_id,
+            )
+        )
+        assert log_after is not None
+        assert log_after.payout_eligible is True

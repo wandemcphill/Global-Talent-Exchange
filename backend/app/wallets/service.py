@@ -911,6 +911,8 @@ class WalletService:
         extra_meta: dict[str, object] | None = None,
         idempotency_key: str | None = None,
     ) -> WithdrawalRequestResult:
+        if unit is not LedgerUnit.COIN and str(unit) != LedgerUnit.COIN.value:
+            raise LedgerError("FanCoin is never withdrawable. Withdrawal requests must use GTEX Coin.")
         normalized_amount = self._normalize_amount(amount)
         if normalized_amount <= Decimal("0.0000"):
             raise LedgerError("Withdrawal amount must be positive.")

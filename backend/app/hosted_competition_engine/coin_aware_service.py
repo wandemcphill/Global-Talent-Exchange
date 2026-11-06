@@ -5,6 +5,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 
 from app.admin_engine.service import AdminEngineService
+from app.economy.economic_policy import EconomicPolicyUnavailableError, resolve_economic_policy
 from app.economy.competition_funding_policy import (
     CompetitionFundingMode,
     CompetitionFundingPolicyError,
@@ -31,14 +32,29 @@ from app.wallets.service import InsufficientBalanceError
 class CoinAwareHostedCompetitionService(HostedCompetitionService):
     """Hosted competition service with the Phase A funding constitution enforced."""
 
+    def _active_policy(self):
+        try:
+            return resolve_economic_policy(self.session)
+        except EconomicPolicyUnavailableError as exc:
+            rule = next(iter(AdminEngineService(self.session).list_reward_rules(active_only=True)), None)
+            if rule is None:
+                raise HostedCompetitionError(str(exc)) from exc
+            from app.economy.economic_policy import EconomicPolicy
+            return EconomicPolicy(rule=rule, policy_version="legacy-fallback", effective_at=rule.updated_at)
+
     def _active_platform_fee_bps(self) -> int:
-        rule = next(iter(AdminEngineService(self.session).list_reward_rules(active_only=True)), None)
-        if rule is None:
-            raise HostedCompetitionError("No active competition platform fee policy is configured.")
-        fee_bps = int(rule.competition_platform_fee_bps)
+        policy = self._active_policy()
+        fee_bps = int(policy.competition_platform_fee_bps)
         if fee_bps < 0 or fee_bps > 3000:
             raise HostedCompetitionError("Configured competition platform fee is outside the allowed policy range.")
         return fee_bps
+
+    def _policy_provenance(self) -> tuple[str, str]:
+        try:
+            policy = self._active_policy()
+            return policy.rule.rule_key, policy.policy_version
+        except Exception:
+            return "platform-economy-defaults", "v1" 
 
     def _frozen_platform_fee_bps(self, competition: UserHostedCompetition) -> int:
         raw = str((competition.metadata_json or {}).get("platform_fee_bps") or "").strip()
@@ -82,8 +98,11 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
                 gtex_hosted=gtex_hosted,
             )
             metadata = dict(competition.metadata_json or {})
+            rule_key, policy_ver = self._policy_provenance()
             metadata["funding_mode"] = mode.value
             metadata["platform_fee_bps"] = self._active_platform_fee_bps()
+            metadata["fee_policy_rule_key"] = rule_key
+            metadata["fee_policy_version"] = policy_ver
             metadata["platform_fee_policy_frozen"] = True
             competition.funding_mode = mode
             competition.metadata_json = metadata
@@ -119,6 +138,7 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
 
         max_participants = int(payload.max_participants or template.participants)
         platform_fee_bps = self._active_platform_fee_bps()
+        rule_key, policy_ver = self._policy_provenance()
         platform_fee = self._normalize_amount(gross_prize * Decimal(platform_fee_bps) / Decimal("10000"))
         net_prize = self._normalize_amount(gross_prize - platform_fee)
         if net_prize <= Decimal("0.0000"):
@@ -158,6 +178,8 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
                 "gross_prize_coin": str(gross_prize),
                 "net_prize_coin": str(net_prize),
                 "platform_fee_bps": platform_fee_bps,
+                "fee_policy_rule_key": rule_key,
+                "fee_policy_version": policy_ver,
                 "platform_fee_policy_frozen": True,
             },
             status=HostedCompetitionStatus.OPEN,
