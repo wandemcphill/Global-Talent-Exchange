@@ -5,6 +5,7 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 import json
 import logging
+import re
 from typing import Any
 from uuid import uuid4
 
@@ -17,6 +18,241 @@ from app.core.event_backbone import make_json_safe
 
 logger = logging.getLogger(__name__)
 
+_CAMEL_BOUNDARY_RE = re.compile(r"([a-z0-9])([A-Z])")
+
+
+def _canonical_field_name(raw_key: str) -> str:
+    s = _CAMEL_BOUNDARY_RE.sub(r"\1_\2", str(raw_key).strip())
+    return re.sub(r"[\s\-]+", "_", s).lower()
+
+
+_EMPTY_LIST_CANONICAL_KEYS: frozenset[str] = frozenset(
+    {
+        "coach_notes",
+        "active_user_ids",
+        "active_users",
+        "viewer_user_ids",
+        "connected_user_ids",
+    }
+)
+
+_CONFIDENTIAL_CANONICAL_KEYS: frozenset[str] = frozenset(
+    {
+        "internal_tactics",
+        "confidential_tactics",
+        "opponent_exploit_notes",
+        "deterministic_seed",
+        "user_id",
+        "account_id",
+        "owner_id",
+        "owner_user_id",
+        "host_user_id",
+        "actor_user_id",
+        "sender_user_id",
+        "viewer_id",
+        "viewer_ids",
+        "connection_id",
+        "client_id",
+        "socket_id",
+        "ws_id",
+        "session_id",
+        "token",
+        "access_token",
+        "refresh_token",
+        "auth_token",
+        "bearer",
+        "ticket",
+        "ticket_id",
+        "ticket_hash",
+        "email",
+        "phone",
+        "ip_address",
+    }
+)
+
+_CONFIDENTIAL_CANONICAL_SUFFIXES: tuple[str, ...] = (
+    "_user_id",
+    "_user_ids",
+    "_account_id",
+    "_account_ids",
+    "_connection_id",
+    "_connection_ids",
+    "_client_id",
+    "_client_ids",
+    "_socket_id",
+    "_ws_id",
+    "_session_id",
+    "_token",
+    "_ticket",
+)
+
+_ALLOWED_PUBLIC_EVENT_ROOT_KEYS: frozenset[str] = frozenset(
+    {
+        "type",
+        "match_id",
+        "tournament_id",
+        "event_id",
+        "occurred_at",
+        "sequence",
+        "user_id",
+        "display_name",
+        "reaction",
+        "message",
+        "snapshot",
+        "score_update",
+        "featured_match_id",
+        "standings",
+        "payload",
+    }
+)
+
+_ALLOWED_PUBLIC_SNAPSHOT_KEYS: frozenset[str] = frozenset(
+    {
+        "match_id",
+        "viewer_count",
+        "peak_viewers",
+        "active_user_ids",
+        "is_live",
+        "featured",
+        "score_update",
+        "metadata",
+    }
+)
+
+
+def _is_forbidden_identifier_key(canonical: str) -> bool:
+    if canonical in _CONFIDENTIAL_CANONICAL_KEYS:
+        return True
+    return any(canonical.endswith(suffix) for suffix in _CONFIDENTIAL_CANONICAL_SUFFIXES)
+
+
+def sanitize_public_spectator_payload(
+    value: Any,
+    *,
+    _is_root: bool = True,
+    _in_snapshot: bool = False,
+) -> Any:
+    """
+    Recursively sanitizes public spectator payloads using:
+    1. Explicit structural allowlists at the event root and snapshot boundaries.
+    2. Case-insensitive / camelCase-aware redaction of all account IDs, connection IDs,
+       session/auth tokens, and confidential coaching tactics in nested payloads.
+    """
+    if isinstance(value, dict):
+        cleaned: dict[str, Any] = {}
+        for k, v in value.items():
+            key_str = str(k)
+            canonical = _canonical_field_name(key_str)
+
+            if _is_root and key_str not in _ALLOWED_PUBLIC_EVENT_ROOT_KEYS:
+                continue
+            if _in_snapshot and key_str not in _ALLOWED_PUBLIC_SNAPSHOT_KEYS:
+                continue
+
+            if canonical in _EMPTY_LIST_CANONICAL_KEYS:
+                cleaned["active_user_ids" if "user" in canonical else "coach_notes"] = []
+                continue
+
+            if canonical == "user_id":
+                if _is_root:
+                    cleaned["user_id"] = None
+                continue
+
+            if _is_forbidden_identifier_key(canonical):
+                continue
+
+            cleaned[key_str] = sanitize_public_spectator_payload(
+                v,
+                _is_root=False,
+                _in_snapshot=(canonical == "snapshot"),
+            )
+        return cleaned
+    if isinstance(value, list):
+        return [sanitize_public_spectator_payload(item, _is_root=False, _in_snapshot=False) for item in value]
+    return value
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def adapt_match_stream_message(match_id: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Translate production Redis match publishers into the spectator WebSocket contract.
+
+    MatchStreamService publishes a raw match_event envelope, while LiveMatchTicker
+    publishes a wrapped live_match_state message. Both share this Redis channel.
+    """
+    source_match_id = str(payload.get("match_id") or "").strip()
+    if source_match_id and source_match_id != match_id:
+        return None
+
+    message_type = str(payload.get("type") or payload.get("message_type") or "").strip().lower()
+    if message_type == "live_match_state":
+        return {
+            "type": "score_update",
+            "match_id": match_id,
+            "score_update": {
+                "home_score": _safe_int(payload.get("home_score")),
+                "away_score": _safe_int(payload.get("away_score")),
+                "minute": _safe_int(payload.get("minute")),
+                "status": str(payload.get("phase") or "live"),
+            },
+        }
+
+    if message_type != "match_event":
+        return None
+
+    event_id = str(payload.get("event_id") or "").strip()
+    event_type = str(payload.get("event_type") or "").strip()
+    if not event_id or not event_type:
+        return None
+
+    metadata = payload.get("metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    minute = _safe_int(payload.get("minute"))
+    home_score = _safe_int(payload.get("home_score"))
+    away_score = _safe_int(payload.get("away_score"))
+    commentary = str(payload.get("commentary") or payload.get("source_commentary") or "").strip()
+    event_payload: dict[str, Any] = {
+        "event_id": event_id,
+        "sequence": _safe_int(payload.get("sequence")) if payload.get("sequence") is not None else None,
+        "event_type": event_type,
+        "minute": minute,
+        "added_time": 0,
+        "clock_label": str(payload.get("clock") or f"{minute}'"),
+        "home_score": home_score,
+        "away_score": away_score,
+        "banner_text": commentary or event_type.replace("_", " ").upper(),
+        "commentary": commentary or None,
+        "team_id": payload.get("team_id"),
+        "team_name": payload.get("team"),
+        "primary_player_id": payload.get("player_id"),
+        "primary_player_name": payload.get("player"),
+        "secondary_player_id": payload.get("secondary_player_id"),
+        "secondary_player_name": payload.get("secondary_player"),
+        "flags": ["penalty"] if metadata.get("is_penalty") else [],
+    }
+    event_payload = {key: value for key, value in event_payload.items() if value is not None}
+
+    score_update = {
+        "home_score": home_score,
+        "away_score": away_score,
+        "minute": minute,
+        "status": str(metadata.get("status") or "live"),
+    }
+    return {
+        "type": "match_event",
+        "match_id": match_id,
+        "event_id": event_id,
+        "sequence": event_payload.get("sequence"),
+        "occurred_at": payload.get("published_at"),
+        "score_update": score_update,
+        "payload": event_payload,
+    }
+
 
 @dataclass(eq=False, slots=True)
 class RoomClient:
@@ -26,6 +262,7 @@ class RoomClient:
     queue: asyncio.Queue[dict[str, Any]]
     user_id: str | None = None
     display_name: str | None = None
+    message_timestamps: list[float] = field(default_factory=list)
 
     def __hash__(self) -> int:
         return hash(self.connection_id)
@@ -168,10 +405,17 @@ class MatchRoomManager:
                     envelope = json.loads(raw_payload)
                 except json.JSONDecodeError:
                     continue
+                if not isinstance(envelope, dict):
+                    continue
                 if str(envelope.get("instance_id") or "") == self.instance_id:
                     continue
                 payload = envelope.get("message")
                 if not isinstance(payload, dict):
+                    payload = envelope
+                adapted = adapt_match_stream_message(match_id, payload)
+                if adapted is not None:
+                    payload = adapted
+                elif not isinstance(envelope.get("message"), dict):
                     continue
                 await self.broadcast(match_id, payload, delay_seconds=self._resolved_delay(payload))
         except asyncio.CancelledError:
@@ -218,8 +462,10 @@ class MatchRoomManager:
 
     def _normalize_message(self, message: dict[str, Any] | BaseModel) -> dict[str, Any]:
         if isinstance(message, BaseModel):
-            return dict(message.model_dump(mode="json"))
-        return dict(make_json_safe(message))
+            raw_dict = dict(message.model_dump(mode="json"))
+        else:
+            raw_dict = dict(make_json_safe(message))
+        return sanitize_public_spectator_payload(raw_dict)
 
     def _resolved_delay(self, payload: dict[str, Any]) -> float:
         message_type = str(payload.get("type") or "").strip().lower()

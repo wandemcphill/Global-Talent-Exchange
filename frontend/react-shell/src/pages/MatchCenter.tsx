@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -31,10 +31,13 @@ import {
   VolumeX,
   Zap,
 } from "lucide-react";
-import { api, errMsg } from "@/lib/api";
+import { api, errMsg, tokens } from "@/lib/api";
 import { useActiveClub, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Loading, Panel } from "@/components/gtex/ui";
 import { Cinema3DStage, Cinema3DSceneType } from "@/components/gtex/Cinema3DStage";
+import { MatchPitchLiveScene } from "@/lib/3d/broadcast/MatchPitchLiveScene";
+import { useMatchSpectatorStream } from "@/lib/3d/broadcast/useMatchSpectatorStream";
+import { loadFiveMinuteShowcaseFixture } from "@/lib/3d/broadcast/showcaseLoader";
 import { HolographicPlayerCard } from "@/components/gtex/ApexWidgets";
 import { MatchdayLineupBroadcast, useClubMatchdaySheet, type MatchdaySquadMember } from "@/components/gtex/MatchdayLineupBroadcast";
 import { useSkin } from "@/lib/skin-engine";
@@ -1967,32 +1970,135 @@ export default function MatchCenter() {
   const clubId = params.get("club") || activeClub?.club_id || "";
   const { getModuleView, setModuleView } = useSkin();
   const matchView = getModuleView("match_center");
+  // 3D WebGL Broadcast View vs 2D Tactical Pitch View Toggle & Full-Screen 16:9 Match Theatre
+  const [view3DBroadcast, setView3DBroadcast] = useState<boolean>(true);
+  const [isTheatreMode, setIsTheatreMode] = useState<boolean>(
+    params.get("theatre") === "1" || params.get("theatre") === "true"
+  );
+
+  const modeParam = params.get("mode");
+  const durationParam = params.get("duration");
+  const showcaseDurationSec = Number(durationParam) > 0 ? Number(durationParam) : 300;
+  const viewerQuerySuffix = useMemo(() => {
+    const q = new URLSearchParams();
+    if (modeParam) q.set("mode", modeParam);
+    if (durationParam) q.set("target_duration_seconds", durationParam);
+    const qs = q.toString();
+    return qs ? `?${qs}` : "";
+  }, [modeParam, durationParam]);
+
+  const { data: viewerData, refetch: refetchViewerData } = useQuery({
+    queryKey: ["match-viewer", id, modeParam, durationParam],
+    queryFn: async () => {
+      if (id === "u2a-006-showcase") {
+        return await loadFiveMinuteShowcaseFixture(showcaseDurationSec);
+      }
+      try {
+        return (await api.get(`/match-viewer/${id}${viewerQuerySuffix}`)).data;
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!id,
+    retry: false,
+  });
+
   const { data: m, isLoading } = useQuery({
-    queryKey: ["match", id],
-    queryFn: async () => (await api.get(`/owner/matches/${id}`)).data,
+    queryKey: ["match", id, modeParam, durationParam],
+    queryFn: async () => {
+      if (id === "u2a-006-showcase") {
+        const showcase = await loadFiveMinuteShowcaseFixture(showcaseDurationSec);
+        if (!showcase) return null;
+        return {
+          match_id: showcase.match_id,
+          id: showcase.match_id,
+          home_club_id: showcase.home_team.team_id,
+          away_club_id: showcase.away_team.team_id,
+          home_name: showcase.home_team.team_name,
+          away_name: showcase.away_team.team_name,
+          venue_name: showcase.venue_name,
+          status: "LIVE",
+          round: 1,
+          events: showcase.events,
+          frames: showcase.frames,
+          home_team: showcase.home_team,
+          away_team: showcase.away_team,
+          duration_seconds: (showcase as any).duration_seconds ?? showcaseDurationSec,
+        };
+      }
+      try {
+        return (await api.get(`/owner/matches/${id}`)).data;
+      } catch {
+        const viewer = (await api.get(`/match-viewer/${id}${viewerQuerySuffix}`)).data;
+        if (viewer && viewer.match_id) {
+          return {
+            match_id: viewer.match_id,
+            id: viewer.match_id,
+            home_club_id: viewer.home_team?.team_id || "home-club",
+            away_club_id: viewer.away_team?.team_id || "away-club",
+            home_name: viewer.home_team?.team_name || "Home XI",
+            away_name: viewer.away_team?.team_name || "Away XI",
+            venue_name: viewer.venue_name || "GTEX National Arena",
+            status: "LIVE",
+            round: 1,
+            events: viewer.events || [],
+            frames: viewer.frames || [],
+            home_team: viewer.home_team,
+            away_team: viewer.away_team,
+            duration_seconds: viewer.duration_seconds,
+          };
+        }
+        throw new Error("Match not found");
+      }
+    },
     enabled: !!id,
   });
 
   const { data: liveState } = useQuery({
     queryKey: ["match-live-state", id],
-    queryFn: async () => (await api.get(`/matches/${id}/state`)).data,
+    queryFn: async () => {
+      try {
+        return (await api.get(`/matches/${id}/state`)).data;
+      } catch {
+        return null;
+      }
+    },
     refetchInterval: (query) => {
       const data = query.state.data;
-      if (!data) return 2500;
+      if (!data) return false;
       return data.phase === "full_time" || data.status === "FT" ? false : 2500;
     },
-    enabled: !!id,
+    enabled: !!id && id !== "u2a-006-showcase",
+    retry: false,
+  });
+
+  const isViewerAuthenticated = Boolean(tokens.get());
+  const requestSpectatorTicket = useCallback(async (targetMatchId: string): Promise<string | null> => {
+    const res = await api.post(`/matches/${encodeURIComponent(targetMatchId)}/spectate-ticket`);
+    return res.data?.ticket ?? null;
+  }, []);
+
+  const spectatorStream = useMatchSpectatorStream({
+    matchId: id || "",
+    enabled: Boolean(id && id !== "u2a-006-showcase" && (params.get("live") || view3DBroadcast)),
+    isAuthenticated: isViewerAuthenticated,
+    requestTicket: isViewerAuthenticated ? requestSpectatorTicket : undefined,
+    onResyncRequired: () => {
+      refetchViewerData();
+    },
   });
 
   // Clock & Playback Controls
   const [localMinute, setLocalMinute] = useState(params.get("live") ? 0 : 120);
   const [isPaused, setIsPaused] = useState(false);
-  const [speed, setSpeed] = useState(1.0);
+  const [speed, setSpeed] = useState(Number(params.get("speed")) || 1.0);
   const [audioAtmosphere, setAudioAtmosphere] = useState(false);
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<"pitch" | "lineups" | "tactics" | "pre_match" | "post_match" | "commentary">("pitch");
-  const [showKickoffLineups, setShowKickoffLineups] = useState<boolean>(Boolean(params.get("live")));
+  const [showKickoffLineups, setShowKickoffLineups] = useState<boolean>(
+    Boolean(params.get("live") && params.get("dismissWalkout") !== "1")
+  );
 
   // Pitch Overlay & Camera Perspective Toggles
   const [showHeatmap, setShowHeatmap] = useState(false);
@@ -2353,6 +2459,38 @@ export default function MatchCenter() {
                 ))}
               </div>
 
+              {/* 3D WebGL Broadcast / 2D Tactical Toggle & 16:9 Match Theatre Launch */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  data-testid="toggle-3d-broadcast-mode"
+                  onClick={() => setView3DBroadcast(!view3DBroadcast)}
+                  className={`flex items-center gap-1.5 rounded-sm px-2.5 py-1 text-[10px] font-black tracking-wider transition-colors ${
+                    view3DBroadcast
+                      ? "border border-cyan-400/60 bg-cyan-500/25 text-cyan-200"
+                      : "bg-white/5 text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <Tv size={11} className={view3DBroadcast ? "text-cyan-400" : "text-slate-400"} />
+                  <span>{view3DBroadcast ? "3D BROADCAST" : "2D PITCH"}</span>
+                </button>
+                <button
+                  type="button"
+                  data-testid="enter-match-theatre-button"
+                  onClick={() => {
+                    setView3DBroadcast(true);
+                    setIsTheatreMode((t) => !t);
+                  }}
+                  className={`flex items-center gap-1.5 rounded-sm px-2.5 py-1 text-[10px] font-black tracking-wider transition-colors ${
+                    isTheatreMode
+                      ? "border border-emerald-400 bg-emerald-500 text-slate-950"
+                      : "border border-emerald-400/50 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25"
+                  }`}
+                >
+                  <span>{isTheatreMode ? "EXIT 16:9 THEATRE" : "16:9 MATCH THEATRE"}</span>
+                </button>
+              </div>
+
               {/* Spatial Shaders + Event-Driven 3D Cut-In Triggers */}
               <div className="flex flex-wrap items-center gap-1.5">
                 <button
@@ -2435,32 +2573,52 @@ export default function MatchCenter() {
               </div>
             )}
 
-            {/* Pitch View */}
-            <Pitch2DView
-              selectedPlayer={selectedPlayer}
-              onSelectPlayer={setSelectedPlayer}
-              showHeatmap={showHeatmap}
-              showTactics={showTactics}
-              showLanes={showLanes}
-              showVoronoi={showVoronoi}
-              cameraMode={cameraMode}
-              ballOwner={null}
-              pitchPlayers={liveState?.pitch_players}
-              ball={liveState?.ball}
-              activeGift={activeGift}
-              formation={formation}
-              press={press}
-              line={line}
-              tempo={tempo}
-              minute={minute}
-              homeName={m.home_name}
-              awayName={m.away_name}
-              show3DCutIn={show3DCutIn}
-              cutInScene={cutInScene}
-              onClose3DCutIn={() => setShow3DCutIn(false)}
-              homeRoster={homeSheetState.sheet.starters}
-              awayRoster={awaySheetState.sheet.starters}
-            />
+            {/* 3D WebGL Live Match Broadcast Canvas or 2D Pitch Fallback */}
+            {view3DBroadcast ? (
+              <MatchPitchLiveScene
+                matchViewState={viewerData || m}
+                isLive={Boolean(params.get("live"))}
+                viewerCount={spectatorStream.viewerCount}
+                qualityTier={(params.get("tier") as any) || (params.get("quality") as any) || "high"}
+                playbackSpeed={speed}
+                isPaused={isPaused}
+                liveFrame={spectatorStream.lastFrame}
+                liveEvents={spectatorStream.recentEvents}
+                liveScore={spectatorStream.latestScore}
+                isTheatreMode={isTheatreMode}
+                onToggleTheatreMode={() => setIsTheatreMode((t) => !t)}
+                onToggle2DCompanion={() => {
+                  setIsTheatreMode(false);
+                  setView3DBroadcast(false);
+                }}
+              />
+            ) : (
+              <Pitch2DView
+                selectedPlayer={selectedPlayer}
+                onSelectPlayer={setSelectedPlayer}
+                showHeatmap={showHeatmap}
+                showTactics={showTactics}
+                showLanes={showLanes}
+                showVoronoi={showVoronoi}
+                cameraMode={cameraMode}
+                ballOwner={null}
+                pitchPlayers={liveState?.pitch_players}
+                ball={liveState?.ball}
+                activeGift={activeGift}
+                formation={formation}
+                press={press}
+                line={line}
+                tempo={tempo}
+                minute={minute}
+                homeName={m.home_name}
+                awayName={m.away_name}
+                show3DCutIn={show3DCutIn}
+                cutInScene={cutInScene}
+                onClose3DCutIn={() => setShow3DCutIn(false)}
+                homeRoster={homeSheetState.sheet.starters}
+                awayRoster={awaySheetState.sheet.starters}
+              />
+            )}
           </div>
         )}
 
