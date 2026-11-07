@@ -183,13 +183,26 @@ class OwnerCompetitionLifecycleMappingService:
             active_fixture_mapping_count += len(active_fixture_links)
             unmapped_legacy_fixture_count += len(unmapped_fixtures)
 
-            canonical_fixture_count = 0
-            if canonical is not None:
-                canonical_fixture_count = len(
+            canonical_matches = (
+                list(
                     self.session.scalars(
                         select(CompetitionMatch).where(CompetitionMatch.competition_id == canonical.id)
                     ).all()
                 )
+                if canonical is not None
+                else []
+            )
+            canonical_fixture_ids = {match.id for match in canonical_matches}
+            mapped_canonical_fixture_ids = {
+                link.canonical_match_id for link in active_fixture_links
+            }
+            dangling_fixture_mapping_count = len(
+                mapped_canonical_fixture_ids - canonical_fixture_ids
+            )
+            unmapped_canonical_fixture_count = len(
+                canonical_fixture_ids - mapped_canonical_fixture_ids
+            )
+            canonical_fixture_count = len(canonical_matches)
 
             reasons: list[str] = []
             if not is_active_mapping:
@@ -200,20 +213,10 @@ class OwnerCompetitionLifecycleMappingService:
                 reasons.append("legacy_historical_results_must_be_preserved")
             if unmapped_fixtures:
                 reasons.append("legacy_fixtures_require_explicit_review")
-            if (
-                canonical is not None
-                and canonical_fixture_count != len(active_fixture_links) + len(
-                    [
-                        match
-                        for match in competition_legacy_matches
-                        if match.id in mapped_legacy_match_ids
-                    ]
-                )
-            ):
-                # Counts are intentionally reported, not treated as an automatic
-                # one-to-one assertion: canonical competitions may have fixtures
-                # that have no legacy owner-console counterpart.
-                reasons.append("canonical_and_legacy_fixture_counts_need_review")
+            if dangling_fixture_mapping_count:
+                reasons.append("fixture_mapping_references_missing_canonical_fixtures")
+            if unmapped_canonical_fixture_count:
+                reasons.append("canonical_fixtures_without_legacy_owner_records_need_review")
 
             rows.append(
                 {
@@ -235,6 +238,8 @@ class OwnerCompetitionLifecycleMappingService:
                     "canonical_status": str(canonical.status) if canonical is not None else None,
                     "canonical_fixture_count": canonical_fixture_count,
                     "active_fixture_mapping_count": len(active_fixture_links),
+                    "unmapped_canonical_fixture_count": unmapped_canonical_fixture_count,
+                    "dangling_fixture_mapping_count": dangling_fixture_mapping_count,
                     "unmapped_legacy_fixture_ids": [match.id for match in unmapped_fixtures],
                     "operator_review_reasons": reasons,
                     "automatic_reconciliation": False,
@@ -255,6 +260,12 @@ class OwnerCompetitionLifecycleMappingService:
                 "legacy_historical_results": historical_result_count,
                 "active_fixture_mappings": active_fixture_mapping_count,
                 "unmapped_legacy_fixtures": unmapped_legacy_fixture_count,
+                "unmapped_canonical_fixtures": sum(
+                    int(row["unmapped_canonical_fixture_count"]) for row in rows
+                ),
+                "dangling_fixture_mappings": sum(
+                    int(row["dangling_fixture_mapping_count"]) for row in rows
+                ),
             },
             "competitions": rows,
         }
