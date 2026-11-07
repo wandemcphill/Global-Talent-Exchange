@@ -131,6 +131,8 @@ def _build_synthetic_canonical_entities() -> dict[str, object]:
 
 
 def _build_canonical_competition_test_env():
+    environment_keys = ("GTE_AUTH_SECRET", "GTE_MEDIA_SIGNING_SECRET", "DATABASE_URL")
+    original_environment = {key: os.environ.get(key) for key in environment_keys}
     os.environ["GTE_AUTH_SECRET"] = TEST_AUTH_SECRET
     os.environ["GTE_MEDIA_SIGNING_SECRET"] = MEDIA_SIGNING_TEST_SECRET
     os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
@@ -152,6 +154,17 @@ def _build_canonical_competition_test_env():
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     app.state.session_factory = session_factory
+
+    def _cleanup_test_environment():
+        engine.dispose()
+        for key, original_value in original_environment.items():
+            if original_value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = original_value
+        reset_settings_cache()
+
+    app.state.cleanup_test_environment = _cleanup_test_environment
 
     def _override_session():
         with session_factory() as session:
@@ -303,7 +316,7 @@ def _seed_canonical_competition_fixture(
     return competition, fixture
 
 
-def test_u2a007_canonical_competition_match_and_exact_durations():
+def test_u2a007_canonical_competition_match_and_exact_durations(request):
     """
     Validates Sections 6 & 7 of U2A-007:
     - Real GTEX competition (`West Africa Elite Circuit`), registered clubs (`Lagos Atlas FC` vs `Rio Norte SC`),
@@ -314,6 +327,7 @@ def test_u2a007_canonical_competition_match_and_exact_durations():
     """
     canonical_data = _build_synthetic_canonical_entities()
     app, session_factory = _build_canonical_competition_test_env()
+    request.addfinalizer(app.state.cleanup_test_environment)
 
     with session_factory() as session:
         competition, fixture = _seed_canonical_competition_fixture(session, canonical_data)
