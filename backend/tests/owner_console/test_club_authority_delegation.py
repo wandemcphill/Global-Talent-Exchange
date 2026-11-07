@@ -864,8 +864,6 @@ def test_policy_change_rolls_back_when_outbox_publish_fails(client, bootstrap_ad
         session.rollback()
 
     with app.state.session_factory() as session:
-        persisted_policy = session.scalar(
-            select(ClubDelegationPolicy).where(ClubDelegationPolicy.club_id == club_id)
-        )
+        persisted_policy = session.scalar(select(ClubDelegationPolicy).where(ClubDelegationPolicy.club_id == club_id))
         assert persisted_policy is not None
         assert persisted_policy.mode == "balanced"
