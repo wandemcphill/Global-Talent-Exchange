@@ -22,6 +22,49 @@ import {
   SpectatorSafePlayerTelemetry,
 } from "./spectatorContract";
 
+
+/**
+ * Advances the local broadcast cursor without jumping over intermediate match
+ * frames after a delayed render callback. A short bounded step is used for the
+ * delayed callback itself; subsequent live frames may catch up at up to 2x,
+ * while preserving a sequence of observable interpolation states.
+ */
+export function calculateTimelineAdvanceSeconds(args: {
+  currentTimeSeconds: number;
+  frameDeltaMs: number;
+  latestFrameTimeSeconds: number;
+  isLive: boolean;
+  playbackSpeed?: number;
+}): number {
+  const {
+    currentTimeSeconds,
+    frameDeltaMs,
+    latestFrameTimeSeconds,
+    isLive,
+    playbackSpeed = 1,
+  } = args;
+
+  if (!Number.isFinite(currentTimeSeconds) || !Number.isFinite(frameDeltaMs)) {
+    return 0;
+  }
+
+  const elapsedSeconds = Math.min(0.1, Math.max(0, frameDeltaMs) / 1000);
+  const speed = Number.isFinite(playbackSpeed) ? Math.max(0, playbackSpeed) : 1;
+
+  // Do not accelerate the same callback that reveals a large frame gap.
+  // Catch-up begins on normal subsequent render frames so no large time jump
+  // can skip the authoritative frames/events between the old and latest time.
+  if (!isLive || frameDeltaMs >= 250 || !Number.isFinite(latestFrameTimeSeconds)) {
+    return elapsedSeconds * speed;
+  }
+
+  const backlogSeconds = Math.max(0, latestFrameTimeSeconds - currentTimeSeconds);
+  const catchUpMultiplier =
+    backlogSeconds > 0.5 ? Math.min(2, 1 + backlogSeconds * 0.1) : 1;
+
+  return elapsedSeconds * speed * catchUpMultiplier;
+}
+
 export interface InterpolatedPlayerState {
   player_id: string;
   team_id: string;

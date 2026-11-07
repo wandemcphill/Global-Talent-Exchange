@@ -1,4 +1,4 @@
-import { SpatialInterpolator } from "./SpatialInterpolator";
+import { calculateTimelineAdvanceSeconds, SpatialInterpolator } from "./SpatialInterpolator";
 import { SpectatorSafeFrameView } from "./spectatorContract";
 import { PITCH_BOUNDS } from "./matchCoordinates";
 
@@ -147,4 +147,54 @@ describe("SpatialInterpolator", () => {
     expect(transition?.players[0].position3D[0]).toBeLessThanOrEqual(PITCH_BOUNDS.maxX);
     expect(transition?.players[0].position3D[0]).toBeGreaterThanOrEqual(PITCH_BOUNDS.minX);
   });
+  test("catches up after a large render gap without skipping intermediate authoritative event frames", () => {
+    const eventFrames: SpectatorSafeFrameView[] = [
+      frame0,
+      { ...frame0, frame_id: "event-frame-1", time_seconds: 11, active_event_id: "event-1" },
+      { ...frame0, frame_id: "event-frame-2", time_seconds: 12, active_event_id: "event-2" },
+      { ...frame0, frame_id: "event-frame-3", time_seconds: 13, active_event_id: "event-3" },
+    ];
+    const interpolator = new SpatialInterpolator(eventFrames);
+    const latestFrameTimeSeconds = 13;
+    let cursor = 10;
+
+    // The delayed callback itself is deliberately bounded and cannot jump to
+    // the end of the newly available authoritative frame buffer.
+    const delayedFrameAdvance = calculateTimelineAdvanceSeconds({
+      currentTimeSeconds: cursor,
+      frameDeltaMs: 5000,
+      latestFrameTimeSeconds,
+      isLive: true,
+    });
+    expect(delayedFrameAdvance).toBeLessThanOrEqual(0.1);
+    cursor += delayedFrameAdvance;
+    expect(cursor).toBeLessThan(11);
+
+    const observedEventIds: string[] = [];
+    let previousEventId: string | null | undefined;
+    let iterations = 0;
+
+    while (cursor < latestFrameTimeSeconds && iterations < 400) {
+      const advance = calculateTimelineAdvanceSeconds({
+        currentTimeSeconds: cursor,
+        frameDeltaMs: 1000 / 60,
+        latestFrameTimeSeconds,
+        isLive: true,
+      });
+      expect(advance).toBeGreaterThan(0);
+      expect(advance).toBeLessThanOrEqual(0.034);
+      cursor = Math.min(latestFrameTimeSeconds, cursor + advance);
+
+      const eventId = interpolator.interpolate(cursor)?.active_event_id;
+      if (eventId && eventId !== previousEventId) {
+        observedEventIds.push(eventId);
+        previousEventId = eventId;
+      }
+      iterations += 1;
+    }
+
+    expect(cursor).toBe(latestFrameTimeSeconds);
+    expect(observedEventIds).toEqual(["event-1", "event-2", "event-3"]);
+  });
+
 });
