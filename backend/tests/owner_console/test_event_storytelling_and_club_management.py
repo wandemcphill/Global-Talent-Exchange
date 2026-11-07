@@ -1270,3 +1270,15 @@ def test_global_competition_reconciliation_report_is_read_only_and_preserves_his
         assert historical_match.played_at == datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
         assert scheduled_match.status == "scheduled"
         assert scheduled_match.played_at is None
+
+
+def test_competition_reconciliation_report_is_admin_only(client, bootstrap_admin_headers):
+    endpoint = "/api/owner/admin/competitions/reconciliation-report"
+
+    anonymous_response = client.get(endpoint)
+    assert anonymous_response.status_code in {401, 403}
+
+    admin_response = client.get(endpoint, headers=bootstrap_admin_headers)
+    assert admin_response.status_code == 200, admin_response.text
+    assert admin_response.json()["mode"] == "read_only"
+    assert admin_response.json()["automatic_reconciliation"] is False
