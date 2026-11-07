@@ -14,6 +14,13 @@ from app.owner_console.models import (
 )
 
 
+@pytest.fixture
+def bootstrap_admin_headers(auth_user_factory):
+    """Provides a fresh, isolated owner account with dedicated headers for each test."""
+    owner = auth_user_factory(account_type="user")
+    return owner["headers"]
+
+
 def _claim_and_activate(client, headers, city: str = "Lagos") -> str:
     resp = client.post("/api/owner/clubs/claim", headers=headers, json={"city_name": city, "country_code": "NG"})
     assert resp.status_code == 200, resp.text
