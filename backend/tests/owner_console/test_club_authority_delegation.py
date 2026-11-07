@@ -661,9 +661,7 @@ def test_ten_security_scenarios_and_financial_integrity(client, bootstrap_admin_
     with app.state.session_factory() as session:
         ledger_count_after = (
             session.scalar(
-                select(func.count(ClubFinanceLedgerEntry.id)).where(
-                    ClubFinanceLedgerEntry.club_id == club_id
-                )
+                select(func.count(ClubFinanceLedgerEntry.id)).where(ClubFinanceLedgerEntry.club_id == club_id)
             )
             or 0
         )

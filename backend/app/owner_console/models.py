@@ -430,6 +430,7 @@ class OwnerClubDirective(UUIDPrimaryKeyMixin, Base):
         DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
     )
 
+
 class ClubDelegationPolicy(UUIDPrimaryKeyMixin, Base):
     """Authoritative club responsibility and owner delegation policy."""
 

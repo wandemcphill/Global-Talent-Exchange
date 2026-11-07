@@ -209,6 +209,7 @@ def _build_default_assignments(mode: str) -> dict[str, dict[str, Any]]:
 # 2. Policy Management & State Queries
 # ==============================================================================
 
+
 def get_or_create_delegation_policy(session: Session, club_id: str, owner_user_id: str) -> ClubDelegationPolicy:
     """Retrieves or initializes the authoritative delegation policy for a club."""
     _require_club_owner(session, club_id, owner_user_id)

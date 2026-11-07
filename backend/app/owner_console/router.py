@@ -1598,7 +1598,9 @@ def get_club_authority_escalations(
                 "proposed_by_staff_name": d.proposed_by_staff_name,
                 "title": d.title,
                 "summary": d.summary,
-                "financial_amount_gtex": float(d.financial_amount_gtex) if d.financial_amount_gtex is not None else None,
+                "financial_amount_gtex": (
+                    float(d.financial_amount_gtex) if d.financial_amount_gtex is not None else None
+                ),
                 "approval_reason": d.approval_reason,
                 "status": d.status,
                 "payload": d.payload_json,
