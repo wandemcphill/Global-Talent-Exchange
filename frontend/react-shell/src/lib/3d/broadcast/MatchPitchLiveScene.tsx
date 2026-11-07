@@ -31,6 +31,7 @@ import type { DeviceQualityTier } from "../GtexSceneTypes";
 import { StadiumArenaEnvironment } from "./StadiumArenaEnvironment";
 import { HumanoidFootballerRig } from "./HumanoidFootballerRig";
 import { FootballAnimationStateMachine } from "./FootballAnimationStateMachine";
+import { gtexAudio } from "@/lib/audio";
 
 export interface SpectatorLiveScoreUpdate {
   home_score: number;
@@ -212,6 +213,18 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   useEffect(() => {
     cameraDirector.setManualMode(cameraMode);
   }, [cameraMode, cameraDirector]);
+
+  // Coordinate Match Atmosphere Audio with central GtexAudioManager
+  useEffect(() => {
+    if (!audioMuted) {
+      gtexAudio.registerActiveChannelSource("ambience", "match_pitch_live_atmosphere");
+    } else {
+      gtexAudio.unregisterActiveChannelSource("ambience", "match_pitch_live_atmosphere");
+    }
+    return () => {
+      gtexAudio.unregisterActiveChannelSource("ambience", "match_pitch_live_atmosphere");
+    };
+  }, [audioMuted]);
 
   // ---------------------------------------------------------------------------
   // Three.js WebGL Scene Lifecycle

@@ -7,13 +7,14 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.admin_engine.service import AdminEngineService
+from app.economy.economic_policy import resolve_economic_policy
 from app.economy.pricing_engine import PricingEngine, ServicePriceQuote
 from app.models.base import generate_uuid
 from app.models.user import User
 from app.models.wallet import LedgerAccount, LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
 from app.wallets.service import LedgerPosting, WalletService
 
-AMOUNT_QUANTUM = Decimal('0.0001')
+AMOUNT_QUANTUM = Decimal("0.0001")
 
 
 class EconomyServiceError(ValueError):
@@ -153,10 +154,12 @@ class EconomyService:
             quantity=quantity,
             fee_bps=fee_bps,
         )
-        resolved_reference = reference or f'match-entry:{generate_uuid()}'
+        resolved_reference = reference or f"match-entry:{generate_uuid()}"
         resolved_external_reference = external_reference or resolved_reference
         user_account = self.wallet_service.get_user_account(self.session, user, payment_unit)
-        resolved_destination = destination_account or self.wallet_service.ensure_match_pool_account(self.session, payment_unit)
+        resolved_destination = destination_account or self.wallet_service.ensure_match_pool_account(
+            self.session, payment_unit
+        )
         resolved_fee_account = fee_account or self.wallet_service.ensure_match_fee_account(self.session, payment_unit)
         resolved_fee_tag = fee_source_tag or source_tag
         resolved_treasury_share_bps = max(0, min(10_000, int(treasury_share_bps or 0)))
@@ -180,7 +183,7 @@ class EconomyService:
                 transaction_type=LedgerTransactionType.MATCH_ENTRY_FEE,
             ),
         ]
-        if destination_amount > Decimal('0.0000'):
+        if destination_amount > Decimal("0.0000"):
             postings.append(
                 LedgerPosting(
                     account=resolved_destination,
@@ -198,7 +201,7 @@ class EconomyService:
                     transaction_type=LedgerTransactionType.MATCH_ENTRY_FEE,
                 )
             )
-        if quote.fee_amount > Decimal('0.0000'):
+        if quote.fee_amount > Decimal("0.0000"):
             postings.append(
                 LedgerPosting(
                     account=resolved_fee_account,
@@ -210,18 +213,18 @@ class EconomyService:
 
         metadata_payload = dict(metadata or {})
         metadata_payload.setdefault(
-            'match_entry',
+            "match_entry",
             {
-                'service_key': service_key,
-                'quantity': str(quantity),
-                'payment_unit': payment_unit.value,
-                'gross_amount': str(quote.gross_amount),
-                'fee_bps': quote.fee_bps,
-                'fee_amount': str(quote.fee_amount),
-                'net_amount': str(quote.net_amount),
-                'treasury_share_bps': resolved_treasury_share_bps,
-                'treasury_amount': str(treasury_amount),
-                'destination_amount': str(destination_amount),
+                "service_key": service_key,
+                "quantity": str(quantity),
+                "payment_unit": payment_unit.value,
+                "gross_amount": str(quote.gross_amount),
+                "fee_bps": quote.fee_bps,
+                "fee_amount": str(quote.fee_amount),
+                "net_amount": str(quote.net_amount),
+                "treasury_share_bps": resolved_treasury_share_bps,
+                "treasury_amount": str(treasury_amount),
+                "destination_amount": str(destination_amount),
             },
         )
         entries = self.wallet_service.append_transaction(
@@ -231,7 +234,7 @@ class EconomyService:
             source_tag=source_tag,
             reference=resolved_reference,
             external_reference=resolved_external_reference,
-            description=description or 'Match entry payment',
+            description=description or "Match entry payment",
             actor=actor or user,
             idempotency_key=idempotency_key,
             transaction_type=LedgerTransactionType.MATCH_ENTRY_FEE,
@@ -246,7 +249,7 @@ class EconomyService:
             fee_amount=quote.fee_amount,
             net_amount=quote.net_amount,
             destination_account_code=resolved_destination.code,
-            fee_account_code=resolved_fee_account.code if quote.fee_amount > Decimal('0.0000') else None,
+            fee_account_code=resolved_fee_account.code if quote.fee_amount > Decimal("0.0000") else None,
             treasury_amount=treasury_amount,
             treasury_account_code=resolved_treasury_account.code if resolved_treasury_account is not None else None,
             service_key=service_key,
@@ -298,7 +301,7 @@ class EconomyService:
             unit=unit,
             fee_bps=fee_bps,
         )
-        resolved_reference = reference or f'marketplace:{generate_uuid()}'
+        resolved_reference = reference or f"marketplace:{generate_uuid()}"
         resolved_external_reference = external_reference or resolved_reference
         buyer_account = self.wallet_service.get_user_account(self.session, buyer, unit)
         seller_account = self.wallet_service.get_user_account(self.session, seller, unit)
@@ -323,7 +326,7 @@ class EconomyService:
                 transaction_type=LedgerTransactionType.TRADE_SELL,
             ),
         ]
-        if quote.fee_amount > Decimal('0.0000'):
+        if quote.fee_amount > Decimal("0.0000"):
             postings.append(
                 LedgerPosting(
                     account=resolved_fee_account,
@@ -335,13 +338,13 @@ class EconomyService:
 
         metadata_payload = dict(metadata or {})
         metadata_payload.setdefault(
-            'marketplace',
+            "marketplace",
             {
-                'gross_amount': str(quote.gross_amount),
-                'fee_bps': quote.fee_bps,
-                'fee_amount': str(quote.fee_amount),
-                'seller_net_amount': str(quote.seller_net_amount),
-                'unit': unit.value,
+                "gross_amount": str(quote.gross_amount),
+                "fee_bps": quote.fee_bps,
+                "fee_amount": str(quote.fee_amount),
+                "seller_net_amount": str(quote.seller_net_amount),
+                "unit": unit.value,
             },
         )
         entries = self.wallet_service.append_transaction(
@@ -350,7 +353,7 @@ class EconomyService:
             reason=self.wallet_service.trade_settlement_reason,
             reference=resolved_reference,
             external_reference=resolved_external_reference,
-            description=description or 'Marketplace settlement',
+            description=description or "Marketplace settlement",
             actor=actor or buyer,
             idempotency_key=idempotency_key,
             metadata=metadata_payload,
@@ -365,7 +368,7 @@ class EconomyService:
             seller_net_amount=quote.seller_net_amount,
             buyer_account_code=buyer_account.code,
             seller_account_code=seller_account.code,
-            fee_account_code=resolved_fee_account.code if quote.fee_amount > Decimal('0.0000') else None,
+            fee_account_code=resolved_fee_account.code if quote.fee_amount > Decimal("0.0000") else None,
         )
 
     def _resolve_price_quote(
@@ -376,27 +379,35 @@ class EconomyService:
         quantity: int | Decimal,
     ) -> ServicePriceQuote | None:
         if service_key is not None and gross_amount is not None:
-            raise EconomyServiceError('Provide either service_key or gross_amount, not both.')
+            raise EconomyServiceError("Provide either service_key or gross_amount, not both.")
         if service_key is None and gross_amount is None:
-            raise EconomyServiceError('A service_key or gross_amount is required.')
+            raise EconomyServiceError("A service_key or gross_amount is required.")
         if service_key is not None:
             return self.pricing_engine.quote_service(service_key, quantity=quantity)
         multiplier = Decimal(str(quantity))
-        if multiplier != Decimal('1'):
-            raise EconomyServiceError('Quantity is only supported when service_key pricing is used.')
+        if multiplier != Decimal("1"):
+            raise EconomyServiceError("Quantity is only supported when service_key pricing is used.")
         return None
 
     def _resolve_match_entry_fee_bps(self, fee_bps: int | None) -> int:
         if fee_bps is not None:
             return self._validate_fee_bps(fee_bps)
-        rule = AdminEngineService(self.session).get_active_reward_rule()
-        return self._validate_fee_bps(rule.competition_platform_fee_bps if rule is not None else 1000)
+        try:
+            policy = resolve_economic_policy(self.session)
+            return self._validate_fee_bps(policy.competition_platform_fee_bps)
+        except Exception:
+            rule = AdminEngineService(self.session).get_active_reward_rule()
+            return self._validate_fee_bps(rule.competition_platform_fee_bps if rule is not None else 1000)
 
     def _resolve_marketplace_fee_bps(self, fee_bps: int | None) -> int:
         if fee_bps is not None:
             return self._validate_fee_bps(fee_bps)
-        rule = AdminEngineService(self.session).get_active_reward_rule()
-        return self._validate_fee_bps(rule.trading_fee_bps if rule is not None else 2000)
+        try:
+            policy = resolve_economic_policy(self.session)
+            return self._validate_fee_bps(policy.trading_fee_bps)
+        except Exception:
+            rule = AdminEngineService(self.session).get_active_reward_rule()
+            return self._validate_fee_bps(rule.trading_fee_bps if rule is not None else 2000)
 
     def _build_fee_quote(
         self,
@@ -406,13 +417,13 @@ class EconomyService:
         fee_bps: int,
     ) -> FeeQuote:
         gross = self._normalize_amount(gross_amount)
-        if gross <= Decimal('0.0000'):
-            raise EconomyServiceError('Gross amount must be positive.')
+        if gross <= Decimal("0.0000"):
+            raise EconomyServiceError("Gross amount must be positive.")
         resolved_fee_bps = self._validate_fee_bps(fee_bps)
         fee_amount = self._normalize_amount(gross * Decimal(resolved_fee_bps) / Decimal(10_000))
         net_amount = self._normalize_amount(gross - fee_amount)
-        if net_amount < Decimal('0.0000'):
-            raise EconomyServiceError('Fee amount cannot exceed the gross amount.')
+        if net_amount < Decimal("0.0000"):
+            raise EconomyServiceError("Fee amount cannot exceed the gross amount.")
         return FeeQuote(
             gross_amount=gross,
             fee_bps=resolved_fee_bps,
@@ -425,11 +436,11 @@ class EconomyService:
     def _validate_fee_bps(value: int) -> int:
         resolved = int(value)
         if not 0 <= resolved <= 10_000:
-            raise EconomyServiceError('Fee bps must be between 0 and 10,000.')
+            raise EconomyServiceError("Fee bps must be between 0 and 10,000.")
         return resolved
 
     @staticmethod
     def _normalize_amount(value: Decimal | int | float | str | None) -> Decimal:
         if value is None:
-            value = Decimal('0.0000')
+            value = Decimal("0.0000")
         return Decimal(str(value)).quantize(AMOUNT_QUANTUM)

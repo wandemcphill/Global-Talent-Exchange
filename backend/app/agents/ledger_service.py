@@ -21,6 +21,21 @@ from app.wallets.service import LedgerError, LedgerPosting, WalletService
 AMOUNT_QUANTUM = Decimal("0.0001")
 
 
+def _clamp(value: float, minimum: float, maximum: float) -> float:
+    return max(minimum, min(float(value), maximum))
+
+
+@dataclass(frozen=True, slots=True)
+class AgentSettlementDecision:
+    realized_earnings: float
+    approved: bool
+    reason: str
+    quality_score: float
+    trust_score: float
+    decay_multiplier: float
+    payout_eligible: bool = False
+
+
 @dataclass(frozen=True, slots=True)
 class AgentLedgerAccountRef:
     agent_id: str
@@ -34,6 +49,10 @@ class AgentLedgerService:
     Agent accounts are system-owned accounting identities. The legacy AgentWallet
     dataclass remains a projection and must not be used as the balance authority.
     """
+
+    min_quality_threshold: float = 0.58
+    min_trust_threshold: float = 0.60
+    min_decay_multiplier: float = 0.25
 
     def __init__(self, wallet_service: WalletService | None = None) -> None:
         self.wallet_service = wallet_service or WalletService()
@@ -171,5 +190,76 @@ class AgentLedgerService:
             transaction_type=LedgerTransactionType.ADJUSTMENT,
         )[0].transaction_id
 
+    def evaluate_settlement(
+        self,
+        *,
+        earnings: float,
+        quality_score: float,
+        trust_score: float,
+        repetition_ratio: float,
+    ) -> AgentSettlementDecision:
+        normalized_quality = _clamp(quality_score, 0.0, 1.0)
+        normalized_trust = _clamp(trust_score, 0.0, 1.0)
+        normalized_repetition = _clamp(repetition_ratio, 0.0, 1.0)
+        decay_multiplier = round(
+            max(1.0 - (normalized_repetition * 0.75), self.min_decay_multiplier),
+            4,
+        )
+        if normalized_trust < self.min_trust_threshold:
+            realized = 0.0
+            approved = False
+            reason = "trust_score_below_floor"
+        elif normalized_quality < self.min_quality_threshold:
+            realized = 0.0
+            approved = False
+            reason = "quality_below_floor"
+        else:
+            realized = max(round(float(earnings) * decay_multiplier, 2), 0.0)
+            approved = True
+            reason = "approved" if decay_multiplier >= 0.99 else "repetition_decay"
 
-__all__ = ["AgentLedgerAccountRef", "AgentLedgerService"]
+        # Payout eligibility is ALWAYS False by default until explicitly authorized (Requirement 9)
+        return AgentSettlementDecision(
+            realized_earnings=realized,
+            approved=approved,
+            reason=reason,
+            quality_score=round(normalized_quality, 4),
+            trust_score=round(normalized_trust, 4),
+            decay_multiplier=decay_multiplier,
+            payout_eligible=False,
+        )
+
+    def settle(
+        self,
+        session: Session,
+        *,
+        agent_id: str,
+        earnings: float,
+        quality_score: float,
+        trust_score: float,
+        repetition_ratio: float,
+        reference: str,
+        actor=None,
+    ) -> AgentSettlementDecision:
+        decision = self.evaluate_settlement(
+            earnings=earnings,
+            quality_score=quality_score,
+            trust_score=trust_score,
+            repetition_ratio=repetition_ratio,
+        )
+        if decision.approved and decision.realized_earnings > 0.0:
+            rewards_pool = self.wallet_service.ensure_rewards_pool_account(session, LedgerUnit.COIN)
+            self.earn(
+                session,
+                agent_id=agent_id,
+                amount=Decimal(str(decision.realized_earnings)),
+                funding_source=rewards_pool,
+                reference=reference,
+                actor=actor,
+                source_tag=LedgerSourceTag.AGENT_PERFORMANCE_EARNINGS,
+                idempotency_key=reference,
+            )
+        return decision
+
+
+__all__ = ["AgentLedgerAccountRef", "AgentLedgerService", "AgentSettlementDecision"]

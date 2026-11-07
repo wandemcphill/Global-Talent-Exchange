@@ -864,7 +864,7 @@ def _lifecycle_mapping_test_canonical_competition(session, name: str, source_typ
     return competition
 
 
-def test_global_competition_mapping_is_idempotent_and_one_to_one(app):
+def test_global_competition_mapping_is_idempotent_and_one_to_one(client, app):
     from app.models.owner_competition_lifecycle_mapping import OwnerCompetitionLifecycleMapping
     from app.services.owner_competition_lifecycle_mapping_service import (
         OwnerCompetitionLifecycleMappingError,
@@ -914,7 +914,7 @@ def test_global_competition_mapping_is_idempotent_and_one_to_one(app):
         )
 
 
-def test_user_hosted_competition_stays_on_separate_lifecycle(app):
+def test_user_hosted_competition_stays_on_separate_lifecycle(client, app):
     from app.services.owner_competition_lifecycle_mapping_service import (
         OwnerCompetitionLifecycleMappingError,
         OwnerCompetitionLifecycleMappingService,
@@ -935,7 +935,7 @@ def test_user_hosted_competition_stays_on_separate_lifecycle(app):
         assert exc_info.value.code == "user_hosted_competition_uses_separate_lifecycle"
 
 
-def test_scheduled_fixture_mapping_checks_identity_and_preserves_results(app):
+def test_scheduled_fixture_mapping_checks_identity_and_preserves_results(client, app):
     from app.models.competition_match import CompetitionMatch
     from app.models.competition_round import CompetitionRound
     from app.models.owner_competition_lifecycle_mapping import OwnerMatchLifecycleMapping
@@ -1036,7 +1036,7 @@ def test_scheduled_fixture_mapping_checks_identity_and_preserves_results(app):
         )
 
 
-def test_pre_match_tactics_are_saved_on_canonical_fixture_and_kickoff_is_enforced(app):
+def test_pre_match_tactics_are_saved_on_canonical_fixture_and_kickoff_is_enforced(client, app):
     from app.models.competition_match import CompetitionMatch
     from app.models.competition_round import CompetitionRound
     from app.owner_console.models import OwnerMatch
