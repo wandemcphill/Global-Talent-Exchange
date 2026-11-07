@@ -58,7 +58,7 @@ def _create_user(session: Session, *, email: str, username: str) -> User:
         session,
         email=email,
         username=username,
-        password="SuperSecretPassword123!",
+        password="SuperSecretPassword123!",  # pragma: allowlist secret — synthetic fixture password, not a credential
     )
     session.commit()
     return user
