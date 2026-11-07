@@ -25,6 +25,7 @@ def test_coin_funding_mode_creates_host_funded_withdrawable_contract() -> None:
         return_value=SimpleNamespace(entry_fee_fancoin=Decimal("0.0000"), metadata_json={})
     )
     service._active_platform_fee_bps = MagicMock(return_value=3000)
+    service._policy_provenance = MagicMock(return_value=("host-funded-test-policy", "test-v1"))
     host = SimpleNamespace(id="host-1")
     payload = SimpleNamespace(
         funding_mode="host_funded_gtex_coin_prize",
@@ -51,5 +52,7 @@ def test_coin_funding_mode_creates_host_funded_withdrawable_contract() -> None:
     assert competition.host_funding_required_coin == Decimal("1000.0000")
     assert competition.host_funding_escrowed_coin == Decimal("1000.0000")
     assert competition.entry_fee_fancoin == Decimal("0.0000")
+    assert competition.metadata_json["fee_policy_rule_key"] == "host-funded-test-policy"
+    assert competition.metadata_json["fee_policy_version"] == "test-v1"
     postings = wallet.append_transaction.call_args.kwargs["postings"]
     assert all(posting.account.unit is LedgerUnit.COIN for posting in postings)

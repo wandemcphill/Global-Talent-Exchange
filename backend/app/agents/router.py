@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.agents.agent_manager import (
     AgentManagerSummaryView,
@@ -15,7 +15,6 @@ from app.agents.agent_manager import (
 )
 from app.auth.dependencies import get_current_admin
 from app.models.user import User
-
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -74,6 +73,20 @@ def submit_agent_performance(
 ) -> AgentPerformanceReceiptView:
     try:
         return ensure_creator_agent_manager(request.app).record_performance(payload)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/{agent_id}/authorize-payout")
+def authorize_agent_payout(
+    agent_id: str,
+    request: Request,
+    clip_id: str | None = Query(default=None),
+    _current_user: User = Depends(get_current_admin),
+) -> dict[str, bool]:
+    try:
+        success = ensure_creator_agent_manager(request.app).authorize_payout(agent_id=agent_id, clip_id=clip_id)
+        return {"authorized": success}
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

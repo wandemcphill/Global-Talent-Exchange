@@ -188,9 +188,21 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                     reason="match_gift_rate_limited",
                 )
 
+        requested_currency = str(kwargs.get("currency") or kwargs.get("ledger_unit") or "").strip().lower()
+        if requested_currency in {"coin", "gtex_coin"}:
+            raise GiftEngineError(
+                "GTEX Coin cannot be used as a gift source currency. Gifts must use FanCoin/CREDIT.",
+                reason="invalid_gift_source_currency",
+            )
+
         gift = requested_catalog_item if requested_catalog_item is not None and requested_catalog_item.active else None
         if gift is None:
             raise GiftEngineError("Gift catalog item was not found.")
+        if (gift.currency or "").strip().lower() in {"coin", "gtex_coin"}:
+            raise GiftEngineError(
+                "GTEX Coin cannot be used as a gift source currency. Gifts must use FanCoin/CREDIT.",
+                reason="invalid_gift_source_currency",
+            )
         unit_price = self._normalize_amount(gift.fancoin_price)
         gross_amount = self._normalize_amount(unit_price * normalized_quantity)
         if gross_amount <= Decimal("0.0000"):

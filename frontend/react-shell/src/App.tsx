@@ -38,12 +38,14 @@ import { ClubAuthorityPage } from "@/pages/ClubAuthorityPage";
 import { SkinProvider } from "@/lib/skin-engine";
 import { ROUTER_BASENAME } from "@/lib/publicPath";
 import { GtexAdvertisingProvider } from "@/components/advertising/GtexAdvertising";
+import { GtexAudioProvider } from "@/lib/audio";
 
 export default function App() {
   return (
     <AuthProvider>
       <SkinProvider>
-      <BrowserRouter basename={ROUTER_BASENAME}>
+      <GtexAudioProvider>
+        <BrowserRouter basename={ROUTER_BASENAME}>
         <Routes>
           <Route path="/" element={<GtexAdvertisingProvider><Landing /></GtexAdvertisingProvider>} />
           <Route path="/login" element={<GtexAdvertisingProvider><AuthPage mode="login" /></GtexAdvertisingProvider>} />
@@ -51,6 +53,7 @@ export default function App() {
           <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/payment/callback" element={<PaymentCallback />} />
           <Route path="/club/:clubSlug" element={<PublicClubProfile />} />
+          <Route path="/clubs/:clubSlug" element={<PublicClubProfile />} />
           <Route path="/inbox" element={<Navigate to="/app/inbox" replace />} />
           <Route path="/app" element={<AppShell />}>
             <Route index element={<ControlCenter />} />
@@ -99,7 +102,8 @@ export default function App() {
         </Routes>
       </BrowserRouter>
       <Toaster theme="dark" position="top-right" richColors />
-    </SkinProvider>
+    </GtexAudioProvider>
+      </SkinProvider>
     </AuthProvider>
   );
 }

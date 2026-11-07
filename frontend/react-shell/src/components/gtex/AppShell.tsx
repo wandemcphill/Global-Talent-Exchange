@@ -35,6 +35,7 @@ import { Loading } from "@/components/gtex/ui";
 import { GlobalLiveTicker } from "@/components/gtex/GlobalLiveTicker";
 import { CommandPaletteModal } from "@/components/gtex/ApexWidgets";
 import { GtexTraxTopBarControl } from "@/components/gtex/GtexTraxPlayer";
+import { GtexSponsoredMusicCard } from "@/lib/audio";
 import { formatWorldDate, formatWorldTime, useWorldClock } from "@/lib/worldClock";
 import { useSkin } from "@/lib/skin-engine";
 
@@ -541,6 +542,10 @@ export default function AppShell() {
           }}
         >
           <Outlet />
+          {/* Global GTEX Sponsored Music Presentation (when active) */}
+          <div className="fixed bottom-4 right-4 z-40 max-w-md w-full sm:w-auto pointer-events-auto px-4 sm:px-0">
+            <GtexSponsoredMusicCard />
+          </div>
         </main>
       </div>
     </div>
