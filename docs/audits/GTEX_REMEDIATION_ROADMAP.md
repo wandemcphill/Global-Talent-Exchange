@@ -100,7 +100,7 @@ Nothing here is permission to merge without review. Each repair is an independen
 | **Agent D (Delegation Engine)** | Draft PR #390 | Current branch head `1057ba61` (original `53ef7331`) | Verify authorization boundaries, shared event backbone use, audit immutability, migration behavior, and PR CI |
 | **Agent G (Windows Demo Package)** | Draft PR #393 (`1a4618ec`) | Interactive Windows desktop | Obtain genuine screenshot/recording evidence; visual acceptance remains blocked after Session 0 capture failure |
 | **Agent H (Comprehensive Audit)** | Draft PR #392 (`e4306cf6`) | Status reconciliation | Review original audit and dated reconciliation separately before merging documentation |
-| **M2 Match Experience** | Draft PR #391 (`7b2af23d`) | PR CI and event-order regression | Verify 3D/2D lifecycle, large-gap chronology, isolated SQLite fixtures, and authoritative clock |
+| **M2 Match Experience** | Draft PR #391 (`4f7804ec`) | PR CI and event-order regression | Verify 3D/2D lifecycle, large-gap chronology, isolated SQLite fixtures with teardown, and authoritative clock |
 | **Agent I (Campus GLB)** | PR #378 closed, not merged | Redundancy review | No merge required; work was found redundant against current `main` |
 
 ---
@@ -134,6 +134,6 @@ Canonical `main` remains `a19893d44e3e3742dd7932880935a68cd2577d92`. Recovery br
 - **Agent D:** recovered original commit `53ef7331`; current branch head `87b7cdf8`, draft PR #390. CI and endpoint/migration review pending.
 - **Agent G:** recovered Windows demo commit `1a4618ec`, draft PR #393. Genuine interactive Windows capture evidence remains outstanding.
 - **Agent H:** four audit deliverables recovered and reconciled; current branch head `e4306cf6`, draft PR #392.
-- **M2:** current branch head `7b2af23d`, draft PR #391. The jump-to-tail was removed, event-frame ordering regression added, and test lint fixed; current CI pending.
+- **M2:** current branch head `4f7804ec`, draft PR #391. The jump-to-tail was removed, event-frame ordering regression added, lint fixed, and the in-memory test fixture now cleans up environment state; current CI pending.
 
 Do not treat agent-reported local tests as CI results. Do not merge until the respective review gates pass. Player, regen, and legend data remain protected.
