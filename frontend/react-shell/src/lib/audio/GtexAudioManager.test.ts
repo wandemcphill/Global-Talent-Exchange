@@ -9,6 +9,7 @@ describe("GtexAudioManager", () => {
   let manager: GtexAudioManager;
 
   beforeEach(() => {
+    window.localStorage.removeItem("gtex_audio_session_preferences");
     (global as any).fetch = jest.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
     manager = new GtexAudioManager();
   });
