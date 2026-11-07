@@ -19,6 +19,43 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 
 . (Join-Path $PSScriptRoot "GTEX_Launcher_Common.ps1")
 
+function Get-GtexInteractiveDesktopStatus {
+    $currentProcess = Get-Process -Id $PID -ErrorAction Stop
+    $sessionId = [int]$currentProcess.SessionId
+    $hasExplorerShell = @(
+        Get-Process -Name "explorer" -ErrorAction SilentlyContinue |
+            Where-Object { [int]$_.SessionId -eq $sessionId }
+    ).Count -gt 0
+
+    $isUserInteractive = [Environment]::UserInteractive
+    [pscustomobject]@{
+        SessionId = $sessionId
+        IsUserInteractive = $isUserInteractive
+        HasExplorerShell = $hasExplorerShell
+        IsInteractive = ($sessionId -gt 0 -and $isUserInteractive -and $hasExplorerShell)
+    }
+}
+
+function Assert-GtexInteractiveDesktop {
+    $desktop = Get-GtexInteractiveDesktopStatus
+    if (-not $desktop.IsInteractive) {
+        throw (
+            "GTEX visual demo requires an interactive Windows desktop session. " +
+            "Current process SessionId=$($desktop.SessionId), " +
+            "UserInteractive=$($desktop.IsUserInteractive), " +
+            "ExplorerShellPresent=$($desktop.HasExplorerShell). " +
+            "Session 0/services and scheduled tasks configured to run when the user is logged off " +
+            "cannot produce valid visual evidence. Sign in to Windows and launch this script from " +
+            "the visible desktop PowerShell session."
+        )
+    }
+    return $desktop
+}
+
+# Fail before starting a backend, provisioning a match, or launching Unity.
+$desktopStatus = Assert-GtexInteractiveDesktop
+Write-Host "[+] Interactive desktop verified (SessionId $($desktopStatus.SessionId))." -ForegroundColor Green
+
 function Resolve-PythonExecutable {
     param([string]$ExplicitPath)
     if (-not [string]::IsNullOrWhiteSpace($ExplicitPath)) {
