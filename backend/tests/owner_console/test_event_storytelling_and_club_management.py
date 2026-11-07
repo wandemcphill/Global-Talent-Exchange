@@ -1264,7 +1264,10 @@ def test_global_competition_reconciliation_report_is_read_only_and_preserves_his
         assert historical_match.status == "played"
         assert (historical_match.home_goals, historical_match.away_goals) == (2, 1)
         assert historical_match.events_json == [{"minute": 76, "type": "goal"}]
-        assert historical_match.played_at == datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
+        assert historical_match.played_at is not None
+        assert historical_match.played_at.replace(tzinfo=timezone.utc) == datetime(
+            2026, 10, 1, 12, 0, tzinfo=timezone.utc
+        )
         assert scheduled_match.status == "scheduled"
         assert scheduled_match.played_at is None
 
