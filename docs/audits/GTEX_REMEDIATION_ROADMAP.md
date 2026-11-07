@@ -127,9 +127,9 @@ Nothing here is permission to merge without review. Each repair is an independen
 
 ---
 
-## 7. Remote Recovery Checkpoint — 2026-11-07
+## 7. Historical Remote Recovery Checkpoint — 2026-11-07 (pre-merge snapshot)
 
-Canonical `main` remains `a19893d44e3e3742dd7932880935a68cd2577d92`. Recovery branches and draft PRs are proposals only; none is merged.
+At this historical checkpoint, canonical `main` was `a19893d44e3e3742dd7932880935a68cd2577d92`, before PRs #386–#389 were merged. The current post-merge state is recorded in Section 8.
 
 - **Agent D:** recovered original commit `53ef7331`; current branch head `87b7cdf8`, draft PR #390. CI and endpoint/migration review pending.
 - **Agent G:** recovered Windows demo commit `1a4618ec`, draft PR #393. Genuine interactive Windows capture evidence remains outstanding.
@@ -164,8 +164,8 @@ Do not treat agent-reported local tests as CI results. Do not merge until the re
 | #391 M2 Match Experience | `cb558307a1be241b498af27f4a5008d9a4167a87` | Quality Gates, Phase A, shell, Cloudflare, WebGL, CI/Staging, P7-FEV and Final Certification passed. | Formal review; still draft and unmerged. |
 | #392 Platform Audit | Updated by this audit branch | Documentation reconciliation | Review, CI and final status confirmation. |
 | #393 Windows Demo | `1a4618ec7ad2c463e873c44c48b6b41bcdbcec57` | Automated tests reported green. | Interactive Windows/GPU visual capture; remains draft. |
-| #394 UTF-8 correction | `a8c51dd688fefa9bd2bc67fd85a04da3d9bbd602` | Quality Gates, Phase A and WebGL passed. | CI/Staging, P7-FEV and Final Certification were still running at the last recorded check; remains draft. |
-| #395 Competition reconciliation visibility | `8e4cff26b2de459a20e74f1db115ef2089081694` | Fresh checks queued after the final formatting repair. | Await current CI; remains draft. |
+| #394 UTF-8 correction | `a8c51dd688fefa9bd2bc67fd85a04da3d9bbd602` | Quality Gates, Phase A, WebGL and CI/Staging passed. | P7-FEV and Final Certification remain in progress at last check; remains draft. |
+| #395 Competition reconciliation visibility | `43e34897326269acf0e6213a66bff23125efa469` | Fresh checks running after the final Black formatting correction. | Await current Quality Gates, P7-FEV, WebGL, Phase A, CI/Staging and Final Certification; remains draft. |
 
 ### Specific fixes in the queue
 
