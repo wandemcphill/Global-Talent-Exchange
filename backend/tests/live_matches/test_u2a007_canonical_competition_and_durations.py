@@ -38,6 +38,7 @@ from app.schemas.match_viewer import MatchMode
 from app.services.competition_auto_runner import CompetitionAutoRunner
 from backend.tests.support.secrets import MEDIA_SIGNING_TEST_SECRET, TEST_AUTH_SECRET
 
+
 def _build_synthetic_canonical_entities() -> dict[str, object]:
     """Isolated, deterministic synthetic extraction of canonical competition, clubs, and real-scale players."""
     comp_row = {
@@ -93,29 +94,33 @@ def _build_synthetic_canonical_entities() -> dict[str, object]:
     p_num = 1
     for norm_pos, pos, count in pos_specs:
         for idx in range(count):
-            home_players.append({
-                "id": f"00000000-0000-0000-0001-{p_num:012d}",
-                "full_name": f"Home {pos} {idx+1}",
-                "position": pos,
-                "normalized_position": norm_pos,
-                "shirt_number": p_num,
-                "height_cm": 182,
-                "market_value_eur": 25_000_000,
-            })
+            home_players.append(
+                {
+                    "id": f"00000000-0000-0000-0001-{p_num:012d}",
+                    "full_name": f"Home {pos} {idx+1}",
+                    "position": pos,
+                    "normalized_position": norm_pos,
+                    "shirt_number": p_num,
+                    "height_cm": 182,
+                    "market_value_eur": 25_000_000,
+                }
+            )
             p_num += 1
 
     away_players = []
     for norm_pos, pos, count in pos_specs:
         for idx in range(count):
-            away_players.append({
-                "id": f"00000000-0000-0000-0002-{p_num:012d}",
-                "full_name": f"Away {pos} {idx+1}",
-                "position": pos,
-                "normalized_position": norm_pos,
-                "shirt_number": p_num,
-                "height_cm": 182,
-                "market_value_eur": 25_000_000,
-            })
+            away_players.append(
+                {
+                    "id": f"00000000-0000-0000-0002-{p_num:012d}",
+                    "full_name": f"Away {pos} {idx+1}",
+                    "position": pos,
+                    "normalized_position": norm_pos,
+                    "shirt_number": p_num,
+                    "height_cm": 182,
+                    "market_value_eur": 25_000_000,
+                }
+            )
             p_num += 1
 
     return {
@@ -124,6 +129,7 @@ def _build_synthetic_canonical_entities() -> dict[str, object]:
         "home_players": home_players,
         "away_players": away_players,
     }
+
 
 def _build_canonical_competition_test_env():
     os.environ["GTE_AUTH_SECRET"] = TEST_AUTH_SECRET
