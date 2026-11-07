@@ -97,7 +97,7 @@ Nothing here is permission to merge without review. Each repair is an independen
 | **Agent A (Competitions)** | Issue #352 | Agent B financial contract | Align competition entry fees and prize escrow with double-entry ledger |
 | **Agent B (Financial Ledger)** | Issue #2 | Paystack sandbox | Complete idempotency test suite for ledger entries |
 | **Agent C (Ingestion Worker)** | Issue #136 | render.yaml | Deploy worker recovery spec; test exclusively against sandbox fixtures |
-| **Agent D (Delegation Engine)** | Draft PR #390 | Current branch head `87b7cdf8` (original `53ef7331`) | Verify authorization boundaries, shared event backbone use, audit immutability, migration behavior, and PR CI |
+| **Agent D (Delegation Engine)** | Draft PR #390 | Current branch head `1057ba61` (original `53ef7331`) | Verify authorization boundaries, shared event backbone use, audit immutability, migration behavior, and PR CI |
 | **Agent G (Windows Demo Package)** | Draft PR #393 (`1a4618ec`) | Interactive Windows desktop | Obtain genuine screenshot/recording evidence; visual acceptance remains blocked after Session 0 capture failure |
 | **Agent H (Comprehensive Audit)** | Draft PR #392 (`e4306cf6`) | Status reconciliation | Review original audit and dated reconciliation separately before merging documentation |
 | **M2 Match Experience** | Draft PR #391 (`7b2af23d`) | PR CI and event-order regression | Verify 3D/2D lifecycle, large-gap chronology, isolated SQLite fixtures, and authoritative clock |
