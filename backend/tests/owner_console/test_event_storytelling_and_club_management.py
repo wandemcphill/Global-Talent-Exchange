@@ -1242,10 +1242,7 @@ def test_global_competition_reconciliation_report_is_read_only_and_preserves_his
         session.flush()
 
         report = OwnerCompetitionLifecycleMappingService(session).reconciliation_report()
-        row = next(
-            item for item in report["competitions"]
-            if item["legacy_competition_id"] == global_competition.id
-        )
+        row = next(item for item in report["competitions"] if item["legacy_competition_id"] == global_competition.id)
 
         assert report["mode"] == "read_only"
         assert report["automatic_reconciliation"] is False
