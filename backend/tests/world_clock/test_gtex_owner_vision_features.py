@@ -76,7 +76,7 @@ def _seed_club(session: Session, *, prestige: int = 50, cash: int = 100_000) -> 
         id="user-1",
         email="owner1@gtex.test",
         username="owner1",
-        password_hash="hash",
+        password_hash="hash",  # pragma: allowlist secret — synthetic test hash, not a credential
     )
     profile = ClubProfile(
         id="club-1",
