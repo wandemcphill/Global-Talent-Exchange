@@ -38,10 +38,7 @@ test("Render runs idempotent migrations before starting the ingestion worker", (
 
 test("the worker package exposes the Node built-in test runner", () => {
   const packageJson = JSON.parse(
-    fs.readFileSync(
-      path.join(repositoryRoot, "services/player-ingestion/package.json"),
-      "utf8",
-    ),
+    fs.readFileSync(path.join(repositoryRoot, "services/player-ingestion/package.json"), "utf8"),
   );
 
   assert.equal(packageJson.scripts.test, "node --test");
