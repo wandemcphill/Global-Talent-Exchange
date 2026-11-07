@@ -835,8 +835,16 @@ class TreasuryService:
             raise TreasuryError("Withdrawal request references missing payout request.")
 
         previous = request.status
-        if previous == TreasuryWithdrawalStatus.PAID:
-            return request
+        if previous in {
+            TreasuryWithdrawalStatus.PAID,
+            TreasuryWithdrawalStatus.REJECTED,
+            TreasuryWithdrawalStatus.CANCELLED,
+            TreasuryWithdrawalStatus.FAILED,
+            TreasuryWithdrawalStatus.REVERSED,
+        }:
+            if status == previous:
+                return request
+            raise TreasuryError(f"Terminal withdrawal request with status {previous.value} cannot change status.")
 
         request.status = status
         request.admin_user_id = actor.id

@@ -3,7 +3,7 @@
 **Document Version:** 3.0.0 (Comprehensive Multi-Agent Acceptance Audit)  
 **Issue:** [#267 (GTEX — Comprehensive Platform Acceptance Audit)](https://github.com/wandemcphill/Global-Talent-Exchange/issues/267)  
 **Target Repository:** `wandemcphill/Global-Talent-Exchange`  
-**Inspected Canonical Main SHA:** `89d792adb2b012f5ddeea8747853a8e832beeeec`  
+**Inspected Canonical Main SHA:** `74b917ec3d7166a3b81396fe4d895d2a4764b400`  
 **Previous Audit Baseline SHA:** `bb6d82a9b8b5867318f9a0baf19789cef5b25637` (2026-10-27)  
 **Delta:** 485 commits since baseline `bb6d82a9b8b5867318f9a0baf19789cef5b25637`  
 **Date:** 2026-11-07  
@@ -251,7 +251,7 @@ No production database writes, player/regen/legend modifications, player ingesti
 
 ## 8. Post-merge Integration & Remediation Checkpoint — 2026-11-07
 
-**Canonical main:** `89d792adb2b012f5ddeea8747853a8e832beeeec`  
+**Canonical main:** `74b917ec3d7166a3b81396fe4d895d2a4764b400`  
 **Prior main before the four integration merges:** `a19893d44e3e3742dd7932880935a68cd2577d92`  
 **Baseline comparison:** 485 commits ahead of `bb6d82a9b8b5867318f9a0baf19789cef5b25637`; no commits behind.  
 **Post-merge CI:** all seven push-triggered workflows on the exact canonical main SHA completed successfully: Quality Gates, Phase A Economic Regressions, React shell build, Cloudflare Pages deployment, React WebGL verification, CI and Staging Deploy, and Final Platform Certification.
@@ -263,7 +263,7 @@ No production database writes, player/regen/legend modifications, player ingesti
 | #386 | Canonical competition follow-up hardening | `2b92e6ac79ebae04e59994cd500ab93e0ab17ef3` | Merged and CI-green. Does **not** close Issue #352; legacy global competition reconciliation remains open. |
 | #387 | Central audio manager and sponsored music | `1240083a114b700e23bf89595f9ff7b3aedf6d63` | Merged; exact-head quality, browser, shell, WebGL, Phase A, staging and certification checks green. |
 | #388 | Financial integrity / economic foundation | `d3eeef643f75d96215778b865a04ab1d5d791847` | Merged; CI-green. Live payment, bank clearing and KYC provider credentials remain production dependencies. |
-| #389 | Club HQ and public club profile | `89d792adb2b012f5ddeea8747853a8e832beeeec` | Merged; all reported checks green. |
+| #389 | Club HQ and public club profile | `74b917ec3d7166a3b81396fe4d895d2a4764b400` | Merged; all reported checks green. |
 
 ### Follow-up remediation branches
 

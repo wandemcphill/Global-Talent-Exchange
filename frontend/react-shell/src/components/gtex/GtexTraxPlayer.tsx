@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { gtexAudio } from "@/lib/audio";
 import {
   Disc3,
   ExternalLink,
@@ -309,6 +310,18 @@ export function GtexTraxTopBarControl() {
     const nextCtx = inferContextFromPath(pathname);
     setActiveContext(nextCtx);
   }, [pathname]);
+
+  // Coordinate with Central Audio Session Manager (user_music channel priority)
+  useEffect(() => {
+    if (isPlaying && !isMuted) {
+      gtexAudio.registerActiveChannelSource("user_music", "gtex_trax_player");
+    } else {
+      gtexAudio.unregisterActiveChannelSource("user_music", "gtex_trax_player");
+    }
+    return () => {
+      gtexAudio.unregisterActiveChannelSource("user_music", "gtex_trax_player");
+    };
+  }, [isPlaying, isMuted]);
 
   // Show EA FC Trax-style Now Playing Broadcast Chyron when track changes while playing
   useEffect(() => {
@@ -744,15 +757,35 @@ export function GtexTraxTopBarControl() {
                           <p className="mt-2 text-sm font-black text-white">{promotion.headline}</p>
                           <p className="text-[11px] text-emerald-300">{promotion.artist_name || promotion.playlist_name || promotion.brand_name}{promotion.track_title ? " · " + promotion.track_title : ""}</p>
                           {promotion.description && <p className="mt-1 text-xs leading-relaxed text-slate-400">{promotion.description}</p>}
-                          <a
-                            href={promotion.destination_url}
-                            target="_blank"
-                            rel="noopener noreferrer sponsored"
-                            onClick={() => reportMusicPromotionEvent(promotion.campaign_id, "click")}
-                            className="mt-3 inline-flex rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-[10px] font-black uppercase text-amber-200 hover:bg-amber-400/20"
-                          >
-                            Visit sponsored partner ↗
-                          </a>
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void gtexAudio.playSponsoredTrack({
+                                  campaignId: promotion.campaign_id,
+                                  title: promotion.track_title || promotion.headline,
+                                  artist: promotion.artist_name || promotion.brand_name,
+                                  destinationUrl: promotion.destination_url,
+                                  genre: promotion.genre || "Afrobeats / Arena",
+                                  rightsVerified: true,
+                                  sponsorTier: "Spotlight",
+                                });
+                                reportMusicPromotionEvent(promotion.campaign_id, "click");
+                              }}
+                              className="inline-flex rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-2.5 py-1.5 text-[10px] font-black uppercase text-emerald-200 hover:bg-emerald-400/20"
+                            >
+                              ▶ Play Spotlight
+                            </button>
+                            <a
+                              href={promotion.destination_url}
+                              target="_blank"
+                              rel="noopener noreferrer sponsored"
+                              onClick={() => reportMusicPromotionEvent(promotion.campaign_id, "click")}
+                              className="inline-flex rounded-lg border border-amber-400/40 bg-amber-400/10 px-2.5 py-1.5 text-[10px] font-black uppercase text-amber-200 hover:bg-amber-400/20"
+                            >
+                              Visit partner ↗
+                            </a>
+                          </div>
                         </article>
                       ))}
                     </div>

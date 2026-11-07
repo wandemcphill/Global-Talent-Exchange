@@ -1,6 +1,6 @@
 # GTEX Remediation Roadmap
 
-**Current Review Baseline:** `main` `89d792adb2b012f5ddeea8747853a8e832beeeec` (2026-11-07).  
+**Current Review Baseline:** `main` `74b917ec3d7166a3b81396fe4d895d2a4764b400` (2026-11-07).  
 **Historical Baselines:** `bb6d82a9` (2026-10-27) and `45e29ef6` (2026-10-18).  
 **Primary Reference:** `docs/audits/GTEX_COMPREHENSIVE_PLATFORM_AUDIT.md` (Version 3.0.0).  
 **Player Universe Protection Policy:** STRICTLY ENFORCED & LOCKED (Zero player/regen/legend records altered, synthetic records created, or imports executed).
@@ -143,7 +143,7 @@ Do not treat agent-reported local tests as CI results. Do not merge until the re
 
 ## 8. Post-merge Remediation Checkpoint — 2026-11-07
 
-**Canonical main:** `89d792adb2b012f5ddeea8747853a8e832beeeec`.  
+**Canonical main:** `74b917ec3d7166a3b81396fe4d895d2a4764b400`.  
 **Merge set:** PRs #386, #387, #388 and #389 are merged.  
 **Post-merge validation:** all seven push-triggered main workflows passed on that exact SHA: Quality Gates, Phase A Economic Regressions, React shell build, Cloudflare Pages, React WebGL, CI and Staging Deploy, and Final Platform Certification.
 
