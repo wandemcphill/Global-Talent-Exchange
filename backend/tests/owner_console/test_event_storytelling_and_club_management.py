@@ -1039,7 +1039,7 @@ def test_scheduled_fixture_mapping_checks_identity_and_preserves_results(client,
 def test_pre_match_tactics_are_saved_on_canonical_fixture_and_kickoff_is_enforced(client, app):
     from app.models.competition_match import CompetitionMatch
     from app.models.competition_round import CompetitionRound
-    from app.owner_console.models import OwnerMatch
+    from app.owner_console.models import OwnerClubState, OwnerMatch
     from app.services.owner_competition_lifecycle_mapping_service import (
         OwnerCompetitionLifecycleMappingError,
         OwnerCompetitionLifecycleMappingService,
@@ -1048,6 +1048,21 @@ def test_pre_match_tactics_are_saved_on_canonical_fixture_and_kickoff_is_enforce
 
     with app.state.session_factory() as session:
         home_club_id, away_club_id = _lifecycle_mapping_test_id(), _lifecycle_mapping_test_id()
+        home_owner_id, away_owner_id = _lifecycle_mapping_test_id(), _lifecycle_mapping_test_id()
+        session.add_all(
+            [
+                OwnerClubState(
+                    club_id=home_club_id,
+                    owner_user_id=home_owner_id,
+                    club_name="Home",
+                ),
+                OwnerClubState(
+                    club_id=away_club_id,
+                    owner_user_id=away_owner_id,
+                    club_name="Away",
+                ),
+            ]
+        )
         legacy_competition = OwnerCompetition(
             name=f"Global Cup {_lifecycle_mapping_test_id()}",
             host_type="gtex",
@@ -1096,10 +1111,20 @@ def test_pre_match_tactics_are_saved_on_canonical_fixture_and_kickoff_is_enforce
         service = OwnerCompetitionLifecycleMappingService(session)
         service.bind_competition(legacy_competition.id, canonical_competition.id)
         service.bind_scheduled_match(legacy_match.id, canonical_match.id)
+        with pytest.raises(OwnerCompetitionLifecycleMappingError) as exc_info:
+            service.save_pre_match_tactics(
+                legacy_match_id=legacy_match.id,
+                club_id=home_club_id,
+                user_id=_lifecycle_mapping_test_id(),
+                mentality="attacking",
+                lineup_mode="rotate",
+            )
+        assert exc_info.value.code == "not_club_owner"
+
         saved = service.save_pre_match_tactics(
             legacy_match_id=legacy_match.id,
             club_id=home_club_id,
-            user_id=_lifecycle_mapping_test_id(),
+            user_id=home_owner_id,
             mentality="attacking",
             lineup_mode="rotate",
         )
@@ -1115,7 +1140,7 @@ def test_pre_match_tactics_are_saved_on_canonical_fixture_and_kickoff_is_enforce
             service.save_pre_match_tactics(
                 legacy_match_id=legacy_match.id,
                 club_id=away_club_id,
-                user_id=_lifecycle_mapping_test_id(),
+                user_id=away_owner_id,
                 mentality="defensive",
                 lineup_mode="strongest",
             )
