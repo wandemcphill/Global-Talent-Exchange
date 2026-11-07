@@ -229,9 +229,7 @@ class OwnerCompetitionLifecycleMappingService:
                     "legacy_historical_result_count": len(historical_matches),
                     "legacy_fixture_ids": [match.id for match in competition_legacy_matches],
                     "mapping_status": mapping.mapping_status if mapping is not None else "unmapped",
-                    "canonical_competition_id": (
-                        mapping.canonical_competition_id if mapping is not None else None
-                    ),
+                    "canonical_competition_id": (mapping.canonical_competition_id if mapping is not None else None),
                     "canonical_competition_exists": canonical is not None,
                     "canonical_status": str(canonical.status) if canonical is not None else None,
                     "canonical_fixture_count": canonical_fixture_count,
