@@ -22,7 +22,7 @@ To run and capture the demonstration on Windows:
 |---|---|---|
 | **Operating System** | Windows 10 or Windows 11 64-bit (Build 19041+) | `[System.Environment]::OSVersion.Version` |
 | **GPU & Display** | DirectX 11 or 12 capable GPU / integrated graphics (Intel HD Graphics 620+, NVIDIA, AMD) with active desktop session | `dxdiag /t tmp/dxdiag.txt` |
-| **PowerShell** | Windows PowerShell 5.1 or PowerShell Core 7+ | `$PSVersionTable.PSVersion` |
+| **PowerShell** | Windows PowerShell 5.1 or PowerShell Core 7+ launched inside a signed-in interactive desktop session | `$PSVersionTable.PSVersion`; `(Get-Process -Id $PID).SessionId` |
 | **Python** | Python 3.11 – 3.14 on `PATH` or at `.venv\Scripts\python.exe` | `python --version` |
 | **Backend Dependencies** | Installed via repository root virtual environment | `pip list` or `uv pip list` |
 | **Unity Editor (for rebuilds)** | **Unity 6 `6000.3.12f1`** (`6000.3.12f1 (fca03ac9b0d5)`) | Installed under `C:\Program Files\Unity\Hub\Editor\6000.3.12f1\Editor\Unity.exe` |
@@ -131,8 +131,17 @@ When the Unity standalone player boots, `GtexMatchConfigLoader` reads this file,
 The repository provides the automated PowerShell launcher:
 `tools/GTEX_PHASE1_WINDOWS_DEMO.ps1`
 
+### Interactive Desktop Requirement
+
+The launcher now performs a preflight before starting the backend or provisioning a match. It requires:
+- a Windows session ID greater than 0 (Session 0 is rejected);
+- `[Environment]::UserInteractive` to be true; and
+- an `explorer.exe` shell in the current session.
+
+Run the script from a visible PowerShell window after signing in to the Windows desktop. A Windows service, CI runner, Session 0 process, or scheduled task configured to run while the user is logged off is not an acceptable visual-capture environment. For Task Scheduler, choose **Run only when user is logged on**. The preflight failure is intentional and produces no backend, match-provisioning, or Unity side effects.
+
 ### Running the Demo
-Open a PowerShell console in the repository root and execute:
+Open a PowerShell console in the repository root, from the visible signed-in desktop session, and execute:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\GTEX_PHASE1_WINDOWS_DEMO.ps1 -LeaveUnityRunning
