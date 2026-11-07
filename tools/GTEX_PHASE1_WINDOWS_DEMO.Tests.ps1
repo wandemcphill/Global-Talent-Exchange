@@ -83,6 +83,16 @@ Describe "GTEX_PHASE1_WINDOWS_DEMO.ps1 static structure" {
         $scriptContent | Should Match '-ArgumentList\s+\$unityArgString'
     }
 
+    It "rejects Session 0 and headless sessions before starting backend or provisioning" {
+        $scriptContent = Get-Content (Join-Path $PSScriptRoot "GTEX_PHASE1_WINDOWS_DEMO.ps1") -Raw
+        $scriptContent | Should Match 'function Get-GtexInteractiveDesktopStatus'
+        $scriptContent | Should Match '\$sessionId -gt 0'
+        $scriptContent | Should Match '\[Environment\]::UserInteractive'
+        $scriptContent | Should Match 'Get-Process -Name "explorer"'
+        $scriptContent | Should Match 'Assert-GtexInteractiveDesktop'
+        $scriptContent | Should Match 'Fail before starting a backend'
+    }
+
     It "provides the exact Unity build command when standalone player is missing" {
         $scriptContent = Get-Content (Join-Path $PSScriptRoot "GTEX_PHASE1_WINDOWS_DEMO.ps1") -Raw
         $scriptContent | Should Match 'FStudio\.GTEX\.Editor\.GtexBuildTools\.BuildWindows64ProductionFromCommandLine'
