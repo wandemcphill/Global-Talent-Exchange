@@ -51,7 +51,7 @@ In accordance with GTEX Multi-Agent Execution and Integration Control, the activ
 | **A** | Canonical Competitions & Match Engine | `feat/competition-engine-integration-352` | Issue #352 | `backend/app/services/competition_engine/`, `backend/app/routes/competitions.py` | Engine unit tests passing | **LOCKED (Verified)** | Must finalize unified contract with Agent B financial ledger for competition entry fees and prize distribution. | In Progress (Pre-PR verification) |
 | **B** | Financial Foundation & Double-Entry Ledger | `feat/financial-integrity-economic-foundation` | Issue #2 | `backend/app/services/wallet/`, `backend/app/models/financial_ledger.py` | Ledger balancing & idempotency tests passing | **LOCKED (Verified)** | Needs webhook idempotency integration with external Paystack sandbox. | In Progress (Integration testing) |
 | **C** | Ingestion Worker Operational Recovery | `fix/issue-136-player-ingestion-worker-recovery` | Issue #136 | `backend/app/workers/ingestion_worker.py`, `render.yaml` | Worker ping/healthcheck pass | **LOCKED (Verified)** | Worker run must execute against staging fixtures only; NEVER touch production player DB. | Ready for PR submission |
-| **D** | Owner Authority & Delegation Engine | `Desktop/GLOBAL TALENT EXCHANGE` (uncommitted) | PR merged `6ec53f3e`; pending PR | `backend/app/services/delegation_service.py`, `frontend/react-shell/src/pages/ClubAuthorityPage.tsx`, migration `20261105_0225` | Pending clean branch push | **LOCKED (Verified)** | Uncommitted files in host workspace must be committed to a dedicated feature branch without modifying existing migrations. | Pending Branch / PR |
+| **D** | Owner Authority & Delegation Engine | `feat/owner-authority-and-delegation-engine` (`53ef7331`) | Draft PR #390 | `backend/app/owner_console/delegation_service.py`, `backend/app/owner_console/router.py`, migration `20261106_0227_owner_club_delegation_and_authority_engine`, React governance components | Agent-reported 19 backend tests; PR CI pending | **PENDING REVIEW** | Verify endpoint authorization, audit-log immutability, shared event-outbox use, frontend integration, and migration upgrade/downgrade. | Draft PR #390 / CI pending |
 | **E** | Club HQ & Public Club Profile | `feat/club-hq-public-profile-completion` | PR #343 / `250a9ea2` | `frontend/react-shell/src/pages/PublicClubPage.tsx`, `frontend/lib/screens/clubs/gtex_public_club_profile_screen_v2.dart` | Profile visual snapshot pass | **LOCKED (Verified)** | Privacy masking for financial ledger on public profiles requires strict backend serialization. | Merged / Polish stage |
 | **F** | Audio Foundation & Sponsored Music | `docs/audits/gtex-audio-foundation-jules-audit.md` | Commit `2028e03c` | `frontend/react-shell/src/lib/audio/`, `frontend/lib/services/audio_service.dart` | Audio playback state tests pass | **LOCKED (Verified)** | CDN asset licensing and volume persistence across route transitions. | Partially Merged |
 | **G** | Unity Windows Demonstration & Arena Gameplay | `gemini/unit-2a-milestone-2-arena-gameplay-readiness` | PR #384 / `a19893d4` | `backend/app/services/match_simulation/`, `unity/Assets/Scripts/` | Unity test harness & headless simulation pass | **LOCKED (Verified)** | Asset bundle streaming size optimization for low-bandwidth clients. | **MERGED into main** |
@@ -85,7 +85,7 @@ In accordance with GTEX Multi-Agent Execution and Integration Control, the activ
 - **Findings:**
   - PR #346 unified staff qualification rules, ending conflation between `ClubLegacyExecutive` (GM/HOYD) and modern `club_growth` staff contracts (`ROLE_FIRST_TEAM_MANAGER`, `ROLE_FIRST_TEAM_COACH`, `ROLE_SCOUT`, `ROLE_MEDICAL`, `ROLE_ANALYST`).
   - Open Gap (`NEW-STF-001`): `ClubOpsStore` in `backend/app/services/club_ops_store.py` remains an in-memory singleton. If the backend process restarts or scales to multiple workers, club operations cache state is lost unless persisted to PostgreSQL.
-  - Agent D's uncommitted delegation engine (`delegation_service.py`) provides fine-grained permission delegation (scouting delegation, transfer signing authority) and must be merged via an independent PR.
+  - Agent D's recovered implementation is available on `feat/owner-authority-and-delegation-engine` at `53ef7331` and draft PR #390. It is not merged; required CI and authorization review remain outstanding.
 
 ### Domain 4: Player Discovery and Markets
 - **Code Trace:** `backend/app/routes/transfers.py`, `backend/app/routes/sale_market.py`, `backend/app/routes/regens.py`, `frontend/react-shell/src/pages/TransferHub.tsx`, `frontend/react-shell/src/pages/RegenWorld.tsx`.
@@ -219,7 +219,29 @@ We certify under strict engineering protection policy:
 2. **Multi-Agent Integrations:**
    - Merge Agent I (PR #378: Campus GLB integrity).
    - Review and merge Agent A (Issue #352: Canonical competition engine).
-   - Commit and submit Agent D's delegation engine via dedicated feature branch.
+   - Review recovered Agent D delegation implementation through draft PR #390; do not merge until CI, authorization review, and migration checks pass.
    - Deploy Agent C's recovered worker definition in `render.yaml`.
 3. **Frontend Unification:**
    - Unify React signup into single user flow per Issue #228.
+
+
+---
+
+## 7. Remote Recovery and Milestone 2 Acceptance Checkpoint — 2026-11-07
+
+**Checkpoint baseline:** canonical `main` remains `a19893d44e3e3742dd7932880935a68cd2577d92`. The following work is on separate feature/documentation branches and has not been merged.
+
+| Workstream | Remote reference | Verified state at this checkpoint | Remaining acceptance gate |
+|---|---|---|---|
+| Agent D — Owner Authority & Delegation | `feat/owner-authority-and-delegation-engine`, commit `53ef7331`, draft PR #390 | Original commit and branch resolve on GitHub; migration `20261106_0227` descends from the current Phase 2.4 `0226` revision. | PR CI, endpoint authorization review, audit immutability, event-outbox integration, and migration execution checks. |
+| Agent G — Windows Demo Package | `feat/unity-windows-demo-package`, commit `1a4618ec` | Original package branch resolves on GitHub. The commit changes the demo documentation and PowerShell harness/tests. | Interactive Windows desktop capture was not produced in the reported Session 0 environment. Runtime visual acceptance remains incomplete. |
+| Agent H — Platform Audit | `audit/issue-267-comprehensive-platform-acceptance`, commit `a3aba565` | Four original audit deliverables are present on the recovered branch. | Audit is documentation-only and requires review of dated status reconciliation before merge. |
+| M2 — Match Experience Acceptance | `fix/u2a-m2-match-experience-acceptance-remediation`, commit `812c78dd`, draft PR #391 | Four defect fixes are present; the follow-up removes the jump-to-tail behavior and adds a chronological event-frame regression test. | New catch-up regression and complete required PR CI remain pending. Do not mark M2 accepted until the event-ordering and clock/lifecycle checks pass. |
+
+**Interpretation:** “Recovered” means the commit/branch is remotely resolvable; “implemented” means the proposed patch is present on its branch; neither means merged or production-verified. Agent-reported local test results are not substitutes for current PR checks.
+
+The Windows demo package recovery is separate from the Unity arena/match gameplay already merged through PR #384. The two workstreams must not be conflated.
+
+PR #378 is closed and was not merged; the recovered campus GLB audit work was determined redundant against files already present on `main`.
+
+No production database writes, player/regen/legend modifications, player ingestion, or backfills were performed as part of this checkpoint.
