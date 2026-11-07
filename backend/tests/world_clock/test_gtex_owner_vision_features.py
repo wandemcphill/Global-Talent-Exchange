@@ -20,14 +20,13 @@ from app.models.wallet import (
     LedgerTransaction,
 )
 from app.models.world_clock import WorldClockState
-from app.owner_console import competitions as comps
 from app.owner_console import engine as owner_engine
 from app.owner_console import ledger, service, storytelling
 from app.owner_console.models import (
     OWNER_CONSOLE_TABLES,
     OwnerClubState,
 )
-from app.services.world_clock_service import DEFAULT_CLOCK_ID, WorldClockService
+from app.services.world_clock_service import DEFAULT_CLOCK_ID
 from app.world_simulation.router import get_world_clock
 
 WORLD_NOW = datetime(2026, 10, 27, 12, 0, tzinfo=timezone.utc)
