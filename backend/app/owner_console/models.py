@@ -431,7 +431,75 @@ class OwnerClubDirective(UUIDPrimaryKeyMixin, Base):
     )
 
 
+class ClubDelegationPolicy(UUIDPrimaryKeyMixin, Base):
+    """Authoritative club responsibility and owner delegation policy."""
+
+    __tablename__ = "owner_club_delegation_policies"
+
+    club_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True, index=True)
+    owner_user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    mode: Mapped[str] = mapped_column(String(32), nullable=False, default="balanced")
+    is_suspended: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    suspension_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    financial_thresholds_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    activity_assignments_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    reserved_decisions_json: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
+    temporary_overrides_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+
+class ClubDelegatedDecision(UUIDPrimaryKeyMixin, Base):
+    """Authoritative ledger of delegated decisions, approvals, and escalations."""
+
+    __tablename__ = "owner_club_delegated_decisions"
+
+    club_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    owner_user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    activity_key: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    domain: Mapped[str] = mapped_column(String(32), nullable=False, default="sporting")
+    proposed_by_role: Mapped[str] = mapped_column(String(40), nullable=False)
+    proposed_by_staff_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    financial_amount_gtex: Mapped[Decimal | None] = mapped_column(Numeric(20, 2), nullable=True)
+    requires_owner_approval: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    approval_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending_approval", index=True)
+    execution_status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending_execution")
+    decided_by_user_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    decision_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    outcome_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    staff_competence_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    staff_impact_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    ecosystem_event_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ClubDelegatedDecisionAuditLog(UUIDPrimaryKeyMixin, Base):
+    """Immutable append-only audit trail for all delegated decision lifecycle transitions."""
+
+    __tablename__ = "owner_club_decision_audit_logs"
+
+    decision_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    club_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    actor_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    previous_status: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    new_status: Mapped[str] = mapped_column(String(24), nullable=False)
+    decision_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
 OWNER_CONSOLE_TABLES = (
+    ClubDelegationPolicy.__table__,
+    ClubDelegatedDecision.__table__,
+    ClubDelegatedDecisionAuditLog.__table__,
     OwnerClubState.__table__,
     OwnerSquadPlayer.__table__,
     OwnerInboxItem.__table__,
