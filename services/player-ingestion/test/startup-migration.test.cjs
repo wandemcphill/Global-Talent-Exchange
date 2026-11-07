@@ -21,10 +21,7 @@ test("Render runs idempotent migrations before starting the ingestion worker", (
   const serviceStart = blueprint.indexOf("  - name: gtex-player-ingestion-worker");
   assert.notEqual(serviceStart, -1);
 
-  const nextService = blueprint.indexOf(
-    "\n  - name:",
-    serviceStart + 1,
-  );
+  const nextService = blueprint.indexOf("\n  - name:", serviceStart + 1);
   const workerService = blueprint.slice(
     serviceStart,
     nextService === -1 ? blueprint.length : nextService,
