@@ -97,8 +97,11 @@ Nothing here is permission to merge without review. Each repair is an independen
 | **Agent A (Competitions)** | Issue #352 | Agent B financial contract | Align competition entry fees and prize escrow with double-entry ledger |
 | **Agent B (Financial Ledger)** | Issue #2 | Paystack sandbox | Complete idempotency test suite for ledger entries |
 | **Agent C (Ingestion Worker)** | Issue #136 | render.yaml | Deploy worker recovery spec; test exclusively against sandbox fixtures |
-| **Agent D (Delegation Engine)** | Draft PR #390 | Remote branch recovered at `53ef7331` | Verify authorization boundaries, shared event backbone use, audit immutability, migration behavior, and PR CI |
-| **Agent G (Windows Demo Package)** | Recovered branch `feat/unity-windows-demo-package` | Interactive Windows desktop | Obtain genuine screenshot/recording evidence; current Session 0 capture attempt was blocked |\n| **Agent H (Comprehensive Audit)** | Recovered branch `audit/issue-267-comprehensive-platform-acceptance` | Status reconciliation | Review original audit and dated reconciliation separately before merging documentation |\n| **M2 Match Experience** | Draft PR #391 (`812c78dd`) | PR CI and event-order regression | Verify 3D/2D lifecycle, large-gap chronology, isolated SQLite fixtures, and authoritative clock |\n| **Agent I (Campus GLB)** | PR #378 closed, not merged | Redundancy review | No merge required; work was found redundant against current `main` |
+| **Agent D (Delegation Engine)** | Draft PR #390 | Current branch head `87b7cdf8` (original `53ef7331`) | Verify authorization boundaries, shared event backbone use, audit immutability, migration behavior, and PR CI |
+| **Agent G (Windows Demo Package)** | Draft PR #393 (`1a4618ec`) | Interactive Windows desktop | Obtain genuine screenshot/recording evidence; visual acceptance remains blocked after Session 0 capture failure |
+| **Agent H (Comprehensive Audit)** | Draft PR #392 (`e4306cf6`) | Status reconciliation | Review original audit and dated reconciliation separately before merging documentation |
+| **M2 Match Experience** | Draft PR #391 (`7b2af23d`) | PR CI and event-order regression | Verify 3D/2D lifecycle, large-gap chronology, isolated SQLite fixtures, and authoritative clock |
+| **Agent I (Campus GLB)** | PR #378 closed, not merged | Redundancy review | No merge required; work was found redundant against current `main` |
 
 ---
 
@@ -128,9 +131,9 @@ Nothing here is permission to merge without review. Each repair is an independen
 
 Canonical `main` remains `a19893d44e3e3742dd7932880935a68cd2577d92`. Recovery branches and draft PRs are proposals only; none is merged.
 
-- **Agent D:** recovered commit `53ef7331`, draft PR #390. CI and endpoint/migration review pending.
-- **Agent G:** recovered Windows demo commit `1a4618ec`. No PR created because genuine interactive Windows capture evidence is still missing.
-- **Agent H:** four audit deliverables recovered on the audit branch. Documentation reconciliation is in review.
-- **M2:** draft PR #391 at `812c78dd`. The live jump-to-tail was removed and event-frame ordering regression coverage added. CI pending.
+- **Agent D:** recovered original commit `53ef7331`; current branch head `87b7cdf8`, draft PR #390. CI and endpoint/migration review pending.
+- **Agent G:** recovered Windows demo commit `1a4618ec`, draft PR #393. Genuine interactive Windows capture evidence remains outstanding.
+- **Agent H:** four audit deliverables recovered and reconciled; current branch head `e4306cf6`, draft PR #392.
+- **M2:** current branch head `7b2af23d`, draft PR #391. The jump-to-tail was removed, event-frame ordering regression added, and test lint fixed; current CI pending.
 
 Do not treat agent-reported local tests as CI results. Do not merge until the respective review gates pass. Player, regen, and legend data remain protected.
