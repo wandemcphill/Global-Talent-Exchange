@@ -508,7 +508,7 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
             "owner_hook": (
                 "Offer improved youth contract, promise minutes, or gift a Showroom luxury item to lock down loyalty."
                 if p.morale < 55
-                else "High morale — prime candidate for Senior Promotion or Sponsor Endorsement."
+                else "High morale â€” prime candidate for Senior Promotion or Sponsor Endorsement."
             ),
         },
     }
@@ -2133,7 +2133,11 @@ def club_card(session: Session, state: OwnerClubState) -> dict[str, Any]:
         "primary_color": profile.primary_color if profile else "#10B981",
         "secondary_color": profile.secondary_color if profile else "#0F172A",
         "city": profile.city_name if profile else None,
-        "public_profile_slug": profile.slug if profile and profile.visibility == "public" else None,
+        "slug": profile.slug if profile else None,
+        "visibility": str(profile.visibility) if profile else "private",
+        "home_venue_name": profile.home_venue_name if profile else None,
+        "description": profile.description if profile else None,
+        "public_profile_slug": profile.slug if profile and str(profile.visibility) == "public" else None,
         "country_code": profile.country_code if profile else None,
         "continent_code": profile.continent_code if profile else None,
         "stage": state.stage,

@@ -105,11 +105,20 @@ export function useWatchlist(clubId?: string) {
   });
 }
 
+export function useClubStaff(clubId?: string) {
+  return useQuery({
+    queryKey: ["club-staff", clubId],
+    queryFn: async () => (await api.get(`/owner/clubs/${clubId}/staff`)).data,
+    enabled: !!clubId,
+  });
+}
+
 export function useRefreshOwner() {
   const qc = useQueryClient();
   return () => {
     qc.invalidateQueries({ queryKey: ["cc"] });
     qc.invalidateQueries({ queryKey: ["club"] });
+    qc.invalidateQueries({ queryKey: ["club-staff"] });
     qc.invalidateQueries({ queryKey: ["finance"] });
     qc.invalidateQueries({ queryKey: ["inbox"] });
     qc.invalidateQueries({ queryKey: ["communications"] });

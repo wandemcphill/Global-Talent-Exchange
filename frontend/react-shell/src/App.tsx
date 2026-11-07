@@ -52,6 +52,7 @@ export default function App() {
           <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/payment/callback" element={<PaymentCallback />} />
           <Route path="/club/:clubSlug" element={<PublicClubProfile />} />
+          <Route path="/clubs/:clubSlug" element={<PublicClubProfile />} />
           <Route path="/inbox" element={<Navigate to="/app/inbox" replace />} />
           <Route path="/app" element={<AppShell />}>
             <Route index element={<ControlCenter />} />
