@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import sqlite3
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
