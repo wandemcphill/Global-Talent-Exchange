@@ -16,6 +16,7 @@ describe("GtexAudioManager", () => {
 
   afterEach(() => {
     manager.cleanup();
+    window.localStorage.removeItem("gtex_audio_session_preferences");
   });
 
   it("initializes with default preferences and channels", () => {
