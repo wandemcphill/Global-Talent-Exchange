@@ -1167,6 +1167,15 @@ def release(event_id: str, admin=Depends(get_current_admin), session: Session = 
 # ---------- canonical global competition reconciliation ----------
 
 
+@router.get("/admin/competitions/reconciliation-report")
+def get_global_competition_reconciliation_report(
+    admin=Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Return a read-only inventory; mapping and history preservation remain operator decisions."""
+    return OwnerCompetitionLifecycleMappingService(session).reconciliation_report()
+
+
 def _raise_mapping_error(exc: OwnerCompetitionLifecycleMappingError) -> None:
     status_code = (
         404

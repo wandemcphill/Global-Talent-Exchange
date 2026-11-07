@@ -1039,7 +1039,7 @@ def test_scheduled_fixture_mapping_checks_identity_and_preserves_results(client,
 def test_pre_match_tactics_are_saved_on_canonical_fixture_and_kickoff_is_enforced(client, app):
     from app.models.competition_match import CompetitionMatch
     from app.models.competition_round import CompetitionRound
-    from app.owner_console.models import OwnerMatch
+    from app.owner_console.models import OwnerClubState, OwnerMatch
     from app.services.owner_competition_lifecycle_mapping_service import (
         OwnerCompetitionLifecycleMappingError,
         OwnerCompetitionLifecycleMappingService,
@@ -1048,6 +1048,21 @@ def test_pre_match_tactics_are_saved_on_canonical_fixture_and_kickoff_is_enforce
 
     with app.state.session_factory() as session:
         home_club_id, away_club_id = _lifecycle_mapping_test_id(), _lifecycle_mapping_test_id()
+        home_owner_id, away_owner_id = _lifecycle_mapping_test_id(), _lifecycle_mapping_test_id()
+        session.add_all(
+            [
+                OwnerClubState(
+                    club_id=home_club_id,
+                    owner_user_id=home_owner_id,
+                    club_name="Home",
+                ),
+                OwnerClubState(
+                    club_id=away_club_id,
+                    owner_user_id=away_owner_id,
+                    club_name="Away",
+                ),
+            ]
+        )
         legacy_competition = OwnerCompetition(
             name=f"Global Cup {_lifecycle_mapping_test_id()}",
             host_type="gtex",
@@ -1096,10 +1111,20 @@ def test_pre_match_tactics_are_saved_on_canonical_fixture_and_kickoff_is_enforce
         service = OwnerCompetitionLifecycleMappingService(session)
         service.bind_competition(legacy_competition.id, canonical_competition.id)
         service.bind_scheduled_match(legacy_match.id, canonical_match.id)
+        with pytest.raises(OwnerCompetitionLifecycleMappingError) as exc_info:
+            service.save_pre_match_tactics(
+                legacy_match_id=legacy_match.id,
+                club_id=home_club_id,
+                user_id=_lifecycle_mapping_test_id(),
+                mentality="attacking",
+                lineup_mode="rotate",
+            )
+        assert exc_info.value.code == "not_club_owner"
+
         saved = service.save_pre_match_tactics(
             legacy_match_id=legacy_match.id,
             club_id=home_club_id,
-            user_id=_lifecycle_mapping_test_id(),
+            user_id=home_owner_id,
             mentality="attacking",
             lineup_mode="rotate",
         )
@@ -1115,7 +1140,7 @@ def test_pre_match_tactics_are_saved_on_canonical_fixture_and_kickoff_is_enforce
             service.save_pre_match_tactics(
                 legacy_match_id=legacy_match.id,
                 club_id=away_club_id,
-                user_id=_lifecycle_mapping_test_id(),
+                user_id=away_owner_id,
                 mentality="defensive",
                 lineup_mode="strongest",
             )
@@ -1143,3 +1168,117 @@ def test_global_competition_entry_does_not_charge_legacy_ledger(monkeypatch):
 
     assert exc_info.value.code == "canonical_competition_mapping_required"
     assert exc_info.value.status == 409
+
+
+def test_global_competition_reconciliation_report_is_read_only_and_preserves_history(client, app):
+    from app.owner_console.models import OwnerCompetitionEntry
+    from app.services.owner_competition_lifecycle_mapping_service import (
+        OwnerCompetitionLifecycleMappingService,
+    )
+
+    with app.state.session_factory() as session:
+        global_competition = OwnerCompetition(
+            id=_lifecycle_mapping_test_id(),
+            name=f"Legacy Global League {_lifecycle_mapping_test_id()}",
+            host_type="gtex",
+            format="league",
+            status="running",
+            current_round=3,
+        )
+        user_hosted_competition = OwnerCompetition(
+            id=_lifecycle_mapping_test_id(),
+            name=f"Community Cup {_lifecycle_mapping_test_id()}",
+            host_type="user",
+            format="knockout",
+            status="running",
+        )
+        session.add_all([global_competition, user_hosted_competition])
+        session.flush()
+
+        historical_match = OwnerMatch(
+            id=_lifecycle_mapping_test_id(),
+            competition_id=global_competition.id,
+            round_number=1,
+            home_club_id=_lifecycle_mapping_test_id(),
+            away_club_id=_lifecycle_mapping_test_id(),
+            home_name="Historical Home",
+            away_name="Historical Away",
+            status="played",
+            home_goals=2,
+            away_goals=1,
+            events_json=[{"minute": 76, "type": "goal"}],
+            played_at=datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc),
+        )
+        scheduled_match = OwnerMatch(
+            id=_lifecycle_mapping_test_id(),
+            competition_id=global_competition.id,
+            round_number=2,
+            home_club_id=_lifecycle_mapping_test_id(),
+            away_club_id=_lifecycle_mapping_test_id(),
+            home_name="Scheduled Home",
+            away_name="Scheduled Away",
+            status="scheduled",
+        )
+        user_match = OwnerMatch(
+            id=_lifecycle_mapping_test_id(),
+            competition_id=user_hosted_competition.id,
+            round_number=1,
+            home_club_id=_lifecycle_mapping_test_id(),
+            away_club_id=_lifecycle_mapping_test_id(),
+            home_name="Community Home",
+            away_name="Community Away",
+            status="scheduled",
+        )
+        session.add_all([historical_match, scheduled_match, user_match])
+        session.add(
+            OwnerCompetitionEntry(
+                id=_lifecycle_mapping_test_id(),
+                competition_id=global_competition.id,
+                club_id=historical_match.home_club_id,
+                club_name="Historical Home",
+                owner_user_id=_lifecycle_mapping_test_id(),
+            )
+        )
+        session.flush()
+
+        report = OwnerCompetitionLifecycleMappingService(session).reconciliation_report()
+        row = next(item for item in report["competitions"] if item["legacy_competition_id"] == global_competition.id)
+
+        assert report["mode"] == "read_only"
+        assert report["automatic_reconciliation"] is False
+        assert row["mapping_status"] == "unmapped"
+        assert row["legacy_entrant_count"] == 1
+        assert row["legacy_fixture_count"] == 2
+        assert row["legacy_historical_result_count"] == 1
+        assert row["legacy_unplayed_fixture_count"] == 1
+        assert set(row["unmapped_legacy_fixture_ids"]) == {
+            historical_match.id,
+            scheduled_match.id,
+        }
+        assert row["historical_rows_mutated"] is False
+        assert row["ledger_or_reward_rows_mutated"] is False
+        assert all(item["legacy_competition_id"] != user_hosted_competition.id for item in report["competitions"])
+
+        session.refresh(historical_match)
+        session.refresh(scheduled_match)
+        assert historical_match.status == "played"
+        assert (historical_match.home_goals, historical_match.away_goals) == (2, 1)
+        assert historical_match.events_json == [{"minute": 76, "type": "goal"}]
+        assert historical_match.played_at is not None
+        assert historical_match.played_at.replace(tzinfo=timezone.utc) == datetime(
+            2026, 10, 1, 12, 0, tzinfo=timezone.utc
+        )
+        assert scheduled_match.status == "scheduled"
+        assert scheduled_match.played_at is None
+
+
+def test_competition_reconciliation_report_is_admin_only(client, bootstrap_admin_headers):
+    endpoint = "/api/owner/admin/competitions/reconciliation-report"
+
+    anonymous_response = client.get(endpoint)
+    assert anonymous_response.status_code in {401, 403}
+
+    admin_response = client.get(endpoint, headers=bootstrap_admin_headers)
+    assert admin_response.status_code == 200, admin_response.text
+    assert admin_response.json()["mode"] == "read_only"
+    assert admin_response.json()["automatic_reconciliation"] is False

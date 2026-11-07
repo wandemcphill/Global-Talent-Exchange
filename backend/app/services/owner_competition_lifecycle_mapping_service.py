@@ -15,7 +15,7 @@ from app.models.owner_competition_lifecycle_mapping import (
     OwnerCompetitionLifecycleMapping,
     OwnerMatchLifecycleMapping,
 )
-from app.owner_console.models import OwnerCompetition, OwnerMatch
+from app.owner_console.models import OwnerClubState, OwnerCompetition, OwnerCompetitionEntry, OwnerMatch
 from app.services.world_clock_service import WorldClockService
 
 
@@ -37,6 +37,224 @@ class OwnerCompetitionLifecycleMappingService:
     """
 
     session: Session
+
+    def reconciliation_report(self) -> dict[str, object]:
+        """Return a read-only inventory of global legacy competitions and canonical mappings.
+
+        This deliberately does not create mappings, synthesize canonical competitions,
+        copy results, replay fixtures, or touch ledger/reward records. It gives an
+        operator the evidence needed to make explicit, reversible mapping decisions.
+        """
+        legacy_competitions = list(
+            self.session.scalars(
+                select(OwnerCompetition)
+                .where(OwnerCompetition.host_type == "gtex")
+                .order_by(OwnerCompetition.created_at.asc(), OwnerCompetition.id.asc())
+            ).all()
+        )
+        if not legacy_competitions:
+            return {
+                "mode": "read_only",
+                "automatic_reconciliation": False,
+                "summary": {
+                    "global_competitions": 0,
+                    "active_competition_mappings": 0,
+                    "unmapped_competitions": 0,
+                    "missing_canonical_competitions": 0,
+                    "legacy_fixtures": 0,
+                    "legacy_historical_results": 0,
+                    "active_fixture_mappings": 0,
+                    "unmapped_legacy_fixtures": 0,
+                    "unmapped_canonical_fixtures": 0,
+                    "dangling_fixture_mappings": 0,
+                },
+                "competitions": [],
+            }
+
+        legacy_ids = [competition.id for competition in legacy_competitions]
+        legacy_matches = list(
+            self.session.scalars(
+                select(OwnerMatch)
+                .where(OwnerMatch.competition_id.in_(legacy_ids))
+                .order_by(OwnerMatch.round_number.asc(), OwnerMatch.id.asc())
+            ).all()
+        )
+        legacy_matches_by_competition: dict[str, list[OwnerMatch]] = {
+            competition_id: [] for competition_id in legacy_ids
+        }
+        for legacy_match in legacy_matches:
+            legacy_matches_by_competition.setdefault(legacy_match.competition_id, []).append(legacy_match)
+
+        legacy_entries = list(
+            self.session.scalars(
+                select(OwnerCompetitionEntry).where(OwnerCompetitionEntry.competition_id.in_(legacy_ids))
+            ).all()
+        )
+        entrant_counts: dict[str, int] = {competition_id: 0 for competition_id in legacy_ids}
+        for entry in legacy_entries:
+            entrant_counts[entry.competition_id] = entrant_counts.get(entry.competition_id, 0) + 1
+
+        competition_mappings = list(
+            self.session.scalars(
+                select(OwnerCompetitionLifecycleMapping).where(
+                    OwnerCompetitionLifecycleMapping.legacy_competition_id.in_(legacy_ids)
+                )
+            ).all()
+        )
+        mappings_by_legacy = {mapping.legacy_competition_id: mapping for mapping in competition_mappings}
+        active_mapping_ids = [mapping.id for mapping in competition_mappings if mapping.mapping_status == "active"]
+        fixture_mappings = (
+            list(
+                self.session.scalars(
+                    select(OwnerMatchLifecycleMapping).where(
+                        OwnerMatchLifecycleMapping.competition_mapping_id.in_(active_mapping_ids)
+                    )
+                ).all()
+            )
+            if active_mapping_ids
+            else []
+        )
+        active_fixture_mappings_by_competition: dict[str, list[OwnerMatchLifecycleMapping]] = {
+            competition_id: [] for competition_id in legacy_ids
+        }
+        for fixture_mapping in fixture_mappings:
+            if fixture_mapping.mapping_status == "active":
+                active_fixture_mappings_by_competition.setdefault(fixture_mapping.legacy_competition_id, []).append(
+                    fixture_mapping
+                )
+
+        rows: list[dict[str, object]] = []
+        active_competition_mapping_count = 0
+        unmapped_competition_count = 0
+        missing_canonical_count = 0
+        historical_result_count = 0
+        active_fixture_mapping_count = 0
+        unmapped_legacy_fixture_count = 0
+
+        for legacy in legacy_competitions:
+            mapping = mappings_by_legacy.get(legacy.id)
+            is_active_mapping = mapping is not None and mapping.mapping_status == "active"
+            if is_active_mapping:
+                active_competition_mapping_count += 1
+            else:
+                unmapped_competition_count += 1
+
+            canonical = (
+                self.session.get(UserCompetition, mapping.canonical_competition_id)
+                if is_active_mapping and mapping is not None
+                else None
+            )
+            canonical_missing = bool(is_active_mapping and canonical is None)
+            if canonical_missing:
+                missing_canonical_count += 1
+
+            competition_legacy_matches = legacy_matches_by_competition.get(legacy.id, [])
+            historical_matches = [
+                match
+                for match in competition_legacy_matches
+                if (
+                    match.played_at is not None
+                    or match.home_goals is not None
+                    or match.away_goals is not None
+                    or bool(match.events_json)
+                    or match.status not in {"scheduled", "pending"}
+                )
+            ]
+            unplayed_matches = [
+                match
+                for match in competition_legacy_matches
+                if (
+                    match.status == "scheduled"
+                    and match.played_at is None
+                    and match.home_goals is None
+                    and match.away_goals is None
+                    and not match.events_json
+                )
+            ]
+            historical_result_count += len(historical_matches)
+
+            active_fixture_links = active_fixture_mappings_by_competition.get(legacy.id, [])
+            mapped_legacy_match_ids = {link.legacy_match_id for link in active_fixture_links}
+            unmapped_fixtures = [
+                match for match in competition_legacy_matches if match.id not in mapped_legacy_match_ids
+            ]
+            active_fixture_mapping_count += len(active_fixture_links)
+            unmapped_legacy_fixture_count += len(unmapped_fixtures)
+
+            canonical_matches = (
+                list(
+                    self.session.scalars(
+                        select(CompetitionMatch).where(CompetitionMatch.competition_id == canonical.id)
+                    ).all()
+                )
+                if canonical is not None
+                else []
+            )
+            canonical_fixture_ids = {match.id for match in canonical_matches}
+            mapped_canonical_fixture_ids = {link.canonical_match_id for link in active_fixture_links}
+            dangling_fixture_mapping_count = len(mapped_canonical_fixture_ids - canonical_fixture_ids)
+            unmapped_canonical_fixture_count = len(canonical_fixture_ids - mapped_canonical_fixture_ids)
+            canonical_fixture_count = len(canonical_matches)
+
+            reasons: list[str] = []
+            if not is_active_mapping:
+                reasons.append("competition_mapping_required")
+            if canonical_missing:
+                reasons.append("mapped_canonical_competition_missing")
+            if historical_matches:
+                reasons.append("legacy_historical_results_must_be_preserved")
+            if unmapped_fixtures:
+                reasons.append("legacy_fixtures_require_explicit_review")
+            if dangling_fixture_mapping_count:
+                reasons.append("fixture_mapping_references_missing_canonical_fixtures")
+            if unmapped_canonical_fixture_count:
+                reasons.append("canonical_fixtures_without_legacy_owner_records_need_review")
+
+            rows.append(
+                {
+                    "legacy_competition_id": legacy.id,
+                    "name": legacy.name,
+                    "format": legacy.format,
+                    "legacy_status": legacy.status,
+                    "legacy_current_round": legacy.current_round,
+                    "legacy_entrant_count": entrant_counts.get(legacy.id, 0),
+                    "legacy_fixture_count": len(competition_legacy_matches),
+                    "legacy_unplayed_fixture_count": len(unplayed_matches),
+                    "legacy_historical_result_count": len(historical_matches),
+                    "legacy_fixture_ids": [match.id for match in competition_legacy_matches],
+                    "mapping_status": mapping.mapping_status if mapping is not None else "unmapped",
+                    "canonical_competition_id": (mapping.canonical_competition_id if mapping is not None else None),
+                    "canonical_competition_exists": canonical is not None,
+                    "canonical_status": str(canonical.status) if canonical is not None else None,
+                    "canonical_fixture_count": canonical_fixture_count,
+                    "active_fixture_mapping_count": len(active_fixture_links),
+                    "unmapped_canonical_fixture_count": unmapped_canonical_fixture_count,
+                    "dangling_fixture_mapping_count": dangling_fixture_mapping_count,
+                    "unmapped_legacy_fixture_ids": [match.id for match in unmapped_fixtures],
+                    "operator_review_reasons": reasons,
+                    "automatic_reconciliation": False,
+                    "historical_rows_mutated": False,
+                    "ledger_or_reward_rows_mutated": False,
+                }
+            )
+
+        return {
+            "mode": "read_only",
+            "automatic_reconciliation": False,
+            "summary": {
+                "global_competitions": len(legacy_competitions),
+                "active_competition_mappings": active_competition_mapping_count,
+                "unmapped_competitions": unmapped_competition_count,
+                "missing_canonical_competitions": missing_canonical_count,
+                "legacy_fixtures": len(legacy_matches),
+                "legacy_historical_results": historical_result_count,
+                "active_fixture_mappings": active_fixture_mapping_count,
+                "unmapped_legacy_fixtures": unmapped_legacy_fixture_count,
+                "unmapped_canonical_fixtures": sum(int(row["unmapped_canonical_fixture_count"]) for row in rows),
+                "dangling_fixture_mappings": sum(int(row["dangling_fixture_mapping_count"]) for row in rows),
+            },
+            "competitions": rows,
+        }
 
     def bind_competition(
         self,
@@ -278,6 +496,13 @@ class OwnerCompetitionLifecycleMappingService:
         if club_id not in {legacy_match.home_club_id, legacy_match.away_club_id}:
             raise OwnerCompetitionLifecycleMappingError(
                 "club_not_in_fixture", "The selected club is not one of the clubs in this fixture."
+            )
+
+        owner_state = self.session.scalar(select(OwnerClubState).where(OwnerClubState.club_id == club_id))
+        if owner_state is None or owner_state.owner_user_id != user_id:
+            raise OwnerCompetitionLifecycleMappingError(
+                "not_club_owner",
+                "Only the authenticated owner of this club may submit pre-match instructions.",
             )
 
         legacy_entry = self.session.scalar(
