@@ -1,8 +1,10 @@
 <#
 .SYNOPSIS
-    Regression tests for the GTEX Windows launcher's argument-quoting logic.
+    Regression tests for the GTEX Windows launcher's argument-quoting logic
+    and demonstration package static validation.
     Covers the bug where Start-Process -ArgumentList truncated paths at the
-    first space (e.g. repo paths under "GLOBAL TALENT EXCHANGE").
+    first space (e.g. repo paths under "GLOBAL TALENT EXCHANGE"), and validates
+    Issue #28 compliance.
 
 .NOTES
     Run with: Invoke-Pester -Path .\tools\GTEX_PHASE1_WINDOWS_DEMO.Tests.ps1
@@ -79,5 +81,33 @@ Describe "GTEX_PHASE1_WINDOWS_DEMO.ps1 static structure" {
         $scriptContent = Get-Content (Join-Path $PSScriptRoot "GTEX_PHASE1_WINDOWS_DEMO.ps1") -Raw
         $scriptContent | Should Match '\$unityArgString\s*=\s*ConvertTo-QuotedArgumentString'
         $scriptContent | Should Match '-ArgumentList\s+\$unityArgString'
+    }
+
+    It "rejects Session 0 and headless sessions before starting backend or provisioning" {
+        $scriptContent = Get-Content (Join-Path $PSScriptRoot "GTEX_PHASE1_WINDOWS_DEMO.ps1") -Raw
+        $scriptContent | Should Match 'function Get-GtexInteractiveDesktopStatus'
+        $scriptContent | Should Match '\$sessionId -gt 0'
+        $scriptContent | Should Match '\[Environment\]::UserInteractive'
+        $scriptContent | Should Match 'Get-Process -Name "explorer"'
+        $scriptContent | Should Match 'Assert-GtexInteractiveDesktop'
+        $scriptContent | Should Match 'Fail before starting a backend'
+    }
+
+    It "provides the exact Unity build command when standalone player is missing" {
+        $scriptContent = Get-Content (Join-Path $PSScriptRoot "GTEX_PHASE1_WINDOWS_DEMO.ps1") -Raw
+        $scriptContent | Should Match 'FStudio\.GTEX\.Editor\.GtexBuildTools\.BuildWindows64ProductionFromCommandLine'
+        $scriptContent | Should Match 'run_gtex_windows_production_build\.ps1'
+    }
+
+    It "mirrors the runtime bootstrap file to the executable directory" {
+        $scriptContent = Get-Content (Join-Path $PSScriptRoot "GTEX_PHASE1_WINDOWS_DEMO.ps1") -Raw
+        $scriptContent | Should Match 'gtex-live-bootstrap\.json'
+        $scriptContent | Should Match 'GTEX_BOOTSTRAP_PATH'
+    }
+
+    It "enforces authoritative live playback runtime mode overrides" {
+        $scriptContent = Get-Content (Join-Path $PSScriptRoot "GTEX_PHASE1_WINDOWS_DEMO.ps1") -Raw
+        $scriptContent | Should Match '\$env:GTEX_RUNTIME_MODE\s*=\s*"live"'
+        $scriptContent | Should Match '\$env:GTEX_ENVIRONMENT\s*=\s*"local"'
     }
 }

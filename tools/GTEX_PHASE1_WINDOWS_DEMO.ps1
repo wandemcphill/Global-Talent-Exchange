@@ -19,6 +19,43 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 
 . (Join-Path $PSScriptRoot "GTEX_Launcher_Common.ps1")
 
+function Get-GtexInteractiveDesktopStatus {
+    $currentProcess = Get-Process -Id $PID -ErrorAction Stop
+    $sessionId = [int]$currentProcess.SessionId
+    $hasExplorerShell = @(
+        Get-Process -Name "explorer" -ErrorAction SilentlyContinue |
+            Where-Object { [int]$_.SessionId -eq $sessionId }
+    ).Count -gt 0
+
+    $isUserInteractive = [Environment]::UserInteractive
+    [pscustomobject]@{
+        SessionId = $sessionId
+        IsUserInteractive = $isUserInteractive
+        HasExplorerShell = $hasExplorerShell
+        IsInteractive = ($sessionId -gt 0 -and $isUserInteractive -and $hasExplorerShell)
+    }
+}
+
+function Assert-GtexInteractiveDesktop {
+    $desktop = Get-GtexInteractiveDesktopStatus
+    if (-not $desktop.IsInteractive) {
+        throw (
+            "GTEX visual demo requires an interactive Windows desktop session. " +
+            "Current process SessionId=$($desktop.SessionId), " +
+            "UserInteractive=$($desktop.IsUserInteractive), " +
+            "ExplorerShellPresent=$($desktop.HasExplorerShell). " +
+            "Session 0/services and scheduled tasks configured to run when the user is logged off " +
+            "cannot produce valid visual evidence. Sign in to Windows and launch this script from " +
+            "the visible desktop PowerShell session."
+        )
+    }
+    return $desktop
+}
+
+# Fail before starting a backend, provisioning a match, or launching Unity.
+$desktopStatus = Assert-GtexInteractiveDesktop
+Write-Host "[+] Interactive desktop verified (SessionId $($desktopStatus.SessionId))." -ForegroundColor Green
+
 function Resolve-PythonExecutable {
     param([string]$ExplicitPath)
     if (-not [string]::IsNullOrWhiteSpace($ExplicitPath)) {
@@ -45,15 +82,34 @@ function Resolve-UnityExecutable {
         if (Test-Path $ExplicitPath) { return (Get-Item $ExplicitPath).FullName }
         throw "Specified Unity executable not found: $ExplicitPath"
     }
-    $buildsDir = Join-Path $repoRoot "Gtex_Test_Migration\Builds"
-    if (-not (Test-Path $buildsDir)) { return $null }
+
+    $candidateBuildDirs = @(
+        (Join-Path $repoRoot "Gtex_Test_Migration\Builds")
+    )
+
+    try {
+        $gitCommonDir = git rev-parse --git-common-dir 2>$null
+        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($gitCommonDir)) {
+            $resolvedCommon = Resolve-Path $gitCommonDir -ErrorAction SilentlyContinue
+            if ($null -ne $resolvedCommon) {
+                $mainRepo = Split-Path $resolvedCommon.Path -Parent
+                if ($mainRepo -and (Test-Path $mainRepo) -and ($mainRepo -ne $repoRoot)) {
+                    $candidateBuildDirs += (Join-Path $mainRepo "Gtex_Test_Migration\Builds")
+                }
+            }
+        }
+    } catch {}
+
     $preferredNames = @("GTEXMatch.exe", "Gtex_Test_Migration.exe")
-    foreach ($name in $preferredNames) {
-        $candidate = Get-ChildItem -Path $buildsDir -Recurse -Filter $name -File -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($null -ne $candidate) { return $candidate.FullName }
+    foreach ($buildsDir in $candidateBuildDirs) {
+        if (-not (Test-Path $buildsDir)) { continue }
+        foreach ($name in $preferredNames) {
+            $candidate = Get-ChildItem -Path $buildsDir -Recurse -Filter $name -File -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($null -ne $candidate) { return $candidate.FullName }
+        }
+        $fallback = Get-ChildItem -Path $buildsDir -Recurse -Filter "*.exe" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($null -ne $fallback) { return $fallback.FullName }
     }
-    $fallback = Get-ChildItem -Path $buildsDir -Recurse -Filter "*.exe" -File -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($null -ne $fallback) { return $fallback.FullName }
     return $null
 }
 
@@ -94,7 +150,18 @@ function Resolve-ExistingLiveMatchId {
 $python = Resolve-PythonExecutable -ExplicitPath $PythonExe
 $exe = Resolve-UnityExecutable -ExplicitPath $ExePath
 if ($null -eq $exe) {
-    throw "No Windows Unity build found under Gtex_Test_Migration\Builds. Build the standalone player first."
+    Write-Host "================================================================" -ForegroundColor Red
+    Write-Host " [!] No Windows Unity standalone build found under Gtex_Test_Migration\Builds." -ForegroundColor Red
+    Write-Host "================================================================" -ForegroundColor Red
+    Write-Host "A compiled StandaloneWindows64 build is required to run the demo." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "To build the Windows player using Unity 6 (6000.3.12f1), run:" -ForegroundColor Yellow
+    Write-Host '& "C:\Program Files\Unity\Hub\Editor\6000.3.12f1\Editor\Unity.exe" -batchmode -quit -nographics -buildTarget StandaloneWindows64 -projectPath "Gtex_Test_Migration" -executeMethod "FStudio.GTEX.Editor.GtexBuildTools.BuildWindows64ProductionFromCommandLine" -logFile tmp/unity_windows_build.log' -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Or run the repository build helper script:" -ForegroundColor Yellow
+    Write-Host "powershell -ExecutionPolicy Bypass -File .\tools\run_gtex_windows_production_build.ps1" -ForegroundColor Cyan
+    Write-Host ""
+    throw "No Windows Unity build found under Gtex_Test_Migration\Builds. Build the standalone player first using the command shown above."
 }
 
 Write-Host "================================================================" -ForegroundColor Cyan
@@ -108,12 +175,13 @@ $backend = $null
 $startedBackend = $false
 $unity = $null
 
+$backendOut = Join-Path $repoRoot "tmp\gtex_live_backend_demo.log"
+$backendErr = Join-Path $repoRoot "tmp\gtex_live_backend_demo.err.log"
+
 try {
     if (Test-BackendPort -Port $BackendPort) {
         Write-Host "[+] Backend already running at $baseUrl" -ForegroundColor Green
     } else {
-        $backendOut = Join-Path $repoRoot "tmp\gtex_live_backend_demo.log"
-        $backendErr = Join-Path $repoRoot "tmp\gtex_live_backend_demo.err.log"
         New-Item -ItemType Directory -Force -Path (Split-Path $backendOut -Parent) | Out-Null
         $backendScript = Join-Path $repoRoot "tools\run_gtex_live_backend.py"
         $backendArgs = @($backendScript, "--profile", "local", "--port", $BackendPort, "--log-level", "info")
@@ -151,6 +219,18 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Live match provisioning failed with exit code $LASTEXITCODE." }
     Write-Host "[+] Live match provisioned; Unity bootstrap/config updated." -ForegroundColor Green
 
+    # Mirror bootstrap file to standalone player directory tmp if needed
+    $primaryBootstrap = Join-Path $repoRoot "Gtex_Test_Migration\tmp\gtex-live-bootstrap.json"
+    if (Test-Path $primaryBootstrap) {
+        $exeTmpDir = Join-Path (Split-Path $exe -Parent) "tmp"
+        if (-not (Test-Path $exeTmpDir)) {
+            New-Item -ItemType Directory -Force -Path $exeTmpDir | Out-Null
+        }
+        $targetBootstrap = Join-Path $exeTmpDir "gtex-live-bootstrap.json"
+        Copy-Item -Path $primaryBootstrap -Destination $targetBootstrap -Force
+        $env:GTEX_BOOTSTRAP_PATH = $targetBootstrap
+    }
+
     # The Unity config supports environment-variable overrides. Force the
     # evidence player into live playback so an old developer-shell override
     # cannot silently select OriginalVisualRuntime again.
@@ -166,9 +246,16 @@ try {
     $unity = Start-Process -FilePath $exe -ArgumentList $unityArgString -WorkingDirectory (Split-Path $exe -Parent) -PassThru
 
     Write-Host "[+] GTEX 3D player launched. PID=$($unity.Id)" -ForegroundColor Green
-    Write-Host "    Recording: Win+Alt+R" -ForegroundColor Yellow
-    Write-Host "    Screenshot: Win+Shift+S" -ForegroundColor Yellow
-    Write-Host "    Player log: $playerLog" -ForegroundColor Gray
+    Write-Host "    Backend Base URL:   $baseUrl" -ForegroundColor Cyan
+    Write-Host "    Websocket Route:    ws://127.0.0.1:$BackendPort/api/v2/ws/match/<match_id>?format=unity" -ForegroundColor Cyan
+    Write-Host "    Player log:         $playerLog" -ForegroundColor Gray
+    Write-Host "    Backend stdout:     $backendOut" -ForegroundColor Gray
+    Write-Host "    Backend stderr:     $backendErr" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "    Evidence capture shortcuts:" -ForegroundColor Yellow
+    Write-Host "      - Screen Recording: Win+Alt+R (Xbox Game Bar)" -ForegroundColor White
+    Write-Host "      - Screenshot:       Win+Shift+S" -ForegroundColor White
+    Write-Host ""
 
     if ($LeaveUnityRunning.IsPresent) {
         Write-Host "[+] Leaving Unity and the backend running." -ForegroundColor Green
