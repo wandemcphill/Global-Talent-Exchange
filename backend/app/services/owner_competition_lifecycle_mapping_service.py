@@ -101,12 +101,8 @@ class OwnerCompetitionLifecycleMappingService:
                 )
             ).all()
         )
-        mappings_by_legacy = {
-            mapping.legacy_competition_id: mapping for mapping in competition_mappings
-        }
-        active_mapping_ids = [
-            mapping.id for mapping in competition_mappings if mapping.mapping_status == "active"
-        ]
+        mappings_by_legacy = {mapping.legacy_competition_id: mapping for mapping in competition_mappings}
+        active_mapping_ids = [mapping.id for mapping in competition_mappings if mapping.mapping_status == "active"]
         fixture_mappings = (
             list(
                 self.session.scalars(
