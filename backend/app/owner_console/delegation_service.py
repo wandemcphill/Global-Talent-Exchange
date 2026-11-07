@@ -250,9 +250,6 @@ def set_management_configuration(session: Session, club_id: str, owner_user_id: 
         )
         policy.activity_assignments_json = _build_default_assignments(mode)
 
-    session.commit()
-    session.refresh(policy)
-
     _publish_governance_event(
         session,
         club_id,
@@ -260,6 +257,9 @@ def set_management_configuration(session: Session, club_id: str, owner_user_id: 
         "delegation.mode_changed",
         {"new_mode": mode},
     )
+
+    session.commit()
+    session.refresh(policy)
     return policy
 
 
@@ -297,9 +297,6 @@ def update_activity_assignment(
 
     policy.activity_assignments_json = assignments
     policy.mode = "custom"
-    session.commit()
-    session.refresh(policy)
-
     _publish_governance_event(
         session,
         club_id,
@@ -311,6 +308,9 @@ def update_activity_assignment(
             "authority_level": authority_level,
         },
     )
+
+    session.commit()
+    session.refresh(policy)
     return policy
 
 
@@ -328,9 +328,6 @@ def update_financial_thresholds(
             continue
 
     policy.financial_thresholds_json = current
-    session.commit()
-    session.refresh(policy)
-
     _publish_governance_event(
         session,
         club_id,
@@ -338,6 +335,9 @@ def update_financial_thresholds(
         "delegation.thresholds_updated",
         {"financial_thresholds": current},
     )
+
+    session.commit()
+    session.refresh(policy)
     return policy
 
 
@@ -349,9 +349,6 @@ def toggle_delegation_suspension(
     policy.is_suspended = suspend
     policy.suspension_reason = reason if suspend else None
 
-    session.commit()
-    session.refresh(policy)
-
     event_name = "delegation.delegation_suspended" if suspend else "delegation.delegation_restored"
     _publish_governance_event(
         session,
@@ -361,6 +358,8 @@ def toggle_delegation_suspension(
         {"is_suspended": suspend, "reason": reason},
         priority=EcosystemEventPriority.HIGH if suspend else EcosystemEventPriority.NORMAL,
     )
+    session.commit()
+    session.refresh(policy)
     return policy
 
 
@@ -389,9 +388,6 @@ def set_temporary_override(
     }
 
     policy.temporary_overrides_json = overrides
-    session.commit()
-    session.refresh(policy)
-
     _publish_governance_event(
         session,
         club_id,
@@ -399,6 +395,9 @@ def set_temporary_override(
         "delegation.override_applied",
         {"activity_key": activity_key, "override_role": override_role, "reason": reason},
     )
+
+    session.commit()
+    session.refresh(policy)
     return policy
 
 
@@ -412,9 +411,6 @@ def remove_temporary_override(
     if activity_key in overrides:
         del overrides[activity_key]
         policy.temporary_overrides_json = overrides
-        session.commit()
-        session.refresh(policy)
-
         _publish_governance_event(
             session,
             club_id,
@@ -422,6 +418,8 @@ def remove_temporary_override(
             "delegation.override_removed",
             {"activity_key": activity_key},
         )
+        session.commit()
+        session.refresh(policy)
 
     return policy
 
