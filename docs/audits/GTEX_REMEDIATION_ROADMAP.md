@@ -1,6 +1,6 @@
 # GTEX Remediation Roadmap
 
-**Current Review Baseline:** `main` `a19893d44e3e3742dd7932880935a68cd2577d92` (2026-11-06).  
+**Current Review Baseline:** `main` `89d792adb2b012f5ddeea8747853a8e832beeeec` (2026-11-07).  
 **Historical Baselines:** `bb6d82a9` (2026-10-27) and `45e29ef6` (2026-10-18).  
 **Primary Reference:** `docs/audits/GTEX_COMPREHENSIVE_PLATFORM_AUDIT.md` (Version 3.0.0).  
 **Player Universe Protection Policy:** STRICTLY ENFORCED & LOCKED (Zero player/regen/legend records altered, synthetic records created, or imports executed).
@@ -9,7 +9,7 @@ Nothing here is permission to merge without review. Each repair is an independen
 
 ---
 
-## 1. Current-Main Checkpoint (2026-11-06, `a19893d4`)
+## 1. Historical Main Checkpoint (2026-11-06, `a19893d4`)
 
 - **453 Commits Landed Since Baseline `bb6d82a9`:** Major additions include PR #343 (owner inbox & showroom desk actions), PR #344 (transfer hub & cash offer settlement), PR #345 (living world & narrative events), PR #346 (staff qualification policy & sister-club rules), PR #352 (canonical competition engine mapping), PR #377 (Cloudflare Pages frontend deployment), and PR #384 (Unit 2A Milestone 2 stadium arena & humanoid match gameplay).
 - **Authentication & Turnstile (FND-001, NEW-AUTH-1):** Fully resolved in code. `verify_turnstile_token` is enforced across `/auth/signup`, `/auth/signup-creator`, and `/auth/signup-trader` in `backend/app/auth/router.py`. Flutter signup renders `GtexTurnstileChallengeWidget` (dev-bypass removed).
@@ -137,3 +137,49 @@ Canonical `main` remains `a19893d44e3e3742dd7932880935a68cd2577d92`. Recovery br
 - **M2:** current branch head `4f7804ec`, draft PR #391. The jump-to-tail was removed, event-frame ordering regression added, lint fixed, and the in-memory test fixture now cleans up environment state; current CI pending.
 
 Do not treat agent-reported local tests as CI results. Do not merge until the respective review gates pass. Player, regen, and legend data remain protected.
+
+
+---
+
+## 8. Post-merge Remediation Checkpoint — 2026-11-07
+
+**Canonical main:** `89d792adb2b012f5ddeea8747853a8e832beeeec`.  
+**Merge set:** PRs #386, #387, #388 and #389 are merged.  
+**Post-merge validation:** all seven push-triggered main workflows passed on that exact SHA: Quality Gates, Phase A Economic Regressions, React shell build, Cloudflare Pages, React WebGL, CI and Staging Deploy, and Final Platform Certification.
+
+### Integrated PRs
+
+| PR | Area | Result |
+|---|---|---|
+| #386 | Competition engine follow-up | Merged; does not by itself close Issue #352. |
+| #387 | Central audio and sponsored music | Merged; all reported PR checks green. |
+| #388 | Financial integrity | Merged; provider-dependent production readiness remains open. |
+| #389 | Club HQ and public profile | Merged; all reported PR checks green. |
+
+### Active remediation PRs
+
+| PR | Branch head | Verified checks | Remaining |
+|---|---|---|---|
+| #390 Owner Authority | `23c1a454fd7de29620dfa0d53f128c81ede511b4` | Quality Gates, Phase A, shell, Cloudflare, WebGL, CI/Staging, P7-FEV and Final Certification passed. | Formal review; still draft and unmerged. |
+| #391 M2 Match Experience | `cb558307a1be241b498af27f4a5008d9a4167a87` | Quality Gates, Phase A, shell, Cloudflare, WebGL, CI/Staging, P7-FEV and Final Certification passed. | Formal review; still draft and unmerged. |
+| #392 Platform Audit | Updated by this audit branch | Documentation reconciliation | Review, CI and final status confirmation. |
+| #393 Windows Demo | `1a4618ec7ad2c463e873c44c48b6b41bcdbcec57` | Automated tests reported green. | Interactive Windows/GPU visual capture; remains draft. |
+| #394 UTF-8 correction | `a8c51dd688fefa9bd2bc67fd85a04da3d9bbd602` | Quality Gates, Phase A and WebGL passed. | CI/Staging, P7-FEV and Final Certification were still running at the last recorded check; remains draft. |
+| #395 Competition reconciliation visibility | `8e4cff26b2de459a20e74f1db115ef2089081694` | Fresh checks queued after the final formatting repair. | Await current CI; remains draft. |
+
+### Specific fixes in the queue
+
+- **Owner delegation:** policy mutations now publish the canonical governance event before commit, so policy and outbox state roll back together. A regression covers outbox publication failure.
+- **M2 mobile browser acceptance:** Flutter semantics locators now scroll and activate the actual section nodes and wait for the Club sections sheet without weakening the route, squad, or overflow assertions.
+- **UTF-8 text:** the owner-facing morale hook was restored to a true em dash and an exact-string test was added. The touched legacy test's synthetic password hash is marked explicitly as a test-only fixture for the secret scanner.
+- **Competition mapping:** direct canonical pre-match tactic writes now enforce club ownership inside the mapping service. A read-only admin report inventories legacy global competitions, historical results, canonical mappings, and unmatched fixtures. It does not create mappings or mutate match, ledger, reward, player, regen, or legend records.
+
+### External and production dependencies that remain open
+
+1. **Issue #352:** production legacy global competitions have not been inventoried or reconciled from the live database. PR #395 supplies read-only inventory capability; an authorized operator must deploy it, inspect the report, and explicitly map only verified identity/fixture pairs. No history migration or automatic replay is authorized.
+2. **Issue #2:** live payment-provider credentials, bank-clearing rails and external KYC authority remain provider-dependent. No production payment or payout was executed.
+3. **Issue #136:** the Render player-ingestion worker was reported suspended in `stuck_crashlooping`. It was not resumed or executed; isolated staging recovery must come first.
+4. **Issue #28:** the Windows package still needs real visual evidence from an interactive Windows desktop with a supported Unity/GPU runtime. No screenshot was fabricated.
+5. **Issue #267:** the comprehensive audit remains open; CI success and this documentation refresh do not replace full screen-by-screen operational evidence.
+
+**Permanent protection:** no production player, regen, legend, portrait, face-bank, or ingestion data was changed as part of these remediations. No production financial transaction was executed. PRs remain drafts and no follow-up PR was merged in this checkpoint.
