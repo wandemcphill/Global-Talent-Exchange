@@ -91,7 +91,7 @@ describe("BroadcastOverlayHUD", () => {
 
     expect(container.textContent).toContain("APX");
     expect(container.textContent).toContain("NST");
-    expect(container.textContent).toContain("02:15");
+    expect(container.querySelector("[data-testid='authoritative-match-clock']")?.textContent).toBe("2'");
     expect(container.textContent).toContain("1ST HALF");
   });
 
@@ -154,5 +154,41 @@ describe("BroadcastOverlayHUD", () => {
       toggle2DBtn?.click();
     });
     expect(handle2D).toHaveBeenCalled();
+  });
+
+  test("displays authoritative streamed match minute and ignores local time drift", async () => {
+    await act(async () => {
+      root.render(
+        <BroadcastOverlayHUD
+          matchState={{ ...mockState, clock_minute: 74, time_seconds: 200 }}
+          homeTeam={mockHome}
+          awayTeam={mockAway}
+          matchLabel="Apex Lagos vs Nairobi Stars"
+          cameraMode="director_auto"
+          onSelectCameraMode={jest.fn()}
+          onToggle2DFallback={jest.fn()}
+        />
+      );
+    });
+
+    const clockEl = container.querySelector("[data-testid='authoritative-match-clock']");
+    expect(clockEl?.textContent).toBe("74'");
+
+    // Simulate local elapsed animation time advancing while authoritative streamed minute stays at 74'
+    await act(async () => {
+      root.render(
+        <BroadcastOverlayHUD
+          matchState={{ ...mockState, clock_minute: 74, time_seconds: 220 }}
+          homeTeam={mockHome}
+          awayTeam={mockAway}
+          matchLabel="Apex Lagos vs Nairobi Stars"
+          cameraMode="director_auto"
+          onSelectCameraMode={jest.fn()}
+          onToggle2DFallback={jest.fn()}
+        />
+      );
+    });
+
+    expect(clockEl?.textContent).toBe("74'");
   });
 });

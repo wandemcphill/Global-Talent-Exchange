@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import sqlite3
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -38,66 +37,102 @@ from app.schemas.match_viewer import MatchMode
 from app.services.competition_auto_runner import CompetitionAutoRunner
 from backend.tests.support.secrets import MEDIA_SIGNING_TEST_SECRET, TEST_AUTH_SECRET
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-GTE_BACKEND_DB_PATH = REPO_ROOT / "gte_backend.db"
 
+def _build_synthetic_canonical_entities() -> dict[str, object]:
+    """Isolated, deterministic synthetic extraction of canonical competition, clubs, and real-scale players."""
+    comp_row = {
+        "id": "00000000-0000-0000-0000-000000000401",
+        "name": "West Africa Elite Circuit",
+        "format": "league",
+        "visibility": "public",
+        "status": "live",
+        "start_mode": "scheduled",
+        "source_type": "official",
+        "host_user_id": "00000000-0000-0000-0000-000000000001",
+        "currency": "GTEX",
+    }
+    club_rows = [
+        {
+            "id": "00000000-0000-0000-0000-000000000101",
+            "owner_user_id": "00000000-0000-0000-0000-000000000011",
+            "club_name": "Lagos Atlas FC",
+            "short_name": "LAF",
+            "slug": "lagos-atlas-fc",
+            "primary_color": "#00E676",
+            "secondary_color": "#0F172A",
+            "accent_color": "#F5B83D",
+            "home_venue_name": "GTEX National Arena",
+            "country_code": "NG",
+            "region_name": "West Africa",
+            "city_name": "Lagos",
+        },
+        {
+            "id": "00000000-0000-0000-0000-000000000102",
+            "owner_user_id": "00000000-0000-0000-0000-000000000012",
+            "club_name": "Rio Norte SC",
+            "short_name": "RNS",
+            "slug": "rio-norte-sc",
+            "primary_color": "#3B82F6",
+            "secondary_color": "#F8FAFC",
+            "accent_color": "#F43F5E",
+            "home_venue_name": "Rio Norte Arena",
+            "country_code": "NG",
+            "region_name": "West Africa",
+            "city_name": "Abuja",
+        },
+    ]
 
-def _load_real_canonical_entities_from_gte_db() -> dict[str, object]:
-    """Read-only extraction of canonical competition, clubs, and real players from gte_backend.db."""
-    assert GTE_BACKEND_DB_PATH.exists(), f"Expected canonical DB at {GTE_BACKEND_DB_PATH}"
-    uri = f"file:{GTE_BACKEND_DB_PATH.as_posix()}?mode=ro"
-    conn = sqlite3.connect(uri, uri=True)
-    conn.row_factory = sqlite3.Row
-    try:
-        comp_row = conn.execute(
-            "SELECT id, name, format, visibility, status, start_mode, source_type, host_user_id, currency "
-            "FROM user_competitions WHERE id = '00000000-0000-0000-0000-000000000401'"
-        ).fetchone()
-        assert comp_row is not None
+    pos_specs = [
+        ("goalkeeper", "GK", 2),
+        ("defender", "DF", 6),
+        ("midfielder", "MF", 5),
+        ("forward", "FW", 5),
+    ]
 
-        club_rows = conn.execute(
-            "SELECT id, owner_user_id, club_name, short_name, slug, primary_color, secondary_color, accent_color, "
-            "home_venue_name, country_code, region_name, city_name "
-            "FROM club_profiles WHERE id IN ("
-            "'00000000-0000-0000-0000-000000000101', "
-            "'00000000-0000-0000-0000-000000000102'"
-            ") ORDER BY id"
-        ).fetchall()
-        assert len(club_rows) == 2
+    home_players = []
+    p_num = 1
+    for norm_pos, pos, count in pos_specs:
+        for idx in range(count):
+            home_players.append(
+                {
+                    "id": f"00000000-0000-0000-0001-{p_num:012d}",
+                    "full_name": f"Home {pos} {idx+1}",
+                    "position": pos,
+                    "normalized_position": norm_pos,
+                    "shirt_number": p_num,
+                    "height_cm": 182,
+                    "market_value_eur": 25_000_000,
+                }
+            )
+            p_num += 1
 
-        # Fetch 36 real ingested players across GK, DF, MF, FW positions (18 per club: 11 starters + 7 bench)
-        gks = conn.execute(
-            "SELECT id, full_name, position, normalized_position, shirt_number, height_cm, market_value_eur "
-            "FROM ingestion_players WHERE normalized_position = 'goalkeeper' ORDER BY full_name LIMIT 4"
-        ).fetchall()
-        dfs = conn.execute(
-            "SELECT id, full_name, position, normalized_position, shirt_number, height_cm, market_value_eur "
-            "FROM ingestion_players WHERE normalized_position = 'defender' ORDER BY full_name LIMIT 12"
-        ).fetchall()
-        mfs = conn.execute(
-            "SELECT id, full_name, position, normalized_position, shirt_number, height_cm, market_value_eur "
-            "FROM ingestion_players WHERE normalized_position = 'midfielder' ORDER BY full_name LIMIT 10"
-        ).fetchall()
-        fws = conn.execute(
-            "SELECT id, full_name, position, normalized_position, shirt_number, height_cm, market_value_eur "
-            "FROM ingestion_players WHERE normalized_position = 'forward' ORDER BY full_name LIMIT 10"
-        ).fetchall()
+    away_players = []
+    for norm_pos, pos, count in pos_specs:
+        for idx in range(count):
+            away_players.append(
+                {
+                    "id": f"00000000-0000-0000-0002-{p_num:012d}",
+                    "full_name": f"Away {pos} {idx+1}",
+                    "position": pos,
+                    "normalized_position": norm_pos,
+                    "shirt_number": p_num,
+                    "height_cm": 182,
+                    "market_value_eur": 25_000_000,
+                }
+            )
+            p_num += 1
 
-        assert len(gks) == 4 and len(dfs) == 12 and len(mfs) == 10 and len(fws) == 10
-        home_players = [dict(r) for r in (gks[:2] + dfs[:6] + mfs[:5] + fws[:5])]
-        away_players = [dict(r) for r in (gks[2:4] + dfs[6:12] + mfs[5:10] + fws[5:10])]
-
-        return {
-            "competition": dict(comp_row),
-            "clubs": [dict(c) for c in club_rows],
-            "home_players": home_players,
-            "away_players": away_players,
-        }
-    finally:
-        conn.close()
+    return {
+        "competition": comp_row,
+        "clubs": club_rows,
+        "home_players": home_players,
+        "away_players": away_players,
+    }
 
 
 def _build_canonical_competition_test_env():
+    environment_keys = ("GTE_AUTH_SECRET", "GTE_MEDIA_SIGNING_SECRET", "DATABASE_URL")
+    original_environment = {key: os.environ.get(key) for key in environment_keys}
     os.environ["GTE_AUTH_SECRET"] = TEST_AUTH_SECRET
     os.environ["GTE_MEDIA_SIGNING_SECRET"] = MEDIA_SIGNING_TEST_SECRET
     os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
@@ -119,6 +154,17 @@ def _build_canonical_competition_test_env():
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     app.state.session_factory = session_factory
+
+    def _cleanup_test_environment():
+        engine.dispose()
+        for key, original_value in original_environment.items():
+            if original_value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = original_value
+        reset_settings_cache()
+
+    app.state.cleanup_test_environment = _cleanup_test_environment
 
     def _override_session():
         with session_factory() as session:
@@ -270,7 +316,7 @@ def _seed_canonical_competition_fixture(
     return competition, fixture
 
 
-def test_u2a007_canonical_competition_match_and_exact_durations():
+def test_u2a007_canonical_competition_match_and_exact_durations(request):
     """
     Validates Sections 6 & 7 of U2A-007:
     - Real GTEX competition (`West Africa Elite Circuit`), registered clubs (`Lagos Atlas FC` vs `Rio Norte SC`),
@@ -279,8 +325,9 @@ def test_u2a007_canonical_competition_match_and_exact_durations():
     - Preservation of all authoritative events, score, statistics, substitutions, and final outcome.
     - Live spectator WebSocket gateway (`/ws/spectate/{match_id}`) streaming.
     """
-    canonical_data = _load_real_canonical_entities_from_gte_db()
+    canonical_data = _build_synthetic_canonical_entities()
     app, session_factory = _build_canonical_competition_test_env()
+    request.addfinalizer(app.state.cleanup_test_environment)
 
     with session_factory() as session:
         competition, fixture = _seed_canonical_competition_fixture(session, canonical_data)
@@ -384,8 +431,9 @@ def test_u2a007_canonical_competition_match_and_exact_durations():
         assert initial_msg["match_id"] == match_id
 
     # Save 300s and 600s canonical competition payloads to scratch if directory exists
-    scratch_dir = Path(r"C:\Users\ayomc\.gemini\antigravity\brain\2e247d29-6480-46bb-8d45-7cc27e1fc56f\scratch")
-    if scratch_dir.exists():
+    scratch_env = os.environ.get("GTEX_TEST_SCRATCH_DIR")
+    scratch_dir = Path(scratch_env) if scratch_env else None
+    if scratch_dir and scratch_dir.exists():
         for sec in (180, 300, 420, 600):
             (scratch_dir / f"u2a007_canonical_competition_{sec}s.json").write_text(
                 json.dumps(exported_payloads[sec]), encoding="utf-8"

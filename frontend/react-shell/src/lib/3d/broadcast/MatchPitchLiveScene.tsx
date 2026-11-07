@@ -15,7 +15,7 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import * as THREE from "three";
 import { FIFA_PITCH_DIMENSIONS, pitchTo3D, PITCH_BOUNDS } from "./matchCoordinates";
-import { SpatialInterpolator, InterpolatedMatchState } from "./SpatialInterpolator";
+import { calculateTimelineAdvanceSeconds, SpatialInterpolator, InterpolatedMatchState } from "./SpatialInterpolator";
 import { CameraDirector, ManualCameraMode } from "./CameraDirector";
 import { BroadcastOverlayHUD } from "./BroadcastOverlayHUD";
 import {
@@ -230,6 +230,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   // Three.js WebGL Scene Lifecycle
   // ---------------------------------------------------------------------------
   useEffect(() => {
+    if (is2DActive) return;
     const container = mountRef.current;
     if (!container) return;
 
@@ -500,7 +501,17 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       if (!isPausedRef.current) {
         const effectiveSpeed =
           replayReturnTimeRef.current !== null ? Math.min(0.85, playbackSpeedRef.current) : playbackSpeedRef.current;
-        localTimeRef.current += deltaSec * effectiveSpeed;
+        // Keep simulation time monotonic after background/frame stalls. The
+        // helper bounds the delayed callback and catches up gradually on later
+        // live frames so intermediate authoritative events remain observable.
+        const timelineDelta = calculateTimelineAdvanceSeconds({
+          currentTimeSeconds: localTimeRef.current,
+          frameDeltaMs: rawDeltaMs,
+          latestFrameTimeSeconds: interpolator.getEndTime(),
+          isLive: isLiveRef.current && replayReturnTimeRef.current === null,
+          playbackSpeed: effectiveSpeed,
+        });
+        localTimeRef.current += timelineDelta;
         if (replayReturnTimeRef.current !== null && localTimeRef.current >= replayReturnTimeRef.current) {
           localTimeRef.current = replayReturnTimeRef.current;
           replayReturnTimeRef.current = null;
@@ -753,7 +764,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         }
       }
     };
-  }, [qualityTier, cameraDirector, interpolator, animationStateMachine, handleSelectQualityTier]);
+  }, [qualityTier, cameraDirector, interpolator, animationStateMachine, handleSelectQualityTier, is2DActive]);
 
   // Handle 2D companion mode toggle
   const handleToggle2D = useCallback(() => {
