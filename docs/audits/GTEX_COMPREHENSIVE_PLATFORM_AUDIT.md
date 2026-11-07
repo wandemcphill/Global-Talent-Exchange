@@ -227,9 +227,9 @@ We certify under strict engineering protection policy:
 
 ---
 
-## 7. Remote Recovery and Milestone 2 Acceptance Checkpoint — 2026-11-07
+## 7. Historical Remote Recovery and Milestone 2 Acceptance Checkpoint — 2026-11-07 (pre-merge snapshot)
 
-**Checkpoint baseline:** canonical `main` remains `a19893d44e3e3742dd7932880935a68cd2577d92`. The following work is on separate feature/documentation branches and has not been merged.
+**Historical checkpoint baseline:** canonical `main` was `a19893d44e3e3742dd7932880935a68cd2577d92` before PRs #386–#389 were merged. This pre-merge snapshot is superseded by Section 8.
 
 | Workstream | Remote reference | Verified state at this checkpoint | Remaining acceptance gate |
 |---|---|---|---|
