@@ -35,7 +35,7 @@ Nothing here is permission to merge without review. Each repair is an independen
    - Agent A (Issue #352): canonical competition engine integration & economic contract
    - Agent B (Issue #2): double-entry financial ledger idempotency certification
    - Agent C (Issue #136): ingestion worker recovery definition in render.yaml
-   - Agent D: commit and open PR for delegation engine in host workspace
+   - Agent D: recovered remote branch is available in draft PR #390; run CI, authorization review, and migration checks before considering integration.
    - Agent I (PR #378): merge Campus GLB integrity reconciliation
 5. Account Flow Unification (Issue #228):
    - Unify React signup into single user flow, deferring creator/trader roles to post-signup capabilities
@@ -97,8 +97,8 @@ Nothing here is permission to merge without review. Each repair is an independen
 | **Agent A (Competitions)** | Issue #352 | Agent B financial contract | Align competition entry fees and prize escrow with double-entry ledger |
 | **Agent B (Financial Ledger)** | Issue #2 | Paystack sandbox | Complete idempotency test suite for ledger entries |
 | **Agent C (Ingestion Worker)** | Issue #136 | render.yaml | Deploy worker recovery spec; test exclusively against sandbox fixtures |
-| **Agent D (Delegation Engine)** | PR pending | Feature branch push | Branch uncommitted delegation code in `Desktop/GLOBAL TALENT EXCHANGE` |
-| **Agent I (Campus GLB)** | PR #378 (Draft) | CI review | Review mesh validator and merge PR #378 into canonical `main` |
+| **Agent D (Delegation Engine)** | Draft PR #390 | Remote branch recovered at `53ef7331` | Verify authorization boundaries, shared event backbone use, audit immutability, migration behavior, and PR CI |
+| **Agent G (Windows Demo Package)** | Recovered branch `feat/unity-windows-demo-package` | Interactive Windows desktop | Obtain genuine screenshot/recording evidence; current Session 0 capture attempt was blocked |\n| **Agent H (Comprehensive Audit)** | Recovered branch `audit/issue-267-comprehensive-platform-acceptance` | Status reconciliation | Review original audit and dated reconciliation separately before merging documentation |\n| **M2 Match Experience** | Draft PR #391 (`812c78dd`) | PR CI and event-order regression | Verify 3D/2D lifecycle, large-gap chronology, isolated SQLite fixtures, and authoritative clock |\n| **Agent I (Campus GLB)** | PR #378 closed, not merged | Redundancy review | No merge required; work was found redundant against current `main` |
 
 ---
 
@@ -120,3 +120,17 @@ Nothing here is permission to merge without review. Each repair is an independen
 4. Subsequent reads return the persisted state with zero mock/sample fallbacks.
 5. Automated pytest and client tests pass with assertions against actual responses.
 6. Financial workflows are validated exclusively in sandbox environments with idempotency keys.
+
+
+---
+
+## 7. Remote Recovery Checkpoint — 2026-11-07
+
+Canonical `main` remains `a19893d44e3e3742dd7932880935a68cd2577d92`. Recovery branches and draft PRs are proposals only; none is merged.
+
+- **Agent D:** recovered commit `53ef7331`, draft PR #390. CI and endpoint/migration review pending.
+- **Agent G:** recovered Windows demo commit `1a4618ec`. No PR created because genuine interactive Windows capture evidence is still missing.
+- **Agent H:** four audit deliverables recovered on the audit branch. Documentation reconciliation is in review.
+- **M2:** draft PR #391 at `812c78dd`. The live jump-to-tail was removed and event-frame ordering regression coverage added. CI pending.
+
+Do not treat agent-reported local tests as CI results. Do not merge until the respective review gates pass. Player, regen, and legend data remain protected.
