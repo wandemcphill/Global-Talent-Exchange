@@ -512,6 +512,15 @@ class OwnerCompetitionLifecycleMappingService:
                 "club_not_in_fixture", "The selected club is not one of the clubs in this fixture."
             )
 
+        owner_state = self.session.scalar(
+            select(OwnerClubState).where(OwnerClubState.club_id == club_id)
+        )
+        if owner_state is None or owner_state.owner_user_id != user_id:
+            raise OwnerCompetitionLifecycleMappingError(
+                "not_club_owner",
+                "Only the authenticated owner of this club may submit pre-match instructions.",
+            )
+
         legacy_entry = self.session.scalar(
             select(OwnerCompetitionLifecycleMapping).where(
                 OwnerCompetitionLifecycleMapping.legacy_competition_id == legacy_competition.id,
