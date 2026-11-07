@@ -11,18 +11,11 @@ import {
 } from "./helpers.mjs";
 
 async function clickSemanticsControl(page, locator) {
-  const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
-  const box = await locator.boundingBox().catch(() => null);
-  if (box && (box.y + box.height > viewport.height - 24 || box.y < 24)) {
-    const targetDelta = Math.round(box.y - viewport.height * 0.45);
-    if (Math.abs(targetDelta) > 40) {
-      await page.mouse.move(Math.round(viewport.width * 0.5), Math.round(viewport.height * 0.5));
-      await page.mouse.wheel(0, targetDelta);
-      await page.waitForTimeout(350);
-      await enableAccessibility(page);
-    }
-  }
-  await locator.click({ force: true, timeout: 3_000 }).catch(async () => {
+  // Flutter owns a nested scrollable semantics tree. Let Playwright scroll the
+  // actual tappable semantics node into view rather than wheel the page body,
+  // which is fixed/overflow-hidden in Flutter Web.
+  await locator.scrollIntoViewIfNeeded().catch(() => {});
+  await locator.click({ force: true, timeout: 8_000 }).catch(async () => {
     await locator.dispatchEvent("click").catch(() => {});
   });
 }
@@ -79,49 +72,30 @@ test("Club squad route loads the roster or explicit no-club state", async ({ pag
       await enableAccessibility(page);
     }
 
-    const browseButton = page.getByRole("button", { name: "Club sections" });
-    // Match the Squad section tile by its unique subtitle rather than /Squad/i so we never
-    // match "Switch active club Argentina Academy Squad 01" or "Sync squad".
+    // Flutter exposes these controls as flt-semantics nodes. CSS-backed
+    // locators avoid repeatedly walking the large accessibility role tree on
+    // mobile, where each getByRole visibility query can take several seconds.
+    const browseButton = page
+      .locator('flt-semantics[role="button"]')
+      .filter({ hasText: /^Club sections$/ })
+      .first();
     const squadSection = page
-      .getByRole("button", { name: /Owned players and regens/i })
-      .or(page.getByText("Owned players and regens", { exact: true }))
+      .locator('flt-semantics[role="button"]')
+      .filter({ hasText: /Owned players and regens/i })
       .first();
 
-    // In compact layouts (mobile/narrow tablet), sections are housed in a "Club sections" sheet;
-    // in desktop layouts, the left panel is rendered inline.
-    await expect
-      .poll(
-        async () => {
-          await enableAccessibility(page);
-          return (
-            Number(await browseButton.isVisible().catch(() => false)) +
-            Number(await squadSection.isVisible().catch(() => false))
-          );
-        },
-        { timeout: 15_000 },
-      )
-      .toBeGreaterThan(0);
-
+    // Compact layouts put the section list in a bottom sheet; wider layouts
+    // render the same list inline. Open the sheet once and wait for the real
+    // Squad item rather than polling two slow semantic-role locators together.
     let browseSheetOpened = false;
     if (await browseButton.isVisible().catch(() => false)) {
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        await clickSemanticsControl(page, browseButton);
-        browseSheetOpened = true;
-        await page.waitForTimeout(450);
-        await enableAccessibility(page);
-        if (await squadSection.isVisible().catch(() => false)) {
-          break;
-        }
-        await browseButton.dispatchEvent("click").catch(() => {});
-        await page.waitForTimeout(450);
-        await enableAccessibility(page);
-        if (await squadSection.isVisible().catch(() => false)) {
-          break;
-        }
-      }
+      browseSheetOpened = true;
+      await clickSemanticsControl(page, browseButton);
+      await expect(squadSection).toBeVisible({ timeout: 45_000 });
+    } else {
+      await expect(squadSection).toBeVisible({ timeout: 45_000 });
     }
 
-    await expect(squadSection).toBeVisible({ timeout: 15_000 });
     await clickSemanticsControl(page, squadSection);
 
     if (browseSheetOpened) {
