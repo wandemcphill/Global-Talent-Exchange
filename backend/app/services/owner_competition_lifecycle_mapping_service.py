@@ -65,6 +65,8 @@ class OwnerCompetitionLifecycleMappingService:
                     "legacy_historical_results": 0,
                     "active_fixture_mappings": 0,
                     "unmapped_legacy_fixtures": 0,
+                    "unmapped_canonical_fixtures": 0,
+                    "dangling_fixture_mappings": 0,
                 },
                 "competitions": [],
             }
