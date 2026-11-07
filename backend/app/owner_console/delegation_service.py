@@ -209,14 +209,10 @@ def _build_default_assignments(mode: str) -> dict[str, dict[str, Any]]:
 # 2. Policy Management & State Queries
 # ==============================================================================
 
-def get_or_create_delegation_policy(
-    session: Session, club_id: str, owner_user_id: str
-) -> ClubDelegationPolicy:
+def get_or_create_delegation_policy(session: Session, club_id: str, owner_user_id: str) -> ClubDelegationPolicy:
     """Retrieves or initializes the authoritative delegation policy for a club."""
     _require_club_owner(session, club_id, owner_user_id)
-    policy = session.scalar(
-        select(ClubDelegationPolicy).where(ClubDelegationPolicy.club_id == club_id)
-    )
+    policy = session.scalar(select(ClubDelegationPolicy).where(ClubDelegationPolicy.club_id == club_id))
     if policy is not None:
         return policy
 
@@ -242,14 +238,10 @@ def get_or_create_delegation_policy(
     return policy
 
 
-def set_management_configuration(
-    session: Session, club_id: str, owner_user_id: str, mode: str
-) -> ClubDelegationPolicy:
+def set_management_configuration(session: Session, club_id: str, owner_user_id: str, mode: str) -> ClubDelegationPolicy:
     """Switches the management mode (hands_on, balanced, delegating, custom)."""
     if mode not in MANAGEMENT_MODES:
-        raise DelegationError(
-            f"Invalid management mode '{mode}'. Must be one of {MANAGEMENT_MODES}.", 400
-        )
+        raise DelegationError(f"Invalid management mode '{mode}'. Must be one of {MANAGEMENT_MODES}.", 400)
 
     policy = get_or_create_delegation_policy(session, club_id, owner_user_id)
     policy.mode = mode
@@ -439,6 +431,7 @@ def remove_temporary_override(
 # ==============================================================================
 # 3. Authority Evaluation Engine
 # ==============================================================================
+
 
 class AuthorityEvaluationResult:
     def __init__(
@@ -650,7 +643,9 @@ def evaluate_action_authority(
                     staff_impact=competence_impact,
                 )
 
-    if authority_level == "owner_only" and (not evaluating_owner_direct or (proposed_by_role and proposed_by_role != "owner")):
+    if authority_level == "owner_only" and (
+        not evaluating_owner_direct or (proposed_by_role and proposed_by_role != "owner")
+    ):
         return AuthorityEvaluationResult(
             allowed=False,
             requires_approval=True,
@@ -718,7 +713,9 @@ def _calculate_staff_competence_impact(
         nego = int(staff_member.get("negotiation") or staff_member.get("ambition") or (rating // 5))
         discount_pct = min(15, max(3, round((nego / 20) * 15, 1)))
         impact["negotiation_discount_pct"] = discount_pct
-        impact["summary"] = f"GM {staff_member.get('name', 'Appointee')} achieved a {discount_pct}% cost efficiency on negotiation."
+        impact["summary"] = (
+            f"GM {staff_member.get('name', 'Appointee')} achieved a {discount_pct}% cost efficiency on negotiation."
+        )
     elif role == "first_team_manager":
         tactics = int(staff_member.get("tactical_flexibility") or (rating // 5))
         morale_boost = 2 if tactics >= 18 else (1 if tactics >= 14 else 0)
@@ -738,7 +735,9 @@ def _calculate_staff_competence_impact(
         medical = int(staff_member.get("medical_expertise") or (rating // 5))
         recovery_pct = min(40, medical * 2)
         impact["medical_recovery_pct"] = recovery_pct
-        impact["summary"] = f"Medical Director expertise ({medical}/20) provides {recovery_pct}% accelerated rehabilitation."
+        impact["summary"] = (
+            f"Medical Director expertise ({medical}/20) provides {recovery_pct}% accelerated rehabilitation."
+        )
     else:
         impact["summary"] = f"Staff competence rating {rating}/100 evaluated."
 
@@ -748,6 +747,7 @@ def _calculate_staff_competence_impact(
 # ==============================================================================
 # 4. Delegated Decisions Lifecycle & Approval Workflow
 # ==============================================================================
+
 
 def propose_delegated_decision(
     session: Session,
@@ -884,11 +884,7 @@ def propose_delegated_decision(
         session.add(inbox_item)
 
     # Publish Ecosystem Event
-    event_name = (
-        "delegation.decision_auto_approved"
-        if status == "auto_approved"
-        else "delegation.decision_proposed"
-    )
+    event_name = "delegation.decision_auto_approved" if status == "auto_approved" else "delegation.decision_proposed"
     _publish_governance_event(
         session,
         club_id,
@@ -927,9 +923,15 @@ def resolve_delegated_decision(
     if decision is None or decision.club_id != club_id:
         raise DelegationError("Delegated decision not found.", 404, code="decision_not_found")
     if decision.owner_user_id != owner_user_id:
-        raise DelegationError("Unauthorized: Only the club owner may resolve delegated decisions.", 403, code="not_club_owner")
+        raise DelegationError(
+            "Unauthorized: Only the club owner may resolve delegated decisions.", 403, code="not_club_owner"
+        )
     if decision.status not in {"pending_approval", "escalated"}:
-        raise DelegationError(f"Conflict: Decision is already resolved with status '{decision.status}'.", 409, code="decision_already_resolved")
+        raise DelegationError(
+            f"Conflict: Decision is already resolved with status '{decision.status}'.",
+            409,
+            code="decision_already_resolved",
+        )
 
     action = action.lower().strip()
     if action not in {"approve", "reject", "override"}:
@@ -944,7 +946,9 @@ def resolve_delegated_decision(
         decision.outcome_text = f"Proposal rejected by club owner: {decision_note or 'Owner declined authorization.'}"
     else:
         decision.status = "overridden"
-        decision.outcome_text = f"Proposal overridden by club owner: {decision_note or 'Owner substituted executive direction.'}"
+        decision.outcome_text = (
+            f"Proposal overridden by club owner: {decision_note or 'Owner substituted executive direction.'}"
+        )
 
     decision.decided_by_user_id = owner_user_id
     decision.decision_note = decision_note
@@ -1030,9 +1034,7 @@ def get_club_decision_history(
     return list(session.scalars(stmt).all())
 
 
-def get_pending_escalations(
-    session: Session, club_id: str, owner_user_id: str
-) -> list[ClubDelegatedDecision]:
+def get_pending_escalations(session: Session, club_id: str, owner_user_id: str) -> list[ClubDelegatedDecision]:
     """Returns all decisions currently awaiting owner signoff."""
     _require_club_owner(session, club_id, owner_user_id)
     return list(
@@ -1125,9 +1127,7 @@ def mark_decision_executed(
     return decision
 
 
-def get_club_org_structure(
-    session: Session, club_id: str, owner_user_id: str
-) -> dict[str, Any]:
+def get_club_org_structure(session: Session, club_id: str, owner_user_id: str) -> dict[str, Any]:
     """Constructs the comprehensive organizational structure, appointed staff, and authority roles."""
     state = _require_club_owner(session, club_id, owner_user_id)
     policy = get_or_create_delegation_policy(session, club_id, owner_user_id)
@@ -1138,39 +1138,45 @@ def get_club_org_structure(
     staff_positions = []
     for role_key, role_title in ROLE_LABELS.items():
         if role_key == "owner":
-            staff_positions.append({
-                "role_key": "owner",
-                "title": "Club Owner & Chairman",
-                "appointee_name": state.club_name + " Executive Ownership",
-                "rating": 100,
-                "is_appointed": True,
-                "can_fire": False,
-            })
+            staff_positions.append(
+                {
+                    "role_key": "owner",
+                    "title": "Club Owner & Chairman",
+                    "appointee_name": state.club_name + " Executive Ownership",
+                    "rating": 100,
+                    "is_appointed": True,
+                    "can_fire": False,
+                }
+            )
             continue
 
         staff_data = exec_staff.get(role_key)
         if staff_data:
-            staff_positions.append({
-                "role_key": role_key,
-                "title": role_title,
-                "appointee_name": staff_data.get("name"),
-                "staff_id": staff_data.get("id") or staff_data.get("staff_id"),
-                "rating": int(staff_data.get("rating") or 65),
-                "temperament": staff_data.get("temperament"),
-                "specialty": staff_data.get("specialty"),
-                "salary_gtex": float(staff_data.get("salary_gtex") or 0.0),
-                "is_appointed": True,
-                "can_fire": True,
-            })
+            staff_positions.append(
+                {
+                    "role_key": role_key,
+                    "title": role_title,
+                    "appointee_name": staff_data.get("name"),
+                    "staff_id": staff_data.get("id") or staff_data.get("staff_id"),
+                    "rating": int(staff_data.get("rating") or 65),
+                    "temperament": staff_data.get("temperament"),
+                    "specialty": staff_data.get("specialty"),
+                    "salary_gtex": float(staff_data.get("salary_gtex") or 0.0),
+                    "is_appointed": True,
+                    "can_fire": True,
+                }
+            )
         else:
-            staff_positions.append({
-                "role_key": role_key,
-                "title": role_title,
-                "appointee_name": f"Vacant ({role_title})",
-                "rating": 50,
-                "is_appointed": False,
-                "can_fire": False,
-            })
+            staff_positions.append(
+                {
+                    "role_key": role_key,
+                    "title": role_title,
+                    "appointee_name": f"Vacant ({role_title})",
+                    "rating": 50,
+                    "is_appointed": False,
+                    "can_fire": False,
+                }
+            )
 
     return {
         "club_id": club_id,
@@ -1188,6 +1194,7 @@ def get_club_org_structure(
 # ==============================================================================
 # 5. Ecosystem Event Bus Helper
 # ==============================================================================
+
 
 def _publish_governance_event(
     session: Session,

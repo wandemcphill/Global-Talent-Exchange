@@ -27,6 +27,7 @@ def utcnow() -> datetime:
 
 class EcosystemDomain(str, Enum):
     """Canonical GTEX Ecosystem Domains."""
+
     CLUB_MANAGEMENT = "club_management"
     OWNER_DECISION = "owner_decision"
     OWNER_GOVERNANCE = "owner_governance"
@@ -44,14 +45,16 @@ class EcosystemDomain(str, Enum):
 
 class EcosystemEventPriority(str, Enum):
     """Priority tiers for GTEX Ecosystem events."""
+
     CRITICAL = "critical"  # Immediate processing (boardroom ultimatums, takeover notices)
-    HIGH = "high"          # Prompt handling (transfer bids, signing reveals)
-    NORMAL = "normal"      # Standard lifecycle operations
-    LOW = "low"            # Passive metrics, ambient simulations, background logs
+    HIGH = "high"  # Prompt handling (transfer bids, signing reveals)
+    NORMAL = "normal"  # Standard lifecycle operations
+    LOW = "low"  # Passive metrics, ambient simulations, background logs
 
 
 class EcosystemResolutionStatus(str, Enum):
     """Lifecycle / resolution status for interactive ecosystem events."""
+
     OPEN = "open"
     ACKNOWLEDGED = "acknowledged"
     RESOLVED = "resolved"
@@ -61,12 +64,14 @@ class EcosystemResolutionStatus(str, Enum):
 
 class UnauthorizedSettlementBypassError(ValueError):
     """Raised when an ecosystem event attempts to bypass authoritative financial or match settlement."""
+
     pass
 
 
 @dataclass(frozen=True, slots=True)
 class EcosystemActor:
     """Identity and authorization context of the initiating actor."""
+
     actor_id: str
     actor_type: str = "user"  # "user" | "agent" | "system" | "staff" | "player" | "sponsor"
     roles: tuple[str, ...] = field(default_factory=tuple)
@@ -95,6 +100,7 @@ class EcosystemActor:
 @dataclass(frozen=True, slots=True)
 class EcosystemSubject:
     """Primary entity affected by this ecosystem event."""
+
     subject_id: str
     subject_type: str  # "player" | "facility" | "campaign" | "song" | "match" | "order"
     title: str | None = None
@@ -123,6 +129,7 @@ class EcosystemSubject:
 @dataclass(frozen=True, slots=True)
 class EcosystemClubContext:
     """Club authority context for multi-tenant isolation and routing."""
+
     club_id: str
     club_name: str | None = None
     division_id: str | None = None
@@ -148,6 +155,7 @@ class EcosystemClubContext:
 @dataclass(frozen=True, slots=True)
 class EcosystemEvidence:
     """Origin telemetry and verification data."""
+
     source: str  # "ui_action" | "simulation_tick" | "cron" | "webhook" | "ai_agent"
     ip_address: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -176,6 +184,7 @@ class EcosystemEvent:
     Authoritative Versioned Typed GTEX Ecosystem Event Contract.
     Conforms to DomainEvent and EventOutbox standards.
     """
+
     domain: EcosystemDomain | str
     name: str
     payload: dict[str, Any] = field(default_factory=dict)
@@ -330,6 +339,7 @@ class EcosystemEventVersionAdapter:
     Registers and executes schema evolution adapters across event versions.
     Enables backward and forward compatibility as events evolve.
     """
+
     _transformers: dict[tuple[str, int, int], TransformFunc] = {}
 
     @classmethod
@@ -382,6 +392,7 @@ EcosystemConsumerHandler = Callable[[EcosystemEvent, Session], None]
 @dataclass(slots=True)
 class EcosystemConsumerRegistration:
     """Configuration and filters for registered ecosystem event consumers."""
+
     name: str
     domains: set[str]
     event_types: set[str]

@@ -16,9 +16,7 @@ from app.owner_console.models import (
 
 
 def _claim_and_activate(client, headers, city: str = "Lagos") -> str:
-    resp = client.post(
-        "/api/owner/clubs/claim", headers=headers, json={"city_name": city, "country_code": "NG"}
-    )
+    resp = client.post("/api/owner/clubs/claim", headers=headers, json={"city_name": city, "country_code": "NG"})
     assert resp.status_code == 200, resp.text
     club_id = resp.json()["club_id"]
     act = client.post(f"/api/owner/clubs/{club_id}/activate", headers=headers)
@@ -26,15 +24,11 @@ def _claim_and_activate(client, headers, city: str = "Lagos") -> str:
     return club_id
 
 
-def test_delegation_policy_initialization_and_org_structure(
-    client, bootstrap_admin_headers, app
-):
+def test_delegation_policy_initialization_and_org_structure(client, bootstrap_admin_headers, app):
     club_id = _claim_and_activate(client, bootstrap_admin_headers)
 
     # 1. Fetch initial authority policy
-    resp = client.get(
-        f"/api/owner/clubs/{club_id}/authority/policy", headers=bootstrap_admin_headers
-    )
+    resp = client.get(f"/api/owner/clubs/{club_id}/authority/policy", headers=bootstrap_admin_headers)
     assert resp.status_code == 200, resp.text
     data = resp.json()
 
@@ -90,10 +84,7 @@ def test_switch_management_configurations(client, bootstrap_admin_headers):
     data = resp.json()
     assert data["mode"] == "hands_on"
     assert data["financial_thresholds"]["recruitment_max_gtex"] == 0.0
-    assert (
-        data["activity_assignments"]["first_team_tactics"]["authority_level"]
-        == "owner_only"
-    )
+    assert data["activity_assignments"]["first_team_tactics"]["authority_level"] == "owner_only"
 
     # Switch to delegating (executive owner)
     resp = client.post(
@@ -105,10 +96,7 @@ def test_switch_management_configurations(client, bootstrap_admin_headers):
     data = resp.json()
     assert data["mode"] == "delegating"
     assert data["financial_thresholds"]["recruitment_max_gtex"] == 100000.0
-    assert (
-        data["activity_assignments"]["player_recruitment"]["authority_level"]
-        == "delegated_with_limits"
-    )
+    assert data["activity_assignments"]["player_recruitment"]["authority_level"] == "delegated_with_limits"
 
     # Invalid mode rejection
     bad_resp = client.post(
@@ -237,9 +225,7 @@ def test_propose_and_resolve_delegated_decisions(client, bootstrap_admin_headers
     )
     assert esc_resp.status_code == 200
     assert esc_resp.json()["pending_count"] >= 1
-    assert any(
-        item["id"] == decision_id for item in esc_resp.json()["escalations"]
-    )
+    assert any(item["id"] == decision_id for item in esc_resp.json()["escalations"])
 
     # 3. Owner resolves the decision: Approves it
     resolve_resp = client.post(
@@ -255,9 +241,7 @@ def test_propose_and_resolve_delegated_decisions(client, bootstrap_admin_headers
         f"/api/owner/clubs/{club_id}/authority/escalations",
         headers=bootstrap_admin_headers,
     )
-    assert all(
-        item["id"] != decision_id for item in esc_after.json()["escalations"]
-    )
+    assert all(item["id"] != decision_id for item in esc_after.json()["escalations"])
 
     # Appears in decision history log
     hist_resp = client.get(
@@ -373,9 +357,7 @@ def test_emergency_delegation_suspension(client, bootstrap_admin_headers):
     assert eval_restored.json()["requires_approval"] is False
 
 
-def test_unauthorized_actor_cannot_resolve_decision(
-    client, bootstrap_admin_headers, auth_user_factory
-):
+def test_unauthorized_actor_cannot_resolve_decision(client, bootstrap_admin_headers, auth_user_factory):
     club_id = _claim_and_activate(client, bootstrap_admin_headers)
 
     # Propose escalated decision
@@ -402,9 +384,7 @@ def test_unauthorized_actor_cannot_resolve_decision(
     assert intruder_resp.status_code in {403, 404}
 
 
-def test_ecosystem_event_published_on_delegation_actions(
-    client, bootstrap_admin_headers, app
-):
+def test_ecosystem_event_published_on_delegation_actions(client, bootstrap_admin_headers, app):
     club_id = _claim_and_activate(client, bootstrap_admin_headers)
 
     # Switch mode publishes event
@@ -431,9 +411,7 @@ def test_ecosystem_event_published_on_delegation_actions(
         assert eco_meta.get("domain") == EcosystemDomain.OWNER_GOVERNANCE
 
 
-def test_ten_security_scenarios_and_financial_integrity(
-    client, bootstrap_admin_headers, auth_user_factory, app
-):
+def test_ten_security_scenarios_and_financial_integrity(client, bootstrap_admin_headers, auth_user_factory, app):
     """
     Mandated Phase 1D Final Acceptance & Security Verification:
     Tests the 10 core security scenarios, financial ledger non-mutation,
@@ -654,9 +632,7 @@ def test_ten_security_scenarios_and_financial_integrity(
     with app.state.session_factory() as session:
         ledger_count_before = (
             session.scalar(
-                select(func.count(ClubFinanceLedgerEntry.id)).where(
-                    ClubFinanceLedgerEntry.club_id == club_id
-                )
+                select(func.count(ClubFinanceLedgerEntry.id)).where(ClubFinanceLedgerEntry.club_id == club_id)
             )
             or 0
         )
@@ -712,9 +688,7 @@ def test_ten_security_scenarios_and_financial_integrity(
             assert "advisory_notice" in impact
 
 
-def test_decision_audit_trail_append_only_integrity(
-    client, bootstrap_admin_headers, app
-):
+def test_decision_audit_trail_append_only_integrity(client, bootstrap_admin_headers, app):
     """Verifies that decision resolution creates immutable append-only audit trail logs."""
     club_id = _claim_and_activate(client, bootstrap_admin_headers, city="Ibadan")
 
@@ -772,9 +746,7 @@ def test_decision_audit_trail_append_only_integrity(
     assert "strategic expansion" in trail2[1]["decision_note"]
 
 
-def test_approval_authorisation_distinguished_from_financial_execution(
-    client, bootstrap_admin_headers, app
-):
+def test_approval_authorisation_distinguished_from_financial_execution(client, bootstrap_admin_headers, app):
     """
     Verifies that approval authorization does not mark financial execution,
     and execution is explicitly recorded only when the authoritative domain service executes.
@@ -825,9 +797,7 @@ def test_approval_authorisation_distinguished_from_financial_execution(
         assert "tx_gps_vests_9921" in dec_after.outcome_text
 
 
-def test_staff_competence_real_appointed_staff_records(
-    client, bootstrap_admin_headers, app
-):
+def test_staff_competence_real_appointed_staff_records(client, bootstrap_admin_headers, app):
     """Verifies competence calculations use the actual appointed staff records when available."""
     club_id = _claim_and_activate(client, bootstrap_admin_headers, city="Calabar")
 
