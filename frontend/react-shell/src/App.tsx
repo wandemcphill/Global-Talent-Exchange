@@ -34,6 +34,7 @@ import { Showroom } from "@/pages/Showroom";
 import ClubCampus from "@/pages/ClubCampus";
 import Jackpot from "@/pages/Jackpot";
 import AppearanceStudio from "@/pages/AppearanceStudio";
+import { ClubAuthorityPage } from "@/pages/ClubAuthorityPage";
 import { SkinProvider } from "@/lib/skin-engine";
 import { ROUTER_BASENAME } from "@/lib/publicPath";
 import { GtexAdvertisingProvider } from "@/components/advertising/GtexAdvertising";
@@ -57,6 +58,10 @@ export default function App() {
           <Route path="/app" element={<AppShell />}>
             <Route index element={<ControlCenter />} />
             <Route path="clubs" element={<MyClubs />} />
+            <Route path="governance" element={<ClubAuthorityPage />} />
+            <Route path="clubs/:clubId/governance" element={<ClubAuthorityPage />} />
+            <Route path="authority" element={<ClubAuthorityPage />} />
+            <Route path="clubs/:clubId/authority" element={<ClubAuthorityPage />} />
             <Route path="showroom" element={<Showroom />} />
             <Route path="clubs/:clubId/showroom" element={<Showroom />} />
             <Route path="campus" element={<ClubCampus />} />
