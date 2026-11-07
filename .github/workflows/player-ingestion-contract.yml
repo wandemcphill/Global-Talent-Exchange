@@ -1,0 +1,35 @@
+name: Player Ingestion Deployment Contract
+
+on:
+  pull_request:
+    paths:
+      - "services/player-ingestion/**"
+      - "render.yaml"
+      - ".github/workflows/player-ingestion-contract.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "services/player-ingestion/**"
+      - "render.yaml"
+      - ".github/workflows/player-ingestion-contract.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  player-ingestion-contract:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/player-ingestion
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: services/player-ingestion/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: node --check src/index.js

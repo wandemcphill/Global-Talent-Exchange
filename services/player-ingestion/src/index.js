@@ -12,7 +12,6 @@ const { startScheduler } = require("./scheduler");
 async function main() {
   const mode = process.argv[2] || "all";
   initObservability();
-  await db.migrate();
   const healthServer = startHealthServer();
 
   if (mode === "once") {
