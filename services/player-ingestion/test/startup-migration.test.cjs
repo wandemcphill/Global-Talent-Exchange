@@ -16,7 +16,9 @@ test("worker startup does not attempt schema migrations", () => {
   assert.doesNotMatch(entrypoint, /\bdb\.migrate\s*\(/);
 });
 
-test("Render runs idempotent migrations before starting the ingestion worker", () => {
+test(
+  "Render runs idempotent migrations before starting the ingestion worker",
+  () => {
   const blueprint = fs.readFileSync(
     path.join(repositoryRoot, "render.yaml"),
     "utf8",
