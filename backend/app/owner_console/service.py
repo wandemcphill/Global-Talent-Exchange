@@ -508,7 +508,7 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
             "owner_hook": (
                 "Offer improved youth contract, promise minutes, or gift a Showroom luxury item to lock down loyalty."
                 if p.morale < 55
-                else "High morale â€” prime candidate for Senior Promotion or Sponsor Endorsement."
+                else "High morale — prime candidate for Senior Promotion or Sponsor Endorsement."
             ),
         },
     }
