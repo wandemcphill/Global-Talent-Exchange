@@ -25,7 +25,6 @@ from app.owner_console.models import (
 )
 
 
-
 class DelegationError(Exception):
     def __init__(self, message: str, status_code: int = 400, code: str = "delegation_error"):
         super().__init__(message)
