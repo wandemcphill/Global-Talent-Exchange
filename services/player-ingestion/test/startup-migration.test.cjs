@@ -16,37 +16,33 @@ test("worker startup does not attempt schema migrations", () => {
   assert.doesNotMatch(entrypoint, /\bdb\.migrate\s*\(/);
 });
 
-test(
-  "Render runs idempotent migrations before starting the ingestion worker",
-  () => {
-    const blueprint = fs.readFileSync(
-      path.join(repositoryRoot, "render.yaml"),
-      "utf8",
-    );
-    const serviceStart = blueprint.indexOf(
-      "  - name: gtex-player-ingestion-worker",
-    );
-    assert.notEqual(serviceStart, -1);
+test("Render runs idempotent migrations before starting the ingestion worker", () => {
+  const blueprint = fs.readFileSync(
+    path.join(repositoryRoot, "render.yaml"),
+    "utf8",
+  );
+  const serviceStart = blueprint.indexOf(
+    "  - name: gtex-player-ingestion-worker",
+  );
+  assert.notEqual(serviceStart, -1);
 
-    const nextService = blueprint.indexOf(
-      "\n  - name:",
-      serviceStart + 1,
-    );
-    const workerService = blueprint.slice(
-      serviceStart,
-      nextService === -1 ? blueprint.length : nextService,
-    );
-    const migrationCommand = workerService.indexOf("preDeployCommand:");
-    const startCommand = workerService.indexOf("startCommand:");
+  const nextService = blueprint.indexOf(
+    "\n  - name:",
+    serviceStart + 1,
+  );
+  const workerService = blueprint.slice(
+    serviceStart,
+    nextService === -1 ? blueprint.length : nextService,
+  );
+  const migrationCommand = workerService.indexOf("preDeployCommand:");
+  const startCommand = workerService.indexOf("startCommand:");
 
-    assert.notEqual(migrationCommand, -1);
-    assert.notEqual(startCommand, -1);
-    assert.ok(migrationCommand < startCommand);
-    assert.match(workerService, /npm run migrate/);
-    assert.match(workerService, /default_transaction_read_only=off/);
-  },
-);
-
+  assert.notEqual(migrationCommand, -1);
+  assert.notEqual(startCommand, -1);
+  assert.ok(migrationCommand < startCommand);
+  assert.match(workerService, /npm run migrate/);
+  assert.match(workerService, /default_transaction_read_only=off/);
+});
 test("the worker package exposes the Node built-in test runner", () => {
   const packageJson = JSON.parse(
     fs.readFileSync(
