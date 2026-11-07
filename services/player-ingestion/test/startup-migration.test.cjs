@@ -17,13 +17,8 @@ test("worker startup does not attempt schema migrations", () => {
 });
 
 test("Render runs idempotent migrations before starting the ingestion worker", () => {
-  const blueprint = fs.readFileSync(
-    path.join(repositoryRoot, "render.yaml"),
-    "utf8",
-  );
-  const serviceStart = blueprint.indexOf(
-    "  - name: gtex-player-ingestion-worker",
-  );
+  const blueprint = fs.readFileSync(path.join(repositoryRoot, "render.yaml"), "utf8");
+  const serviceStart = blueprint.indexOf("  - name: gtex-player-ingestion-worker");
   assert.notEqual(serviceStart, -1);
 
   const nextService = blueprint.indexOf(
