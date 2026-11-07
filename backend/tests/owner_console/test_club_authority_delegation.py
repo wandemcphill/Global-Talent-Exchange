@@ -718,6 +718,13 @@ def test_decision_audit_trail_append_only_integrity(client, bootstrap_admin_head
     assert trail1[0]["new_status"] == "pending_approval"
     assert trail1[0]["snapshot"]["title"] == "International Winger Scout & Sign"
 
+    # Simulate an escalation transition before owner resolution so the audit
+    # records the actual prior state rather than assuming pending_approval.
+    with app.state.session_factory() as session:
+        escalated = session.get(ClubDelegatedDecision, decision_id)
+        escalated.status = "escalated"
+        session.commit()
+
     # 3. Resolve decision (Approve)
     res = client.post(
         f"/api/owner/clubs/{club_id}/authority/decisions/{decision_id}/resolve",
@@ -739,7 +746,7 @@ def test_decision_audit_trail_append_only_integrity(client, bootstrap_admin_head
     assert trail2[0]["new_status"] == "pending_approval"
     # Verify resolution entry appended
     assert trail2[1]["action"] == "resolved_approve"
-    assert trail2[1]["previous_status"] == "pending_approval"
+    assert trail2[1]["previous_status"] == "escalated"
     assert trail2[1]["new_status"] == "approved"
     assert "strategic expansion" in trail2[1]["decision_note"]
 

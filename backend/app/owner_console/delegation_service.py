@@ -933,6 +933,7 @@ def resolve_delegated_decision(
             409,
             code="decision_already_resolved",
         )
+    previous_status = decision.status
 
     action = action.lower().strip()
     if action not in {"approve", "reject", "override"}:
@@ -961,7 +962,7 @@ def resolve_delegated_decision(
         club_id=club_id,
         actor_id=owner_user_id,
         action=f"resolved_{action}",
-        previous_status="pending_approval",
+        previous_status=previous_status,
         new_status=decision.status,
         decision_note=decision_note,
         snapshot_json={
@@ -1206,17 +1207,14 @@ def _publish_governance_event(
     priority: EcosystemEventPriority = EcosystemEventPriority.NORMAL,
 ) -> None:
     """Emits canonical ecosystem events on the GTEX transactional event backbone."""
-    try:
-        gtex_ecosystem_bus.publish(
-            session,
-            EcosystemEvent(
-                domain=EcosystemDomain.OWNER_GOVERNANCE,
-                name=event_name,
-                payload=payload,
-                actor=EcosystemActor(actor_id=owner_user_id, roles=("owner",)),
-                subject=EcosystemSubject(subject_id=club_id, subject_type="club_delegation"),
-                priority=priority,
-            ),
-        )
-    except Exception as exc:
-        logger.warning(f"[DelegationEngine] Failed to publish ecosystem event {event_name}: {exc}")
+    gtex_ecosystem_bus.publish(
+        session,
+        EcosystemEvent(
+            domain=EcosystemDomain.OWNER_GOVERNANCE,
+            name=event_name,
+            payload=payload,
+            actor=EcosystemActor(actor_id=owner_user_id, roles=("owner",)),
+            subject=EcosystemSubject(subject_id=club_id, subject_type="club_delegation"),
+            priority=priority,
+        ),
+    )
