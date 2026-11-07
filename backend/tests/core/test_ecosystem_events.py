@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.core.ecosystem_events import (
     EcosystemActor,
     EcosystemClubContext,
-    EcosystemConsumerRegistration,
     EcosystemDomain,
     EcosystemEvent,
     EcosystemEventBus,
@@ -18,7 +17,6 @@ from app.core.ecosystem_events import (
     EcosystemSubject,
     UnauthorizedSettlementBypassError,
 )
-from app.core.events import InMemoryEventPublisher
 from app.models.base import Base
 from app.models.event_backbone import EventConsumerState, EventDeadLetter, EventOutbox
 
@@ -229,6 +227,9 @@ def test_permission_aware_distribution(db_session_factory) -> None:
     with db_session_factory() as session:
         dispatched = bus.dispatch_pending_events(session)
         session.commit()
+
+        # Both outbox rows are settled: one authorized and one permission-denied.
+        assert dispatched == 2
 
         # Only authorized event should have been dispatched to handler
         assert unauthorized_event.event_id not in executed
