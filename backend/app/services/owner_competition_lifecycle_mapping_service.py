@@ -119,9 +119,9 @@ class OwnerCompetitionLifecycleMappingService:
         }
         for fixture_mapping in fixture_mappings:
             if fixture_mapping.mapping_status == "active":
-                active_fixture_mappings_by_competition.setdefault(
-                    fixture_mapping.legacy_competition_id, []
-                ).append(fixture_mapping)
+                active_fixture_mappings_by_competition.setdefault(fixture_mapping.legacy_competition_id, []).append(
+                    fixture_mapping
+                )
 
         rows: list[dict[str, object]] = []
         active_competition_mapping_count = 0
@@ -191,15 +191,9 @@ class OwnerCompetitionLifecycleMappingService:
                 else []
             )
             canonical_fixture_ids = {match.id for match in canonical_matches}
-            mapped_canonical_fixture_ids = {
-                link.canonical_match_id for link in active_fixture_links
-            }
-            dangling_fixture_mapping_count = len(
-                mapped_canonical_fixture_ids - canonical_fixture_ids
-            )
-            unmapped_canonical_fixture_count = len(
-                canonical_fixture_ids - mapped_canonical_fixture_ids
-            )
+            mapped_canonical_fixture_ids = {link.canonical_match_id for link in active_fixture_links}
+            dangling_fixture_mapping_count = len(mapped_canonical_fixture_ids - canonical_fixture_ids)
+            unmapped_canonical_fixture_count = len(canonical_fixture_ids - mapped_canonical_fixture_ids)
             canonical_fixture_count = len(canonical_matches)
 
             reasons: list[str] = []
