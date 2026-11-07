@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Mapping
@@ -25,7 +24,6 @@ from app.owner_console.models import (
     OwnerInboxItem,
 )
 
-logger = logging.getLogger(__name__)
 
 
 class DelegationError(Exception):
