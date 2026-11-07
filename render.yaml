@@ -426,6 +426,7 @@ services:
     region: frankfurt
     plan: starter
     buildCommand: "cd services/player-ingestion && npm ci"
+    preDeployCommand: "cd services/player-ingestion && PGOPTIONS='-c default_transaction_read_only=off' npm run migrate"
     startCommand: "cd services/player-ingestion && npm start"
     envVars:
       - key: DATABASE_URL

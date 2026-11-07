@@ -6,6 +6,7 @@
   "main": "src/index.js",
   "scripts": {
     "migrate": "node src/migrate.js",
+    "test": "node --test",
     "once": "node src/index.js once",
     "backfill:market-images": "node src/backfillMarketplaceImages.js",
     "import:top-europe": "node src/importTopEuropeanLeagues.js",

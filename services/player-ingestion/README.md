@@ -76,6 +76,7 @@ SEASON_TRANSFER_WINDOWS=2026-01-01:2026-01-31,2026-08-01:2026-08-31
 ```bash
 npm install
 npm run migrate
+npm test
 npm run once
 npm run worker
 npm run scheduler
@@ -138,3 +139,10 @@ Chemistry lives in `src/relationships.js`; youth generation in `src/youthAcademy
 - Do not hotlink Sportmonks/Wikimedia images in app UI. This worker uploads them to Cloudinary and stores the Cloudinary URL.
 - The remote-image fallback is only a safety net for temporary Cloudinary failures; the next successful run will replace it with the CDN URL.
 - If Sportmonks `updated_since` filters are not available on your plan, leave `SPORTMONKS_UPDATED_SINCE_SUPPORTED=false`; the worker still compares stable hashes before updating rows.
+
+
+## Deployment Contract
+
+On Render, the worker runs `npm run migrate` as a pre-deploy command before the new worker process starts. The worker entry point does not execute schema DDL during normal startup. The migration command is idempotent and uses the worker's configured `DATABASE_URL`.
+
+The worker's `DATABASE_URL` must be a write-enabled PostgreSQL connection with the required DDL and ingestion-write privileges. A read-only endpoint or role remains a hard deployment blocker: pre-deploy migration must fail rather than starting an ingestion worker against an unusable schema or pretending that player data is fresh. The pre-deploy command cannot grant database privileges or turn a physical read replica into a writable primary.
