@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import select
 
 from app.core.ecosystem_events import EcosystemDomain
@@ -836,3 +837,35 @@ def test_staff_competence_real_appointed_staff_records(client, bootstrap_admin_h
     assert impact["tactical_synergy_boost"] == 19
     assert impact["morale_boost"] == 2
     assert "actual appointed staff attributes" in impact["scoring_methodology"]
+
+
+def test_policy_change_rolls_back_when_outbox_publish_fails(client, bootstrap_admin_headers, app, monkeypatch):
+    club_id = _claim_and_activate(client, bootstrap_admin_headers)
+    policy_resp = client.get(
+        f"/api/owner/clubs/{club_id}/authority/policy",
+        headers=bootstrap_admin_headers,
+    )
+    assert policy_resp.status_code == 200
+    assert policy_resp.json()["mode"] == "balanced"
+
+    with app.state.session_factory() as session:
+        state = session.scalar(select(OwnerClubState).where(OwnerClubState.club_id == club_id))
+        assert state is not None
+        owner_user_id = state.owner_user_id
+
+    def fail_publish(*args, **kwargs):
+        raise RuntimeError("simulated event outbox failure")
+
+    monkeypatch.setattr(delegation_service.gtex_ecosystem_bus, "publish", fail_publish)
+
+    with app.state.session_factory() as session:
+        with pytest.raises(RuntimeError, match="simulated event outbox failure"):
+            delegation_service.set_management_configuration(session, club_id, owner_user_id, "hands_on")
+        session.rollback()
+
+    with app.state.session_factory() as session:
+        persisted_policy = session.scalar(
+            select(ClubDelegationPolicy).where(ClubDelegationPolicy.club_id == club_id)
+        )
+        assert persisted_policy is not None
+        assert persisted_policy.mode == "balanced"
