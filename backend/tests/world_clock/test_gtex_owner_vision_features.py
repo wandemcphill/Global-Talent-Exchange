@@ -20,14 +20,13 @@ from app.models.wallet import (
     LedgerTransaction,
 )
 from app.models.world_clock import WorldClockState
-from app.owner_console import competitions as comps
 from app.owner_console import engine as owner_engine
 from app.owner_console import ledger, service, storytelling
 from app.owner_console.models import (
     OWNER_CONSOLE_TABLES,
     OwnerClubState,
 )
-from app.services.world_clock_service import DEFAULT_CLOCK_ID, WorldClockService
+from app.services.world_clock_service import DEFAULT_CLOCK_ID
 from app.world_simulation.router import get_world_clock
 
 WORLD_NOW = datetime(2026, 10, 27, 12, 0, tzinfo=timezone.utc)
@@ -77,7 +76,7 @@ def _seed_club(session: Session, *, prestige: int = 50, cash: int = 100_000) -> 
         id="user-1",
         email="owner1@gtex.test",
         username="owner1",
-        password_hash="hash",
+        password_hash="hash",  # pragma: allowlist secret — synthetic test hash, not a credential
     )
     profile = ClubProfile(
         id="club-1",
@@ -216,8 +215,13 @@ def test_academy_readiness_youth_contract_and_senior_promotion():
     regens = service.academy_intake(session, "user-1", "club-1")
     assert len(regens) >= 1
     prospect = regens[0]
+    # Keep this branch deterministic so the exact UTF-8 copy is regression-tested.
+    prospect.morale = 75
 
     pdict = service.player_dict(prospect)
+    assert pdict["drama_arc"]["owner_hook"] == (
+        "High morale — prime candidate for Senior Promotion or Sponsor Endorsement."
+    )
     assert "archetype" in pdict
     assert "mood_state" in pdict
     assert "inner_monologue" in pdict

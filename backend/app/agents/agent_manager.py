@@ -8,6 +8,8 @@ import logging
 from threading import RLock
 from typing import Any
 
+from sqlalchemy import select
+
 from fastapi import FastAPI
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -291,7 +293,7 @@ class AgentPerformanceReceiptView(AgentManagerSchema):
     roi: float
     quality_score: float = Field(ge=0.0, le=1.0)
     trust_score: float = Field(ge=0.0, le=1.0)
-    payout_eligible: bool = True
+    payout_eligible: bool = False
     payout_block_reason: str | None = None
 
 
@@ -551,8 +553,7 @@ class CreatorAgentManager:
             quality_score = self._quality_score(agent=agent, signal=signal)
             trust_score = self._trust_score(agent=agent, signal=signal, quality_score=quality_score)
             repetition_ratio = self._repetition_ratio(agent_id=record.agent_id, primary_format=record.primary_format)
-            agent.wallet, settlement = self.wallet_service.settle(
-                agent.wallet,
+            settlement = self.agent_ledger_service.evaluate_settlement(
                 earnings=payload.earnings,
                 quality_score=quality_score,
                 trust_score=trust_score,
@@ -578,7 +579,7 @@ class CreatorAgentManager:
                         reward_total=reward.total,
                         quality_score=quality_score,
                         trust_score=trust_score,
-                        payout_eligible=settlement.approved,
+                        payout_eligible=False,
                         payout_block_reason=None if settlement.approved else settlement.reason,
                         performance=signal,
                         orchestrator_weight=self._orchestrator_weight_for(record.clip_id),
@@ -599,9 +600,32 @@ class CreatorAgentManager:
                 roi=agent.wallet.roi,
                 quality_score=quality_score,
                 trust_score=trust_score,
-                payout_eligible=settlement.approved,
+                payout_eligible=False,
                 payout_block_reason=None if settlement.approved else settlement.reason,
             )
+
+    def authorize_payout(self, *, agent_id: str, clip_id: str | None = None) -> bool:
+        with self._lock:
+            agent = self._agents.get(agent_id)
+            if agent is None:
+                raise KeyError("Unknown agent.")
+            agent.wallet = replace(agent.wallet, payout_eligible=True, last_block_reason=None)
+            agent.save_state()
+            if self.state_store is not None and clip_id:
+                from app.agents.models import AgentPerformanceLogRecord
+
+                with self.state_store.session_factory() as session:
+                    log_record = session.scalar(
+                        select(AgentPerformanceLogRecord).where(
+                            AgentPerformanceLogRecord.agent_id == agent_id,
+                            AgentPerformanceLogRecord.clip_id == clip_id,
+                        )
+                    )
+                    if log_record is not None:
+                        log_record.payout_eligible = True
+                        log_record.payout_block_reason = None
+                        session.commit()
+            return True
 
     def _agent_ledger_balance(self, agent_id: str) -> Decimal:
         if self.state_store is None:

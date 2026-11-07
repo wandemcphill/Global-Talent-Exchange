@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class GiftSendRequest(BaseModel):
@@ -66,6 +66,12 @@ class GiftTransactionView(BaseModel):
     competition_id: str | None = None
     source_scope: str
     ledger_unit: str
+    source_ledger_unit: str = "credit"
+    destination_ledger_unit: str = "coin"
+    economic_conversion_id: str | None = None
+    conversion_rate: Decimal = Decimal("1.0000")
+    fee_policy_rule_key: str | None = None
+    fee_policy_version: str | None = None
     currency_label: str | None = None
     ledger_transaction_id: str | None = None
     wallet_debit_ledger_id: str | None = None
@@ -140,6 +146,13 @@ class GiftCatalogAdminUpsertRequest(BaseModel):
     legal_status: str = Field(default="safe", max_length=32)
     sort_order: int = Field(default=0, ge=0, le=100000)
 
+    @field_validator("currency")
+    @classmethod
+    def validate_gift_currency(cls, v: str | None) -> str | None:
+        if v is not None and v.strip().lower() in {"coin", "gtex_coin"}:
+            raise ValueError("GTEX Coin cannot be used as a gift currency. Gifts must use FanCoin/credit.")
+        return v
+
     @property
     def resolved_key(self) -> str:
         return (self.code or self.key or "").strip()
@@ -170,6 +183,13 @@ class GiftCatalogAdminPatchRequest(BaseModel):
     is_award_pack: bool | None = None
     legal_status: str | None = Field(default=None, max_length=32)
     sort_order: int | None = Field(default=None, ge=0, le=100000)
+
+    @field_validator("currency")
+    @classmethod
+    def validate_gift_currency(cls, v: str | None) -> str | None:
+        if v is not None and v.strip().lower() in {"coin", "gtex_coin"}:
+            raise ValueError("GTEX Coin cannot be used as a gift currency. Gifts must use FanCoin/credit.")
+        return v
 
 
 class GiftAbuseFlagView(BaseModel):
