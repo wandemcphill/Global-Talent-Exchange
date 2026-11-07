@@ -262,12 +262,8 @@ class OwnerCompetitionLifecycleMappingService:
                 "legacy_historical_results": historical_result_count,
                 "active_fixture_mappings": active_fixture_mapping_count,
                 "unmapped_legacy_fixtures": unmapped_legacy_fixture_count,
-                "unmapped_canonical_fixtures": sum(
-                    int(row["unmapped_canonical_fixture_count"]) for row in rows
-                ),
-                "dangling_fixture_mappings": sum(
-                    int(row["dangling_fixture_mapping_count"]) for row in rows
-                ),
+                "unmapped_canonical_fixtures": sum(int(row["unmapped_canonical_fixture_count"]) for row in rows),
+                "dangling_fixture_mappings": sum(int(row["dangling_fixture_mapping_count"]) for row in rows),
             },
             "competitions": rows,
         }
@@ -514,9 +510,7 @@ class OwnerCompetitionLifecycleMappingService:
                 "club_not_in_fixture", "The selected club is not one of the clubs in this fixture."
             )
 
-        owner_state = self.session.scalar(
-            select(OwnerClubState).where(OwnerClubState.club_id == club_id)
-        )
+        owner_state = self.session.scalar(select(OwnerClubState).where(OwnerClubState.club_id == club_id))
         if owner_state is None or owner_state.owner_user_id != user_id:
             raise OwnerCompetitionLifecycleMappingError(
                 "not_club_owner",
