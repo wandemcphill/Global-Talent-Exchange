@@ -9,6 +9,7 @@ from app.core.ecosystem_events import EcosystemDomain
 from app.owner_console import delegation_service
 from app.owner_console.models import (
     ClubDelegatedDecision,
+    ClubDelegationPolicy,
     OwnerClubState,
 )
 
