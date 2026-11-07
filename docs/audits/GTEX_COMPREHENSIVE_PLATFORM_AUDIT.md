@@ -3,10 +3,10 @@
 **Document Version:** 3.0.0 (Comprehensive Multi-Agent Acceptance Audit)  
 **Issue:** [#267 (GTEX — Comprehensive Platform Acceptance Audit)](https://github.com/wandemcphill/Global-Talent-Exchange/issues/267)  
 **Target Repository:** `wandemcphill/Global-Talent-Exchange`  
-**Inspected Canonical Main SHA:** `a19893d44e3e3742dd7932880935a68cd2577d92`  
+**Inspected Canonical Main SHA:** `89d792adb2b012f5ddeea8747853a8e832beeeec`  
 **Previous Audit Baseline SHA:** `bb6d82a9b8b5867318f9a0baf19789cef5b25637` (2026-10-27)  
-**Delta:** 453 merged commits  
-**Date:** 2026-11-06  
+**Delta:** 485 commits since baseline `bb6d82a9b8b5867318f9a0baf19789cef5b25637`  
+**Date:** 2026-11-07  
 **Auditor:** Independent Senior QA & Architecture Auditor / Central Engineering Integration Session  
 **Player Universe Protection Status:** STRICTLY ENFORCED & LOCKED (Zero player/regen/legend records altered, synthetic records created, or imports executed)
 
@@ -245,3 +245,43 @@ The Windows demo package recovery is separate from the Unity arena/match gamepla
 PR #378 is closed and was not merged; the recovered campus GLB audit work was determined redundant against files already present on `main`.
 
 No production database writes, player/regen/legend modifications, player ingestion, or backfills were performed as part of this checkpoint.
+
+
+---
+
+## 8. Post-merge Integration & Remediation Checkpoint — 2026-11-07
+
+**Canonical main:** `89d792adb2b012f5ddeea8747853a8e832beeeec`  
+**Prior main before the four integration merges:** `a19893d44e3e3742dd7932880935a68cd2577d92`  
+**Baseline comparison:** 485 commits ahead of `bb6d82a9b8b5867318f9a0baf19789cef5b25637`; no commits behind.  
+**Post-merge CI:** all seven push-triggered workflows on the exact canonical main SHA completed successfully: Quality Gates, Phase A Economic Regressions, React shell build, Cloudflare Pages deployment, React WebGL verification, CI and Staging Deploy, and Final Platform Certification.
+
+### Merged integration set
+
+| PR | Workstream | Merge commit | Acceptance note |
+|---|---|---|---|
+| #386 | Canonical competition follow-up hardening | `2b92e6ac79ebae04e59994cd500ab93e0ab17ef3` | Merged and CI-green. Does **not** close Issue #352; legacy global competition reconciliation remains open. |
+| #387 | Central audio manager and sponsored music | `1240083a114b700e23bf89595f9ff7b3aedf6d63` | Merged; exact-head quality, browser, shell, WebGL, Phase A, staging and certification checks green. |
+| #388 | Financial integrity / economic foundation | `d3eeef643f75d96215778b865a04ab1d5d791847` | Merged; CI-green. Live payment, bank clearing and KYC provider credentials remain production dependencies. |
+| #389 | Club HQ and public club profile | `89d792adb2b012f5ddeea8747853a8e832beeeec` | Merged; all reported checks green. |
+
+### Follow-up remediation branches
+
+| Workstream | Remote reference | Current evidence | Remaining gate |
+|---|---|---|---|
+| Owner Authority & Delegation | Draft PR #390, branch `feat/owner-authority-and-delegation-engine`, head `23c1a454fd7de29620dfa0d53f128c81ede511b4` | Quality Gates, Phase A, shell, Cloudflare, WebGL, CI/Staging, P7-FEV and Final Platform Certification all passed on this head. Policy mutations and canonical event-outbox publication share a transaction; rollback regression added. | Draft PR remains unmerged pending formal review and integration approval. |
+| M2 Match Experience | Draft PR #391, branch `fix/u2a-m2-match-experience-acceptance-remediation`, head `cb558307a1be241b498af27f4a5008d9a4167a87` | Quality Gates, Phase A, shell, Cloudflare, WebGL, CI/Staging, P7-FEV and Final Platform Certification all passed. Mobile Flutter semantics locator waits were corrected without removing acceptance assertions. | Draft PR remains unmerged pending final review. |
+| Text-encoding correction | Draft PR #394, branch `fix/post-merge-owner-hook-encoding`, head `a8c51dd688fefa9bd2bc67fd85a04da3d9bbd602` | Corrected owner-facing em dash and added exact-string regression; synthetic test hash is explicitly allowlisted as non-credential. Quality Gates, Phase A and WebGL passed at last check. | CI/Staging, P7-FEV and Final Certification still running at checkpoint. |
+| Competition reconciliation visibility | Draft PR #395, branch `fix/global-competition-reconciliation-visibility`, head `8e4cff26b2de459a20e74f1db115ef2089081694` | Adds read-only admin reconciliation inventory; direct canonical pre-match tactic service now enforces club ownership. Tests cover read-only history preservation, user-hosted isolation, admin-only access and non-owner rejection. | Fresh CI after final Black formatting change pending. No production mappings are executed by this PR. |
+| Comprehensive platform audit | Draft PR #392, branch `audit/issue-267-comprehensive-platform-acceptance` | This document and the roadmap now reflect the post-merge main checkpoint. | Issue #267 remains open until its remaining screens, roles, and operational integrations receive evidence-backed acceptance. |
+| Windows demonstration package | Draft PR #393, branch `feat/unity-windows-demo-package`, head `1a4618ec7ad2c463e873c44c48b6b41bcdbcec57` | Automated code and harness checks passed. | Visual acceptance still requires genuine capture from an interactive Windows desktop/GPU session; no synthetic or Session 0 image is accepted as evidence. |
+
+### Unresolved production and integration dependencies
+
+- **Issue #352 — global competition lifecycle:** PR #386 is not the reconciliation of all seeded/running legacy competitions. PR #395 adds a read-only report for operator inventory, but a deployed admin must review each legacy/canonical competition and fixture identity before explicit mappings. Historical scores, events, standings and financial history must remain intact; no automatic data repair or match replay is authorized.
+- **Issue #2 — financial providers:** the financial foundation is integrated, but live Korapay/Paystack credentials, callbacks/webhook signing, commercial bank-clearing credentials and external KYC authority remain provider-dependent. No live payment or payout was executed for this audit.
+- **Issue #136 — ingestion worker:** the Render player-ingestion worker was reported suspended in `stuck_crashlooping`. It was not resumed or executed. Recovery must first be designed and validated against isolated staging fixtures; live player-universe ingestion remains prohibited.
+- **Issue #28 — Windows visual evidence:** requires a real interactive Windows desktop/Unity runtime capture. This environment has not produced that evidence.
+- **Player universe protection:** no production player, regen, legend, portrait or face-bank records were changed by the four integration merges or the follow-up remediation work.
+
+**Status language:** successful main CI establishes that the merged commit passed the configured automated gates. It does not establish provider-secret readiness, production transaction execution, complete competition reconciliation, Windows visual acceptance, or closure of Issue #267.
