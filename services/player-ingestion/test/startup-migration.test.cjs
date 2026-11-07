@@ -43,6 +43,7 @@ test("Render runs idempotent migrations before starting the ingestion worker", (
   assert.match(workerService, /npm run migrate/);
   assert.match(workerService, /default_transaction_read_only=off/);
 });
+
 test("the worker package exposes the Node built-in test runner", () => {
   const packageJson = JSON.parse(
     fs.readFileSync(
