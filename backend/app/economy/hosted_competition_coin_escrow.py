@@ -165,5 +165,46 @@ class HostedCompetitionCoinEscrowService:
         self.session.flush()
         return entries[0].transaction_id
 
+    def refund_to_host(
+        self,
+        *,
+        competition: UserHostedCompetition,
+        host: User,
+        actor: User,
+        reason: str = "Host-funded GTEX Coin prize refund",
+    ) -> str | None:
+        escrow_balance = self.available_balance(competition)
+        if escrow_balance <= Decimal("0.0000"):
+            return None
+        escrow = self.escrow_account(competition)
+        host_account = self.wallet_service.get_user_account(self.session, host, LedgerUnit.COIN)
+        entries = self.wallet_service.append_transaction(
+            self.session,
+            postings=[
+                LedgerPosting(
+                    account=escrow, amount=-escrow_balance, source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD
+                ),
+                LedgerPosting(
+                    account=host_account, amount=escrow_balance, source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD
+                ),
+            ],
+            reason=LedgerEntryReason.COMPETITION_REWARD,
+            reference=f"hosted-coin-prize-refund:{competition.id}",
+            external_reference=f"hosted-coin-prize-refund:{competition.id}",
+            description=f"{reason} for {competition.title}",
+            actor=actor,
+            idempotency_key=f"hosted-coin-prize-refund:{competition.id}",
+            metadata={
+                "hosted_competition_id": competition.id,
+                "currency": LedgerUnit.COIN.value,
+                "funding_mode": "host_funded_gtex_coin_prize",
+                "refund_reason": reason,
+                "refund_amount": str(escrow_balance),
+            },
+        )
+        competition.host_funding_escrowed_coin = Decimal("0.0000")
+        self.session.flush()
+        return entries[0].transaction_id
+
 
 __all__ = ["HostedCompetitionCoinEscrowError", "HostedCompetitionCoinEscrowService"]
