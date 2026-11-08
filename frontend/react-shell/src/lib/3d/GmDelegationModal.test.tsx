@@ -232,7 +232,7 @@ describe("GmDelegationModal Component", () => {
     expect(api.put).toHaveBeenCalledWith(
       "/owner/clubs/c_test_gm/living-world/gm-delegation/matrix",
       {
-        activities: {
+        activity_assignments: {
           staff_hiring: { requires_owner_approval: false },
         },
       }
@@ -258,7 +258,7 @@ describe("GmDelegationModal Component", () => {
     expect(api.post).toHaveBeenCalledWith(
       "/owner/clubs/c_test_gm/living-world/gm-delegation/proposals/prop_1/resolve",
       {
-        approved: true,
+        action: "approve",
         decision_note: undefined,
       }
     );
@@ -283,7 +283,7 @@ describe("GmDelegationModal Component", () => {
     expect(api.post).toHaveBeenCalledWith(
       "/owner/clubs/c_test_gm/living-world/gm-delegation/proposals/prop_1/resolve",
       {
-        approved: false,
+        action: "reject",
         decision_note: undefined,
       }
     );
