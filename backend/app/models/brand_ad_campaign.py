@@ -80,7 +80,9 @@ class BrandAdCampaign(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     description: Mapped[str] = mapped_column(String(360), nullable=False, default="", server_default="")
     placement: Mapped[str] = mapped_column(String(40), nullable=False)
     placements_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    destination_url: Mapped[str] = mapped_column(String(2048), nullable=False, default="https://gtex.app", server_default="https://gtex.app")
+    destination_url: Mapped[str] = mapped_column(
+        String(2048), nullable=False, default="https://gtex.app", server_default="https://gtex.app"
+    )
     logo_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     creative_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     logo_asset_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
@@ -97,9 +99,7 @@ class BrandAdCampaign(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     campaign_type: Mapped[str] = mapped_column(String(16), nullable=False, default="brand", server_default="brand")
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft", server_default="draft")
-    payment_status: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="unpaid", server_default="unpaid"
-    )
+    payment_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unpaid", server_default="unpaid")
     payment_reference: Mapped[str | None] = mapped_column(String(120), nullable=True)
     price_minor_ngn: Mapped[int] = mapped_column(
         BigInteger().with_variant(Integer, "sqlite"), nullable=False, default=0, server_default="0"
@@ -133,9 +133,7 @@ class BrandAdCampaign(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     music_artwork_asset_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     music_audio_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     music_artwork_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
-    music_explicit_content: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default=false()
-    )
+    music_explicit_content: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false())
     music_rights_declaration_accepted: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=false()
     )

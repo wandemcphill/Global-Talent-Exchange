@@ -54,7 +54,7 @@ def _normalize_for_js(val: Any) -> Any:
 
 def _js_json_stringify(value: Any) -> str:
     """Format dict according to JavaScript JSON.stringify for KoraPay signature checks.
-    
+
     Guarantees cross-language parity with Node.js JSON.stringify:
     - Eliminates Python whitespace (separators=(',', ':'))
     - Preserves literal UTF-8 Unicode characters (ensure_ascii=False)

@@ -200,7 +200,9 @@ def get_public_brand_ad_campaigns(
                 if spend >= budget:
                     continue
 
-        resolved_placement = placement if (placement and placement in (campaign.placements_json or [])) else campaign.placement
+        resolved_placement = (
+            placement if (placement and placement in (campaign.placements_json or [])) else campaign.placement
+        )
         campaigns.append(
             PublicBrandAdCampaignView(
                 id=campaign.id,
