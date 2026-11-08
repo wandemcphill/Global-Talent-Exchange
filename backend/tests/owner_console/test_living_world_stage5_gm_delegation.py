@@ -607,3 +607,28 @@ def test_gm_cycle_blocks_academy_settlement_when_suspended_or_unfunded(monkeypat
     cycle_suspended = living_gm_delegation.evaluate_gm_operational_cycle(session, u.id, cp.id)
     assert "academy_recruitment" in [action["type"] for action in cycle_suspended["blocked_actions"]]
     assert not cycle_suspended["executed_actions"]
+
+
+def test_owner_managed_mode_cannot_be_overridden_by_matrix_toggle():
+    session = _session()
+    u, cp, state = _bootstrap_club(session, "u_gm_owner_only", "c_gm_owner_only")
+    living_gm_delegation.update_gm_delegation_mode(session, u.id, cp.id, "owner_managed")
+
+    overview = living_gm_delegation.get_gm_delegation_overview(session, u.id, cp.id)
+    hiring = next(a for a in overview["activities"] if a["activity_key"] == "staff_hiring")
+    assert hiring["requires_owner_approval"] is True
+    assert hiring["gm_can_execute"] is False
+
+    with pytest.raises(DelegationError, match="cannot be delegated"):
+        living_gm_delegation.update_gm_matrix_and_financial_controls(
+            session,
+            u.id,
+            cp.id,
+            activity_assignments={
+                "staff_hiring": {
+                    "responsible_role": "general_manager",
+                    "authority_level": "full_autonomy",
+                    "requires_owner_approval": False,
+                }
+            },
+        )
