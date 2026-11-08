@@ -29,6 +29,20 @@ jest.mock("three/examples/jsm/controls/OrbitControls.js", () => {
   };
 });
 
+jest.mock("@/lib/api", () => ({
+  api: {
+    get: jest.fn().mockResolvedValue({ data: null }),
+    post: jest.fn().mockResolvedValue({
+      data: {
+        media_headline: "Official Statement Registered: Immediate Silverware",
+        quote: "We brought elite leadership because this club belongs at the summit.",
+        political_impact: { supporter_confidence: "+5", board_ambition: "+4" },
+      },
+    }),
+  },
+  errMsg: (err: any, fallback: string) => fallback,
+}));
+
 const mockArrivalEvent: CinematicEventPayload = {
   event_id: "evt_mgr_arrival_1",
   event_type: "manager_arrival",
@@ -104,6 +118,15 @@ describe("ManagerArrivalScene", () => {
     expect(container.textContent).toContain("OVR 91");
     expect(container.querySelector('[data-testid="arrival-render-mode-badge"]')).not.toBeNull();
 
+    // Test Snapshot capture button
+    const snapshotBtn = container.querySelector(
+      '[data-testid="capture-arrival-snapshot-btn"]'
+    ) as HTMLButtonElement;
+    expect(snapshotBtn).not.toBeNull();
+    await act(async () => {
+      snapshotBtn.click();
+    });
+
     // Switch camera preset to press_flashbulbs
     const pressStageBtn = container.querySelector(
       '[data-testid="arrival-camera-press_flashbulbs"]'
@@ -113,6 +136,19 @@ describe("ManagerArrivalScene", () => {
       pressStageBtn.click();
     });
     expect(pressStageBtn.className).toContain("bg-emerald-500");
+
+    // Interactive 3D Press Conference Q&A overlay is active
+    expect(container.querySelector('[data-testid="arrival-press-qa-overlay"]')).not.toBeNull();
+    const winNowStanceBtn = container.querySelector(
+      '[data-testid="press-stance-championship_ambition"]'
+    ) as HTMLButtonElement;
+    expect(winNowStanceBtn).not.toBeNull();
+    await act(async () => {
+      winNowStanceBtn.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(container.textContent).toContain("Official Statement Registered");
 
     // Click complete button
     const completeBtn = container.querySelector(

@@ -13,11 +13,14 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { api } from "@/lib/api";
 import { GtexSceneRegistry } from "../GtexSceneRegistry";
 import type { GtexSceneRendererProps } from "../GtexSceneTypes";
 import type { CinematicEventPayload } from "@/lib/ownerBriefing";
 
 export type ArrivalCameraShot =
+  | "vip_transport_touchdown"
+  | "medical_clearance_scan"
   | "tunnel_emergence"
   | "press_flashbulbs"
   | "contract_handover"
@@ -42,6 +45,16 @@ const SHOT_PRESETS: Record<
   ArrivalCameraShot,
   { label: string; position: [number, number, number]; target: [number, number, number] }
 > = {
+  vip_transport_touchdown: {
+    label: "VIP Tarmac",
+    position: [-7.0, 3.2, 11.5],
+    target: [-2.0, 1.2, 0],
+  },
+  medical_clearance_scan: {
+    label: "Medical Scan",
+    position: [2.8, 2.2, 4.8],
+    target: [1.2, 1.6, 0],
+  },
   tunnel_emergence: {
     label: "1. Tunnel Walkout",
     position: [0, 2.8, 9.5],
@@ -130,6 +143,13 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
     0x0f172a
   );
 
+  const [pressResponse, setPressResponse] = useState<{
+    headline: string;
+    quote: string;
+    political_impact?: Record<string, string>;
+  } | null>(null);
+  const [submittingStance, setSubmittingStance] = useState<boolean>(false);
+
   const handleSelectShot = useCallback((shot: ArrivalCameraShot) => {
     setActiveShot(shot);
     const cfg = SHOT_PRESETS[shot];
@@ -137,6 +157,64 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
     cameraGoalTargetRef.current.set(...cfg.target);
     isTransitioningRef.current = true;
   }, []);
+
+  const handleSelectPressStance = useCallback(
+    async (stance: string) => {
+      setSubmittingStance(true);
+      const resolvedEventId = cinematicEvent?.event_id || meta?.event_id || "evt_press_latest";
+      const resolvedClubId = branding?.club_id || clubName || "c_default";
+      try {
+        const res = await api.post(
+          `/owner/clubs/${resolvedClubId}/living-world/cinema-showroom/${resolvedEventId}/press-question`,
+          { stance }
+        );
+        setPressResponse({
+          headline: res.data?.media_headline || res.data?.headline || "Official Press Statement Published",
+          quote: res.data?.quote || "Statement on club sporting direction delivered to press pack.",
+          political_impact: res.data?.political_impact || {},
+        });
+      } catch {
+        const defaultHeadlines: Record<
+          string,
+          { headline: string; quote: string; political_impact: Record<string, string> }
+        > = {
+          championship_ambition: {
+            headline: "Owner Demands Immediate Silverware: 'We Are Here to Win Everything'",
+            quote: "We brought elite leadership because this club belongs at the summit.",
+            political_impact: { supporter_confidence: "+5", board_ambition: "+4" },
+          },
+          tactical_pragmatism: {
+            headline: "Owner Preaches Tactical Solidity: Structure Precedes Silverware",
+            quote: "Discipline and tactical solidity will give us the platform to conquer.",
+            political_impact: { manager_authority: "+5", stability: "+4" },
+          },
+          youth_and_sustainability: {
+            headline: "Owner Pledges Academy Dynasty: Future Powered by Youth Prodigies",
+            quote: "Our investment in the next generation is unwavering.",
+            political_impact: { hoyd_influence: "+5", academy_confidence: "+3" },
+          },
+        };
+        setPressResponse(defaultHeadlines[stance] || defaultHeadlines.championship_ambition);
+      } finally {
+        setSubmittingStance(false);
+      }
+    },
+    [branding?.club_id, cinematicEvent?.event_id, clubName, meta?.event_id]
+  );
+
+  const handleCaptureSnapshot = useCallback(() => {
+    const canvas = mountRef.current?.querySelector("canvas");
+    if (!canvas) return;
+    try {
+      const url = canvas.toDataURL("image/png");
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `GTEX_Arrival_${(resolvedName || "Staff").replace(/\s+/g, "_")}.png`;
+      a.click();
+    } catch {
+      // test environment without real canvas rendering
+    }
+  }, [resolvedName]);
 
   useEffect(() => {
     const container = mountRef.current;
@@ -256,6 +334,23 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
     podium.position.set(0, 0.75, 0.6);
     scene.add(podium);
 
+    // 3D Biometric Medical Scanner Ring (Right Stage)
+    const medicalScanner = new THREE.Mesh(
+      new THREE.TorusGeometry(0.85, 0.04, 16, 32),
+      new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.75 })
+    );
+    medicalScanner.rotation.x = Math.PI / 2;
+    medicalScanner.position.set(1.6, 1.2, 0);
+    scene.add(medicalScanner);
+
+    // VIP Transport Tarmac & Arrival Runway Marker (Left Stage)
+    const tarmacMarker = new THREE.Mesh(
+      new THREE.BoxGeometry(5.0, 0.04, 1.4),
+      new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.3, metalness: 0.5 })
+    );
+    tarmacMarker.position.set(-5.5, 0.02, 2.5);
+    scene.add(tarmacMarker);
+
     // 3D Humanoid Appointed Manager/Staff Figure (Center-Left) & Club Owner Figure (Center-Right)
     const figuresGroup = new THREE.Group();
     const buildHumanoid = (xPos: number, suitColor: number) => {
@@ -304,6 +399,7 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
 
       // Subtle breathing / presentation pose motion
       figuresGroup.position.y = Math.sin(clock.getElapsedTime() * 2.2) * 0.02;
+      medicalScanner.position.y = 1.2 + Math.sin(clock.getElapsedTime() * 2.8) * 0.3;
 
       if (isTransitioningRef.current) {
         camera.position.lerp(cameraGoalPosRef.current, dt * 3.8);
@@ -373,25 +469,108 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
           </span>
         </div>
 
-        {/* Camera Choreography Shots */}
-        <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/80 p-1 backdrop-blur-md">
-          {(Object.keys(SHOT_PRESETS) as ArrivalCameraShot[]).map((shotKey) => (
-            <button
-              key={shotKey}
-              type="button"
-              data-testid={`arrival-camera-${shotKey}`}
-              onClick={() => handleSelectShot(shotKey)}
-              className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all ${
-                activeShot === shotKey
-                  ? "bg-emerald-500 text-slate-950"
-                  : "text-slate-300 hover:text-white"
-              }`}
-            >
-              {SHOT_PRESETS[shotKey].label}
-            </button>
-          ))}
+        {/* Camera Choreography Shots & Snapshot Action */}
+        <div className="pointer-events-auto flex items-center gap-1.5">
+          <button
+            type="button"
+            data-testid="capture-arrival-snapshot-btn"
+            onClick={handleCaptureSnapshot}
+            className="rounded-lg border border-emerald-400/30 bg-slate-950/80 px-2.5 py-1 text-[11px] font-bold text-emerald-300 backdrop-blur-md hover:bg-white/10 transition-colors"
+            title="Capture HD Frame Snapshot"
+          >
+            Snapshot
+          </button>
+          <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/80 p-1 backdrop-blur-md">
+            {(Object.keys(SHOT_PRESETS) as ArrivalCameraShot[]).map((shotKey) => (
+              <button
+                key={shotKey}
+                type="button"
+                data-testid={`arrival-camera-${shotKey}`}
+                onClick={() => handleSelectShot(shotKey)}
+                className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all ${
+                  activeShot === shotKey
+                    ? "bg-emerald-500 text-slate-950"
+                    : "text-slate-300 hover:text-white"
+                }`}
+              >
+                {SHOT_PRESETS[shotKey].label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
+
+      {/* Interactive 3D Press Conference Q&A Overlay */}
+      {activeShot === "press_flashbulbs" && (
+        <div
+          data-testid="arrival-press-qa-overlay"
+          className="pointer-events-auto absolute bottom-24 left-1/2 z-30 w-[92%] max-w-xl -translate-x-1/2 rounded-2xl border border-sky-500/40 bg-slate-950/95 p-4 shadow-2xl backdrop-blur-lg animate-fade-in"
+        >
+          <div className="flex items-center justify-between border-b border-white/10 pb-2">
+            <div className="flex items-center gap-2">
+              <span className="flex h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+              <span className="text-[11px] font-black uppercase tracking-wider text-sky-400">
+                GTEX Live Press Conference
+              </span>
+            </div>
+            <span className="text-[10px] text-slate-400">Continental Media Pack</span>
+          </div>
+
+          <p className="mt-2 text-xs text-slate-200">
+            {pressResponse
+              ? pressResponse.headline
+              : `Journalists are pressing for the strategic mandate for ${resolvedName}: "What is the owner's primary objective for this tenure?"`}
+          </p>
+
+          {pressResponse ? (
+            <div className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2.5 text-xs text-emerald-300">
+              <div className="font-bold">Official Statement Registered:</div>
+              <p className="mt-0.5 text-[11px] italic text-slate-300">&ldquo;{pressResponse.quote}&rdquo;</p>
+              {pressResponse.political_impact && Object.keys(pressResponse.political_impact).length > 0 && (
+                <div className="mt-1 font-mono text-[10px] text-emerald-400">
+                  Impact: {JSON.stringify(pressResponse.political_impact)}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <button
+                type="button"
+                data-testid="press-stance-championship_ambition"
+                onClick={() => handleSelectPressStance("championship_ambition")}
+                disabled={submittingStance}
+                className="flex flex-col items-start rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 p-2.5 text-left transition-all"
+              >
+                <span className="text-[11px] font-black text-amber-300">Win Now</span>
+                <span className="text-[10px] text-slate-300 mt-0.5">Silverware Ambition</span>
+                <span className="text-[9px] text-amber-400/80 font-mono mt-1">+5 Confidence</span>
+              </button>
+              <button
+                type="button"
+                data-testid="press-stance-tactical_pragmatism"
+                onClick={() => handleSelectPressStance("tactical_pragmatism")}
+                disabled={submittingStance}
+                className="flex flex-col items-start rounded-xl border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20 p-2.5 text-left transition-all"
+              >
+                <span className="text-[11px] font-black text-sky-300">Pragmatic</span>
+                <span className="text-[10px] text-slate-300 mt-0.5">Tactical Solidity</span>
+                <span className="text-[9px] text-sky-400/80 font-mono mt-1">+5 Alignment</span>
+              </button>
+              <button
+                type="button"
+                data-testid="press-stance-youth_and_sustainability"
+                onClick={() => handleSelectPressStance("youth_and_sustainability")}
+                disabled={submittingStance}
+                className="flex flex-col items-start rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 p-2.5 text-left transition-all"
+              >
+                <span className="text-[11px] font-black text-emerald-300">Dynasty</span>
+                <span className="text-[10px] text-slate-300 mt-0.5">Youth & Academy</span>
+                <span className="text-[9px] text-emerald-400/80 font-mono mt-1">+5 HOYD Respect</span>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Bottom Verified Contract Summary & Return Action */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent p-4">

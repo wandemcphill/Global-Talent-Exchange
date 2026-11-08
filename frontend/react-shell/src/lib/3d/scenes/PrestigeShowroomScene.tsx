@@ -308,6 +308,20 @@ export const PrestigeShowroomScene: React.FC<PrestigeShowroomSceneProps> = ({
     cameraGoalPosRef.current.copy(cameraRef.current.position);
   }, []);
 
+  const handleCaptureSnapshot = useCallback(() => {
+    const canvas = mountRef.current?.querySelector("canvas");
+    if (!canvas) return;
+    try {
+      const url = canvas.toDataURL("image/png");
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `GTEX_Showroom_${(assetName || "asset").replace(/\s+/g, "_")}.png`;
+      a.click();
+    } catch {
+      // test environment without real canvas rendering
+    }
+  }, [assetName]);
+
   useEffect(() => {
     const container = mountRef.current;
     if (!container) return;
@@ -482,6 +496,14 @@ export const PrestigeShowroomScene: React.FC<PrestigeShowroomSceneProps> = ({
           >
             {isOwned ? `Verified Owned (${ownedCount || 1})` : "Catalog Inspection"}
           </span>
+          {isOwned && (
+            <span
+              data-testid="showroom-perk-active-badge"
+              className="rounded-lg border border-emerald-400/40 bg-emerald-500/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-300 backdrop-blur-md"
+            >
+              Perk Yield Active
+            </span>
+          )}
           {priceGtex !== undefined && (
             <span className="rounded-lg border border-amber-400/30 bg-slate-950/80 px-2.5 py-1 font-mono text-[10px] font-bold text-amber-300 backdrop-blur-md">
               {typeof priceGtex === "number" ? priceGtex.toLocaleString() : priceGtex} GTEX
@@ -489,8 +511,17 @@ export const PrestigeShowroomScene: React.FC<PrestigeShowroomSceneProps> = ({
           )}
         </div>
 
-        {/* Zoom & Turntable Spin Controls */}
+        {/* Zoom, Snapshot & Turntable Spin Controls */}
         <div className="pointer-events-auto flex items-center gap-1.5">
+          <button
+            type="button"
+            data-testid="capture-showroom-snapshot-btn"
+            onClick={handleCaptureSnapshot}
+            className="rounded-lg border border-amber-400/30 bg-slate-950/80 px-2.5 py-1 text-[10px] font-bold text-amber-300 hover:bg-white/10 transition-colors"
+            title="Capture 3D Frame Snapshot"
+          >
+            Snapshot
+          </button>
           <button
             type="button"
             data-testid="toggle-turntable-rotation-btn"

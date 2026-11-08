@@ -37,7 +37,10 @@ def _login(client, *, email: str, password: str) -> dict[str, str]:
 
 def _error_message(response) -> str:
     body = response.json()
-    return str(body.get("detail") or body.get("message") or body.get("code") or "")
+    detail = body.get("detail")
+    if isinstance(detail, dict):
+        return str(detail.get("detail") or detail.get("message") or detail.get("code") or "")
+    return str(body.get("message") or detail or body.get("code") or "")
 
 
 @pytest.fixture(scope="module")
@@ -329,9 +332,7 @@ def test_new_user_without_club_can_enter_and_rent_for_national_team(
     with app_session_factory() as session:
         assert session.scalar(select(ClubProfile).where(ClubProfile.owner_user_id == user_id)) is None
 
-    competition = _create_competition(
-        client, national_admin_headers, key_prefix=f"no-club-national-{nonce}"
-    )
+    competition = _create_competition(client, national_admin_headers, key_prefix=f"no-club-national-{nonce}")
     player_ids = _seed_national_pool(
         app_session_factory,
         prefix=f"no-club-national-{nonce}",
@@ -357,10 +358,7 @@ def test_new_user_without_club_can_enter_and_rent_for_national_team(
     )
     assert rent_response.status_code == 200, rent_response.text
     rented = rent_response.json()
-    assert any(
-        member["player_id"] == player_ids["home-st"]
-        for member in rented["rental_squad_members"]
-    )
+    assert any(member["player_id"] == player_ids["home-st"] for member in rented["rental_squad_members"])
     with app_session_factory() as session:
         assert session.scalar(select(ClubProfile).where(ClubProfile.owner_user_id == user_id)) is None
 

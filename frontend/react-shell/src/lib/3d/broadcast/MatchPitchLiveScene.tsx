@@ -22,7 +22,7 @@ import {
   InterpolatedMatchState,
   TacticalVisualConfig,
 } from "./SpatialInterpolator";
-import { CameraDirector, ManualCameraMode } from "./CameraDirector";
+import { CameraDirector, ManualCameraMode, type CameraPose } from "./CameraDirector";
 import { BroadcastOverlayHUD } from "./BroadcastOverlayHUD";
 import {
   SpectatorSafeMatchView,
@@ -54,6 +54,17 @@ import {
   StadiumCeremonySystem,
   type StadiumCeremonyState,
 } from "./StadiumCeremonySystem";
+import {
+  ReplayDirectorStudio,
+  type ReplayStudioAngle,
+} from "./ReplayDirectorStudio";
+import { PitchTurfDegradationSystem } from "./PitchTurfDegradationSystem";
+import { StadiumTifoAndJumbotronSystem } from "./StadiumTifoAndJumbotronSystem";
+import {
+  SpectatorImmersionLayer,
+  type CommentaryCue,
+  type SpectatorReactionItem,
+} from "./SpectatorImmersionLayer";
 import {
   type StadiumLedCampaign,
   type StadiumAdImpressionEvent,
@@ -125,6 +136,14 @@ export interface MatchPitchLiveSceneProps {
   arOverlayMode?: BroadcastAROverlayMode;
   /** Callback when user changes AR overlay mode */
   onArOverlayModeChange?: (mode: BroadcastAROverlayMode) => void;
+  /** Phase 4: Cinematic Replay Studio camera angle */
+  replayStudioAngle?: ReplayStudioAngle;
+  /** Callback when user changes Replay Studio camera angle */
+  onReplayStudioAngleChange?: (angle: ReplayStudioAngle) => void;
+  /** Phase 4: Toggle web haptics */
+  hapticsEnabled?: boolean;
+  /** Callback when user toggles haptics */
+  onHapticsChange?: (enabled: boolean) => void;
   /** Additional container CSS class */
   className?: string;
   /** Test identifier */
@@ -159,6 +178,10 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   onWeatherPresetChange,
   arOverlayMode: propArOverlayMode = "off",
   onArOverlayModeChange,
+  replayStudioAngle: propReplayStudioAngle = "orbit_360",
+  onReplayStudioAngleChange,
+  hapticsEnabled: propHapticsEnabled = true,
+  onHapticsChange,
   className = "",
   testId = "match-pitch-live-scene",
 }) => {
@@ -170,6 +193,10 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   const arOverlayRef = useRef<BroadcastTacticalAROverlay | null>(null);
   const goalNetAndSetPiecesRef = useRef<GoalNetPhysicsAndSetPieces | null>(null);
   const stadiumCeremonyRef = useRef<StadiumCeremonySystem | null>(null);
+  const replayStudioRef = useRef<ReplayDirectorStudio | null>(null);
+  const turfDegradationRef = useRef<PitchTurfDegradationSystem | null>(null);
+  const tifoAndJumbotronRef = useRef<StadiumTifoAndJumbotronSystem | null>(null);
+  const immersionLayerRef = useRef<SpectatorImmersionLayer | null>(null);
   const audioEngineRef = useRef<StadiumAudioEngine>(new StadiumAudioEngine({ initialMuted: true }));
   const [webglSupported, setWebglSupported] = useState<boolean>(true);
   const [contextLost, setContextLost] = useState<boolean>(false);
@@ -180,6 +207,11 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   const [stadiumTier, setStadiumTierState] = useState<StadiumTier>(propStadiumTier);
   const [weatherPreset, setWeatherPresetState] = useState<StadiumWeatherPreset>(propWeatherPreset);
   const [arOverlayMode, setArOverlayModeState] = useState<BroadcastAROverlayMode>(propArOverlayMode);
+  const [replayStudioAngle, setReplayStudioAngleState] = useState<ReplayStudioAngle>(propReplayStudioAngle);
+  const [hapticsEnabled, setHapticsEnabledState] = useState<boolean>(propHapticsEnabled);
+  const [commentaryCue, setCommentaryCue] = useState<CommentaryCue | null>(null);
+  const [spectatorReactions, setSpectatorReactions] = useState<readonly SpectatorReactionItem[]>([]);
+  const [watchPartyCheerMeter, setWatchPartyCheerMeter] = useState<number>(15);
   const [internalTheatreMode, setInternalTheatreMode] = useState<boolean>(false);
   const [minimalHud, setMinimalHud] = useState<boolean>(false);
   const [isReplayActive, setIsReplayActive] = useState<boolean>(false);
@@ -192,6 +224,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   const stadiumTierRef = useRef<StadiumTier>(propStadiumTier);
   const weatherPresetRef = useRef<StadiumWeatherPreset>(propWeatherPreset);
   const arOverlayModeRef = useRef<BroadcastAROverlayMode>(propArOverlayMode);
+  const replayStudioAngleRef = useRef<ReplayStudioAngle>(propReplayStudioAngle);
 
   const isTheatreMode = externalTheatreMode ?? internalTheatreMode;
 
@@ -216,6 +249,17 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     arOverlayModeRef.current = propArOverlayMode;
     arOverlayRef.current?.setMode(propArOverlayMode);
   }, [propArOverlayMode]);
+
+  useEffect(() => {
+    setReplayStudioAngleState(propReplayStudioAngle);
+    replayStudioAngleRef.current = propReplayStudioAngle;
+    replayStudioRef.current?.setReplayAngle(propReplayStudioAngle);
+  }, [propReplayStudioAngle]);
+
+  useEffect(() => {
+    setHapticsEnabledState(propHapticsEnabled);
+    immersionLayerRef.current?.setHapticsEnabled(propHapticsEnabled);
+  }, [propHapticsEnabled]);
 
   const handleSelectQualityTier = useCallback(
     (tier: "high" | "medium" | "low") => {
@@ -254,6 +298,33 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     },
     [onArOverlayModeChange]
   );
+
+  const handleSelectReplayStudioAngle = useCallback(
+    (angle: ReplayStudioAngle) => {
+      setReplayStudioAngleState(angle);
+      replayStudioAngleRef.current = angle;
+      replayStudioRef.current?.setReplayAngle(angle);
+      onReplayStudioAngleChange?.(angle);
+    },
+    [onReplayStudioAngleChange]
+  );
+
+  const handleToggleHaptics = useCallback(() => {
+    setHapticsEnabledState((prev) => {
+      const next = !prev;
+      immersionLayerRef.current?.setHapticsEnabled(next);
+      onHapticsChange?.(next);
+      return next;
+    });
+  }, [onHapticsChange]);
+
+  const handleSendReaction = useCallback((emoji: string) => {
+    immersionLayerRef.current?.sendReaction(emoji, "Viewer");
+    if (immersionLayerRef.current) {
+      setSpectatorReactions(immersionLayerRef.current.getRecentReactions());
+      setWatchPartyCheerMeter(immersionLayerRef.current.getSummary().cheerMeter);
+    }
+  }, []);
 
   const handleToggleTheatre = useCallback(() => {
     if (onToggleTheatreMode) {
@@ -540,6 +611,33 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     const stadiumCeremony = new StadiumCeremonySystem(scene);
     stadiumCeremonyRef.current = stadiumCeremony;
 
+    // -------------------------------------------------------------------------
+    // 3c. Phase 4: Replay Studio, Pitch Turf Degradation, Jumbotrons/Tifo & Immersion
+    // -------------------------------------------------------------------------
+    const replayStudio = new ReplayDirectorStudio({
+      initialAngle: replayStudioAngleRef.current,
+      playbackRate: 0.45,
+    });
+    replayStudioRef.current = replayStudio;
+
+    const turfDegradation = new PitchTurfDegradationSystem(scene);
+    turfDegradationRef.current = turfDegradation;
+
+    const tifoAndJumbotron = new StadiumTifoAndJumbotronSystem(scene, {
+      homeShortName: safeViewRef.current.home_team.short_name,
+      awayShortName: safeViewRef.current.away_team.short_name,
+      homeColorHex: safeViewRef.current.home_team.primary_color,
+      awayColorHex: safeViewRef.current.away_team.primary_color,
+      competitionName: safeViewRef.current.competition_name || "GTEX PREMIER BROADCAST",
+    });
+    tifoAndJumbotronRef.current = tifoAndJumbotron;
+
+    const immersionLayer = new SpectatorImmersionLayer({
+      hapticsEnabled: propHapticsEnabled,
+      watchPartyRoomSize: Math.max(12, Math.min(250, viewerCount ? Math.floor(viewerCount / 40) : 32)),
+    });
+    immersionLayerRef.current = immersionLayer;
+
     const adNet = stadiumArena.getAdvertisingNetwork();
     if (safeViewRef.current.monetization) {
       adNet.setMatchMonetization(safeViewRef.current.monetization);
@@ -766,6 +864,12 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           goalNetAndSetPieces: goalNetAndSetPieces.getSummary(),
           stadiumCeremony: stadiumCeremony.getSummary(),
         }),
+        getPhase4Summary: () => ({
+          replayStudio: replayStudio.getSummary(),
+          turfDegradation: turfDegradation.getSummary(),
+          tifoAndJumbotron: tifoAndJumbotron.getSummary(),
+          immersionLayer: immersionLayer.getSummary(),
+        }),
         resetTelemetry: () => {
           frameDeltaSamplesMs.length = 0;
           frameDeltaSumMs = 0;
@@ -831,10 +935,12 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
 
         // If a replay window is active, advance the replay cursor independently at 0.85x slow-motion
         if (replayCursorTimeRef.current !== null && replayEndTimeRef.current !== null) {
+          replayStudio.setReplayActive(true);
           replayCursorTimeRef.current += deltaSec * Math.min(0.85, playbackSpeedRef.current);
           if (replayCursorTimeRef.current >= replayEndTimeRef.current) {
             replayCursorTimeRef.current = null;
             replayEndTimeRef.current = null;
+            replayStudio.setReplayActive(false);
             setIsReplayActive(false);
             setCameraMode("director_auto");
           }
@@ -890,6 +996,9 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           state.event_banner || activeEvent?.banner_text || null
         );
 
+        const scorer = state.players.find((p) => p.animation_state === "celebrate");
+        const scorerPos = scorer ? scorer.position3D : null;
+
         if (activeEvent && activeEvent.event_id !== lastCrowdEventIdRef.current) {
           lastCrowdEventIdRef.current = activeEvent.event_id;
           const evType = (activeEvent.event_type || "").toLowerCase();
@@ -922,17 +1031,48 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           arOverlay.triggerEventFlash(evType);
           goalNetAndSetPieces.triggerMatchEvent(evType, evSide, state.ball.position3D);
           stadiumCeremony.triggerMatchEvent(evType);
+
+          // Phase 4: Replay Studio bookmark, pitch turf degradation, jumbotron alerts & immersion
+          replayStudio.recordBookmark({
+            eventId: activeEvent.event_id,
+            eventType: evType,
+            timestampSec: localTime,
+            clockMinute: hudState?.clock_minute ?? state.clock_minute,
+            ballPosition: state.ball.position3D,
+            primaryActorPosition: scorerPos,
+            recommendedAngle: evType === "goal" ? "orbit_360" : evType === "red_card" ? "reverse_angle_pov" : "spidercam_overhead",
+            summaryText: state.event_banner || activeEvent.banner_text || evType.toUpperCase(),
+          });
+          if (evType === "tackle" || evType === "foul") {
+            turfDegradation.addSlideTackleDivot(state.ball.position3D[0], state.ball.position3D[2], Math.random() * Math.PI);
+          }
+          if (evType === "goal") {
+            tifoAndJumbotron.triggerTifo("FORZA GTEX", 12);
+            tifoAndJumbotron.triggerJumbotronFlash("GOAL!", "#10b981", 8);
+          } else if (evType === "red_card") {
+            tifoAndJumbotron.triggerJumbotronFlash("RED CARD!", "#ef4444", 6);
+          } else if (evType === "var" || evType === "var_review") {
+            tifoAndJumbotron.triggerJumbotronFlash("VAR CHECK", "#facc15", 8);
+          }
+          immersionLayer.handleMatchEvent(evType, evSide, {
+            playerName: scorer?.label,
+            clock: `${Math.floor(hudState?.clock_minute ?? state.clock_minute)}'`,
+          });
         }
 
         // Update Camera first so LOD distance checks use the exact current camera pose
-        const scorer = state.players.find((p) => p.animation_state === "celebrate");
-        const scorerPos = scorer ? scorer.position3D : null;
-        const pose = cameraDirector.update(
-          deltaSec,
-          state.camera_preset,
-          state.ball.position3D,
-          scorerPos
-        );
+        let pose: CameraPose;
+        if (replayCursorTimeRef.current !== null && replayEndTimeRef.current !== null) {
+          const replayProgress = Math.max(0, Math.min(1, 1 - (replayEndTimeRef.current - replayCursorTimeRef.current) / 8.0));
+          pose = replayStudio.computeReplayPose(deltaSec, replayProgress, state.ball.position3D, scorerPos);
+        } else {
+          pose = cameraDirector.update(
+            deltaSec,
+            state.camera_preset,
+            state.ball.position3D,
+            scorerPos
+          );
+        }
 
         camera.position.set(pose.position[0], pose.position[1], pose.position[2]);
         camera.lookAt(pose.target[0], pose.target[1], pose.target[2]);
@@ -1008,6 +1148,26 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         });
         goalNetAndSetPieces.update(deltaSec, [bx, by, bz]);
         stadiumCeremony.update(deltaSec);
+
+        // Phase 4: Update Turf Degradation, Jumbotrons/Tifo & Immersion Layer
+        turfDegradation.update({
+          deltaSec,
+          clockMinute: hudState?.clock_minute ?? state.clock_minute,
+          weatherPreset: weatherPresetRef.current,
+          ballPosition3D: [bx, by, bz],
+          ballVelocity: state.ball.velocity ?? null,
+        });
+        tifoAndJumbotron.update(deltaSec, {
+          homeScore: hudState?.home_score ?? state.home_score,
+          awayScore: hudState?.away_score ?? state.away_score,
+          clockMinute: hudState?.clock_minute ?? state.clock_minute,
+          eventBanner: state.event_banner,
+          phase: state.phase,
+        });
+        immersionLayer.update(deltaSec);
+        setCommentaryCue(immersionLayer.getCurrentCommentaryCue());
+        setSpectatorReactions(immersionLayer.getRecentReactions());
+        setWatchPartyCheerMeter(immersionLayer.getSummary().cheerMeter);
 
         // Update ball drop shadow
         ballShadowMesh.position.set(bx, 0.03, bz);
@@ -1142,6 +1302,10 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
               arOverlay: arOverlay.getSummary(),
               goalNetAndSetPieces: goalNetAndSetPieces.getSummary(),
               stadiumCeremony: stadiumCeremony.getSummary(),
+              replayStudio: replayStudio.getSummary(),
+              turfDegradation: turfDegradation.getSummary(),
+              tifoAndJumbotron: tifoAndJumbotron.getSummary(),
+              immersionLayer: immersionLayer.getSummary(),
               adRotationCount: adNet.getRotationCount(),
               adImpressionCount: adNet.getImpressionHistory().length,
               activeAdCampaigns: adNet.getActiveCampaigns().map((c) => ({
@@ -1195,6 +1359,10 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       arOverlayRef.current = null;
       goalNetAndSetPiecesRef.current = null;
       stadiumCeremonyRef.current = null;
+      replayStudioRef.current = null;
+      turfDegradationRef.current = null;
+      tifoAndJumbotronRef.current = null;
+      immersionLayerRef.current = null;
       playerRigs.forEach((rig) => rig.dispose());
       playerRigs.clear();
       scene.clear();
@@ -1205,6 +1373,10 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       arOverlay.dispose();
       goalNetAndSetPieces.dispose();
       stadiumCeremony.dispose();
+      replayStudio.dispose();
+      turfDegradation.dispose();
+      tifoAndJumbotron.dispose();
+      immersionLayer.dispose();
       ballGeo.dispose();
       ballMat.dispose();
       shadowGeo.dispose();
@@ -1239,6 +1411,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     if (isReplayActive) {
       replayCursorTimeRef.current = null;
       replayEndTimeRef.current = null;
+      replayStudioRef.current?.setReplayActive(false);
       setIsReplayActive(false);
       setReplayFallbackMessage(null);
       setCameraMode("director_auto");
@@ -1253,6 +1426,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       replayEndTimeRef.current = liveNow;
       const rewindTo = Math.max(interpolator.getStartTime(), liveNow - 8.0);
       replayCursorTimeRef.current = rewindTo;
+      replayStudioRef.current?.setReplayActive(true);
       setIsReplayActive(true);
       setCameraMode("replay_cam");
     }
@@ -1350,6 +1524,14 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           onSelectWeatherPreset={handleSelectWeatherPreset}
           arOverlayMode={arOverlayMode}
           onSelectArOverlayMode={handleSelectArOverlayMode}
+          replayStudioAngle={replayStudioAngle}
+          onSelectReplayStudioAngle={handleSelectReplayStudioAngle}
+          commentaryCue={commentaryCue}
+          spectatorReactions={spectatorReactions}
+          watchPartyCheerMeter={watchPartyCheerMeter}
+          hapticsEnabled={hapticsEnabled}
+          onToggleHaptics={handleToggleHaptics}
+          onSendReaction={handleSendReaction}
           isTheatreMode={isTheatreMode}
           onToggleTheatreMode={handleToggleTheatre}
           minimalHud={minimalHud}
@@ -1412,6 +1594,14 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           onSelectWeatherPreset={handleSelectWeatherPreset}
           arOverlayMode={arOverlayMode}
           onSelectArOverlayMode={handleSelectArOverlayMode}
+          replayStudioAngle={replayStudioAngle}
+          onSelectReplayStudioAngle={handleSelectReplayStudioAngle}
+          commentaryCue={commentaryCue}
+          spectatorReactions={spectatorReactions}
+          watchPartyCheerMeter={watchPartyCheerMeter}
+          hapticsEnabled={hapticsEnabled}
+          onToggleHaptics={handleToggleHaptics}
+          onSendReaction={handleSendReaction}
           isTheatreMode={isTheatreMode}
           onToggleTheatreMode={handleToggleTheatre}
           minimalHud={minimalHud}

@@ -30,6 +30,63 @@ export interface TacticianSuiteSceneProps extends Partial<GtexSceneRendererProps
   clubId?: string;
 }
 
+export type TacticalFormation = "4-3-3" | "4-2-3-1" | "3-5-2" | "4-4-2";
+
+export const FORMATION_COORDINATES: Record<TacticalFormation, Array<[number, number]>> = {
+  "4-3-3": [
+    [0, -1.2],
+    [-1.8, -0.6],
+    [-0.6, -0.6],
+    [0.6, -0.6],
+    [1.8, -0.6],
+    [-1.1, 0.1],
+    [0, 0.3],
+    [1.1, 0.1],
+    [-1.6, 1.0],
+    [0, 1.15],
+    [1.6, 1.0],
+  ],
+  "4-2-3-1": [
+    [0, -1.2],
+    [-1.8, -0.6],
+    [-0.6, -0.6],
+    [0.6, -0.6],
+    [1.8, -0.6],
+    [-0.8, -0.05],
+    [0.8, -0.05],
+    [-1.5, 0.55],
+    [0, 0.65],
+    [1.5, 0.55],
+    [0, 1.15],
+  ],
+  "3-5-2": [
+    [0, -1.2],
+    [-1.2, -0.6],
+    [0, -0.6],
+    [1.2, -0.6],
+    [-1.8, 0.1],
+    [-0.8, 0.15],
+    [0, 0.05],
+    [0.8, 0.15],
+    [1.8, 0.1],
+    [-0.7, 1.05],
+    [0.7, 1.05],
+  ],
+  "4-4-2": [
+    [0, -1.2],
+    [-1.8, -0.6],
+    [-0.6, -0.6],
+    [0.6, -0.6],
+    [1.8, -0.6],
+    [-1.8, 0.15],
+    [-0.6, 0.15],
+    [0.6, 0.15],
+    [1.8, 0.15],
+    [-0.65, 1.05],
+    [0.65, 1.05],
+  ],
+};
+
 export type TacticianCameraPreset = "tactics_board" | "desk" | "overview" | "tunnel_view";
 
 const CAMERA_PRESETS: Record<
@@ -66,6 +123,7 @@ export const TacticianSuiteScene: React.FC<TacticianSuiteSceneProps> = ({
 }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const [activePreset, setActivePreset] = useState<TacticianCameraPreset>("tactics_board");
+  const [activeFormation, setActiveFormation] = useState<TacticalFormation>("4-3-3");
   const [lightingMode, setLightingMode] = useState<"day" | "night">("day");
   const [isHovered, setIsHovered] = useState<boolean>(false);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -73,6 +131,7 @@ export const TacticianSuiteScene: React.FC<TacticianSuiteSceneProps> = ({
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
+  const magnetsRef = useRef<THREE.Mesh[]>([]);
   const cameraGoalPosRef = useRef<THREE.Vector3>(new THREE.Vector3(...CAMERA_PRESETS.tactics_board.position));
   const cameraGoalTargetRef = useRef<THREE.Vector3>(new THREE.Vector3(...CAMERA_PRESETS.tactics_board.target));
   const isTransitioningRef = useRef<boolean>(true);
@@ -84,6 +143,31 @@ export const TacticianSuiteScene: React.FC<TacticianSuiteSceneProps> = ({
     cameraGoalTargetRef.current.set(...target.target);
     isTransitioningRef.current = true;
   }, []);
+
+  const handleSelectFormation = useCallback((formation: TacticalFormation) => {
+    setActiveFormation(formation);
+    const coords = FORMATION_COORDINATES[formation];
+    if (!coords || magnetsRef.current.length === 0) return;
+    magnetsRef.current.forEach((magnet, idx) => {
+      if (coords[idx]) {
+        magnet.position.set(coords[idx][0], coords[idx][1], 0.1);
+      }
+    });
+  }, []);
+
+  const handleCaptureSnapshot = useCallback(() => {
+    const canvas = mountRef.current?.querySelector("canvas");
+    if (!canvas) return;
+    try {
+      const url = canvas.toDataURL("image/png");
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `GTEX_TacticianSuite_${clubId}_${Date.now()}.png`;
+      a.click();
+    } catch {
+      // test environment without real canvas rendering
+    }
+  }, [clubId]);
 
   useEffect(() => {
     const container = mountRef.current;
@@ -180,34 +264,39 @@ export const TacticianSuiteScene: React.FC<TacticianSuiteSceneProps> = ({
     boardSurface.position.z = 0.07;
     boardGroup.add(boardSurface);
 
-    // 4-3-3 Tactical Formation Magnets
-    const formationPositions: Array<[number, number]> = [
-      // GK
-      [0, -1.2],
-      // Defense
-      [-1.8, -0.6],
-      [-0.6, -0.6],
-      [0.6, -0.6],
-      [1.8, -0.6],
-      // Midfield
-      [-1.1, 0.1],
-      [0, 0.3],
-      [1.1, 0.1],
-      // Attack
-      [-1.6, 1.0],
-      [0, 1.15],
-      [1.6, 1.0],
-    ];
+    // 11-Token Tactical Formation Magnets on Pitch Board
+    magnetsRef.current = [];
+    const formationPositions = FORMATION_COORDINATES[activeFormation] || FORMATION_COORDINATES["4-3-3"];
 
     formationPositions.forEach(([mx, my]) => {
       const magnetGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.06, 16);
-      const magnetMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.2 });
+      const magnetMat = new THREE.MeshStandardMaterial({
+        color: 0x38bdf8,
+        roughness: 0.2,
+        metalness: 0.6,
+      });
       const magnet = new THREE.Mesh(magnetGeo, magnetMat);
       magnet.rotation.x = Math.PI / 2;
       magnet.position.set(mx, my, 0.1);
       boardGroup.add(magnet);
+      magnetsRef.current.push(magnet);
     });
     scene.add(boardGroup);
+
+    // Silverware Trophy Miniature on Manager's Executive Side Shelf
+    const trophyTable = new THREE.Mesh(
+      new THREE.BoxGeometry(1.2, 0.9, 0.6),
+      new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.3 })
+    );
+    trophyTable.position.set(-2.8, 0.45, -0.8);
+    scene.add(trophyTable);
+
+    const trophyCup = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.2, 0.08, 0.38, 16),
+      new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.9, roughness: 0.15 })
+    );
+    trophyCup.position.set(-2.8, 1.1, -0.8);
+    scene.add(trophyCup);
 
     // -----------------------------------------------------------------------
     // 3D First-Team Manager Persona
@@ -346,18 +435,54 @@ export const TacticianSuiteScene: React.FC<TacticianSuiteSceneProps> = ({
       <div ref={mountRef} className="h-full w-full" />
 
       {/* Top HUD Controls */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between p-4">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-wrap items-center justify-between gap-2 p-4">
         <div className="pointer-events-auto flex items-center gap-2 rounded-xl border border-white/10 bg-slate-950/80 px-3 py-1.5 backdrop-blur-md">
           <Sliders className="h-4 w-4 text-emerald-400" />
           <span className="text-xs font-bold uppercase tracking-wider text-white">
             Manager Tactician War Room
           </span>
           <span className="rounded bg-sky-500/20 px-1.5 py-0.5 text-[10px] font-mono text-sky-300">
-            FORMATION 4-3-3
+            FORMATION {activeFormation}
           </span>
         </div>
 
+        {/* Formation Switcher */}
+        <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/80 p-1 backdrop-blur-md">
+          {(["4-3-3", "4-2-3-1", "3-5-2", "4-4-2"] as TacticalFormation[]).map((fmt) => (
+            <button
+              key={fmt}
+              type="button"
+              data-testid={`formation-select-${fmt}`}
+              onClick={() => handleSelectFormation(fmt)}
+              className={`rounded-lg px-2 py-0.5 text-[10px] font-mono font-bold transition-all ${
+                activeFormation === fmt
+                  ? "bg-sky-500 text-slate-950 shadow-sm"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              {fmt}
+            </button>
+          ))}
+        </div>
+
         <div className="pointer-events-auto flex items-center gap-2">
+          <span
+            data-testid="medical-suite-cryo-link"
+            className="rounded-lg border border-sky-400/30 bg-sky-500/10 px-2.5 py-1 text-[10px] font-bold text-sky-300 backdrop-blur-md"
+          >
+            Medical Link: Cryo Active
+          </span>
+
+          <button
+            type="button"
+            data-testid="capture-tactician-snapshot-btn"
+            onClick={handleCaptureSnapshot}
+            className="rounded-lg border border-emerald-400/30 bg-slate-950/80 px-2.5 py-1 text-xs font-bold text-emerald-300 hover:bg-white/10 transition-colors backdrop-blur-md"
+            title="Capture 3D Tactical Frame"
+          >
+            Snapshot
+          </button>
+
           <button
             type="button"
             data-testid="toggle-tactician-lighting-btn"

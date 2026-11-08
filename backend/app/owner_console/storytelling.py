@@ -993,6 +993,7 @@ def get_club_showroom(session: Session, user_id: str, club_id: str) -> dict[str,
     from app.owner_console import engine
 
     from app.owner_console.prestige_campus_comms import PRESTIGE_VISUAL_MANIFEST
+    from app.owner_console.living_cinema_showroom import compute_club_showroom_perks
 
     cash_bal = float(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX))
     facs = dict(state.facilities_json or {})
@@ -1005,12 +1006,14 @@ def get_club_showroom(session: Session, user_id: str, club_id: str) -> dict[str,
         1 for o in owned if not o.get("gifted_to_player_name") and o.get("category") in ("vehicle", "watch")
     )
     gifted_count = sum(1 for o in owned if o.get("gifted_to_player_name"))
+    perks = compute_club_showroom_perks(session, club_id)
     return {
         "catalog": items,
         "owned_assets": owned,
         "club_prestige": club_prestige,
         "prestige_tier": engine.prestige_tier_label(club_prestige),
         "visual_manifest": PRESTIGE_VISUAL_MANIFEST,
+        "operational_perks": perks,
         "owner_office_summary": {
             "club_id": club_id,
             "club_name": state.club_name,
