@@ -247,6 +247,14 @@ export const commercialApi = {
     return data;
   },
 
+  async getStadiumInventory(limit = 25): Promise<{
+    generated_at: string;
+    campaigns: PublicBrandAd[];
+  }> {
+    const { data } = await api.get("/v2/public/ads/stadium/inventory", { params: { limit } });
+    return data;
+  },
+
   async registerAdvertiser(payload: {
     account_type: "business" | "agency" | "music";
     company_name: string;
