@@ -67,6 +67,28 @@ jobs:
         working-directory: frontend
         run: flutter pub get
 
+      # Use the same compiled release runtime as the certified P7-FEV browser
+      # environment. Flutter's debug web-server loads the DDC module graph in
+      # every browser context and causes intermittent cold-render/auth failures.
+      - name: Build Flutter Web release bundle
+        working-directory: frontend
+        run: >
+          flutter build web --release
+          --dart-define=GTE_API_BASE_URL=http://127.0.0.1:8000
+          --dart-define=GTE_BACKEND_MODE=live
+
+      - name: Start Flutter Web release server
+        run: |
+          nohup python tools/serve_dev.py 7357 > /tmp/gtex-web.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:7357/ >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/gtex-web.log
+          exit 1
+
       - name: Install Playwright dependencies
         working-directory: qa/playwright
         run: npm ci
@@ -80,6 +102,7 @@ jobs:
         working-directory: qa/playwright
         env:
           CI: "true"
+          GTEX_E2E_BASE_URL: "http://127.0.0.1:7357"
           GTEX_E2E_API_BASE_URL: "http://127.0.0.1:8000"
           GTEX_E2E_EMAIL: "seed.scout@gte.local"
           GTEX_E2E_PASSWORD: "DemoPass123" # pragma: allowlist secret
@@ -87,6 +110,7 @@ jobs:
           GTEX_E2E_DESIGN_LAB: "1"
         run: >-
           npx playwright test
+          --workers=1
           --project=${{ matrix.project }}
           tests/p7_fe_audio_shell.spec.mjs
           tests/p7_fe_authed_shell.spec.mjs
