@@ -152,19 +152,33 @@ export function Showroom() {
   }, [catalog, ownedAssets, selectedCategory]);
 
   const operationalPerks = (showroomData as any)?.operational_perks || {};
-  const wageBonusPct = Number(operationalPerks?.wage_recruitment_bonus_pct || 0);
-  const recoveryBonusDays = Number(operationalPerks?.away_recovery_days_bonus || 0);
-  const moraleFloor = Number(operationalPerks?.squad_morale_floor || 0);
-  const commercialRate = Number(operationalPerks?.matchday_commercial_yield_rate || 0);
-  const unclaimedYield = Number(operationalPerks?.unclaimed_commercial_yield_gtex || 0);
+  const wageBonusPct = Number(
+    operationalPerks?.recruitment_wage_bonus_pct ?? operationalPerks?.wage_recruitment_bonus_pct ?? 0
+  );
+  const recoveryBonusDays = Number(
+    operationalPerks?.away_recovery_boost_days ?? operationalPerks?.away_recovery_days_bonus ?? 0
+  );
+  const moraleFloor = Number(
+    operationalPerks?.squad_morale_floor_bonus ?? operationalPerks?.squad_morale_floor ?? 0
+  );
+  const commercialRate = Number(
+    operationalPerks?.matchday_commercial_yield_gtex ?? operationalPerks?.matchday_commercial_yield_rate ?? 0
+  );
+  const alreadyClaimedToday = Boolean(operationalPerks?.already_claimed_today);
+  const unclaimedYield = Number(
+    operationalPerks?.unclaimed_commercial_yield_gtex ?? (alreadyClaimedToday ? 0 : commercialRate)
+  );
 
   const handleClaimYield = async () => {
     if (!clubId || claimingYield) return;
     setClaimingYield(true);
     try {
       const res = await api.post(`/owner/clubs/${clubId}/living-world/cinema-showroom/claim-yield`);
+      const credited = Number(res.data?.yield_credited_gtex ?? res.data?.claimed_gtex ?? commercialRate);
       toast.success(
-        `Claimed ${Number(res.data.claimed_gtex || 0).toLocaleString()} GTEX in showroom commercial dividend!`
+        res.data?.already_claimed
+          ? `Today's showroom dividend (${credited.toLocaleString()} GTEX) was already credited.`
+          : `Claimed ${credited.toLocaleString()} GTEX in showroom commercial dividend!`
       );
       refresh();
     } catch (e: any) {

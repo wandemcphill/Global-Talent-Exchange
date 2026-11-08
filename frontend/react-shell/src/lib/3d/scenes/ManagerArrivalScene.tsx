@@ -115,6 +115,12 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
 
   const meta = (cinematicEvent as any)?.metadata || {};
   const branding = (cinematicEvent as any)?.club_branding || {};
+  const vipTransport = (cinematicEvent as any)?.vip_transport || meta?.vip_transport || null;
+  const medicalClearance =
+    (cinematicEvent as any)?.medical_clearance_status ||
+    meta?.medical_clearance_status ||
+    "cleared_fit_for_duty";
+  const pressQaPayload = (cinematicEvent as any)?.press_conference_qa || meta?.press_conference_qa || null;
 
   const resolvedName =
     cinematicEvent?.subject_name || meta.staff_name || subjectName || "Emmanuel Amuneke";
@@ -162,16 +168,27 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
     async (stance: string) => {
       setSubmittingStance(true);
       const resolvedEventId = cinematicEvent?.event_id || meta?.event_id || "evt_press_latest";
-      const resolvedClubId = branding?.club_id || clubName || "c_default";
+      const resolvedClubId =
+        (cinematicEvent as any)?.club_id ||
+        meta?.club_id ||
+        branding?.club_id ||
+        clubName ||
+        "c_default";
       try {
         const res = await api.post(
           `/owner/clubs/${resolvedClubId}/living-world/cinema-showroom/${resolvedEventId}/press-question`,
           { stance }
         );
+        const rawEffects = res.data?.political_impact || res.data?.effects || {};
+        const normalizedImpact: Record<string, string> = {};
+        Object.entries(rawEffects).forEach(([k, v]) => {
+          const numVal = Number(v);
+          normalizedImpact[k] = !Number.isNaN(numVal) && numVal > 0 ? `+${numVal}` : String(v);
+        });
         setPressResponse({
           headline: res.data?.media_headline || res.data?.headline || "Official Press Statement Published",
           quote: res.data?.quote || "Statement on club sporting direction delivered to press pack.",
-          political_impact: res.data?.political_impact || {},
+          political_impact: normalizedImpact,
         });
       } catch {
         const defaultHeadlines: Record<
@@ -199,7 +216,7 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
         setSubmittingStance(false);
       }
     },
-    [branding?.club_id, cinematicEvent?.event_id, clubName, meta?.event_id]
+    [branding?.club_id, cinematicEvent, clubName, meta?.club_id, meta?.event_id]
   );
 
   const handleCaptureSnapshot = useCallback(() => {
@@ -343,13 +360,52 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
     medicalScanner.position.set(1.6, 1.2, 0);
     scene.add(medicalScanner);
 
-    // VIP Transport Tarmac & Arrival Runway Marker (Left Stage)
+    // VIP Transport Tarmac & Arrival Runway Marker + 3D VIP Vehicle (Left Stage)
     const tarmacMarker = new THREE.Mesh(
       new THREE.BoxGeometry(5.0, 0.04, 1.4),
       new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.3, metalness: 0.5 })
     );
     tarmacMarker.position.set(-5.5, 0.02, 2.5);
     scene.add(tarmacMarker);
+
+    const vipVehicleGroup = new THREE.Group();
+    vipVehicleGroup.position.set(-5.5, 0.38, 2.5);
+    const vehicleArchetype = vipTransport?.mesh_archetype || "private_jet";
+    if (vehicleArchetype === "private_jet") {
+      const fuselage = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.28, 0.28, 3.2, 20),
+        new THREE.MeshStandardMaterial({ color: 0xf8fafc, metalness: 0.65, roughness: 0.2 })
+      );
+      fuselage.rotation.z = Math.PI / 2;
+      vipVehicleGroup.add(fuselage);
+
+      const wings = new THREE.Mesh(
+        new THREE.BoxGeometry(0.9, 0.05, 2.6),
+        new THREE.MeshStandardMaterial({ color: resolvedPrimaryHex, metalness: 0.55, roughness: 0.25 })
+      );
+      vipVehicleGroup.add(wings);
+
+      const tailFin = new THREE.Mesh(
+        new THREE.BoxGeometry(0.45, 0.65, 0.06),
+        new THREE.MeshStandardMaterial({ color: resolvedPrimaryHex, metalness: 0.5, roughness: 0.3 })
+      );
+      tailFin.position.set(-1.35, 0.35, 0);
+      vipVehicleGroup.add(tailFin);
+    } else {
+      const chassis = new THREE.Mesh(
+        new THREE.BoxGeometry(2.4, 0.55, 1.05),
+        new THREE.MeshStandardMaterial({ color: resolvedSecondaryHex, metalness: 0.7, roughness: 0.2 })
+      );
+      vipVehicleGroup.add(chassis);
+
+      const liveryStripe = new THREE.Mesh(
+        new THREE.BoxGeometry(2.42, 0.12, 1.07),
+        new THREE.MeshStandardMaterial({ color: resolvedPrimaryHex, emissive: resolvedPrimaryHex, emissiveIntensity: 0.25 })
+      );
+      liveryStripe.position.y = 0.08;
+      vipVehicleGroup.add(liveryStripe);
+    }
+    scene.add(vipVehicleGroup);
 
     // 3D Humanoid Appointed Manager/Staff Figure (Center-Left) & Club Owner Figure (Center-Right)
     const figuresGroup = new THREE.Group();
@@ -452,8 +508,8 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
       )}
 
       {/* Top HUD Bar */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between p-4">
-        <div className="flex items-center gap-2">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-wrap items-center justify-between gap-2 p-4">
+        <div className="flex flex-wrap items-center gap-2">
           <span
             data-testid="arrival-render-mode-badge"
             className={`rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-wider backdrop-blur-md ${
@@ -466,6 +522,18 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
           </span>
           <span className="rounded-lg border border-white/15 bg-slate-950/80 px-2.5 py-1 text-[10px] font-bold uppercase text-white backdrop-blur-md">
             {resolvedBadge} • VERIFIED APPOINTMENT
+          </span>
+          <span
+            data-testid="arrival-vip-transport-badge"
+            className="rounded-lg border border-amber-400/30 bg-slate-950/80 px-2.5 py-1 text-[10px] font-bold text-amber-300 backdrop-blur-md"
+          >
+            VIP Transport: {vipTransport?.custom_name || "Executive Club Charter"}
+          </span>
+          <span
+            data-testid="arrival-medical-clearance-badge"
+            className="rounded-lg border border-sky-400/30 bg-slate-950/80 px-2.5 py-1 text-[10px] font-bold text-sky-300 backdrop-blur-md"
+          >
+            Medical: {String(medicalClearance).replace(/_/g, " ").toUpperCase()}
           </span>
         </div>
 
@@ -513,13 +581,16 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
                 GTEX Live Press Conference
               </span>
             </div>
-            <span className="text-[10px] text-slate-400">Continental Media Pack</span>
+            <span className="text-[10px] text-slate-400">
+              {pressQaPayload?.journalist_name || "Continental Media Pack"}
+            </span>
           </div>
 
           <p className="mt-2 text-xs text-slate-200">
             {pressResponse
               ? pressResponse.headline
-              : `Journalists are pressing for the strategic mandate for ${resolvedName}: "What is the owner's primary objective for this tenure?"`}
+              : pressQaPayload?.question_text ||
+                `Journalists are pressing for the strategic mandate for ${resolvedName}: "What is the owner's primary objective for this tenure?"`}
           </p>
 
           {pressResponse ? (
