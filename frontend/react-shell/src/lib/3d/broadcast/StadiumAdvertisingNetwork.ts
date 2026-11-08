@@ -392,20 +392,21 @@ export class StadiumAdvertisingNetwork {
   /**
    * Ingests explicit StadiumLedCampaigns (e.g. club sponsors, competition campaigns, test fixtures).
    */
-  public setCampaigns(campaigns: StadiumLedCampaign[]): void {
+  public setCampaigns(campaigns: StadiumLedCampaign[], nowMs: number = Date.now()): void {
     this.customCampaigns = Array.isArray(campaigns) ? [...campaigns] : [];
     for (const c of this.customCampaigns) {
       this.preloadImage(c.logoUrl);
       this.preloadImage(c.creativeUrl);
     }
+    this.currentRotationIndex = -1;
     this.needsRedraw = true;
-    this.refreshActiveSlots(0, Date.now(), true);
+    this.refreshActiveSlots(0, nowMs, true);
   }
 
   /**
    * Ingests live GTEX Brand Ad Campaigns from `GtexAdvertising` (`/public/ads/campaigns`).
    */
-  public setPublicBrandCampaigns(campaigns: GtexAdCampaign[]): void {
+  public setPublicBrandCampaigns(campaigns: GtexAdCampaign[], nowMs: number = Date.now()): void {
     if (!Array.isArray(campaigns)) return;
     this.brandCampaigns = campaigns.map((c) => {
       const palette = resolveBrandPalette(c.brand_name);
@@ -433,14 +434,15 @@ export class StadiumAdvertisingNetwork {
       this.preloadImage(c.logoUrl);
       this.preloadImage(c.creativeUrl);
     }
+    this.currentRotationIndex = -1;
     this.needsRedraw = true;
-    this.refreshActiveSlots(0, Date.now(), true);
+    this.refreshActiveSlots(0, nowMs, true);
   }
 
   /**
    * Ingests backend `/sponsorship/placements` (`SponsorshipPlacementService`) items.
    */
-  public setSponsorshipPlacements(placements: SponsorshipPlacementDTO[]): void {
+  public setSponsorshipPlacements(placements: SponsorshipPlacementDTO[], nowMs: number = Date.now()): void {
     if (!Array.isArray(placements)) return;
     this.sponsorshipCampaigns = placements
       .filter((p) => p && p.sponsor_name && (!p.surface || p.surface === "stadium_board"))
@@ -491,14 +493,15 @@ export class StadiumAdvertisingNetwork {
     for (const c of this.sponsorshipCampaigns) {
       this.preloadImage(c.creativeUrl);
     }
+    this.currentRotationIndex = -1;
     this.needsRedraw = true;
-    this.refreshActiveSlots(0, Date.now(), true);
+    this.refreshActiveSlots(0, nowMs, true);
   }
 
   /**
    * Ingests `MatchViewStateView.monetization` (`MatchViewerMonetizationView`) placements from `/match-viewer/{id}`.
    */
-  public setMatchMonetization(monetization?: SpectatorMonetizationView | null): void {
+  public setMatchMonetization(monetization?: SpectatorMonetizationView | null, nowMs: number = Date.now()): void {
     if (!monetization || monetization.premium_ad_free || !monetization.ads_enabled) {
       this.monetizationCampaigns = [];
       this.needsRedraw = true;
@@ -534,8 +537,9 @@ export class StadiumAdvertisingNetwork {
     }
 
     this.monetizationCampaigns = mapped;
+    this.currentRotationIndex = -1;
     this.needsRedraw = true;
-    this.refreshActiveSlots(0, Date.now(), true);
+    this.refreshActiveSlots(0, nowMs, true);
   }
 
   /**

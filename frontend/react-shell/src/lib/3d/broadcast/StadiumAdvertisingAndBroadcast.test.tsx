@@ -45,7 +45,7 @@ describe("GTEX Master 3D Matchday — Stadium Advertising, Tactical Shaping, Cam
         ...validCampaign,
         id: "camp-future",
         brandName: "FUTURE CORP",
-        startAt: "2026-11-08T00:00:00Z",
+        startAt: new Date(nowMs + 86400000 * 30).toISOString(),
       };
 
       const unapprovedCampaign: StadiumLedCampaign = {
@@ -73,13 +73,16 @@ describe("GTEX Master 3D Matchday — Stadium Advertising, Tactical Shaping, Cam
         enableNetworkFetch: false,
         enableImpressionPost: false,
       });
-      net.setCampaigns([
-        expiredCampaign,
-        futureCampaign,
-        unapprovedCampaign,
-        pausedCampaign,
-        validCampaign,
-      ]);
+      net.setCampaigns(
+        [
+          expiredCampaign,
+          futureCampaign,
+          unapprovedCampaign,
+          pausedCampaign,
+          validCampaign,
+        ],
+        nowMs
+      );
       net.update(0.5, 0, 0, nowMs);
 
       const active = net.getActiveCampaigns();
