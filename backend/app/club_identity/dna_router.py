@@ -23,6 +23,7 @@ from dataclasses import asdict
 
 router = APIRouter(prefix="/api/clubs", tags=["club-dna-governance"])
 
+
 class StudioRecommendationRequest(BaseModel):
     club_name: str
     country_code: str | None = "FRA"
@@ -32,10 +33,12 @@ class StudioRecommendationRequest(BaseModel):
     preferred_age_bracket: str = "U23"
     nationality_focus: str = "preferred"
 
+
 class StudioConversationalEditRequest(BaseModel):
     current_kit: dict[str, Any]
     current_crest: dict[str, Any]
     instruction: str
+
 
 @router.post("/studio/recommend")
 def recommend_club_identity(payload: StudioRecommendationRequest) -> dict[str, Any]:
@@ -51,6 +54,7 @@ def recommend_club_identity(payload: StudioRecommendationRequest) -> dict[str, A
     )
     return asdict(bundle)
 
+
 @router.post("/studio/edit")
 def edit_club_identity_conversational(payload: StudioConversationalEditRequest) -> dict[str, Any]:
     service = ClubIdentityStudioService()
@@ -59,6 +63,7 @@ def edit_club_identity_conversational(payload: StudioConversationalEditRequest) 
         current_crest=payload.current_crest,
         instruction=payload.instruction,
     )
+
 
 require_club_write_access = require_bound_organization_access(
     OrganizationRole.CLUB, forbidden_detail="club_access_required"
@@ -200,7 +205,9 @@ def list_governance_exceptions(
     ]
 
 
-@router.post("/{club_id}/governance/exceptions", response_model=ClubGovernanceExceptionView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{club_id}/governance/exceptions", response_model=ClubGovernanceExceptionView, status_code=status.HTTP_201_CREATED
+)
 def approve_governance_exception(
     club_id: str,
     payload: ClubGovernanceExceptionCreateRequest,
