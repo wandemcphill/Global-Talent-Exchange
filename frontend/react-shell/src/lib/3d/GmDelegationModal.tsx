@@ -73,7 +73,7 @@ const MODES = [
     badge: "Recommended",
     badgeColor: "border-sky-500/40 text-sky-300 bg-sky-500/10",
     description: "Structured partnership. GM operates autonomously within moderate spending caps; high-stakes actions escalate.",
-    limits: "Cap: 15,000 GTEX unapproved, max staff salary 1,500 GTEX, 2-yr contracts.",
+    limits: "Cap: 10,000 GTEX unapproved, max staff salary 1,500 GTEX, 2-yr contracts.",
   },
   {
     key: "gm_led",
@@ -81,7 +81,7 @@ const MODES = [
     badge: "High Autonomy",
     badgeColor: "border-emerald-500/40 text-emerald-300 bg-emerald-500/10",
     description: "Full operational delegation. GM exercises sporting and administrative discretion within macro seasonal budgets.",
-    limits: "Cap: 50,000 GTEX unapproved, max staff salary 4,000 GTEX, 3-yr contracts.",
+    limits: "Cap: 50,000 GTEX unapproved, max staff salary 3,500 GTEX, 4-yr contracts.",
   },
 ];
 
@@ -137,7 +137,7 @@ export const GmDelegationModal: React.FC<GmDelegationModalProps> = ({
   // Update Matrix / Financial Controls
   const matrixMutation = useMutation({
     mutationFn: async (payload: {
-      activities?: Record<string, { requires_owner_approval: boolean }>;
+      activity_assignments?: Record<string, { requires_owner_approval: boolean }>;
       financial_controls?: Partial<GmDelegationFinancialControls>;
     }) => {
       const res = await api.put(clubGmDelegationMatrixEndpoint(clubId), payload);
@@ -164,8 +164,9 @@ export const GmDelegationModal: React.FC<GmDelegationModalProps> = ({
     onSuccess: (data) => {
       const execCount = data.executed_actions?.length || 0;
       const escCount = data.escalated_proposals?.length || 0;
+      const blockedCount = data.blocked_actions?.length || 0;
       toast.success(
-        `GM Operational Cycle Concluded: ${execCount} executed autonomously, ${escCount} escalated.`
+        `GM Operational Cycle: ${execCount} executed, ${escCount} escalated, ${blockedCount} blocked.`
       );
       queryClient.invalidateQueries({ queryKey: ["club-gm-delegation", clubId] });
     },
@@ -187,7 +188,7 @@ export const GmDelegationModal: React.FC<GmDelegationModalProps> = ({
     }) => {
       const res = await api.post<GmProposalResolveResponse>(
         clubGmResolveProposalEndpoint(clubId, proposalId),
-        { approved, decision_note: note || undefined }
+        { action: approved ? "approve" : "reject", decision_note: note || undefined }
       );
       return res.data;
     },
@@ -227,7 +228,7 @@ export const GmDelegationModal: React.FC<GmDelegationModalProps> = ({
 
   const handleToggleActivityApproval = (activityKey: string, currentVal: boolean) => {
     matrixMutation.mutate({
-      activities: {
+      activity_assignments: {
         [activityKey]: { requires_owner_approval: !currentVal },
       },
     });
@@ -642,13 +643,21 @@ export const GmDelegationModal: React.FC<GmDelegationModalProps> = ({
                               onClick={() =>
                                 handleToggleActivityApproval(act.activity_key, requiresApproval)
                               }
-                              className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold border transition-all ${
+                              disabled={act.execution_supported === false}
+                              title={
+                                act.execution_supported === false
+                                  ? "GM execution is not implemented for this activity yet."
+                                  : undefined
+                              }
+                              className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold border transition-all disabled:cursor-not-allowed disabled:opacity-40 ${
                                 requiresApproval
                                   ? "border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
                                   : "border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
                               }`}
                             >
-                              {requiresApproval ? "Require Approval" : "Autonomous"}
+                              {act.execution_supported === false
+                                ? "Owner Only"
+                                : requiresApproval ? "Require Approval" : "Autonomous"}
                             </button>
                           </td>
                         </tr>
