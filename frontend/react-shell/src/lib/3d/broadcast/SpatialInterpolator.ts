@@ -115,9 +115,24 @@ export interface InterpolatedMatchState {
   transition_state?: string;
   danger_zone?: string | null;
   pressure_index?: number;
+  compactness_home?: number;
+  compactness_away?: number;
   frame_tags?: string[];
   players: InterpolatedPlayerState[];
   ball: InterpolatedBallState;
+}
+
+export interface TacticalVisualConfig {
+  homeFormation?: string;
+  awayFormation?: string;
+  homeDefensiveLine?: "low" | "standard" | "high" | string | number;
+  awayDefensiveLine?: "low" | "standard" | "high" | string | number;
+  homePressing?: "low" | "standard" | "high" | string | number;
+  awayPressing?: "low" | "standard" | "high" | string | number;
+  homeWidth?: "narrow" | "balanced" | "wide" | string | number;
+  awayWidth?: "narrow" | "balanced" | "wide" | string | number;
+  homeTempo?: "slow" | "standard" | "fast" | string | number;
+  awayTempo?: "slow" | "standard" | "fast" | string | number;
 }
 
 /**
@@ -144,9 +159,18 @@ function lerpAngle(from: number, to: number, alpha: number): number {
 
 export class SpatialInterpolator {
   private frames: SpectatorSafeFrameView[] = [];
+  private tacticalConfig: TacticalVisualConfig | null = null;
 
   constructor(initialFrames: SpectatorSafeFrameView[] = []) {
     this.setFrames(initialFrames);
+  }
+
+  public setTacticalConfig(config: TacticalVisualConfig | null): void {
+    this.tacticalConfig = config ? { ...config } : null;
+  }
+
+  public getTacticalConfig(): TacticalVisualConfig | null {
+    return this.tacticalConfig;
   }
 
   /**
@@ -204,18 +228,26 @@ export class SpatialInterpolator {
   /**
    * Computes the interpolated match state at exact query time t (seconds).
    */
-  public interpolate(queryTimeSeconds: number): InterpolatedMatchState | null {
+  public interpolate(
+    queryTimeSeconds: number,
+    tacticalOverride?: TacticalVisualConfig | null
+  ): InterpolatedMatchState | null {
     if (this.frames.length === 0) return null;
+    const effectiveTactics = tacticalOverride !== undefined ? tacticalOverride : this.tacticalConfig;
 
     const firstFrame = this.frames[0];
     const lastFrame = this.frames[this.frames.length - 1];
 
     // Boundary clamping: NO extrapolation beyond known authoritative bounds
     if (queryTimeSeconds <= firstFrame.time_seconds) {
-      return this.frameToInterpolated(firstFrame);
+      const state = this.frameToInterpolated(firstFrame);
+      if (effectiveTactics) this.applyTacticalShaping(state, effectiveTactics);
+      return state;
     }
     if (queryTimeSeconds >= lastFrame.time_seconds) {
-      return this.frameToInterpolated(lastFrame);
+      const state = this.frameToInterpolated(lastFrame);
+      if (effectiveTactics) this.applyTacticalShaping(state, effectiveTactics);
+      return state;
     }
 
     // Binary search for bracket [frameA, frameB]
@@ -398,7 +430,7 @@ export class SpatialInterpolator {
       }
     }
 
-    return {
+    const resultState: InterpolatedMatchState = {
       time_seconds: queryTimeSeconds,
       clock_minute: activeFrame.clock_minute,
       phase: activeFrame.phase,
@@ -415,6 +447,8 @@ export class SpatialInterpolator {
       transition_state: activeFrame.transition_state,
       danger_zone: activeFrame.danger_zone,
       pressure_index: activeFrame.pressure_index,
+      compactness_home: activeFrame.compactness_home,
+      compactness_away: activeFrame.compactness_away,
       frame_tags: activeFrame.frame_tags,
       players: interpolatedPlayers,
       ball: {
@@ -430,6 +464,126 @@ export class SpatialInterpolator {
           : undefined,
       },
     };
+
+    if (effectiveTactics) {
+      this.applyTacticalShaping(resultState, effectiveTactics);
+    }
+
+    return resultState;
+  }
+
+  /**
+   * Visually expresses tactical instructions (formation shape, defensive line height,
+   * lateral width/compactness, and pressing intensity) on off-ball outfield players
+   * while keeping goalkeepers, the ball carrier, and highlighted event actors locked
+   * to their exact authoritative coordinates.
+   */
+  private applyTacticalShaping(
+    state: InterpolatedMatchState,
+    tactics: TacticalVisualConfig
+  ): void {
+    const ballX = state.ball.position3D[0];
+    const ballZ = state.ball.position3D[2];
+    const ownerId = state.ball.owner_player_id;
+
+    for (const p of state.players) {
+      if (p.active === false) continue;
+      const roleUpper = (p.role || "").toUpperCase();
+      const lineLower = (p.line || "").toLowerCase();
+      const isGK = roleUpper === "GK" || roleUpper === "GOALKEEPER" || lineLower === "goalkeeper";
+      if (isGK || p.has_possession || p.player_id === ownerId || p.highlighted) {
+        continue;
+      }
+
+      const isHome = p.side === "home";
+      const attacksRight = isHome ? state.home_attacks_right : !state.home_attacks_right;
+      const attackSign = attacksRight ? 1 : -1;
+
+      const rawLine = isHome ? tactics.homeDefensiveLine : tactics.awayDefensiveLine;
+      const lineSetting =
+        typeof rawLine === "number"
+          ? rawLine >= 65
+            ? "high"
+            : rawLine <= 35
+            ? "low"
+            : "standard"
+          : String(rawLine || "standard").toLowerCase();
+
+      const rawPress = isHome ? tactics.homePressing : tactics.awayPressing;
+      const pressSetting =
+        typeof rawPress === "number"
+          ? rawPress >= 65
+            ? "high"
+            : rawPress <= 35
+            ? "low"
+            : "standard"
+          : String(rawPress || "standard").toLowerCase();
+
+      const rawWidth = isHome ? tactics.homeWidth : tactics.awayWidth;
+      const widthSetting =
+        typeof rawWidth === "number"
+          ? rawWidth >= 65
+            ? "wide"
+            : rawWidth <= 35
+            ? "narrow"
+            : "balanced"
+          : String(rawWidth || "balanced").toLowerCase();
+
+      const formation = String(
+        (isHome ? tactics.homeFormation : tactics.awayFormation) || ""
+      ).trim();
+
+      // 1. Defensive Line Height & Formation Depth Shift
+      let depthOffsetM = 0;
+      if (lineSetting === "high" || lineSetting === "aggressive") {
+        depthOffsetM += 4.2 * attackSign;
+      } else if (lineSetting === "low" || lineSetting === "deep") {
+        depthOffsetM -= 4.2 * attackSign;
+      }
+
+      // Formation-specific line adjustments
+      const isDefender = lineLower.includes("def") || roleUpper.includes("DEF") || roleUpper.includes("CB") || roleUpper.includes("FB") || roleUpper.includes("LB") || roleUpper.includes("RB") || roleUpper.includes("WB");
+      const isAttacker = lineLower.includes("att") || lineLower.includes("fw") || roleUpper.includes("FWD") || roleUpper.includes("ST") || roleUpper.includes("CF") || roleUpper.includes("LW") || roleUpper.includes("RW");
+      if (formation === "3-5-2" || formation === "5-3-2") {
+        if (!isDefender && !isAttacker) {
+          depthOffsetM += 1.6 * attackSign;
+        }
+      } else if (formation === "4-2-3-1") {
+        if (isAttacker) {
+          depthOffsetM += 1.4 * attackSign;
+        }
+      } else if (formation === "4-4-2") {
+        if (isDefender) {
+          depthOffsetM -= 1.0 * attackSign;
+        }
+      }
+
+      // 2. Lateral Width & Compactness
+      let widthScale = 1.0;
+      if (widthSetting === "wide") {
+        widthScale = 1.14;
+      } else if (widthSetting === "narrow" || widthSetting === "compact") {
+        widthScale = 0.86;
+      }
+
+      let px = p.position3D[0] + depthOffsetM;
+      let pz = p.position3D[2] * widthScale;
+
+      // 3. Pressing Intensity (Defending team closes down ball carrier)
+      const isDefendingTeam = p.side !== state.possession_side;
+      if (isDefendingTeam && (pressSetting === "high" || pressSetting === "intense" || (state.pressure_index ?? 0) >= 0.65)) {
+        const distToBall = Math.hypot(ballX - px, ballZ - pz);
+        if (distToBall > 2.2 && distToBall < 18.5) {
+          const pull = pressSetting === "high" || pressSetting === "intense" ? 0.18 : 0.1;
+          px += (ballX - px) * pull;
+          pz += (ballZ - pz) * pull;
+          p.speed_ratio = Math.min(1, p.speed_ratio + 0.12);
+        }
+      }
+
+      p.position3D[0] = Math.max(PITCH_BOUNDS.minX + 1.5, Math.min(PITCH_BOUNDS.maxX - 1.5, px));
+      p.position3D[2] = Math.max(PITCH_BOUNDS.minZ + 1.2, Math.min(PITCH_BOUNDS.maxZ - 1.2, pz));
+    }
   }
 
   private playerToInterpolated(

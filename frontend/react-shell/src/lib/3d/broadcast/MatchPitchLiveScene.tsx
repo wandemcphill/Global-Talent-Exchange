@@ -15,7 +15,12 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import * as THREE from "three";
 import { FIFA_PITCH_DIMENSIONS, pitchTo3D, PITCH_BOUNDS } from "./matchCoordinates";
-import { calculateTimelineAdvanceSeconds, SpatialInterpolator, InterpolatedMatchState } from "./SpatialInterpolator";
+import {
+  calculateTimelineAdvanceSeconds,
+  SpatialInterpolator,
+  InterpolatedMatchState,
+  TacticalVisualConfig,
+} from "./SpatialInterpolator";
 import { CameraDirector, ManualCameraMode } from "./CameraDirector";
 import { BroadcastOverlayHUD } from "./BroadcastOverlayHUD";
 import {
@@ -29,6 +34,11 @@ import {
 import { GtexSceneRegistry, QUALITY_PROFILES } from "../GtexSceneRegistry";
 import type { DeviceQualityTier } from "../GtexSceneTypes";
 import { StadiumArenaEnvironment } from "./StadiumArenaEnvironment";
+import {
+  type StadiumLedCampaign,
+  type StadiumAdImpressionEvent,
+} from "./StadiumAdvertisingNetwork";
+import type { GtexAdCampaign } from "@/components/advertising/GtexAdvertising";
 import { HumanoidFootballerRig } from "./HumanoidFootballerRig";
 import { FootballAnimationStateMachine } from "./FootballAnimationStateMachine";
 import { gtexAudio } from "@/lib/audio";
@@ -63,6 +73,16 @@ export interface MatchPitchLiveSceneProps {
   liveEvents?: SpectatorSafeEventView[];
   /** Latest authoritative score/clock update from the M1 spectator stream */
   liveScore?: SpectatorLiveScoreUpdate | null;
+  /** Live tactical configuration (formation, defensive line, pressing, width, tempo) */
+  tacticalConfig?: TacticalVisualConfig | null;
+  /** Custom or club/competition stadium LED advertising campaigns */
+  stadiumCampaigns?: StadiumLedCampaign[];
+  /** Active GTEX public brand campaigns from GtexAdvertising */
+  publicBrandCampaigns?: GtexAdCampaign[];
+  /** Stadium LED slot rotation interval in seconds (default 10s) */
+  adRotationIntervalSec?: number;
+  /** Optional callback when a stadium LED campaign impression is recorded */
+  onAdImpressionRecorded?: (event: StadiumAdImpressionEvent) => void;
   /** Callback when time advances (for scrubbing sync) */
   onTimeUpdate?: (timeSeconds: number) => void;
   /** Fallback toggle callback when user selects 2D tactical view */
@@ -91,6 +111,11 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   liveFrame = null,
   liveEvents = [],
   liveScore,
+  tacticalConfig = null,
+  stadiumCampaigns,
+  publicBrandCampaigns,
+  adRotationIntervalSec = 10,
+  onAdImpressionRecorded,
   onTimeUpdate,
   onToggle2DCompanion,
   isTheatreMode: externalTheatreMode,
@@ -100,6 +125,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   testId = "match-pitch-live-scene",
 }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
+  const stadiumArenaRef = useRef<StadiumArenaEnvironment | null>(null);
   const [webglSupported, setWebglSupported] = useState<boolean>(true);
   const [contextLost, setContextLost] = useState<boolean>(false);
   const [cameraMode, setCameraMode] = useState<ManualCameraMode>("director_auto");
@@ -109,7 +135,11 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   const [internalTheatreMode, setInternalTheatreMode] = useState<boolean>(false);
   const [minimalHud, setMinimalHud] = useState<boolean>(false);
   const [isReplayActive, setIsReplayActive] = useState<boolean>(false);
-  const replayReturnTimeRef = useRef<number | null>(null);
+  const [replayFallbackMessage, setReplayFallbackMessage] = useState<string | null>(null);
+  const [activeSponsorName, setActiveSponsorName] = useState<string | null>(null);
+  const replayCursorTimeRef = useRef<number | null>(null);
+  const replayEndTimeRef = useRef<number | null>(null);
+  const lastCrowdEventIdRef = useRef<string | null>(null);
 
   const isTheatreMode = externalTheatreMode ?? internalTheatreMode;
 
@@ -169,7 +199,32 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   useEffect(() => {
     safeViewRef.current = safeView;
     interpolator.setFrames(safeView.frames);
+    if (stadiumArenaRef.current) {
+      stadiumArenaRef.current.setTeamIdentity(
+        safeView.home_team,
+        safeView.away_team,
+        safeView.competition_name,
+        safeView.match_id
+      );
+      stadiumArenaRef.current.getAdvertisingNetwork().setMatchMonetization(safeView.monetization);
+    }
   }, [safeView, interpolator]);
+
+  useEffect(() => {
+    interpolator.setTacticalConfig(tacticalConfig ?? null);
+  }, [tacticalConfig, interpolator]);
+
+  useEffect(() => {
+    if (stadiumArenaRef.current && stadiumCampaigns) {
+      stadiumArenaRef.current.getAdvertisingNetwork().setCampaigns(stadiumCampaigns);
+    }
+  }, [stadiumCampaigns]);
+
+  useEffect(() => {
+    if (stadiumArenaRef.current && publicBrandCampaigns) {
+      stadiumArenaRef.current.getAdvertisingNetwork().setPublicBrandCampaigns(publicBrandCampaigns);
+    }
+  }, [publicBrandCampaigns]);
 
   useEffect(() => {
     const mergedEvents =
@@ -321,7 +376,36 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       awayTeam: safeViewRef.current.away_team,
       qualityTier,
       stadiumName: safeViewRef.current.venue_name || "GTEX National Arena",
+      competitionName: safeViewRef.current.competition_name || "GTEX PREMIER BROADCAST",
+      matchId: safeViewRef.current.match_id,
+      adNetworkOptions: {
+        rotationIntervalSec: adRotationIntervalSec,
+        onImpressionRecorded: onAdImpressionRecorded,
+        onRotationChanged: (activeCampaigns) => {
+          setActiveSponsorName(activeCampaigns[0]?.brandName || null);
+        },
+      },
+      initialCampaigns: stadiumCampaigns,
     });
+    stadiumArenaRef.current = stadiumArena;
+
+    const adNet = stadiumArena.getAdvertisingNetwork();
+    if (safeViewRef.current.monetization) {
+      adNet.setMatchMonetization(safeViewRef.current.monetization);
+    }
+    if (publicBrandCampaigns && publicBrandCampaigns.length > 0) {
+      adNet.setPublicBrandCampaigns(publicBrandCampaigns);
+    }
+    setActiveSponsorName(adNet.getActiveCampaigns()[0]?.brandName || null);
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined") {
+        adNet.setDocumentVisible(!document.hidden);
+      }
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
 
     // Query physical GPU renderer info from WebGL context
     let gpuVendor = "WebGL";
@@ -421,6 +505,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     let cachedWorstOnePctAvgMs = 16.6;
     const observedStatesHistory = new Set<string>();
     const observedCameraPresetsHistory = new Set<string>();
+    const activePlayerIdsScratch = new Set<string>();
     let lastUiStateUpdateMs = 0;
 
     if (typeof window !== "undefined") {
@@ -439,13 +524,33 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           setInternalTheatreMode(enabled);
         },
         triggerReplay: () => {
+          if (interpolator.getFrameCount() < 2) {
+            setReplayFallbackMessage("EVENT SUMMARY ONLY — SPATIAL REPLAY HISTORY UNAVAILABLE");
+            return;
+          }
           const liveNow = localTimeRef.current;
-          replayReturnTimeRef.current = liveNow;
+          replayEndTimeRef.current = liveNow;
           const rewindTo = Math.max(interpolator.getStartTime(), liveNow - 8.0);
-          localTimeRef.current = rewindTo;
-          setCurrentTime(rewindTo);
+          replayCursorTimeRef.current = rewindTo;
           setIsReplayActive(true);
-          setCameraMode("closeup_action");
+          setCameraMode("replay_cam");
+        },
+        setTacticalConfig: (cfg: TacticalVisualConfig | null) => {
+          interpolator.setTacticalConfig(cfg);
+        },
+        setStadiumCampaigns: (campaigns: StadiumLedCampaign[]) => {
+          stadiumArena.getAdvertisingNetwork().setCampaigns(campaigns);
+          setActiveSponsorName(stadiumArena.getAdvertisingNetwork().getActiveCampaigns()[0]?.brandName || null);
+        },
+        getAdvertisingSummary: () => {
+          const net = stadiumArena.getAdvertisingNetwork();
+          return {
+            rotationIntervalSec: net.getRotationIntervalSec(),
+            rotationCount: net.getRotationCount(),
+            currentRotationIndex: net.getCurrentRotationIndex(),
+            activeCampaigns: net.getActiveCampaigns(),
+            impressions: net.getImpressionHistory(),
+          };
         },
         resetTelemetry: () => {
           frameDeltaSamplesMs.length = 0;
@@ -488,47 +593,51 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       if (rawDeltaMs < 250) {
         frameDeltaSamplesMs.push(rawDeltaMs);
         frameDeltaSumMs += rawDeltaMs;
-        if (frameDeltaSamplesMs.length > 3600) {
+        if (frameDeltaSamplesMs.length > 240) {
           const removed = frameDeltaSamplesMs.shift() || 0;
           frameDeltaSumMs -= removed;
         }
       }
 
-      // Update stadium dynamics (GPU UV offset LED ad boards)
-      stadiumArena.update(deltaSec);
-
-      // Advance time if live or playing
+      // Advance live match timeline monotonically (never paused by replay)
       if (!isPausedRef.current) {
-        const effectiveSpeed =
-          replayReturnTimeRef.current !== null ? Math.min(0.85, playbackSpeedRef.current) : playbackSpeedRef.current;
-        // Keep simulation time monotonic after background/frame stalls. The
-        // helper bounds the delayed callback and catches up gradually on later
-        // live frames so intermediate authoritative events remain observable.
         const timelineDelta = calculateTimelineAdvanceSeconds({
           currentTimeSeconds: localTimeRef.current,
           frameDeltaMs: rawDeltaMs,
           latestFrameTimeSeconds: interpolator.getEndTime(),
-          isLive: isLiveRef.current && replayReturnTimeRef.current === null,
-          playbackSpeed: effectiveSpeed,
+          isLive: isLiveRef.current,
+          playbackSpeed: playbackSpeedRef.current,
         });
         localTimeRef.current += timelineDelta;
-        if (replayReturnTimeRef.current !== null && localTimeRef.current >= replayReturnTimeRef.current) {
-          localTimeRef.current = replayReturnTimeRef.current;
-          replayReturnTimeRef.current = null;
-          setIsReplayActive(false);
-          setCameraMode("director_auto");
-        }
         const endTime = interpolator.getEndTime();
         if (endTime > 0 && localTimeRef.current > endTime) {
           localTimeRef.current = isLiveRef.current ? endTime : interpolator.getStartTime();
         }
         onTimeUpdateRef.current?.(localTimeRef.current);
+
+        // If a replay window is active, advance the replay cursor independently at 0.85x slow-motion
+        if (replayCursorTimeRef.current !== null && replayEndTimeRef.current !== null) {
+          replayCursorTimeRef.current += deltaSec * Math.min(0.85, playbackSpeedRef.current);
+          if (replayCursorTimeRef.current >= replayEndTimeRef.current) {
+            replayCursorTimeRef.current = null;
+            replayEndTimeRef.current = null;
+            setIsReplayActive(false);
+            setCameraMode("director_auto");
+          }
+        }
       }
 
       const localTime = localTimeRef.current;
+      const sampleTime =
+        replayCursorTimeRef.current !== null ? replayCursorTimeRef.current : localTime;
 
-      // Query interpolated match state at localTime
-      const state = interpolator.interpolate(localTime);
+      // Update stadium dynamics (slot-boundary LED ad rotation + instanced crowd motion)
+      stadiumArena.update(deltaSec, localTime);
+
+      // Query interpolated match state at sampleTime (replay cursor during replay, live cursor otherwise)
+      const state = interpolator.interpolate(sampleTime);
+      const liveAuthoritativeState =
+        replayCursorTimeRef.current !== null ? interpolator.interpolate(localTime) : state;
       const scoreUpdate = liveScoreRef.current;
       const hudState =
         state && scoreUpdate
@@ -536,7 +645,14 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
               ...state,
               home_score: scoreUpdate.home_score,
               away_score: scoreUpdate.away_score,
-              clock_minute: scoreUpdate.minute ?? state.clock_minute,
+              clock_minute: scoreUpdate.minute ?? (liveAuthoritativeState?.clock_minute ?? state.clock_minute),
+            }
+          : state && liveAuthoritativeState && replayCursorTimeRef.current !== null
+          ? {
+              ...state,
+              home_score: liveAuthoritativeState.home_score,
+              away_score: liveAuthoritativeState.away_score,
+              clock_minute: liveAuthoritativeState.clock_minute,
             }
           : state;
       if (now - lastUiStateUpdateMs >= 100 || !state) {
@@ -550,6 +666,38 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       if (state) {
         observedCameraPresetsHistory.add(state.camera_preset);
         const activeEvent = animationStateMachine.getEventById(state.active_event_id);
+
+        // Update stadium jumbotron scoreboard and event-driven crowd reactions
+        stadiumArena.updateScoreboard(
+          hudState?.home_score ?? state.home_score,
+          hudState?.away_score ?? state.away_score,
+          `${Math.floor(hudState?.clock_minute ?? state.clock_minute)}'`,
+          state.event_banner || activeEvent?.banner_text || null
+        );
+
+        if (activeEvent && activeEvent.event_id !== lastCrowdEventIdRef.current) {
+          lastCrowdEventIdRef.current = activeEvent.event_id;
+          const evType = (activeEvent.event_type || "").toLowerCase();
+          const evSide =
+            activeEvent.team_id === safeViewRef.current.away_team.team_id
+              ? "away"
+              : activeEvent.team_id === safeViewRef.current.home_team.team_id
+              ? "home"
+              : "both";
+          if (evType === "goal") {
+            stadiumArena.triggerCrowdReaction("goal", evSide);
+          } else if (evType === "save") {
+            stadiumArena.triggerCrowdReaction("save", "both");
+          } else if (evType === "miss" || evType === "shot") {
+            stadiumArena.triggerCrowdReaction("near_miss", "both");
+          } else if (evType === "red_card") {
+            stadiumArena.triggerCrowdReaction("red_card", "both");
+          } else if (evType === "fulltime") {
+            stadiumArena.triggerCrowdReaction("fulltime", "both");
+          } else if (evType === "attack" || evType === "penalty") {
+            stadiumArena.triggerCrowdReaction("attack", evSide);
+          }
+        }
 
         // Update Camera first so LOD distance checks use the exact current camera pose
         const scorer = state.players.find((p) => p.animation_state === "celebrate");
@@ -600,10 +748,10 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         );
 
         // Update 22 Rigged Humanoid Players & Skeletal Animations
-        const activeIds = new Set<string>();
+        activePlayerIdsScratch.clear();
         for (const p of state.players) {
           if (p.active === false) continue;
-          activeIds.add(p.player_id);
+          activePlayerIdsScratch.add(p.player_id);
           const isGK = p.role.toUpperCase() === "GK" || p.role.toLowerCase() === "goalkeeper";
           const rig = getOrCreatePlayerRig(
             p.player_id,
@@ -645,7 +793,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
 
         // Hide inactive/substituted player rigs
         playerRigs.forEach((rig, id) => {
-          if (!activeIds.has(id)) {
+          if (!activePlayerIdsScratch.has(id)) {
             rig.rootGroup.visible = false;
           }
         });
@@ -714,6 +862,15 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
               activeAnimationStates: activeStatesSnapshot,
               observedStatesHistory: Array.from(observedStatesHistory),
               observedCameraPresetsHistory: Array.from(observedCameraPresetsHistory),
+              crowdReaction: stadiumArena.getCrowdReactionState(),
+              adRotationCount: adNet.getRotationCount(),
+              adImpressionCount: adNet.getImpressionHistory().length,
+              activeAdCampaigns: adNet.getActiveCampaigns().map((c) => ({
+                id: c.id,
+                brandName: c.brandName,
+                headline: c.headline,
+                source: c.source,
+              })),
             };
           }
         }
@@ -744,11 +901,15 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     return () => {
       cancelAnimationFrame(animationFrameId);
       window.removeEventListener("resize", handleResize);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      }
       resizeObserver?.disconnect();
       canvasElement.removeEventListener("webglcontextlost", handleContextLost);
       canvasElement.removeEventListener("webglcontextrestored", handleContextRestored);
 
       // Dispose Three.js objects
+      stadiumArenaRef.current = null;
       playerRigs.forEach((rig) => rig.dispose());
       playerRigs.clear();
       scene.clear();
@@ -764,29 +925,45 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         }
       }
     };
-  }, [qualityTier, cameraDirector, interpolator, animationStateMachine, handleSelectQualityTier, is2DActive]);
+  }, [qualityTier, cameraDirector, interpolator, animationStateMachine, handleSelectQualityTier, is2DActive, adRotationIntervalSec, onAdImpressionRecorded]);
 
-  // Handle 2D companion mode toggle
+  // Resolve active HUD event from either timeline or live stream
+  const activeHudEvent = useMemo(() => {
+    if (currentMatchState?.active_event_id) {
+      const fromTimeline = animationStateMachine.getEventById(currentMatchState.active_event_id);
+      if (fromTimeline) return fromTimeline;
+    }
+    return liveEvents[0] ?? null;
+  }, [currentMatchState?.active_event_id, animationStateMachine, liveEvents]);
+
+  // Handle 2D companion mode toggle and context recovery
   const handleToggle2D = useCallback(() => {
     setIs2DActive((prev) => !prev);
+    setContextLost(false);
     onToggle2DCompanion?.();
   }, [onToggle2DCompanion]);
 
-  // Handle 8-second Action Replay toggle
+  // Handle 8-second Non-Disruptive Action Replay toggle
   const handleTriggerReplay = useCallback(() => {
-    if (isReplayActive && replayReturnTimeRef.current !== null) {
-      localTimeRef.current = replayReturnTimeRef.current;
-      replayReturnTimeRef.current = null;
+    if (isReplayActive) {
+      replayCursorTimeRef.current = null;
+      replayEndTimeRef.current = null;
       setIsReplayActive(false);
+      setReplayFallbackMessage(null);
       setCameraMode("director_auto");
     } else {
+      if (interpolator.getFrameCount() < 2) {
+        setReplayFallbackMessage("EVENT SUMMARY ONLY — SPATIAL REPLAY HISTORY UNAVAILABLE");
+        setIsReplayActive(true);
+        return;
+      }
+      setReplayFallbackMessage(null);
       const liveNow = localTimeRef.current;
-      replayReturnTimeRef.current = liveNow;
+      replayEndTimeRef.current = liveNow;
       const rewindTo = Math.max(interpolator.getStartTime(), liveNow - 8.0);
-      localTimeRef.current = rewindTo;
-      setCurrentTime(rewindTo);
+      replayCursorTimeRef.current = rewindTo;
       setIsReplayActive(true);
-      setCameraMode("closeup_action");
+      setCameraMode("replay_cam");
     }
   }, [isReplayActive, interpolator]);
 
@@ -862,6 +1039,9 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           homeTeam={safeView.home_team}
           awayTeam={safeView.away_team}
           matchLabel={safeView.match_label}
+          competitionName={safeView.competition_name}
+          isDemonstrationFixture={safeView.is_demonstration_fixture}
+          activeEvent={activeHudEvent}
           liveEventBanner={liveEvents[0]?.banner_text || liveEvents[0]?.commentary || undefined}
           isLive={isLive}
           viewerCount={viewerCount}
@@ -878,7 +1058,9 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           minimalHud={minimalHud}
           onToggleMinimalHud={() => setMinimalHud((h) => !h)}
           isReplayActive={isReplayActive}
+          replayFallbackMessage={replayFallbackMessage}
           onTriggerReplay={handleTriggerReplay}
+          activeSponsorName={activeSponsorName}
         />
       </div>
     );
@@ -913,6 +1095,9 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           homeTeam={safeView.home_team}
           awayTeam={safeView.away_team}
           matchLabel={safeView.match_label}
+          competitionName={safeView.competition_name}
+          isDemonstrationFixture={safeView.is_demonstration_fixture}
+          activeEvent={activeHudEvent}
           liveEventBanner={liveEvents[0]?.banner_text || liveEvents[0]?.commentary || undefined}
           isLive={isLive}
           viewerCount={viewerCount}
@@ -929,7 +1114,9 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           minimalHud={minimalHud}
           onToggleMinimalHud={() => setMinimalHud((h) => !h)}
           isReplayActive={isReplayActive}
+          replayFallbackMessage={replayFallbackMessage}
           onTriggerReplay={handleTriggerReplay}
+          activeSponsorName={activeSponsorName}
         />
       </div>
     </div>
