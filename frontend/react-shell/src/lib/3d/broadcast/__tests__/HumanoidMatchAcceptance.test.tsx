@@ -339,4 +339,99 @@ describe("U2A-006 Mandatory 5-Minute Humanoid Match Acceptance Test", () => {
 
     rigs.forEach((r) => r.dispose());
   });
+
+  test("dynamically scales fixture events and frames across parameterized durations (180s, 300s, 600s)", () => {
+    for (const duration of [180, 300, 600]) {
+      const fixture = buildFiveMinuteHumanoidMatchFixture(duration);
+      expect(fixture.frames.length).toBe(duration + 1);
+      expect(fixture.frames[0].time_seconds).toBe(0);
+      expect(fixture.frames[fixture.frames.length - 1].time_seconds).toBe(duration);
+
+      // Verify all events are bounded by duration
+      for (const ev of fixture.events) {
+        expect(ev.time_seconds).toBeLessThanOrEqual(duration);
+        expect(ev.time_seconds).toBeGreaterThanOrEqual(0);
+        expect(ev.minute).toBeLessThanOrEqual(90);
+      }
+
+      // Verify last event (late_save_10) scales proportionally
+      const lateSave = fixture.events.find((e) => e.event_id === "ev_late_save_10");
+      expect(lateSave).toBeDefined();
+      expect(lateSave!.time_seconds).toBe(Math.round((278 / 300) * duration));
+
+      // Test interpolator coverage
+      const interpolator = new SpatialInterpolator(fixture.frames);
+      const midState = interpolator.interpolate(duration / 2);
+      expect(midState).not.toBeNull();
+      expect(midState!.players.length).toBe(22);
+    }
+  });
+
+  test("smoothly interpolates across large frame gaps (> 2.5s) without stalling or freezing", () => {
+    const frameA = {
+      frame_id: "gap_f1",
+      time_seconds: 10.0,
+      clock_minute: 10,
+      phase: "open_play",
+      home_score: 0,
+      away_score: 0,
+      home_attacks_right: true,
+      possession_side: "home",
+      camera_preset: "broadcast",
+      players: [
+        {
+          player_id: "p1",
+          team_id: "h1",
+          side: "home",
+          shirt_number: 9,
+          label: "Player 1",
+          role: "FWD",
+          position: { x: 40.0, y: 50.0 },
+          animation_state: "run",
+          speed_ratio: 0.6,
+          has_possession: true,
+        },
+      ],
+      ball: { position: { x: 40.0, y: 50.0 }, height: 0.1, state: "controlled" },
+    };
+
+    const frameB = {
+      frame_id: "gap_f2",
+      time_seconds: 15.0, // 5.0s gap
+      clock_minute: 15,
+      phase: "open_play",
+      home_score: 0,
+      away_score: 0,
+      home_attacks_right: true,
+      possession_side: "home",
+      camera_preset: "broadcast",
+      players: [
+        {
+          player_id: "p1",
+          team_id: "h1",
+          side: "home",
+          shirt_number: 9,
+          label: "Player 1",
+          role: "FWD",
+          position: { x: 60.0, y: 50.0 },
+          animation_state: "sprint",
+          speed_ratio: 0.9,
+          has_possession: true,
+        },
+      ],
+      ball: { position: { x: 60.0, y: 50.0 }, height: 0.1, state: "controlled" },
+    };
+
+    const interpolator = new SpatialInterpolator([frameA as any, frameB as any]);
+    
+    // Sample at 12.5s (alpha = 0.5)
+    const midState = interpolator.interpolate(12.5);
+    expect(midState).not.toBeNull();
+    const stateA = interpolator.interpolate(10.0)!;
+    const stateB = interpolator.interpolate(15.0)!;
+    const expectedMidX = (stateA.players[0].position3D[0] + stateB.players[0].position3D[0]) / 2;
+    // Position should be smoothly interpolated instead of freezing at stateA
+    expect(midState!.players[0].position3D[0]).toBeCloseTo(expectedMidX, 1);
+    expect(midState!.ball.position3D[0]).toBeCloseTo((stateA.ball.position3D[0] + stateB.ball.position3D[0]) / 2, 1);
+  });
 });

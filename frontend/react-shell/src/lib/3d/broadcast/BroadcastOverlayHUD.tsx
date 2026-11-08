@@ -79,12 +79,13 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = ({
   className = "",
 }) => {
   const clockDisplay = useMemo(() => {
-    if (!matchState) return "00:00";
-    const totalSec = Math.floor(matchState.time_seconds);
-    const mins = Math.floor(totalSec / 60);
-    const secs = totalSec % 60;
-    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-  }, [matchState?.time_seconds]);
+    if (!matchState) return "0'";
+    if (typeof matchState.clock_minute === "number") {
+      const min = Math.max(0, Math.floor(matchState.clock_minute));
+      return `${min}'`;
+    }
+    return "0'";
+  }, [matchState?.clock_minute]);
 
   const phaseLabel = useMemo(() => {
     const raw = (matchState?.phase || "open_play").toLowerCase();
@@ -130,13 +131,25 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = ({
               ) : (
                 <Tv className="size-3 text-cyan-400" />
               )}
-              <span className="font-mono text-xs font-bold tracking-tight text-white">
+              <span
+                data-testid="authoritative-match-clock"
+                className="font-mono text-xs font-bold tracking-tight text-white"
+              >
                 {clockDisplay}
               </span>
             </div>
-            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-              {phaseLabel}
-            </span>
+            <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-slate-400">
+              <span>{phaseLabel}</span>
+              {matchState && typeof matchState.time_seconds === "number" && (
+                <span
+                  data-testid="local-animation-clock"
+                  className="text-slate-500 font-mono text-[8px]"
+                  title="Local render interpolation timeline"
+                >
+                  ({Math.floor(matchState.time_seconds / 60)}:{String(Math.floor(matchState.time_seconds % 60)).padStart(2, "0")})
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Away Team Cell */}
