@@ -149,14 +149,22 @@ def test_concurrent_session_savepoint_rollback_isolation(session) -> None:
     today = datetime.now(UTC).date()
     challenge = session.scalar(select(DailyChallenge).where(DailyChallenge.challenge_key == "watch-highlight"))
     assert challenge is not None
+    # Raise claim_limit_per_day to 2 so a second claim bypasses the pre-check and directly
+    # exercises the database UniqueConstraint("user_id", "challenge_id", "claim_date") savepoint rollback.
+    challenge.claim_limit_per_day = 2
+    session.commit()
 
     # First claim succeeds
     claim = service.claim(user=user, challenge_key="watch-highlight")
     session.commit()
     assert claim.id is not None
 
+    wallet_service = WalletService()
+    user_account = wallet_service.get_user_account(session, user, LedgerUnit.CREDIT)
+    balance_after_first = wallet_service.get_balance(session, user_account)
+
     # Verify that in a separate session, inserting a duplicate claim with the same (user_id, challenge_id, claim_date)
-    # triggers the DB unique constraint and savepoint cleanly handles it without corrupting the session
+    # triggers the DB unique constraint IntegrityError and the nested savepoint rolls back cleanly before settling
     RetrySession = sessionmaker(bind=session.get_bind(), autoflush=False, expire_on_commit=False)
     with RetrySession() as retry_session:
         retry_user = retry_session.get(User, user.id)
@@ -166,8 +174,10 @@ def test_concurrent_session_savepoint_rollback_isolation(session) -> None:
         with pytest.raises(DailyChallengeError, match="already been claimed for today"):
             retry_service.claim(user=retry_user, challenge_key="watch-highlight")
 
-        # Session is still functional after the savepoint rollback
+        # Session is still functional after the IntegrityError savepoint rollback
         streak = retry_service.build_login_streak(user=retry_user)
+        assert streak is not None
+        assert wallet_service.get_balance(retry_session, user_account) == balance_after_first
         assert streak is not None
 
     # Total claims in DB remain exactly 1

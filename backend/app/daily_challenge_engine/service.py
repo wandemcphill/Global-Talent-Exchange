@@ -169,23 +169,13 @@ class DailyChallengeService:
             bonus_amount = Decimal(str(streak_snapshot["next_bonus_amount"]))
             reward_amount = (Decimal(challenge.reward_amount) + bonus_amount).quantize(Decimal("0.0001"))
         reward_unit = str(challenge.reward_unit or "").strip().lower()
-        settlement = reward_service.settle_reward(
-            actor=user,
-            user_id=user.id,
-            competition_key=f"daily:{challenge.challenge_key}:{today.isoformat()}",
-            title=challenge.title,
-            gross_amount=reward_amount,
-            reward_source="daily_challenge",
-            note="Daily challenge reward",
-            ledger_unit=LedgerUnit.CREDIT if reward_unit == "credit" else LedgerUnit.COIN,
-        )
         claim = DailyChallengeClaim(
             user_id=user.id,
             challenge_id=challenge.id,
             claim_date=today,
             reward_amount=reward_amount,
             reward_unit=challenge.reward_unit,
-            reward_settlement_id=settlement.id,
+            reward_settlement_id=None,
             metadata_json={
                 "challenge_key": challenge.challenge_key,
                 "streak_before_claim": streak_snapshot["current_streak"],
@@ -196,8 +186,23 @@ class DailyChallengeService:
         try:
             self.session.add(claim)
             self.session.flush()
+            settlement = reward_service.settle_reward(
+                actor=user,
+                user_id=user.id,
+                competition_key=f"daily:{challenge.challenge_key}:{today.isoformat()}",
+                title=challenge.title,
+                gross_amount=reward_amount,
+                reward_source="daily_challenge",
+                note="Daily challenge reward",
+                ledger_unit=LedgerUnit.CREDIT if reward_unit == "credit" else LedgerUnit.COIN,
+            )
+            claim.reward_settlement_id = settlement.id
+            self.session.flush()
             savepoint.commit()
         except IntegrityError as exc:
             savepoint.rollback()
             raise DailyChallengeError("Daily challenge has already been claimed for today.") from exc
+        except Exception:
+            savepoint.rollback()
+            raise
         return claim

@@ -895,3 +895,131 @@ def test_champion_eligibility_validation_and_router_authorization(tmp_path: Path
         lifecycle_after = client.get(f"/national-team-engine/competitions/{competition.id}/lifecycle")
         assert lifecycle_after.status_code == 200
         assert lifecycle_after.json()["champion_reward_settlement"]["settlement_id"] == settled_body["settlement_id"]
+
+
+def test_rental_provenance_rejects_fabricated_players_and_caller_spoofed_attributes(tmp_path: Path) -> None:
+    session_factory = _build_session_factory(tmp_path / "rental-provenance-spoof.db")
+    wallet_service = WalletService()
+
+    with session_factory() as session:
+        club_owner = _create_user(session, "club_owner")
+        manager = _create_user(session, "ng_manager")
+        _fund_user(session, wallet_service, manager, Decimal("1000.0000"))
+
+        nigeria = _seed_country(session, name="Nigeria", alpha2="NG", alpha3="NGA", fifa="NGA")
+        # Seed a 30-year-old player (date_of_birth=2000-05-14) with GSI=74
+        _, veteran_player, _ = _seed_club_and_player(
+            session,
+            owner=club_owner,
+            country=nigeria,
+            club_name="Kano Pillars",
+            player_name="Veteran Rented Player",
+            position="ST",
+            gsi=74,
+        )
+
+        u17_comp = NationalTeamCompetition(
+            key=f"u17-provenance-{uuid.uuid4().hex[:6]}",
+            title="U17 Provenance Cup",
+            season_label="2030",
+            region_type="afcon",
+            age_band="u17",
+            format_type="cup",
+            status="published",
+            active=True,
+            kickoff_at=datetime(2030, 7, 1, 12, 0, 0, tzinfo=UTC),
+            metadata_json={"minimum_squad_size": 1, "maximum_squad_size": 5},
+            created_by_user_id=club_owner.id,
+        )
+        senior_comp = NationalTeamCompetition(
+            key=f"senior-provenance-{uuid.uuid4().hex[:6]}",
+            title="Senior Provenance Cup",
+            season_label="2030",
+            region_type="afcon",
+            age_band="senior",
+            format_type="cup",
+            status="published",
+            active=True,
+            kickoff_at=datetime(2030, 7, 1, 12, 0, 0, tzinfo=UTC),
+            metadata_json={"minimum_squad_size": 1, "maximum_squad_size": 5},
+            created_by_user_id=club_owner.id,
+        )
+        session.add_all([u17_comp, senior_comp])
+        session.flush()
+
+        u17_entry = NationalTeamEntry(
+            competition_id=u17_comp.id,
+            country_code="NG",
+            country_name="Nigeria",
+            entry_owner_user_id=manager.id,
+            manager_user_id=manager.id,
+        )
+        senior_entry = NationalTeamEntry(
+            competition_id=senior_comp.id,
+            country_code="NG",
+            country_name="Nigeria",
+            entry_owner_user_id=manager.id,
+            manager_user_id=manager.id,
+        )
+        session.add_all([u17_entry, senior_entry])
+        session.flush()
+
+        tournament_service = NationalTeamTournamentService(session, wallet_service=wallet_service)
+        u17_comp.age_band = "senior"
+        tournament_service.rent_player(entry_id=u17_entry.id, actor=manager, player_id=veteran_player.id)
+        u17_comp.age_band = "u17"
+        tournament_service.rent_player(entry_id=senior_entry.id, actor=manager, player_id=veteran_player.id)
+
+        lifecycle_service = NationalCompetitionLifecycleService(session, wallet_service=wallet_service)
+
+        # 1) Fabricated player without player_id in a rental-backed tournament is rejected
+        with pytest.raises(NationalCompetitionLifecycleError) as fabricated_exc:
+            lifecycle_service.submit_entry(
+                competition_id=senior_comp.id,
+                actor=manager,
+                payload=NationalTeamCompetitionEntrySubmitRequest(
+                    country_code="NG",
+                    country_name="Nigeria",
+                    squad=[{"player_name": "Fabricated 99 Superstar", "age": 22, "overall_rating": 99}],
+                ),
+            )
+        assert fabricated_exc.value.reason == "player_not_rented"
+
+        # 2) Caller spoofing age=16 on a rented 30-year-old player in U17 is rejected using DB date_of_birth
+        with pytest.raises(NationalCompetitionLifecycleError) as spoof_age_exc:
+            lifecycle_service.submit_entry(
+                competition_id=u17_comp.id,
+                actor=manager,
+                payload=NationalTeamCompetitionEntrySubmitRequest(
+                    country_code="NG",
+                    country_name="Nigeria",
+                    squad=[
+                        {
+                            "player_id": veteran_player.id,
+                            "player_name": veteran_player.full_name,
+                            "age": 16,
+                            "overall_rating": 99,
+                        }
+                    ],
+                ),
+            )
+        assert spoof_age_exc.value.reason == "invalid_squad_age"
+
+        # 3) Caller spoofing overall_rating=99 in senior tournament is bound to authoritative DB GSI (74)
+        submitted = lifecycle_service.submit_entry(
+            competition_id=senior_comp.id,
+            actor=manager,
+            payload=NationalTeamCompetitionEntrySubmitRequest(
+                country_code="NG",
+                country_name="Nigeria",
+                squad=[
+                    {
+                        "player_id": veteran_player.id,
+                        "player_name": veteran_player.full_name,
+                        "overall_rating": 99,
+                    }
+                ],
+            ),
+        )
+        assert submitted["squad"][0]["overall_rating"] == 74
+        assert submitted["squad"][0]["resolved_age"] == 30
