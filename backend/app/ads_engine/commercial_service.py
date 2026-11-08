@@ -627,10 +627,7 @@ class CommercialNetworkService:
 
     def ensure_default_catalog(self) -> None:
         """Seed default placement specs and NGN pricing package definitions if missing."""
-        existing_placements = {
-            row.placement_key
-            for row in self.session.scalars(select(AdPlacementSpec)).all()
-        }
+        existing_placements = {row.placement_key for row in self.session.scalars(select(AdPlacementSpec)).all()}
         for spec_def in DEFAULT_PLACEMENT_SPECS:
             if spec_def["placement_key"] in existing_placements:
                 continue
@@ -659,10 +656,7 @@ class CommercialNetworkService:
                 )
             )
 
-        existing_packages = {
-            row.package_code
-            for row in self.session.scalars(select(AdPricingPackage)).all()
-        }
+        existing_packages = {row.package_code for row in self.session.scalars(select(AdPricingPackage)).all()}
         for pkg_def in DEFAULT_PRICING_PACKAGES:
             if pkg_def["package_code"] in existing_packages:
                 continue
@@ -913,7 +907,13 @@ class CommercialNetworkService:
                     invited_email=user.email,
                     role="owner",
                     status="active",
-                    permissions_json=["manage_workspace", "manage_campaigns", "manage_billing", "view_reports", "manage_team"],
+                    permissions_json=[
+                        "manage_workspace",
+                        "manage_campaigns",
+                        "manage_billing",
+                        "view_reports",
+                        "manage_team",
+                    ],
                 )
             )
             self.session.flush()
@@ -1137,6 +1137,7 @@ class CommercialNetworkService:
 
     def get_storage(self):
         from app.storage import get_default_object_storage
+
         return get_default_object_storage()
 
     # ------------------------------------------------------------------
@@ -1233,7 +1234,9 @@ class CommercialNetworkService:
                 logger.warning("Object storage read failed for asset %s (%s): %s", asset.id, asset.storage_key, ex)
                 if asset.data:
                     return bytes(asset.data)
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media asset binary not found in storage.")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail="Media asset binary not found in storage."
+                )
         if asset.data:
             return bytes(asset.data)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media asset binary data not available.")
@@ -1382,7 +1385,9 @@ class CommercialNetworkService:
         self.session.refresh(row)
         return self.serialize_placement(row)
 
-    def list_pricing_packages(self, *, division: str | None = None, active_only: bool = True) -> list[AdPricingPackageView]:
+    def list_pricing_packages(
+        self, *, division: str | None = None, active_only: bool = True
+    ) -> list[AdPricingPackageView]:
         self.ensure_default_catalog()
         stmt = select(AdPricingPackage).order_by(AdPricingPackage.division.asc(), AdPricingPackage.sort_order.asc())
         if division:
@@ -1425,9 +1430,7 @@ class CommercialNetworkService:
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Minimum campaign package duration is 7 days.",
             )
-        row = self.session.scalar(
-            select(AdPricingPackage).where(AdPricingPackage.package_code == payload.package_code)
-        )
+        row = self.session.scalar(select(AdPricingPackage).where(AdPricingPackage.package_code == payload.package_code))
         if row is None:
             row = AdPricingPackage(
                 package_code=payload.package_code,
@@ -1531,7 +1534,9 @@ class CommercialNetworkService:
             )
 
         # 2. Otherwise calculate from selected placement weekly rates * weeks
-        placement_keys = payload.placements or (["music_rotation"] if payload.division == "music" else ["public_homepage"])
+        placement_keys = payload.placements or (
+            ["music_rotation"] if payload.division == "music" else ["public_homepage"]
+        )
         weeks = max(1, math.ceil(payload.duration_days / 7.0))
         subtotal_minor = 0
 
@@ -1683,7 +1688,11 @@ class CommercialNetworkService:
             placements_json=deduped_placements,
             destination_url=(payload.website_url or workspace.website_url or "https://gtex.app").strip(),
             logo_asset_id=logo_asset.id if logo_asset else workspace.logo_asset_id,
-            logo_url=f"/api/v2/public/ads/media/{logo_asset.id}" if logo_asset else (f"/api/v2/public/ads/media/{workspace.logo_asset_id}" if workspace.logo_asset_id else None),
+            logo_url=(
+                f"/api/v2/public/ads/media/{logo_asset.id}"
+                if logo_asset
+                else (f"/api/v2/public/ads/media/{workspace.logo_asset_id}" if workspace.logo_asset_id else None)
+            ),
             creative_asset_id=creative_asset.id,
             creative_url=f"/api/v2/public/ads/media/{creative_asset.id}",
             creative_media_type=creative_asset.mime_type,
@@ -1749,12 +1758,20 @@ class CommercialNetworkService:
         audio_asset = self._require_valid_asset(payload.audio_asset_id, expected_kinds={"music_audio"})
         artwork_asset: AdvertiserMediaAsset | None = None
         if payload.artwork_asset_id:
-            artwork_asset = self._require_valid_asset(payload.artwork_asset_id, expected_kinds={"music_artwork", "brand_image", "logo"})
+            artwork_asset = self._require_valid_asset(
+                payload.artwork_asset_id, expected_kinds={"music_artwork", "brand_image", "logo"}
+            )
 
-        track_title = (payload.track_title or "").strip() or clean_track_title_from_filename(audio_asset.original_filename)
-        artist_name = (
-            (payload.stage_name or payload.artist_name or workspace.stage_name or workspace.company_name or "GTEX Featured Artist").strip()
+        track_title = (payload.track_title or "").strip() or clean_track_title_from_filename(
+            audio_asset.original_filename
         )
+        artist_name = (
+            payload.stage_name
+            or payload.artist_name
+            or workspace.stage_name
+            or workspace.company_name
+            or "GTEX Featured Artist"
+        ).strip()
         label_name = (payload.label_name or workspace.label_name or workspace.company_name).strip()
 
         price_calc = self.calculate_price_ngn(
@@ -2156,6 +2173,7 @@ class CommercialNetworkService:
         # Server-to-server gateway verification (No Client Bypass!)
         # -------------------------------------------------------------
         from app.wallets.providers.registry import get_provider_adapter
+
         try:
             adapter = get_provider_adapter(payment.provider)
         except KeyError:
@@ -2175,7 +2193,9 @@ class CommercialNetworkService:
         try:
             verification = adapter.verify_payment(reference=verification_ref)
         except Exception as ex:
-            logger.error("Provider verification request failed for %s (ref %s): %s", payment.provider, verification_ref, ex)
+            logger.error(
+                "Provider verification request failed for %s (ref %s): %s", payment.provider, verification_ref, ex
+            )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"Failed to verify payment with gateway {payment.provider}: {ex}",
@@ -2306,7 +2326,9 @@ class CommercialNetworkService:
         if provider_minor < expected_minor:
             # Underpayment case: Underpayment must not activate a campaign
             payment.status = "failed"
-            payment.failure_reason = f"Underpayment detected: expected {expected_minor} kobo, received {provider_minor} kobo."
+            payment.failure_reason = (
+                f"Underpayment detected: expected {expected_minor} kobo, received {provider_minor} kobo."
+            )
             reconciliation_data = {
                 "type": "underpayment",
                 "expected_minor": expected_minor,
@@ -2416,6 +2438,7 @@ class CommercialNetworkService:
         payload_dict: dict[str, Any],
     ) -> dict[str, Any]:
         from app.wallets.providers.registry import get_provider_adapter
+
         try:
             adapter = get_provider_adapter(provider)
         except KeyError:
@@ -2443,7 +2466,11 @@ class CommercialNetworkService:
                 )
             # Support signing key rotation and legitimate overlap (including whsec_ and whk_ keys)
             candidate_secrets = [s.strip() for s in primary_secret.split(",") if s.strip()]
-            for env_name in ("PAYSTACK_WEBHOOK_SECRET", "GTE_PAYSTACK_WEBHOOK_SECRET", "PAYSTACK_WEBHOOK_SECRET_FALLBACK"):
+            for env_name in (
+                "PAYSTACK_WEBHOOK_SECRET",
+                "GTE_PAYSTACK_WEBHOOK_SECRET",
+                "PAYSTACK_WEBHOOK_SECRET_FALLBACK",
+            ):
                 env_sec = os.getenv(env_name)
                 if env_sec and env_sec.strip() not in candidate_secrets:
                     candidate_secrets.append(env_sec.strip())
@@ -2474,14 +2501,21 @@ class CommercialNetworkService:
                             v1_sigs.append((header_key_id, raw_v1))
 
                 if not ts_str or not v1_sigs:
-                    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Malformed Paystack-Signature header.")
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED, detail="Malformed Paystack-Signature header."
+                    )
                 try:
                     ts = int(ts_str)
                     now_ts = int(_utcnow().timestamp())
                     if abs(now_ts - ts) > 300:
-                        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Paystack webhook timestamp outside validity window (past or future drift exceeded 300s).")
+                        raise HTTPException(
+                            status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="Paystack webhook timestamp outside validity window (past or future drift exceeded 300s).",
+                        )
                 except ValueError:
-                    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid timestamp in Paystack-Signature.")
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid timestamp in Paystack-Signature."
+                    )
 
                 signed_content = f"{ts_str}.".encode("utf-8") + raw_body
                 for secret in candidate_secrets:
@@ -2494,7 +2528,10 @@ class CommercialNetworkService:
                         break
 
                 if not signature_verified:
-                    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Paystack webhook signature verification failed.")
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Paystack webhook signature verification failed.",
+                    )
 
             elif legacy_sig or newer_sig:
                 sig_to_check = legacy_sig or newer_sig
@@ -2505,19 +2542,29 @@ class CommercialNetworkService:
                         break
 
                 if not signature_verified:
-                    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Paystack legacy signature verification failed.")
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Paystack legacy signature verification failed.",
+                    )
             else:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing Paystack signature header.")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing Paystack signature header."
+                )
 
         elif provider == "korapay":
             # Documented Korapay signature scheme: x-korapay-signature header
             sig = norm_headers.get("x-korapay-signature")
             if not sig:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing Korapay signature header (x-korapay-signature).")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Missing Korapay signature header (x-korapay-signature).",
+                )
 
             primary_kora_secret = adapter._webhook_secret()
             if not primary_kora_secret:
-                raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Korapay secret key is missing.")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Korapay secret key is missing."
+                )
 
             candidate_kora_secrets = [s.strip() for s in primary_kora_secret.split(",") if s.strip()]
             fallback_kora = os.getenv("KORAPAY_WEBHOOK_SECRET_FALLBACK")
@@ -2526,6 +2573,7 @@ class CommercialNetworkService:
 
             # Korapay requires HMAC-SHA256 over the canonical JSON string of the 'data' object
             from app.wallets.providers.korapay import _js_json_stringify
+
             data_source = payload_dict.get("data")
             if not isinstance(data_source, dict):
                 # Try parsing raw bytes if payload_dict missing data
@@ -2536,7 +2584,10 @@ class CommercialNetworkService:
                     data_source = None
 
             if not isinstance(data_source, dict):
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Korapay payload.data object is missing or invalid.")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Korapay payload.data object is missing or invalid.",
+                )
 
             canonical_data = _js_json_stringify(data_source).encode("utf-8")
             for secret in candidate_kora_secrets:
@@ -2546,10 +2597,14 @@ class CommercialNetworkService:
                     break
 
             if not signature_verified:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Korapay webhook signature verification failed.")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED, detail="Korapay webhook signature verification failed."
+                )
 
         if not signature_verified:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Webhook signature could not be verified.")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Webhook signature could not be verified."
+            )
 
         event_id = str(
             payload_dict.get("id")
@@ -2641,7 +2696,9 @@ class CommercialNetworkService:
                     if provider == "paystack":
                         refund_amount_minor = int(raw_refund_amount)
                     else:
-                        refund_amount_minor = int((Decimal(str(raw_refund_amount)) * Decimal("100")).to_integral_value())
+                        refund_amount_minor = int(
+                            (Decimal(str(raw_refund_amount)) * Decimal("100")).to_integral_value()
+                        )
                 else:
                     refund_amount_minor = int(target_payment.amount_minor_ngn)
 
@@ -3109,9 +3166,7 @@ class CommercialNetworkService:
         ctr_percent = round((clicks / impressions) * 100.0, 2) if impressions > 0 else 0.0
 
         # Placement breakdown from metadata_json
-        events = self.session.scalars(
-            select(BrandAdEvent).where(BrandAdEvent.campaign_id == campaign_id)
-        ).all()
+        events = self.session.scalars(select(BrandAdEvent).where(BrandAdEvent.campaign_id == campaign_id)).all()
         placement_breakdown: dict[str, dict[str, int]] = {}
         daily_timeline: dict[str, dict[str, int]] = {}
         for ev in events:
@@ -3156,7 +3211,5 @@ class CommercialNetworkService:
                 "unique_authenticated_listeners": unique_listeners,
             },
             "placement_breakdown": placement_breakdown,
-            "daily_timeline": [
-                {"date": day, **vals} for day, vals in sorted(daily_timeline.items())
-            ],
+            "daily_timeline": [{"date": day, **vals} for day, vals in sorted(daily_timeline.items())],
         }

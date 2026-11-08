@@ -47,7 +47,6 @@ from app.models.user_region import UserRegionProfile
 from app.storage.base import StorageError, StorageNotFound
 from app.storage.s3 import S3ObjectStorage
 
-
 PAYSTACK_TEST_SECRET = "sk_test_paystack_security_secret_123"
 KORAPAY_TEST_SECRET = "korapay_test_security_secret_456"
 
@@ -183,6 +182,7 @@ def _setup_advertiser_and_campaign(client: TestClient, admin_token: str) -> tupl
 # 1. WEBHOOK SIGNATURE AUTHENTICATION & FORGERY TESTS (SCENARIOS 1 - 5)
 # ==============================================================================
 
+
 def test_paystack_webhook_signature_verification_and_rejection(tmp_path: Path, monkeypatch) -> None:
     client, session_factory, _ = _build_test_app(tmp_path, monkeypatch)
     admin_token = _create_admin(session_factory, "adm-1", "admin1@gtex.test", "adm1")
@@ -201,10 +201,17 @@ def test_paystack_webhook_signature_verification_and_rejection(tmp_path: Path, m
         ).json()
 
     ref = pay_res["reference"]
-    body = json.dumps({"event": "charge.success", "data": {"id": "ps_sec_1", "reference": ref, "amount": 25_000_000, "currency": "NGN"}}).encode("utf-8")
+    body = json.dumps(
+        {
+            "event": "charge.success",
+            "data": {"id": "ps_sec_1", "reference": ref, "amount": 25_000_000, "currency": "NGN"},
+        }
+    ).encode("utf-8")
 
     # A. Missing signature header -> 401 Unauthorized
-    res_no_sig = client.post("/api/v2/public/ads/webhooks/paystack", content=body, headers={"Content-Type": "application/json"})
+    res_no_sig = client.post(
+        "/api/v2/public/ads/webhooks/paystack", content=body, headers={"Content-Type": "application/json"}
+    )
     assert res_no_sig.status_code == 401
     assert "missing" in res_no_sig.json()["detail"].lower()
 
@@ -223,7 +230,10 @@ def test_paystack_webhook_signature_verification_and_rejection(tmp_path: Path, m
         mock_verify.return_value = MagicMock(
             status_code=200,
             raise_for_status=MagicMock(),
-            json=lambda: {"status": True, "data": {"status": "success", "amount": 25_000_000, "currency": "NGN", "reference": ref}},
+            json=lambda: {
+                "status": True,
+                "data": {"status": "success", "amount": 25_000_000, "currency": "NGN", "reference": ref},
+            },
         )
         res_valid = client.post(
             "/api/v2/public/ads/webhooks/paystack",
@@ -261,9 +271,15 @@ def test_paystack_webhook_timestamped_signature_and_rotation(tmp_path: Path, mon
         ).json()
 
     ref = pay_res["reference"]
-    body = json.dumps({"event": "charge.success", "data": {"id": "ps_rot_1", "reference": ref, "amount": 25_000_000, "currency": "NGN"}}).encode("utf-8")
+    body = json.dumps(
+        {
+            "event": "charge.success",
+            "data": {"id": "ps_rot_1", "reference": ref, "amount": 25_000_000, "currency": "NGN"},
+        }
+    ).encode("utf-8")
 
     import time
+
     now_ts = int(time.time())
 
     # A. Stale timestamp (> 300s) -> 401 Unauthorized
@@ -285,12 +301,18 @@ def test_paystack_webhook_timestamped_signature_and_rotation(tmp_path: Path, mon
         mock_verify.return_value = MagicMock(
             status_code=200,
             raise_for_status=MagicMock(),
-            json=lambda: {"status": True, "data": {"status": "success", "amount": 25_000_000, "currency": "NGN", "reference": ref}},
+            json=lambda: {
+                "status": True,
+                "data": {"status": "success", "amount": 25_000_000, "currency": "NGN", "reference": ref},
+            },
         )
         res_rot = client.post(
             "/api/v2/public/ads/webhooks/paystack",
             content=body,
-            headers={"Content-Type": "application/json", "paystack-signature": f"t={now_ts},v1=old_invalid_key,v1={valid_v1}"},
+            headers={
+                "Content-Type": "application/json",
+                "paystack-signature": f"t={now_ts},v1=old_invalid_key,v1={valid_v1}",
+            },
         )
         assert res_rot.status_code == 200
         assert res_rot.json()["status"] == "processed"
@@ -319,7 +341,9 @@ def test_korapay_webhook_signature_verification_and_rejection(tmp_path: Path, mo
     raw_body = json.dumps(full_payload).encode("utf-8")
 
     # A. Missing Korapay signature -> 401 Unauthorized
-    res_no_sig = client.post("/api/v2/public/ads/webhooks/korapay", content=raw_body, headers={"Content-Type": "application/json"})
+    res_no_sig = client.post(
+        "/api/v2/public/ads/webhooks/korapay", content=raw_body, headers={"Content-Type": "application/json"}
+    )
     assert res_no_sig.status_code == 401
 
     # B. Forged Korapay signature -> 401 Unauthorized
@@ -338,7 +362,10 @@ def test_korapay_webhook_signature_verification_and_rejection(tmp_path: Path, mo
         mock_kora_verify.return_value = MagicMock(
             status_code=200,
             raise_for_status=MagicMock(),
-            json=lambda: {"status": True, "data": {"status": "success", "amount": 250000, "currency": "NGN", "reference": ref}},
+            json=lambda: {
+                "status": True,
+                "data": {"status": "success", "amount": 250000, "currency": "NGN", "reference": ref},
+            },
         )
         res_valid = client.post(
             "/api/v2/public/ads/webhooks/korapay",
@@ -352,6 +379,7 @@ def test_korapay_webhook_signature_verification_and_rejection(tmp_path: Path, mo
 # 2. CLIENT PAYMENT VERIFICATION BYPASS REMOVAL & EXACT AMOUNT MATCHING
 # ==============================================================================
 
+
 def test_client_cannot_bypass_gateway_verification(tmp_path: Path, monkeypatch) -> None:
     client, session_factory, _ = _build_test_app(tmp_path, monkeypatch)
     admin_token = _create_admin(session_factory, "adm-3", "admin3@gtex.test", "adm3")
@@ -361,7 +389,10 @@ def test_client_cannot_bypass_gateway_verification(tmp_path: Path, monkeypatch) 
         mock_post.return_value = MagicMock(
             status_code=200,
             raise_for_status=MagicMock(),
-            json=lambda: {"status": True, "data": {"authorization_url": "https://ps.co/123", "reference": "REF_BYPASS"}},
+            json=lambda: {
+                "status": True,
+                "data": {"authorization_url": "https://ps.co/123", "reference": "REF_BYPASS"},
+            },
         )
         pay_res = client.post(
             "/api/v2/advertiser/payments/initiate",
@@ -376,7 +407,10 @@ def test_client_cannot_bypass_gateway_verification(tmp_path: Path, monkeypatch) 
         mock_get.return_value = MagicMock(
             status_code=200,
             raise_for_status=MagicMock(),
-            json=lambda: {"status": True, "data": {"status": "failed", "amount": 25_000_000, "currency": "NGN", "reference": ref}},
+            json=lambda: {
+                "status": True,
+                "data": {"status": "failed", "amount": 25_000_000, "currency": "NGN", "reference": ref},
+            },
         )
         fail_res = client.post(f"/api/v2/advertiser/payments/{ref}/verify", headers=_auth_header(adv_token))
         assert fail_res.status_code == 400
@@ -387,7 +421,10 @@ def test_client_cannot_bypass_gateway_verification(tmp_path: Path, monkeypatch) 
         mock_get.return_value = MagicMock(
             status_code=200,
             raise_for_status=MagicMock(),
-            json=lambda: {"status": True, "data": {"status": "success", "amount": 1000, "currency": "NGN", "reference": ref}},
+            json=lambda: {
+                "status": True,
+                "data": {"status": "success", "amount": 1000, "currency": "NGN", "reference": ref},
+            },
         )
         underpaid_res = client.post(f"/api/v2/advertiser/payments/{ref}/verify", headers=_auth_header(adv_token))
         assert underpaid_res.status_code == 400
@@ -398,7 +435,10 @@ def test_client_cannot_bypass_gateway_verification(tmp_path: Path, monkeypatch) 
         mock_get.return_value = MagicMock(
             status_code=200,
             raise_for_status=MagicMock(),
-            json=lambda: {"status": True, "data": {"status": "success", "amount": 25_000_000, "currency": "USD", "reference": ref}},
+            json=lambda: {
+                "status": True,
+                "data": {"status": "success", "amount": 25_000_000, "currency": "USD", "reference": ref},
+            },
         )
         curr_res = client.post(f"/api/v2/advertiser/payments/{ref}/verify", headers=_auth_header(adv_token))
         assert curr_res.status_code == 400
@@ -409,7 +449,10 @@ def test_client_cannot_bypass_gateway_verification(tmp_path: Path, monkeypatch) 
         mock_get.return_value = MagicMock(
             status_code=200,
             raise_for_status=MagicMock(),
-            json=lambda: {"status": True, "data": {"status": "success", "amount": 25_000_000, "currency": "NGN", "reference": ref}},
+            json=lambda: {
+                "status": True,
+                "data": {"status": "success", "amount": 25_000_000, "currency": "NGN", "reference": ref},
+            },
         )
         success_res = client.post(f"/api/v2/advertiser/payments/{ref}/verify", headers=_auth_header(adv_token))
         assert success_res.status_code == 200
@@ -425,7 +468,10 @@ def test_exact_payment_reconciliation_all_states(tmp_path: Path, monkeypatch) ->
         mock_post.return_value = MagicMock(
             status_code=200,
             raise_for_status=MagicMock(),
-            json=lambda: {"status": True, "data": {"authorization_url": "https://ps.co/recon", "reference": "REF_PS_RECON"}},
+            json=lambda: {
+                "status": True,
+                "data": {"authorization_url": "https://ps.co/recon", "reference": "REF_PS_RECON"},
+            },
         )
         pay_res = client.post(
             "/api/v2/advertiser/payments/initiate",
@@ -439,7 +485,10 @@ def test_exact_payment_reconciliation_all_states(tmp_path: Path, monkeypatch) ->
         mock_get.return_value = MagicMock(
             status_code=200,
             raise_for_status=MagicMock(),
-            json=lambda: {"status": True, "data": {"status": "success", "amount": 24_999_999, "currency": "NGN", "reference": ref_ps}},
+            json=lambda: {
+                "status": True,
+                "data": {"status": "success", "amount": 24_999_999, "currency": "NGN", "reference": ref_ps},
+            },
         )
         res_under = client.post(f"/api/v2/advertiser/payments/{ref_ps}/verify", headers=_auth_header(adv_token))
         assert res_under.status_code == 400
@@ -460,7 +509,10 @@ def test_exact_payment_reconciliation_all_states(tmp_path: Path, monkeypatch) ->
         mock_get.return_value = MagicMock(
             status_code=200,
             raise_for_status=MagicMock(),
-            json=lambda: {"status": True, "data": {"status": "success", "amount": 25_000_001, "currency": "NGN", "reference": ref_ps}},
+            json=lambda: {
+                "status": True,
+                "data": {"status": "success", "amount": 25_000_001, "currency": "NGN", "reference": ref_ps},
+            },
         )
         res_over = client.post(f"/api/v2/advertiser/payments/{ref_ps}/verify", headers=_auth_header(adv_token))
         assert res_over.status_code == 400
@@ -484,7 +536,10 @@ def test_exact_payment_reconciliation_all_states(tmp_path: Path, monkeypatch) ->
         mock_get.return_value = MagicMock(
             status_code=200,
             raise_for_status=MagicMock(),
-            json=lambda: {"status": True, "data": {"status": "success", "amount": 25_000_000, "currency": "NGN", "reference": ref_ps}},
+            json=lambda: {
+                "status": True,
+                "data": {"status": "success", "amount": 25_000_000, "currency": "NGN", "reference": ref_ps},
+            },
         )
         res_exact = client.post(f"/api/v2/advertiser/payments/{ref_ps}/verify", headers=_auth_header(adv_token))
         assert res_exact.status_code == 200
@@ -502,6 +557,7 @@ def test_exact_payment_reconciliation_all_states(tmp_path: Path, monkeypatch) ->
         svc = CommercialNetworkService(session)
         finance_admin = session.scalar(select(User).where(User.username == "admrecon"))
         from app.ads_engine.commercial_schemas import RefundCreateRequest
+
         ref_res = svc.create_admin_refund(
             finance_admin=finance_admin,
             payload=RefundCreateRequest(
@@ -523,7 +579,10 @@ def test_exact_payment_reconciliation_all_states(tmp_path: Path, monkeypatch) ->
         mock_post.return_value = MagicMock(
             status_code=200,
             raise_for_status=MagicMock(),
-            json=lambda: {"status": True, "data": {"checkout_url": "https://kora.co/recon", "reference": "REF_KORA_RECON"}},
+            json=lambda: {
+                "status": True,
+                "data": {"checkout_url": "https://kora.co/recon", "reference": "REF_KORA_RECON"},
+            },
         )
         kora_pay_res = client.post(
             "/api/v2/advertiser/payments/initiate",
@@ -537,9 +596,14 @@ def test_exact_payment_reconciliation_all_states(tmp_path: Path, monkeypatch) ->
         mock_get.return_value = MagicMock(
             status_code=200,
             raise_for_status=MagicMock(),
-            json=lambda: {"status": True, "data": {"status": "success", "amount": 249999, "currency": "NGN", "reference": ref_kora}},
+            json=lambda: {
+                "status": True,
+                "data": {"status": "success", "amount": 249999, "currency": "NGN", "reference": ref_kora},
+            },
         )
-        res_kora_under = client.post(f"/api/v2/advertiser/payments/{ref_kora}/verify", headers=_auth_header(adv_kora_token))
+        res_kora_under = client.post(
+            f"/api/v2/advertiser/payments/{ref_kora}/verify", headers=_auth_header(adv_kora_token)
+        )
         assert res_kora_under.status_code == 400
         assert "underpayment" in res_kora_under.json()["detail"].lower()
 
@@ -553,9 +617,14 @@ def test_exact_payment_reconciliation_all_states(tmp_path: Path, monkeypatch) ->
         mock_get.return_value = MagicMock(
             status_code=200,
             raise_for_status=MagicMock(),
-            json=lambda: {"status": True, "data": {"status": "success", "amount": 250001, "currency": "NGN", "reference": ref_kora}},
+            json=lambda: {
+                "status": True,
+                "data": {"status": "success", "amount": 250001, "currency": "NGN", "reference": ref_kora},
+            },
         )
-        res_kora_over = client.post(f"/api/v2/advertiser/payments/{ref_kora}/verify", headers=_auth_header(adv_kora_token))
+        res_kora_over = client.post(
+            f"/api/v2/advertiser/payments/{ref_kora}/verify", headers=_auth_header(adv_kora_token)
+        )
         assert res_kora_over.status_code == 400
         assert "overpayment" in res_kora_over.json()["detail"].lower()
 
@@ -569,9 +638,14 @@ def test_exact_payment_reconciliation_all_states(tmp_path: Path, monkeypatch) ->
         mock_get.return_value = MagicMock(
             status_code=200,
             raise_for_status=MagicMock(),
-            json=lambda: {"status": True, "data": {"status": "reversed", "amount": 250000, "currency": "NGN", "reference": ref_kora}},
+            json=lambda: {
+                "status": True,
+                "data": {"status": "reversed", "amount": 250000, "currency": "NGN", "reference": ref_kora},
+            },
         )
-        res_kora_rev = client.post(f"/api/v2/advertiser/payments/{ref_kora}/verify", headers=_auth_header(adv_kora_token))
+        res_kora_rev = client.post(
+            f"/api/v2/advertiser/payments/{ref_kora}/verify", headers=_auth_header(adv_kora_token)
+        )
         assert res_kora_rev.status_code == 400
         assert "reversed" in res_kora_rev.json()["detail"].lower()
     with session_factory() as session:
@@ -582,6 +656,7 @@ def test_exact_payment_reconciliation_all_states(tmp_path: Path, monkeypatch) ->
 # ==============================================================================
 # 3. CHECKOUT ADAPTER MISMATCH & FAIL CLOSED (SCENARIOS 12)
 # ==============================================================================
+
 
 def test_gateway_checkout_adapter_invokes_canonical_method_and_fails_closed(tmp_path: Path, monkeypatch) -> None:
     client, session_factory, _ = _build_test_app(tmp_path, monkeypatch)
@@ -603,6 +678,7 @@ def test_gateway_checkout_adapter_invokes_canonical_method_and_fails_closed(tmp_
 # ==============================================================================
 # 4. MEDIA OBJECT STORAGE, RESTART SURVIVAL & BACKFILL (SCENARIOS 13 - 14)
 # ==============================================================================
+
 
 def test_media_storage_outage_fails_safely_and_backfill_resumes(tmp_path: Path, monkeypatch) -> None:
     client, session_factory, media_dir = _build_test_app(tmp_path, monkeypatch)
@@ -775,6 +851,7 @@ def test_s3_durable_cloud_object_storage(tmp_path: Path) -> None:
 # 5. PUBLIC CAMPAIGN VIEW CTA LABEL SAFETY (SCENARIO 15)
 # ==============================================================================
 
+
 def test_public_campaign_view_handles_absent_and_present_cta():
     from app.ads_engine.schemas import PublicBrandAdCampaignView
 
@@ -802,6 +879,7 @@ def test_public_campaign_view_handles_absent_and_present_cta():
 # 6. CENTRAL REMEDIATION TASKS 1 - 4 REGRESSION TESTS
 # ==============================================================================
 
+
 def test_payment_amount_precision_and_rejections(tmp_path: Path, monkeypatch) -> None:
     client, session_factory, _ = _build_test_app(tmp_path, monkeypatch)
     admin_token = _create_admin(session_factory, "adm-prec", "admin_prec@gtex.test", "admprec")
@@ -825,10 +903,14 @@ def test_payment_amount_precision_and_rejections(tmp_path: Path, monkeypatch) ->
         mock_get.return_value = MagicMock(
             status_code=200,
             raise_for_status=MagicMock(),
-            json=lambda: {"status": True, "data": {"status": "success", "amount": 25000000.4, "currency": "NGN", "reference": ref}},
+            json=lambda: {
+                "status": True,
+                "data": {"status": "success", "amount": 25000000.4, "currency": "NGN", "reference": ref},
+            },
         )
         with patch("app.wallets.providers.paystack.PaystackProviderAdapter.verify_payment") as mock_vp:
             from app.wallets.providers.base import PaymentVerification
+
             mock_vp.return_value = PaymentVerification(
                 reference=ref,
                 provider_reference=ref,
@@ -955,7 +1037,10 @@ def test_paystack_advanced_signature_and_whsec_whk_key_rotation(tmp_path: Path, 
         mock_post.return_value = MagicMock(
             status_code=200,
             raise_for_status=MagicMock(),
-            json=lambda: {"status": True, "data": {"authorization_url": "https://ps.co/adv", "reference": "REF_PS_ADV"}},
+            json=lambda: {
+                "status": True,
+                "data": {"authorization_url": "https://ps.co/adv", "reference": "REF_PS_ADV"},
+            },
         )
         pay_res = client.post(
             "/api/v2/advertiser/payments/initiate",
@@ -964,8 +1049,14 @@ def test_paystack_advanced_signature_and_whsec_whk_key_rotation(tmp_path: Path, 
         ).json()
     ref = pay_res["reference"]
 
-    body = json.dumps({"event": "charge.success", "data": {"id": "ps_adv_1", "reference": ref, "amount": 25_000_000, "currency": "NGN"}}).encode("utf-8")
+    body = json.dumps(
+        {
+            "event": "charge.success",
+            "data": {"id": "ps_adv_1", "reference": ref, "amount": 25_000_000, "currency": "NGN"},
+        }
+    ).encode("utf-8")
     import time
+
     now_ts = int(time.time())
 
     # A. Future timestamp outside 300s window (> 300s in future) -> 401
@@ -983,7 +1074,9 @@ def test_paystack_advanced_signature_and_whsec_whk_key_rotation(tmp_path: Path, 
     # B. Tampered body with valid timestamp -> 401
     signed_now = f"{now_ts}.".encode("utf-8") + body
     valid_sig = hmac.new(WHSEC_SECRET.encode("utf-8"), signed_now, hashlib.sha512).hexdigest()
-    tampered_body = json.dumps({"event": "charge.success", "data": {"id": "ps_adv_1", "reference": ref, "amount": 100, "currency": "NGN"}}).encode("utf-8")
+    tampered_body = json.dumps(
+        {"event": "charge.success", "data": {"id": "ps_adv_1", "reference": ref, "amount": 100, "currency": "NGN"}}
+    ).encode("utf-8")
     res_tampered = client.post(
         "/api/v2/public/ads/webhooks/paystack",
         content=tampered_body,
@@ -998,7 +1091,10 @@ def test_paystack_advanced_signature_and_whsec_whk_key_rotation(tmp_path: Path, 
         mock_verify.return_value = MagicMock(
             status_code=200,
             raise_for_status=MagicMock(),
-            json=lambda: {"status": True, "data": {"status": "success", "amount": 25_000_000, "currency": "NGN", "reference": ref}},
+            json=lambda: {
+                "status": True,
+                "data": {"status": "success", "amount": 25_000_000, "currency": "NGN", "reference": ref},
+            },
         )
         res_rotation = client.post(
             "/api/v2/public/ads/webhooks/paystack",
@@ -1079,4 +1175,3 @@ def test_s3_production_safety_guard(tmp_path: Path, monkeypatch) -> None:
     )
     assert outage_res.status_code == 503
     assert "unavailable" in outage_res.json()["detail"].lower()
-

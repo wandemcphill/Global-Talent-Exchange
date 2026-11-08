@@ -227,10 +227,11 @@ def get_current_football_user(
 def get_current_advertiser_user(
     current_user: User = Depends(get_current_user),
 ) -> User:
-    if (
-        current_user.account_type == PublicAccountType.ADVERTISER
-        or current_user.role in {UserRole.ADVERTISER, UserRole.ADMIN, UserRole.SUPER_ADMIN}
-    ):
+    if current_user.account_type == PublicAccountType.ADVERTISER or current_user.role in {
+        UserRole.ADVERTISER,
+        UserRole.ADMIN,
+        UserRole.SUPER_ADMIN,
+    }:
         return current_user
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
@@ -253,7 +254,9 @@ def get_current_finance_admin(
         return current_user
     from app.auth.service import AuthService
 
-    permissions = set(AuthService().resolve_user_permissions(getattr(request, "app", None), current_user, session=session))
+    permissions = set(
+        AuthService().resolve_user_permissions(getattr(request, "app", None), current_user, session=session)
+    )
     finance_permissions = {
         "manage_payment_rails",
         "manage_withdrawals",

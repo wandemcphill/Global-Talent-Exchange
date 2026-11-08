@@ -255,10 +255,7 @@ def get_advertiser_workspace_overview(
     service.refresh_expired_campaigns()
     campaigns = session.scalars(
         select(BrandAdCampaign)
-        .where(
-            (BrandAdCampaign.workspace_id == workspace.id)
-            | (BrandAdCampaign.advertiser_id == current_user.id)
-        )
+        .where((BrandAdCampaign.workspace_id == workspace.id) | (BrandAdCampaign.advertiser_id == current_user.id))
         .order_by(BrandAdCampaign.created_at.desc())
     ).all()
     payments = service.list_workspace_payments(current_user)
@@ -387,10 +384,7 @@ def list_workspace_commercial_campaigns(
     service.refresh_expired_campaigns()
     stmt = (
         select(BrandAdCampaign)
-        .where(
-            (BrandAdCampaign.workspace_id == workspace.id)
-            | (BrandAdCampaign.advertiser_id == current_user.id)
-        )
+        .where((BrandAdCampaign.workspace_id == workspace.id) | (BrandAdCampaign.advertiser_id == current_user.id))
         .order_by(BrandAdCampaign.created_at.desc())
     )
     if division:
@@ -512,9 +506,7 @@ def verify_advertiser_ngn_payment(
 ) -> PaymentRecordView:
     service = CommercialNetworkService(session)
     workspace = service.require_active_workspace(current_user)
-    payment = session.scalar(
-        select(AdvertiserPaymentRecord).where(AdvertiserPaymentRecord.reference == reference)
-    )
+    payment = session.scalar(select(AdvertiserPaymentRecord).where(AdvertiserPaymentRecord.reference == reference))
     if payment is None or payment.workspace_id != workspace.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment record not found.")
     return service.verify_payment_server_side(reference=reference, actor_user_id=current_user.id)
@@ -557,10 +549,7 @@ def get_advertiser_performance_reports(
     workspace = service.require_active_workspace(current_user)
     campaigns = session.scalars(
         select(BrandAdCampaign)
-        .where(
-            (BrandAdCampaign.workspace_id == workspace.id)
-            | (BrandAdCampaign.advertiser_id == current_user.id)
-        )
+        .where((BrandAdCampaign.workspace_id == workspace.id) | (BrandAdCampaign.advertiser_id == current_user.id))
         .order_by(BrandAdCampaign.created_at.desc())
     ).all()
     items = [service.get_campaign_analytics(c.id) for c in campaigns]
@@ -605,7 +594,9 @@ def get_admin_commercial_overview(
         "campaigns_total": len(campaigns),
         "active_campaigns": sum(1 for c in campaigns if c.is_active),
         "pending_moderation": sum(
-            1 for c in campaigns if c.status in {"pending", "submitted", "under_review", "awaiting_payment"} and not c.is_approved
+            1
+            for c in campaigns
+            if c.status in {"pending", "submitted", "under_review", "awaiting_payment"} and not c.is_approved
         ),
         "revenue_paid_minor_ngn": paid_minor,
         "revenue_paid_formatted_ngn": format_ngn_from_minor(paid_minor) or "₦0.00",
@@ -614,7 +605,8 @@ def get_admin_commercial_overview(
             "viewable_impressions": int(event_counts.get("viewable_impression", 0)),
             "clicks": int(event_counts.get("click", 0)),
             "plays_started": int(event_counts.get("play_started", 0)),
-            "qualified_listens": int(event_counts.get("qualified_listen", 0)) + int(event_counts.get("milestone_50", 0)),
+            "qualified_listens": int(event_counts.get("qualified_listen", 0))
+            + int(event_counts.get("milestone_50", 0)),
             "completed_listens": int(event_counts.get("completed", 0)) + int(event_counts.get("completed_listen", 0)),
         },
     }
@@ -722,9 +714,13 @@ def admin_list_commercial_payments(
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
     service = CommercialNetworkService(session)
-    payments = session.scalars(select(AdvertiserPaymentRecord).order_by(AdvertiserPaymentRecord.created_at.desc())).all()
+    payments = session.scalars(
+        select(AdvertiserPaymentRecord).order_by(AdvertiserPaymentRecord.created_at.desc())
+    ).all()
     invoices = session.scalars(select(AdvertiserInvoice).order_by(AdvertiserInvoice.created_at.desc())).all()
-    subscriptions = session.scalars(select(AdvertiserSubscription).order_by(AdvertiserSubscription.created_at.desc())).all()
+    subscriptions = session.scalars(
+        select(AdvertiserSubscription).order_by(AdvertiserSubscription.created_at.desc())
+    ).all()
     refunds = session.scalars(select(AdvertiserRefundRecord).order_by(AdvertiserRefundRecord.created_at.desc())).all()
     return {
         "currency": "NGN",

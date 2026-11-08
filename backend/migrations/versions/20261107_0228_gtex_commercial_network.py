@@ -60,9 +60,15 @@ def upgrade() -> None:
     if "advertiser_media_assets" in existing_tables:
         media_cols = {col["name"] for col in inspector.get_columns("advertiser_media_assets")}
         media_new_cols = [
-            ("storage_provider", sa.Column("storage_provider", sa.String(64), nullable=False, server_default="local_object_storage")),
+            (
+                "storage_provider",
+                sa.Column("storage_provider", sa.String(64), nullable=False, server_default="local_object_storage"),
+            ),
             ("storage_key", sa.Column("storage_key", sa.String(512), nullable=True)),
-            ("access_classification", sa.Column("access_classification", sa.String(32), nullable=False, server_default="public")),
+            (
+                "access_classification",
+                sa.Column("access_classification", sa.String(32), nullable=False, server_default="public"),
+            ),
         ]
         for col_name, col_def in media_new_cols:
             if col_name not in media_cols:
@@ -86,19 +92,42 @@ def upgrade() -> None:
             ("logo_asset_id", sa.Column("logo_asset_id", sa.String(length=36), nullable=True)),
             ("creative_asset_id", sa.Column("creative_asset_id", sa.String(length=36), nullable=True)),
             ("creative_media_type", sa.Column("creative_media_type", sa.String(length=64), nullable=True)),
-            ("is_silent_creative", sa.Column("is_silent_creative", sa.Boolean(), nullable=False, server_default=sa.true())),
+            (
+                "is_silent_creative",
+                sa.Column("is_silent_creative", sa.Boolean(), nullable=False, server_default=sa.true()),
+            ),
             ("duration_days", sa.Column("duration_days", sa.Integer(), nullable=False, server_default="7")),
-            ("payment_status", sa.Column("payment_status", sa.String(length=32), nullable=False, server_default="unpaid")),
+            (
+                "payment_status",
+                sa.Column("payment_status", sa.String(length=32), nullable=False, server_default="unpaid"),
+            ),
             ("payment_reference", sa.Column("payment_reference", sa.String(length=120), nullable=True)),
-            ("price_minor_ngn", sa.Column("price_minor_ngn", sa.BigInteger().with_variant(sa.Integer(), "sqlite"), nullable=False, server_default="0")),
+            (
+                "price_minor_ngn",
+                sa.Column(
+                    "price_minor_ngn",
+                    sa.BigInteger().with_variant(sa.Integer(), "sqlite"),
+                    nullable=False,
+                    server_default="0",
+                ),
+            ),
             ("is_subscription", sa.Column("is_subscription", sa.Boolean(), nullable=False, server_default=sa.false())),
             ("music_audio_asset_id", sa.Column("music_audio_asset_id", sa.String(length=36), nullable=True)),
             ("music_artwork_asset_id", sa.Column("music_artwork_asset_id", sa.String(length=36), nullable=True)),
             ("music_audio_url", sa.Column("music_audio_url", sa.String(length=2048), nullable=True)),
             ("music_artwork_url", sa.Column("music_artwork_url", sa.String(length=2048), nullable=True)),
-            ("music_explicit_content", sa.Column("music_explicit_content", sa.Boolean(), nullable=False, server_default=sa.false())),
-            ("music_rights_declaration_accepted", sa.Column("music_rights_declaration_accepted", sa.Boolean(), nullable=False, server_default=sa.false())),
-            ("music_rights_declaration_at", sa.Column("music_rights_declaration_at", sa.DateTime(timezone=True), nullable=True)),
+            (
+                "music_explicit_content",
+                sa.Column("music_explicit_content", sa.Boolean(), nullable=False, server_default=sa.false()),
+            ),
+            (
+                "music_rights_declaration_accepted",
+                sa.Column("music_rights_declaration_accepted", sa.Boolean(), nullable=False, server_default=sa.false()),
+            ),
+            (
+                "music_rights_declaration_at",
+                sa.Column("music_rights_declaration_at", sa.DateTime(timezone=True), nullable=True),
+            ),
         ]
         for col_name, col_def in new_columns:
             if col_name not in existing_cols:

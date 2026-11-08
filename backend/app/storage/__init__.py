@@ -31,7 +31,11 @@ def get_default_object_storage(root_override: Path | None = None) -> ObjectStora
 
     # Explicit production configuration guard: prevent silent write to ephemeral container disk
     app_env = (os.getenv("GTE_APP_ENV") or os.getenv("APP_ENV") or "development").strip().lower()
-    allow_local_in_prod = os.getenv("GTE_ALLOW_LOCAL_STORAGE_IN_PRODUCTION", "false").strip().lower() in {"true", "1", "yes"}
+    allow_local_in_prod = os.getenv("GTE_ALLOW_LOCAL_STORAGE_IN_PRODUCTION", "false").strip().lower() in {
+        "true",
+        "1",
+        "yes",
+    }
     if app_env in {"production", "prod", "release", "staging"} and not allow_local_in_prod:
         raise StorageError(
             "Durable cloud object storage (GTE_S3_BUCKET) is not configured in production/staging. "
