@@ -32,7 +32,13 @@ from app.models.wallet import (
     LedgerTransaction,
 )
 from app.models.user import User
-from app.owner_console import delegation_service, ledger, living_gm_delegation, living_staff_market, router as owner_router
+from app.owner_console import (
+    delegation_service,
+    ledger,
+    living_gm_delegation,
+    living_staff_market,
+    router as owner_router,
+)
 from app.owner_console.delegation_service import DelegationError
 from app.owner_console.models import (
     OWNER_CONSOLE_TABLES,
@@ -252,7 +258,67 @@ def test_gm_operational_cycle_autonomous_hiring_in_gm_led():
     # Verify decision logged in database
     decisions = session.scalars(select(ClubDelegatedDecision).where(ClubDelegatedDecision.club_id == cp.id)).all()
     assert len(decisions) >= 1
-    assert any(d.status == "executed" for d in decisions)
+    executed = [d for d in decisions if d.status == "executed"]
+    assert executed
+    for decision in executed:
+        audit = session.scalar(
+            select(ClubDelegatedDecisionAuditLog).where(
+                ClubDelegatedDecisionAuditLog.decision_id == decision.id,
+                ClubDelegatedDecisionAuditLog.action == "gm_execute",
+            )
+        )
+        assert audit is not None
+
+
+def test_gm_operational_cycle_does_not_log_rejected_staff_offer_as_executed(monkeypatch):
+    session = _session()
+    u, cp, state = _bootstrap_club(session, "u_gm_failed_cycle_hire", "c_gm_failed_cycle_hire", prestige=75)
+    living_gm_delegation.update_gm_delegation_mode(session, u.id, cp.id, "gm_led")
+
+    monkeypatch.setattr(
+        living_staff_market,
+        "get_club_vacancies",
+        lambda *args, **kwargs: {"vacancies": [{"role_key": "general_manager", "role_label": "General Manager"}]},
+    )
+    monkeypatch.setattr(
+        living_staff_market,
+        "list_staff_market_candidates",
+        lambda *args, **kwargs: {
+            "candidates": [
+                {
+                    "profile_id": "profile_candidate_rejected",
+                    "name": "Candidate Rejected",
+                    "rating": 80,
+                    "expected_salary_gtex": 1000,
+                }
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        living_staff_market,
+        "hire_staff_from_market",
+        lambda *args, **kwargs: {
+            "success": False,
+            "status": "rejected",
+            "reason": "insufficient_prestige",
+            "message": "Candidate declined the appointment.",
+        },
+    )
+
+    cycle = living_gm_delegation.evaluate_gm_operational_cycle(session, u.id, cp.id)
+
+    assert "staff_hire" in [action["type"] for action in cycle["blocked_actions"]]
+    assert "staff_hire" not in [action["type"] for action in cycle["executed_actions"]]
+    assert (
+        session.scalar(
+            select(ClubDelegatedDecision).where(
+                ClubDelegatedDecision.club_id == cp.id,
+                ClubDelegatedDecision.activity_key == "staff_hiring",
+                ClubDelegatedDecision.execution_status == "executed",
+            )
+        )
+        is None
+    )
 
 
 def test_gm_operational_cycle_escalates_when_limit_exceeded():
@@ -472,18 +538,17 @@ def test_owner_approval_does_not_mark_rejected_staff_offer_as_executed(monkeypat
     )
 
     with pytest.raises(DelegationError, match="Approval was not executed"):
-        living_gm_delegation.resolve_gm_proposal(
-            session, u.id, cp.id, decision.id, action="approve"
-        )
+        living_gm_delegation.resolve_gm_proposal(session, u.id, cp.id, decision.id, action="approve")
 
     session.refresh(decision)
     assert decision.status == "pending_approval"
     assert decision.execution_status == "pending_execution"
-    assert session.scalar(
-        select(ClubDelegatedDecisionAuditLog).where(
-            ClubDelegatedDecisionAuditLog.decision_id == decision.id
+    assert (
+        session.scalar(
+            select(ClubDelegatedDecisionAuditLog).where(ClubDelegatedDecisionAuditLog.decision_id == decision.id)
         )
-    ) is None
+        is None
+    )
     rel = session.scalar(select(OwnerClubRelationship).where(OwnerClubRelationship.club_id == cp.id))
     assert rel.trust == 60
 
@@ -513,9 +578,7 @@ def test_staff_market_does_not_create_contract_when_treasury_cannot_fund_it(monk
 
     assert result["success"] is False
     assert result["reason"] == "insufficient_funds"
-    assert session.scalar(
-        select(ClubStaffContract).where(ClubStaffContract.club_id == cp.id)
-    ) is None
+    assert session.scalar(select(ClubStaffContract).where(ClubStaffContract.club_id == cp.id)) is None
 
 
 def test_gm_cycle_blocks_academy_settlement_when_suspended_or_unfunded(monkeypatch):
@@ -533,13 +596,16 @@ def test_gm_cycle_blocks_academy_settlement_when_suspended_or_unfunded(monkeypat
 
     assert "academy_recruitment" in [action["type"] for action in cycle["blocked_actions"]]
     assert "academy_recruitment" not in [action["type"] for action in cycle["executed_actions"]]
-    assert session.scalar(
-        select(ClubDelegatedDecision).where(
-            ClubDelegatedDecision.club_id == cp.id,
-            ClubDelegatedDecision.activity_key == "academy_recruitment",
-            ClubDelegatedDecision.execution_status == "executed",
+    assert (
+        session.scalar(
+            select(ClubDelegatedDecision).where(
+                ClubDelegatedDecision.club_id == cp.id,
+                ClubDelegatedDecision.activity_key == "academy_recruitment",
+                ClubDelegatedDecision.execution_status == "executed",
+            )
         )
-    ) is None
+        is None
+    )
 
     # Suspension must block the same path even after funds are restored.
     monkeypatch.setattr(living_gm_delegation.ledger, "balance", lambda *args, **kwargs: Decimal("2000000"))
@@ -550,3 +616,28 @@ def test_gm_cycle_blocks_academy_settlement_when_suspended_or_unfunded(monkeypat
     cycle_suspended = living_gm_delegation.evaluate_gm_operational_cycle(session, u.id, cp.id)
     assert "academy_recruitment" in [action["type"] for action in cycle_suspended["blocked_actions"]]
     assert not cycle_suspended["executed_actions"]
+
+
+def test_owner_managed_mode_cannot_be_overridden_by_matrix_toggle():
+    session = _session()
+    u, cp, state = _bootstrap_club(session, "u_gm_owner_only", "c_gm_owner_only")
+    living_gm_delegation.update_gm_delegation_mode(session, u.id, cp.id, "owner_managed")
+
+    overview = living_gm_delegation.get_gm_delegation_overview(session, u.id, cp.id)
+    hiring = next(a for a in overview["activities"] if a["activity_key"] == "staff_hiring")
+    assert hiring["requires_owner_approval"] is True
+    assert hiring["gm_can_execute"] is False
+
+    with pytest.raises(DelegationError, match="cannot be delegated"):
+        living_gm_delegation.update_gm_matrix_and_financial_controls(
+            session,
+            u.id,
+            cp.id,
+            activity_assignments={
+                "staff_hiring": {
+                    "responsible_role": "general_manager",
+                    "authority_level": "full_autonomy",
+                    "requires_owner_approval": False,
+                }
+            },
+        )

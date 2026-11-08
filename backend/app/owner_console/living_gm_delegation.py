@@ -311,7 +311,7 @@ def get_gm_delegation_overview(session: Session, user_id: str, club_id: str) -> 
 
         # The matrix must never advertise autonomous authority for a workflow that
         # does not yet have an authoritative execution handler.
-        if not is_execution_supported:
+        if not is_execution_supported or canonical_mode == "owner_managed" or policy.is_suspended:
             authority_level = "owner_only"
             requires_approval = True
             responsible_role = "owner"
@@ -391,14 +391,14 @@ def get_gm_delegation_overview(session: Session, user_id: str, club_id: str) -> 
             "requires_owner_approval": item["requires_owner_approval"],
             "gm_can_execute": (
                 item["execution_supported"]
+                and canonical_mode != "owner_managed"
                 and not item["requires_owner_approval"]
                 and item["authority_level"] != "owner_only"
                 and not policy.is_suspended
             ),
             "execution_supported": item["execution_supported"],
-            "expenditure_limit_gtex": float(
-                financial_controls.get(item["financial_control_key"], 0) or 0
-            ),
+            "policy_suspended": bool(policy.is_suspended),
+            "expenditure_limit_gtex": float(financial_controls.get(item["financial_control_key"], 0) or 0),
             "delegation_level": item["authority_level"],
         }
         for item in activity_matrix
@@ -414,11 +414,15 @@ def get_gm_delegation_overview(session: Session, user_id: str, club_id: str) -> 
         {
             "id": row.id,
             "decision_id": row.decision_id,
-            "actor_role": "owner",
+            "actor_role": ("general_manager" if row.action.startswith("gm_") else "owner"),
             "action": (
-                "approved" if row.action == "owner_approve"
-                else "rejected" if row.action == "owner_reject"
-                else row.action
+                "approved"
+                if row.action == "owner_approve"
+                else (
+                    "rejected"
+                    if row.action == "owner_reject"
+                    else "executed" if row.action == "gm_execute" else row.action
+                )
             ),
             "reason": (row.snapshot_json or {}).get("outcome") or row.new_status,
             "note": row.decision_note,
@@ -428,9 +432,7 @@ def get_gm_delegation_overview(session: Session, user_id: str, club_id: str) -> 
     ]
 
     executed_rows = [d for d in decision_rows if d.execution_status == "executed"]
-    total_expenditure_approved = sum(
-        float(d.financial_amount_gtex or 0) for d in executed_rows
-    )
+    total_expenditure_approved = sum(float(d.financial_amount_gtex or 0) for d in executed_rows)
     gm_staff = {
         "id": str(gm_profile.get("id") or gm_profile.get("staff_id") or ""),
         "name": gm_profile.get("name", "Dayo Adeleke"),
@@ -546,11 +548,7 @@ def update_gm_matrix_and_financial_controls(
             if key == "allow_emergency_spending":
                 if isinstance(value, bool):
                     current_th[key] = 1.0 if value else 0.0
-                elif (
-                    isinstance(value, (int, float))
-                    and math.isfinite(float(value))
-                    and float(value) in (0.0, 1.0)
-                ):
+                elif isinstance(value, (int, float)) and math.isfinite(float(value)) and float(value) in (0.0, 1.0):
                     current_th[key] = float(value)
                 else:
                     raise DelegationError("allow_emergency_spending must be a boolean.", 400)
@@ -572,14 +570,11 @@ def update_gm_matrix_and_financial_controls(
                 raise DelegationError(f"Activity assignment for {key} must be an object.", 400)
 
             is_supported = key in STAGE5_EXECUTABLE_ACTIVITIES
+            canonical_mode = STAGE5_REVERSE_MODE_ALIASES.get(policy.mode, policy.mode)
             current = dict(current_act.get(key) or {})
             responsible_role = value.get("responsible_role", current.get("responsible_role", "general_manager"))
-            authority_level = value.get(
-                "authority_level", current.get("authority_level", "delegated_with_limits")
-            )
-            requires_approval = value.get(
-                "requires_owner_approval", current.get("requires_owner_approval", False)
-            )
+            authority_level = value.get("authority_level", current.get("authority_level", "delegated_with_limits"))
+            requires_approval = value.get("requires_owner_approval", current.get("requires_owner_approval", False))
 
             if responsible_role not in STAGE5_RESPONSIBLE_ROLES:
                 raise DelegationError(f"Invalid responsible role for {key}.", 400)
@@ -592,6 +587,15 @@ def update_gm_matrix_and_financial_controls(
             ):
                 raise DelegationError(
                     f"{key} does not yet have a GM execution handler and must remain owner-controlled.",
+                    409,
+                )
+            if (
+                is_supported
+                and canonical_mode == "owner_managed"
+                and (responsible_role != "owner" or authority_level != "owner_only" or not requires_approval)
+            ):
+                raise DelegationError(
+                    f"{key} cannot be delegated while the club is in owner-managed mode.",
                     409,
                 )
 
@@ -714,6 +718,18 @@ def evaluate_gm_operational_cycle(session: Session, user_id: str, club_id: str) 
                     )
                     session.add(decision)
                     session.flush()
+                    session.add(
+                        ClubDelegatedDecisionAuditLog(
+                            decision_id=decision.id,
+                            club_id=club_id,
+                            actor_id=user_id,
+                            action="gm_execute",
+                            previous_status=None,
+                            new_status="executed",
+                            decision_note=decision.decision_note,
+                            snapshot_json={"payload": decision.payload_json, "outcome": decision.outcome_text},
+                        )
+                    )
                     executed_actions.append(
                         {
                             "type": "staff_hire",
@@ -865,6 +881,18 @@ def evaluate_gm_operational_cycle(session: Session, user_id: str, club_id: str) 
             )
             session.add(decision_acad)
             session.flush()
+            session.add(
+                ClubDelegatedDecisionAuditLog(
+                    decision_id=decision_acad.id,
+                    club_id=club_id,
+                    actor_id=user_id,
+                    action="gm_execute",
+                    previous_status=None,
+                    new_status="executed",
+                    decision_note=decision_acad.decision_note,
+                    snapshot_json={"payload": decision_acad.payload_json, "outcome": decision_acad.outcome_text},
+                )
+            )
             executed_actions.append(
                 {
                     "type": "academy_recruitment",
@@ -991,7 +1019,9 @@ def resolve_gm_proposal(
                     check_funds=True,
                 )
             except ledger.LedgerError as exc:
-                raise DelegationError(f"Approval was not executed: {exc}", 409, code="proposal_settlement_failed") from exc
+                raise DelegationError(
+                    f"Approval was not executed: {exc}", 409, code="proposal_settlement_failed"
+                ) from exc
             decision.outcome_text = "Academy scouting proposal approved and ledger settlement completed."
         else:
             raise DelegationError(

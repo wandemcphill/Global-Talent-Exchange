@@ -448,7 +448,7 @@ def hire_staff_from_market(
     club_acct = ledger.club_account(club_id)
     club_bal = ledger.balance(session, club_acct, ledger.GTEX)
     logger.info("Executing staff appointment for club %s; ledger balance: %s GTEX", club_id, club_bal)
-    if club_bal < Decimal(str(total_contract_fee)):
+    if club_bal < total_contract_fee:
         return {
             "status": "rejected",
             "success": False,
