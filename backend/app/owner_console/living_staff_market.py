@@ -305,10 +305,12 @@ def evaluate_staff_contract_offer(
     contract_years: int,
     marquee_premium: bool = False,
     past_sentiment: str | None = None,
+    showroom_wage_bonus_pct: float = 0.0,
 ) -> dict[str, Any]:
     """
     Authoritative AI evaluation of a club contract offer by a professional candidate.
-    Evaluates prestige threshold, salary competitiveness, ambition, and loyalty.
+    Evaluates prestige threshold, salary competitiveness, ambition, loyalty, and
+    Prestige Showroom operational perks (e.g., private jet charter bonus).
     """
     meta = dict(candidate_profile.metadata_json or {})
     min_prestige = _safe_int(meta.get("min_prestige"), 15)
@@ -319,6 +321,8 @@ def evaluate_staff_contract_offer(
 
     # Loyal candidates value multi-year contract stability (3+ years)
     loyalty_stability_bonus = 0.05 if (contract_years >= 3 and loyalty >= 14) else 0.0
+    showroom_bonus_ratio = max(0.0, float(showroom_wage_bonus_pct or 0.0) / 100.0)
+    prestige_perk_offset = 4 if showroom_wage_bonus_pct >= 6.0 else (2 if showroom_wage_bonus_pct >= 3.0 else 0)
 
     # 1. Strained prior relationship check
     if past_sentiment == "hostile":
@@ -330,10 +334,10 @@ def evaluate_staff_contract_offer(
         }
 
     # 2. Club Prestige Check
-    prestige_gap = min_prestige - club_prestige
+    prestige_gap = min_prestige - (club_prestige + prestige_perk_offset)
     if prestige_gap > 0 and not marquee_premium:
         # Candidate requires higher prestige unless compensated with a wage premium
-        wage_ratio = offered_salary_gtex / max(1, expected_salary)
+        wage_ratio = (offered_salary_gtex / max(1, expected_salary)) + showroom_bonus_ratio
         if wage_ratio < 1.4:
             return {
                 "accepted": False,
@@ -344,7 +348,7 @@ def evaluate_staff_contract_offer(
             }
 
     # 3. Wage Competitiveness Check
-    wage_ratio = (offered_salary_gtex / max(1, expected_salary)) + loyalty_stability_bonus
+    wage_ratio = (offered_salary_gtex / max(1, expected_salary)) + loyalty_stability_bonus + showroom_bonus_ratio
     if wage_ratio < 0.75:
         return {
             "accepted": False,
@@ -381,6 +385,7 @@ def evaluate_staff_contract_offer(
         "message": f"{name} has accepted the offer and agreed terms as your new {candidate_profile.staff_type}!",
         "agreed_salary_gtex": offered_salary_gtex,
         "contract_years": contract_years,
+        "showroom_wage_bonus_pct": round(float(showroom_wage_bonus_pct or 0.0), 1),
     }
 
 
@@ -403,7 +408,7 @@ def hire_staff_from_market(
     - Updates ClubStaffProfile with employment_status='employed' and appends career history.
     - Settles upfront contract fees via club ledger.
     """
-    from app.owner_console import service
+    from app.owner_console import living_cinema_showroom, service
 
     state = service.require_state(session, club_id, user_id)
     profile = session.get(ClubStaffProfile, profile_id)
@@ -417,6 +422,8 @@ def hire_staff_from_market(
 
     meta = dict(profile.metadata_json or {})
     past_sentiment = meta.get("previous_relationships", {}).get(club_id, {}).get("sentiment")
+    perks = living_cinema_showroom.compute_club_showroom_perks(session, club_id)
+    showroom_bonus_pct = float(perks.get("recruitment_wage_bonus_pct") or 0.0)
 
     # Evaluate AI decision
     evaluation = evaluate_staff_contract_offer(
@@ -426,6 +433,7 @@ def hire_staff_from_market(
         contract_years=years,
         marquee_premium=marquee_wage_premium,
         past_sentiment=past_sentiment,
+        showroom_wage_bonus_pct=showroom_bonus_pct,
     )
 
     if not evaluation["accepted"]:
@@ -793,4 +801,311 @@ def get_candidate_career_dossier(
         "club_prestige": state.prestige,
         "interest_preview": evaluation["outcome"],
         "interest_message": evaluation["message"],
+    }
+
+
+def evaluate_external_poaching_approach(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    *,
+    role: str = ROLE_FIRST_TEAM_MANAGER,
+    rival_club_name: str = "Continental Sporting FC",
+) -> dict[str, Any]:
+    """
+    Simulates a rival club poaching approach for an employed high-performing or low-loyalty
+    staff member, presenting the Owner with a Retention vs. Buyout Release negotiation.
+    """
+    from app.owner_console import living_club_world, service
+    from app.owner_console.models import OwnerClubEvent, OwnerClubRelationship
+
+    state = service.require_state(session, club_id, user_id)
+    target_role = normalise_staff_role(role)
+    roster = living_club_world.resolve_club_staff_roster(state)
+    slot = roster.get(target_role)
+    if not slot or not slot.get("is_appointed"):
+        raise service.OwnerError("role_vacant", 400, f"Cannot evaluate poaching approach: {target_role} is vacant.")
+
+    staff_name = str(slot.get("name") or "Appointed Executive")
+    role_label = ROLE_DISPLAY_LABELS.get(target_role, target_role.replace("_", " ").title())
+    current_salary = max(600, int(slot.get("salary_gtex") or (state.manager_json or {}).get("salary_gtex") or 1200))
+    rival_salary = int(round(current_salary * 1.35))
+    buyout_clause_gtex = max(1800, int(round(current_salary * 2.5)))
+
+    rel = session.scalar(
+        select(OwnerClubRelationship).where(
+            OwnerClubRelationship.club_id == club_id,
+            OwnerClubRelationship.participant_b_id == target_role,
+        )
+    )
+    loyalty_val = int(rel.loyalty if rel else 58)
+    trust_val = int(rel.trust if rel else 60)
+
+    ev = OwnerClubEvent(
+        club_id=club_id,
+        category="staff_market",
+        event_type="external_staff_poaching_approach",
+        severity="high",
+        status="open",
+        source_type="rival_club_poaching",
+        source_id=f"{target_role}:{state.world_day or 1}",
+        title=f"Rival Poaching Approach: {rival_club_name} Target {staff_name}",
+        description=(
+            f"{rival_club_name} have formally approached {staff_name} ({role_label}) with a "
+            f"{rival_salary:,} GTEX/yr contract and a {buyout_clause_gtex:,} GTEX buyout clause offer."
+        ),
+        participants_json=[
+            {"role": target_role, "name": staff_name, "loyalty": loyalty_val, "trust": trust_val},
+            {"role": "rival_club", "name": rival_club_name},
+        ],
+        world_day=state.world_day or 1,
+        actions_json=[
+            {
+                "choice": "match_rival_offer",
+                "label": f"Match Wage ({rival_salary:,} GTEX/yr) & Pay Loyalty Bonus",
+            },
+            {
+                "choice": "promise_facility_upgrade",
+                "label": "Reaffirm Sporting Project & Facility Investment",
+            },
+            {
+                "choice": "accept_buyout_release",
+                "label": f"Accept {buyout_clause_gtex:,} GTEX Buyout & Release to {rival_club_name}",
+            },
+        ],
+        consequences_json={
+            "role": target_role,
+            "role_label": role_label,
+            "staff_name": staff_name,
+            "rival_club_name": rival_club_name,
+            "current_salary_gtex": current_salary,
+            "rival_offered_salary_gtex": rival_salary,
+            "buyout_clause_gtex": buyout_clause_gtex,
+            "loyalty_before": loyalty_val,
+            "trust_before": trust_val,
+        },
+    )
+    session.add(ev)
+    session.flush()
+
+    return {
+        "event_id": ev.id,
+        "club_id": club_id,
+        "status": ev.status,
+        "role": target_role,
+        "role_label": role_label,
+        "staff_name": staff_name,
+        "rival_club_name": rival_club_name,
+        "current_salary_gtex": current_salary,
+        "rival_offered_salary_gtex": rival_salary,
+        "buyout_clause_gtex": buyout_clause_gtex,
+        "options": ev.actions_json,
+    }
+
+
+def resolve_external_poaching_approach(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    *,
+    event_id: str,
+    choice: str,
+) -> dict[str, Any]:
+    """
+    Resolves an external rival poaching approach:
+    - match_rival_offer: Debits retention loyalty bonus, upgrades salary, boosts loyalty/trust.
+    - promise_facility_upgrade: Retains staff via project alignment (requires trust >= 35).
+    - accept_buyout_release: Credits buyout_clause_gtex to club treasury, releases staff to rival club,
+      vacates the local role, and preserves career history.
+    """
+    from decimal import Decimal
+    from sqlalchemy.orm.attributes import flag_modified
+    from app.owner_console import living_club_world, service
+    from app.owner_console.models import OwnerClubEvent
+
+    state = service.require_state(session, club_id, user_id)
+    ev = session.get(OwnerClubEvent, event_id)
+    if ev is None or ev.club_id != club_id or ev.event_type != "external_staff_poaching_approach":
+        raise service.OwnerError("poaching_event_not_found", 404, f"Poaching event {event_id} not found.")
+
+    if ev.status == "resolved":
+        return {
+            "event_id": ev.id,
+            "status": "resolved",
+            "already_resolved": True,
+            "resolution": ev.consequences_json,
+        }
+
+    valid_choices = {"match_rival_offer", "promise_facility_upgrade", "accept_buyout_release"}
+    if choice not in valid_choices:
+        raise service.OwnerError("invalid_poaching_choice", 400, f"Invalid choice '{choice}'.")
+
+    meta = dict(ev.consequences_json or {})
+    target_role = str(meta.get("role") or ROLE_FIRST_TEAM_MANAGER)
+    staff_name = str(meta.get("staff_name") or "Appointed Executive")
+    rival_club = str(meta.get("rival_club_name") or "Continental Sporting FC")
+    current_salary = int(meta.get("current_salary_gtex") or 1000)
+    rival_salary = int(meta.get("rival_offered_salary_gtex") or int(current_salary * 1.35))
+    buyout_gtex = int(meta.get("buyout_clause_gtex") or 2500)
+
+    facs = dict(state.facilities_json or {})
+    exec_staff = dict(facs.get("_executive_staff") or {})
+
+    if choice == "match_rival_offer":
+        retention_bonus = max(250, int(round(current_salary * 0.4)))
+        ledger.record(
+            session,
+            event_type="staff_retention_bonus",
+            source=ledger.club_account(club_id),
+            destination=ledger.WORLD_CLUBS,
+            currency=ledger.GTEX,
+            gross=Decimal(str(retention_bonus)),
+            club_id=club_id,
+            user_id=user_id,
+            related_type="staff_poaching",
+            related_id=ev.id,
+            memo=f"Retention contract bonus for {staff_name} to fend off {rival_club}",
+            check_funds=True,
+        )
+        if target_role in exec_staff and isinstance(exec_staff[target_role], dict):
+            exec_staff[target_role]["salary_gtex"] = rival_salary
+            facs["_executive_staff"] = exec_staff
+            state.facilities_json = facs
+            flag_modified(state, "facilities_json")
+        if target_role == ROLE_FIRST_TEAM_MANAGER and isinstance(state.manager_json, dict):
+            mgr = dict(state.manager_json)
+            mgr["salary_gtex"] = rival_salary
+            state.manager_json = mgr
+            flag_modified(state, "manager_json")
+
+        rel = living_club_world.apply_relationship_delta(
+            session,
+            club_id=club_id,
+            part_a_type="owner",
+            part_a_id=f"owner:{user_id}",
+            part_a_name="Club Owner",
+            part_b_type="staff",
+            part_b_id=target_role,
+            part_b_name=staff_name,
+            delta_loyalty=10,
+            delta_trust=8,
+            delta_tension=-6,
+            reason=f"Matched rival offer from {rival_club} ({rival_salary:,} GTEX/yr)",
+        )
+        outcome_payload = {
+            "choice": choice,
+            "retained": True,
+            "new_salary_gtex": rival_salary,
+            "retention_bonus_paid_gtex": retention_bonus,
+            "buyout_credited_gtex": 0,
+            "loyalty_after": rel.loyalty,
+            "trust_after": rel.trust,
+        }
+
+    elif choice == "promise_facility_upgrade":
+        rel = living_club_world.apply_relationship_delta(
+            session,
+            club_id=club_id,
+            part_a_type="owner",
+            part_a_id=f"owner:{user_id}",
+            part_a_name="Club Owner",
+            part_b_type="staff",
+            part_b_id=target_role,
+            part_b_name=staff_name,
+            delta_alignment=8,
+            delta_influence=6,
+            delta_respect=5,
+            delta_tension=-4,
+            reason=f"Convinced {staff_name} to reject {rival_club} via sporting project commitment",
+        )
+        outcome_payload = {
+            "choice": choice,
+            "retained": True,
+            "new_salary_gtex": current_salary,
+            "retention_bonus_paid_gtex": 0,
+            "buyout_credited_gtex": 0,
+            "alignment_after": rel.alignment,
+            "influence_after": rel.influence,
+        }
+
+    else:
+        # accept_buyout_release -> Credit buyout clause to club treasury and vacate slot
+        ledger.record(
+            session,
+            event_type="staff_buyout_compensation",
+            source=ledger.WORLD_CLUBS,
+            destination=ledger.club_account(club_id),
+            currency=ledger.GTEX,
+            gross=Decimal(str(buyout_gtex)),
+            club_id=club_id,
+            user_id=user_id,
+            related_type="staff_poaching",
+            related_id=ev.id,
+            memo=f"Buyout clause compensation from {rival_club} for {staff_name}",
+            check_funds=False,
+        )
+
+        # Terminate active assignment/contract at this club
+        active_assign = session.scalar(
+            select(ClubStaffAssignment).where(
+                ClubStaffAssignment.club_id == club_id,
+                ClubStaffAssignment.role_key == target_role,
+                ClubStaffAssignment.active.is_(True),
+            )
+        )
+        if active_assign:
+            active_assign.active = False
+            contract = session.get(ClubStaffContract, active_assign.staff_contract_id)
+            if contract:
+                contract.status = "terminated"
+                contract.terminated_at = datetime.now(timezone.utc)
+                profile = session.get(ClubStaffProfile, contract.staff_profile_id)
+                if profile:
+                    p_meta = dict(profile.metadata_json or {})
+                    hist = list(p_meta.get("career_history") or [])
+                    hist.append(
+                        {
+                            "event": "poached_via_buyout",
+                            "from_club_id": club_id,
+                            "to_club_name": rival_club,
+                            "role": target_role,
+                            "buyout_clause_gtex": buyout_gtex,
+                            "world_day": state.world_day or 1,
+                        }
+                    )
+                    p_meta["career_history"] = hist
+                    p_meta["employment_status"] = "employed"
+                    p_meta["current_club_id"] = f"rival:{rival_club.lower().replace(' ', '_')}"
+                    profile.metadata_json = p_meta
+                    flag_modified(profile, "metadata_json")
+
+        exec_staff.pop(target_role, None)
+        facs["_executive_staff"] = exec_staff
+        state.facilities_json = facs
+        flag_modified(state, "facilities_json")
+        if target_role == ROLE_FIRST_TEAM_MANAGER:
+            state.manager_json = {"name": "", "is_vacant": True, "status": "vacant", "is_appointed": False}
+            flag_modified(state, "manager_json")
+
+        outcome_payload = {
+            "choice": choice,
+            "retained": False,
+            "released_to": rival_club,
+            "role_vacated": target_role,
+            "buyout_credited_gtex": buyout_gtex,
+            "treasury_balance_gtex": float(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)),
+        }
+
+    meta.update(outcome_payload)
+    ev.consequences_json = meta
+    ev.status = "resolved"
+    ev.resolved_at = datetime.now(timezone.utc)
+    flag_modified(ev, "consequences_json")
+    session.flush()
+
+    return {
+        "event_id": ev.id,
+        "status": "resolved",
+        "already_resolved": False,
+        "resolution": outcome_payload,
     }

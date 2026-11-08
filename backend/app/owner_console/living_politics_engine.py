@@ -104,6 +104,11 @@ MEDIA_OUTLETS: list[dict[str, str]] = [
     {"name": "Global Talent Insider", "tier": "tier_2", "bias": "transfer_market"},
 ]
 
+
+def _clamp(v: int, lo: int = 0, hi: int = 100) -> int:
+    return max(lo, min(hi, v))
+
+
 # ==============================================================================
 # 2. Politics Overview & Data Resolution
 # ==============================================================================
@@ -715,4 +720,179 @@ def dispatch_owner_media_statement(
         "effects": statement_effects,
         "board_confidence": politics.get("board_confidence"),
         "supporter_confidence": politics.get("supporter_confidence"),
+    }
+
+
+def process_matchday_consequence_bridge(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    *,
+    match_outcome: str = "win",
+    rushed_player_id: str | None = None,
+    wonderkid_scorer_id: str | None = None,
+    is_away_fixture: bool = False,
+) -> dict[str, Any]:
+    """
+    Live Matchday-to-Boardroom Consequence Bridge:
+    - If a rushed injured starter suffers a matchday recurrence, triggers an immediate
+      Boardroom/Medical accountability event, extends injury days, and penalizes confidence.
+    - If a promoted academy wonderkid scores/stars on matchday, boosts HOYD respect/influence/alignment,
+      raises fan sentiment, and automatically triggers a verified 3D 'academy_wonderkid' Cinema Spotlight.
+    - Applies Prestige Showroom travel & coach recovery perks on away fixtures.
+    """
+    from app.owner_console import living_cinema_showroom
+
+    state = session.get(OwnerClubState, club_id)
+    if state is None:
+        raise ValueError(f"Club {club_id} not found")
+    politics = get_or_initialize_club_politics(session, club_id, user_id)
+    current_day = int(state.world_day or 1)
+    bridge_actions: list[dict[str, Any]] = []
+    wonderkid_cinematic: dict[str, Any] | None = None
+
+    # 1. Rushed Starter Recurrence Fallout
+    if rushed_player_id:
+        rushed_player = session.get(OwnerSquadPlayer, rushed_player_id)
+        if rushed_player is None or rushed_player.club_id != club_id:
+            raise ValueError(f"Rushed player {rushed_player_id} not found in club {club_id}")
+
+        rushed_player.injured_days = max(10, int(rushed_player.injured_days or 0) + 10)
+        rushed_player.morale = max(25, int(rushed_player.morale or 65) - 10)
+        politics["board_confidence"] = _clamp(int(politics.get("board_confidence", 68)) - 6)
+        politics["supporter_confidence"] = _clamp(int(politics.get("supporter_confidence", 65)) - 5)
+
+        living_club_world.apply_relationship_delta(
+            session,
+            club_id=club_id,
+            part_a_type="owner",
+            part_a_id=f"owner:{user_id}",
+            part_a_name="Club Owner",
+            part_b_type="staff",
+            part_b_id="medical_director",
+            part_b_name="Dr. Chidi Obi",
+            delta_trust=-7,
+            delta_respect=-5,
+            delta_tension=9,
+            reason=f"Matchday injury recurrence for rushed starter {rushed_player.name}",
+        )
+
+        fallout_ev = OwnerClubEvent(
+            club_id=club_id,
+            category="politics",
+            event_type="matchday_medical_recurrence_fallout",
+            severity="critical",
+            status="open",
+            source_type="matchday_bridge",
+            source_id=f"recurrence:{rushed_player.id}:day:{current_day}",
+            title=f"Medical Fallout: {rushed_player.name} Suffers Matchday Recurrence",
+            description=(
+                f"Overriding medical protocol backfired: {rushed_player.name} aggravated their injury on matchday "
+                f"and is sidelined for {rushed_player.injured_days} days. Dr. Chidi Obi has demanded a boardroom review."
+            ),
+            participants_json=[
+                {"role": "medical_director", "name": "Dr. Chidi Obi"},
+                {"role": "player", "id": rushed_player.id, "name": rushed_player.name},
+            ],
+            world_day=current_day,
+            actions_json=[
+                {"choice": "issue_public_apology", "label": "Acknowledge Medical Protocol & Fund Specialist Rehab"},
+            ],
+            consequences_json={
+                "player_id": rushed_player.id,
+                "player_name": rushed_player.name,
+                "updated_injured_days": rushed_player.injured_days,
+                "board_confidence_delta": -6,
+                "supporter_confidence_delta": -5,
+            },
+        )
+        session.add(fallout_ev)
+        bridge_actions.append(
+            {
+                "type": "medical_recurrence_fallout",
+                "player_id": rushed_player.id,
+                "player_name": rushed_player.name,
+                "injured_days": rushed_player.injured_days,
+            }
+        )
+
+    # 2. Academy Wonderkid Matchday Breakthrough & 3D Spotlight
+    if wonderkid_scorer_id:
+        wonderkid = session.get(OwnerSquadPlayer, wonderkid_scorer_id)
+        if wonderkid is None or wonderkid.club_id != club_id:
+            raise ValueError(f"Wonderkid player {wonderkid_scorer_id} not found in club {club_id}")
+
+        wonderkid.morale = min(99, int(wonderkid.morale or 72) + 8)
+        politics["supporter_confidence"] = _clamp(int(politics.get("supporter_confidence", 65)) + 5)
+        politics["board_confidence"] = _clamp(int(politics.get("board_confidence", 68)) + 4)
+
+        hoyd_rel = living_club_world.apply_relationship_delta(
+            session,
+            club_id=club_id,
+            part_a_type="owner",
+            part_a_id=f"owner:{user_id}",
+            part_a_name="Club Owner",
+            part_b_type="staff",
+            part_b_id="head_of_youth_development",
+            part_b_name="Kunle Adeyemi",
+            delta_respect=8,
+            delta_influence=6,
+            delta_alignment=7,
+            delta_tension=-4,
+            reason=f"Academy graduate {wonderkid.name} delivered matchday breakthrough performance",
+        )
+
+        cin_res = living_cinema_showroom.trigger_verified_club_cinematic(
+            session,
+            user_id,
+            club_id,
+            event_type="academy_wonderkid",
+            subject_id=wonderkid.id,
+            custom_headline=f"Matchday Wonderkid Spotlight: {wonderkid.name} Shines",
+        )
+        wonderkid_cinematic = cin_res["cinematic_event"]
+        bridge_actions.append(
+            {
+                "type": "wonderkid_matchday_breakthrough",
+                "player_id": wonderkid.id,
+                "player_name": wonderkid.name,
+                "hoyd_respect": hoyd_rel.respect,
+                "hoyd_influence": hoyd_rel.influence,
+                "cinematic_event_id": wonderkid_cinematic["event_id"],
+            }
+        )
+
+    # 3. Away Fixture Travel & Showroom Operational Perks
+    perks = living_cinema_showroom.compute_club_showroom_perks(session, club_id)
+    recovery_days_saved = int(perks.get("away_recovery_boost_days") or 0) if is_away_fixture else 0
+    morale_floor_bonus = int(perks.get("squad_morale_floor_bonus") or 0)
+    if is_away_fixture and (recovery_days_saved > 0 or morale_floor_bonus > 0):
+        squad = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
+        for p in squad:
+            if p.id != rushed_player_id and int(p.injured_days or 0) > 1 and recovery_days_saved > 0:
+                p.injured_days = max(1, int(p.injured_days) - recovery_days_saved)
+            if morale_floor_bonus > 0:
+                p.morale = min(99, int(p.morale or 65) + morale_floor_bonus)
+        politics["team_spirit"] = min(100, int(politics.get("team_spirit", 70)) + morale_floor_bonus)
+        bridge_actions.append(
+            {
+                "type": "showroom_travel_perks_applied",
+                "away_recovery_boost_days": recovery_days_saved,
+                "squad_morale_floor_bonus": morale_floor_bonus,
+            }
+        )
+
+    state.facilities_json["_club_politics"] = politics
+    flag_modified(state, "facilities_json")
+    session.flush()
+
+    return {
+        "success": True,
+        "club_id": club_id,
+        "match_outcome": match_outcome,
+        "board_confidence": politics.get("board_confidence"),
+        "supporter_confidence": politics.get("supporter_confidence"),
+        "team_spirit": politics.get("team_spirit", 70),
+        "bridge_actions": bridge_actions,
+        "wonderkid_cinematic": wonderkid_cinematic,
     }

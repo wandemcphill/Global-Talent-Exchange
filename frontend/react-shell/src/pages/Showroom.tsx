@@ -65,6 +65,7 @@ export function Showroom() {
   const [busyItem, setBusyItem] = useState<string | null>(null);
   const [purchaseReceipt, setPurchaseReceipt] = useState<any | null>(null);
   const [giftReceipt, setGiftReceipt] = useState<any | null>(null);
+  const [claimingYield, setClaimingYield] = useState<boolean>(false);
 
   const purchaseIntentKeys = useRef(new Map<string, string>());
   const giftIntentKeys = useRef(new Map<string, string>());
@@ -149,6 +150,29 @@ export function Showroom() {
     }
     return catalog.filter((it: any) => it.category === selectedCategory);
   }, [catalog, ownedAssets, selectedCategory]);
+
+  const operationalPerks = (showroomData as any)?.operational_perks || {};
+  const wageBonusPct = Number(operationalPerks?.wage_recruitment_bonus_pct || 0);
+  const recoveryBonusDays = Number(operationalPerks?.away_recovery_days_bonus || 0);
+  const moraleFloor = Number(operationalPerks?.squad_morale_floor || 0);
+  const commercialRate = Number(operationalPerks?.matchday_commercial_yield_rate || 0);
+  const unclaimedYield = Number(operationalPerks?.unclaimed_commercial_yield_gtex || 0);
+
+  const handleClaimYield = async () => {
+    if (!clubId || claimingYield) return;
+    setClaimingYield(true);
+    try {
+      const res = await api.post(`/owner/clubs/${clubId}/living-world/cinema-showroom/claim-yield`);
+      toast.success(
+        `Claimed ${Number(res.data.claimed_gtex || 0).toLocaleString()} GTEX in showroom commercial dividend!`
+      );
+      refresh();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || "No commercial dividend available to claim yet.");
+    } finally {
+      setClaimingYield(false);
+    }
+  };
 
   const handlePurchase = async (item: any) => {
     if (!clubId) return;
@@ -405,6 +429,61 @@ export function Showroom() {
               Supporter-driven digital celebrations (chants, ceremonies, reveals) using FanCoin during match broadcasts.
               Community fan gifts do not debit club treasury cash or alter internal boardroom contracts.
             </p>
+          </div>
+        </div>
+
+        {/* Living World Next-Gen: Showroom Operational Perks & Commercial Dividend */}
+        <div
+          data-testid="showroom-operational-perks-banner"
+          className="rounded-xl border border-amber-500/30 bg-gradient-to-r from-slate-950 via-amber-950/20 to-slate-950 p-4 shadow-xl"
+        >
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-300">
+                  Living World Perk Engine
+                </span>
+                <span className="text-xs font-bold text-slate-300">
+                  Prestige Fleet & Asset Operational Yield
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-slate-200">
+                <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-slate-900/80 px-2.5 py-1">
+                  <span className="text-amber-400 font-bold">Marquee Wage Bonus:</span>
+                  <span className="font-mono font-black text-white">+{wageBonusPct}%</span>
+                </div>
+                <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-slate-900/80 px-2.5 py-1">
+                  <span className="text-emerald-400 font-bold">Away Recovery:</span>
+                  <span className="font-mono font-black text-white">-{recoveryBonusDays} day</span>
+                </div>
+                <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-slate-900/80 px-2.5 py-1">
+                  <span className="text-sky-400 font-bold">Squad Morale Floor:</span>
+                  <span className="font-mono font-black text-white">+{moraleFloor}</span>
+                </div>
+                <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-slate-900/80 px-2.5 py-1">
+                  <span className="text-purple-400 font-bold">Commercial Yield:</span>
+                  <span className="font-mono font-black text-white">{commercialRate.toLocaleString()} GTEX/match</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="text-right">
+                <div className="text-[10px] uppercase font-bold text-slate-400">Unclaimed Dividend</div>
+                <div className="font-mono text-sm font-black text-amber-300">
+                  {unclaimedYield.toLocaleString()} GTEX
+                </div>
+              </div>
+              <button
+                type="button"
+                data-testid="claim-showroom-dividend-btn"
+                disabled={claimingYield || unclaimedYield <= 0}
+                onClick={handleClaimYield}
+                className="rounded-xl border border-amber-400/40 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2 text-xs font-black text-slate-950 transition-colors shadow-lg shadow-amber-500/20"
+              >
+                {claimingYield ? "Claiming..." : "Claim Dividend"}
+              </button>
+            </div>
           </div>
         </div>
 
