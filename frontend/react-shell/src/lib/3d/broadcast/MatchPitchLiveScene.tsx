@@ -65,6 +65,15 @@ import {
   type CommentaryCue,
   type SpectatorReactionItem,
 } from "./SpectatorImmersionLayer";
+import { BroadcastPostProcessingPipeline } from "./BroadcastPostProcessingPipeline";
+import { PbrTurfShaderMaterial } from "./PbrTurfShaderMaterial";
+import { AssetStreamingCache } from "./AssetStreamingCache";
+import { CrowdChoreographyAndImpactSystem } from "./CrowdChoreographyAndImpactSystem";
+import { WebGpuCapabilityBridge } from "./WebGpuCapabilityBridge";
+import { StadiumEnvironmentLighting } from "./StadiumEnvironmentLighting";
+import { DynamicShadowRig } from "./DynamicShadowRig";
+import { PlayerImpostorLodSystem, type ImpostorCandidate } from "./PlayerImpostorLodSystem";
+import { AdaptiveQualityGovernor, type AdaptiveQualityDecision } from "./AdaptiveQualityGovernor";
 import {
   type StadiumLedCampaign,
   type StadiumAdImpressionEvent,
@@ -144,6 +153,10 @@ export interface MatchPitchLiveSceneProps {
   hapticsEnabled?: boolean;
   /** Callback when user toggles haptics */
   onHapticsChange?: (enabled: boolean) => void;
+  /** React WebGL Upgrades: Toggle bloom & cinematic post-processing */
+  bloomEnabled?: boolean;
+  /** Callback when user toggles bloom post-processing */
+  onToggleBloom?: () => void;
   /** Additional container CSS class */
   className?: string;
   /** Test identifier */
@@ -182,6 +195,8 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   onReplayStudioAngleChange,
   hapticsEnabled: propHapticsEnabled = true,
   onHapticsChange,
+  bloomEnabled: propBloomEnabled = true,
+  onToggleBloom,
   className = "",
   testId = "match-pitch-live-scene",
 }) => {
@@ -197,6 +212,12 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   const turfDegradationRef = useRef<PitchTurfDegradationSystem | null>(null);
   const tifoAndJumbotronRef = useRef<StadiumTifoAndJumbotronSystem | null>(null);
   const immersionLayerRef = useRef<SpectatorImmersionLayer | null>(null);
+  const postProcessingRef = useRef<BroadcastPostProcessingPipeline | null>(null);
+  const pbrTurfRef = useRef<PbrTurfShaderMaterial | null>(null);
+  const crowdChoreographyRef = useRef<CrowdChoreographyAndImpactSystem | null>(null);
+  const webGpuBridgeRef = useRef<WebGpuCapabilityBridge | null>(null);
+  const qualityGovernorRef = useRef<AdaptiveQualityGovernor | null>(null);
+  const userLockedQualityRef = useRef<boolean>(false);
   const audioEngineRef = useRef<StadiumAudioEngine>(new StadiumAudioEngine({ initialMuted: true }));
   const [webglSupported, setWebglSupported] = useState<boolean>(true);
   const [contextLost, setContextLost] = useState<boolean>(false);
@@ -209,6 +230,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   const [arOverlayMode, setArOverlayModeState] = useState<BroadcastAROverlayMode>(propArOverlayMode);
   const [replayStudioAngle, setReplayStudioAngleState] = useState<ReplayStudioAngle>(propReplayStudioAngle);
   const [hapticsEnabled, setHapticsEnabledState] = useState<boolean>(propHapticsEnabled);
+  const [bloomEnabled, setBloomEnabledState] = useState<boolean>(propBloomEnabled);
   const [commentaryCue, setCommentaryCue] = useState<CommentaryCue | null>(null);
   const [spectatorReactions, setSpectatorReactions] = useState<readonly SpectatorReactionItem[]>([]);
   const [watchPartyCheerMeter, setWatchPartyCheerMeter] = useState<number>(15);
@@ -230,7 +252,13 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
 
   useEffect(() => {
     setQualityTierState(propQualityTier);
+    postProcessingRef.current?.setQualityTier(propQualityTier);
   }, [propQualityTier]);
+
+  useEffect(() => {
+    setBloomEnabledState(propBloomEnabled);
+    postProcessingRef.current?.setBloomEnabled(propBloomEnabled);
+  }, [propBloomEnabled]);
 
   useEffect(() => {
     setStadiumTierState(propStadiumTier);
@@ -263,6 +291,9 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
 
   const handleSelectQualityTier = useCallback(
     (tier: "high" | "medium" | "low") => {
+      // A manual choice overrides the adaptive quality governor
+      userLockedQualityRef.current = true;
+      qualityGovernorRef.current?.lock(tier);
       setQualityTierState(tier);
       onQualityTierChange?.(tier);
     },
@@ -317,6 +348,15 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       return next;
     });
   }, [onHapticsChange]);
+
+  const handleToggleBloom = useCallback(() => {
+    setBloomEnabledState((prev) => {
+      const next = !prev;
+      postProcessingRef.current?.setBloomEnabled(next);
+      onToggleBloom?.();
+      return next;
+    });
+  }, [onToggleBloom]);
 
   const handleSendReaction = useCallback((emoji: string) => {
     immersionLayerRef.current?.sendReaction(emoji, "Viewer");
@@ -638,6 +678,60 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     });
     immersionLayerRef.current = immersionLayer;
 
+    // -------------------------------------------------------------------------
+    // 3d. React WebGL 3D Upgrades: Post-Processing, PBR Turf, Crowd Choreo & WebGPU
+    // -------------------------------------------------------------------------
+    const postProcessing = new BroadcastPostProcessingPipeline(renderer, scene, camera, {
+      qualityTier,
+      bloomEnabled,
+    });
+    postProcessingRef.current = postProcessing;
+
+    const pbrTurf = new PbrTurfShaderMaterial({
+      moisture: weatherPresetRef.current === "rain" ? 0.75 : weatherPresetRef.current === "snow" ? 0.45 : 0.0,
+      wearFactor: 0.0,
+    });
+    pbrTurfRef.current = pbrTurf;
+
+    const crowdChoreography = new CrowdChoreographyAndImpactSystem();
+    crowdChoreographyRef.current = crowdChoreography;
+
+    const webGpuBridge = new WebGpuCapabilityBridge();
+    webGpuBridgeRef.current = webGpuBridge;
+
+    // PBR turf actually replaces the Lambert pitch surface
+    stadiumArena.applyPitchTurfMaterial(pbrTurf.material);
+
+    // Crowd choreography waves physically move the instanced supporters
+    stadiumArena.setExternalCrowdOffsetFn((x, z) => crowdChoreography.getCrowdSectionOffset(x, z));
+
+    // Image-based lighting, ball-following soft shadows, distant-player impostors
+    const stadiumEnvLighting = new StadiumEnvironmentLighting(renderer, scene, qualityTier);
+    const shadowRig = new DynamicShadowRig(renderer, keyLight, qualityTier);
+    const shadowsOn = shadowRig.getSummary().enabled;
+    const playerImpostors = new PlayerImpostorLodSystem(scene, qualityTier);
+    const impostorCandidatesScratch: ImpostorCandidate[] = [];
+
+    // Adaptive quality: hardware report caps the tier, frame times drive resolution + post-FX
+    const basePixelRatio = Math.min(window.devicePixelRatio || 1, qualityTier === "ultra" ? 1.5 : 1.0);
+    const qualityGovernor = new AdaptiveQualityGovernor(qualityTier);
+    if (userLockedQualityRef.current) qualityGovernor.lock(qualityTier);
+    qualityGovernorRef.current = qualityGovernor;
+    const applyQualityDecision = (decision: AdaptiveQualityDecision) => {
+      if (!decision.changed || !renderer) return;
+      renderer.setPixelRatio(basePixelRatio * decision.resolutionScale);
+      postProcessing.setQualityTier(decision.postFxTier);
+      playerImpostors.setQualityTier(decision.postFxTier);
+      const w = container.clientWidth || width;
+      const h = container.clientHeight || height;
+      renderer.setSize(w, h);
+      postProcessing.setSize(w, h);
+    };
+    webGpuBridge
+      .inspectRenderer(renderer)
+      .then((report) => applyQualityDecision(qualityGovernor.applyCapabilities(report)))
+      .catch(() => {});
+
     const adNet = stadiumArena.getAdvertisingNetwork();
     if (safeViewRef.current.monetization) {
       adNet.setMatchMonetization(safeViewRef.current.monetization);
@@ -740,6 +834,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       });
 
       playersGroup.add(rig.rootGroup);
+      rig.setShadowCasting(shadowsOn);
       playerRigs.set(playerId, rig);
       return rig;
     };
@@ -870,6 +965,13 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           tifoAndJumbotron: tifoAndJumbotron.getSummary(),
           immersionLayer: immersionLayer.getSummary(),
         }),
+        getUpgradesSummary: () => ({
+          postProcessing: postProcessing.getSummary(),
+          pbrTurf: pbrTurf.getSummary(),
+          assetCache: AssetStreamingCache.getInstance().getSummary(),
+          crowdChoreography: crowdChoreography.getSummary(),
+          webGpuBridge: webGpuBridge.getReport(),
+        }),
         resetTelemetry: () => {
           frameDeltaSamplesMs.length = 0;
           frameDeltaSumMs = 0;
@@ -915,6 +1017,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           const removed = frameDeltaSamplesMs.shift() || 0;
           frameDeltaSumMs -= removed;
         }
+        applyQualityDecision(qualityGovernor.recordFrame(rawDeltaMs, deltaSec));
       }
 
       // Advance live match timeline monotonically (never paused by replay)
@@ -1058,6 +1161,18 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
             playerName: scorer?.label,
             clock: `${Math.floor(hudState?.clock_minute ?? state.clock_minute)}'`,
           });
+
+          // React WebGL Upgrades: Camera trauma impact shake & stadium crowd waves
+          if (evType === "goal") {
+            crowdChoreography.triggerCameraTrauma(0.75);
+            crowdChoreography.triggerCrowdWave("celebration", 14);
+          } else if (evType === "miss" || evType === "shot") {
+            crowdChoreography.triggerCameraTrauma(0.40);
+          } else if (evType === "foul" || evType === "red_card") {
+            crowdChoreography.triggerCameraTrauma(0.32);
+          } else if (evType === "attack") {
+            crowdChoreography.triggerCrowdWave("la_ola", 10);
+          }
         }
 
         // Update Camera first so LOD distance checks use the exact current camera pose
@@ -1074,7 +1189,12 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           );
         }
 
-        camera.position.set(pose.position[0], pose.position[1], pose.position[2]);
+        const crowdUpdate = crowdChoreography.update(deltaSec);
+        camera.position.set(
+          pose.position[0] + crowdUpdate.cameraShakeOffset[0],
+          pose.position[1] + crowdUpdate.cameraShakeOffset[1],
+          pose.position[2] + crowdUpdate.cameraShakeOffset[2]
+        );
         camera.lookAt(pose.target[0], pose.target[1], pose.target[2]);
         camera.fov = pose.fov;
         camera.updateProjectionMatrix();
@@ -1169,6 +1289,11 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         setSpectatorReactions(immersionLayer.getRecentReactions());
         setWatchPartyCheerMeter(immersionLayer.getSummary().cheerMeter);
 
+        // React WebGL Upgrades: Update PBR turf anisotropic sheen & moisture
+        pbrTurf.setMoisture(weatherPresetRef.current === "rain" ? 0.8 : weatherPresetRef.current === "snow" ? 0.45 : 0.0);
+        pbrTurf.setWearFactor(hudState?.clock_minute ? Math.min(1.0, hudState.clock_minute / 90.0) : 0);
+        pbrTurf.update(deltaSec, keyLight.position);
+
         // Update ball drop shadow
         ballShadowMesh.position.set(bx, 0.03, bz);
         const shadowScale = Math.max(0.4, 1.0 - by * 0.15);
@@ -1228,10 +1353,37 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
             rig.rootGroup.visible = false;
           }
         });
+
+        // Swap distant active players to the single-draw-call impostor batch
+        impostorCandidatesScratch.length = 0;
+        playerRigs.forEach((rig, id) => {
+          if (!activePlayerIdsScratch.has(id)) return;
+          const kit = rig.options;
+          impostorCandidatesScratch.push({
+            id,
+            rootObject: rig.rootGroup,
+            colorHex: kit.isGoalkeeper ? kit.goalkeeperColor : kit.primaryColor,
+          });
+        });
+        playerImpostors.update(camera, impostorCandidatesScratch);
+
+        // Dynamic shadows follow the ball; IBL reflections strengthen on a wet pitch
+        shadowRig.update(deltaSec, [bx, by, bz]);
+        stadiumEnvLighting.setFloodlightBoost(weatherPresetRef.current === "rain" ? 1.4 : 1.0);
+
+        // Replays get a shallow depth of field focused on the ball; live play stays sharp
+        const replayActiveNow = replayCursorTimeRef.current !== null;
+        const ballDist = Math.hypot(
+          camera.position.x - bx,
+          camera.position.y - by,
+          camera.position.z - bz
+        );
+        postProcessing.setDepthOfField(replayActiveNow, ballDist, replayActiveNow ? 10 : 18);
+        postProcessing.setMotionBlur(true, replayActiveNow ? 1.0 : 0.5);
       }
 
       if (renderer) {
-        renderer.render(scene, camera);
+        postProcessing.render(deltaSec);
 
         if (typeof window !== "undefined" && frameDeltaSamplesMs.length > 0) {
           telemetryTick++;
@@ -1306,6 +1458,15 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
               turfDegradation: turfDegradation.getSummary(),
               tifoAndJumbotron: tifoAndJumbotron.getSummary(),
               immersionLayer: immersionLayer.getSummary(),
+              postProcessing: postProcessing.getSummary(),
+              pbrTurf: pbrTurf.getSummary(),
+              crowdChoreography: crowdChoreography.getSummary(),
+              webGpuReport: webGpuBridge.getReport(),
+              environmentLighting: stadiumEnvLighting.getSummary(),
+              dynamicShadows: shadowRig.getSummary(),
+              playerImpostors: playerImpostors.getSummary(),
+              adaptiveQuality: qualityGovernor.getSummary(),
+              assetCache: AssetStreamingCache.getInstance().getSummary(),
               adRotationCount: adNet.getRotationCount(),
               adImpressionCount: adNet.getImpressionHistory().length,
               activeAdCampaigns: adNet.getActiveCampaigns().map((c) => ({
@@ -1331,6 +1492,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         camera.aspect = w / h;
         camera.updateProjectionMatrix();
         renderer.setSize(w, h);
+        postProcessing.setSize(w, h);
       }
     };
     window.addEventListener("resize", handleResize);
@@ -1363,6 +1525,10 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       turfDegradationRef.current = null;
       tifoAndJumbotronRef.current = null;
       immersionLayerRef.current = null;
+      postProcessingRef.current = null;
+      pbrTurfRef.current = null;
+      crowdChoreographyRef.current = null;
+      webGpuBridgeRef.current = null;
       playerRigs.forEach((rig) => rig.dispose());
       playerRigs.clear();
       scene.clear();
@@ -1377,6 +1543,13 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       turfDegradation.dispose();
       tifoAndJumbotron.dispose();
       immersionLayer.dispose();
+      postProcessing.dispose();
+      pbrTurf.dispose();
+      crowdChoreography.dispose();
+      stadiumArena.setExternalCrowdOffsetFn(null);
+      stadiumEnvLighting.dispose();
+      playerImpostors.dispose();
+      qualityGovernorRef.current = null;
       ballGeo.dispose();
       ballMat.dispose();
       shadowGeo.dispose();
@@ -1532,6 +1705,8 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           hapticsEnabled={hapticsEnabled}
           onToggleHaptics={handleToggleHaptics}
           onSendReaction={handleSendReaction}
+          bloomEnabled={bloomEnabled}
+          onToggleBloom={handleToggleBloom}
           isTheatreMode={isTheatreMode}
           onToggleTheatreMode={handleToggleTheatre}
           minimalHud={minimalHud}
@@ -1602,6 +1777,8 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           hapticsEnabled={hapticsEnabled}
           onToggleHaptics={handleToggleHaptics}
           onSendReaction={handleSendReaction}
+          bloomEnabled={bloomEnabled}
+          onToggleBloom={handleToggleBloom}
           isTheatreMode={isTheatreMode}
           onToggleTheatreMode={handleToggleTheatre}
           minimalHud={minimalHud}
