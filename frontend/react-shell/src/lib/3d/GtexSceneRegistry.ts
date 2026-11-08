@@ -8,6 +8,7 @@ import type React from "react";
 import {
   DeviceQualityTier,
   FallbackMode,
+  GtexCustomSceneRenderer,
   GtexSceneDescriptor,
   QualityProfile,
   SceneCategory,
@@ -405,16 +406,16 @@ const INITIAL_SCENE_CATALOG: GtexSceneDescriptor[] = [
 class SceneRegistryStore {
   private scenes = new Map<string, GtexSceneDescriptor>();
   private qualityOverride: DeviceQualityTier | null = null;
-  private customRenderers = new Map<string, React.ComponentType<any>>();
+  private customRenderers = new Map<string, GtexCustomSceneRenderer>();
 
   /** Register a custom component renderer for a scene ID (decoupling viewports from concrete scenes) */
-  public registerRenderer(sceneId: string, renderer: React.ComponentType<any>): void {
-    this.customRenderers.set(sceneId, renderer);
+  public registerRenderer<P = any>(sceneId: string, renderer: GtexCustomSceneRenderer<P>): void {
+    this.customRenderers.set(sceneId, renderer as GtexCustomSceneRenderer);
   }
 
   /** Retrieve a custom component renderer for a scene ID */
-  public getRenderer(sceneId: string): React.ComponentType<any> | undefined {
-    return this.customRenderers.get(sceneId);
+  public getRenderer<P = any>(sceneId: string): GtexCustomSceneRenderer<P> | undefined {
+    return this.customRenderers.get(sceneId) as GtexCustomSceneRenderer<P> | undefined;
   }
 
   /** Unregister a custom component renderer */
