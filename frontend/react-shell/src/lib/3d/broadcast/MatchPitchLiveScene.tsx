@@ -44,6 +44,16 @@ import {
 } from "./WeatherAtmosphereSystem";
 import { TouchlineManagerSystem } from "./TouchlineManagerSystem";
 import { StadiumAudioEngine } from "./StadiumAudioEngine";
+import { MatchOfficialsSystem } from "./MatchOfficialsSystem";
+import {
+  BroadcastTacticalAROverlay,
+  type BroadcastAROverlayMode,
+} from "./BroadcastTacticalAROverlay";
+import { GoalNetPhysicsAndSetPieces } from "./GoalNetPhysicsAndSetPieces";
+import {
+  StadiumCeremonySystem,
+  type StadiumCeremonyState,
+} from "./StadiumCeremonySystem";
 import {
   type StadiumLedCampaign,
   type StadiumAdImpressionEvent,
@@ -111,6 +121,10 @@ export interface MatchPitchLiveSceneProps {
   weatherPreset?: StadiumWeatherPreset;
   /** Callback when user changes weather preset */
   onWeatherPresetChange?: (preset: StadiumWeatherPreset) => void;
+  /** Phase 3: On-pitch 3D Broadcast AR Telestrator overlay mode */
+  arOverlayMode?: BroadcastAROverlayMode;
+  /** Callback when user changes AR overlay mode */
+  onArOverlayModeChange?: (mode: BroadcastAROverlayMode) => void;
   /** Additional container CSS class */
   className?: string;
   /** Test identifier */
@@ -143,6 +157,8 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   onStadiumTierChange,
   weatherPreset: propWeatherPreset = "clear_night",
   onWeatherPresetChange,
+  arOverlayMode: propArOverlayMode = "off",
+  onArOverlayModeChange,
   className = "",
   testId = "match-pitch-live-scene",
 }) => {
@@ -150,6 +166,10 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   const stadiumArenaRef = useRef<StadiumArenaEnvironment | null>(null);
   const weatherSystemRef = useRef<WeatherAtmosphereSystem | null>(null);
   const touchlineManagerRef = useRef<TouchlineManagerSystem | null>(null);
+  const matchOfficialsRef = useRef<MatchOfficialsSystem | null>(null);
+  const arOverlayRef = useRef<BroadcastTacticalAROverlay | null>(null);
+  const goalNetAndSetPiecesRef = useRef<GoalNetPhysicsAndSetPieces | null>(null);
+  const stadiumCeremonyRef = useRef<StadiumCeremonySystem | null>(null);
   const audioEngineRef = useRef<StadiumAudioEngine>(new StadiumAudioEngine({ initialMuted: true }));
   const [webglSupported, setWebglSupported] = useState<boolean>(true);
   const [contextLost, setContextLost] = useState<boolean>(false);
@@ -159,6 +179,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   const [qualityTier, setQualityTierState] = useState<DeviceQualityTier>(propQualityTier);
   const [stadiumTier, setStadiumTierState] = useState<StadiumTier>(propStadiumTier);
   const [weatherPreset, setWeatherPresetState] = useState<StadiumWeatherPreset>(propWeatherPreset);
+  const [arOverlayMode, setArOverlayModeState] = useState<BroadcastAROverlayMode>(propArOverlayMode);
   const [internalTheatreMode, setInternalTheatreMode] = useState<boolean>(false);
   const [minimalHud, setMinimalHud] = useState<boolean>(false);
   const [isReplayActive, setIsReplayActive] = useState<boolean>(false);
@@ -170,6 +191,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   const lastBallStateRef = useRef<string>("idle");
   const stadiumTierRef = useRef<StadiumTier>(propStadiumTier);
   const weatherPresetRef = useRef<StadiumWeatherPreset>(propWeatherPreset);
+  const arOverlayModeRef = useRef<BroadcastAROverlayMode>(propArOverlayMode);
 
   const isTheatreMode = externalTheatreMode ?? internalTheatreMode;
 
@@ -188,6 +210,12 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     weatherPresetRef.current = propWeatherPreset;
     weatherSystemRef.current?.setPreset(propWeatherPreset);
   }, [propWeatherPreset]);
+
+  useEffect(() => {
+    setArOverlayModeState(propArOverlayMode);
+    arOverlayModeRef.current = propArOverlayMode;
+    arOverlayRef.current?.setMode(propArOverlayMode);
+  }, [propArOverlayMode]);
 
   const handleSelectQualityTier = useCallback(
     (tier: "high" | "medium" | "low") => {
@@ -215,6 +243,16 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       onWeatherPresetChange?.(preset);
     },
     [onWeatherPresetChange]
+  );
+
+  const handleSelectArOverlayMode = useCallback(
+    (mode: BroadcastAROverlayMode) => {
+      setArOverlayModeState(mode);
+      arOverlayModeRef.current = mode;
+      arOverlayRef.current?.setMode(mode);
+      onArOverlayModeChange?.(mode);
+    },
+    [onArOverlayModeChange]
   );
 
   const handleToggleTheatre = useCallback(() => {
@@ -483,6 +521,25 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     });
     touchlineManagerRef.current = touchlineManagers;
 
+    // -------------------------------------------------------------------------
+    // 3b. Phase 3: Match Officials, Broadcast AR Overlays, Goal-Net Physics & Ceremony
+    // -------------------------------------------------------------------------
+    const matchOfficials = new MatchOfficialsSystem(scene, { qualityTier });
+    matchOfficialsRef.current = matchOfficials;
+
+    const arOverlay = new BroadcastTacticalAROverlay(scene, {
+      initialMode: arOverlayModeRef.current,
+      homeColorHex: safeViewRef.current.home_team.primary_color,
+      awayColorHex: safeViewRef.current.away_team.primary_color,
+    });
+    arOverlayRef.current = arOverlay;
+
+    const goalNetAndSetPieces = new GoalNetPhysicsAndSetPieces(scene);
+    goalNetAndSetPiecesRef.current = goalNetAndSetPieces;
+
+    const stadiumCeremony = new StadiumCeremonySystem(scene);
+    stadiumCeremonyRef.current = stadiumCeremony;
+
     const adNet = stadiumArena.getAdvertisingNetwork();
     if (safeViewRef.current.monetization) {
       adNet.setMatchMonetization(safeViewRef.current.monetization);
@@ -620,6 +677,12 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         setWeatherPreset: (preset: StadiumWeatherPreset) => {
           handleSelectWeatherPreset(preset);
         },
+        setArOverlayMode: (mode: BroadcastAROverlayMode) => {
+          handleSelectArOverlayMode(mode);
+        },
+        setCeremonyState: (state: StadiumCeremonyState, durationSec: number = 8.0) => {
+          stadiumCeremony.setCeremonyState(state, durationSec);
+        },
         triggerCrowdWave: () => {
           stadiumArena.triggerCrowdWave();
         },
@@ -663,6 +726,12 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           weather: weatherSystem.getTelemetry(),
           touchlineManagers: touchlineManagers.getSummary(),
           spatialAudio: audioEngineRef.current.getTelemetry(),
+        }),
+        getPhase3Summary: () => ({
+          matchOfficials: matchOfficials.getSummary(),
+          arOverlay: arOverlay.getSummary(),
+          goalNetAndSetPieces: goalNetAndSetPieces.getSummary(),
+          stadiumCeremony: stadiumCeremony.getSummary(),
         }),
         resetTelemetry: () => {
           frameDeltaSamplesMs.length = 0;
@@ -814,6 +883,12 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           // Phase 2: Touchline manager reaction + spatial stadium audio cue
           touchlineManagers.triggerEventReaction(evType, evSide);
           audioEngineRef.current.handleMatchEvent(evType, evSide, state.ball.position3D);
+
+          // Phase 3: Match officials, AR telestrator flash, goal-net/set-piece & ceremony reactions
+          matchOfficials.triggerEventReaction(evType, state.ball.position3D);
+          arOverlay.triggerEventFlash(evType);
+          goalNetAndSetPieces.triggerMatchEvent(evType, evSide, state.ball.position3D);
+          stadiumCeremony.triggerMatchEvent(evType);
         }
 
         // Update Camera first so LOD distance checks use the exact current camera pose
@@ -883,6 +958,23 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           qualityTier,
         });
         audioEngineRef.current.updateCrowdAmbience(stadiumArena.getCrowdReactionState().intensity);
+
+        // Phase 3: Update Match Officials, 3D Broadcast AR Overlays, Goal-Net Physics & Ceremony
+        matchOfficials.update({
+          deltaSec,
+          ballPosition3D: [bx, by, bz],
+          players: state.players,
+          cameraPosition3D: pose.position,
+          qualityTier,
+        });
+        arOverlay.update({
+          deltaSec,
+          players: state.players,
+          ballPosition3D: [bx, by, bz],
+          possessionSide: state.possession_side,
+        });
+        goalNetAndSetPieces.update(deltaSec, [bx, by, bz]);
+        stadiumCeremony.update(deltaSec);
 
         // Update ball drop shadow
         ballShadowMesh.position.set(bx, 0.03, bz);
@@ -1013,6 +1105,10 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
               weather: weatherSystem.getTelemetry(),
               touchlineManagers: touchlineManagers.getSummary(),
               spatialAudio: audioEngineRef.current.getTelemetry(),
+              matchOfficials: matchOfficials.getSummary(),
+              arOverlay: arOverlay.getSummary(),
+              goalNetAndSetPieces: goalNetAndSetPieces.getSummary(),
+              stadiumCeremony: stadiumCeremony.getSummary(),
               adRotationCount: adNet.getRotationCount(),
               adImpressionCount: adNet.getImpressionHistory().length,
               activeAdCampaigns: adNet.getActiveCampaigns().map((c) => ({
@@ -1062,12 +1158,20 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       stadiumArenaRef.current = null;
       weatherSystemRef.current = null;
       touchlineManagerRef.current = null;
+      matchOfficialsRef.current = null;
+      arOverlayRef.current = null;
+      goalNetAndSetPiecesRef.current = null;
+      stadiumCeremonyRef.current = null;
       playerRigs.forEach((rig) => rig.dispose());
       playerRigs.clear();
       scene.clear();
       stadiumArena.dispose();
       weatherSystem.dispose();
       touchlineManagers.dispose();
+      matchOfficials.dispose();
+      arOverlay.dispose();
+      goalNetAndSetPieces.dispose();
+      stadiumCeremony.dispose();
       ballGeo.dispose();
       ballMat.dispose();
       shadowGeo.dispose();
@@ -1211,6 +1315,8 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           onSelectStadiumTier={handleSelectStadiumTier}
           weatherPreset={weatherPreset}
           onSelectWeatherPreset={handleSelectWeatherPreset}
+          arOverlayMode={arOverlayMode}
+          onSelectArOverlayMode={handleSelectArOverlayMode}
           isTheatreMode={isTheatreMode}
           onToggleTheatreMode={handleToggleTheatre}
           minimalHud={minimalHud}
@@ -1271,6 +1377,8 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           onSelectStadiumTier={handleSelectStadiumTier}
           weatherPreset={weatherPreset}
           onSelectWeatherPreset={handleSelectWeatherPreset}
+          arOverlayMode={arOverlayMode}
+          onSelectArOverlayMode={handleSelectArOverlayMode}
           isTheatreMode={isTheatreMode}
           onToggleTheatreMode={handleToggleTheatre}
           minimalHud={minimalHud}

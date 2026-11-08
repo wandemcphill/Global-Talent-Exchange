@@ -44,6 +44,7 @@ import {
   type StadiumWeatherPreset,
   STADIUM_WEATHER_PROFILES,
 } from "./WeatherAtmosphereSystem";
+import type { BroadcastAROverlayMode } from "./BroadcastTacticalAROverlay";
 
 export interface BroadcastOverlayHUDProps {
   matchState: InterpolatedMatchState | null;
@@ -70,6 +71,8 @@ export interface BroadcastOverlayHUDProps {
   onSelectStadiumTier?: (tier: StadiumTier) => void;
   weatherPreset?: StadiumWeatherPreset;
   onSelectWeatherPreset?: (preset: StadiumWeatherPreset) => void;
+  arOverlayMode?: BroadcastAROverlayMode;
+  onSelectArOverlayMode?: (mode: BroadcastAROverlayMode) => void;
   isTheatreMode?: boolean;
   onToggleTheatreMode?: () => void;
   minimalHud?: boolean;
@@ -135,6 +138,8 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
   onSelectStadiumTier,
   weatherPreset = "clear_night",
   onSelectWeatherPreset,
+  arOverlayMode = "off",
+  onSelectArOverlayMode,
   isTheatreMode = false,
   onToggleTheatreMode,
   minimalHud = false,
@@ -436,6 +441,37 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
                   }`}
                 >
                   {STADIUM_WEATHER_PROFILES[preset].shortLabel}
+                </button>
+              ))}
+            </div>
+          )}
+          {onSelectArOverlayMode && !minimalHud && (
+            <div
+              data-testid="broadcast-ar-selector"
+              className="hidden xl:flex items-center gap-0.5 rounded-lg border border-white/15 bg-slate-950/85 p-0.5 text-[10px] font-bold uppercase backdrop-blur-md"
+              title="On-Pitch 3D Broadcast AR Telestrator"
+            >
+              {(
+                [
+                  { mode: "off", label: "AR OFF" },
+                  { mode: "tactical_lines", label: "LINES" },
+                  { mode: "offside_wall", label: "OFFSIDE" },
+                  { mode: "shot_trails", label: "TRAILS" },
+                  { mode: "full_ar", label: "FULL AR" },
+                ] as const
+              ).map(({ mode, label }) => (
+                <button
+                  key={mode}
+                  type="button"
+                  data-testid={`ar-mode-${mode}`}
+                  onClick={() => onSelectArOverlayMode(mode)}
+                  className={`rounded px-1.5 py-0.5 transition-colors ${
+                    arOverlayMode === mode
+                      ? "bg-amber-400 text-slate-950 font-black"
+                      : "text-slate-300 hover:bg-white/10"
+                  }`}
+                >
+                  {label}
                 </button>
               ))}
             </div>
@@ -805,6 +841,18 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
               }`}
             >
               DUGOUT
+            </button>
+            <button
+              type="button"
+              data-testid="camera-mode-tunnel_walkout"
+              onClick={() => onSelectCameraMode("tunnel_walkout")}
+              className={`rounded-lg px-2 py-1 text-[11px] font-bold uppercase tracking-wider transition-colors ${
+                cameraMode === "tunnel_walkout"
+                  ? "bg-emerald-500 text-slate-950 shadow-sm"
+                  : "text-slate-300 hover:bg-white/10"
+              }`}
+            >
+              WALKOUT
             </button>
           </div>
 
