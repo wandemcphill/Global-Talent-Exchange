@@ -414,10 +414,13 @@ def get_gm_delegation_overview(session: Session, user_id: str, club_id: str) -> 
         {
             "id": row.id,
             "decision_id": row.decision_id,
-            "actor_role": "owner",
+            "actor_role": (
+                "general_manager" if row.action.startswith("gm_") else "owner"
+            ),
             "action": (
                 "approved" if row.action == "owner_approve"
                 else "rejected" if row.action == "owner_reject"
+                else "executed" if row.action == "gm_execute"
                 else row.action
             ),
             "reason": (row.snapshot_json or {}).get("outcome") or row.new_status,
@@ -714,6 +717,18 @@ def evaluate_gm_operational_cycle(session: Session, user_id: str, club_id: str) 
                     )
                     session.add(decision)
                     session.flush()
+                    session.add(
+                        ClubDelegatedDecisionAuditLog(
+                            decision_id=decision.id,
+                            club_id=club_id,
+                            actor_id=user_id,
+                            action="gm_execute",
+                            previous_status=None,
+                            new_status="executed",
+                            decision_note=decision.decision_note,
+                            snapshot_json={"payload": decision.payload_json, "outcome": decision.outcome_text},
+                        )
+                    )
                     executed_actions.append(
                         {
                             "type": "staff_hire",
@@ -865,6 +880,18 @@ def evaluate_gm_operational_cycle(session: Session, user_id: str, club_id: str) 
             )
             session.add(decision_acad)
             session.flush()
+            session.add(
+                ClubDelegatedDecisionAuditLog(
+                    decision_id=decision_acad.id,
+                    club_id=club_id,
+                    actor_id=user_id,
+                    action="gm_execute",
+                    previous_status=None,
+                    new_status="executed",
+                    decision_note=decision_acad.decision_note,
+                    snapshot_json={"payload": decision_acad.payload_json, "outcome": decision_acad.outcome_text},
+                )
+            )
             executed_actions.append(
                 {
                     "type": "academy_recruitment",
