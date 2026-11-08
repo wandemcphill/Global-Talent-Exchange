@@ -1,6 +1,6 @@
 /**
  * GTEX Living Football Ecosystem — WebGL 3D Match Broadcast Arena
- * Milestone 2 — Comprehensive Stadium & Architectural Expansion
+ * Milestone 2 & Phase 2 — Comprehensive Tiered Stadium, Club Identity & Crowd Wave Expansion
  *
  * Implements:
  * 1. Realistic FIFA Pitch Geometry:
@@ -10,38 +10,26 @@
  *      penalty arcs ("D"), and 4 corner arcs.
  *    - 4 realistic corner flags (1.5m flexible pole with fluttering fabric flags).
  *    - 3D FIFA goal cages with rounded posts, crossbar, net support stanchions, and 3D net mesh.
- * 2. Stadium Stands & Seating Architecture:
- *    - West Grandstand: Main multi-tiered stand with lower bowl, executive VIP skybox suites
- *      with reflective panoramic windows, upper tier, and cantilevered roof canopy.
- *    - East Stand: 2-tiered stand with suspended broadcast gantry and roof canopy.
- *    - North Stand (Home Kop End): Steep single-tier home supporter stand with club crest banners.
- *    - South Stand (Away End): 2-tiered stand with away section and elevated digital scoreboard tower.
- *    - Vomitories (access tunnel stairs), concrete rakes, and steel safety railings.
- * 3. Crowd Presentation:
+ * 2. Phase 2 Tiered & Procedural Stadium Stands Architecture (`StadiumTier`: 1 | 2 | 3):
+ *    - Tier 1 (Community Municipal Ground — 12,500 cap): Single-tier lower bowl, West cantilever roof, 1 scoreboard.
+ *    - Tier 2 (Regional Championship Arena — 36,000 cap): 2-tier East & West stands, 4 stand roofs, 2 jumbotrons.
+ *    - Tier 3 (Sovereign Super-Arena — 68,000 cap): Full multi-tier bowl, VIP Panoramic Executive Skyboxes,
+ *      4 architectural corner towers, 3 HD jumbotrons, and custom club identity fascia banners.
+ * 3. Crowd Presentation & Phase 2 Radial Mexican Wave:
  *    - Tiered spectator seating with multi-colored home and away supporter crowd blocks.
- *    - Device-quality tier adaptation (instanced high-density seating on High/Ultra,
- *      optimized batched geometry on Medium/Low for guaranteed 60fps).
+ *    - Instanced 3D supporter crowd with event-driven surge reactions and radial stadium wave propagation.
  * 4. Floodlights & Environmental Lighting:
  *    - 4 corner floodlight towers (36m tall) with 3D steel lattice pylons and 4x4 LED lamp arrays.
- *    - 4 targeted spotlight cones casting pitch-quadrant beams with subtle atmospheric haze.
- *    - Under-canopy architectural wash lights.
  * 5. Touchlines, Technical Areas & Dugouts:
- *    - Home and away dashed chalk technical coaching boxes.
- *    - Modern ergonomic team dugouts with curved tinted polycarbonate canopies, aluminum ribs,
- *      and 14 contoured racing bucket seats styled in club colors.
- *    - 4th official / referee board station.
+ *    - Home and away dashed chalk technical coaching boxes and curved ergonomic dugouts.
  * 6. Player Tunnel & Stadium Entrances:
  *    - Central walkout tunnel portal embedded into the West Grandstand.
- *    - Retractable accordion tunnel canopy and red/emerald turf walkout runner.
- * 7. Dressing Rooms & Supporting Environments:
- *    - Illuminated tunnel interior mouth with club branding and flash interview step-and-repeat backdrop.
- * 8. Dynamic LED Perimeter Advertising Boards:
- *    - 0.9m digital LED boards wrapping the pitch perimeter with animated rotating sponsor campaigns
- *      (GTEX Living Football, Chronos Tourbillon, Apex Dynasty, Sovereign Fleet).
+ * 7. Dynamic LED Perimeter Advertising Boards:
+ *    - Wrapping pitch perimeter LED boards driven by `StadiumAdvertisingNetwork`.
  */
 
 import * as THREE from "three";
-import { FIFA_PITCH_DIMENSIONS, PITCH_LANDMARKS } from "./matchCoordinates";
+import { FIFA_PITCH_DIMENSIONS } from "./matchCoordinates";
 import { SpectatorSafeTeamView } from "./spectatorContract";
 import type { DeviceQualityTier } from "../GtexSceneTypes";
 import {
@@ -59,10 +47,69 @@ export type StadiumCrowdReactionType =
   | "red_card"
   | "fulltime";
 
+export type StadiumTier = 1 | 2 | 3;
+
+export interface StadiumTierProfile {
+  tier: StadiumTier;
+  tierKey: "tier_1_community" | "tier_2_regional" | "tier_3_sovereign";
+  label: string;
+  shortLabel: string;
+  capacity: number;
+  hasUpperTiers: boolean;
+  hasVipSkyboxes: boolean;
+  hasFullRoofCanopy: boolean;
+  hasCornerTowers: boolean;
+  jumbotronCount: number;
+  floodlightHeightM: number;
+}
+
+export const STADIUM_TIER_PROFILES: Readonly<Record<StadiumTier, StadiumTierProfile>> = {
+  1: {
+    tier: 1,
+    tierKey: "tier_1_community",
+    label: "Tier 1 • Community Municipal Ground",
+    shortLabel: "T1 • 12.5K",
+    capacity: 12500,
+    hasUpperTiers: false,
+    hasVipSkyboxes: false,
+    hasFullRoofCanopy: false,
+    hasCornerTowers: false,
+    jumbotronCount: 1,
+    floodlightHeightM: 26,
+  },
+  2: {
+    tier: 2,
+    tierKey: "tier_2_regional",
+    label: "Tier 2 • Regional Championship Arena",
+    shortLabel: "T2 • 36K",
+    capacity: 36000,
+    hasUpperTiers: true,
+    hasVipSkyboxes: false,
+    hasFullRoofCanopy: true,
+    hasCornerTowers: false,
+    jumbotronCount: 2,
+    floodlightHeightM: 32,
+  },
+  3: {
+    tier: 3,
+    tierKey: "tier_3_sovereign",
+    label: "Tier 3 • Sovereign Super-Arena",
+    shortLabel: "T3 • 68K",
+    capacity: 68000,
+    hasUpperTiers: true,
+    hasVipSkyboxes: true,
+    hasFullRoofCanopy: true,
+    hasCornerTowers: true,
+    jumbotronCount: 3,
+    floodlightHeightM: 36,
+  },
+};
+
 export interface StadiumArenaOptions {
   homeTeam?: SpectatorSafeTeamView;
   awayTeam?: SpectatorSafeTeamView;
   qualityTier?: DeviceQualityTier;
+  stadiumTier?: StadiumTier;
   stadiumName?: string;
   competitionName?: string;
   matchId?: string;
@@ -77,6 +124,7 @@ interface SupporterInstanceMeta {
   baseZ: number;
   rotY: number;
   phase: number;
+  angleRad: number;
   side: "home" | "away" | "neutral";
 }
 
@@ -89,30 +137,44 @@ export class StadiumArenaEnvironment {
   public readonly crowdGroup: THREE.Group;
 
   private qualityTier: DeviceQualityTier;
+  private stadiumTier: StadiumTier;
+  private stadiumName: string;
   private homeTeam: SpectatorSafeTeamView;
   private awayTeam: SpectatorSafeTeamView;
   private competitionName: string;
   private adNetwork: StadiumAdvertisingNetwork;
   private adTouchlineTexture: THREE.CanvasTexture | null = null;
-  private adGoalTexture: THREE.CanvasTexture | null = null;
   private scoreboardCanvas: HTMLCanvasElement | null = null;
   private scoreboardContext: CanvasRenderingContext2D | null = null;
   private scoreboardTexture: THREE.CanvasTexture | null = null;
   private lastScoreboardKey: string = "";
+  private clubBannerCanvas: HTMLCanvasElement | null = null;
+  private clubBannerContext: CanvasRenderingContext2D | null = null;
+  private clubBannerTexture: THREE.CanvasTexture | null = null;
+  private pitchTurfMat: THREE.MeshLambertMaterial | null = null;
+  private pitchRunoffMat: THREE.MeshLambertMaterial | null = null;
   private homeCrowdMat: THREE.MeshLambertMaterial | null = null;
   private awayCrowdMat: THREE.MeshLambertMaterial | null = null;
   private bannerMat: THREE.MeshBasicMaterial | null = null;
   private supporterMesh: THREE.InstancedMesh | null = null;
   private supporterMeta: SupporterInstanceMeta[] = [];
+  private upperTierObjects: THREE.Object3D[] = [];
+  private vipSkyboxObjects: THREE.Object3D[] = [];
+  private secondaryRoofObjects: THREE.Object3D[] = [];
+  private cornerTowerObjects: THREE.Object3D[] = [];
+  private secondaryJumbotronObjects: THREE.Object3D[] = [];
   private crowdReactionType: StadiumCrowdReactionType = "calm";
   private crowdReactionSide: "home" | "away" | "both" = "both";
   private crowdReactionIntensity: number = 0.15;
   private crowdReactionTimerSec: number = 0;
+  private crowdWaveTimerSec: number = 0;
   private elapsedSec: number = 0;
   private disposables: Array<{ dispose: () => void }> = [];
 
   constructor(scene: THREE.Scene, options: StadiumArenaOptions = {}) {
     this.qualityTier = options.qualityTier || "high";
+    this.stadiumTier = options.stadiumTier || 3;
+    this.stadiumName = options.stadiumName || "GTEX National Arena";
     this.competitionName = options.competitionName || "GTEX PREMIER BROADCAST";
     this.homeTeam = options.homeTeam || {
       team_id: "home-default",
@@ -189,6 +251,7 @@ export class StadiumArenaEnvironment {
     this.buildGrandstands();
     this.buildCrowd(options.attendancePct ?? 94);
     this.buildFloodlightsAndEnvironment(scene);
+    this.applyStadiumTierVisibility(this.stadiumTier);
 
     // Freeze world matrices on static stadium architecture while keeping animated crowd unlocked
     this.group.updateMatrixWorld(true);
@@ -197,6 +260,16 @@ export class StadiumArenaEnvironment {
         obj.matrixAutoUpdate = false;
       }
     });
+  }
+
+  public getPitchMaterials(): {
+    pitchTurfMat: THREE.MeshLambertMaterial | null;
+    pitchRunoffMat: THREE.MeshLambertMaterial | null;
+  } {
+    return {
+      pitchTurfMat: this.pitchTurfMat,
+      pitchRunoffMat: this.pitchRunoffMat,
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -214,6 +287,7 @@ export class StadiumArenaEnvironment {
       color: 0x154726,
       side: THREE.DoubleSide,
     });
+    this.pitchTurfMat = pitchMat;
     this.disposables.push(pitchGeo, pitchMat);
     const pitchMesh = new THREE.Mesh(pitchGeo, pitchMat);
     pitchMesh.rotation.x = -Math.PI / 2;
@@ -226,6 +300,7 @@ export class StadiumArenaEnvironment {
       color: 0x0e361b,
       side: THREE.DoubleSide,
     });
+    this.pitchRunoffMat = runoffMat;
     this.disposables.push(runoffGeo, runoffMat);
     const runoffMesh = new THREE.Mesh(runoffGeo, runoffMat);
     runoffMesh.rotation.x = -Math.PI / 2;
@@ -322,7 +397,6 @@ export class StadiumArenaEnvironment {
       this.pitchGroup.add(penSpot);
 
       // Penalty Arc (the "D" outside the box, radius 9.15m from spot)
-      // Angle spans roughly -53 deg to +53 deg facing pitch interior
       const startAngle = isLeft ? -Math.PI * 0.29 : Math.PI - Math.PI * 0.29;
       const endAngle = isLeft ? Math.PI * 0.29 : Math.PI + Math.PI * 0.29;
       const arcCurve = new THREE.EllipseCurve(spotX, 0, 9.15, 9.15, startAngle, endAngle, false, 0);
@@ -519,8 +593,6 @@ export class StadiumArenaEnvironment {
       platform.position.y = 0.075;
       dugoutGroup.add(platform);
 
-      // Curved canopy roof (half-cylinder) — uses MeshStandardMaterial/MeshLambertMaterial instead of
-      // MeshPhysicalMaterial(transmission) to prevent Three.js from executing a costly second full-scene render pass.
       const canopySegments = this.qualityTier === "low" ? 8 : 12;
       const canopyGeo = new THREE.CylinderGeometry(1.4, 1.4, 11, canopySegments, 1, true, 0, Math.PI);
       const canopyMat =
@@ -544,7 +616,6 @@ export class StadiumArenaEnvironment {
       canopy.position.set(0, 1.4, 0);
       dugoutGroup.add(canopy);
 
-      // Aluminum frame ribs (shared geometry across ribs; skipped on low quality tier)
       if (this.qualityTier !== "low") {
         const ribMat = new THREE.MeshLambertMaterial({ color: 0x94a3b8 });
         const ribGeo = new THREE.TorusGeometry(1.42, 0.03, 6, 12, Math.PI);
@@ -557,7 +628,6 @@ export class StadiumArenaEnvironment {
         }
       }
 
-      // 14 Bucket Seats batched into a single InstancedMesh (1 draw call instead of 14, no shadow pass overhead)
       const seatColor = isHome
         ? new THREE.Color(this.homeTeam.primary_color)
         : new THREE.Color(this.awayTeam.primary_color);
@@ -783,7 +853,10 @@ export class StadiumArenaEnvironment {
       sbCanvas.width = 512;
       sbCanvas.height = 256;
       try {
-        const isJsdom = typeof navigator !== "undefined" && /jsdom/i.test(navigator.userAgent || "") && !(sbCanvas.getContext as any)?._isMockFunction;
+        const isJsdom =
+          typeof navigator !== "undefined" &&
+          /jsdom/i.test(navigator.userAgent || "") &&
+          !(sbCanvas.getContext as any)?._isMockFunction;
         this.scoreboardContext = isJsdom ? null : sbCanvas.getContext("2d");
       } catch {
         this.scoreboardContext = null;
@@ -817,12 +890,14 @@ export class StadiumArenaEnvironment {
         const vip = new THREE.Mesh(vipGeo, vipGlassMat);
         vip.position.set(0, 8, 4);
         standGroup.add(vip);
+        this.vipSkyboxObjects.push(vip);
 
         const upperGeo = new THREE.BoxGeometry(FIFA_PITCH_DIMENSIONS.length + 14, 8, 14);
         this.disposables.push(upperGeo);
         const upper = new THREE.Mesh(upperGeo, concreteMat);
         upper.position.set(0, 14, 10);
         standGroup.add(upper);
+        this.upperTierObjects.push(upper);
       }
 
       const roofGeo = new THREE.BoxGeometry(FIFA_PITCH_DIMENSIONS.length + 18, 1.2, 22);
@@ -852,6 +927,7 @@ export class StadiumArenaEnvironment {
         const upper = new THREE.Mesh(upperGeo, concreteMat);
         upper.position.set(0, 10.5, -6);
         standGroup.add(upper);
+        this.upperTierObjects.push(upper);
       }
 
       const roofGeo = new THREE.BoxGeometry(FIFA_PITCH_DIMENSIONS.length + 16, 1.2, 26);
@@ -860,6 +936,7 @@ export class StadiumArenaEnvironment {
       roof.position.set(0, 20, -3);
       roof.rotation.x = -0.08;
       standGroup.add(roof);
+      this.secondaryRoofObjects.push(roof);
 
       // Dual Corner Jumbotron Screens angled toward the main broadcast camera
       const jumboScreenGeo = new THREE.PlaneGeometry(11.5, 5.8);
@@ -869,11 +946,13 @@ export class StadiumArenaEnvironment {
       leftJumbo.position.set(-halfL + 4, 15.8, 5.5);
       leftJumbo.rotation.y = 0.36;
       standGroup.add(leftJumbo);
+      this.secondaryJumbotronObjects.push(leftJumbo);
 
       const rightJumbo = new THREE.Mesh(jumboScreenGeo, jumbotronScreenMat);
       rightJumbo.position.set(halfL - 4, 15.8, 5.5);
       rightJumbo.rotation.y = -0.36;
       standGroup.add(rightJumbo);
+      this.secondaryJumbotronObjects.push(rightJumbo);
 
       this.stadiumGroup.add(standGroup);
     };
@@ -895,6 +974,7 @@ export class StadiumArenaEnvironment {
       roof.position.set(2, 18, 0);
       roof.rotation.z = 0.06;
       standGroup.add(roof);
+      this.secondaryRoofObjects.push(roof);
 
       this.stadiumGroup.add(standGroup);
     };
@@ -924,14 +1004,103 @@ export class StadiumArenaEnvironment {
       roof.position.set(-2, 18, 0);
       roof.rotation.z = -0.06;
       standGroup.add(roof);
+      this.secondaryRoofObjects.push(roof);
 
       this.stadiumGroup.add(standGroup);
+    };
+
+    // E. Tier 3 Sovereign Super-Arena Corner Architectural Towers
+    const buildCornerTowers = () => {
+      const towerGeo = new THREE.CylinderGeometry(5.2, 6.0, 21, 8);
+      this.disposables.push(towerGeo);
+      const cornerCoords: Array<[number, number]> = [
+        [-(halfL + 15), -(halfW + 15)],
+        [halfL + 15, -(halfW + 15)],
+        [-(halfL + 15), halfW + 24],
+        [halfL + 15, halfW + 24],
+      ];
+
+      cornerCoords.forEach(([cx, cz]) => {
+        const tower = new THREE.Mesh(towerGeo, vipGlassMat);
+        tower.name = "Sovereign_Corner_Tower";
+        tower.position.set(cx, 10.5, cz);
+        this.stadiumGroup.add(tower);
+        this.cornerTowerObjects.push(tower);
+      });
     };
 
     buildWestMainStand();
     buildEastStand();
     buildNorthKopStand();
     buildSouthAwayStand();
+    buildCornerTowers();
+  }
+
+  /**
+   * Dynamically switches the 3D stadium architecture tier (Tier 1 Community -> Tier 2 Regional -> Tier 3 Sovereign)
+   * without reallocating GPU geometries or textures.
+   */
+  public setStadiumTier(tier: StadiumTier): void {
+    this.stadiumTier = tier;
+    this.applyStadiumTierVisibility(tier);
+    this.updateClubIdentityBanner();
+  }
+
+  public getStadiumTier(): StadiumTier {
+    return this.stadiumTier;
+  }
+
+  public getStadiumTierProfile(): StadiumTierProfile {
+    return STADIUM_TIER_PROFILES[this.stadiumTier] || STADIUM_TIER_PROFILES[3];
+  }
+
+  private applyStadiumTierVisibility(tier: StadiumTier): void {
+    const profile = STADIUM_TIER_PROFILES[tier] || STADIUM_TIER_PROFILES[3];
+
+    this.upperTierObjects.forEach((obj) => {
+      obj.visible = profile.hasUpperTiers;
+    });
+    this.vipSkyboxObjects.forEach((obj) => {
+      obj.visible = profile.hasVipSkyboxes;
+    });
+    this.secondaryRoofObjects.forEach((obj) => {
+      obj.visible = profile.hasFullRoofCanopy;
+    });
+    this.cornerTowerObjects.forEach((obj) => {
+      obj.visible = profile.hasCornerTowers;
+    });
+    this.secondaryJumbotronObjects.forEach((obj, idx) => {
+      obj.visible = idx + 2 <= profile.jumbotronCount;
+    });
+  }
+
+  private updateClubIdentityBanner(): void {
+    const ctx = this.clubBannerContext;
+    const canvas = this.clubBannerCanvas;
+    if (!ctx || !canvas) return;
+
+    const primary = this.homeTeam.primary_color || "#00E676";
+    const secondary = this.homeTeam.secondary_color || "#1B5E20";
+    const accent = this.homeTeam.accent_color || "#FFFFFF";
+    const profile = this.getStadiumTierProfile();
+
+    ctx.fillStyle = secondary;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = primary;
+    ctx.fillRect(0, 0, canvas.width, 14);
+    ctx.fillRect(0, canvas.height - 14, canvas.width, 14);
+
+    ctx.fillStyle = accent;
+    ctx.font = "900 32px 'Outfit', 'Inter', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const bannerTitle = `${(this.homeTeam.team_name || "HOME CLUB").toUpperCase()}  •  ${profile.label.toUpperCase()} (${profile.capacity.toLocaleString()} CAP)`;
+    ctx.fillText(bannerTitle.slice(0, 64), canvas.width / 2, canvas.height / 2);
+
+    if (this.clubBannerTexture) {
+      this.clubBannerTexture.needsUpdate = true;
+    }
   }
 
   /**
@@ -943,7 +1112,7 @@ export class StadiumArenaEnvironment {
     clockLabel: string,
     eventBanner?: string | null
   ): void {
-    const key = `${this.homeTeam.short_name}:${homeScore}-${awayScore}:${this.awayTeam.short_name}:${clockLabel}:${eventBanner || ""}`;
+    const key = `${this.homeTeam.short_name}:${homeScore}-${awayScore}:${this.awayTeam.short_name}:${clockLabel}:${eventBanner || ""}:${this.stadiumTier}`;
     if (key === this.lastScoreboardKey) return;
     this.lastScoreboardKey = key;
 
@@ -1023,6 +1192,7 @@ export class StadiumArenaEnvironment {
     if (this.bannerMat) {
       this.bannerMat.color.set(homeTeam.accent_color || "#FFFFFF");
     }
+    this.updateClubIdentityBanner();
     this.adNetwork.setMatchContext({
       matchId,
       homeTeamId: homeTeam.team_id,
@@ -1037,7 +1207,7 @@ export class StadiumArenaEnvironment {
   }
 
   // ---------------------------------------------------------------------------
-  // 8. Crowd Presentation & Instanced Supporter Reactions (Phase 7)
+  // 8. Crowd Presentation & Instanced Supporter Reactions (Phase 7 & Phase 2 Wave)
   // ---------------------------------------------------------------------------
   private buildCrowd(attendancePct: number): void {
     const halfL = FIFA_PITCH_DIMENSIONS.length / 2;
@@ -1046,10 +1216,33 @@ export class StadiumArenaEnvironment {
     const awayColor = new THREE.Color(this.awayTeam.primary_color);
     const accentColor = new THREE.Color(this.homeTeam.accent_color || "#ffffff");
 
+    if (typeof document !== "undefined") {
+      const bCanvas = document.createElement("canvas");
+      bCanvas.width = 1024;
+      bCanvas.height = 96;
+      try {
+        const isJsdom =
+          typeof navigator !== "undefined" &&
+          /jsdom/i.test(navigator.userAgent || "") &&
+          !(bCanvas.getContext as any)?._isMockFunction;
+        this.clubBannerContext = isJsdom ? null : bCanvas.getContext("2d");
+      } catch {
+        this.clubBannerContext = null;
+      }
+      this.clubBannerCanvas = bCanvas;
+      this.clubBannerTexture = new THREE.CanvasTexture(bCanvas);
+      this.clubBannerTexture.colorSpace = THREE.SRGBColorSpace;
+      this.disposables.push(this.clubBannerTexture);
+      this.updateClubIdentityBanner();
+    }
+
     const homeCrowdMat = new THREE.MeshLambertMaterial({ color: homeColor });
     const awayCrowdMat = new THREE.MeshLambertMaterial({ color: awayColor });
     const neutralCrowdMat = new THREE.MeshLambertMaterial({ color: 0x475569 });
-    const bannerMat = new THREE.MeshBasicMaterial({ color: accentColor });
+    const bannerMat = new THREE.MeshBasicMaterial({
+      color: this.clubBannerTexture ? 0xffffff : accentColor,
+      map: this.clubBannerTexture || null,
+    });
     this.homeCrowdMat = homeCrowdMat;
     this.awayCrowdMat = awayCrowdMat;
     this.bannerMat = bannerMat;
@@ -1074,6 +1267,7 @@ export class StadiumArenaEnvironment {
       const eastCrowdUpper = new THREE.Mesh(crowdBlockGeo, homeCrowdMat);
       eastCrowdUpper.position.set(0, 13.5, -(halfW + 21));
       this.crowdGroup.add(westCrowdUpper, eastCrowdUpper);
+      this.upperTierObjects.push(westCrowdUpper, eastCrowdUpper);
     }
 
     // North Stand Kop Crowd (100% Home Ultras)
@@ -1091,9 +1285,10 @@ export class StadiumArenaEnvironment {
     this.crowdGroup.add(awayCrowd);
 
     // Supporter banner tifo strips along the East & Kop fascias
-    const tifoGeo = new THREE.BoxGeometry(halfL * 1.4, 0.75, 0.25);
+    const tifoGeo = new THREE.BoxGeometry(halfL * 1.4, 0.95, 0.25);
     this.disposables.push(tifoGeo);
     const eastTifo = new THREE.Mesh(tifoGeo, bannerMat);
+    eastTifo.name = "Club_Identity_East_Banner";
     eastTifo.position.set(0, 9.2, -(halfW + 10.2));
     this.crowdGroup.add(eastTifo);
 
@@ -1156,7 +1351,8 @@ export class StadiumArenaEnvironment {
       }
 
       const phase = (i * 1.37) % (Math.PI * 2);
-      this.supporterMeta.push({ baseX: bx, baseY: by, baseZ: bz, rotY, phase, side });
+      const angleRad = Math.atan2(bz, bx);
+      this.supporterMeta.push({ baseX: bx, baseY: by, baseZ: bz, rotY, phase, angleRad, side });
 
       dummyMatrix.makeRotationY(rotY);
       dummyMatrix.setPosition(bx, by, bz);
@@ -1181,6 +1377,17 @@ export class StadiumArenaEnvironment {
   }
 
   /**
+   * Triggers a stadium-wide radial Mexican Wave around the supporter bowl.
+   */
+  public triggerCrowdWave(durationSec: number = 8.0): void {
+    this.crowdWaveTimerSec = Math.max(this.crowdWaveTimerSec, durationSec);
+  }
+
+  public isCrowdWaveActive(): boolean {
+    return this.crowdWaveTimerSec > 0;
+  }
+
+  /**
    * Triggers an event-driven stadium crowd reaction (goal celebration surge, save cheer,
    * near-miss gasp, attacking roar, red card reaction, or fulltime ovation).
    */
@@ -1194,6 +1401,7 @@ export class StadiumArenaEnvironment {
       case "goal":
         this.crowdReactionIntensity = 1.0;
         this.crowdReactionTimerSec = 6.5;
+        this.crowdWaveTimerSec = 7.5;
         break;
       case "save":
       case "near_miss":
@@ -1204,6 +1412,9 @@ export class StadiumArenaEnvironment {
       case "fulltime":
         this.crowdReactionIntensity = 0.88;
         this.crowdReactionTimerSec = 5.0;
+        if (reaction === "fulltime") {
+          this.crowdWaveTimerSec = 6.0;
+        }
         break;
       case "attack":
         this.crowdReactionIntensity = Math.max(this.crowdReactionIntensity, 0.48);
@@ -1220,11 +1431,13 @@ export class StadiumArenaEnvironment {
     type: StadiumCrowdReactionType;
     intensity: number;
     side: "home" | "away" | "both";
+    waveActive?: boolean;
   } {
     return {
       type: this.crowdReactionType,
       intensity: this.crowdReactionIntensity,
       side: this.crowdReactionSide,
+      waveActive: this.crowdWaveTimerSec > 0,
     };
   }
 
@@ -1301,7 +1514,7 @@ export class StadiumArenaEnvironment {
     // 1. Step Stadium LED Advertising Network (rotates only on slot boundaries)
     this.adNetwork.update(deltaSec, this.elapsedSec, effectiveMatchSec);
 
-    // 2. Decay crowd reaction timer smoothly back to ambient open-play pulse
+    // 2. Decay crowd reaction & wave timers smoothly back to ambient open-play pulse
     if (this.crowdReactionTimerSec > 0) {
       this.crowdReactionTimerSec = Math.max(0, this.crowdReactionTimerSec - deltaSec);
       if (this.crowdReactionTimerSec === 0) {
@@ -1309,12 +1522,17 @@ export class StadiumArenaEnvironment {
         this.crowdReactionIntensity = 0.15;
       }
     }
+    if (this.crowdWaveTimerSec > 0) {
+      this.crowdWaveTimerSec = Math.max(0, this.crowdWaveTimerSec - deltaSec);
+    }
 
     // 3. Animate instanced supporters (jumping wave during excitement, subtle sway in open play)
     if (this.supporterMesh && this.supporterMeta.length > 0) {
       const mat4 = new THREE.Matrix4();
       const freq = this.crowdReactionIntensity > 0.5 ? 11.5 : 4.2;
       const amp = 0.06 + this.crowdReactionIntensity * 0.42;
+      const waveActive = this.crowdWaveTimerSec > 0;
+      const waveFrontAngle = (this.elapsedSec * 2.8) % (Math.PI * 2);
 
       for (let i = 0; i < this.supporterMeta.length; i++) {
         const meta = this.supporterMeta[i];
@@ -1323,7 +1541,13 @@ export class StadiumArenaEnvironment {
           meta.side === "neutral" ||
           meta.side === this.crowdReactionSide;
         const localAmp = isReactingSide ? amp : amp * 0.3;
-        const bounce = Math.abs(Math.sin(this.elapsedSec * freq + meta.phase + meta.baseX * 0.08)) * localAmp;
+        let bounce =
+          Math.abs(Math.sin(this.elapsedSec * freq + meta.phase + meta.baseX * 0.08)) * localAmp;
+
+        if (waveActive) {
+          const waveCrest = Math.max(0, Math.cos(meta.angleRad - waveFrontAngle));
+          bounce += Math.pow(waveCrest, 4) * 0.52;
+        }
 
         mat4.makeRotationY(meta.rotY);
         mat4.setPosition(meta.baseX, meta.baseY + bounce, meta.baseZ);
