@@ -451,10 +451,22 @@ def run_verification(headless: bool = True) -> int:
         print(f"[PASS] 2D Blueprint status indicator: '{status_text_2d}'")
         assert "2D Blueprint Active" in status_text_2d
 
-        # Switch back to 3D WebGL
+        # Switch back to 3D WebGL. Re-mounting the Three.js scene and reloading
+        # its six GLB assets is slower than the initial mode toggle in headless CI.
         toggle_btn.click()
-        page.wait_for_selector('[data-testid="club-operations-3d-canvas"]', timeout=5000)
-        print("[PASS] Successfully restored 3D WebGL viewport.")
+        page.wait_for_selector(
+            '[data-testid="club-operations-3d-canvas"]',
+            state="visible",
+            timeout=25000,
+        )
+        page.wait_for_function(
+            """() => {
+                const status = document.querySelector('[data-testid="glb-asset-status"]');
+                return Boolean(status && status.textContent.includes("WebGL Active"));
+            }""",
+            timeout=25000,
+        )
+        print("[PASS] Successfully restored the fully initialized 3D WebGL viewport.")
 
         # -------------------------------------------------------------
         # TEST 4: Unified Living World Timeline Drawer & Filters

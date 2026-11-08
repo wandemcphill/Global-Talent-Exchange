@@ -17,10 +17,13 @@
 
 export type ManualCameraMode =
   | "director_auto"
+  | "broadcast_main"
   | "tactical_high"
   | "closeup_action"
   | "endzone_home"
   | "endzone_away"
+  | "replay_cam"
+  | "celebration_cam"
   | "dugout_cam"
   | "tunnel_walkout"
   | "free_orbit";
@@ -78,7 +81,14 @@ export class CameraDirector {
     const ballZ = ballPos3D[2];
 
     // 1. Check if user selected manual camera override
-    if (this.manualMode === "tactical_high") {
+    if (this.manualMode === "broadcast_main") {
+      const trackingX = Math.max(-32, Math.min(32, ballX * 0.62));
+      this.targetPose = {
+        position: [trackingX, 30, 58],
+        target: [ballX * 0.45, ballY * 0.25, ballZ * 0.25],
+        fov: 42,
+      };
+    } else if (this.manualMode === "tactical_high") {
       this.targetPose = {
         position: [0, 68, 30],
         target: [0, 0, 0],
@@ -92,9 +102,10 @@ export class CameraDirector {
         fov: 32,
       };
     } else if (this.manualMode === "endzone_home") {
+      const goalSide = ballX >= 0 ? 62 : -62;
       this.targetPose = {
-        position: [-62, 16, 0],
-        target: [0, 0, 0],
+        position: [goalSide, 15, ballZ * 0.3],
+        target: [ballX * 0.6, Math.max(0.5, ballY), ballZ * 0.4],
         fov: 35,
       };
     } else if (this.manualMode === "endzone_away") {
@@ -102,6 +113,27 @@ export class CameraDirector {
         position: [62, 16, 0],
         target: [0, 0, 0],
         fov: 35,
+      };
+    } else if (this.manualMode === "replay_cam") {
+      this.celebrationOrbitAngle += deltaSec * 0.38;
+      const sweepX = ballX + Math.sin(this.celebrationOrbitAngle) * 14;
+      this.targetPose = {
+        position: [Math.max(-48, Math.min(48, sweepX)), 14.5, 36],
+        target: [ballX, Math.max(0.6, ballY), ballZ],
+        fov: 33,
+      };
+    } else if (this.manualMode === "celebration_cam") {
+      const center = activeGoalScorerPos3D || [ballX, 0, ballZ];
+      this.celebrationOrbitAngle += deltaSec * 0.75;
+      const radius = 10.5;
+      this.targetPose = {
+        position: [
+          center[0] + Math.cos(this.celebrationOrbitAngle) * radius,
+          4.2,
+          center[2] + Math.sin(this.celebrationOrbitAngle) * radius,
+        ],
+        target: [center[0], 1.35, center[2]],
+        fov: 34,
       };
     } else if (this.manualMode === "dugout_cam") {
       this.targetPose = {

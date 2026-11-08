@@ -44,13 +44,40 @@ import * as THREE from "three";
 import { FIFA_PITCH_DIMENSIONS, PITCH_LANDMARKS } from "./matchCoordinates";
 import { SpectatorSafeTeamView } from "./spectatorContract";
 import type { DeviceQualityTier } from "../GtexSceneTypes";
+import {
+  StadiumAdvertisingNetwork,
+  type StadiumAdvertisingNetworkOptions,
+  type StadiumLedCampaign,
+} from "./StadiumAdvertisingNetwork";
+
+export type StadiumCrowdReactionType =
+  | "calm"
+  | "attack"
+  | "near_miss"
+  | "save"
+  | "goal"
+  | "red_card"
+  | "fulltime";
 
 export interface StadiumArenaOptions {
   homeTeam?: SpectatorSafeTeamView;
   awayTeam?: SpectatorSafeTeamView;
   qualityTier?: DeviceQualityTier;
   stadiumName?: string;
+  competitionName?: string;
+  matchId?: string;
   attendancePct?: number; // 0..100
+  adNetworkOptions?: StadiumAdvertisingNetworkOptions;
+  initialCampaigns?: StadiumLedCampaign[];
+}
+
+interface SupporterInstanceMeta {
+  baseX: number;
+  baseY: number;
+  baseZ: number;
+  rotY: number;
+  phase: number;
+  side: "home" | "away" | "neutral";
 }
 
 export class StadiumArenaEnvironment {
@@ -64,18 +91,33 @@ export class StadiumArenaEnvironment {
   private qualityTier: DeviceQualityTier;
   private homeTeam: SpectatorSafeTeamView;
   private awayTeam: SpectatorSafeTeamView;
-  private adTexture: THREE.CanvasTexture | null = null;
-  private adCanvas: HTMLCanvasElement | null = null;
-  private adContext: CanvasRenderingContext2D | null = null;
-  private adScrollOffset: number = 0;
+  private competitionName: string;
+  private adNetwork: StadiumAdvertisingNetwork;
+  private adTouchlineTexture: THREE.CanvasTexture | null = null;
+  private adGoalTexture: THREE.CanvasTexture | null = null;
+  private scoreboardCanvas: HTMLCanvasElement | null = null;
+  private scoreboardContext: CanvasRenderingContext2D | null = null;
+  private scoreboardTexture: THREE.CanvasTexture | null = null;
+  private lastScoreboardKey: string = "";
+  private homeCrowdMat: THREE.MeshLambertMaterial | null = null;
+  private awayCrowdMat: THREE.MeshLambertMaterial | null = null;
+  private bannerMat: THREE.MeshBasicMaterial | null = null;
+  private supporterMesh: THREE.InstancedMesh | null = null;
+  private supporterMeta: SupporterInstanceMeta[] = [];
+  private crowdReactionType: StadiumCrowdReactionType = "calm";
+  private crowdReactionSide: "home" | "away" | "both" = "both";
+  private crowdReactionIntensity: number = 0.15;
+  private crowdReactionTimerSec: number = 0;
+  private elapsedSec: number = 0;
   private disposables: Array<{ dispose: () => void }> = [];
 
   constructor(scene: THREE.Scene, options: StadiumArenaOptions = {}) {
     this.qualityTier = options.qualityTier || "high";
+    this.competitionName = options.competitionName || "GTEX PREMIER BROADCAST";
     this.homeTeam = options.homeTeam || {
       team_id: "home-default",
-      team_name: "Apex Home FC",
-      short_name: "APX",
+      team_name: "Lagos Atlas FC",
+      short_name: "LAG",
       formation: "4-3-3",
       primary_color: "#00E676",
       secondary_color: "#1B5E20",
@@ -84,14 +126,32 @@ export class StadiumArenaEnvironment {
     };
     this.awayTeam = options.awayTeam || {
       team_id: "away-default",
-      team_name: "Titan Away FC",
-      short_name: "TTN",
+      team_name: "Abuja Sovereign SC",
+      short_name: "ABJ",
       formation: "4-4-2",
       primary_color: "#2979FF",
       secondary_color: "#0D47A1",
       accent_color: "#FFFFFF",
       goalkeeper_color: "#FF3D00",
     };
+
+    this.adNetwork = new StadiumAdvertisingNetwork({
+      enableNetworkFetch: false,
+      ...options.adNetworkOptions,
+    });
+    this.adNetwork.setMatchContext({
+      matchId: options.matchId,
+      homeTeamId: this.homeTeam.team_id,
+      homeTeamName: this.homeTeam.team_name,
+      homePrimaryColor: this.homeTeam.primary_color,
+      awayTeamId: this.awayTeam.team_id,
+      awayTeamName: this.awayTeam.team_name,
+      awayPrimaryColor: this.awayTeam.primary_color,
+      competitionName: this.competitionName,
+    });
+    if (options.initialCampaigns && options.initialCampaigns.length > 0) {
+      this.adNetwork.setCampaigns(options.initialCampaigns);
+    }
 
     this.group = new THREE.Group();
     this.group.name = "GTEX_Stadium_Arena_Environment";
@@ -130,10 +190,10 @@ export class StadiumArenaEnvironment {
     this.buildCrowd(options.attendancePct ?? 94);
     this.buildFloodlightsAndEnvironment(scene);
 
-    // Freeze world matrices on all static stadium architecture to eliminate 180+ per-frame matrix multiplications
+    // Freeze world matrices on static stadium architecture while keeping animated crowd unlocked
     this.group.updateMatrixWorld(true);
     this.group.traverse((obj) => {
-      if (obj !== this.group) {
+      if (obj !== this.group && obj !== this.crowdGroup && !this.crowdGroup.children.includes(obj)) {
         obj.matrixAutoUpdate = false;
       }
     });
@@ -592,112 +652,95 @@ export class StadiumArenaEnvironment {
   }
 
   // ---------------------------------------------------------------------------
-  // 6. Dynamic LED Perimeter Advertising Boards
+  // 6. Dynamic LED Perimeter Advertising Boards (GTEX Stadium Advertising Network)
   // ---------------------------------------------------------------------------
   private buildPerimeterAdBoards(): void {
     const halfL = FIFA_PITCH_DIMENSIONS.length / 2;
     const halfW = FIFA_PITCH_DIMENSIONS.width / 2;
-    const boardH = 0.95;
+    const boardH = 1.38;
     const offsetSide = halfW + 3.2;
     const offsetGoal = halfL + 4.8;
 
-    // Create Canvas Texture for Real-Time LED Scrolling Sponsor Campaigns
-    const canvas = document.createElement("canvas");
-    canvas.width = 1024;
-    canvas.height = 64;
-    let ctx: CanvasRenderingContext2D | null = null;
-    try {
-      ctx = canvas.getContext("2d");
-    } catch {
-      ctx = null;
-    }
-    if (ctx) {
-      this.adCanvas = canvas;
-      this.adContext = ctx;
-      this.renderAdCanvasContent();
-      this.adTexture = new THREE.CanvasTexture(canvas);
-      this.adTexture.wrapS = THREE.RepeatWrapping;
-      this.adTexture.wrapT = THREE.ClampToEdgeWrapping;
-      this.disposables.push(this.adTexture);
-    }
+    const baseTexture = this.adNetwork.getTexture();
+    this.adTouchlineTexture = baseTexture;
+    this.adTouchlineTexture.repeat.set(3, 1);
 
-    const ledMat = this.adTexture
-      ? new THREE.MeshBasicMaterial({ map: this.adTexture })
-      : new THREE.MeshBasicMaterial({ color: 0x0284c7 });
-    this.disposables.push(ledMat);
+    const ledScreenMat = new THREE.MeshBasicMaterial({
+      map: this.adTouchlineTexture,
+      side: THREE.DoubleSide,
+    });
+    const cabinetFrameMat = new THREE.MeshLambertMaterial({ color: 0x090d16 });
+    this.disposables.push(ledScreenMat, cabinetFrameMat);
 
-    // Side Touchline Boards (Top and Bottom)
-    const sideBoardGeo = new THREE.BoxGeometry(FIFA_PITCH_DIMENSIONS.length + 8, boardH, 0.18);
-    this.disposables.push(sideBoardGeo);
+    // A. Far Touchline Broadcast LED Board (z = -offsetSide, facing +Z toward main broadcast camera at [0, 25, 58])
+    const touchlineLen = FIFA_PITCH_DIMENSIONS.length + 8;
+    const backingGeo = new THREE.BoxGeometry(touchlineLen, boardH, 0.28);
+    const screenGeo = new THREE.PlaneGeometry(touchlineLen, boardH - 0.08);
+    this.disposables.push(backingGeo, screenGeo);
 
-    // Top Touchline LED Board
-    const topBoard = new THREE.Mesh(sideBoardGeo, ledMat);
-    topBoard.position.set(0, boardH / 2, -offsetSide);
-    this.adBoardsGroup.add(topBoard);
+    const farBacking = new THREE.Mesh(backingGeo, cabinetFrameMat);
+    farBacking.position.set(0, boardH / 2, -offsetSide - 0.16);
+    farBacking.rotation.x = -0.22; // 12.6° tilt upward toward broadcast camera
+    this.adBoardsGroup.add(farBacking);
 
-    // Bottom Touchline LED Board (with gap for player tunnel / dugouts)
-    const bottomBoardLeft = new THREE.Mesh(
-      new THREE.BoxGeometry(halfL - 8, boardH, 0.18),
-      ledMat
-    );
-    bottomBoardLeft.position.set(-halfL / 2 - 4, boardH / 2, offsetSide);
-    const bottomBoardRight = new THREE.Mesh(
-      new THREE.BoxGeometry(halfL - 8, boardH, 0.18),
-      ledMat
-    );
-    bottomBoardRight.position.set(halfL / 2 + 4, boardH / 2, offsetSide);
-    this.adBoardsGroup.add(bottomBoardLeft, bottomBoardRight);
+    const farScreen = new THREE.Mesh(screenGeo, ledScreenMat);
+    farScreen.position.set(0, boardH / 2 + 0.02, -offsetSide);
+    farScreen.rotation.x = -0.22;
+    this.adBoardsGroup.add(farScreen);
 
-    // Goal End LED Boards (Behind Left and Right Goal Nets)
-    const goalBoardGeo = new THREE.BoxGeometry(0.18, boardH, FIFA_PITCH_DIMENSIONS.width + 6);
-    this.disposables.push(goalBoardGeo);
+    // B. Near Touchline LED Boards (Left & Right of Dugouts / Walkout Tunnel)
+    const nearSegLen = halfL - 8;
+    const nearBackingGeo = new THREE.BoxGeometry(nearSegLen, boardH, 0.26);
+    const nearScreenGeo = new THREE.PlaneGeometry(nearSegLen, boardH - 0.08);
+    this.disposables.push(nearBackingGeo, nearScreenGeo);
 
-    const leftGoalBoard = new THREE.Mesh(goalBoardGeo, ledMat);
-    leftGoalBoard.position.set(-offsetGoal, boardH / 2, 0);
-    const rightGoalBoard = new THREE.Mesh(goalBoardGeo, ledMat);
-    rightGoalBoard.position.set(offsetGoal, boardH / 2, 0);
-    this.adBoardsGroup.add(leftGoalBoard, rightGoalBoard);
+    const leftNearBacking = new THREE.Mesh(nearBackingGeo, cabinetFrameMat);
+    leftNearBacking.position.set(-halfL / 2 - 4, boardH / 2, offsetSide + 0.14);
+    const leftNearScreen = new THREE.Mesh(nearScreenGeo, ledScreenMat);
+    leftNearScreen.position.set(-halfL / 2 - 4, boardH / 2, offsetSide);
+    leftNearScreen.rotation.y = Math.PI;
+
+    const rightNearBacking = new THREE.Mesh(nearBackingGeo, cabinetFrameMat);
+    rightNearBacking.position.set(halfL / 2 + 4, boardH / 2, offsetSide + 0.14);
+    const rightNearScreen = new THREE.Mesh(nearScreenGeo, ledScreenMat);
+    rightNearScreen.position.set(halfL / 2 + 4, boardH / 2, offsetSide);
+    rightNearScreen.rotation.y = Math.PI;
+    this.adBoardsGroup.add(leftNearBacking, leftNearScreen, rightNearBacking, rightNearScreen);
+
+    // C. Goal End LED Boards (Behind Left and Right Goal Nets)
+    const goalLen = FIFA_PITCH_DIMENSIONS.width + 6;
+    const goalBackingGeo = new THREE.BoxGeometry(0.28, boardH, goalLen);
+    const goalScreenGeo = new THREE.PlaneGeometry(goalLen, boardH - 0.08);
+    this.disposables.push(goalBackingGeo, goalScreenGeo);
+
+    const leftGoalBacking = new THREE.Mesh(goalBackingGeo, cabinetFrameMat);
+    leftGoalBacking.position.set(-offsetGoal - 0.16, boardH / 2, 0);
+    const leftGoalScreen = new THREE.Mesh(goalScreenGeo, ledScreenMat);
+    leftGoalScreen.position.set(-offsetGoal, boardH / 2, 0);
+    leftGoalScreen.rotation.y = Math.PI / 2;
+
+    const rightGoalBacking = new THREE.Mesh(goalBackingGeo, cabinetFrameMat);
+    rightGoalBacking.position.set(offsetGoal + 0.16, boardH / 2, 0);
+    const rightGoalScreen = new THREE.Mesh(goalScreenGeo, ledScreenMat);
+    rightGoalScreen.position.set(offsetGoal, boardH / 2, 0);
+    rightGoalScreen.rotation.y = -Math.PI / 2;
+
+    this.adBoardsGroup.add(leftGoalBacking, leftGoalScreen, rightGoalBacking, rightGoalScreen);
+
+    // D. East Stand Mid-Tier Broadcast Fascia LED Ribbon (directly visible in TV Wide & Broadcast shots)
+    const fasciaRibbonGeo = new THREE.PlaneGeometry(touchlineLen + 4, 1.55);
+    this.disposables.push(fasciaRibbonGeo);
+    const eastFasciaRibbon = new THREE.Mesh(fasciaRibbonGeo, ledScreenMat);
+    eastFasciaRibbon.position.set(0, 6.8, -(halfW + 9.85));
+    this.adBoardsGroup.add(eastFasciaRibbon);
   }
 
-  private renderAdCanvasContent(): void {
-    const ctx = this.adContext;
-    if (!ctx || !this.adCanvas) return;
-
-    ctx.fillStyle = "#030712";
-    ctx.fillRect(0, 0, this.adCanvas.width, this.adCanvas.height);
-
-    // Neon accent edge
-    ctx.fillStyle = "#00e5ff";
-    ctx.fillRect(0, 0, this.adCanvas.width, 3);
-    ctx.fillStyle = "#10b981";
-    ctx.fillRect(0, this.adCanvas.height - 3, this.adCanvas.width, 3);
-
-    // Sponsor brand slogans rendered once into the tileable 1024x64 texture;
-    // runtime scrolling shifts UV offset.x on the GPU without CPU-to-GPU texImage2D stalls.
-    const slogans = [
-      "GTEX GLOBAL TALENT EXCHANGE",
-      "APEX REGEN TOURNAMENT ARENA",
-      "CHRONOS TOURBILLON — OFFICIAL TIMEKEEPER",
-      "SOVEREIGN EXECUTIVE FLEET",
-    ];
-
-    ctx.font = "bold 19px 'Segoe UI', Inter, sans-serif";
-    ctx.textBaseline = "middle";
-
-    let xCursor = 18;
-    slogans.forEach((slogan, idx) => {
-      ctx.fillStyle = idx % 2 === 0 ? "#00E676" : "#38BDF8";
-      ctx.fillText(slogan, xCursor, 34);
-      xCursor += 252;
-    });
-
-    if (this.adTexture) {
-      this.adTexture.needsUpdate = true;
-    }
+  public getAdvertisingNetwork(): StadiumAdvertisingNetwork {
+    return this.adNetwork;
   }
 
   // ---------------------------------------------------------------------------
-  // 7. Stadium Grandstands & Architecture (4 Major Stands)
+  // 7. Stadium Grandstands, Club Identity & Live Jumbotron Scoreboards
   // ---------------------------------------------------------------------------
   private buildGrandstands(): void {
     const halfL = FIFA_PITCH_DIMENSIONS.length / 2;
@@ -710,8 +753,6 @@ export class StadiumArenaEnvironment {
             color: 0x1e293b,
             roughness: 0.85,
           });
-    // Use MeshStandardMaterial / MeshLambertMaterial instead of MeshPhysicalMaterial(transmission)
-    // to avoid triggering Three.js's costly second full-scene opaque render pass.
     const vipGlassMat =
       this.qualityTier === "low"
         ? new THREE.MeshLambertMaterial({
@@ -736,12 +777,34 @@ export class StadiumArenaEnvironment {
           });
     this.disposables.push(concreteMat, vipGlassMat, roofMat);
 
+    // Live Stadium Scoreboard Jumbotron Canvas Texture
+    if (typeof document !== "undefined") {
+      const sbCanvas = document.createElement("canvas");
+      sbCanvas.width = 512;
+      sbCanvas.height = 256;
+      try {
+        const isJsdom = typeof navigator !== "undefined" && /jsdom/i.test(navigator.userAgent || "") && !(sbCanvas.getContext as any)?._isMockFunction;
+        this.scoreboardContext = isJsdom ? null : sbCanvas.getContext("2d");
+      } catch {
+        this.scoreboardContext = null;
+      }
+      this.scoreboardCanvas = sbCanvas;
+      this.scoreboardTexture = new THREE.CanvasTexture(sbCanvas);
+      this.scoreboardTexture.colorSpace = THREE.SRGBColorSpace;
+      this.disposables.push(this.scoreboardTexture);
+      this.updateScoreboard(0, 0, "00:00", "LIVE MATCHDAY BROADCAST");
+    }
+
+    const jumbotronScreenMat = this.scoreboardTexture
+      ? new THREE.MeshBasicMaterial({ map: this.scoreboardTexture, side: THREE.DoubleSide })
+      : new THREE.MeshBasicMaterial({ color: 0x0284c7 });
+    this.disposables.push(jumbotronScreenMat);
+
     // A. West Grandstand (Main Stand: positioned behind the TV broadcast camera gantry at z = 56 so it never occludes the pitch)
     const buildWestMainStand = () => {
       const standGroup = new THREE.Group();
       standGroup.position.set(0, 0, halfW + 34);
 
-      // Lower Tier Tiered Rake
       const lowerGeo = new THREE.BoxGeometry(FIFA_PITCH_DIMENSIONS.length + 10, 6, 12);
       this.disposables.push(lowerGeo);
       const lower = new THREE.Mesh(lowerGeo, concreteMat);
@@ -749,14 +812,12 @@ export class StadiumArenaEnvironment {
       standGroup.add(lower);
 
       if (this.qualityTier !== "low") {
-        // VIP Hospitality Skybox Floor
         const vipGeo = new THREE.BoxGeometry(FIFA_PITCH_DIMENSIONS.length + 6, 4, 10);
         this.disposables.push(vipGeo);
         const vip = new THREE.Mesh(vipGeo, vipGlassMat);
         vip.position.set(0, 8, 4);
         standGroup.add(vip);
 
-        // Upper Tier Rake
         const upperGeo = new THREE.BoxGeometry(FIFA_PITCH_DIMENSIONS.length + 14, 8, 14);
         this.disposables.push(upperGeo);
         const upper = new THREE.Mesh(upperGeo, concreteMat);
@@ -764,7 +825,6 @@ export class StadiumArenaEnvironment {
         standGroup.add(upper);
       }
 
-      // Cantilevered Roof Canopy (set behind broadcast camera gantry)
       const roofGeo = new THREE.BoxGeometry(FIFA_PITCH_DIMENSIONS.length + 18, 1.2, 22);
       this.disposables.push(roofGeo);
       const roof = new THREE.Mesh(roofGeo, roofMat);
@@ -775,7 +835,7 @@ export class StadiumArenaEnvironment {
       this.stadiumGroup.add(standGroup);
     };
 
-    // B. East Stand (Opposite Stand: 2-Tier Rake + Roof)
+    // B. East Stand (Opposite Stand: 2-Tier Rake + Roof + Corner Broadcast Jumbotrons)
     const buildEastStand = () => {
       const standGroup = new THREE.Group();
       standGroup.position.set(0, 0, -(halfW + 16));
@@ -800,6 +860,20 @@ export class StadiumArenaEnvironment {
       roof.position.set(0, 20, -3);
       roof.rotation.x = -0.08;
       standGroup.add(roof);
+
+      // Dual Corner Jumbotron Screens angled toward the main broadcast camera
+      const jumboScreenGeo = new THREE.PlaneGeometry(11.5, 5.8);
+      this.disposables.push(jumboScreenGeo);
+
+      const leftJumbo = new THREE.Mesh(jumboScreenGeo, jumbotronScreenMat);
+      leftJumbo.position.set(-halfL + 4, 15.8, 5.5);
+      leftJumbo.rotation.y = 0.36;
+      standGroup.add(leftJumbo);
+
+      const rightJumbo = new THREE.Mesh(jumboScreenGeo, jumbotronScreenMat);
+      rightJumbo.position.set(halfL - 4, 15.8, 5.5);
+      rightJumbo.rotation.y = -0.36;
+      standGroup.add(rightJumbo);
 
       this.stadiumGroup.add(standGroup);
     };
@@ -837,11 +911,11 @@ export class StadiumArenaEnvironment {
       standGroup.add(away);
 
       // Elevated Digital Scoreboard Jumbotron
-      const scoreGeo = new THREE.BoxGeometry(1.2, 6.0, 14.0);
-      const scoreMat = new THREE.MeshBasicMaterial({ color: 0x0284c7 });
-      this.disposables.push(scoreGeo, scoreMat);
-      const scoreboard = new THREE.Mesh(scoreGeo, scoreMat);
-      scoreboard.position.set(4, 16, 0);
+      const scoreGeo = new THREE.PlaneGeometry(14.0, 6.0);
+      this.disposables.push(scoreGeo);
+      const scoreboard = new THREE.Mesh(scoreGeo, jumbotronScreenMat);
+      scoreboard.position.set(-5.2, 16, 0);
+      scoreboard.rotation.y = -Math.PI / 2;
       standGroup.add(scoreboard);
 
       const roofGeo = new THREE.BoxGeometry(22, 1.2, FIFA_PITCH_DIMENSIONS.width + 16);
@@ -860,8 +934,110 @@ export class StadiumArenaEnvironment {
     buildSouthAwayStand();
   }
 
+  /**
+   * Updates the stadium jumbotron scoreboard texture only when score, clock minute, or banner changes.
+   */
+  public updateScoreboard(
+    homeScore: number,
+    awayScore: number,
+    clockLabel: string,
+    eventBanner?: string | null
+  ): void {
+    const key = `${this.homeTeam.short_name}:${homeScore}-${awayScore}:${this.awayTeam.short_name}:${clockLabel}:${eventBanner || ""}`;
+    if (key === this.lastScoreboardKey) return;
+    this.lastScoreboardKey = key;
+
+    const ctx = this.scoreboardContext;
+    const canvas = this.scoreboardCanvas;
+    if (!ctx || !canvas) return;
+
+    ctx.fillStyle = "#040814";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Header competition bar
+    ctx.fillStyle = "#10B981";
+    ctx.fillRect(0, 0, canvas.width, 40);
+    ctx.fillStyle = "#020617";
+    ctx.font = "900 20px 'Outfit', 'Inter', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(this.competitionName.toUpperCase().slice(0, 32), canvas.width / 2, 21);
+
+    // Home club block
+    ctx.fillStyle = this.homeTeam.primary_color || "#00E676";
+    ctx.fillRect(24, 58, 148, 108);
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = "900 44px 'Outfit', 'Inter', sans-serif";
+    ctx.fillText((this.homeTeam.short_name || "HOM").slice(0, 4), 98, 114);
+
+    // Away club block
+    ctx.fillStyle = this.awayTeam.primary_color || "#2979FF";
+    ctx.fillRect(canvas.width - 172, 58, 148, 108);
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillText((this.awayTeam.short_name || "AWY").slice(0, 4), canvas.width - 98, 114);
+
+    // Live Score in Center
+    ctx.fillStyle = "#F8FAFC";
+    ctx.font = "900 68px 'JetBrains Mono', monospace";
+    ctx.fillText(`${homeScore} - ${awayScore}`, canvas.width / 2, 116);
+
+    // Match Clock & Event Strip
+    ctx.fillStyle = "#0F172A";
+    ctx.fillRect(24, 182, canvas.width - 48, 56);
+    ctx.strokeStyle = "#38BDF8";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(24, 182, canvas.width - 48, 56);
+
+    ctx.fillStyle = "#38BDF8";
+    ctx.font = "800 26px 'JetBrains Mono', monospace";
+    const bottomLabel = eventBanner
+      ? `${clockLabel}  •  ${eventBanner.toUpperCase().slice(0, 22)}`
+      : `${clockLabel}  •  ${this.homeTeam.team_name.toUpperCase().slice(0, 12)} v ${this.awayTeam.team_name.toUpperCase().slice(0, 12)}`;
+    ctx.fillText(bottomLabel, canvas.width / 2, 211);
+
+    if (this.scoreboardTexture) {
+      this.scoreboardTexture.needsUpdate = true;
+    }
+  }
+
+  /**
+   * Updates club colours, banners, scoreboard, and ad network match context dynamically.
+   */
+  public setTeamIdentity(
+    homeTeam: SpectatorSafeTeamView,
+    awayTeam: SpectatorSafeTeamView,
+    competitionName?: string,
+    matchId?: string
+  ): void {
+    this.homeTeam = homeTeam;
+    this.awayTeam = awayTeam;
+    if (competitionName) {
+      this.competitionName = competitionName;
+    }
+    if (this.homeCrowdMat) {
+      this.homeCrowdMat.color.set(homeTeam.primary_color || "#00E676");
+    }
+    if (this.awayCrowdMat) {
+      this.awayCrowdMat.color.set(awayTeam.primary_color || "#2979FF");
+    }
+    if (this.bannerMat) {
+      this.bannerMat.color.set(homeTeam.accent_color || "#FFFFFF");
+    }
+    this.adNetwork.setMatchContext({
+      matchId,
+      homeTeamId: homeTeam.team_id,
+      homeTeamName: homeTeam.team_name,
+      homePrimaryColor: homeTeam.primary_color,
+      awayTeamId: awayTeam.team_id,
+      awayTeamName: awayTeam.team_name,
+      awayPrimaryColor: awayTeam.primary_color,
+      competitionName: this.competitionName,
+    });
+    this.lastScoreboardKey = "";
+  }
+
   // ---------------------------------------------------------------------------
-  // 8. Crowd Presentation (Home/Away Supporter Color Distribution)
+  // 8. Crowd Presentation & Instanced Supporter Reactions (Phase 7)
   // ---------------------------------------------------------------------------
   private buildCrowd(attendancePct: number): void {
     const halfL = FIFA_PITCH_DIMENSIONS.length / 2;
@@ -874,6 +1050,9 @@ export class StadiumArenaEnvironment {
     const awayCrowdMat = new THREE.MeshLambertMaterial({ color: awayColor });
     const neutralCrowdMat = new THREE.MeshLambertMaterial({ color: 0x475569 });
     const bannerMat = new THREE.MeshBasicMaterial({ color: accentColor });
+    this.homeCrowdMat = homeCrowdMat;
+    this.awayCrowdMat = awayCrowdMat;
+    this.bannerMat = bannerMat;
     this.disposables.push(homeCrowdMat, awayCrowdMat, neutralCrowdMat, bannerMat);
 
     const crowdBlockGeo = new THREE.BoxGeometry(halfL * 1.8 * Math.max(0.65, attendancePct / 100), 1.6, 2.4);
@@ -911,14 +1090,142 @@ export class StadiumArenaEnvironment {
     awayCrowd.position.set(halfL + 15, 7.5, 0);
     this.crowdGroup.add(awayCrowd);
 
-    // High quality tier adds supporter banner tifo strips along the East & Kop fascias
-    if (this.qualityTier === "high" || this.qualityTier === "ultra") {
-      const tifoGeo = new THREE.BoxGeometry(halfL * 1.4, 0.75, 0.25);
-      this.disposables.push(tifoGeo);
-      const eastTifo = new THREE.Mesh(tifoGeo, bannerMat);
-      eastTifo.position.set(0, 9.2, -(halfW + 10.2));
-      this.crowdGroup.add(eastTifo);
+    // Supporter banner tifo strips along the East & Kop fascias
+    const tifoGeo = new THREE.BoxGeometry(halfL * 1.4, 0.75, 0.25);
+    this.disposables.push(tifoGeo);
+    const eastTifo = new THREE.Mesh(tifoGeo, bannerMat);
+    eastTifo.position.set(0, 9.2, -(halfW + 10.2));
+    this.crowdGroup.add(eastTifo);
+
+    // Instanced 3D Supporter Crowd (1 single GPU draw call for hundreds of reactive supporters)
+    const supporterCount = this.qualityTier === "low" ? 240 : 720;
+    const supGeo = new THREE.BoxGeometry(0.52, 1.25, 0.42);
+    const supMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    this.disposables.push(supGeo, supMat);
+
+    const instanced = new THREE.InstancedMesh(supGeo, supMat, supporterCount);
+    instanced.name = "Instanced_Supporter_Crowd";
+    instanced.castShadow = false;
+    instanced.receiveShadow = false;
+
+    const dummyMatrix = new THREE.Matrix4();
+    const color = new THREE.Color();
+    const homeSecondary = new THREE.Color(this.homeTeam.secondary_color || "#1B5E20");
+    const awaySecondary = new THREE.Color(this.awayTeam.secondary_color || "#0D47A1");
+    this.supporterMeta = [];
+
+    for (let i = 0; i < supporterCount; i++) {
+      let bx = 0;
+      let by = 5.5;
+      let bz = -(halfW + 13);
+      let rotY = 0;
+      let side: "home" | "away" | "neutral" = "home";
+
+      if (i < supporterCount * 0.55) {
+        // East Stand lower & upper rows (directly visible in TV broadcast camera)
+        const row = i % 6;
+        const col = Math.floor(i / 6);
+        const maxCols = Math.max(1, Math.floor((supporterCount * 0.55) / 6));
+        bx = -halfL * 0.92 + (col / maxCols) * (FIFA_PITCH_DIMENSIONS.length * 0.92);
+        by = 3.2 + row * 1.45 + (row >= 3 ? 3.2 : 0);
+        bz = -(halfW + 11.5 + row * 1.65 + (row >= 3 ? 2.5 : 0));
+        rotY = 0;
+        side = i % 7 === 0 ? "neutral" : "home";
+      } else if (i < supporterCount * 0.8) {
+        // North Kop Stand (Home Ultras)
+        const idx = i - Math.floor(supporterCount * 0.55);
+        const row = idx % 5;
+        const col = Math.floor(idx / 5);
+        const maxCols = Math.max(1, Math.floor((supporterCount * 0.25) / 5));
+        bx = -(halfL + 11.5 + row * 1.5);
+        by = 3.5 + row * 1.5;
+        bz = -halfW * 0.88 + (col / maxCols) * (FIFA_PITCH_DIMENSIONS.width * 0.88);
+        rotY = Math.PI / 2;
+        side = "home";
+      } else {
+        // South Stand (Away Supporters)
+        const idx = i - Math.floor(supporterCount * 0.8);
+        const row = idx % 5;
+        const col = Math.floor(idx / 5);
+        const maxCols = Math.max(1, Math.floor((supporterCount * 0.2) / 5));
+        bx = halfL + 11.5 + row * 1.5;
+        by = 3.5 + row * 1.4;
+        bz = -halfW * 0.88 + (col / maxCols) * (FIFA_PITCH_DIMENSIONS.width * 0.88);
+        rotY = -Math.PI / 2;
+        side = "away";
+      }
+
+      const phase = (i * 1.37) % (Math.PI * 2);
+      this.supporterMeta.push({ baseX: bx, baseY: by, baseZ: bz, rotY, phase, side });
+
+      dummyMatrix.makeRotationY(rotY);
+      dummyMatrix.setPosition(bx, by, bz);
+      instanced.setMatrixAt(i, dummyMatrix);
+
+      if (side === "home") {
+        color.copy(i % 3 === 0 ? homeSecondary : i % 5 === 0 ? accentColor : homeColor);
+      } else if (side === "away") {
+        color.copy(i % 3 === 0 ? awaySecondary : awayColor);
+      } else {
+        color.setHex(i % 2 === 0 ? 0xe2e8f0 : 0x64748b);
+      }
+      instanced.setColorAt(i, color);
     }
+
+    instanced.instanceMatrix.needsUpdate = true;
+    if (instanced.instanceColor) {
+      instanced.instanceColor.needsUpdate = true;
+    }
+    this.supporterMesh = instanced;
+    this.crowdGroup.add(instanced);
+  }
+
+  /**
+   * Triggers an event-driven stadium crowd reaction (goal celebration surge, save cheer,
+   * near-miss gasp, attacking roar, red card reaction, or fulltime ovation).
+   */
+  public triggerCrowdReaction(
+    reaction: StadiumCrowdReactionType,
+    side: "home" | "away" | "both" = "both"
+  ): void {
+    this.crowdReactionType = reaction;
+    this.crowdReactionSide = side;
+    switch (reaction) {
+      case "goal":
+        this.crowdReactionIntensity = 1.0;
+        this.crowdReactionTimerSec = 6.5;
+        break;
+      case "save":
+      case "near_miss":
+        this.crowdReactionIntensity = 0.78;
+        this.crowdReactionTimerSec = 3.8;
+        break;
+      case "red_card":
+      case "fulltime":
+        this.crowdReactionIntensity = 0.88;
+        this.crowdReactionTimerSec = 5.0;
+        break;
+      case "attack":
+        this.crowdReactionIntensity = Math.max(this.crowdReactionIntensity, 0.48);
+        this.crowdReactionTimerSec = Math.max(this.crowdReactionTimerSec, 2.2);
+        break;
+      default:
+        this.crowdReactionIntensity = 0.15;
+        this.crowdReactionTimerSec = 0;
+        break;
+    }
+  }
+
+  public getCrowdReactionState(): {
+    type: StadiumCrowdReactionType;
+    intensity: number;
+    side: "home" | "away" | "both";
+  } {
+    return {
+      type: this.crowdReactionType,
+      intensity: this.crowdReactionIntensity,
+      side: this.crowdReactionSide,
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -985,12 +1292,44 @@ export class StadiumArenaEnvironment {
   }
 
   // ---------------------------------------------------------------------------
-  // Real-Time Update Tick (GPU UV Offset LED Scrolling — Zero CPU Canvas Re-Upload)
+  // Real-Time Update Tick (Slot-Boundary LED Rotation & Instanced Crowd Motion)
   // ---------------------------------------------------------------------------
-  public update(deltaSec: number): void {
-    this.adScrollOffset = (this.adScrollOffset + deltaSec * 35) % 800;
-    if (this.adTexture) {
-      this.adTexture.offset.x = (this.adTexture.offset.x + deltaSec * 0.042) % 1.0;
+  public update(deltaSec: number, matchTimeSec?: number): void {
+    this.elapsedSec += Math.max(0, deltaSec);
+    const effectiveMatchSec = typeof matchTimeSec === "number" ? matchTimeSec : this.elapsedSec;
+
+    // 1. Step Stadium LED Advertising Network (rotates only on slot boundaries)
+    this.adNetwork.update(deltaSec, this.elapsedSec, effectiveMatchSec);
+
+    // 2. Decay crowd reaction timer smoothly back to ambient open-play pulse
+    if (this.crowdReactionTimerSec > 0) {
+      this.crowdReactionTimerSec = Math.max(0, this.crowdReactionTimerSec - deltaSec);
+      if (this.crowdReactionTimerSec === 0) {
+        this.crowdReactionType = "calm";
+        this.crowdReactionIntensity = 0.15;
+      }
+    }
+
+    // 3. Animate instanced supporters (jumping wave during excitement, subtle sway in open play)
+    if (this.supporterMesh && this.supporterMeta.length > 0) {
+      const mat4 = new THREE.Matrix4();
+      const freq = this.crowdReactionIntensity > 0.5 ? 11.5 : 4.2;
+      const amp = 0.06 + this.crowdReactionIntensity * 0.42;
+
+      for (let i = 0; i < this.supporterMeta.length; i++) {
+        const meta = this.supporterMeta[i];
+        const isReactingSide =
+          this.crowdReactionSide === "both" ||
+          meta.side === "neutral" ||
+          meta.side === this.crowdReactionSide;
+        const localAmp = isReactingSide ? amp : amp * 0.3;
+        const bounce = Math.abs(Math.sin(this.elapsedSec * freq + meta.phase + meta.baseX * 0.08)) * localAmp;
+
+        mat4.makeRotationY(meta.rotY);
+        mat4.setPosition(meta.baseX, meta.baseY + bounce, meta.baseZ);
+        this.supporterMesh.setMatrixAt(i, mat4);
+      }
+      this.supporterMesh.instanceMatrix.needsUpdate = true;
     }
   }
 
@@ -998,6 +1337,7 @@ export class StadiumArenaEnvironment {
   // Resource Cleanup & Memory Management
   // ---------------------------------------------------------------------------
   public dispose(): void {
+    this.adNetwork.dispose();
     this.disposables.forEach((item) => {
       try {
         item.dispose();
