@@ -17,6 +17,7 @@ Provides:
 from __future__ import annotations
 
 import logging
+import math
 from decimal import Decimal
 from typing import Any
 
@@ -145,6 +146,12 @@ STAGE5_ACTIVITIES: list[dict[str, Any]] = [
         "financial_control_key": "recruitment_budget_gtex",
     },
 ]
+
+STAGE5_EXECUTABLE_ACTIVITIES = frozenset({"staff_hiring", "academy_recruitment"})
+STAGE5_ACTIVITY_KEYS = frozenset(item["activity_key"] for item in STAGE5_ACTIVITIES)
+STAGE5_AUTHORITY_LEVELS = frozenset({"owner_only", "delegated_with_limits", "full_autonomy"})
+STAGE5_RESPONSIBLE_ROLES = frozenset({"owner", "general_manager"})
+
 
 DEFAULT_STAGE5_FINANCIAL_THRESHOLDS: dict[str, dict[str, float]] = {
     "owner_managed": {
@@ -293,6 +300,7 @@ def get_gm_delegation_overview(session: Session, user_id: str, club_id: str) -> 
     for item in STAGE5_ACTIVITIES:
         k = item["activity_key"]
         rule = raw_assignments.get(k) or raw_assignments.get("operational_expenditure") or {}
+        is_execution_supported = k in STAGE5_EXECUTABLE_ACTIVITIES
         authority_level = rule.get(
             "authority_level", "delegated_with_limits" if canonical_mode != "owner_managed" else "owner_only"
         )
@@ -301,16 +309,28 @@ def get_gm_delegation_overview(session: Session, user_id: str, club_id: str) -> 
             "responsible_role", "general_manager" if canonical_mode != "owner_managed" else "owner"
         )
 
+        # The matrix must never advertise autonomous authority for a workflow that
+        # does not yet have an authoritative execution handler.
+        if not is_execution_supported:
+            authority_level = "owner_only"
+            requires_approval = True
+            responsible_role = "owner"
+
         activity_matrix.append(
             {
                 "activity_key": k,
                 "label": item["label"],
                 "domain": item["domain"],
-                "description": item["description"],
+                "description": (
+                    item["description"]
+                    if is_execution_supported
+                    else f"{item['description']} GM execution is not available for this activity yet."
+                ),
                 "responsible_role": responsible_role,
                 "authority_level": authority_level,
                 "requires_owner_approval": requires_approval,
                 "financial_control_key": item["financial_control_key"],
+                "execution_supported": is_execution_supported,
             }
         )
 
@@ -340,6 +360,9 @@ def get_gm_delegation_overview(session: Session, user_id: str, club_id: str) -> 
         item = {
             "id": d.id,
             "activity_key": d.activity_key,
+            "domain": d.domain,
+            "proposed_by_role": d.proposed_by_role,
+            "proposed_by_staff_name": d.proposed_by_staff_name,
             "title": d.title,
             "summary": d.summary,
             "financial_amount_gtex": float(d.financial_amount_gtex) if d.financial_amount_gtex is not None else 0.0,
@@ -358,6 +381,69 @@ def get_gm_delegation_overview(session: Session, user_id: str, club_id: str) -> 
         else:
             historical_decisions.append(item)
 
+    activities = [
+        {
+            "activity_key": item["activity_key"],
+            "label": item["label"],
+            "description": item["description"],
+            "category": item["domain"],
+            "department": item["domain"],
+            "requires_owner_approval": item["requires_owner_approval"],
+            "gm_can_execute": (
+                item["execution_supported"]
+                and not item["requires_owner_approval"]
+                and item["authority_level"] != "owner_only"
+                and not policy.is_suspended
+            ),
+            "execution_supported": item["execution_supported"],
+            "expenditure_limit_gtex": float(
+                financial_controls.get(item["financial_control_key"], 0) or 0
+            ),
+            "delegation_level": item["authority_level"],
+        }
+        for item in activity_matrix
+    ]
+
+    audit_rows = session.scalars(
+        select(ClubDelegatedDecisionAuditLog)
+        .where(ClubDelegatedDecisionAuditLog.club_id == club_id)
+        .order_by(ClubDelegatedDecisionAuditLog.created_at.desc())
+        .limit(30)
+    ).all()
+    recent_audit_trail = [
+        {
+            "id": row.id,
+            "decision_id": row.decision_id,
+            "actor_role": "owner",
+            "action": (
+                "approved" if row.action == "owner_approve"
+                else "rejected" if row.action == "owner_reject"
+                else row.action
+            ),
+            "reason": (row.snapshot_json or {}).get("outcome") or row.new_status,
+            "note": row.decision_note,
+            "occurred_at": row.created_at.isoformat() if row.created_at else "",
+        }
+        for row in audit_rows
+    ]
+
+    executed_rows = [d for d in decision_rows if d.execution_status == "executed"]
+    total_expenditure_approved = sum(
+        float(d.financial_amount_gtex or 0) for d in executed_rows
+    )
+    gm_staff = {
+        "id": str(gm_profile.get("id") or gm_profile.get("staff_id") or ""),
+        "name": gm_profile.get("name", "Dayo Adeleke"),
+        "role": gm_profile.get("role", "General Manager"),
+        "rating": int(gm_profile.get("rating") or 0),
+        "salary_gtex": float(gm_profile.get("salary_gtex") or gm_profile.get("salary") or 0),
+        "trust": rel_summary["trust"],
+        "tension": rel_summary["tension"],
+        "alignment": rel_summary["alignment"],
+        "loyalty": rel_summary["loyalty"],
+        "is_appointed": bool(exec_staff.get("general_manager")),
+    }
+
     return {
         "club_id": club_id,
         "mode": canonical_mode,
@@ -370,6 +456,17 @@ def get_gm_delegation_overview(session: Session, user_id: str, club_id: str) -> 
         "pending_proposals_count": len(pending_proposals),
         "pending_proposals": pending_proposals,
         "historical_decisions": historical_decisions[:10],
+        # React Stage 5 contract aliases. Keep the original keys for existing consumers.
+        "gm_staff": gm_staff,
+        "delegation_mode": canonical_mode,
+        "canonical_mode": canonical_mode,
+        "activities": activities,
+        "recent_audit_trail": recent_audit_trail,
+        "statistics": {
+            "total_executed": len(executed_rows),
+            "pending_approval_count": len(pending_proposals),
+            "total_expenditure_approved_gtex": total_expenditure_approved,
+        },
     }
 
 
@@ -438,24 +535,75 @@ def update_gm_matrix_and_financial_controls(
     """Updates granular activity permissions and financial authorization limits."""
     policy = delegation_service.get_or_create_delegation_policy(session, club_id, user_id)
 
-    if financial_controls:
-        current_th = dict(policy.financial_thresholds_json or {})
-        for k, v in financial_controls.items():
-            current_th[k] = float(v) if isinstance(v, (int, float)) else v
-        policy.financial_thresholds_json = current_th
+    current_th = dict(policy.financial_thresholds_json or {})
+    current_act = dict(policy.activity_assignments_json or {})
 
-    if activity_assignments:
-        current_act = dict(policy.activity_assignments_json or {})
-        for k, v in activity_assignments.items():
-            if isinstance(v, dict):
-                current_act[k] = {
-                    "activity_key": k,
-                    "responsible_role": v.get("responsible_role", "general_manager"),
-                    "authority_level": v.get("authority_level", "delegated_with_limits"),
-                    "requires_owner_approval": bool(v.get("requires_owner_approval", False)),
-                }
-        policy.activity_assignments_json = current_act
+    if financial_controls is not None:
+        allowed_controls = set(DEFAULT_STAGE5_FINANCIAL_THRESHOLDS["balanced"])
+        for key, value in financial_controls.items():
+            if key not in allowed_controls:
+                raise DelegationError(f"Unknown financial control: {key}", 400)
+            if key == "allow_emergency_spending":
+                if isinstance(value, bool):
+                    current_th[key] = 1.0 if value else 0.0
+                elif (
+                    isinstance(value, (int, float))
+                    and math.isfinite(float(value))
+                    and float(value) in (0.0, 1.0)
+                ):
+                    current_th[key] = float(value)
+                else:
+                    raise DelegationError("allow_emergency_spending must be a boolean.", 400)
+                continue
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(float(value))
+                or float(value) < 0
+            ):
+                raise DelegationError(f"{key} must be a finite, non-negative number.", 400)
+            current_th[key] = float(value)
 
+    if activity_assignments is not None:
+        for key, value in activity_assignments.items():
+            if key not in STAGE5_ACTIVITY_KEYS:
+                raise DelegationError(f"Unknown Stage 5 activity: {key}", 400)
+            if not isinstance(value, dict):
+                raise DelegationError(f"Activity assignment for {key} must be an object.", 400)
+
+            is_supported = key in STAGE5_EXECUTABLE_ACTIVITIES
+            current = dict(current_act.get(key) or {})
+            responsible_role = value.get("responsible_role", current.get("responsible_role", "general_manager"))
+            authority_level = value.get(
+                "authority_level", current.get("authority_level", "delegated_with_limits")
+            )
+            requires_approval = value.get(
+                "requires_owner_approval", current.get("requires_owner_approval", False)
+            )
+
+            if responsible_role not in STAGE5_RESPONSIBLE_ROLES:
+                raise DelegationError(f"Invalid responsible role for {key}.", 400)
+            if authority_level not in STAGE5_AUTHORITY_LEVELS:
+                raise DelegationError(f"Invalid authority level for {key}.", 400)
+            if not isinstance(requires_approval, bool):
+                raise DelegationError(f"requires_owner_approval for {key} must be boolean.", 400)
+            if not is_supported and (
+                responsible_role != "owner" or authority_level != "owner_only" or not requires_approval
+            ):
+                raise DelegationError(
+                    f"{key} does not yet have a GM execution handler and must remain owner-controlled.",
+                    409,
+                )
+
+            current_act[key] = {
+                "activity_key": key,
+                "responsible_role": responsible_role,
+                "authority_level": authority_level,
+                "requires_owner_approval": requires_approval,
+            }
+
+    policy.financial_thresholds_json = current_th
+    policy.activity_assignments_json = current_act
     session.commit()
     return get_gm_delegation_overview(session, user_id, club_id)
 
@@ -495,6 +643,7 @@ def evaluate_gm_operational_cycle(session: Session, user_id: str, club_id: str) 
 
     executed_actions: list[dict[str, Any]] = []
     escalated_proposals: list[dict[str, Any]] = []
+    blocked_actions: list[dict[str, Any]] = []
 
     # 1. Audit Vacancies
     vacancies_data = living_staff_market.get_club_vacancies(session, user_id, club_id)
@@ -512,68 +661,90 @@ def evaluate_gm_operational_cycle(session: Session, user_id: str, club_id: str) 
 
         if candidates:
             best_candidate = candidates[0]
-            cand_salary = best_candidate["expected_salary_gtex"]
+            cand_salary = float(best_candidate["expected_salary_gtex"])
             rule = assignments.get("staff_hiring") or {}
             requires_approval = rule.get("requires_owner_approval", canonical_mode == "owner_managed")
-            is_owner_only = rule.get("authority_level") == "owner_only" or canonical_mode == "owner_managed"
-
-            # Check if GM can autonomously hire
+            authority_level = rule.get("authority_level", "delegated_with_limits")
+            contract_years = 2
+            max_contract_years = float(financial_controls.get("max_contract_years_unapproved", 2.0))
             can_autonomously_hire = (
-                not is_owner_only
+                not policy.is_suspended
+                and canonical_mode != "owner_managed"
                 and not requires_approval
+                and authority_level != "owner_only"
                 and cand_salary <= max_staff_salary
-                and not policy.is_suspended
+                and contract_years <= max_contract_years
             )
 
             if can_autonomously_hire:
-                # GM hires autonomously
                 hire_res = living_staff_market.hire_staff_from_market(
                     session,
                     user_id,
                     club_id,
                     profile_id=best_candidate["profile_id"],
                     role=role_key,
-                    offered_salary_gtex=cand_salary,
-                    contract_years=2,
+                    offered_salary_gtex=int(cand_salary),
+                    contract_years=contract_years,
                     pitch_note=f"Appointed autonomously by General Manager {gm_name} under {canonical_mode} delegation.",
                 )
 
-                # Log decision
-                decision = ClubDelegatedDecision(
-                    club_id=club_id,
-                    owner_user_id=user_id,
-                    activity_key="staff_hiring",
-                    domain="club_operations",
-                    proposed_by_role="general_manager",
-                    proposed_by_staff_name=gm_name,
-                    title=f"Autonomously Appointed {best_candidate['name']} as {target_vac['role_label']}",
-                    summary=f"GM {gm_name} successfully resolved department vacancy by recruiting {best_candidate['name']} (OVR {best_candidate['rating']}).",
-                    financial_amount_gtex=Decimal(str(cand_salary)),
-                    requires_owner_approval=False,
-                    status="executed",
-                    execution_status="executed",
-                    decided_by_user_id=user_id,
-                    decision_note="Executed autonomously under authorized GM delegation limits.",
-                    outcome_text="Contract ratified and signed. Department operational efficiency restored.",
-                    payload_json={"profile_id": best_candidate["profile_id"], "role": role_key, "salary": cand_salary},
-                )
-                session.add(decision)
-                session.flush()
-
-                executed_actions.append(
+                if hire_res.get("success") is True:
+                    decision = ClubDelegatedDecision(
+                        club_id=club_id,
+                        owner_user_id=user_id,
+                        activity_key="staff_hiring",
+                        domain="club_operations",
+                        proposed_by_role="general_manager",
+                        proposed_by_staff_name=gm_name,
+                        title=f"Autonomously Appointed {best_candidate['name']} as {target_vac['role_label']}",
+                        summary=f"GM {gm_name} resolved the vacancy by recruiting {best_candidate['name']} (OVR {best_candidate['rating']}).",
+                        financial_amount_gtex=Decimal(str(cand_salary)),
+                        requires_owner_approval=False,
+                        status="executed",
+                        execution_status="executed",
+                        decided_by_user_id=user_id,
+                        decision_note="Executed autonomously under authorized GM delegation limits.",
+                        outcome_text="Contract ratified, ledger settlement completed, and staff appointment recorded.",
+                        payload_json={
+                            "profile_id": best_candidate["profile_id"],
+                            "role": role_key,
+                            "salary": cand_salary,
+                            "contract_years": contract_years,
+                        },
+                    )
+                    session.add(decision)
+                    session.flush()
+                    executed_actions.append(
+                        {
+                            "type": "staff_hire",
+                            "title": decision.title,
+                            "details": hire_res.get("message"),
+                        }
+                    )
+                else:
+                    blocked_actions.append(
+                        {
+                            "type": "staff_hire",
+                            "title": f"Appointment not completed: {best_candidate['name']}",
+                            "reason": hire_res.get("reason") or "offer_not_accepted",
+                            "details": hire_res.get("message") or "The staff-market service did not accept the offer.",
+                        }
+                    )
+            elif policy.is_suspended:
+                blocked_actions.append(
                     {
                         "type": "staff_hire",
-                        "title": decision.title,
-                        "details": hire_res.get("message"),
+                        "title": f"Appointment suspended: {best_candidate['name']}",
+                        "reason": policy.suspension_reason or "Delegation policy is suspended.",
                     }
                 )
             else:
-                # Escalate proposal to owner
-                reason = (
-                    "Exceeds authorized staff salary ceiling"
-                    if cand_salary > max_staff_salary
-                    else "Policy mandates owner ratification"
-                )
+                if cand_salary > max_staff_salary:
+                    reason = "Exceeds authorized staff salary ceiling"
+                elif contract_years > max_contract_years:
+                    reason = "Exceeds authorized contract duration"
+                else:
+                    reason = "Policy mandates owner ratification"
                 decision = ClubDelegatedDecision(
                     club_id=club_id,
                     owner_user_id=user_id,
@@ -583,8 +754,8 @@ def evaluate_gm_operational_cycle(session: Session, user_id: str, club_id: str) 
                     proposed_by_staff_name=gm_name,
                     title=f"Contract Offer Recommendation: {best_candidate['name']} for {target_vac['role_label']}",
                     summary=(
-                        f"GM {gm_name} identified top candidate {best_candidate['name']} (OVR {best_candidate['rating']}, Expected Salary: ₦{cand_salary:,} GTEX). "
-                        f"Escalated for owner ratification: {reason}."
+                        f"GM {gm_name} identified {best_candidate['name']} (OVR {best_candidate['rating']}, "
+                        f"expected salary {cand_salary:,.0f} GTEX). Escalated for owner ratification: {reason}."
                     ),
                     financial_amount_gtex=Decimal(str(cand_salary)),
                     requires_owner_approval=True,
@@ -595,13 +766,11 @@ def evaluate_gm_operational_cycle(session: Session, user_id: str, club_id: str) 
                         "profile_id": best_candidate["profile_id"],
                         "role": role_key,
                         "salary": cand_salary,
-                        "contract_years": 2,
+                        "contract_years": contract_years,
                     },
                 )
                 session.add(decision)
                 session.flush()
-
-                # Add inbox alert
                 inbox = OwnerInboxItem(
                     club_id=club_id,
                     user_id=user_id,
@@ -621,7 +790,6 @@ def evaluate_gm_operational_cycle(session: Session, user_id: str, club_id: str) 
                     ],
                 )
                 session.add(inbox)
-
                 escalated_proposals.append(
                     {
                         "decision_id": decision.id,
@@ -631,15 +799,31 @@ def evaluate_gm_operational_cycle(session: Session, user_id: str, club_id: str) 
                     }
                 )
 
-    # 2. Academy Trial & Grassroots Intake Proposal
+    # 2. Academy Trial & Grassroots Intake
     academy_cost = 2500
     rule_acad = assignments.get("academy_recruitment") or {}
     acad_approval = rule_acad.get("requires_owner_approval", canonical_mode == "owner_managed")
+    acad_authority = rule_acad.get("authority_level", "delegated_with_limits")
+    can_autonomously_fund_academy = (
+        not policy.is_suspended
+        and canonical_mode != "owner_managed"
+        and not acad_approval
+        and acad_authority != "owner_only"
+        and academy_cost <= max_unapproved_spend
+    )
 
-    if not acad_approval and academy_cost <= max_unapproved_spend and canonical_mode == "gm_led":
-        # Disburse trial fee via ledger
+    if policy.is_suspended:
+        blocked_actions.append(
+            {
+                "type": "academy_recruitment",
+                "title": "Academy intake suspended",
+                "reason": policy.suspension_reason or "Delegation policy is suspended.",
+            }
+        )
+    elif can_autonomously_fund_academy:
         club_acct = ledger.club_account(club_id)
         try:
+            # ledger.record checks the actual available balance by default.
             ledger.record(
                 session,
                 event_type="academy_scouting",
@@ -650,39 +834,52 @@ def evaluate_gm_operational_cycle(session: Session, user_id: str, club_id: str) 
                 club_id=club_id,
                 user_id=user_id,
                 memo=f"Autonomous academy scouting drive authorized by GM {gm_name}",
-                check_funds=False,
+                check_funds=True,
             )
-        except Exception:
-            pass
+        except ledger.LedgerError as exc:
+            blocked_actions.append(
+                {
+                    "type": "academy_recruitment",
+                    "title": "Academy intake not funded",
+                    "reason": str(exc),
+                }
+            )
+        else:
+            decision_acad = ClubDelegatedDecision(
+                club_id=club_id,
+                owner_user_id=user_id,
+                activity_key="academy_recruitment",
+                domain="sporting",
+                proposed_by_role="general_manager",
+                proposed_by_staff_name=gm_name,
+                title="Grassroots Academy Showcase Ingestion",
+                summary=f"GM {gm_name} sanctioned regional trial tournament for 25 high-potential grassroots scholars.",
+                financial_amount_gtex=Decimal(str(academy_cost)),
+                requires_owner_approval=False,
+                status="executed",
+                execution_status="executed",
+                decided_by_user_id=user_id,
+                decision_note="Executed autonomously under authorized GM delegation limits.",
+                outcome_text="Trial fee settled successfully. 4 high-upside prospects flagged for academy scholarship consideration.",
+                payload_json={"cost_gtex": academy_cost},
+            )
+            session.add(decision_acad)
+            session.flush()
+            executed_actions.append(
+                {
+                    "type": "academy_recruitment",
+                    "title": decision_acad.title,
+                    "cost_gtex": academy_cost,
+                }
+            )
+    else:
+        if acad_approval or acad_authority == "owner_only" or canonical_mode == "owner_managed":
+            academy_reason = "Owner approval required by the delegation matrix"
+        elif academy_cost > max_unapproved_spend:
+            academy_reason = "Academy intake exceeds the unapproved expenditure ceiling"
+        else:
+            academy_reason = "Academy intake is outside the active GM delegation policy"
 
-        decision_acad = ClubDelegatedDecision(
-            club_id=club_id,
-            owner_user_id=user_id,
-            activity_key="academy_recruitment",
-            domain="sporting",
-            proposed_by_role="general_manager",
-            proposed_by_staff_name=gm_name,
-            title="Grassroots Academy Showcase Ingestion",
-            summary=f"GM {gm_name} sanctioned regional trial tournament for 25 high-potential grassroots scholars.",
-            financial_amount_gtex=Decimal(str(academy_cost)),
-            requires_owner_approval=False,
-            status="executed",
-            execution_status="executed",
-            outcome_text="Trial concluded. 4 high-upside prospects flagged for academy scholarship consideration.",
-            payload_json={"cost_gtex": academy_cost},
-        )
-        session.add(decision_acad)
-        session.flush()
-
-        executed_actions.append(
-            {
-                "type": "academy_recruitment",
-                "title": decision_acad.title,
-                "cost_gtex": academy_cost,
-            }
-        )
-    elif canonical_mode == "owner_managed":
-        # Escalate as proposal
         decision_acad = ClubDelegatedDecision(
             club_id=club_id,
             owner_user_id=user_id,
@@ -691,23 +888,22 @@ def evaluate_gm_operational_cycle(session: Session, user_id: str, club_id: str) 
             proposed_by_role="general_manager",
             proposed_by_staff_name=gm_name,
             title="Grassroots Academy Showcase Authorization",
-            summary=f"GM {gm_name} requests owner approval to disburse ₦{academy_cost:,} GTEX for regional youth trials.",
+            summary=f"GM {gm_name} requests owner approval to disburse {academy_cost:,} GTEX for regional youth trials.",
             financial_amount_gtex=Decimal(str(academy_cost)),
             requires_owner_approval=True,
-            approval_reason="Owner-managed policy requires explicit sanction for scouting drives",
+            approval_reason=academy_reason,
             status="pending_approval",
             execution_status="pending_execution",
             payload_json={"cost_gtex": academy_cost},
         )
         session.add(decision_acad)
         session.flush()
-
         escalated_proposals.append(
             {
                 "decision_id": decision_acad.id,
                 "title": decision_acad.title,
                 "amount_gtex": academy_cost,
-                "reason": "Owner approval required",
+                "reason": academy_reason,
             }
         )
 
@@ -720,6 +916,8 @@ def evaluate_gm_operational_cycle(session: Session, user_id: str, club_id: str) 
         "executed_actions": executed_actions,
         "escalated_proposals_count": len(escalated_proposals),
         "escalated_proposals": escalated_proposals,
+        "blocked_actions_count": len(blocked_actions),
+        "blocked_actions": blocked_actions,
     }
 
 
@@ -756,15 +954,12 @@ def resolve_gm_proposal(
     payload = dict(decision.payload_json or {})
 
     if clean_action == "approve":
-        decision.status = "approved"
-        decision.execution_status = "executed"
-        decision.decision_note = decision_note or "Approved by club owner."
-        decision.resolved_at = utcnow()
-        decision.decided_by_user_id = user_id
-
-        # Execute payload action if staff hiring
-        if decision.activity_key == "staff_hiring" and payload.get("profile_id"):
-            living_staff_market.hire_staff_from_market(
+        # Execute the real business operation first. A proposal is not approved or
+        # marked executed until its appointment/ledger settlement has succeeded.
+        if decision.activity_key == "staff_hiring":
+            if not payload.get("profile_id"):
+                raise DelegationError("Staff-hiring proposal is missing its candidate profile.", 400)
+            hire_result = living_staff_market.hire_staff_from_market(
                 session,
                 user_id,
                 club_id,
@@ -774,9 +969,43 @@ def resolve_gm_proposal(
                 contract_years=payload.get("contract_years", 2),
                 pitch_note=f"Sanctioned by owner following GM proposal: {decision.title}",
             )
-            decision.outcome_text = "Contract offer approved. Staff member appointed and settled."
+            if hire_result.get("success") is not True:
+                reason = hire_result.get("message") or hire_result.get("reason") or "Staff offer was not accepted."
+                raise DelegationError(f"Approval was not executed: {reason}", 409, code="proposal_execution_failed")
+            decision.outcome_text = "Contract offer approved. Staff member appointed and ledger settlement completed."
+        elif decision.activity_key == "academy_recruitment":
+            academy_cost = float(payload.get("cost_gtex") or decision.financial_amount_gtex or 0)
+            if not math.isfinite(academy_cost) or academy_cost <= 0:
+                raise DelegationError("Academy proposal has an invalid settlement amount.", 400)
+            try:
+                ledger.record(
+                    session,
+                    event_type="academy_scouting",
+                    source=ledger.club_account(club_id),
+                    destination=ledger.WORLD_CLUBS,
+                    currency=ledger.GTEX,
+                    gross=academy_cost,
+                    club_id=club_id,
+                    user_id=user_id,
+                    memo=f"Owner-approved academy scouting drive: {decision.title}",
+                    check_funds=True,
+                )
+            except ledger.LedgerError as exc:
+                raise DelegationError(f"Approval was not executed: {exc}", 409, code="proposal_settlement_failed") from exc
+            decision.outcome_text = "Academy scouting proposal approved and ledger settlement completed."
+        else:
+            raise DelegationError(
+                f"{decision.activity_key} has no executable Stage 5 operation yet; the proposal remains pending.",
+                409,
+                code="proposal_execution_unsupported",
+            )
 
-        # Bilateral relationship: GM feels validated
+        decision.status = "approved"
+        decision.execution_status = "executed"
+        decision.decision_note = decision_note or "Approved by club owner."
+        decision.resolved_at = utcnow()
+        decision.decided_by_user_id = user_id
+
         _apply_gm_relationship_delta(
             session,
             club_id,
@@ -819,11 +1048,21 @@ def resolve_gm_proposal(
     session.commit()
     session.refresh(decision)
 
+    rel = _get_gm_relationship(session, club_id)
+    updated_relationships = {
+        "trust": rel.trust if rel else 60,
+        "tension": rel.tension if rel else 20,
+        "alignment": rel.alignment if rel else 65,
+    }
     return {
         "success": True,
         "decision_id": decision.id,
+        "proposal_id": decision.id,
         "status": decision.status,
         "execution_status": decision.execution_status,
         "outcome_text": decision.outcome_text,
+        "action_taken": decision.outcome_text or decision.decision_note or clean_action,
+        "audit_logged": True,
+        "updated_relationships": updated_relationships,
         "resolved_at": decision.resolved_at.isoformat() if decision.resolved_at else None,
     }
