@@ -21,6 +21,8 @@ from app.models.club_growth import (
     ClubStaffContract,
     ClubStaffAssignment,
 )
+from app.models.event_backbone import EventOutbox
+from app.models.risk_ops import AuditLog
 from app.models.wallet import (
     LedgerAccount,
     LedgerBalanceProjection,
@@ -51,6 +53,8 @@ def _session() -> Session:
             ClubStaffProfile.__table__,
             ClubStaffContract.__table__,
             ClubStaffAssignment.__table__,
+            EventOutbox.__table__,
+            AuditLog.__table__,
             LedgerAccount.__table__,
             LedgerBalanceProjection.__table__,
             LedgerEntry.__table__,

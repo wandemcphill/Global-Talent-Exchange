@@ -369,6 +369,8 @@ def _format_cinematic_event(ev: OwnerClubEvent, branding: dict[str, str]) -> dic
         "subject_role_label": meta.get("subject_role_label"),
         "overall_rating": meta.get("overall_rating"),
         "potential_rating": meta.get("potential_rating"),
+        "is_regen": meta.get("is_regen"),
+        "portrait_url": meta.get("portrait_url"),
         "contract_id": meta.get("contract_id"),
         "contract_years": meta.get("contract_years"),
         "salary_gtex": meta.get("salary_gtex"),
@@ -543,6 +545,7 @@ def trigger_verified_club_cinematic(
     event_type: str,
     subject_id: str | None = None,
     catalog_key: str | None = None,
+    asset_catalog_key: str | None = None,
     custom_headline: str | None = None,
 ) -> dict[str, Any]:
     """
@@ -550,6 +553,7 @@ def trigger_verified_club_cinematic(
     Never triggers a success scene for an unappointed staff member, non-existent player,
     unowned showroom asset, or unverified sponsor.
     """
+    catalog_key = catalog_key or asset_catalog_key
     state = session.get(OwnerClubState, club_id)
     if state is None:
         raise ValueError(f"Club {club_id} not found")

@@ -2834,3 +2834,40 @@ def post_living_world_cinema_showroom_trigger(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return _run(session, _op)
+
+
+class ProposeTacticalAdjustmentRequest(BaseModel):
+    proposed_formation: str = Field(default="4-3-3", max_length=24)
+    proposed_mentality: str = Field(default="balanced", max_length=24)
+    proposed_pressing: str = Field(default="medium", max_length=24)
+    proposed_tempo: str = Field(default="standard", max_length=24)
+    autonomy_mode: str | None = Field(default=None, max_length=32)
+    accept_counter_proposal: bool = Field(default=False)
+    rationale: str | None = Field(default=None, max_length=500)
+
+
+@router.post("/clubs/{club_id}/living-world/tactics/propose")
+def post_living_world_tactical_proposal(
+    club_id: str,
+    payload: ProposeTacticalAdjustmentRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Propose and evaluate an owner tactical adjustment with authoritative manager response."""
+    from app.owner_console import living_club_world
+
+    return _run(
+        session,
+        lambda: living_club_world.propose_tactical_adjustment(
+            session,
+            user.id,
+            club_id,
+            proposed_formation=payload.proposed_formation,
+            proposed_mentality=payload.proposed_mentality,
+            proposed_pressing=payload.proposed_pressing,
+            proposed_tempo=payload.proposed_tempo,
+            autonomy_mode=payload.autonomy_mode,
+            accept_counter_proposal=payload.accept_counter_proposal,
+            rationale=payload.rationale,
+        ),
+    )

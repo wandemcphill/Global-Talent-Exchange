@@ -3993,3 +3993,257 @@ def get_delegated_decisions_history(
         "decisions": decision_dicts,
         "world_day": state.world_day,
     }
+
+
+VALID_TACTICAL_FORMATIONS = (
+    "4-3-3",
+    "4-2-3-1",
+    "4-4-2",
+    "3-5-2",
+    "3-4-3",
+    "5-3-2",
+    "4-1-4-1",
+)
+VALID_TACTICAL_MENTALITIES = ("defensive", "balanced", "attacking")
+VALID_TACTICAL_AUTONOMY_MODES = ("full_autonomy", "consultative", "owner_led")
+
+
+def propose_tactical_adjustment(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    *,
+    proposed_formation: str = "4-3-3",
+    proposed_mentality: str = "balanced",
+    proposed_pressing: str = "medium",
+    proposed_tempo: str = "standard",
+    autonomy_mode: str | None = None,
+    accept_counter_proposal: bool = False,
+    rationale: str | None = None,
+) -> dict[str, Any]:
+    """Evaluate and authoritatively execute (or reject/counter-propose) an owner tactical intervention.
+
+    Enforces Section 3.4 & 8.1 Scenario A:
+    1. Validates requested formation & mentality server-side.
+    2. Evaluates manager response using autonomy mode, manager conviction/rating, and relationship metrics.
+    3. Only mutates authoritative tactical state when accepted; re-reads effective state before marking implemented=True.
+    4. Persists relationship history and club event history for every exchange.
+    """
+    state = service.require_state(session, club_id, user_id)
+    if proposed_formation not in VALID_TACTICAL_FORMATIONS:
+        raise service.OwnerError(
+            "invalid_formation",
+            400,
+            f"Unsupported formation '{proposed_formation}'. Allowed: {VALID_TACTICAL_FORMATIONS}",
+        )
+    if proposed_mentality not in VALID_TACTICAL_MENTALITIES:
+        raise service.OwnerError(
+            "invalid_mentality",
+            400,
+            f"Unsupported mentality '{proposed_mentality}'. Allowed: {VALID_TACTICAL_MENTALITIES}",
+        )
+
+    reconcile_staff_relationships(session, state)
+    roster = resolve_club_staff_roster(state)
+    mgr_slot = roster.get("first_team_manager") or {}
+    mgr_id = mgr_slot.get("person_id") or "first_team_manager"
+    mgr_name = mgr_slot.get("name") or "First-Team Manager"
+    w_day = int(state.world_day or 1)
+
+    facs = dict(state.facilities_json or {})
+    if autonomy_mode:
+        if autonomy_mode not in VALID_TACTICAL_AUTONOMY_MODES:
+            raise service.OwnerError(
+                "invalid_autonomy_mode",
+                400,
+                f"Unsupported autonomy mode '{autonomy_mode}'. Allowed: {VALID_TACTICAL_AUTONOMY_MODES}",
+            )
+        facs["_tactical_autonomy_mode"] = autonomy_mode
+    active_autonomy = str(facs.get("_tactical_autonomy_mode") or "consultative")
+
+    key = pairing_key(club_id, "owner", mgr_id)
+    rel = session.scalar(
+        select(OwnerClubRelationship).where(
+            OwnerClubRelationship.club_id == club_id,
+            OwnerClubRelationship.pairing_key == key,
+            OwnerClubRelationship.status == "active",
+        )
+    )
+    trust = int(rel.trust if rel else 55)
+    tension = int(rel.tension if rel else 20)
+
+    mgr_json = dict(state.manager_json or {})
+    current_formation = str(mgr_json.get("formation") or "4-3-3")
+    current_mentality = str(state.mentality or "balanced")
+
+    # Determine whether the manager rejects/counter-proposes or accepts
+    is_radical_shift = proposed_formation in ("5-3-2", "3-4-3") and proposed_mentality != current_mentality
+    should_reject = not accept_counter_proposal and (
+        (active_autonomy == "full_autonomy" and (trust < 75 or is_radical_shift))
+        or (active_autonomy == "consultative" and (trust < 48 or tension >= 55 or is_radical_shift))
+    )
+
+    if should_reject:
+        counter_formation = "4-2-3-1" if proposed_formation != "4-2-3-1" else "4-3-3"
+        counter_mentality = "balanced" if proposed_mentality != "balanced" else "attacking"
+        updated_rel = apply_relationship_delta(
+            session,
+            club_id,
+            "owner",
+            "owner",
+            "Club Owner",
+            "staff",
+            mgr_id,
+            mgr_name,
+            delta_trust=-4,
+            delta_respect=-2,
+            delta_alignment=-5,
+            delta_tension=7,
+            delta_influence=-2,
+            reason=f"Tactical disagreement over {proposed_formation} ({proposed_mentality})",
+            world_day=w_day,
+        )
+        evt, _ = create_club_event(
+            session,
+            club_id,
+            category="tactical",
+            event_type="tactical_proposal_rejected",
+            severity="important",
+            title=f"Tactical Disagreement: {mgr_name} Counter-Proposes {counter_formation}",
+            description=(
+                f"Owner proposed switching to {proposed_formation} ({proposed_mentality}). "
+                f"{mgr_name} rejected the immediate shift under {active_autonomy} authority and "
+                f"counter-proposed {counter_formation} ({counter_mentality})."
+            ),
+            world_day=w_day,
+            source_type="staff",
+            source_id=mgr_id,
+            participants=[
+                {"role": "owner", "name": "Club Owner"},
+                {"role": "first_team_manager", "id": mgr_id, "name": mgr_name},
+            ],
+            consequences={
+                "status": "rejected",
+                "implemented": False,
+                "proposed_formation": proposed_formation,
+                "proposed_mentality": proposed_mentality,
+                "counter_formation": counter_formation,
+                "counter_mentality": counter_mentality,
+            },
+            actions=[{"key": "review_tactics", "label": "Review Counter-Proposal", "style": "primary"}],
+        )
+        state.facilities_json = facs
+        session.flush()
+        return {
+            "club_id": club_id,
+            "status": "rejected",
+            "implemented": False,
+            "autonomy_mode": active_autonomy,
+            "manager_name": mgr_name,
+            "manager_explanation": (
+                f"Forcing {proposed_formation} ({proposed_mentality}) right now exposes our transition shape. "
+                f"I recommend a structured {counter_formation} ({counter_mentality}) compromise instead."
+            ),
+            "counter_proposal": {
+                "formation": counter_formation,
+                "mentality": counter_mentality,
+                "pressing": "high" if counter_mentality == "attacking" else "medium",
+                "tempo": "standard",
+            },
+            "effective_tactics": {
+                "formation": current_formation,
+                "mentality": current_mentality,
+            },
+            "relationship": format_relationship_dict(updated_rel) if updated_rel else None,
+            "event_id": evt.id,
+        }
+
+    # Accepted: update authoritative tactical configuration and re-read effective state
+    mgr_json["formation"] = proposed_formation
+    mgr_json["tactical_pressing"] = proposed_pressing
+    mgr_json["tactical_tempo"] = proposed_tempo
+    state.manager_json = mgr_json
+    state.mentality = proposed_mentality
+    facs["_tactical_config"] = {
+        "formation": proposed_formation,
+        "mentality": proposed_mentality,
+        "pressing": proposed_pressing,
+        "tempo": proposed_tempo,
+        "autonomy_mode": active_autonomy,
+        "updated_at_world_day": w_day,
+        "rationale": rationale or "Owner-Manager tactical alignment",
+    }
+    state.facilities_json = facs
+    session.flush()
+
+    # Re-read authoritative state to verify implementation
+    refreshed_state = service.require_state(session, club_id, user_id)
+    effective_formation = str((refreshed_state.manager_json or {}).get("formation") or "")
+    effective_mentality = str(refreshed_state.mentality or "")
+    implemented = effective_formation == proposed_formation and effective_mentality == proposed_mentality
+
+    updated_rel = apply_relationship_delta(
+        session,
+        club_id,
+        "owner",
+        "owner",
+        "Club Owner",
+        "staff",
+        mgr_id,
+        mgr_name,
+        delta_trust=5,
+        delta_respect=4,
+        delta_alignment=6,
+        delta_tension=-4,
+        delta_loyalty=3,
+        reason=f"Tactical agreement ratified: {proposed_formation} ({proposed_mentality})",
+        world_day=w_day,
+    )
+    evt, _ = create_club_event(
+        session,
+        club_id,
+        category="tactical",
+        event_type="tactical_proposal_implemented",
+        severity="info",
+        title=f"Tactical System Updated: {proposed_formation} ({proposed_mentality.title()})",
+        description=(
+            f"Following consultation between Owner and {mgr_name}, the first-team tactical system "
+            f"was updated to {proposed_formation} with a {proposed_mentality} mentality."
+        ),
+        world_day=w_day,
+        source_type="staff",
+        source_id=mgr_id,
+        participants=[
+            {"role": "owner", "name": "Club Owner"},
+            {"role": "first_team_manager", "id": mgr_id, "name": mgr_name},
+        ],
+        consequences={
+            "status": "accepted",
+            "implemented": implemented,
+            "effective_formation": effective_formation,
+            "effective_mentality": effective_mentality,
+        },
+        actions=[{"key": "acknowledge", "label": "Acknowledge", "style": "ghost"}],
+    )
+    session.flush()
+
+    return {
+        "club_id": club_id,
+        "status": "accepted",
+        "implemented": implemented,
+        "autonomy_mode": active_autonomy,
+        "manager_name": mgr_name,
+        "manager_explanation": (
+            f"Agreed. Transitioning our matchday setup to {effective_formation} ({effective_mentality}) "
+            "gives the squad clear tactical balance."
+        ),
+        "counter_proposal": None,
+        "effective_tactics": {
+            "formation": effective_formation,
+            "mentality": effective_mentality,
+            "pressing": proposed_pressing,
+            "tempo": proposed_tempo,
+        },
+        "relationship": format_relationship_dict(updated_rel) if updated_rel else None,
+        "event_id": evt.id,
+    }
