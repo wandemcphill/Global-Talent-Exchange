@@ -278,20 +278,20 @@ def test_gm_operational_cycle_does_not_log_rejected_staff_offer_as_executed(monk
     monkeypatch.setattr(
         living_staff_market,
         "get_club_vacancies",
-        lambda *args, **kwargs: {
-            "vacancies": [{"role_key": "general_manager", "role_label": "General Manager"}]
-        },
+        lambda *args, **kwargs: {"vacancies": [{"role_key": "general_manager", "role_label": "General Manager"}]},
     )
     monkeypatch.setattr(
         living_staff_market,
         "list_staff_market_candidates",
         lambda *args, **kwargs: {
-            "candidates": [{
-                "profile_id": "profile_candidate_rejected",
-                "name": "Candidate Rejected",
-                "rating": 80,
-                "expected_salary_gtex": 1000,
-            }]
+            "candidates": [
+                {
+                    "profile_id": "profile_candidate_rejected",
+                    "name": "Candidate Rejected",
+                    "rating": 80,
+                    "expected_salary_gtex": 1000,
+                }
+            ]
         },
     )
     monkeypatch.setattr(
@@ -309,13 +309,16 @@ def test_gm_operational_cycle_does_not_log_rejected_staff_offer_as_executed(monk
 
     assert "staff_hire" in [action["type"] for action in cycle["blocked_actions"]]
     assert "staff_hire" not in [action["type"] for action in cycle["executed_actions"]]
-    assert session.scalar(
-        select(ClubDelegatedDecision).where(
-            ClubDelegatedDecision.club_id == cp.id,
-            ClubDelegatedDecision.activity_key == "staff_hiring",
-            ClubDelegatedDecision.execution_status == "executed",
+    assert (
+        session.scalar(
+            select(ClubDelegatedDecision).where(
+                ClubDelegatedDecision.club_id == cp.id,
+                ClubDelegatedDecision.activity_key == "staff_hiring",
+                ClubDelegatedDecision.execution_status == "executed",
+            )
         )
-    ) is None
+        is None
+    )
 
 
 def test_gm_operational_cycle_escalates_when_limit_exceeded():
