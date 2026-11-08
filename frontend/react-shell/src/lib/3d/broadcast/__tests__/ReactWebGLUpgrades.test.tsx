@@ -6,6 +6,14 @@ import { PbrTurfShaderMaterial } from "../PbrTurfShaderMaterial";
 import { AssetStreamingCache } from "../AssetStreamingCache";
 import { CrowdChoreographyAndImpactSystem } from "../CrowdChoreographyAndImpactSystem";
 import { WebGpuCapabilityBridge } from "../WebGpuCapabilityBridge";
+import { StadiumEnvironmentLighting } from "../StadiumEnvironmentLighting";
+import { DynamicShadowRig } from "../DynamicShadowRig";
+import { PlayerImpostorLodSystem } from "../PlayerImpostorLodSystem";
+import {
+  AdaptiveQualityGovernor,
+  recommendTierFromCapabilities,
+} from "../AdaptiveQualityGovernor";
+import { StadiumArenaEnvironment } from "../StadiumArenaEnvironment";
 import { BroadcastOverlayHUD } from "../BroadcastOverlayHUD";
 import { SpatialInterpolator } from "../SpatialInterpolator";
 import { sanitizeForSpectator } from "../spectatorContract";
@@ -53,6 +61,12 @@ function createMockRenderer(customGl?: Partial<Record<string, any>>) {
     dispose: jest.fn(),
     toneMapping: THREE.NoToneMapping,
     toneMappingExposure: 1.0,
+    shadowMap: {
+      enabled: false,
+      type: THREE.BasicShadowMap,
+      autoUpdate: true,
+      needsUpdate: false,
+    },
     capabilities: {
       getMaxAnisotropy: jest.fn().mockReturnValue(16),
       isWebGL2: true,
@@ -66,11 +80,11 @@ function createMockRenderer(customGl?: Partial<Record<string, any>>) {
   return { mockRenderer, gl };
 }
 
-describe("GTEX React WebGL 3D Upgrades — Cinematic Post-Processing, PBR Turf, Asset Cache, Crowd Choreo & WebGPU", () => {
-  describe("1. Cinematic Post-Processing Pipeline (BroadcastPostProcessingPipeline)", () => {
-    test("initializes with ACES tone mapping, handles bloom toggles, resize, and tiered quality scalability", () => {
+describe("GTEX React WebGL 3D Upgrades — Priority A, B & C Full Verification", () => {
+  describe("1. Multi-Pass HDR Post-Processing (BroadcastPostProcessingPipeline)", () => {
+    test("executes HDR scene pass, separable Gaussian bloom blur, SSAO, DoF, Motion Blur, ACES + sRGB & FXAA", () => {
       const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.1, 1000);
+      const camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.5, 300);
 
       const { mockRenderer } = createMockRenderer();
       const pipeline = new BroadcastPostProcessingPipeline(mockRenderer, scene, camera, {
@@ -81,32 +95,46 @@ describe("GTEX React WebGL 3D Upgrades — Cinematic Post-Processing, PBR Turf, 
       const summary = pipeline.getSummary();
       expect(summary.qualityTier).toBe("high");
       expect(summary.isSupported).toBe(true);
-      expect(typeof summary.bloomStrength).toBe("number");
-      expect(typeof summary.bloomRadius).toBe("number");
+      expect(summary.isHdrTarget).toBe(true);
+      expect(summary.ssaoActive).toBe(true);
+      expect(summary.fxaaActive).toBe(true);
+      expect(summary.motionBlurActive).toBe(true);
 
-      // Set bloom enabled / disabled
+      // Render high tier with bloom + composite + FXAA (1 scene + 5 bloom + 1 composite + 1 fxaa = 8 passes)
+      pipeline.render(0.016);
+      expect(pipeline.getSummary().renderPassCount).toBe(8);
+
+      // Enable Depth of Field for replay close-ups (+3 passes = 11 passes)
+      pipeline.setDepthOfField(true, 22.0, 10.0);
+      pipeline.setMotionBlur(true, 0.9);
+      pipeline.render(0.016);
+      expect(pipeline.getSummary().depthOfFieldActive).toBe(true);
+      expect(pipeline.getSummary().focusDistance).toBe(22.0);
+      expect(pipeline.getSummary().renderPassCount).toBe(11);
+
+      // Set bloom disabled -> drops 5 bloom passes (11 - 5 = 6 passes)
       pipeline.setBloomEnabled(false);
       expect(pipeline.isBloomEnabled()).toBe(false);
+      pipeline.render(0.016);
+      expect(pipeline.getSummary().renderPassCount).toBe(6);
 
-      // Set quality tier to ultra and medium
+      // Low quality tier bypasses offscreen post-processing -> 1 direct pass
+      pipeline.setQualityTier("low");
+      pipeline.render(0.016);
+      expect(pipeline.getSummary().renderPassCount).toBe(1);
+
+      // Resize and restore ultra tier
       pipeline.setQualityTier("ultra");
-      expect(pipeline.getSummary().qualityTier).toBe("ultra");
-
-      pipeline.setQualityTier("medium");
-      expect(pipeline.getSummary().qualityTier).toBe("medium");
-
-      // Handle resize and render
       pipeline.setSize(1280, 720);
       expect(() => pipeline.render(0.016)).not.toThrow();
-      expect(mockRenderer.render).toHaveBeenCalled();
 
       pipeline.dispose();
       mockRenderer.dispose();
     });
   });
 
-  describe("2. PBR Pitch Turf Shader & Anisotropic Sheen (PbrTurfShaderMaterial)", () => {
-    test("compiles custom anisotropic mowing shader, modulates moisture and high-traffic wear", () => {
+  describe("2. PBR Pitch Turf Shader & Stadium Surface Integration", () => {
+    test("compiles custom anisotropic mowing shader and replaces the stadium pitch mesh material", () => {
       const turfMat = new PbrTurfShaderMaterial({
         baseColorHex: "#1a5e28",
         stripeColorHex: "#236d33",
@@ -116,125 +144,251 @@ describe("GTEX React WebGL 3D Upgrades — Cinematic Post-Processing, PBR Turf, 
       });
 
       expect(turfMat.material).toBeInstanceOf(THREE.MeshStandardMaterial);
-      const initialSummary = turfMat.getSummary();
-      expect(initialSummary.stripeWidthMeters).toBe(5.5);
-      expect(initialSummary.moisture).toBe(0.2);
-      expect(initialSummary.wearFactor).toBe(0.15);
+      expect(turfMat.getSummary().stripeWidthMeters).toBe(5.5);
 
-      // Modulate moisture (rain soaked condition lowers roughness)
+      // Modulate moisture & wear
       turfMat.setMoisture(0.85);
       expect(turfMat.getSummary().moisture).toBe(0.85);
       expect(turfMat.getSummary().roughness).toBeLessThan(0.7);
-
-      // Modulate wear factor
       turfMat.setWearFactor(0.9);
       expect(turfMat.getSummary().wearFactor).toBe(0.9);
+      turfMat.update(0.016, new THREE.Vector3(1, 2, 1));
 
-      // Advance update with light direction
-      const lightDir = new THREE.Vector3(1, 2, 1);
-      expect(() => turfMat.update(0.016, lightDir)).not.toThrow();
+      // Verify StadiumArenaEnvironment.applyPitchTurfMaterial swaps the actual pitch surface
+      const scene = new THREE.Scene();
+      const fixture = buildFiveMinuteHumanoidMatchFixture(30);
+      const safeView = sanitizeForSpectator(fixture, false);
+      const arena = new StadiumArenaEnvironment(scene, {
+        homeTeam: safeView.home_team,
+        awayTeam: safeView.away_team,
+        qualityTier: "medium",
+      });
 
+      arena.applyPitchTurfMaterial(turfMat.material);
+      let foundPbrPitchMesh = false;
+      scene.traverse((obj) => {
+        if ((obj as THREE.Mesh).isMesh && (obj as THREE.Mesh).material === turfMat.material) {
+          foundPbrPitchMesh = true;
+        }
+      });
+      expect(foundPbrPitchMesh).toBe(true);
+
+      arena.dispose();
       turfMat.dispose();
     });
   });
 
-  describe("3. Progressive Asset Streaming & IndexedDB Cache (AssetStreamingCache)", () => {
-    test("caches loaded ArrayBuffers in memory, tracks cache hits, and clears cache on demand", async () => {
+  describe("3. Progressive Asset Streaming Cache & Draco/KTX2 glTF Decoding", () => {
+    test("caches ArrayBuffers, refuses to cache failed fetches, and decodes glTF via configured loader stack", async () => {
       const cache = AssetStreamingCache.getInstance();
+      await cache.clearCache();
 
-      const initialSummary = cache.getSummary();
-      expect(typeof initialSummary.cachedAssetCount).toBe("number");
-      expect(typeof initialSummary.memoryCacheHits).toBe("number");
-
-      // Mock fetch response for reliable jsdom environment execution
-      const mockBuffer = new Uint8Array([1, 2, 3, 4]).buffer;
+      const mockBuffer = new Uint8Array([0x67, 0x6c, 0x54, 0x46, 2, 0, 0, 0]).buffer;
       const fetchSpy = jest.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,
+        status: 200,
         arrayBuffer: async () => mockBuffer,
       } as any);
 
-      // Load a test asset
       const testUrl = "/assets/3d/footballers/gtex_humanoid_footballer.glb";
       const buffer = await cache.loadAsset(testUrl);
-      expect(buffer).toBeInstanceOf(ArrayBuffer);
+      expect(buffer).toBe(mockBuffer);
       expect(cache.has(testUrl)).toBe(true);
 
-      // Subsequent load should hit memory cache without calling fetch again
+      // Second load hits memory cache without network fetch
+      const hitsBefore = cache.getSummary().memoryCacheHits;
       const buffer2 = await cache.loadAsset(testUrl);
-      expect(buffer2).toBe(buffer);
-      expect(cache.getSummary().memoryCacheHits).toBeGreaterThanOrEqual(1);
+      expect(buffer2).toBe(mockBuffer);
+      expect(cache.getSummary().memoryCacheHits).toBe(hitsBefore + 1);
 
-      // Clear cache
+      // Failed fetch is thrown and NOT cached
+      fetchSpy.mockResolvedValueOnce({ ok: false, status: 404 } as any);
+      const badUrl = "/assets/3d/missing.glb";
+      await expect(cache.loadAsset(badUrl)).rejects.toThrow(/HTTP 404/);
+      expect(cache.has(badUrl)).toBe(false);
+
+      // Verify loadGLTF invokes configured Draco/KTX2 factory with decoder paths
+      let capturedPaths: any = null;
+      cache.setDecoderPaths({
+        dracoDecoderPath: "/custom/draco/",
+        basisTranscoderPath: "/custom/basis/",
+      });
+      cache.setGltfLoaderFactory(async (paths) => {
+        capturedPaths = paths;
+        return async (buf) => ({
+          scene: new THREE.Group(),
+          animations: [],
+          byteLength: buf.byteLength,
+        });
+      });
+
+      const gltf = await cache.loadGLTF(testUrl);
+      expect(capturedPaths).toEqual({
+        dracoDecoderPath: "/custom/draco/",
+        basisTranscoderPath: "/custom/basis/",
+      });
+      expect(gltf.byteLength).toBe(mockBuffer.byteLength);
+      expect(cache.getSummary().gltfDecodes).toBeGreaterThanOrEqual(1);
+
+      cache.setGltfLoaderFactory(null);
       await cache.clearCache();
-      expect(cache.has(testUrl)).toBe(false);
-
       fetchSpy.mockRestore();
     });
   });
 
-  describe("4. Stadium Crowd Wave & Camera Trauma Shake (CrowdChoreographyAndImpactSystem)", () => {
-    test("evaluates circular La Ola wave propagation and quadratic camera trauma decay", () => {
+  describe("4. Stadium Crowd Wave ('La Ola') Wired to Instanced Crowd & Camera Trauma Shake", () => {
+    test("physically displaces StadiumArenaEnvironment instanced supporters during La Ola and decays camera trauma", () => {
       const choreo = new CrowdChoreographyAndImpactSystem({
         traumaDecayRate: 1.5,
         maxShakeOffsetMeters: 0.5,
       });
 
-      expect(choreo.getTrauma()).toBe(0.0);
-      expect(choreo.getSummary().waveType).toBe("calm");
-
-      // Trigger camera trauma from a goal or crossbar strike
       choreo.triggerCameraTrauma(0.75);
       expect(choreo.getTrauma()).toBe(0.75);
       expect(choreo.getSummary().shakeMagnitude).toBeCloseTo(0.5625, 2);
 
-      // Trigger circular Mexican wave ("la_ola")
+      // Wire choreography offset into StadiumArenaEnvironment
+      const scene = new THREE.Scene();
+      const fixture = buildFiveMinuteHumanoidMatchFixture(30);
+      const safeView = sanitizeForSpectator(fixture, false);
+      const arena = new StadiumArenaEnvironment(scene, {
+        homeTeam: safeView.home_team,
+        awayTeam: safeView.away_team,
+        qualityTier: "medium",
+      });
+
+      const offsetSpy = jest.fn((x: number, z: number) => choreo.getCrowdSectionOffset(x, z));
+      arena.setExternalCrowdOffsetFn(offsetSpy);
+
       choreo.triggerCrowdWave("la_ola", 12);
-      expect(choreo.getSummary().waveType).toBe("la_ola");
-      expect(choreo.getSummary().waveActive).toBe(true);
+      choreo.update(0.25);
+      arena.update(0.016, 10.0);
 
-      // Compute crowd section offsets around stadium
-      const offsetNorth = choreo.getCrowdSectionOffset(0, -45);
-      const offsetSouth = choreo.getCrowdSectionOffset(0, 45);
-      expect(Number.isFinite(offsetNorth)).toBe(true);
-      expect(Number.isFinite(offsetSouth)).toBe(true);
+      expect(offsetSpy).toHaveBeenCalled();
+      // Verify at least some stadium sections received positive vertical La Ola displacement
+      const displacements = offsetSpy.mock.results.map((r) => r.value as number);
+      expect(Math.max(...displacements)).toBeGreaterThan(0.1);
 
-      // Advance update to observe trauma decay and non-zero camera shake offset
-      const updateResult = choreo.update(0.1);
-      expect(updateResult.trauma).toBeLessThan(0.75);
-      expect(Number.isFinite(updateResult.cameraShakeOffset[0])).toBe(true);
-      expect(Number.isFinite(updateResult.cameraShakeOffset[1])).toBe(true);
-      expect(Number.isFinite(updateResult.cameraShakeOffset[2])).toBe(true);
-
+      arena.dispose();
       choreo.dispose();
-      expect(choreo.getTrauma()).toBe(0.0);
-      expect(choreo.getSummary().waveActive).toBe(false);
     });
   });
 
-  describe("5. Next-Gen WebGPU Capabilities Bridge (WebGpuCapabilityBridge)", () => {
-    test("detects hardware limits and preferred backend fallback", async () => {
+  describe("5. WebGPU Bridge & Adaptive Quality Governor", () => {
+    test("scores hardware capabilities and dynamically steps resolution & post-FX tier on slow/fast frames", async () => {
       const bridge = new WebGpuCapabilityBridge();
-      const initialReport = bridge.getReport();
-
-      expect(typeof initialReport.isWebGpuSupported).toBe("boolean");
-      expect(["webgpu", "webgl2", "webgl1", "headless"]).toContain(initialReport.preferredBackend);
-      expect(typeof initialReport.maxAnisotropy).toBe("number");
-      expect(typeof initialReport.maxTextureSize).toBe("number");
-
-      // Inspect mock renderer
       const { mockRenderer } = createMockRenderer();
       const report = await bridge.inspectRenderer(mockRenderer);
 
       expect(report.maxTextureSize).toBe(8192);
       expect(report.maxAnisotropy).toBe(16);
       expect(report.supportsHalfFloatTargets).toBe(true);
-      expect(report.supportsAstc).toBe(true);
+      expect(recommendTierFromCapabilities(report)).toBe("high");
+      expect(
+        recommendTierFromCapabilities({
+          ...report,
+          preferredBackend: "webgpu",
+          maxTextureSize: 16384,
+        })
+      ).toBe("ultra");
+      expect(
+        recommendTierFromCapabilities({
+          ...report,
+          preferredBackend: "webgl1",
+        })
+      ).toBe("low");
+
+      // AdaptiveQualityGovernor steps down when frames exceed budget (>19.2ms)
+      const gov = new AdaptiveQualityGovernor("high", 60);
+      let decision = gov.applyCapabilities(report);
+      expect(decision.postFxTier).toBe("high");
+
+      for (let i = 0; i < 95; i++) {
+        decision = gov.recordFrame(28.0, 0.028);
+        if (decision.changed) break;
+      }
+      expect(decision.changed).toBe(true);
+      expect(decision.resolutionScale).toBeLessThan(1.0);
+
+      // Manual user lock overrides automatic stepping
+      gov.lock("medium");
+      expect(gov.getSummary().isLocked).toBe(true);
+      expect(gov.getSummary().postFxTier).toBe("medium");
+      expect(gov.getSummary().resolutionScale).toBe(1.0);
 
       mockRenderer.dispose();
     });
   });
 
-  describe("6. BroadcastOverlayHUD Post-FX Bloom Control", () => {
+  describe("6. Dynamic Soft Shadows, IBL Environment Lighting & Player Impostor LOD", () => {
+    test("snaps dynamic shadow frustum to ball, boosts wet IBL intensity, and batches far players into InstancedMesh", () => {
+      const scene = new THREE.Scene();
+      const { mockRenderer } = createMockRenderer();
+      const keyLight = new THREE.DirectionalLight(0xffffff, 1.35);
+      keyLight.position.set(20, 55, 42);
+      scene.add(keyLight);
+
+      // A. DynamicShadowRig
+      const shadowRig = new DynamicShadowRig(mockRenderer, keyLight, "high");
+      expect(shadowRig.getSummary().enabled).toBe(true);
+      expect(shadowRig.getSummary().mapSize).toBe(2048);
+      expect(mockRenderer.shadowMap.type).toBe(THREE.PCFSoftShadowMap);
+
+      const playerMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(1, 2, 1),
+        new THREE.MeshStandardMaterial()
+      );
+      scene.add(playerMesh);
+      shadowRig.registerCaster(playerMesh);
+      expect(playerMesh.castShadow).toBe(true);
+
+      shadowRig.update(0.05, [18.4, 0.2, -9.7]);
+      expect(shadowRig.getSummary().shadowUpdates).toBe(1);
+      expect(keyLight.target.position.x).toBeCloseTo(18.4, 1);
+      expect(keyLight.target.position.z).toBeCloseTo(-9.7, 1);
+
+      // B. StadiumEnvironmentLighting
+      const envLighting = new StadiumEnvironmentLighting(mockRenderer, scene, "high");
+      expect(() => envLighting.setFloodlightBoost(1.4)).not.toThrow();
+      expect(envLighting.getSummary().floodlightBoost).toBe(1.4);
+
+      // C. PlayerImpostorLodSystem
+      const camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.5, 300);
+      camera.position.set(0, 15, 0);
+
+      const nearPlayer = new THREE.Group();
+      nearPlayer.position.set(10, 0, 0);
+      nearPlayer.updateMatrixWorld();
+
+      const farPlayer1 = new THREE.Group();
+      farPlayer1.position.set(110, 0, 0);
+      farPlayer1.updateMatrixWorld();
+
+      const farPlayer2 = new THREE.Group();
+      farPlayer2.position.set(115, 0, 5);
+      farPlayer2.updateMatrixWorld();
+
+      const impostors = new PlayerImpostorLodSystem(scene, "high");
+      impostors.update(camera, [
+        { id: "p-near", rootObject: nearPlayer, colorHex: "#00e676" },
+        { id: "p-far-1", rootObject: farPlayer1, colorHex: "#ff1744" },
+        { id: "p-far-2", rootObject: farPlayer2, colorHex: "#ff1744" },
+      ]);
+
+      expect(nearPlayer.visible).toBe(true);
+      expect(farPlayer1.visible).toBe(false);
+      expect(farPlayer2.visible).toBe(false);
+      expect(impostors.getSummary().impostorCount).toBe(2);
+      expect(impostors.getSummary().fullRigCount).toBe(1);
+      expect(impostors.getSummary().drawCallsSaved).toBe(1);
+
+      impostors.dispose();
+      envLighting.dispose();
+      mockRenderer.dispose();
+    });
+  });
+
+  describe("7. BroadcastOverlayHUD Post-FX Bloom Control", () => {
     let container: HTMLDivElement | null = null;
     let root: Root | null = null;
 

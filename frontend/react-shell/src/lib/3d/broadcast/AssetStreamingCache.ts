@@ -4,9 +4,11 @@
  *
  * Implements:
  * 1. Two-tier caching: In-memory ArrayBuffer cache + Persistent IndexedDB blob store.
- * 2. Pre-configured Draco & KTX2 / Basis Universal decompression pipelines.
+ * 2. glTF decoding via lazily imported GLTFLoader + DRACOLoader + KTX2Loader + Meshopt.
+ *    Decoder binaries are served from `/decoders/draco/` and `/decoders/basis/` by default
+ *    (copy them from three/examples/jsm/libs/{draco,basis}); override with setDecoderPaths.
  * 3. Zero-wait model instantiation on subsequent matches for returning spectators.
- * 4. Fallback-safe execution in server-side, Node, or mock environments.
+ * 4. Failed fetches are never cached (prevents poisoning the persistent store).
  */
 
 export interface AssetStreamingSummary {
@@ -16,7 +18,48 @@ export interface AssetStreamingSummary {
   networkFetches: number;
   isIndexedDbSupported: boolean;
   totalBytesCached: number;
+  gltfDecodes: number;
 }
+
+export interface DecoderPaths {
+  dracoDecoderPath: string;
+  basisTranscoderPath: string;
+}
+
+/** Minimal shape of a decoded glTF (mirrors three's GLTF without importing jsm types). */
+export interface GltfLoadResult {
+  scene: unknown;
+  animations: unknown[];
+  [key: string]: unknown;
+}
+
+export type GltfParser = (buffer: ArrayBuffer, resourcePath: string) => Promise<GltfLoadResult>;
+export type GltfLoaderFactory = (paths: DecoderPaths, renderer?: unknown) => Promise<GltfParser>;
+
+const defaultGltfLoaderFactory: GltfLoaderFactory = async (paths, renderer) => {
+  const [{ GLTFLoader }, { DRACOLoader }, { KTX2Loader }, { MeshoptDecoder }] = await Promise.all([
+    import(/* webpackChunkName: "gltf-loader" */ "three/examples/jsm/loaders/GLTFLoader.js"),
+    import(/* webpackChunkName: "gltf-loader" */ "three/examples/jsm/loaders/DRACOLoader.js"),
+    import(/* webpackChunkName: "gltf-loader" */ "three/examples/jsm/loaders/KTX2Loader.js"),
+    import(/* webpackChunkName: "gltf-loader" */ "three/examples/jsm/libs/meshopt_decoder.module.js"),
+  ]);
+  const loader = new GLTFLoader();
+  const draco = new DRACOLoader();
+  draco.setDecoderPath(paths.dracoDecoderPath);
+  loader.setDRACOLoader(draco);
+  const ktx2 = new KTX2Loader();
+  ktx2.setTranscoderPath(paths.basisTranscoderPath);
+  if (renderer) {
+    // detectSupport picks ASTC/BC7/ETC2/S3TC targets for the actual GPU
+    ktx2.detectSupport(renderer as import("three").WebGLRenderer);
+  }
+  loader.setKTX2Loader(ktx2);
+  loader.setMeshoptDecoder(MeshoptDecoder);
+  return (buffer, resourcePath) =>
+    new Promise<GltfLoadResult>((resolve, reject) => {
+      loader.parse(buffer, resourcePath, (gltf) => resolve(gltf as unknown as GltfLoadResult), reject);
+    });
+};
 
 const DB_NAME = "GTEX_3D_ASSET_CACHE";
 const DB_VERSION = 1;
@@ -30,6 +73,13 @@ export class AssetStreamingCache {
   private networkFetches = 0;
   private totalBytesCached = 0;
   private dbPromise: Promise<IDBDatabase | null> | null = null;
+  private gltfDecodes = 0;
+  private gltfLoaderFactory: GltfLoaderFactory | null = null;
+  private gltfLoaderPromise: Promise<GltfParser> | null = null;
+  private decoderPaths: DecoderPaths = {
+    dracoDecoderPath: "/decoders/draco/",
+    basisTranscoderPath: "/decoders/basis/",
+  };
 
   public static getInstance(): AssetStreamingCache {
     if (!AssetStreamingCache.instance) {
@@ -96,36 +146,64 @@ export class AssetStreamingCache {
       }
     }
 
-    // 3. Network fetch with simulated or real stream progress
-    this.networkFetches++;
-    try {
-      if (typeof fetch === "function") {
-        const res = await fetch(url);
-        if (!res.ok) {
-          throw new Error(`Failed to fetch 3D asset from ${url}: HTTP ${res.status}`);
-        }
-        const buffer = await res.arrayBuffer();
-        this.memoryCache.set(url, buffer);
-        this.totalBytesCached += buffer.byteLength;
-
-        // Persist to IndexedDB asynchronously
-        if (db) {
-          this.writeToDb(db, url, buffer).catch(() => {});
-        }
-        onProgress?.(100);
-        return buffer;
-      }
-    } catch (err) {
-      // In tests / headless environments where fetch fails or is mocked
-      const fallbackBuffer = new ArrayBuffer(1024);
-      this.memoryCache.set(url, fallbackBuffer);
-      return fallbackBuffer;
+    // 3. Network fetch. Failures are thrown and never cached, so a bad response
+    //    can't poison the persistent IndexedDB store for future sessions.
+    if (typeof fetch !== "function") {
+      throw new Error(`fetch unavailable; cannot load 3D asset ${url}`);
     }
-
-    const emptyBuffer = new ArrayBuffer(512);
-    this.memoryCache.set(url, emptyBuffer);
-    return emptyBuffer;
+    this.networkFetches++;
+    const res = await fetch(url);
+    if (!res || !res.ok) {
+      throw new Error(`Failed to fetch 3D asset from ${url}: HTTP ${res ? res.status : "n/a"}`);
+    }
+    const buffer = await res.arrayBuffer();
+    this.memoryCache.set(url, buffer);
+    this.totalBytesCached += buffer.byteLength;
+    if (db) {
+      this.writeToDb(db, url, buffer).catch(() => {});
+    }
+    onProgress?.(100);
+    return buffer;
   }
+
+  // ---------------------------------------------------------------------------
+  // glTF / GLB decoding with Draco, KTX2 (Basis Universal) and Meshopt support
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Overrides how the glTF loader stack is created. Production uses lazily imported
+   * three/examples loaders; tests inject a fake so no ESM is pulled into Jest.
+   */
+  public setGltfLoaderFactory(factory: GltfLoaderFactory | null): void {
+    this.gltfLoaderFactory = factory;
+    this.gltfLoaderPromise = null;
+  }
+
+  public setDecoderPaths(paths: Partial<DecoderPaths>): void {
+    this.decoderPaths = { ...this.decoderPaths, ...paths };
+    this.gltfLoaderPromise = null;
+  }
+
+  private getGltfParser(renderer?: unknown): Promise<GltfParser> {
+    if (!this.gltfLoaderPromise) {
+      const factory = this.gltfLoaderFactory ?? defaultGltfLoaderFactory;
+      this.gltfLoaderPromise = factory(this.decoderPaths, renderer);
+    }
+    return this.gltfLoaderPromise;
+  }
+
+  /**
+   * Fetches (through the two-tier cache) and decodes a glTF binary. Draco-compressed
+   * geometry, KTX2 textures and Meshopt buffers are decoded by the configured loader stack.
+   */
+  public async loadGLTF(url: string, renderer?: unknown): Promise<GltfLoadResult> {
+    const buffer = await this.loadAsset(url);
+    const parser = await this.getGltfParser(renderer);
+    const resourcePath = url.substring(0, url.lastIndexOf("/") + 1);
+    this.gltfDecodes++;
+    return parser(buffer, resourcePath);
+  }
+
 
   private readFromDb(db: IDBDatabase, key: string): Promise<ArrayBuffer | null> {
     return new Promise((resolve) => {
@@ -181,6 +259,7 @@ export class AssetStreamingCache {
       networkFetches: this.networkFetches,
       isIndexedDbSupported: this.isIndexedDbAvailable(),
       totalBytesCached: this.totalBytesCached,
+      gltfDecodes: this.gltfDecodes,
     };
   }
 }

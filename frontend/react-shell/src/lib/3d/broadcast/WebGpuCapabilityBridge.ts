@@ -56,7 +56,11 @@ export class WebGpuCapabilityBridge {
     try {
       const gl = renderer.getContext();
       if (gl) {
-        if (typeof WebGL2RenderingContext !== "undefined" && gl instanceof WebGL2RenderingContext) {
+        const isWebGL2 =
+          Boolean(renderer.capabilities?.isWebGL2) ||
+          (typeof WebGL2RenderingContext !== "undefined" && gl instanceof WebGL2RenderingContext) ||
+          String(gl.getParameter?.(gl.VERSION ?? 0x1f02) || "").includes("WebGL 2.0");
+        if (isWebGL2) {
           this.report.preferredBackend = this.report.isWebGpuSupported ? "webgpu" : "webgl2";
         } else {
           this.report.preferredBackend = "webgl1";

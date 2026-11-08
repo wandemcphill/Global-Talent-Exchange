@@ -21,6 +21,7 @@ module.exports = {
       jestConfig.moduleNameMapper = {
         ...(jestConfig.moduleNameMapper || {}),
         "^@/(.*)$": "<rootDir>/src/$1",
+        "^three$": "<rootDir>/node_modules/three/build/three.cjs",
       };
       return jestConfig;
     },

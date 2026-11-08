@@ -152,6 +152,8 @@ export class StadiumArenaEnvironment {
   private clubBannerContext: CanvasRenderingContext2D | null = null;
   private clubBannerTexture: THREE.CanvasTexture | null = null;
   private pitchTurfMat: THREE.MeshLambertMaterial | null = null;
+  private pitchMesh: THREE.Mesh | null = null;
+  private externalCrowdOffsetFn: ((x: number, z: number) => number) | null = null;
   private pitchRunoffMat: THREE.MeshLambertMaterial | null = null;
   private homeCrowdMat: THREE.MeshLambertMaterial | null = null;
   private awayCrowdMat: THREE.MeshLambertMaterial | null = null;
@@ -272,6 +274,26 @@ export class StadiumArenaEnvironment {
     };
   }
 
+  /**
+   * Swaps the pitch surface to an externally owned material (e.g. the PBR turf shader).
+   * The caller keeps ownership and disposes it; the original Lambert material stays
+   * tracked for weather tinting compatibility and disposal.
+   */
+  public applyPitchTurfMaterial(material: THREE.Material): void {
+    if (this.pitchMesh) {
+      this.pitchMesh.material = material;
+    }
+  }
+
+  /**
+   * Registers an additional per-supporter vertical offset (metres) evaluated each frame
+   * from the supporter's stadium-space (x, z). Used by the crowd choreography system so
+   * its La Ola / celebration waves physically move the instanced crowd.
+   */
+  public setExternalCrowdOffsetFn(fn: ((x: number, z: number) => number) | null): void {
+    this.externalCrowdOffsetFn = fn;
+  }
+
   // ---------------------------------------------------------------------------
   // 1. Realistic Football Pitch Geometry & FIFA Markings
   // ---------------------------------------------------------------------------
@@ -290,6 +312,7 @@ export class StadiumArenaEnvironment {
     this.pitchTurfMat = pitchMat;
     this.disposables.push(pitchGeo, pitchMat);
     const pitchMesh = new THREE.Mesh(pitchGeo, pitchMat);
+    this.pitchMesh = pitchMesh;
     pitchMesh.rotation.x = -Math.PI / 2;
     pitchMesh.receiveShadow = true;
     this.pitchGroup.add(pitchMesh);
@@ -1547,6 +1570,11 @@ export class StadiumArenaEnvironment {
         if (waveActive) {
           const waveCrest = Math.max(0, Math.cos(meta.angleRad - waveFrontAngle));
           bounce += Math.pow(waveCrest, 4) * 0.52;
+        }
+
+        if (this.externalCrowdOffsetFn) {
+          const extra = this.externalCrowdOffsetFn(meta.baseX, meta.baseZ);
+          if (Number.isFinite(extra)) bounce += Math.max(0, Math.min(1.5, extra));
         }
 
         mat4.makeRotationY(meta.rotY);

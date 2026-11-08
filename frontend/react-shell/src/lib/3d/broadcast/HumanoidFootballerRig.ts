@@ -25,6 +25,7 @@ import {
   GTEX_HUMANOID_BONE_SPECS,
 } from "./FootballAnimationStateMachine";
 import type { DeviceQualityTier } from "../GtexSceneTypes";
+import { AssetStreamingCache } from "./AssetStreamingCache";
 
 // -----------------------------------------------------------------------------
 // 1. Anatomical Kit Zones & Appearance Palettes
@@ -840,16 +841,15 @@ export function loadHumanoidFootballerGLB(
     return Promise.resolve(null);
   }
 
-  pendingGLBPromise = fetch(url)
-    .then((res) => {
-      if (!res.ok) return null;
-      return res.arrayBuffer();
-    })
-    .then((buf) => {
-      if (!buf) return null;
-      return parseHumanoidFootballerGLBBuffer(buf);
-    })
-    .catch(() => null);
+  // Routed through the two-tier asset cache so returning spectators load the
+  // footballer model from memory / IndexedDB instead of the network.
+  pendingGLBPromise = AssetStreamingCache.getInstance()
+    .loadAsset(url)
+    .then((buf) => parseHumanoidFootballerGLBBuffer(buf))
+    .catch(() => {
+      pendingGLBPromise = null;
+      return null;
+    });
 
   return pendingGLBPromise;
 }
@@ -928,6 +928,7 @@ export class HumanoidFootballerRig {
   private currentState: FootballAnimationState = "idle";
   private timeInCurrentStateSec: number = 0;
   private lodLevel: AnimationLODLevel = "full";
+  private shadowCastingEnabled: boolean = false;
   private lodFrameCounter: number = 0;
   private accumulatedLodDeltaSec: number = 0;
   private isUsingGLBMesh: boolean = false;
@@ -1322,7 +1323,13 @@ export class HumanoidFootballerRig {
       }
     }
 
-    this.skinnedMesh.castShadow = false;
+    // Only near/medium-LOD players cast into the dynamic shadow map (when enabled).
+    this.skinnedMesh.castShadow = this.shadowCastingEnabled && this.lodLevel !== "far";
+  }
+
+  /** Enabled by the broadcast DynamicShadowRig on high/ultra tiers. */
+  public setShadowCasting(enabled: boolean): void {
+    this.shadowCastingEnabled = enabled;
   }
 
   private applyProceduralPostureAdjustments(
