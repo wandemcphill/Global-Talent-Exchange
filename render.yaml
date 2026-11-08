@@ -74,6 +74,29 @@ services:
         sync: false
       - key: GTE_PAYSTACK_CALLBACK_URL
         sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PAYSTACK_WEBHOOK_SECRET
+        sync: false
+      - key: KORAPAY_SECRET_KEY
+        sync: false
+      - key: KORAPAY_WEBHOOK_SECRET
+        sync: false
+      # GTEX Commercial Network & Durable Cloud Object Storage (AWS S3 / Cloudflare R2 / MinIO)
+      - key: GTE_COMMERCIAL_NETWORK_ENABLED
+        value: "true"
+      - key: GTE_S3_BUCKET
+        sync: false
+      - key: GTE_S3_REGION
+        value: "eu-central-1"
+      - key: GTE_S3_ENDPOINT_URL
+        sync: false
+      - key: GTE_S3_ACCESS_KEY_ID
+        sync: false
+      - key: GTE_S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: GTE_ALLOW_LOCAL_STORAGE_IN_PRODUCTION
+        value: "false"
       - key: TREASURY_BANK_NAME
         sync: false
       - key: TREASURY_ACCOUNT_NAME
@@ -267,6 +290,17 @@ services:
         sync: false
       - key: GTE_SOCIAL_CONTENT_LLM_TIMEOUT_SECONDS
         value: "8"
+      # Durable Cloud Object Storage (AWS S3 / Cloudflare R2 / MinIO)
+      - key: GTE_S3_BUCKET
+        sync: false
+      - key: GTE_S3_REGION
+        value: "eu-central-1"
+      - key: GTE_S3_ENDPOINT_URL
+        sync: false
+      - key: GTE_S3_ACCESS_KEY_ID
+        sync: false
+      - key: GTE_S3_SECRET_ACCESS_KEY
+        sync: false
 
   - name: gtex-simulation-worker
     type: worker
@@ -331,6 +365,17 @@ services:
         sync: false
       - key: GTE_SOCIAL_CONTENT_LLM_TIMEOUT_SECONDS
         value: "8"
+      # Durable Cloud Object Storage (AWS S3 / Cloudflare R2 / MinIO)
+      - key: GTE_S3_BUCKET
+        sync: false
+      - key: GTE_S3_REGION
+        value: "eu-central-1"
+      - key: GTE_S3_ENDPOINT_URL
+        sync: false
+      - key: GTE_S3_ACCESS_KEY_ID
+        sync: false
+      - key: GTE_S3_SECRET_ACCESS_KEY
+        sync: false
 
   - name: gtex-outbox-relay
     type: worker
@@ -419,6 +464,17 @@ services:
         sync: false
       - key: GTE_SOCIAL_CONTENT_LLM_TIMEOUT_SECONDS
         value: "8"
+      # Durable Cloud Object Storage (AWS S3 / Cloudflare R2 / MinIO)
+      - key: GTE_S3_BUCKET
+        sync: false
+      - key: GTE_S3_REGION
+        value: "eu-central-1"
+      - key: GTE_S3_ENDPOINT_URL
+        sync: false
+      - key: GTE_S3_ACCESS_KEY_ID
+        sync: false
+      - key: GTE_S3_SECRET_ACCESS_KEY
+        sync: false
 
   - name: gtex-player-ingestion-worker
     type: worker
