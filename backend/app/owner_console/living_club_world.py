@@ -190,11 +190,11 @@ DEPARTMENT_TO_ROLE_KEY = {
 }
 
 DEFAULT_STAFF_METRICS = {
-    "first_team_manager": {"trust": 55, "respect": 60, "affinity": 50, "tension": 15},
-    "general_manager": {"trust": 65, "respect": 65, "affinity": 60, "tension": 10},
-    "head_of_youth_development": {"trust": 60, "respect": 60, "affinity": 55, "tension": 10},
-    "medical_director": {"trust": 65, "respect": 70, "affinity": 55, "tension": 5},
-    "chief_scout": {"trust": 55, "respect": 55, "affinity": 50, "tension": 15},
+    "first_team_manager": {"trust": 55, "respect": 60, "affinity": 50, "tension": 15, "alignment": 65, "influence": 70, "loyalty": 60},
+    "general_manager": {"trust": 65, "respect": 65, "affinity": 60, "tension": 10, "alignment": 75, "influence": 75, "loyalty": 70},
+    "head_of_youth_development": {"trust": 60, "respect": 60, "affinity": 55, "tension": 10, "alignment": 70, "influence": 55, "loyalty": 75},
+    "medical_director": {"trust": 65, "respect": 70, "affinity": 55, "tension": 5, "alignment": 70, "influence": 50, "loyalty": 70},
+    "chief_scout": {"trust": 55, "respect": 55, "affinity": 50, "tension": 15, "alignment": 60, "influence": 60, "loyalty": 60},
 }
 
 STAFF_ROLE_LABELS = {
@@ -524,6 +524,9 @@ def get_or_create_relationship(
     initial_respect: int | None = None,
     initial_affinity: int | None = None,
     initial_tension: int | None = None,
+    initial_alignment: int | None = None,
+    initial_influence: int | None = None,
+    initial_loyalty: int | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> OwnerClubRelationship:
     clean_a_id = str(part_a_id or "").strip()
@@ -563,6 +566,9 @@ def get_or_create_relationship(
     r = initial_respect if initial_respect is not None else def_metrics.get("respect", 50)
     a = initial_affinity if initial_affinity is not None else def_metrics.get("affinity", 50)
     ten = initial_tension if initial_tension is not None else def_metrics.get("tension", 20)
+    al = initial_alignment if initial_alignment is not None else def_metrics.get("alignment", 60)
+    inf = initial_influence if initial_influence is not None else def_metrics.get("influence", 50)
+    loy = initial_loyalty if initial_loyalty is not None else def_metrics.get("loyalty", 60)
 
     rel_meta = dict(metadata or {})
     if staff_role and "role_key" not in rel_meta:
@@ -581,6 +587,9 @@ def get_or_create_relationship(
         respect=engine.clamp(r, 0, 100),
         affinity=engine.clamp(a, 0, 100),
         tension=engine.clamp(ten, 0, 100),
+        alignment=engine.clamp(al, 0, 100),
+        influence=engine.clamp(inf, 0, 100),
+        loyalty=engine.clamp(loy, 0, 100),
         status="active",
         metadata_json=rel_meta,
     )
@@ -615,6 +624,9 @@ def apply_relationship_delta(
     delta_respect: int = 0,
     delta_affinity: int = 0,
     delta_tension: int = 0,
+    delta_alignment: int = 0,
+    delta_influence: int = 0,
+    delta_loyalty: int = 0,
     reason: str = "World interaction",
     source_event_id: str | None = None,
     world_day: int = 1,
@@ -648,6 +660,9 @@ def apply_relationship_delta(
     rel.respect = engine.clamp(rel.respect + delta_respect, 0, 100)
     rel.affinity = engine.clamp(rel.affinity + delta_affinity, 0, 100)
     rel.tension = engine.clamp(rel.tension + delta_tension, 0, 100)
+    rel.alignment = engine.clamp(getattr(rel, "alignment", 60) + delta_alignment, 0, 100)
+    rel.influence = engine.clamp(getattr(rel, "influence", 50) + delta_influence, 0, 100)
+    rel.loyalty = engine.clamp(getattr(rel, "loyalty", 60) + delta_loyalty, 0, 100)
     rel.updated_at = utcnow()
 
     history = OwnerClubRelationshipHistory(
@@ -660,11 +675,17 @@ def apply_relationship_delta(
         delta_respect=delta_respect,
         delta_affinity=delta_affinity,
         delta_tension=delta_tension,
+        delta_alignment=delta_alignment,
+        delta_influence=delta_influence,
+        delta_loyalty=delta_loyalty,
         snapshot_json={
             "trust": rel.trust,
             "respect": rel.respect,
             "affinity": rel.affinity,
             "tension": rel.tension,
+            "alignment": rel.alignment,
+            "influence": rel.influence,
+            "loyalty": rel.loyalty,
             "status_label": compute_relationship_status_label(rel.trust, rel.respect, rel.affinity, rel.tension),
         },
     )
@@ -724,6 +745,9 @@ def ensure_default_relationships(
                 initial_respect=metrics["respect"],
                 initial_affinity=metrics["affinity"],
                 initial_tension=metrics["tension"],
+                initial_alignment=metrics.get("alignment", 60),
+                initial_influence=metrics.get("influence", 50),
+                initial_loyalty=metrics.get("loyalty", 60),
                 metadata={
                     "role_key": role_key,
                     "role_label": slot["role_label"],
@@ -839,6 +863,9 @@ def format_relationship_dict(rel: OwnerClubRelationship) -> dict[str, Any]:
         "respect": rel.respect,
         "affinity": rel.affinity,
         "tension": rel.tension,
+        "alignment": getattr(rel, "alignment", 60),
+        "influence": getattr(rel, "influence", 50),
+        "loyalty": getattr(rel, "loyalty", 60),
         "status": rel.status,
         "status_label": compute_relationship_status_label(rel.trust, rel.respect, rel.affinity, rel.tension),
         "metadata": meta,
