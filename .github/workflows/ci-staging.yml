@@ -120,7 +120,16 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter build apk --debug
+      - name: Build debug APK (with retry on transient Gradle download 5xx)
+        run: |
+          for attempt in 1 2 3; do
+            if flutter build apk --debug; then
+              exit 0
+            fi
+            echo "flutter build apk --debug failed on attempt ${attempt}; retrying in 15s..."
+            sleep 15
+          done
+          exit 1
 
   backend-tests:
     runs-on: ubuntu-latest

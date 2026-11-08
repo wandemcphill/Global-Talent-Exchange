@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import os
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_optional_current_user, get_session
@@ -39,14 +38,14 @@ def app_and_db():
         id="00000000-0000-4000-8000-000000000010",
         email="advertiser_v2@example.com",
         username="adv_v2",
-        password_hash="pw",
+        password_hash="pw",  # pragma: allowlist secret
         role=UserRole.USER,
     )
     admin_user = User(
         id="00000000-0000-4000-8000-000000000020",
         email="admin_v2@example.com",
         username="admin_v2",
-        password_hash="pw",
+        password_hash="pw",  # pragma: allowlist secret
         role=UserRole.ADMIN,
     )
     with factory() as session:
@@ -131,6 +130,7 @@ def test_versioned_admin_endpoints_require_admin_role(app_and_db):
     # 2. Authenticated as non-admin user -> 403
     def mock_non_admin_attempt():
         from fastapi import HTTPException, status
+
         if advertiser_user.role not in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required.")
         return advertiser_user

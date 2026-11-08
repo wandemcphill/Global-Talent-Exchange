@@ -36,8 +36,12 @@ def upgrade() -> None:
             sa.Column("financial_philosophy", sa.String(length=64), server_default="balanced", nullable=False),
             sa.Column("club_vision_narrative", sa.Text(), nullable=True),
             sa.Column("metadata_json", sa.JSON(), nullable=False),
-            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
-            sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+            sa.Column(
+                "created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+            ),
+            sa.Column(
+                "updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+            ),
             sa.ForeignKeyConstraint(["club_id"], ["club_profiles.id"], ondelete="CASCADE"),
             sa.PrimaryKeyConstraint("id"),
             sa.UniqueConstraint("club_id", name="uq_club_dna_policies_club_id"),
@@ -60,10 +64,16 @@ def upgrade() -> None:
             sa.Column("reason", sa.Text(), nullable=False),
             sa.Column("approved_by_user_id", sa.String(length=36), nullable=False),
             sa.Column("status", sa.String(length=32), server_default="approved", nullable=False),
-            sa.Column("approved_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+            sa.Column(
+                "approved_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+            ),
             sa.Column("metadata_json", sa.JSON(), nullable=False),
-            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
-            sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+            sa.Column(
+                "created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+            ),
+            sa.Column(
+                "updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+            ),
             sa.ForeignKeyConstraint(["club_id"], ["club_profiles.id"], ondelete="CASCADE"),
             sa.ForeignKeyConstraint(["approved_by_user_id"], ["users.id"], ondelete="CASCADE"),
             sa.PrimaryKeyConstraint("id"),

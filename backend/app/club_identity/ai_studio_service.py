@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import base64
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import Any
 
 from app.club_identity.crest_svg_builder import render_crest_svg
@@ -136,7 +136,11 @@ class ClubIdentityStudioService:
         nat_mode = (
             PolicyNationalityMode.EXCLUSIVE.value
             if nationality_focus == "exclusive"
-            else (PolicyNationalityMode.PREFERRED.value if nationality_focus == "preferred" else PolicyNationalityMode.NONE.value)
+            else (
+                PolicyNationalityMode.PREFERRED.value
+                if nationality_focus == "preferred"
+                else PolicyNationalityMode.NONE.value
+            )
         )
         target_nats = [norm_country] if norm_country and nat_mode != PolicyNationalityMode.NONE.value else []
 

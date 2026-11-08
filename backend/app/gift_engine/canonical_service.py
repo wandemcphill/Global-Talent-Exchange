@@ -296,7 +296,6 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                 "club_id": recipient_club_id,
                 "sender_display_name": sender_label,
                 "recipient_display_name": recipient_label,
-                "duration_ms": getattr(gift, "duration_ms", 3000),
                 "identity_semantics": "profile_is_canonical_sender_recipient_identity_club_is_context_only",
             },
         )
