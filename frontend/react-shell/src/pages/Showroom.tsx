@@ -13,6 +13,7 @@ import { api } from "@/lib/api";
 import { publicAssetPath } from "@/lib/publicPath";
 import { Loading } from "@/components/gtex/ui";
 import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
+import { PrestigeShowroomScene } from "@/lib/3d/scenes/PrestigeShowroomScene";
 import {
   Sparkles,
   Plane,
@@ -642,38 +643,36 @@ export function Showroom() {
       {/* SPECIFICATION INSPECTION MODAL */}
       {inspectingItem && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 overflow-y-auto"
           role="dialog"
           aria-modal="true"
+          data-testid="showroom-inspect-3d-modal"
         >
-          <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-amber-400/40 bg-slate-950 shadow-2xl">
-            <div className="relative h-72 bg-slate-900">
-              <img
-                src={assetImage(inspectingItem)}
-                alt={inspectingItem.name}
-                className="w-full h-full object-cover"
+          <div className="w-full max-w-4xl overflow-hidden rounded-2xl border border-amber-400/40 bg-slate-950 shadow-2xl my-auto">
+            <div className="p-4 bg-slate-950 border-b border-white/10">
+              <PrestigeShowroomScene
+                assetName={inspectingItem.name || "Sovereign Prestige Asset"}
+                assetCategory={inspectingItem.category || "vehicle"}
+                modelName={inspectingItem.model || "Bespoke Edition"}
+                priceGtex={Number(inspectingItem.price_gtex ?? inspectingItem.purchase_price_gtex ?? inspectingItem.price ?? 0)}
+                isOwned={ownedAssets.some((a: any) => keyOf(a) === keyOf(inspectingItem))}
+                clubName={active?.club_name || clubDetail?.club?.name || "GTEX FC"}
+                compact
+                onClose={() => setInspectingItem(null)}
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
-              <button
-                type="button"
-                onClick={() => setInspectingItem(null)}
-                className="absolute right-3 top-3 rounded-full border border-white/20 bg-black/60 p-2 text-white hover:bg-black"
-              >
-                <X className="h-4 w-4" />
-              </button>
-              <div className="absolute bottom-4 left-5 right-5 flex items-end justify-between">
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="flex items-center justify-between">
                 <div>
                   <div className="text-xs font-black uppercase tracking-wider text-amber-400">
                     {inspectingItem.category} · {inspectingItem.model}
                   </div>
-                  <h3 className="text-2xl font-black text-white">{inspectingItem.name}</h3>
+                  <h3 className="text-xl font-black text-white">{inspectingItem.name}</h3>
                 </div>
                 <div className="font-mono text-xl font-black text-amber-300">
                   {formatPrice(inspectingItem)} GTX
                 </div>
               </div>
-            </div>
-            <div className="p-6 space-y-4">
               <p className="text-sm text-slate-300">{inspectingItem.description}</p>
               {inspectingItem.specs && (
                 <div className="grid grid-cols-2 gap-3">

@@ -436,6 +436,7 @@ def hire_staff_from_market(
             "message": evaluation.get("message"),
             "counter_salary_gtex": evaluation.get("counter_salary_gtex"),
             "required_salary_gtex": evaluation.get("required_salary_gtex"),
+            "cinematic_event": None,
         }
 
     # Total upfront contract fee or annual budget
@@ -577,6 +578,17 @@ def hire_staff_from_market(
     profile.metadata_json = meta
     session.flush()
 
+    from app.owner_console import living_cinema_showroom
+
+    cinematic_event = living_cinema_showroom.record_staff_arrival_cinematic(
+        session=session,
+        user_id=user_id,
+        club_id=club_id,
+        appointed_staff=appointed_dict,
+        contract_id=new_contract.id,
+        total_contract_fee=total_contract_fee,
+    )
+
     return {
         "status": "accepted",
         "success": True,
@@ -585,6 +597,7 @@ def hire_staff_from_market(
         "assignment_id": new_assignment.id,
         "appointed_staff": appointed_dict,
         "total_contract_fee": total_contract_fee,
+        "cinematic_event": cinematic_event,
     }
 
 

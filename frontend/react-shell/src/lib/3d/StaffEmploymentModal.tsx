@@ -51,7 +51,9 @@ import {
   type StaffOfferResponse,
   type StaffDismissPayload,
   type StaffDismissResponse,
+  type CinematicEventPayload,
 } from "@/lib/ownerBriefing";
+import { ManagerArrivalScene } from "@/lib/3d/scenes/ManagerArrivalScene";
 
 export interface StaffEmploymentModalProps {
   clubId: string;
@@ -103,6 +105,7 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
   const [marqueePremium, setMarqueePremium] = useState<boolean>(false);
   const [pitchNote, setPitchNote] = useState<string>("");
   const [lastOfferResult, setLastOfferResult] = useState<StaffOfferResponse | null>(null);
+  const [arrivalCinematic, setArrivalCinematic] = useState<CinematicEventPayload | null>(null);
 
   // Dismissal confirmation state
   const [dismissRoleTarget, setDismissRoleTarget] = useState<StaffFilledRoleItem | null>(null);
@@ -154,12 +157,16 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
       setLastOfferResult(data);
       if (data.success && data.status === "accepted") {
         toast.success(data.message || "Contract signed & staff member appointed!");
+        if (data.cinematic_event) {
+          setArrivalCinematic(data.cinematic_event);
+        }
         queryClient.invalidateQueries({ queryKey: ["club-staff-vacancies", clubId] });
         queryClient.invalidateQueries({ queryKey: ["club-staff-market", clubId] });
         queryClient.invalidateQueries({ queryKey: ["club-briefing", clubId] });
         queryClient.invalidateQueries({ queryKey: ["club-persona-details", clubId] });
         onHireComplete?.(data);
       } else {
+        setArrivalCinematic(null);
         toast.error(data.message || "Offer was not accepted by the candidate");
       }
     },
@@ -941,6 +948,21 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
             </div>
           )}
         </div>
+
+        {/* STAGE 7: 3D MANAGER & EXECUTIVE ARRIVAL CINEMATIC OVERLAY */}
+        {arrivalCinematic && (
+          <div
+            data-testid="staff-arrival-cinematic-overlay"
+            className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/95 p-6 backdrop-blur-xl animate-fade-in"
+          >
+            <div className="w-full max-w-4xl">
+              <ManagerArrivalScene
+                cinematicEvent={arrivalCinematic}
+                onComplete={() => setArrivalCinematic(null)}
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
