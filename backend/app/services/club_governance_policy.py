@@ -309,7 +309,7 @@ class ClubGovernancePolicyService:
                 targets_str = ", ".join(policy.target_nationalities)
                 reason = (
                     f"Recruitment rejected: Club operates a strict exclusive nationality policy ({targets_str}). "
-                    f"Player nationality is '{nationality or "Unknown"}', which does not satisfy club eligibility rules."
+                    f"Player nationality is '{nationality or 'Unknown'}', which does not satisfy club eligibility rules."
                 )
                 return PolicyEvaluationResult(
                     is_eligible=False,
