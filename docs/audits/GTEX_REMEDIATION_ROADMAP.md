@@ -1,8 +1,8 @@
 # GTEX Remediation Roadmap
 
-**Current Review Baseline:** `main` `74b917ec3d7166a3b81396fe4d895d2a4764b400` (2026-11-07).  
-**Historical Baselines:** `bb6d82a9` (2026-10-27) and `45e29ef6` (2026-10-18).  
-**Primary Reference:** `docs/audits/GTEX_COMPREHENSIVE_PLATFORM_AUDIT.md` (Version 3.0.0).  
+**Current Review Baseline:** `main` `987de6c91a0937cbfbf5d4a4d62fef24f8d550e5` (2026-11-08).  
+**Historical Baselines:** `74b917ec` (2026-11-07), `bb6d82a9` (2026-10-27), and `45e29ef6` (2026-10-18).  
+**Primary Reference:** `docs/audits/GTEX_COMPREHENSIVE_PLATFORM_AUDIT.md` (Version 3.1.0).  
 **Player Universe Protection Policy:** STRICTLY ENFORCED & LOCKED (Zero player/regen/legend records altered, synthetic records created, or imports executed).
 
 Nothing here is permission to merge without review. Each repair is an independent, reviewable pull request. Do not initiate broad rewrites. Do not run live deposits, withdrawals, jackpot funding, or payouts to close a row.
@@ -178,8 +178,44 @@ Do not treat agent-reported local tests as CI results. Do not merge until the re
 
 1. **Issue #352:** production legacy global competitions have not been inventoried or reconciled from the live database. PR #395 supplies read-only inventory capability; an authorized operator must deploy it, inspect the report, and explicitly map only verified identity/fixture pairs. No history migration or automatic replay is authorized.
 2. **Issue #2:** live payment-provider credentials, bank-clearing rails and external KYC authority remain provider-dependent. No production payment or payout was executed.
-3. **Issue #136:** the Render player-ingestion worker was reported suspended in `stuck_crashlooping`. It was not resumed or executed; isolated staging recovery must come first.
+3. **Issue #136:** RESOLVED & CLOSED via merged PR #407.
 4. **Issue #28:** the Windows package still needs real visual evidence from an interactive Windows desktop with a supported Unity/GPU runtime. No screenshot was fabricated.
 5. **Issue #267:** the comprehensive audit remains open; CI success and this documentation refresh do not replace full screen-by-screen operational evidence.
 
-**Permanent protection:** no production player, regen, legend, portrait, face-bank, or ingestion data was changed as part of these remediations. No production financial transaction was executed. PRs remain drafts and no follow-up PR was merged in this checkpoint.
+**Permanent protection:** no production player, regen, legend, portrait, face-bank, or ingestion data was changed as part of these remediations. No production financial transaction was executed.
+
+---
+
+## 4. Canonical Main Integration Checkpoint (2026-11-08, `987de6c9`)
+
+### Integrated PR Series (PR #390 through PR #407)
+
+| PR | Scope | Merge Commit | Acceptance Summary |
+|---|---|---|---|
+| #390 | Owner Authority & Delegation Engine | `c84331c4` | Full organizational delegation policy engine, escalation cards, authority activity matrix, audit log immutability, and database migration `20261106_0227_owner_club_delegation_and_authority_engine`. All backend and React tests pass. |
+| #391 | M2 Match Experience Acceptance Remediation | `c70ed324` | Chronological event-frame ordering, 3D/2D presentation lifecycle, isolated fixture cleanup, and authoritative world-clock integration. Passed all 18 CI gates. |
+| #393 | Unity Windows Demo Package Architecture | `6634b297` | Standalone playable QA demo package harness, visual verification contracts, and cross-platform headless simulation integration. |
+| #395 | Global Competition Reconciliation Visibility | `1aeca870` | Read-only admin competition inventory, user-hosted competition isolation, ownership-enforced pre-match tactic submission, and historical match event preservation. |
+| #396 | Ingestion Pre-deploy Migrations & Idempotency | `443b696b` | Enforced idempotent schema migrations ahead of service startup on Render deployment targets. |
+| #397 | M2 Match Experience Mobile Locators Remediation | `8c860dfb` | Resolved mobile Flutter semantics locator timeouts without reducing acceptance assertion rigor. |
+| #398 | Living Football World Stage 1: Persona Dimensions | `b8fd0309` | Added spatial boardroom personas, relationship dimensions (`trust`, `influence`, `alignment`), and dynamic story feed generation. |
+| #399 | GTEX Commercial Network Platform: Ad Engine | `34a466c2` | High-throughput commercial ad engine, brand advertising campaigns, billing models (CPM/CPC/flat), and impression telemetry tracking. |
+| #400 | Render Blueprint Commercial Environment Variables | `adc06837` | Configured environment variables and secrets baseline for commercial ad platform services. |
+| #401 | CI Quality & React Shell Build Type Definitions | `3c69cd1e` | Reconciled TypeScript interface contracts across commercial and living-world React components, passing zero-warning ESLint and Prettier gates. |
+| #402 | Living Football World Stage 2: Spatial Interactions | `23791911` | Added interactive boardroom dilemma modals, persona dialogue trees, and spatial club HQ interactions. |
+| #403 | P7-FEV Release Browser Runtime Hardening | `4206efea` | Stabilized authenticated Playwright test harness, handling real browser login sequences without timeouts or flaky locators. |
+| #404 | Club HQ Commercial Network Integration | `051d8e44` | Connected live commercial sponsor slots into Club HQ dashboard, enabling club owners to review and activate sponsor campaigns. |
+| #405 | Matchday 3D Cross-Workstream Integrations | `2ff831f3` | Connected live commercial ad inventory to `StadiumAdvertisingNetwork` (`GET /v2/public/ads/stadium/inventory`), and bridged full-time matchday whistle events and fan gifts to Owner Authority delegation with governance controls (`useMatchFullTimeGovernance`). |
+| #406 | Living Football World Stage 3: Autonomous Decisions | `a7b98aef` | Integrated autonomous owner decision engine, world-clock-driven persona evolution, and automated governance escalations. |
+| #407 | Ingestion Worker Operational Recovery (Issue #136) | `987de6c9` | **PRODUCTION BLOCKER RESOLVED & CLOSED.** Fixed crashlooping on Render service `srv-da50r33m8hqs73b2nnt0` via `PGOPTIONS='-c default_transaction_read_only=off'` in blueprint envVars, registered PostgreSQL pool error and connect handlers, and attached error handlers to Redis connection, BullMQ Queues, and BullMQ Workers. All 18 CI checks passed; Issue #136 closed. |
+
+### Next Sequence Priorities
+
+1. **Priority 4: Issue #2 (Economic Foundation Hardening):**
+   - Double-entry ledger invariant verification.
+   - Withdrawal request processing modes (immediate, manual review, batch payout).
+   - Transaction idempotency and coin escrow settlement durability.
+2. **Priority 5: Issue #28 (Phase 1: Windows 3D Demo Package):**
+   - Standalone playable QA demo package harness for matchday and non-matchday 3D scenes.
+   - Deterministic visual verification runbooks and telemetry logging.
+
