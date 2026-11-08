@@ -196,7 +196,12 @@ def test_re_settling_a_completed_match_with_a_different_score_returns_409(
     )
     assert conflicting.status_code == 409, conflicting.text
     body = conflicting.json()
-    assert "already settled" in (body.get("detail") or body.get("message") or "")
+    error_msg = (
+        body.get("message")
+        or (body.get("detail", {}).get("detail") if isinstance(body.get("detail"), dict) else body.get("detail"))
+        or ""
+    )
+    assert "already settled" in error_msg
 
     # The original settled result must be untouched by the rejected replay.
     standings = client.get(f"/api/competitions/{competition_id}/standings").json()

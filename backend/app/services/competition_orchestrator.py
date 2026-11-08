@@ -245,7 +245,10 @@ class CompetitionOrchestrator:
         payload.source_type = host_type.value
         payload.type = host_type.value
         if host_type is CompetitionHostType.USER_HOSTED:
-            payload.currency = "credit"
+            if self._prize_mode_for_payload(payload) == "host_funded_fixed":
+                payload.currency = "coin"
+            else:
+                payload.currency = "credit"
         is_platform_competition = host_type is CompetitionHostType.GTEX_HOSTED
         domain_payload = backend_competition_create_request(
             payload,
@@ -258,6 +261,7 @@ class CompetitionOrchestrator:
             domain_payload.financials.currency = "coin"
         else:
             domain_payload.financials.platform_fee_bps = USER_COMPETITION_MAX_PLATFORM_FEE_BPS
+            domain_payload.financials.currency = payload.currency
         creation = self.creation_service.build_competition(domain_payload)
         competition = creation.competition
         competition.competition_type = payload.competition_type or competition.format

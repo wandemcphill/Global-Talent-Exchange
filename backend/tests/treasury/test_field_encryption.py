@@ -324,11 +324,11 @@ def test_backfill_script_encrypts_legacy_rows_and_is_idempotent(tmp_path, capsys
                 "INSERT INTO treasury_withdrawal_requests "
                 "(id, payout_request_id, user_id, reference, status, unit, amount_coin, amount_fiat, "
                 "fee_amount, net_amount, rate_value, rate_direction, bank_name, bank_account_number, "
-                "bank_account_name, bank_snapshot_json, kyc_status_snapshot, kyc_tier_snapshot) "
+                "bank_account_name, bank_snapshot_json, kyc_status_snapshot, kyc_tier_snapshot, raw_payload) "
                 "VALUES ('w1', 'p1', 'u1', 'ref-1', 'PENDING_REVIEW', 'COIN', 10, 9000, 0, 10, 900, "
                 "'FIAT_PER_COIN', 'Bank', '9876543210', 'U One', "
                 '\'{"bank_name": "Bank", "account_number": "9876543210", "account_name": "U One"}\', '
-                "'unverified', 'unverified')"
+                "'unverified', 'unverified', '{}')"
             )
         )
         seed.commit()
@@ -441,7 +441,9 @@ def test_backfill_repairs_stale_blind_index_without_rewriting_ciphertext(tmp_pat
     assert backfill_main(["--database-url", url]) == 0
     assert "Done. 1 row(s) updated." in capsys.readouterr().out
     with SessionLocal() as check:
-        raw_after = check.execute(text("SELECT nin, bvn, nin_hash, bvn_hash FROM kyc_profiles WHERE id='k-stale'")).one()
+        raw_after = check.execute(
+            text("SELECT nin, bvn, nin_hash, bvn_hash FROM kyc_profiles WHERE id='k-stale'")
+        ).one()
         assert raw_after[0] == raw_before[0]
         assert raw_after[1] == raw_before[1]
         assert raw_after[2] == blind_index("11122233344")
