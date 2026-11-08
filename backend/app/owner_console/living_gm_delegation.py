@@ -402,9 +402,7 @@ def get_gm_delegation_overview(session: Session, user_id: str, club_id: str) -> 
             ),
             "execution_supported": item["execution_supported"],
             "policy_suspended": bool(policy.is_suspended),
-            "expenditure_limit_gtex": float(
-                financial_controls.get(item["financial_control_key"], 0) or 0
-            ),
+            "expenditure_limit_gtex": float(financial_controls.get(item["financial_control_key"], 0) or 0),
             "delegation_level": item["authority_level"],
         }
         for item in activity_matrix
@@ -424,10 +422,10 @@ def get_gm_delegation_overview(session: Session, user_id: str, club_id: str) -> 
                 "general_manager" if row.action.startswith("gm_") else "owner"
             ),
             "action": (
-                "approved" if row.action == "owner_approve"
+                "approved"
+                if row.action == "owner_approve"
                 else "rejected" if row.action == "owner_reject"
-                else "executed" if row.action == "gm_execute"
-                else row.action
+                else "executed" if row.action == "gm_execute" else row.action
             ),
             "reason": (row.snapshot_json or {}).get("outcome") or row.new_status,
             "note": row.decision_note,
@@ -437,9 +435,7 @@ def get_gm_delegation_overview(session: Session, user_id: str, club_id: str) -> 
     ]
 
     executed_rows = [d for d in decision_rows if d.execution_status == "executed"]
-    total_expenditure_approved = sum(
-        float(d.financial_amount_gtex or 0) for d in executed_rows
-    )
+    total_expenditure_approved = sum(float(d.financial_amount_gtex or 0) for d in executed_rows)
     gm_staff = {
         "id": str(gm_profile.get("id") or gm_profile.get("staff_id") or ""),
         "name": gm_profile.get("name", "Dayo Adeleke"),
@@ -555,11 +551,7 @@ def update_gm_matrix_and_financial_controls(
             if key == "allow_emergency_spending":
                 if isinstance(value, bool):
                     current_th[key] = 1.0 if value else 0.0
-                elif (
-                    isinstance(value, (int, float))
-                    and math.isfinite(float(value))
-                    and float(value) in (0.0, 1.0)
-                ):
+                elif isinstance(value, (int, float)) and math.isfinite(float(value)) and float(value) in (0.0, 1.0):
                     current_th[key] = float(value)
                 else:
                     raise DelegationError("allow_emergency_spending must be a boolean.", 400)
@@ -584,12 +576,8 @@ def update_gm_matrix_and_financial_controls(
             canonical_mode = STAGE5_REVERSE_MODE_ALIASES.get(policy.mode, policy.mode)
             current = dict(current_act.get(key) or {})
             responsible_role = value.get("responsible_role", current.get("responsible_role", "general_manager"))
-            authority_level = value.get(
-                "authority_level", current.get("authority_level", "delegated_with_limits")
-            )
-            requires_approval = value.get(
-                "requires_owner_approval", current.get("requires_owner_approval", False)
-            )
+            authority_level = value.get("authority_level", current.get("authority_level", "delegated_with_limits"))
+            requires_approval = value.get("requires_owner_approval", current.get("requires_owner_approval", False))
 
             if responsible_role not in STAGE5_RESPONSIBLE_ROLES:
                 raise DelegationError(f"Invalid responsible role for {key}.", 400)
@@ -1032,7 +1020,9 @@ def resolve_gm_proposal(
                     check_funds=True,
                 )
             except ledger.LedgerError as exc:
-                raise DelegationError(f"Approval was not executed: {exc}", 409, code="proposal_settlement_failed") from exc
+                raise DelegationError(
+                    f"Approval was not executed: {exc}", 409, code="proposal_settlement_failed"
+                ) from exc
             decision.outcome_text = "Academy scouting proposal approved and ledger settlement completed."
         else:
             raise DelegationError(
