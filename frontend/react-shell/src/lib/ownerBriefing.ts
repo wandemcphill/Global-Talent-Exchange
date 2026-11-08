@@ -936,6 +936,198 @@ export const clubGmEvaluateOperationsEndpoint = (clubId: string) =>
 export const clubGmResolveProposalEndpoint = (clubId: string, proposalId: string) =>
   `/owner/clubs/${encodeURIComponent(clubId)}/living-world/gm-delegation/proposals/${encodeURIComponent(proposalId)}/resolve`;
 
+// ---------- Stage 6: Governance, Politics & Consequences Engine ----------
+
+export interface BoardDirectorItem {
+  id: string;
+  name: string;
+  role_title: string;
+  archetype: string;
+  influence_weight: number;
+  primary_focus: string;
+  bio: string;
+  confidence_score: number;
+  stance: "satisfied" | "concerned" | "hostile" | string;
+}
+
+export interface DressingRoomFaction {
+  label: string;
+  size: number;
+  cohesion: number;
+  sentiment: string;
+}
+
+export interface UnhappyPlayerItem {
+  id: string;
+  name: string;
+  position: string;
+  rating: number;
+  morale: number;
+  issue: string;
+}
+
+export interface InjuredPlayerItem {
+  id: string;
+  name: string;
+  position: string;
+  rating: number;
+  injured_days: number;
+  morale: number;
+  status: string;
+}
+
+export interface PoliticalEventActionItem {
+  action_id: string;
+  label: string;
+  description?: string;
+  delta_summary?: string;
+}
+
+export interface PoliticalEventItem {
+  id: string;
+  club_id: string;
+  category: string;
+  event_type: string;
+  severity: string;
+  status: string;
+  source_type?: string | null;
+  source_id?: string | null;
+  title: string;
+  description: string;
+  world_day?: number | null;
+  actions: PoliticalEventActionItem[];
+  consequences?: Record<string, any>;
+  metadata?: Record<string, any>;
+  created_at?: string | null;
+}
+
+export interface MediaRumourItem {
+  id: string;
+  headline: string;
+  quote: string;
+  statement_type: string;
+  world_day: number;
+  occurred_at: string;
+}
+
+export interface ClubPoliticsOverviewResponse {
+  club_id: string;
+  world_day: number;
+  board_politics: {
+    board_confidence: number;
+    investor_sentiment: number;
+    board_mood: string;
+    directors: BoardDirectorItem[];
+  };
+  dressing_room: {
+    squad_size: number;
+    average_morale: number;
+    leadership_group?: {
+      captain_name: string;
+      vice_captain_name: string;
+      influence_rating: number;
+      owner_trust: number;
+    };
+    factions?: Record<string, DressingRoomFaction>;
+    unhappy_players: UnhappyPlayerItem[];
+    injured_players_count: number;
+  };
+  medical_department: {
+    director: {
+      id: string;
+      name: string;
+      role: string;
+      rating: number;
+      mood?: number;
+    };
+    injured_players: InjuredPlayerItem[];
+    recovery_protocol: number;
+  };
+  youth_development: {
+    hoyd: {
+      id: string;
+      name: string;
+      role: string;
+      rating: number;
+      mood?: number;
+    };
+    academy_tier: number;
+    prospects_monitored: number;
+  };
+  supporter_sentiment: {
+    confidence: number;
+    atmosphere_multiplier: number;
+    fan_trust_rating: string;
+  };
+  media_and_rumours: {
+    active_rumours: MediaRumourItem[];
+    media_profile: string;
+  };
+  active_political_events: PoliticalEventItem[];
+  relationships: Record<string, any>;
+}
+
+export interface PoliticalCycleEvaluateResponse {
+  club_id: string;
+  world_day: number;
+  events_evaluated: number;
+  new_events: Array<{
+    id: string;
+    type: string;
+    title: string;
+    severity: string;
+  }>;
+  board_confidence: number;
+  supporter_confidence: number;
+}
+
+export interface PoliticalEventRespondPayload {
+  action_id: string;
+  decision_note?: string;
+}
+
+export interface PoliticalEventRespondResponse {
+  success: boolean;
+  event_id: string;
+  action_taken: string;
+  outcome_summary: string;
+  delta_report: Record<string, any>;
+  updated_politics: {
+    board_confidence: number;
+    supporter_confidence: number;
+    investor_sentiment: number;
+  };
+}
+
+export interface MediaStatementPayload {
+  statement_type: "vote_of_confidence" | "demand_performance" | "praise_youth_academy" | string;
+  custom_text?: string;
+}
+
+export interface MediaStatementResponse {
+  success: boolean;
+  statement_type: string;
+  outcome_text: string;
+  delta_report: Record<string, any>;
+  updated_politics: {
+    board_confidence: number;
+    supporter_confidence: number;
+    atmosphere_multiplier: number;
+  };
+}
+
+export const clubPoliticsOverviewEndpoint = (clubId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/politics/overview`;
+
+export const clubPoliticsEvaluateCycleEndpoint = (clubId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/politics/events/evaluate-cycle`;
+
+export const clubPoliticsEventRespondEndpoint = (clubId: string, eventId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/politics/events/${encodeURIComponent(eventId)}/respond`;
+
+export const clubPoliticsMediaStatementEndpoint = (clubId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/politics/media/statement`;
+
 /** Resolve what the panel should show. With no published contract this is always `unavailable`. */
 export function useOwnerBriefing(): BriefingViewState {
   if (!OWNER_BRIEFING_ENDPOINT) return { status: "unavailable" };

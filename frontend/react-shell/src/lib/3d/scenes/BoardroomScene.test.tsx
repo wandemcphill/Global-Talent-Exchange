@@ -248,6 +248,28 @@ describe("BoardroomScene", () => {
     expect(document.querySelector('[data-testid="gm-delegation-modal"]')).not.toBeNull();
   });
 
+  test("opens Club Politics & Governance modal when clicking Club Politics HUD button", async () => {
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <BoardroomScene clubId="c_lagos_boardroom" />
+        </QueryClientProvider>
+      );
+    });
+
+    const politicsBtn = container.querySelector(
+      '[data-testid="open-club-politics-btn"]'
+    ) as HTMLButtonElement;
+    expect(politicsBtn).not.toBeNull();
+    expect(politicsBtn.textContent).toContain("Club Politics");
+
+    await act(async () => {
+      politicsBtn.click();
+    });
+
+    expect(document.querySelector('[data-testid="club-politics-modal"]')).not.toBeNull();
+  });
+
   test("unmounts cleanly without WebGL memory leaks", async () => {
     await act(async () => {
       root.render(

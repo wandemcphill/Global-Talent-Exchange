@@ -2692,3 +2692,90 @@ def post_living_world_gm_resolve_proposal(
         )
 
     return _run(session, _op)
+
+
+# ==============================================================================
+# Living World Stage 6: Club Governance, Politics & Consequences
+# ==============================================================================
+
+
+class PoliticalEventRespondRequest(BaseModel):
+    action_id: str = Field(min_length=1, max_length=64)
+    decision_note: str | None = Field(default=None, max_length=500)
+
+
+class MediaStatementRequest(BaseModel):
+    statement_type: str = Field(min_length=1, max_length=64)
+    custom_text: str | None = Field(default=None, max_length=500)
+
+
+@router.get("/clubs/{club_id}/living-world/politics/overview")
+def get_living_world_politics_overview(
+    club_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_politics_engine
+
+    def _op() -> dict[str, Any]:
+        return living_politics_engine.get_club_politics_overview(session, user.id, club_id)
+
+    return _run(session, _op)
+
+
+@router.post("/clubs/{club_id}/living-world/politics/events/evaluate-cycle")
+def post_living_world_politics_evaluate_cycle(
+    club_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_politics_engine
+
+    def _op() -> dict[str, Any]:
+        return living_politics_engine.evaluate_political_cycle(session, user.id, club_id)
+
+    return _run(session, _op)
+
+
+@router.post("/clubs/{club_id}/living-world/politics/events/{event_id}/respond")
+def post_living_world_politics_event_respond(
+    club_id: str,
+    event_id: str,
+    payload: PoliticalEventRespondRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_politics_engine
+
+    def _op() -> dict[str, Any]:
+        return living_politics_engine.resolve_political_event(
+            session,
+            user.id,
+            club_id,
+            event_id=event_id,
+            action_id=payload.action_id,
+            note=payload.decision_note,
+        )
+
+    return _run(session, _op)
+
+
+@router.post("/clubs/{club_id}/living-world/politics/media/statement")
+def post_living_world_politics_media_statement(
+    club_id: str,
+    payload: MediaStatementRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_politics_engine
+
+    def _op() -> dict[str, Any]:
+        return living_politics_engine.dispatch_owner_media_statement(
+            session,
+            user.id,
+            club_id,
+            statement_type=payload.statement_type,
+            custom_text=payload.custom_text,
+        )
+
+    return _run(session, _op)

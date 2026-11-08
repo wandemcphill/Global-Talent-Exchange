@@ -36,6 +36,7 @@ import { PersonaSpatialInteractionModal } from "../PersonaSpatialInteractionModa
 import { BoardroomDilemmaModal } from "../BoardroomDilemmaModal";
 import { StaffEmploymentModal } from "../StaffEmploymentModal";
 import { GmDelegationModal } from "../GmDelegationModal";
+import { ClubPoliticsModal } from "../ClubPoliticsModal";
 import {
   clubActiveDilemmaEndpoint,
   type BoardroomDilemma,
@@ -142,6 +143,7 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
   const [isDilemmaModalOpen, setIsDilemmaModalOpen] = useState<boolean>(false);
   const [isStaffModalOpen, setIsStaffModalOpen] = useState<boolean>(false);
   const [isGmModalOpen, setIsGmModalOpen] = useState<boolean>(false);
+  const [isPoliticsModalOpen, setIsPoliticsModalOpen] = useState<boolean>(false);
 
   // Active Boardroom Dilemma Query
   const { data: activeDilemma } = useQuery<BoardroomDilemma | null>({
@@ -722,6 +724,17 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
             <Sliders className="h-3.5 w-3.5 text-sky-400" />
             <span>GM Delegation</span>
           </button>
+
+          {/* Club Politics & Governance Action Button */}
+          <button
+            type="button"
+            data-testid="open-club-politics-btn"
+            onClick={() => setIsPoliticsModalOpen(true)}
+            className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-violet-500/40 bg-violet-500/20 px-3 py-1.5 text-xs font-bold text-violet-300 backdrop-blur-md transition-all hover:bg-violet-500/30 shadow-lg shadow-violet-500/10"
+          >
+            <Scale className="h-3.5 w-3.5 text-violet-400" />
+            <span>Club Politics</span>
+          </button>
         </div>
 
         {/* Lighting & Camera Presets */}
@@ -849,6 +862,13 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
         clubId={clubId}
         isOpen={isGmModalOpen}
         onClose={() => setIsGmModalOpen(false)}
+      />
+
+      {/* Club Governance, Politics & Consequences Modal */}
+      <ClubPoliticsModal
+        clubId={clubId}
+        isOpen={isPoliticsModalOpen}
+        onClose={() => setIsPoliticsModalOpen(false)}
       />
     </div>
   );
