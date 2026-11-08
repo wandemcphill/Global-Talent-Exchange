@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { gtexAudio } from "@/lib/audio";
+import { commercialApi, MusicRotationTrack, resolveCommercialMediaUrl } from "@/lib/commercial/api";
 import {
   Disc3,
   ExternalLink,
@@ -37,7 +38,17 @@ type PublicMusicPromotion = {
   genre?: string | null;
 };
 
-function reportMusicPromotionEvent(campaignId: string, eventType: "impression" | "click") {
+function reportMusicPromotionEvent(
+  campaignId: string,
+  eventType:
+    | "impression"
+    | "click"
+    | "play_started"
+    | "qualified_listen"
+    | "completed"
+    | "skipped"
+    | "muted",
+) {
   const key = typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -45,7 +56,7 @@ function reportMusicPromotionEvent(campaignId: string, eventType: "impression" |
     campaign_id: campaignId,
     event_type: eventType,
     idempotency_key: `trax-${eventType}-${key}`,
-    metadata_json: { placement: "gtex_trax" },
+    metadata_json: { placement: "music_rotation" },
   }).catch(() => undefined);
 }
 
@@ -85,6 +96,10 @@ export interface GtexTraxItem {
   provenance: string;
   accentColor: string;
   notes: number[];
+  audioUrl?: string;
+  artworkUrl?: string | null;
+  campaignId?: string;
+  explicitContent?: boolean;
 }
 
 export const GTEX_TRAX_CATALOGUE: GtexTraxItem[] = [
@@ -264,12 +279,27 @@ export function GtexTraxTopBarControl() {
   const [clicksByTrack, setClicksByTrack] = useState<Record<string, number>>({});
   const [goalAnthemId, setGoalAnthemId] = useState<string>("gtex-trax-afro-01");
   const [sponsoredPromotions, setSponsoredPromotions] = useState<PublicMusicPromotion[]>([]);
+  const [rotationTracks, setRotationTracks] = useState<GtexTraxItem[]>([]);
   const reportedPromotionImpressions = useRef(new Set<string>());
+  const promoAudioRef = useRef<HTMLAudioElement | null>(null);
+  const qualifiedReportedForPlayRef = useRef<string | null>(null);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const stepRef = useRef(0);
 
-  const currentTrack = GTEX_TRAX_CATALOGUE[currentTrackIndex] || GTEX_TRAX_CATALOGUE[0];
+  // Interleave promoted tracks from GTEX Commercial Music Network into fair rotation
+  const combinedCatalogue = React.useMemo(() => {
+    if (rotationTracks.length === 0) return GTEX_TRAX_CATALOGUE;
+    const merged: GtexTraxItem[] = [];
+    const maxLen = Math.max(rotationTracks.length, GTEX_TRAX_CATALOGUE.length);
+    for (let i = 0; i < maxLen; i += 1) {
+      if (i < rotationTracks.length) merged.push(rotationTracks[i]);
+      if (i < GTEX_TRAX_CATALOGUE.length) merged.push(GTEX_TRAX_CATALOGUE[i]);
+    }
+    return merged;
+  }, [rotationTracks]);
+
+  const currentTrack = combinedCatalogue[currentTrackIndex % combinedCatalogue.length] || GTEX_TRAX_CATALOGUE[0];
   const currentTrackPromotion = sponsoredPromotions.find((promotion) =>
     (promotion.target_type === "track" && promotion.target_id === currentTrack.id) ||
     (promotion.target_type === "artist" && (promotion.artist_name || "").toLowerCase() === currentTrack.artist.toLowerCase()) ||
@@ -281,8 +311,7 @@ export function GtexTraxTopBarControl() {
     ? 0
     : masterVolume * musicVolume * (isMatchdayDucked ? 0.2 : 1.0);
 
-  // Load approved, in-window GTEX TRAX partner promotions. A promotion is a disclosure/link only;
-  // it never selects a track or starts playback.
+  // Load approved, in-window GTEX TRAX partner promotions & uploaded Music Network rotation tracks.
   useEffect(() => {
     let cancelled = false;
     api.get("/public/ads/music/promotions")
@@ -291,6 +320,43 @@ export function GtexTraxTopBarControl() {
       })
       .catch(() => {
         if (!cancelled) setSponsoredPromotions([]);
+      });
+
+    commercialApi.getMusicRotationFeed(20)
+      .then((feed) => {
+        if (cancelled || !Array.isArray(feed?.tracks)) return;
+        const mapped: GtexTraxItem[] = feed.tracks.map((t: MusicRotationTrack) => ({
+          id: t.track_id,
+          title: t.title,
+          artist: t.artist,
+          artistHandle: `@${t.artist.toLowerCase().replace(/[^a-z0-9]+/g, "") || "gtexartist"}`,
+          album: "GTEX Commercial Music Network",
+          genre: t.genre || "Afrobeats / Promoted",
+          region: "Nigeria · Global",
+          bpm: 120,
+          duration: "3:00",
+          isPromoted: true,
+          sponsorTier: "Headliner",
+          artistBio: t.sponsored_disclosure || "Promoted on GTEX Music Network",
+          contexts: ["home", "club", "market", "competition", "matchday", "world", "celebration"],
+          hypeCount: 100,
+          streamImpressions: 0,
+          isGoalAnthem: false,
+          isWalkoutAnthem: true,
+          licence: `Verified Artist Rights (${t.rights_holder || t.artist})`,
+          source: "GTEX Commercial Music Promotion",
+          provenance: "Direct Artist Audio Upload",
+          accentColor: "#F59E0B",
+          notes: [220, 261.63, 293.66, 329.63, 392.0, 329.63, 293.66, 261.63],
+          audioUrl: resolveCommercialMediaUrl(t.audio_url) || undefined,
+          artworkUrl: resolveCommercialMediaUrl(t.artwork_url),
+          campaignId: t.campaign_id,
+          explicitContent: t.explicit_content,
+        }));
+        setRotationTracks(mapped);
+      })
+      .catch(() => {
+        if (!cancelled) setRotationTracks([]);
       });
     return () => { cancelled = true; };
   }, []);
@@ -331,8 +397,60 @@ export function GtexTraxTopBarControl() {
     return () => clearTimeout(t);
   }, [currentTrackIndex, isPlaying]);
 
-  // WebAudio Procedural Groove Sequencer so artist previews work reliably in-browser
+  // HTML5 Audio playback for uploaded promotional tracks + WebAudio fallback for built-in synth catalogue
   useEffect(() => {
+    if (currentTrack.audioUrl) {
+      if (!isPlaying || isMuted || effectiveGain <= 0.01) {
+        if (promoAudioRef.current) {
+          promoAudioRef.current.pause();
+        }
+        return undefined;
+      }
+      if (!promoAudioRef.current) {
+        promoAudioRef.current = new Audio();
+        promoAudioRef.current.crossOrigin = "anonymous";
+      }
+      const el = promoAudioRef.current;
+      if (el.src !== currentTrack.audioUrl) {
+        el.src = currentTrack.audioUrl;
+        qualifiedReportedForPlayRef.current = null;
+      }
+      el.volume = Math.max(0, Math.min(1, effectiveGain));
+
+      const onTimeUpdate = () => {
+        if (
+          currentTrack.campaignId &&
+          qualifiedReportedForPlayRef.current !== currentTrack.campaignId &&
+          (el.currentTime >= 30 || (el.duration > 0 && el.currentTime >= el.duration * 0.5))
+        ) {
+          qualifiedReportedForPlayRef.current = currentTrack.campaignId;
+          reportMusicPromotionEvent(currentTrack.campaignId, "qualified_listen");
+        }
+      };
+      const onEnded = () => {
+        if (currentTrack.campaignId) {
+          reportMusicPromotionEvent(currentTrack.campaignId, "completed");
+        }
+        setCurrentTrackIndex((i) => (i + 1) % combinedCatalogue.length);
+      };
+
+      el.addEventListener("timeupdate", onTimeUpdate);
+      el.addEventListener("ended", onEnded);
+      el.play()
+        .then(() => {
+          if (currentTrack.campaignId) {
+            reportMusicPromotionEvent(currentTrack.campaignId, "play_started");
+          }
+        })
+        .catch(() => undefined);
+
+      return () => {
+        el.removeEventListener("timeupdate", onTimeUpdate);
+        el.removeEventListener("ended", onEnded);
+        el.pause();
+      };
+    }
+
     if (!isPlaying || isMuted || effectiveGain <= 0.01) return undefined;
 
     const stepMs = Math.max(180, Math.round((60000 / currentTrack.bpm) / 2));
@@ -374,14 +492,17 @@ export function GtexTraxTopBarControl() {
     }, stepMs);
 
     return () => clearInterval(timer);
-  }, [isPlaying, isMuted, effectiveGain, currentTrack]);
+  }, [isPlaying, isMuted, effectiveGain, currentTrack, combinedCatalogue.length]);
 
   const nextTrack = () => {
-    setCurrentTrackIndex((i) => (i + 1) % GTEX_TRAX_CATALOGUE.length);
+    if (isPlaying && currentTrack.campaignId) {
+      reportMusicPromotionEvent(currentTrack.campaignId, "skipped");
+    }
+    setCurrentTrackIndex((i) => (i + 1) % combinedCatalogue.length);
   };
 
   const shuffleTrack = () => {
-    const next = Math.floor(Math.random() * GTEX_TRAX_CATALOGUE.length);
+    const next = Math.floor(Math.random() * combinedCatalogue.length);
     setCurrentTrackIndex(next);
   };
 

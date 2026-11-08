@@ -235,8 +235,22 @@ class BrandCampaignReviewRequest(CommonSchema):
 
 
 class BrandCampaignEventRequest(CommonSchema):
-    campaign_id: str = Field(min_length=36, max_length=36)
-    event_type: Literal["impression", "click"]
+    campaign_id: str = Field(min_length=1, max_length=64)
+    event_type: Literal[
+        "impression",
+        "viewable_impression",
+        "click",
+        "play_requested",
+        "play_started",
+        "milestone_25",
+        "milestone_50",
+        "milestone_75",
+        "qualified_listen",
+        "completed",
+        "completed_listen",
+        "skipped",
+        "muted",
+    ]
     idempotency_key: str = Field(min_length=8, max_length=96)
     metadata_json: dict[str, Any] = Field(default_factory=dict)
 
@@ -253,6 +267,9 @@ class PublicMusicPromotionView(CommonSchema):
     description: str
     destination_url: str
     creative_url: str | None = None
+    audio_url: str | None = None
+    artwork_url: str | None = None
+    explicit_content: bool = False
     target_type: Literal["track", "artist", "playlist"]
     target_id: str
     track_title: str | None = None

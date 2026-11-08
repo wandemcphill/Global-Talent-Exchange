@@ -134,6 +134,23 @@ class SponsoredFeedResponse(CommonSchema):
     personalization: dict[str, Any] = Field(default_factory=dict)
 
 
+PublicBrandPlacementLiteral = Literal[
+    "homepage_rail",
+    "homepage_hero",
+    "partner_showcase",
+    "auth_canvas",
+    "public_homepage",
+    "login_page",
+    "registration_page",
+    "gtex_application",
+    "sponsored_cards",
+    "match_sponsor_id",
+    "live_match_panel",
+    "halftime_sponsorship",
+    "stadium_perimeter",
+]
+
+
 class PublicBrandAdCampaignView(CommonSchema):
     """Public-safe projection; advertiser and billing internals stay private."""
 
@@ -141,11 +158,16 @@ class PublicBrandAdCampaignView(CommonSchema):
     brand_name: str
     headline: str
     description: str = ""
-    placement: Literal["homepage_rail", "homepage_hero", "partner_showcase", "auth_canvas"]
+    placement: PublicBrandPlacementLiteral
+    placements: list[str] = Field(default_factory=list)
     destination_url: str
     logo_url: str | None = None
     creative_url: str | None = None
+    creative_media_type: str | None = None
+    is_silent_creative: bool = True
+    sponsored_label: str = "Sponsored"
     priority: int = 100
+    cta_label: str | None = None
 
 
 class PublicBrandAdCampaignsResponse(CommonSchema):

@@ -79,7 +79,6 @@ const NAV = [
 
   // 8. BUSINESS
   { to: "/app/creator-access", label: "Creator Studio", icon: Video, id: "creator-access", category: "BUSINESS" },
-  { to: "/app/advertising", label: "Advertiser Studio", icon: Megaphone, id: "advertising", category: "BUSINESS" },
 ];
 
 function NavItem({ item, badge, compact }: any) {
@@ -193,9 +192,15 @@ export default function AppShell() {
   const role = String(user.role || "").toLowerCase();
   const accountType = String(user.account_type || user.accountType || "user").toLowerCase();
   const isAdmin = ["admin", "super_admin"].includes(role);
+  const isAdvertiserAccount = role === "advertiser" || accountType === "advertiser";
   const isTraderAccount = accountType === "coin_trader";
   const isCreatorAccount = accountType === "creator";
-  const isDedicatedAccount = isTraderAccount || isCreatorAccount;
+  const isDedicatedAccount = isTraderAccount || isCreatorAccount || isAdvertiserAccount;
+
+  if (isAdvertiserAccount && !isAdmin) {
+    return <Navigate to="/advertiser/dashboard" replace />;
+  }
+
   const clubs: any[] = data?.clubs || [];
   const hasClubProfile = !isDedicatedAccount && clubs.length > 0;
   const hasActiveClub =
@@ -205,7 +210,6 @@ export default function AppShell() {
   const traderAllowed = ["/app/coin-traders", "/app/finance", "/app/settings/appearance", "/app/appearance"];
   const creatorAllowed = [
     "/app/creator-access",
-    "/app/advertising",
     "/app/newsroom",
     "/app/transfer-hub",
     "/app/regen-world",
@@ -248,7 +252,6 @@ export default function AppShell() {
     "/app/creator-access",
     "/app/coin-traders",
     "/app/inbox",
-    "/app/advertising",
     "/app/settings/appearance",
     "/app/appearance",
   ];
@@ -282,7 +285,6 @@ export default function AppShell() {
           "newsroom",
           "finance",
           "creator-access",
-          "advertising",
           "coin-traders",
           "appearance-studio",
           "inbox",
@@ -295,7 +297,6 @@ export default function AppShell() {
     ? NAV.filter((item) =>
         [
           "creator-access",
-          "advertising",
           "newsroom",
           "transfers",
           "regen-world",

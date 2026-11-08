@@ -41,6 +41,12 @@ import { loadFiveMinuteShowcaseFixture } from "@/lib/3d/broadcast/showcaseLoader
 import { HolographicPlayerCard } from "@/components/gtex/ApexWidgets";
 import { MatchdayLineupBroadcast, useClubMatchdaySheet, type MatchdaySquadMember } from "@/components/gtex/MatchdayLineupBroadcast";
 import { useSkin } from "@/lib/skin-engine";
+import {
+  MatchSponsorIdentificationBadge,
+  SilentMatchBroadcastPanel,
+  useMatchCommercialInventory,
+} from "@/components/advertising/GtexMatchBroadcastAds";
+import type { PublicBrandAd } from "@/lib/commercial/api";
 
 const GIFTS = [
   { code: "stadium_roar", name: "Stadium Roar", cost: 10 },
@@ -320,6 +326,7 @@ function Pitch2DView({
   onClose3DCutIn,
   homeRoster,
   awayRoster,
+  activePerimeterAd,
 }: {
   selectedPlayer: number | null;
   onSelectPlayer: (num: number | null) => void;
@@ -353,6 +360,7 @@ function Pitch2DView({
   onClose3DCutIn?: () => void;
   homeRoster?: MatchdaySquadMember[];
   awayRoster?: MatchdaySquadMember[];
+  activePerimeterAd?: PublicBrandAd | null;
 }) {
   // Autonomous 60fps Spatial Phase Ticker for live tactical fluid motion
   const [phaseTick, setPhaseTick] = useState(0);
@@ -549,11 +557,26 @@ function Pitch2DView({
 
         {/* 360° Animated Stadium LED Advertising Perimeter Board (Visible in 2.5D / Zoom) */}
         {cameraMode !== "2d" && (
-          <div className="pointer-events-none absolute inset-x-8 top-10 z-10 flex items-center justify-around overflow-hidden rounded-sm border border-emerald-400/30 bg-gradient-to-r from-slate-950 via-emerald-950/90 to-slate-950 py-1 text-[9px] font-black tracking-[0.26em] text-emerald-300 shadow-[0_0_25px_rgba(0,232,122,0.25)]">
-            <span>GTEX SOVEREIGN EXCHANGE</span>
-            <span className="text-amber-400">🎵 GTEX TRAX: KAZEEM – LAGOS NIGHTLIGHTS</span>
-            <span className="hidden md:inline">★ $TALENT LIQUIDITY POOL ★</span>
-            <span className="text-cyan-300">70/30 CLUB REVENUE SPLIT</span>
+          <div
+            data-testid="stadium-perimeter-ad-board"
+            className="pointer-events-none absolute inset-x-8 top-10 z-10 flex items-center justify-around overflow-hidden rounded-sm border border-emerald-400/30 bg-gradient-to-r from-slate-950 via-emerald-950/90 to-slate-950 py-1 text-[9px] font-black tracking-[0.26em] text-emerald-300 shadow-[0_0_25px_rgba(0,232,122,0.25)]"
+          >
+            {activePerimeterAd ? (
+              <>
+                <span className="text-amber-300">SPONSORED PERIMETER · {activePerimeterAd.brand_name.toUpperCase()}</span>
+                <span className="text-white">{activePerimeterAd.headline.toUpperCase()}</span>
+                {activePerimeterAd.cta_label ? (
+                  <span className="hidden md:inline text-emerald-300">★ {activePerimeterAd.cta_label.toUpperCase()} ★</span>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <span>GTEX SOVEREIGN EXCHANGE</span>
+                <span className="text-amber-400">🎵 GTEX TRAX: KAZEEM – LAGOS NIGHTLIGHTS</span>
+                <span className="hidden md:inline">★ $TALENT LIQUIDITY POOL ★</span>
+                <span className="text-cyan-300">70/30 CLUB REVENUE SPLIT</span>
+              </>
+            )}
           </div>
         )}
 
@@ -2168,6 +2191,10 @@ export default function MatchCenter() {
   });
 
   const minute = liveState ? liveState.minute : localMinute;
+  const isHalftime = Boolean(
+    minute === 45 || String(liveState?.phase || "").toLowerCase().includes("half")
+  );
+  const matchAds = useMatchCommercialInventory(id, true);
   const shown = useMemo(() => {
     if (liveState?.timeline?.length) {
       return liveState.timeline;
@@ -2276,8 +2303,10 @@ export default function MatchCenter() {
               {/* Broadcast Match Period Capsule */}
               <div className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-[#080F1C]/70 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-widest text-slate-300">
                 <span className="size-1.5 rounded-full bg-[#00C991] animate-ping" />
-                <span>{minute <= 45 ? "1st Half" : minute <= 90 ? "2nd Half" : "Full Time"}</span>
+                <span>{isHalftime ? "Halftime" : minute <= 45 ? "1st Half" : minute <= 90 ? "2nd Half" : "Full Time"}</span>
               </div>
+
+              <MatchSponsorIdentificationBadge ad={matchAds.sponsorAd} />
 
               {/* Pause/Resume Toggle */}
               {!done && !liveState && (
@@ -2617,6 +2646,7 @@ export default function MatchCenter() {
                 onClose3DCutIn={() => setShow3DCutIn(false)}
                 homeRoster={homeSheetState.sheet.starters}
                 awayRoster={awaySheetState.sheet.starters}
+                activePerimeterAd={matchAds.perimeterAd}
               />
             )}
           </div>
@@ -2707,8 +2737,13 @@ export default function MatchCenter() {
         )}
       </div>
 
-      {/* Right Column: Owner View, Gift Rail, Navigation */}
+      {/* Right Column: Commercial Broadcast Panel, Owner View, Gift Rail, Navigation */}
       <div className="space-y-6 lg:col-span-4">
+        <SilentMatchBroadcastPanel
+          liveAd={matchAds.livePanelAd}
+          halftimeAd={matchAds.halftimeAd}
+          isHalftime={isHalftime}
+        />
         {done && <OwnerView view={m.narrative?.[`${side}_owner_view`]} />}
         <GiftRail
           match={m}

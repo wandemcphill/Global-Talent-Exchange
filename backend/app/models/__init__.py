@@ -672,6 +672,20 @@ from app.models.creator_clip_monetization import CreatorClipRevenueAttribution
 from app.models.sponsored_clip import SponsoredClip
 from app.models.brand_ad_campaign import BrandAdCampaign
 from app.models.brand_advertising import BrandAdvertiserProfile, BrandAdEvent, BrandAdReviewEvent
+from app.models.commercial_network import (
+    AdPlacementSpec,
+    AdPricingPackage,
+    AdvertiserClientBrand,
+    AdvertiserInvoice,
+    AdvertiserMediaAsset,
+    AdvertiserPaymentRecord,
+    AdvertiserRefundRecord,
+    AdvertiserSubscription,
+    AdvertiserWebhookEvent,
+    AdvertiserWorkspace,
+    AdvertiserWorkspaceMember,
+    CommercialAuditLog,
+)
 from app.models.highlight_share import HighlightShareAmplification, HighlightShareExport, HighlightShareTemplate
 from app.models.moderation_report import (
     ModerationPriority,
@@ -1393,6 +1407,18 @@ __all__ = [
     "TicketReaction",
     "TicketWaitlist",
     "WorldClockState",
+    "AdPlacementSpec",
+    "AdPricingPackage",
+    "AdvertiserClientBrand",
+    "AdvertiserInvoice",
+    "AdvertiserMediaAsset",
+    "AdvertiserPaymentRecord",
+    "AdvertiserRefundRecord",
+    "AdvertiserSubscription",
+    "AdvertiserWebhookEvent",
+    "AdvertiserWorkspace",
+    "AdvertiserWorkspaceMember",
+    "CommercialAuditLog",
 ]
 
 

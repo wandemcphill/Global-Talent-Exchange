@@ -184,8 +184,9 @@ class AuthService:
         session.flush()
         _record_timing(timing_recorder, "db.flush_user_ms", initial_flush_started_at)
         wallet_started_at = perf_counter()
-        self.wallet_service.ensure_default_accounts(session, user)
-        WalletFundingService(wallet_service=self.wallet_service).ensure_wallet(session, user)
+        if role != UserRole.ADVERTISER and account_type != PublicAccountType.ADVERTISER:
+            self.wallet_service.ensure_default_accounts(session, user)
+            WalletFundingService(wallet_service=self.wallet_service).ensure_wallet(session, user)
         _record_timing(timing_recorder, "db.ensure_default_wallets_ms", wallet_started_at)
         region_started_at = perf_counter()
         PolicyService(session).ensure_user_region_profile(user=user, region_code=region_code)
@@ -460,6 +461,8 @@ class AuthService:
             return "/app/hub"
         if user.account_type == PublicAccountType.COIN_TRADER:
             return "/app/coin-traders"
+        if user.account_type == PublicAccountType.ADVERTISER or user.role == UserRole.ADVERTISER:
+            return "/advertiser/dashboard"
         return "/app/home"
 
     @staticmethod
@@ -469,6 +472,8 @@ class AuthService:
         # User account must not leak a Trader persona through session bootstrap.
         if effective_role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
             return effective_role
+        if user.account_type == PublicAccountType.ADVERTISER or user.role == UserRole.ADVERTISER:
+            return UserRole.ADVERTISER
         if user.account_type == PublicAccountType.COIN_TRADER:
             return UserRole.COIN_TRADER
         if user.account_type == PublicAccountType.CREATOR:

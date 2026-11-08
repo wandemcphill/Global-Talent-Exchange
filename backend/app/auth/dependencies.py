@@ -224,6 +224,51 @@ def get_current_football_user(
     )
 
 
+def get_current_advertiser_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    if (
+        current_user.account_type == PublicAccountType.ADVERTISER
+        or current_user.role in {UserRole.ADVERTISER, UserRole.ADMIN, UserRole.SUPER_ADMIN}
+    ):
+        return current_user
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Dedicated GTEX Commercial Network advertiser account access is required.",
+    )
+
+
+def get_current_commercial_admin(
+    current_user: User = Depends(get_current_admin),
+) -> User:
+    return current_user
+
+
+def get_current_finance_admin(
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_admin),
+) -> User:
+    if current_user.role == UserRole.SUPER_ADMIN:
+        return current_user
+    from app.auth.service import AuthService
+
+    permissions = set(AuthService().resolve_user_permissions(getattr(request, "app", None), current_user, session=session))
+    finance_permissions = {
+        "manage_payment_rails",
+        "manage_withdrawals",
+        "manage_treasury_withdrawals",
+        "manage_commissions",
+        "manage_commercial_finance",
+    }
+    if permissions & finance_permissions:
+        return current_user
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Commercial finance administrator permission is required.",
+    )
+
+
 def get_current_trading_user(
     request: Request,
     session: Session = Depends(get_session),

@@ -111,6 +111,8 @@ def _report(campaign: BrandAdCampaign, counts: dict[str, int]) -> CampaignReport
 
 
 def _is_campaign_budget_exhausted(session: Session, campaign: BrandAdCampaign) -> bool:
+    if campaign.pricing_model in {"PACKAGE", "DURATION_NGN", "SUBSCRIPTION_NGN"}:
+        return False
     budget = Decimal(campaign.budget_amount or 0)
     if budget <= Decimal("0"):
         return False
@@ -124,7 +126,7 @@ def _live_campaign_statement(*, campaign_type: str, now: datetime):
         select(BrandAdCampaign)
         .where(
             BrandAdCampaign.campaign_type == campaign_type,
-            BrandAdCampaign.status == "approved",
+            BrandAdCampaign.status.in_(("approved", "active")),
             BrandAdCampaign.is_approved.is_(True),
             BrandAdCampaign.is_active.is_(True),
             BrandAdCampaign.start_at <= now,
@@ -469,11 +471,18 @@ def get_public_music_promotions(
         if not row.music_rights_verified:
             continue
         # Phase 5: Pacing / throttling - exclude budget-exhausted campaigns
-        budget = Decimal(row.budget_amount or 0)
-        if budget > Decimal("0"):
-            spend = _estimated_spend(row, counts_by_campaign.get(row.id, {}))
-            if spend >= budget:
-                continue
+        if row.pricing_model in {"CPM", "CPC"}:
+            budget = Decimal(row.budget_amount or 0)
+            if budget > Decimal("0"):
+                spend = _estimated_spend(row, counts_by_campaign.get(row.id, {}))
+                if spend >= budget:
+                    continue
+        audio_url = row.music_audio_url or (
+            f"/api/v2/public/ads/media/{row.music_audio_asset_id}" if row.music_audio_asset_id else None
+        )
+        artwork_url = row.music_artwork_url or (
+            f"/api/v2/public/ads/media/{row.music_artwork_asset_id}" if row.music_artwork_asset_id else row.logo_url
+        )
         promotions.append(
             PublicMusicPromotionView(
                 campaign_id=row.id,
@@ -481,7 +490,10 @@ def get_public_music_promotions(
                 headline=row.headline,
                 description=row.description or "",
                 destination_url=row.destination_url,
-                creative_url=row.creative_url if _safe_http_url(row.creative_url) else None,
+                creative_url=row.creative_url if _safe_media_or_http_url(row.creative_url) else None,
+                audio_url=audio_url if _safe_media_or_http_url(audio_url) else None,
+                artwork_url=artwork_url if _safe_media_or_http_url(artwork_url) else None,
+                explicit_content=bool(row.music_explicit_content),
                 target_type=row.music_target_type,
                 target_id=row.music_target_id,
                 track_title=row.music_title,
@@ -513,6 +525,15 @@ def _safe_http_url(value: str | None) -> bool:
         return False
 
 
+def _safe_media_or_http_url(value: str | None) -> bool:
+    if not isinstance(value, str) or not value.strip():
+        return False
+    cleaned = value.strip()
+    if cleaned.startswith(("/api/v2/public/ads/media/", "/public/ads/media/", "/api/public/ads/media/")):
+        return True
+    return _safe_http_url(cleaned)
+
+
 @public_router.post("/events", response_model=BrandAdEventResponse)
 def record_public_brand_ad_event(
     payload: BrandCampaignEventRequest,
@@ -524,7 +545,7 @@ def record_public_brand_ad_event(
     if (
         campaign is None
         or campaign.campaign_type not in {"brand", "music"}
-        or campaign.status != "approved"
+        or campaign.status not in {"approved", "active"}
         or not campaign.is_approved
         or not campaign.is_active
         or _as_utc(campaign.start_at) > now

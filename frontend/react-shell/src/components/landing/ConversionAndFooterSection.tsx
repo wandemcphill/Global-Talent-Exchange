@@ -137,6 +137,12 @@ export const ConversionAndFooterSection: React.FC = () => {
               <a href="#regens" className="hover:text-white">Regens</a>
               <a href="#competitions" className="hover:text-white">Jackpot Drops</a>
               <a href="#trust" className="hover:text-white">Compliance</a>
+              <Link to="/advertise" data-testid="footer-advertise-link" className="text-[#D4AF37] hover:text-white">
+                Advertise on GTEX
+              </Link>
+              <Link to="/advertise/music" data-testid="footer-music-promotion-link" className="text-[#36E38A] hover:text-white">
+                Promote Music
+              </Link>
             </div>
           </div>
 

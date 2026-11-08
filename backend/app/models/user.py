@@ -22,12 +22,14 @@ class UserRole(StrEnum):
     AGENT = "agent"
     CLUB = "club"
     COIN_TRADER = "coin_trader"
+    ADVERTISER = "advertiser"
 
 
 class PublicAccountType(StrEnum):
     USER = "user"
     CREATOR = "creator"
     COIN_TRADER = "coin_trader"
+    ADVERTISER = "advertiser"
 
 
 class KycStatus(StrEnum):

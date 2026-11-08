@@ -165,6 +165,8 @@ class PaystackProviderAdapter:
             status = "success"
         elif status_raw in {"pending", "ongoing", "processing"}:
             status = "pending"
+        elif status_raw in {"reversed", "chargeback"}:
+            status = "reversed"
         else:
             status = "failed"
 
