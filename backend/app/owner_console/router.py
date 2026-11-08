@@ -2467,3 +2467,124 @@ def get_living_world_delegated_decisions_view(
         )
 
     return _run(session, _op)
+
+
+# ---------- Stage 4: Autonomous Staff Career & Professional Employment Market ----------
+
+
+class StaffOfferSubmitRequest(BaseModel):
+    profile_id: str = Field(min_length=1, max_length=100)
+    role: str | None = Field(default=None, max_length=64)
+    offered_salary_gtex: int | None = Field(default=None, ge=100, le=50000)
+    contract_years: int = Field(default=3, ge=1, le=5)
+    marquee_wage_premium: bool = Field(default=False)
+    pitch_note: str | None = Field(default=None, max_length=500)
+
+
+class StaffDismissRequest(BaseModel):
+    role: str = Field(min_length=1, max_length=64)
+    reason: str = Field(default="tactical_restructure", max_length=100)
+
+
+@router.get("/clubs/{club_id}/living-world/staff-market/vacancies")
+def get_living_world_staff_vacancies(
+    club_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_staff_market
+
+    def _op() -> dict[str, Any]:
+        return living_staff_market.get_club_vacancies(session, user.id, club_id)
+
+    return _run(session, _op)
+
+
+@router.get("/clubs/{club_id}/living-world/staff-market/candidates")
+def get_living_world_staff_market_candidates(
+    club_id: str,
+    role: str | None = None,
+    employment_status: str | None = "unemployed",
+    limit: int = 50,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_staff_market
+
+    def _op() -> dict[str, Any]:
+        return living_staff_market.list_staff_market_candidates(
+            session,
+            user.id,
+            club_id,
+            role=role,
+            employment_status=employment_status,
+            limit=limit,
+        )
+
+    return _run(session, _op)
+
+
+@router.get("/clubs/{club_id}/living-world/staff-market/candidates/{profile_id}")
+def get_living_world_staff_candidate_dossier(
+    club_id: str,
+    profile_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_staff_market
+
+    def _op() -> dict[str, Any]:
+        return living_staff_market.get_candidate_career_dossier(
+            session,
+            user.id,
+            club_id,
+            profile_id=profile_id,
+        )
+
+    return _run(session, _op)
+
+
+@router.post("/clubs/{club_id}/living-world/staff-market/offers")
+def post_living_world_staff_offer(
+    club_id: str,
+    payload: StaffOfferSubmitRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_staff_market
+
+    def _op() -> dict[str, Any]:
+        return living_staff_market.hire_staff_from_market(
+            session,
+            user.id,
+            club_id,
+            profile_id=payload.profile_id,
+            role=payload.role,
+            offered_salary_gtex=payload.offered_salary_gtex,
+            contract_years=payload.contract_years,
+            marquee_wage_premium=payload.marquee_wage_premium,
+            pitch_note=payload.pitch_note,
+        )
+
+    return _run(session, _op)
+
+
+@router.post("/clubs/{club_id}/living-world/staff-market/dismiss")
+def post_living_world_staff_dismiss(
+    club_id: str,
+    payload: StaffDismissRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_staff_market
+
+    def _op() -> dict[str, Any]:
+        return living_staff_market.dismiss_staff_with_free_agency(
+            session,
+            user.id,
+            club_id,
+            role=payload.role,
+            reason=payload.reason,
+        )
+
+    return _run(session, _op)
