@@ -812,6 +812,7 @@ export interface GmDelegationActivityItem {
   department: string;
   requires_owner_approval: boolean;
   gm_can_execute: boolean;
+  execution_supported?: boolean;
   expenditure_limit_gtex?: number;
   delegation_level: string;
 }
@@ -885,19 +886,22 @@ export interface GmDelegationModePayload {
 }
 
 export interface GmMatrixUpdatePayload {
-  activities?: Record<string, { requires_owner_approval: boolean }>;
+  activity_assignments?: Record<string, { requires_owner_approval: boolean }>;
   financial_controls?: Partial<GmDelegationFinancialControls>;
 }
 
 export interface GmProposalResolvePayload {
-  approved: boolean;
+  action: "approve" | "reject";
   decision_note?: string;
 }
 
 export interface GmProposalResolveResponse {
   success: boolean;
+  decision_id: string;
   proposal_id: string;
   status: "approved" | "rejected";
+  execution_status: string;
+  outcome_text?: string | null;
   action_taken: string;
   audit_logged: boolean;
   updated_relationships: {
