@@ -321,17 +321,24 @@ async function runSmokeTest() {
     console.log(`Facility: "${facility}" (expected: First Team Training Complex)`);
     console.log(`No matchViewState required: ${noMatchView} (expected: true)`);
 
-    if (sceneId !== "campus_builder" || facility !== "First Team Training Complex" || noMatchView !== "true") {
+    if (
+      sceneId !== "campus_builder" ||
+      facility !== "First Team Training Complex" ||
+      noMatchView !== "true"
+    ) {
       throw new Error("TEST 1 FAILED: Non-matchday renderer did not receive correct props");
     }
 
     // Wait for telemetry sample window to accumulate frame deltas and compute FPS
     console.log("Waiting for telemetry sample window to calculate measured FPS...");
-    await page.waitForFunction(() => {
-      const el = document.querySelector('[data-testid="gtex-scene-viewport"]');
-      const fps = Number(el?.getAttribute("data-measured-fps") || 0);
-      return fps > 0;
-    }, { timeout: 5000 });
+    await page.waitForFunction(
+      () => {
+        const el = document.querySelector('[data-testid="gtex-scene-viewport"]');
+        const fps = Number(el?.getAttribute("data-measured-fps") || 0);
+        return fps > 0;
+      },
+      { timeout: 5000 },
+    );
 
     const viewportEl = await page.$('[data-testid="gtex-scene-viewport"]');
     const measuredFps = await viewportEl.getAttribute("data-measured-fps");
@@ -339,7 +346,9 @@ async function runSmokeTest() {
     const p50 = await viewportEl.getAttribute("data-p50-frame-time-ms");
     const p95 = await viewportEl.getAttribute("data-p95-frame-time-ms");
 
-    console.log(`[Telemetry] Measured FPS: ${measuredFps}, Instant Frame Time: ${frameTimeMs}ms, p50: ${p50}ms, p95: ${p95}ms`);
+    console.log(
+      `[Telemetry] Measured FPS: ${measuredFps}, Instant Frame Time: ${frameTimeMs}ms, p50: ${p50}ms, p95: ${p95}ms`,
+    );
     await page.screenshot({ path: path.join(OUTPUT_DIR, "01_non_matchday_custom_renderer.png") });
     console.log("Captured screenshot: 01_non_matchday_custom_renderer.png");
 
@@ -349,8 +358,11 @@ async function runSmokeTest() {
     await page.waitForSelector('[data-testid="honest-fallback-view"]');
 
     const fallbackText = await page.textContent('[data-testid="honest-fallback-view"]');
-    console.log(`Fallback text: "${fallbackText.trim().replace(/\s+/g, ' ')}"`);
-    if (!fallbackText.includes("3D COMPANION MODE (RENDERER PENDING)") || !fallbackText.includes("Executive Boardroom Suite")) {
+    console.log(`Fallback text: "${fallbackText.trim().replace(/\s+/g, " ")}"`);
+    if (
+      !fallbackText.includes("3D COMPANION MODE (RENDERER PENDING)") ||
+      !fallbackText.includes("Executive Boardroom Suite")
+    ) {
       throw new Error("TEST 2 FAILED: Honest fallback did not appear for unregistered scene");
     }
     await page.screenshot({ path: path.join(OUTPUT_DIR, "02_honest_pending_fallback.png") });
@@ -359,7 +371,9 @@ async function runSmokeTest() {
     // --- TEST 3: Backward compatibility of stadium_match_broadcast ---
     console.log("\n--- TEST 3: Matchday Broadcast Backward Compatibility ---");
     await page.evaluate(() =>
-      window.__smokeHarness.setScene("stadium_match_broadcast", null, { matchId: "match-live-888" })
+      window.__smokeHarness.setScene("stadium_match_broadcast", null, {
+        matchId: "match-live-888",
+      }),
     );
     await page.waitForSelector('[data-testid="matchday-broadcast-view"]');
 
@@ -371,7 +385,9 @@ async function runSmokeTest() {
     if (matchId !== "match-live-888" || matchTier !== "ultra") {
       throw new Error("TEST 3 FAILED: stadium_match_broadcast did not receive matchViewState");
     }
-    await page.screenshot({ path: path.join(OUTPUT_DIR, "03_matchday_broadcast_backward_compat.png") });
+    await page.screenshot({
+      path: path.join(OUTPUT_DIR, "03_matchday_broadcast_backward_compat.png"),
+    });
     console.log("Captured screenshot: 03_matchday_broadcast_backward_compat.png");
 
     // --- TEST 4: Clean unmounting without errors ---
@@ -379,14 +395,16 @@ async function runSmokeTest() {
     await page.evaluate(() => window.__smokeHarness.unmount());
     await page.waitForSelector("#unmounted-state");
     const unmountedText = await page.textContent("#unmounted-state");
-    console.log(`Unmount container text: "${unmountedText.trim().replace(/\s+/g, ' ')}"`);
+    console.log(`Unmount container text: "${unmountedText.trim().replace(/\s+/g, " ")}"`);
     await page.screenshot({ path: path.join(OUTPUT_DIR, "04_clean_unmount.png") });
     console.log("Captured screenshot: 04_clean_unmount.png");
 
     // Check for uncaught errors
     console.log(`\nUncaught browser errors encountered: ${uncaughtErrors.length}`);
     if (uncaughtErrors.length > 0) {
-      throw new Error(`Browser smoke test encountered uncaught errors: ${uncaughtErrors.join("; ")}`);
+      throw new Error(
+        `Browser smoke test encountered uncaught errors: ${uncaughtErrors.join("; ")}`,
+      );
     }
 
     console.log("\n=======================================================");
