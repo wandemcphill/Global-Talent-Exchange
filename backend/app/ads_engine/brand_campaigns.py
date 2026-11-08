@@ -25,9 +25,11 @@ from app.ads_engine.brand_schemas import (
     PublicMusicPromotionsResponse,
     PublicMusicPromotionView,
 )
+from app.ads_engine.schemas import PublicBrandAdCampaignsResponse, PublicBrandAdCampaignView
 from app.auth.dependencies import get_current_admin, get_current_user, get_optional_current_user, get_session
 from app.models.brand_ad_campaign import BrandAdCampaign
 from app.models.brand_advertising import BrandAdEvent, BrandAdReviewEvent, BrandAdvertiserProfile
+from app.models.commercial_network import AdvertiserWorkspace
 from app.models.user import User
 
 router = APIRouter(prefix="/ads/brand", tags=["brand-advertiser"])
@@ -532,6 +534,79 @@ def _safe_media_or_http_url(value: str | None) -> bool:
     if cleaned.startswith(("/api/v2/public/ads/media/", "/public/ads/media/", "/api/public/ads/media/")):
         return True
     return _safe_http_url(cleaned)
+
+
+@public_router.get("/stadium/inventory", response_model=PublicBrandAdCampaignsResponse)
+def get_public_stadium_inventory(
+    response: Response,
+    limit: int = Query(default=25, ge=1, le=50),
+    session: Session = Depends(get_session),
+) -> PublicBrandAdCampaignsResponse:
+    """Live, paid, approved sponsor inventory for the 3D stadium perimeter LED boards.
+
+    Stricter than the generic public campaign feed: only commercial-network brand campaigns that are
+    approved, *paid*, inside their delivery window, owned by an active workspace, not budget exhausted
+    and booked for the ``stadium_perimeter`` placement are returned. Never fabricates inventory; an empty
+    list tells the renderer to use house creatives.
+    """
+    now = _now()
+    candidates = session.scalars(_live_campaign_statement(campaign_type="brand", now=now).limit(limit * 4)).all()
+    counts_by_campaign = _event_counts(session, [c.id for c in candidates])
+
+    workspace_status: dict[str, str | None] = {}
+    inventory: list[PublicBrandAdCampaignView] = []
+    for campaign in candidates:
+        if len(inventory) >= limit:
+            break
+        if campaign.payment_status != "paid":
+            continue
+        placements = list(campaign.placements_json or [])
+        if campaign.placement and campaign.placement not in placements:
+            placements.insert(0, campaign.placement)
+        if "stadium_perimeter" not in placements:
+            continue
+        if not _safe_http_url(campaign.destination_url):
+            continue
+        if campaign.workspace_id:
+            if campaign.workspace_id not in workspace_status:
+                workspace = session.get(AdvertiserWorkspace, campaign.workspace_id)
+                workspace_status[campaign.workspace_id] = workspace.status if workspace is not None else None
+            if workspace_status[campaign.workspace_id] != "active":
+                continue
+        if campaign.pricing_model in {"CPM", "CPC"}:
+            budget = Decimal(campaign.budget_amount or 0)
+            if budget > Decimal("0") and _estimated_spend(campaign, counts_by_campaign.get(campaign.id, {})) >= budget:
+                continue
+
+        creative_url = campaign.creative_url or (
+            f"/api/v2/public/ads/media/{campaign.creative_asset_id}" if campaign.creative_asset_id else None
+        )
+        logo_url = campaign.logo_url or (
+            f"/api/v2/public/ads/media/{campaign.logo_asset_id}" if campaign.logo_asset_id else None
+        )
+        media_type = (campaign.creative_media_type or "").lower()
+        # LED canvas renders stills; silent video creatives are not drawn on the perimeter boards.
+        if media_type and not media_type.startswith("image/"):
+            creative_url = None
+        inventory.append(
+            PublicBrandAdCampaignView(
+                id=campaign.id,
+                brand_name=campaign.brand_name,
+                headline=campaign.headline,
+                description=campaign.description or "",
+                placement="stadium_perimeter",
+                placements=placements,
+                destination_url=campaign.destination_url,
+                logo_url=logo_url if _safe_media_or_http_url(logo_url) else None,
+                creative_url=creative_url if _safe_media_or_http_url(creative_url) else None,
+                creative_media_type=campaign.creative_media_type,
+                is_silent_creative=True,
+                sponsored_label="Sponsored",
+                priority=campaign.priority,
+            )
+        )
+    response.headers["Cache-Control"] = "public, max-age=15, stale-while-revalidate=30"
+    return PublicBrandAdCampaignsResponse(campaigns=inventory, generated_at=now)
 
 
 @public_router.post("/events", response_model=BrandAdEventResponse)

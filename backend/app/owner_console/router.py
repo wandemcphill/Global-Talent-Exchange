@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.owner_console import alerts, competitions as comps, delegation_service
 from app.owner_console.delegation_service import DelegationError
-from app.owner_console import ledger, money, service, storytelling
+from app.owner_console import ledger, matchday_governance, money, service, storytelling
 from app.owner_console.models import (
     IntegrityFlag,
     LedgerEvent,
@@ -170,6 +170,11 @@ class StaffChatRequest(BaseModel):
 class WinBonusRequest(BaseModel):
     amount_gtex: int
     note: str = ""
+
+
+class FullTimeGovernanceRequest(BaseModel):
+    bonus_amount_gtex: float | None = None
+    bonus_note: str | None = None
 
 
 class PressConferenceRequest(BaseModel):
@@ -1531,6 +1536,30 @@ def remove_club_delegation_override(
         activity_key,
     )
     return {"status": "override_removed", "temporary_overrides": policy.temporary_overrides_json}
+
+
+@router.post("/matches/{match_id}/full-time-governance")
+def record_match_full_time_governance(
+    match_id: str,
+    payload: FullTimeGovernanceRequest | None = None,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """End-whistle bridge: route gift income and post-match bonuses into Owner Authority governance.
+
+    Completion is verified against the canonical match record. Idempotent; returns an empty result list
+    when the caller owns no club that received gifts or participated in the match.
+    """
+    body = payload or FullTimeGovernanceRequest()
+    return _run(
+        session,
+        matchday_governance.record_full_time_governance,
+        session,
+        match_id=match_id,
+        user_id=user.id,
+        bonus_amount_gtex=body.bonus_amount_gtex,
+        bonus_note=body.bonus_note,
+    )
 
 
 @router.get("/clubs/{club_id}/authority/decisions")
