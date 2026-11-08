@@ -1,0 +1,55 @@
+name: Temporary Matchday Black Formatter
+on:
+  push:
+    branches:
+      - fix/u2a-m2-match-experience-acceptance-remediation
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/u2a-m2-match-experience-acceptance-remediation
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install Black
+        run: python -m pip install black
+      - name: Format the files flagged by changed-quality
+        run: |
+          python -m black "backend/app/ads_engine/router.py" \
+            "backend/app/auth/dependencies.py" \
+            "backend/app/ads_engine/commercial_router.py" \
+            "backend/app/models/brand_ad_campaign.py" \
+            "backend/app/storage/__init__.py" \
+            "backend/app/storage/s3.py" \
+            "backend/app/models/commercial_network.py" \
+            "backend/migrations/versions/20261107_0228_gtex_commercial_network.py" \
+            "backend/app/wallets/providers/korapay.py" \
+            "backend/tests/ads_engine/test_commercial_security_remediation.py" \
+            "backend/app/ads_engine/commercial_service.py"
+      - name: Commit formatter changes and remove temporary workflow
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add "backend/app/ads_engine/router.py" \
+              "backend/app/auth/dependencies.py" \
+              "backend/app/ads_engine/commercial_router.py" \
+              "backend/app/models/brand_ad_campaign.py" \
+              "backend/app/storage/__init__.py" \
+              "backend/app/storage/s3.py" \
+              "backend/app/models/commercial_network.py" \
+              "backend/migrations/versions/20261107_0228_gtex_commercial_network.py" \
+              "backend/app/wallets/providers/korapay.py" \
+              "backend/tests/ads_engine/test_commercial_security_remediation.py" \
+              "backend/app/ads_engine/commercial_service.py"
+            git commit -m "style: format commercial Python files for quality gate"
+            git push origin HEAD:fix/u2a-m2-match-experience-acceptance-remediation
+          fi
+          git rm ".github/workflows/temporary-matchday-black-fix.yml"
+          git commit -m "chore: remove temporary Black formatter workflow"
+          git push origin HEAD:fix/u2a-m2-match-experience-acceptance-remediation
