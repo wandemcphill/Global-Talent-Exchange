@@ -32,7 +32,13 @@ from app.models.wallet import (
     LedgerTransaction,
 )
 from app.models.user import User
-from app.owner_console import delegation_service, ledger, living_gm_delegation, living_staff_market, router as owner_router
+from app.owner_console import (
+    delegation_service,
+    ledger,
+    living_gm_delegation,
+    living_staff_market,
+    router as owner_router,
+)
 from app.owner_console.delegation_service import DelegationError
 from app.owner_console.models import (
     OWNER_CONSOLE_TABLES,
@@ -529,18 +535,17 @@ def test_owner_approval_does_not_mark_rejected_staff_offer_as_executed(monkeypat
     )
 
     with pytest.raises(DelegationError, match="Approval was not executed"):
-        living_gm_delegation.resolve_gm_proposal(
-            session, u.id, cp.id, decision.id, action="approve"
-        )
+        living_gm_delegation.resolve_gm_proposal(session, u.id, cp.id, decision.id, action="approve")
 
     session.refresh(decision)
     assert decision.status == "pending_approval"
     assert decision.execution_status == "pending_execution"
-    assert session.scalar(
-        select(ClubDelegatedDecisionAuditLog).where(
-            ClubDelegatedDecisionAuditLog.decision_id == decision.id
+    assert (
+        session.scalar(
+            select(ClubDelegatedDecisionAuditLog).where(ClubDelegatedDecisionAuditLog.decision_id == decision.id)
         )
-    ) is None
+        is None
+    )
     rel = session.scalar(select(OwnerClubRelationship).where(OwnerClubRelationship.club_id == cp.id))
     assert rel.trust == 60
 
@@ -570,9 +575,7 @@ def test_staff_market_does_not_create_contract_when_treasury_cannot_fund_it(monk
 
     assert result["success"] is False
     assert result["reason"] == "insufficient_funds"
-    assert session.scalar(
-        select(ClubStaffContract).where(ClubStaffContract.club_id == cp.id)
-    ) is None
+    assert session.scalar(select(ClubStaffContract).where(ClubStaffContract.club_id == cp.id)) is None
 
 
 def test_gm_cycle_blocks_academy_settlement_when_suspended_or_unfunded(monkeypatch):
@@ -590,13 +593,16 @@ def test_gm_cycle_blocks_academy_settlement_when_suspended_or_unfunded(monkeypat
 
     assert "academy_recruitment" in [action["type"] for action in cycle["blocked_actions"]]
     assert "academy_recruitment" not in [action["type"] for action in cycle["executed_actions"]]
-    assert session.scalar(
-        select(ClubDelegatedDecision).where(
-            ClubDelegatedDecision.club_id == cp.id,
-            ClubDelegatedDecision.activity_key == "academy_recruitment",
-            ClubDelegatedDecision.execution_status == "executed",
+    assert (
+        session.scalar(
+            select(ClubDelegatedDecision).where(
+                ClubDelegatedDecision.club_id == cp.id,
+                ClubDelegatedDecision.activity_key == "academy_recruitment",
+                ClubDelegatedDecision.execution_status == "executed",
+            )
         )
-    ) is None
+        is None
+    )
 
     # Suspension must block the same path even after funds are restored.
     monkeypatch.setattr(living_gm_delegation.ledger, "balance", lambda *args, **kwargs: Decimal("2000000"))
