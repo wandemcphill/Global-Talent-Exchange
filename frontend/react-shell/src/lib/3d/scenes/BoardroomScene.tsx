@@ -27,6 +27,7 @@ import {
   Flame,
   Scale,
   Briefcase,
+  Sliders,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { GtexSceneRegistry } from "../GtexSceneRegistry";
@@ -34,6 +35,7 @@ import type { GtexSceneRendererProps } from "../GtexSceneTypes";
 import { PersonaSpatialInteractionModal } from "../PersonaSpatialInteractionModal";
 import { BoardroomDilemmaModal } from "../BoardroomDilemmaModal";
 import { StaffEmploymentModal } from "../StaffEmploymentModal";
+import { GmDelegationModal } from "../GmDelegationModal";
 import {
   clubActiveDilemmaEndpoint,
   type BoardroomDilemma,
@@ -139,6 +141,7 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isDilemmaModalOpen, setIsDilemmaModalOpen] = useState<boolean>(false);
   const [isStaffModalOpen, setIsStaffModalOpen] = useState<boolean>(false);
+  const [isGmModalOpen, setIsGmModalOpen] = useState<boolean>(false);
 
   // Active Boardroom Dilemma Query
   const { data: activeDilemma } = useQuery<BoardroomDilemma | null>({
@@ -708,6 +711,17 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
             <Briefcase className="h-3.5 w-3.5 text-emerald-400" />
             <span>Staff Market & Careers</span>
           </button>
+
+          {/* GM Delegation & Authority Action Button */}
+          <button
+            type="button"
+            data-testid="open-gm-delegation-btn"
+            onClick={() => setIsGmModalOpen(true)}
+            className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-sky-500/40 bg-sky-500/20 px-3 py-1.5 text-xs font-bold text-sky-300 backdrop-blur-md transition-all hover:bg-sky-500/30 shadow-lg shadow-sky-500/10"
+          >
+            <Sliders className="h-3.5 w-3.5 text-sky-400" />
+            <span>GM Delegation</span>
+          </button>
         </div>
 
         {/* Lighting & Camera Presets */}
@@ -810,6 +824,7 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
         personaRole={selectedPersonaRole}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
+        onOpenGmDelegation={() => setIsGmModalOpen(true)}
         onInteractionComplete={(res) => {
           // Additional custom callback handling if required
         }}
@@ -827,6 +842,13 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
         clubId={clubId}
         isOpen={isStaffModalOpen}
         onClose={() => setIsStaffModalOpen(false)}
+      />
+
+      {/* GM Delegation & Authority Matrix Modal */}
+      <GmDelegationModal
+        clubId={clubId}
+        isOpen={isGmModalOpen}
+        onClose={() => setIsGmModalOpen(false)}
       />
     </div>
   );

@@ -226,6 +226,28 @@ describe("BoardroomScene", () => {
     expect(document.querySelector('[data-testid="staff-employment-modal"]')).not.toBeNull();
   });
 
+  test("opens GM delegation and authority matrix modal when clicking GM delegation HUD button", async () => {
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <BoardroomScene clubId="c_lagos_boardroom" />
+        </QueryClientProvider>
+      );
+    });
+
+    const gmDelegationBtn = container.querySelector(
+      '[data-testid="open-gm-delegation-btn"]'
+    ) as HTMLButtonElement;
+    expect(gmDelegationBtn).not.toBeNull();
+    expect(gmDelegationBtn.textContent).toContain("GM Delegation");
+
+    await act(async () => {
+      gmDelegationBtn.click();
+    });
+
+    expect(document.querySelector('[data-testid="gm-delegation-modal"]')).not.toBeNull();
+  });
+
   test("unmounts cleanly without WebGL memory leaks", async () => {
     await act(async () => {
       root.render(

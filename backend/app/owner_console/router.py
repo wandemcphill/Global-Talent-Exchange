@@ -2588,3 +2588,107 @@ def post_living_world_staff_dismiss(
         )
 
     return _run(session, _op)
+
+
+# ---------- Stage 5: General Manager Delegation & Owner Control ----------
+
+
+class GmDelegationModeRequest(BaseModel):
+    mode: str = Field(min_length=1, max_length=32)
+
+
+class GmMatrixUpdateRequest(BaseModel):
+    financial_controls: dict[str, Any] | None = None
+    activity_assignments: dict[str, Any] | None = None
+
+
+class GmProposalResolveRequest(BaseModel):
+    action: str = Field(pattern="^(approve|reject)$")
+    decision_note: str | None = Field(default=None, max_length=500)
+
+
+@router.get("/clubs/{club_id}/living-world/gm-delegation")
+def get_living_world_gm_delegation(
+    club_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_gm_delegation
+
+    def _op() -> dict[str, Any]:
+        return living_gm_delegation.get_gm_delegation_overview(session, user.id, club_id)
+
+    return _run(session, _op)
+
+
+@router.post("/clubs/{club_id}/living-world/gm-delegation/mode")
+def post_living_world_gm_delegation_mode(
+    club_id: str,
+    payload: GmDelegationModeRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_gm_delegation
+
+    def _op() -> dict[str, Any]:
+        return living_gm_delegation.update_gm_delegation_mode(session, user.id, club_id, payload.mode)
+
+    return _run(session, _op)
+
+
+@router.put("/clubs/{club_id}/living-world/gm-delegation/matrix")
+def put_living_world_gm_delegation_matrix(
+    club_id: str,
+    payload: GmMatrixUpdateRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_gm_delegation
+
+    def _op() -> dict[str, Any]:
+        return living_gm_delegation.update_gm_matrix_and_financial_controls(
+            session,
+            user.id,
+            club_id,
+            financial_controls=payload.financial_controls,
+            activity_assignments=payload.activity_assignments,
+        )
+
+    return _run(session, _op)
+
+
+@router.post("/clubs/{club_id}/living-world/gm-delegation/evaluate-operations")
+def post_living_world_gm_evaluate_operations(
+    club_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_gm_delegation
+
+    def _op() -> dict[str, Any]:
+        return living_gm_delegation.evaluate_gm_operational_cycle(session, user.id, club_id)
+
+    return _run(session, _op)
+
+
+@router.post("/clubs/{club_id}/living-world/gm-delegation/proposals/{proposal_id}/resolve")
+def post_living_world_gm_resolve_proposal(
+    club_id: str,
+    proposal_id: str,
+    payload: GmProposalResolveRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_gm_delegation
+
+    def _op() -> dict[str, Any]:
+        return living_gm_delegation.resolve_gm_proposal(
+            session,
+            user.id,
+            club_id,
+            decision_id=proposal_id,
+            action=payload.action,
+            decision_note=payload.decision_note,
+        )
+
+    return _run(session, _op)
