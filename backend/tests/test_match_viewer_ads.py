@@ -11,6 +11,7 @@ from app.highlights.service import HighlightGenerationService
 from app.match_engine.api.router import router as match_engine_router
 from app.match_engine.services.highlight_manifest import MatchHighlightManifestBuilder
 from app.models.base import Base
+from app.models.competition import UserCompetition
 from app.models.competition_match import CompetitionMatch
 from app.routes.match_viewer import router as match_viewer_router
 from app.schemas.match_viewer import MatchViewerEventType
@@ -34,7 +35,7 @@ def _build_app() -> tuple[FastAPI, sessionmaker[Session]]:
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    Base.metadata.create_all(engine, tables=[CompetitionMatch.__table__])
+    Base.metadata.create_all(engine, tables=[CompetitionMatch.__table__, UserCompetition.__table__])
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
 
     def override_session():
@@ -124,6 +125,8 @@ def test_match_viewer_route_exposes_ad_placements_for_standard_profiles() -> Non
         MatchAdPlacementType.PRE_ROLL.value,
         MatchAdPlacementType.LIVE_BANNER.value,
         MatchAdPlacementType.REWARDED_AD.value,
+        MatchAdPlacementType.FLASH.value,
+        MatchAdPlacementType.SPLIT.value,
     }
     sponsored = next(
         item

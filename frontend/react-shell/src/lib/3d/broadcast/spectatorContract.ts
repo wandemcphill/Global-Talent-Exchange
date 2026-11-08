@@ -71,10 +71,34 @@ export interface SpectatorSafeFrameView {
   transition_state?: string;
   danger_zone?: string | null;
   pressure_index?: number;
+  compactness_home?: number;
+  compactness_away?: number;
   frame_tags?: string[];
   flag_animation?: boolean;
   players: SpectatorSafePlayerTelemetry[];
   ball: SpectatorSafeBallTelemetry;
+}
+
+export interface SpectatorAdPlacementView {
+  ad_id: string;
+  ad_type: string;
+  placement: string;
+  brand: string;
+  message: string;
+  event_id?: string | null;
+  active_from_second?: number | null;
+  active_until_second?: number | null;
+  cta_label?: string | null;
+  pricing_cpm_usd?: number | null;
+  targeting_tags?: string[];
+  inventory_owner?: string | null;
+}
+
+export interface SpectatorMonetizationView {
+  ads_enabled: boolean;
+  premium_ad_free: boolean;
+  placements: SpectatorAdPlacementView[];
+  metadata?: Record<string, unknown>;
 }
 
 export interface SpectatorSafeEventView {
@@ -115,6 +139,8 @@ export interface SpectatorSafeMatchView {
   frames: SpectatorSafeFrameView[];
   events: SpectatorSafeEventView[];
   is_owner_or_manager: boolean;
+  is_demonstration_fixture?: boolean;
+  monetization?: SpectatorMonetizationView | null;
   /** Confidential coaching notes: ONLY populated if is_owner_or_manager is true */
   coach_notes?: string[];
 }
@@ -130,6 +156,8 @@ export interface MatchViewStateDTO {
   venue_name?: string;
   competition_name?: string;
   duration_seconds?: number;
+  is_demonstration_fixture?: boolean;
+  monetization?: Partial<SpectatorMonetizationView> | null;
   home_team?: Partial<SpectatorSafeTeamView>;
   away_team?: Partial<SpectatorSafeTeamView>;
   frames?: Partial<SpectatorSafeFrameView>[];
@@ -269,6 +297,8 @@ export function sanitizeForSpectator(
     transition_state: f.transition_state ? String(f.transition_state) : "stable",
     danger_zone: f.danger_zone ? String(f.danger_zone) : null,
     pressure_index: typeof f.pressure_index === "number" ? Math.max(0, Math.min(1, f.pressure_index)) : 0,
+    compactness_home: typeof f.compactness_home === "number" ? Math.max(0, Math.min(1, f.compactness_home)) : 0.5,
+    compactness_away: typeof f.compactness_away === "number" ? Math.max(0, Math.min(1, f.compactness_away)) : 0.5,
     frame_tags: Array.isArray(f.frame_tags) ? f.frame_tags.map((t: any) => String(t)) : [],
     flag_animation: Boolean(f.flag_animation),
     players: Array.isArray(f.players)
@@ -356,18 +386,60 @@ export function sanitizeForSpectator(
     duration_ms: typeof e.duration_ms === "number" ? e.duration_ms : 500,
   }));
 
+  const sourceLabel = String(validSource?.source || "live_match_hub");
+  const isDemoFixture =
+    Boolean(validSource?.is_demonstration_fixture) ||
+    sourceLabel === "authoritative_simulation_acceptance" ||
+    sourceLabel === "local_showcase" ||
+    matchId === "gtex_u2a_006_humanoid_showcase" ||
+    matchId === "u2a-006-showcase";
+
+  let monetization: SpectatorMonetizationView | null = null;
+  if (validSource?.monetization && typeof validSource.monetization === "object") {
+    const rawMon = validSource.monetization;
+    const rawPlacements: any[] = Array.isArray(rawMon.placements) ? rawMon.placements : [];
+    monetization = {
+      ads_enabled: Boolean(rawMon.ads_enabled),
+      premium_ad_free: Boolean(rawMon.premium_ad_free),
+      placements: rawPlacements
+        .filter((pl) => pl && typeof pl.brand === "string" && typeof pl.message === "string")
+        .map((pl, idx) => ({
+          ad_id: String(pl.ad_id || `ad_${idx}`),
+          ad_type: String(pl.ad_type || "live_banner"),
+          placement: String(pl.placement || "stadium_board"),
+          brand: String(pl.brand),
+          message: String(pl.message),
+          event_id: pl.event_id ? String(pl.event_id) : null,
+          active_from_second: typeof pl.active_from_second === "number" ? pl.active_from_second : null,
+          active_until_second: typeof pl.active_until_second === "number" ? pl.active_until_second : null,
+          cta_label: pl.cta_label ? String(pl.cta_label) : null,
+          pricing_cpm_usd: typeof pl.pricing_cpm_usd === "number" ? pl.pricing_cpm_usd : null,
+          targeting_tags: Array.isArray(pl.targeting_tags) ? pl.targeting_tags.map((t: any) => String(t)) : [],
+          inventory_owner: pl.inventory_owner ? String(pl.inventory_owner) : null,
+        })),
+      metadata: rawMon.metadata && typeof rawMon.metadata === "object" ? { ...rawMon.metadata } : {},
+    };
+  }
+
   const safeView: SpectatorSafeMatchView = {
     match_id: matchId,
     canonical_match_id: canonicalId,
-    source: String(validSource?.source || "live_match_hub"),
+    source: sourceLabel,
     home_team: homeTeam,
     away_team: awayTeam,
     match_label: String(rawPres.match_label || `${homeTeam.team_name} vs ${awayTeam.team_name}`),
-    venue_name: rawPres.context?.venue_name ? String(rawPres.context.venue_name) : undefined,
-    competition_name: rawPres.context?.competition_name ? String(rawPres.context.competition_name) : undefined,
+    venue_name:
+      (rawPres.context?.venue_name ? String(rawPres.context.venue_name) : undefined) ||
+      (validSource?.venue_name ? String(validSource.venue_name) : undefined),
+    competition_name:
+      (rawPres.context?.competition_name ? String(rawPres.context.competition_name) : undefined) ||
+      (validSource?.competition_name ? String(validSource.competition_name) : undefined),
+    duration_seconds: typeof validSource?.duration_seconds === "number" ? validSource.duration_seconds : undefined,
     frames,
     events,
     is_owner_or_manager: isOwnerOrManager,
+    is_demonstration_fixture: isDemoFixture,
+    monetization,
   };
 
   // Only include internal confidential coach notes if viewer is verified club owner/manager

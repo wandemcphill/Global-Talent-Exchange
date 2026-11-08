@@ -40,6 +40,8 @@ import { useMatchSpectatorStream } from "@/lib/3d/broadcast/useMatchSpectatorStr
 import { loadFiveMinuteShowcaseFixture } from "@/lib/3d/broadcast/showcaseLoader";
 import { HolographicPlayerCard } from "@/components/gtex/ApexWidgets";
 import { MatchdayLineupBroadcast, useClubMatchdaySheet, type MatchdaySquadMember } from "@/components/gtex/MatchdayLineupBroadcast";
+import { useGtexAds } from "@/components/advertising/GtexAdvertising";
+import { mapAuthoritativeTactics } from "@/lib/3d/broadcast/authoritativeTactics";
 import { useSkin } from "@/lib/skin-engine";
 
 const GIFTS = [
@@ -1970,6 +1972,7 @@ export default function MatchCenter() {
   const clubId = params.get("club") || activeClub?.club_id || "";
   const { getModuleView, setModuleView } = useSkin();
   const matchView = getModuleView("match_center");
+  const { campaigns: partnerAdCampaigns } = useGtexAds("partner_showcase");
   // 3D WebGL Broadcast View vs 2D Tactical Pitch View Toggle & Full-Screen 16:9 Match Theatre
   const [view3DBroadcast, setView3DBroadcast] = useState<boolean>(true);
   const [isTheatreMode, setIsTheatreMode] = useState<boolean>(
@@ -2072,6 +2075,20 @@ export default function MatchCenter() {
     retry: false,
   });
 
+  const { data: appliedTactics } = useQuery({
+    queryKey: ["match-applied-tactics", id],
+    queryFn: async () => {
+      try {
+        return (await api.get(`/matches/${id}/tactics`)).data;
+      } catch {
+        return null;
+      }
+    },
+    refetchInterval: 5000,
+    enabled: !!id && id !== "u2a-006-showcase",
+    retry: false,
+  });
+  const authoritativeTactics = useMemo(() => mapAuthoritativeTactics(appliedTactics), [appliedTactics]);
   const isViewerAuthenticated = Boolean(tokens.get());
   const requestSpectatorTicket = useCallback(async (targetMatchId: string): Promise<string | null> => {
     const res = await api.post(`/matches/${encodeURIComponent(targetMatchId)}/spectate-ticket`);
@@ -2406,7 +2423,7 @@ export default function MatchCenter() {
         {/* Match Navigation Tabs */}
         <div className="flex flex-wrap gap-2 border-b border-[#25354B] pb-3">
           {[
-            { id: "pitch", label: "2D / 2.5D MATCH PITCH", icon: Tv },
+            { id: "pitch", label: view3DBroadcast ? "3D MATCHDAY BROADCAST (WEBGL)" : "2D / 2.5D MATCH PITCH", icon: Tv },
             { id: "lineups", label: "MATCHDAY LINEUPS", icon: Users },
             { id: "tactics", label: "TACTICS & ADVISOR", icon: Sliders },
             { id: "pre_match", label: "PRE-MATCH + 3D STAGE", icon: Target },
@@ -2438,6 +2455,8 @@ export default function MatchCenter() {
             {/* Pitch Camera & Tactical Shader Toolbar */}
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-white/10 bg-slate-900/85 p-2.5">
               {/* Camera Perspective Switcher */}
+              {/* 2D-only controls: hidden in WebGL mode (3D uses the broadcast HUD camera controls) */}
+              {!view3DBroadcast && (
               <div className="flex items-center gap-1.5">
                 <Camera size={13} className="text-emerald-400" />
                 {[
@@ -2458,6 +2477,7 @@ export default function MatchCenter() {
                   </button>
                 ))}
               </div>
+              )}
 
               {/* 3D WebGL Broadcast / 2D Tactical Toggle & 16:9 Match Theatre Launch */}
               <div className="flex items-center gap-1.5">
@@ -2492,6 +2512,7 @@ export default function MatchCenter() {
               </div>
 
               {/* Spatial Shaders + Event-Driven 3D Cut-In Triggers */}
+              {!view3DBroadcast && (
               <div className="flex flex-wrap items-center gap-1.5">
                 <button
                   onClick={() => setShowVoronoi(!showVoronoi)}
@@ -2539,6 +2560,7 @@ export default function MatchCenter() {
                   <Box size={11} /> 3D GOAL / TUNNEL CAM
                 </button>
               </div>
+              )}
             </div>
 
             {/* Kickoff Broadcast Lineup Walkout Sheet (Auto-shown on Kickoff) */}
@@ -2585,6 +2607,8 @@ export default function MatchCenter() {
                 liveFrame={spectatorStream.lastFrame}
                 liveEvents={spectatorStream.recentEvents}
                 liveScore={spectatorStream.latestScore}
+                tacticalConfig={authoritativeTactics}
+                publicBrandCampaigns={partnerAdCampaigns}
                 isTheatreMode={isTheatreMode}
                 onToggleTheatreMode={() => setIsTheatreMode((t) => !t)}
                 onToggle2DCompanion={() => {
