@@ -311,11 +311,7 @@ def get_gm_delegation_overview(session: Session, user_id: str, club_id: str) -> 
 
         # The matrix must never advertise autonomous authority for a workflow that
         # does not yet have an authoritative execution handler.
-        if (
-            not is_execution_supported
-            or canonical_mode == "owner_managed"
-            or policy.is_suspended
-        ):
+        if not is_execution_supported or canonical_mode == "owner_managed" or policy.is_suspended:
             authority_level = "owner_only"
             requires_approval = True
             responsible_role = "owner"
@@ -418,14 +414,15 @@ def get_gm_delegation_overview(session: Session, user_id: str, club_id: str) -> 
         {
             "id": row.id,
             "decision_id": row.decision_id,
-            "actor_role": (
-                "general_manager" if row.action.startswith("gm_") else "owner"
-            ),
+            "actor_role": ("general_manager" if row.action.startswith("gm_") else "owner"),
             "action": (
                 "approved"
                 if row.action == "owner_approve"
-                else "rejected" if row.action == "owner_reject"
-                else "executed" if row.action == "gm_execute" else row.action
+                else (
+                    "rejected"
+                    if row.action == "owner_reject"
+                    else "executed" if row.action == "gm_execute" else row.action
+                )
             ),
             "reason": (row.snapshot_json or {}).get("outcome") or row.new_status,
             "note": row.decision_note,
@@ -592,8 +589,10 @@ def update_gm_matrix_and_financial_controls(
                     f"{key} does not yet have a GM execution handler and must remain owner-controlled.",
                     409,
                 )
-            if is_supported and canonical_mode == "owner_managed" and (
-                responsible_role != "owner" or authority_level != "owner_only" or not requires_approval
+            if (
+                is_supported
+                and canonical_mode == "owner_managed"
+                and (responsible_role != "owner" or authority_level != "owner_only" or not requires_approval)
             ):
                 raise DelegationError(
                     f"{key} cannot be delegated while the club is in owner-managed mode.",
