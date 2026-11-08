@@ -47,8 +47,8 @@ from app.models.user_region import UserRegionProfile
 from app.storage.base import StorageError, StorageNotFound
 from app.storage.s3 import S3ObjectStorage
 
-PAYSTACK_TEST_SECRET = "sk_test_paystack_security_secret_123"
-KORAPAY_TEST_SECRET = "korapay_test_security_secret_456"
+PAYSTACK_TEST_SECRET = "sk_test_paystack_security_secret_123"  # pragma: allowlist secret
+KORAPAY_TEST_SECRET = "korapay_test_security_secret_456"  # pragma: allowlist secret
 
 
 def _build_test_app(tmp_path: Path, monkeypatch) -> tuple[TestClient, sessionmaker[Session], Path]:
@@ -146,7 +146,7 @@ def _setup_advertiser_and_campaign(client: TestClient, admin_token: str) -> tupl
             "company_name": "Security Brand Ltd",
             "email": f"sec_{uuid4().hex[:8]}@brand.example.com",
             "phone_number": "+2348011112222",
-            "password": "SecurePassword!123",
+            "password": "SecurePassword!123",  # pragma: allowlist secret
         },
     )
     assert reg_res.status_code == 201, reg_res.text
@@ -690,7 +690,7 @@ def test_media_storage_outage_fails_safely_and_backfill_resumes(tmp_path: Path, 
             "company_name": "Storage Test Corp",
             "email": "storage@test.example.com",
             "phone_number": "+2348099990000",
-            "password": "Password!123",
+            "password": "Password!123",  # pragma: allowlist secret
         },
     )
     adv_token = reg_res.json()["access_token"]
@@ -794,7 +794,7 @@ def test_s3_durable_cloud_object_storage(tmp_path: Path) -> None:
         endpoint_url="https://s3.eu-west-1.amazonaws.com",
         region="eu-west-1",
         access_key_id="test_key",
-        secret_access_key="test_secret",
+        secret_access_key="test_secret",  # pragma: allowlist secret
         local_cache_root=cache1,
     )
 
@@ -829,7 +829,7 @@ def test_s3_durable_cloud_object_storage(tmp_path: Path) -> None:
             endpoint_url="https://s3.eu-west-1.amazonaws.com",
             region="eu-west-1",
             access_key_id="test_key",
-            secret_access_key="test_secret",
+            secret_access_key="test_secret",  # pragma: allowlist secret
             local_cache_root=cache2,
         )
 
@@ -1028,8 +1028,8 @@ def test_paystack_advanced_signature_and_whsec_whk_key_rotation(tmp_path: Path, 
     adv_token, camp_id, _ = _setup_advertiser_and_campaign(client, admin_token)
 
     # Configure dedicated webhook secret starting with whsec_ and fallback
-    WHSEC_SECRET = "whsec_primary_dedicated_secret_777"
-    FALLBACK_SECRET = "whsec_fallback_rotation_secret_888"
+    WHSEC_SECRET = "whsec_primary_dedicated_secret_777"  # pragma: allowlist secret
+    FALLBACK_SECRET = "whsec_fallback_rotation_secret_888"  # pragma: allowlist secret
     monkeypatch.setenv("PAYSTACK_WEBHOOK_SECRET", WHSEC_SECRET)
     monkeypatch.setenv("PAYSTACK_WEBHOOK_SECRET_FALLBACK", FALLBACK_SECRET)
 
@@ -1155,7 +1155,7 @@ def test_s3_production_safety_guard(tmp_path: Path, monkeypatch) -> None:
             "company_name": "Guard Test Corp",
             "email": "guard@test.example.com",
             "phone_number": "+2348077778888",
-            "password": "Password!123",
+            "password": "Password!123",  # pragma: allowlist secret
         },
     )
     adv_token = reg_res.json()["access_token"]

@@ -113,7 +113,7 @@ def test_advertiser_registration_login_and_isolation_from_normal_users(tmp_path:
             "email": "marketing@zenithbank.example.com",
             "phone_number": "+2348012345678",
             "website_url": "https://zenithbank.example.com",
-            "password": "StrongPassword!123",
+            "password": "StrongPassword!123",  # pragma: allowlist secret
         },
     )
     assert reg_res.status_code == 201, reg_res.text
@@ -171,7 +171,7 @@ def test_agency_multi_brand_and_team_member_workspace(tmp_path: Path, monkeypatc
             "contact_name": "Tunde Bakare",
             "email": "agency@lagosmedia.example.com",
             "phone_number": "+2348022223333",
-            "password": "AgencyPassword!123",
+            "password": "AgencyPassword!123",  # pragma: allowlist secret
         },
     )
     assert reg_res.status_code == 201
@@ -214,7 +214,7 @@ def test_direct_media_upload_magic_bytes_and_silent_video_enforcement(tmp_path: 
             "company_name": "FirstBrand NG",
             "email": "ads@firstbrand.example.com",
             "phone_number": "+2348033334444",
-            "password": "BrandPassword!123",
+            "password": "BrandPassword!123",  # pragma: allowlist secret
         },
     )
     token = reg_res.json()["access_token"]
@@ -308,7 +308,7 @@ def test_full_brand_and_music_campaigns_ngn_billing_and_rbac(tmp_path: Path, mon
             "company_name": "Paystack Brand Corp",
             "email": "brand@paystack.example.com",
             "phone_number": "+2348055556666",
-            "password": "BrandPassword!123",
+            "password": "BrandPassword!123",  # pragma: allowlist secret
         },
     )
     brand_token = brand_reg.json()["access_token"]
@@ -557,7 +557,7 @@ def test_full_brand_and_music_campaigns_ngn_billing_and_rbac(tmp_path: Path, mon
             "company_name": "Mavin Records",
             "email": "promo@mavin.example.com",
             "phone_number": "+2348077778888",
-            "password": "MusicPassword!123",
+            "password": "MusicPassword!123",  # pragma: allowlist secret
         },
     )
     music_token = music_reg.json()["access_token"]
