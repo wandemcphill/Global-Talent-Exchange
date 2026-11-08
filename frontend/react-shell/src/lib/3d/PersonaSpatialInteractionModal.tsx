@@ -25,6 +25,7 @@ import {
   MessageSquare,
   Clock,
   Compass,
+  Sliders,
 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import {
@@ -41,6 +42,7 @@ export interface PersonaSpatialInteractionModalProps {
   isOpen: boolean;
   onClose: () => void;
   onInteractionComplete?: (response: PersonaInteractionResponse) => void;
+  onOpenGmDelegation?: () => void;
 }
 
 const ACTION_BUTTONS: Array<{
@@ -86,6 +88,7 @@ export const PersonaSpatialInteractionModal: React.FC<PersonaSpatialInteractionM
   isOpen,
   onClose,
   onInteractionComplete,
+  onOpenGmDelegation,
 }) => {
   const queryClient = useQueryClient();
   const [customDialogue, setCustomDialogue] = useState<string>("");
@@ -316,6 +319,32 @@ export const PersonaSpatialInteractionModal: React.FC<PersonaSpatialInteractionM
                     )}
                   </div>
                   <p className="mt-2 text-xs italic text-slate-200">"{lastReply}"</p>
+                </div>
+              )}
+
+              {/* GM Delegation & Authority Banner (when interacting with General Manager) */}
+              {personaRole === "general_manager" && onOpenGmDelegation && (
+                <div className="flex items-center justify-between rounded-xl border border-sky-500/30 bg-sky-500/10 p-3">
+                  <div>
+                    <span className="text-xs font-bold text-sky-300">
+                      General Manager Delegation Policy
+                    </span>
+                    <p className="text-[11px] text-slate-400">
+                      Configure authority matrix, financial limits, and review escalated proposals.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="open-gm-delegation-from-persona-btn"
+                    onClick={() => {
+                      onClose();
+                      onOpenGmDelegation();
+                    }}
+                    className="flex items-center gap-1.5 rounded-lg border border-sky-500/40 bg-sky-500/20 px-3 py-1.5 text-xs font-bold text-sky-300 transition-all hover:bg-sky-500/30 shadow-md shadow-sky-500/10"
+                  >
+                    <Sliders className="h-3.5 w-3.5" />
+                    <span>Authority Matrix</span>
+                  </button>
                 </div>
               )}
 

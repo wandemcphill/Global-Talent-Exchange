@@ -443,29 +443,38 @@ def hire_staff_from_market(
     if marquee_wage_premium:
         total_contract_fee = int(total_contract_fee * 1.4)
 
-    # Financial settlement via ledger
+    # Financial settlement is a hard precondition for an appointment. Never create
+    # a contract or change employment state when the club cannot fund the upfront fee.
     club_acct = ledger.club_account(club_id)
     club_bal = ledger.balance(session, club_acct, ledger.GTEX)
     logger.info("Executing staff appointment for club %s; ledger balance: %s GTEX", club_id, club_bal)
+    if club_bal < Decimal(str(total_contract_fee)):
+        return {
+            "status": "rejected",
+            "success": False,
+            "reason": "insufficient_funds",
+            "message": (
+                f"Appointment not completed: the club has {club_bal} GTEX available, "
+                f"but the upfront contract fee is {total_contract_fee} GTEX."
+            ),
+            "required_salary_gtex": salary,
+        }
 
-    # Safe ledger record
-    try:
-        ledger.record(
-            session,
-            event_type="staff_hire",
-            source=club_acct,
-            destination=ledger.WORLD_CLUBS,
-            currency=ledger.GTEX,
-            gross=total_contract_fee,
-            club_id=club_id,
-            user_id=user_id,
-            related_type="staff",
-            related_id=profile.id,
-            memo=f"Upfront contract salary for {profile.display_name} ({ROLE_DISPLAY_LABELS.get(target_role, target_role)})",
-            check_funds=False,
-        )
-    except Exception as exc:
-        logger.warning("Staff contract ledger recording bypassed: %s", exc)
+    # The ledger must successfully settle before any contract or assignment is written.
+    ledger.record(
+        session,
+        event_type="staff_hire",
+        source=club_acct,
+        destination=ledger.WORLD_CLUBS,
+        currency=ledger.GTEX,
+        gross=total_contract_fee,
+        club_id=club_id,
+        user_id=user_id,
+        related_type="staff",
+        related_id=profile.id,
+        memo=f"Upfront contract salary for {profile.display_name} ({ROLE_DISPLAY_LABELS.get(target_role, target_role)})",
+        check_funds=True,
+    )
 
     now = datetime.now(timezone.utc)
 

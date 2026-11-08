@@ -802,6 +802,139 @@ export const clubStaffMarketOffersEndpoint = (clubId: string) =>
 export const clubStaffMarketDismissEndpoint = (clubId: string) =>
   `/owner/clubs/${encodeURIComponent(clubId)}/living-world/staff-market/dismiss`;
 
+// ---------- Stage 5: General Manager Delegation & Owner Control Engine ----------
+
+export interface GmDelegationActivityItem {
+  activity_key: string;
+  label: string;
+  description: string;
+  category: string;
+  department: string;
+  requires_owner_approval: boolean;
+  gm_can_execute: boolean;
+  execution_supported?: boolean;
+  expenditure_limit_gtex?: number;
+  delegation_level: string;
+}
+
+export interface GmDelegationFinancialControls {
+  max_expenditure_unapproved_gtex: number;
+  max_staff_salary_unapproved_gtex: number;
+  max_contract_years_unapproved: number;
+  recruitment_budget_gtex: number;
+  wage_budget_gtex: number;
+  min_sale_value_gtex: number;
+  allow_emergency_spending: boolean;
+}
+
+export interface GmProposalItem {
+  id: string;
+  activity_key: string;
+  domain: string;
+  proposed_by_role: string;
+  proposed_by_staff_name: string;
+  title: string;
+  summary: string;
+  financial_amount_gtex: number;
+  requires_owner_approval: boolean;
+  status: "pending_approval" | "approved" | "rejected" | "executed" | string;
+  execution_status: string;
+  outcome_text?: string | null;
+  payload?: Record<string, any>;
+  created_at: string;
+}
+
+export interface GmDelegationAuditItem {
+  id: string;
+  decision_id: string;
+  actor_role: string;
+  action: string;
+  reason: string;
+  note?: string | null;
+  occurred_at: string;
+}
+
+export interface GmDelegationOverviewResponse {
+  club_id: string;
+  gm_staff: {
+    id: string;
+    name: string;
+    role: string;
+    rating: number;
+    salary_gtex: number;
+    trust: number;
+    tension: number;
+    alignment: number;
+    loyalty: number;
+    is_appointed: boolean;
+  };
+  delegation_mode: "owner_managed" | "balanced" | "gm_led" | "custom" | string;
+  canonical_mode: "owner_managed" | "balanced" | "gm_led" | "custom" | string;
+  financial_controls: GmDelegationFinancialControls;
+  activities: GmDelegationActivityItem[];
+  pending_proposals: GmProposalItem[];
+  recent_audit_trail: GmDelegationAuditItem[];
+  statistics: {
+    total_executed: number;
+    pending_approval_count: number;
+    total_expenditure_approved_gtex: number;
+  };
+}
+
+export interface GmDelegationModePayload {
+  mode: "owner_managed" | "balanced" | "gm_led" | string;
+}
+
+export interface GmMatrixUpdatePayload {
+  activity_assignments?: Record<string, { requires_owner_approval: boolean }>;
+  financial_controls?: Partial<GmDelegationFinancialControls>;
+}
+
+export interface GmProposalResolvePayload {
+  action: "approve" | "reject";
+  decision_note?: string;
+}
+
+export interface GmProposalResolveResponse {
+  success: boolean;
+  decision_id: string;
+  proposal_id: string;
+  status: "approved" | "rejected";
+  execution_status: string;
+  outcome_text?: string | null;
+  action_taken: string;
+  audit_logged: boolean;
+  updated_relationships: {
+    trust: number;
+    tension: number;
+    alignment: number;
+  };
+}
+
+export interface GmEvaluateOperationsResponse {
+  club_id: string;
+  mode: string;
+  evaluated_count: number;
+  executed_actions: Array<Record<string, any>>;
+  escalated_proposals: Array<Record<string, any>>;
+  blocked_actions: Array<Record<string, any>>;
+}
+
+export const clubGmDelegationEndpoint = (clubId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/gm-delegation`;
+
+export const clubGmDelegationModeEndpoint = (clubId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/gm-delegation/mode`;
+
+export const clubGmDelegationMatrixEndpoint = (clubId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/gm-delegation/matrix`;
+
+export const clubGmEvaluateOperationsEndpoint = (clubId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/gm-delegation/evaluate-operations`;
+
+export const clubGmResolveProposalEndpoint = (clubId: string, proposalId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/gm-delegation/proposals/${encodeURIComponent(proposalId)}/resolve`;
+
 /** Resolve what the panel should show. With no published contract this is always `unavailable`. */
 export function useOwnerBriefing(): BriefingViewState {
   if (!OWNER_BRIEFING_ENDPOINT) return { status: "unavailable" };

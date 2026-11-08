@@ -74,7 +74,7 @@ ACTIVITY_DOMAINS: dict[str, str] = {
     "player_staff_interactions": "player_staff",
 }
 
-MANAGEMENT_MODES = ("hands_on", "balanced", "delegating", "custom")
+MANAGEMENT_MODES = ("hands_on", "balanced", "delegating", "custom", "owner_managed", "gm_led")
 
 ROLE_LABELS = {
     "owner": "Club Owner",
@@ -92,6 +92,13 @@ DEFAULT_FINANCIAL_THRESHOLDS: dict[str, dict[str, float]] = {
         "operational_spend_max_gtex": 0.0,
         "contract_renewal_max_weekly_wage_gtex": 0.0,
         "facility_spend_max_gtex": 0.0,
+        "max_expenditure_unapproved_gtex": 0.0,
+        "max_staff_salary_unapproved_gtex": 0.0,
+        "max_contract_years_unapproved": 0.0,
+        "recruitment_budget_gtex": 0.0,
+        "wage_budget_gtex": 0.0,
+        "min_sale_value_gtex": 0.0,
+        "allow_emergency_spending": 0.0,
     },
     "balanced": {
         "recruitment_max_gtex": 25000.0,
@@ -99,6 +106,13 @@ DEFAULT_FINANCIAL_THRESHOLDS: dict[str, dict[str, float]] = {
         "operational_spend_max_gtex": 10000.0,
         "contract_renewal_max_weekly_wage_gtex": 5000.0,
         "facility_spend_max_gtex": 15000.0,
+        "max_expenditure_unapproved_gtex": 10000.0,
+        "max_staff_salary_unapproved_gtex": 1500.0,
+        "max_contract_years_unapproved": 2.0,
+        "recruitment_budget_gtex": 35000.0,
+        "wage_budget_gtex": 8000.0,
+        "min_sale_value_gtex": 5000.0,
+        "allow_emergency_spending": 0.0,
     },
     "delegating": {
         "recruitment_max_gtex": 100000.0,
@@ -106,8 +120,18 @@ DEFAULT_FINANCIAL_THRESHOLDS: dict[str, dict[str, float]] = {
         "operational_spend_max_gtex": 50000.0,
         "contract_renewal_max_weekly_wage_gtex": 20000.0,
         "facility_spend_max_gtex": 75000.0,
+        "max_expenditure_unapproved_gtex": 50000.0,
+        "max_staff_salary_unapproved_gtex": 3500.0,
+        "max_contract_years_unapproved": 4.0,
+        "recruitment_budget_gtex": 120000.0,
+        "wage_budget_gtex": 25000.0,
+        "min_sale_value_gtex": 25000.0,
+        "allow_emergency_spending": 1.0,
     },
 }
+
+DEFAULT_FINANCIAL_THRESHOLDS["owner_managed"] = DEFAULT_FINANCIAL_THRESHOLDS["hands_on"]
+DEFAULT_FINANCIAL_THRESHOLDS["gm_led"] = DEFAULT_FINANCIAL_THRESHOLDS["delegating"]
 
 DEFAULT_RESERVED_DECISIONS = [
     "staff_recruitment_dismissal",
@@ -119,7 +143,7 @@ def _build_default_assignments(mode: str) -> dict[str, dict[str, Any]]:
     """Builds standard responsibility, authority, and approval policies for a given mode."""
     assignments: dict[str, dict[str, Any]] = {}
 
-    if mode == "hands_on":
+    if mode in ("hands_on", "owner_managed"):
         for activity, domain in ACTIVITY_DOMAINS.items():
             assignments[activity] = {
                 "activity_key": activity,
@@ -132,7 +156,7 @@ def _build_default_assignments(mode: str) -> dict[str, dict[str, Any]]:
             }
         return assignments
 
-    if mode == "delegating":
+    if mode in ("delegating", "gm_led"):
         roles_map = {
             # Sporting
             "first_team_tactics": ("first_team_manager", "full_autonomy", False),
