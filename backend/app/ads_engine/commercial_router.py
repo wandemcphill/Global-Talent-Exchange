@@ -28,7 +28,6 @@ from app.ads_engine.commercial_schemas import (
     CommercialCampaignView,
     CommercialPriceCalculationRequest,
     CommercialPriceCalculationResponse,
-    InvoiceView,
     MediaAssetKind,
     MusicPromotionWizardCreateRequest,
     MusicRotationFeedResponse,

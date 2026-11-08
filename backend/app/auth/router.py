@@ -52,7 +52,7 @@ from app.common.enums.creator_profile_status import CreatorProfileStatus
 from app.models.coin_trader import CoinTraderProfile
 from app.models.auth_session import AuthSession
 from app.models.creator_profile import CreatorProfile
-from app.models.user import PublicAccountType, User
+from app.models.user import PublicAccountType, User, UserRole
 from app.policies.schemas import PolicyRequirementSummary, UserComplianceStatus
 from app.policies.service import PolicyService
 from app.schemas.club_identity_core import ClubProfileCore
