@@ -13,9 +13,7 @@ import importlib
 from datetime import datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
-from typing import Any
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select, text
@@ -38,7 +36,6 @@ from app.models.world_clock import WorldClockState
 from app.owner_console import engine as owner_engine, ledger, living_club_world, router as owner_router
 from app.owner_console.models import (
     OWNER_CONSOLE_TABLES,
-    OwnerClubRelationship,
     OwnerClubRelationshipHistory,
     OwnerClubState,
     OwnerSquadPlayer,
