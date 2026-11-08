@@ -191,7 +191,7 @@ class ClubSaleOfferCollectionView(CommonSchema):
 
 class ClubSaleTransferExecuteRequest(CommonSchema):
     offer_id: str = Field(min_length=1)
-    executed_sale_price: Decimal = Field(gt=0)
+    executed_sale_price: Decimal | None = Field(default=None, gt=0)
     metadata_json: dict[str, Any] = Field(default_factory=dict)
 
 

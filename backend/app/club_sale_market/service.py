@@ -1842,7 +1842,7 @@ class ClubSaleMarketService:
         actor: User,
         club_id: str,
         offer_id: str,
-        executed_sale_price: Decimal,
+        executed_sale_price: Decimal | None = None,
         metadata_json: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         club = self._require_owned_club(actor, club_id)
@@ -1872,20 +1872,24 @@ class ClubSaleMarketService:
             assert_can_acquire_club(self.session, buyer.id)
         except ClubOwnershipCapError as exc:
             raise ClubSaleMarketError(str(exc), reason=exc.reason) from exc
-        executed_sale_price = self._normalize_amount(executed_sale_price)
+
         accepted_offer_price = self._normalize_amount(offer.offered_price)
-        if executed_sale_price != accepted_offer_price:
-            raise ClubSaleMarketError(
-                "Executed sale price must match the accepted offer price.",
-                reason="club_sale_transfer_price_mismatch",
-            )
-        if executed_sale_price <= Decimal("0.0000"):
+        if executed_sale_price is not None:
+            normalized_supplied_price = self._normalize_amount(executed_sale_price)
+            if normalized_supplied_price != accepted_offer_price:
+                raise ClubSaleMarketError(
+                    "Executed sale price must match the accepted offer price.",
+                    reason="club_sale_transfer_price_mismatch",
+                )
+        settled_sale_price = accepted_offer_price
+
+        if settled_sale_price <= Decimal("0.0000"):
             raise ClubSaleMarketError(
                 "Executed sale price must be greater than zero.",
                 reason="club_sale_transfer_price_invalid",
             )
-        platform_fee_amount = self._normalize_amount(executed_sale_price * Decimal(PLATFORM_FEE_BPS) / Decimal(10_000))
-        seller_net_amount = self._normalize_amount(executed_sale_price - platform_fee_amount)
+        platform_fee_amount = self._normalize_amount(settled_sale_price * Decimal(PLATFORM_FEE_BPS) / Decimal(10_000))
+        seller_net_amount = self._normalize_amount(settled_sale_price - platform_fee_amount)
         valuation_snapshot = self.valuation_service.capture_snapshot(
             club_id=club_id,
             actor_user_id=actor.id,
@@ -1901,7 +1905,7 @@ class ClubSaleMarketService:
             postings=[
                 LedgerPosting(
                     account=buyer_account,
-                    amount=-executed_sale_price,
+                    amount=-settled_sale_price,
                     source_tag=LedgerSourceTag.CLUB_SALE_PURCHASE,
                 ),
                 LedgerPosting(
@@ -1930,7 +1934,7 @@ class ClubSaleMarketService:
             seller_user_id=actor.id,
             buyer_user_id=buyer.id,
             valuation_snapshot_id=valuation_snapshot.id,
-            executed_sale_price=executed_sale_price,
+            executed_sale_price=settled_sale_price,
             platform_fee_amount=platform_fee_amount,
             seller_net_amount=seller_net_amount,
             platform_fee_bps=PLATFORM_FEE_BPS,
