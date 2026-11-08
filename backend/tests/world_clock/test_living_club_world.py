@@ -1397,20 +1397,25 @@ def postgres_engine(tmp_path):
 
     pgdata = tmp_path / "pgdata"
     logfile = tmp_path / "postgres.log"
-    subprocess.run(
-        [initdb_bin, "-D", str(pgdata), "-U", "postgres", "-A", "trust", "-E", "UTF8", "--no-locale"],
-        check=True,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    subprocess.run(
-        [pg_ctl_bin, "-D", str(pgdata), "-l", str(logfile), "-o", f"-F -p {port} -h 127.0.0.1", "-w", "start"],
-        check=True,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    try:
+        subprocess.run(
+            [initdb_bin, "-D", str(pgdata), "-U", "postgres", "-A", "trust", "-E", "UTF8", "--no-locale"],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        subprocess.run(
+            [pg_ctl_bin, "-D", str(pgdata), "-l", str(logfile), "-o", f"-F -p {port} -h 127.0.0.1", "-w", "start"],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (subprocess.CalledProcessError, OSError):
+        pytest.skip(
+            "Local ephemeral initdb cluster creation failed; set GTE_TEST_POSTGRES_URL to test real PostgreSQL concurrency"
+        )
     url = f"postgresql+psycopg://postgres@127.0.0.1:{port}/postgres"
     eng = create_engine(url, pool_size=5, max_overflow=5)
     try:

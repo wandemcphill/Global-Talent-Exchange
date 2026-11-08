@@ -153,6 +153,19 @@ def upgrade() -> None:
                 op.alter_column("brand_ad_review_events", "from_status", type_=sa.String(length=32))
                 op.alter_column("brand_ad_review_events", "to_status", type_=sa.String(length=32))
 
+    # The legacy brand_ad_campaigns table predates this migration. When it
+    # already exists, create the workspace lookup index added to the model.
+    # Keep this idempotent because upgraded environments may already have it.
+    if "brand_ad_campaigns" in sa.inspect(bind).get_table_names():
+        campaign_indexes = {index["name"] for index in sa.inspect(bind).get_indexes("brand_ad_campaigns")}
+        if "ix_brand_ad_campaigns_workspace" not in campaign_indexes:
+            op.create_index(
+                "ix_brand_ad_campaigns_workspace",
+                "brand_ad_campaigns",
+                ["workspace_id", "status"],
+                unique=False,
+            )
+
 
 def downgrade() -> None:
     bind = op.get_bind()
