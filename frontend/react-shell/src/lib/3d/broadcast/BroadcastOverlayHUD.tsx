@@ -86,6 +86,8 @@ export interface BroadcastOverlayHUDProps {
   hapticsEnabled?: boolean;
   onToggleHaptics?: () => void;
   onSendReaction?: (emoji: string) => void;
+  bloomEnabled?: boolean;
+  onToggleBloom?: () => void;
   isTheatreMode?: boolean;
   onToggleTheatreMode?: () => void;
   minimalHud?: boolean;
@@ -161,6 +163,8 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
   hapticsEnabled = true,
   onToggleHaptics,
   onSendReaction,
+  bloomEnabled = true,
+  onToggleBloom,
   isTheatreMode = false,
   onToggleTheatreMode,
   minimalHud = false,
@@ -576,6 +580,22 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
             >
               <RotateCcw className="size-3.5" />
               <span className="hidden md:inline">{isReplayActive ? "LIVE" : "REPLAY"}</span>
+            </button>
+          )}
+          {onToggleBloom && (
+            <button
+              type="button"
+              data-testid="toggle-bloom-button"
+              onClick={onToggleBloom}
+              className={`flex items-center gap-1 rounded-lg border px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors backdrop-blur-md ${
+                bloomEnabled
+                  ? "border-amber-400/60 bg-amber-500/20 text-amber-300"
+                  : "border-white/10 bg-slate-950/80 text-slate-400 hover:bg-white/10"
+              }`}
+              title={bloomEnabled ? "Bloom Active (Broadcast TV Flare)" : "Bloom Off"}
+            >
+              <Sparkles className="size-3 text-amber-400" />
+              <span className="hidden xl:inline">BLOOM</span>
             </button>
           )}
           {onToggleMinimalHud && (
