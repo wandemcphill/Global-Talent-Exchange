@@ -160,9 +160,7 @@ def test_exclusive_nationality_policy_enforcement(session: Session, test_club: C
     assert eval_dual_disabled.is_eligible is False
 
 
-def test_age_policy_and_governance_exceptions(
-    session: Session, test_club: ClubProfile, owner: User
-) -> None:
+def test_age_policy_and_governance_exceptions(session: Session, test_club: ClubProfile, owner: User) -> None:
     service = ClubGovernancePolicyService(session)
     service.update_policy(
         test_club.id,
@@ -267,4 +265,3 @@ def test_squad_dna_recommendations(session: Session, test_club: ClubProfile) -> 
     assert recs["academy_promotion_quota"] == 4
     assert any("FRA" in d for d in recs["scouting_directives"])
     assert any("showcase" in d.lower() for d in recs["tactical_directives"])
-
