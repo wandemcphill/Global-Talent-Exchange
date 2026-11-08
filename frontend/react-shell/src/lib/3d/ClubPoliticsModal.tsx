@@ -162,6 +162,35 @@ export const ClubPoliticsModal: React.FC<ClubPoliticsModalProps> = ({
     },
   });
 
+  const matchdayBridgeMutation = useMutation({
+    mutationFn: async (payload?: {
+      match_outcome?: string;
+      rushed_player_id?: string | null;
+      wonderkid_scorer_id?: string | null;
+      is_away_fixture?: boolean;
+    }) => {
+      const res = await api.post(
+        `/owner/clubs/${clubId}/living-world/politics/matchday-bridge`,
+        payload || { match_outcome: "win", is_away_fixture: true }
+      );
+      return ((res as any)?.data ?? res) as any;
+    },
+    onSuccess: (res) => {
+      invalidatePolitics();
+      const actionsCount = Array.isArray(res?.bridge_actions) ? res.bridge_actions.length : 0;
+      setStatusMessage({
+        type: "success",
+        text: `Matchday Consequence Bridge synced (${actionsCount} consequence action(s) applied • Board: ${res?.board_confidence ?? 68}% • Supporters: ${res?.supporter_confidence ?? 65}%).`,
+      });
+    },
+    onError: (err) => {
+      setStatusMessage({
+        type: "error",
+        text: errMsg(err),
+      });
+    },
+  });
+
   if (!isOpen) return null;
 
   const board = overview?.board_politics;
@@ -244,6 +273,28 @@ export const ClubPoliticsModal: React.FC<ClubPoliticsModalProps> = ({
           </div>
 
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <button
+              data-testid="run-matchday-bridge-btn"
+              onClick={() =>
+                matchdayBridgeMutation.mutate({
+                  match_outcome: "win",
+                  is_away_fixture: true,
+                })
+              }
+              disabled={matchdayBridgeMutation.isPending}
+              style={{
+                backgroundColor: "rgba(16, 185, 129, 0.2)",
+                color: "#6EE7B7",
+                border: "1px solid rgba(16, 185, 129, 0.45)",
+                borderRadius: "8px",
+                padding: "9px 14px",
+                fontSize: "13px",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              {matchdayBridgeMutation.isPending ? "Syncing..." : "Sync Matchday Bridge"}
+            </button>
             <button
               data-testid="run-politics-cycle-btn"
               onClick={() => evaluateCycleMutation.mutate()}

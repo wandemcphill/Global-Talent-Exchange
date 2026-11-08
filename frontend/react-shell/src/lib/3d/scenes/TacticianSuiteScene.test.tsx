@@ -92,6 +92,18 @@ describe("TacticianSuiteScene", () => {
     });
     expect(container.textContent).toContain("FORMATION 4-2-3-1");
 
+    // Apply formation proposal to Manager via authoritative backend endpoint
+    const proposeBtn = container.querySelector(
+      '[data-testid="propose-tactical-formation-btn"]'
+    ) as HTMLButtonElement;
+    expect(proposeBtn).not.toBeNull();
+    await act(async () => {
+      proposeBtn.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(container.querySelector('[data-testid="tactical-proposal-response-banner"]')).not.toBeNull();
+
     // Click Snapshot button
     const snapshotBtn = container.querySelector(
       '[data-testid="capture-tactician-snapshot-btn"]'

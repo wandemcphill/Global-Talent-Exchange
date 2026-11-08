@@ -305,12 +305,19 @@ def test_claim_showroom_commercial_yield_and_idempotency():
     session.commit()
 
     bal_before = ledger.balance(session, ledger.club_account(cp.id), ledger.GTEX)
+    perks_pre_claim = living_cinema_showroom.compute_club_showroom_perks(session, cp.id)
+    assert perks_pre_claim["already_claimed_today"] is False
+    assert perks_pre_claim["unclaimed_commercial_yield_gtex"] > 0
+
     claim_1 = living_cinema_showroom.claim_showroom_commercial_yield(session, u.id, cp.id)
     session.commit()
 
     assert claim_1["success"] is True
     assert claim_1["already_claimed"] is False
     assert claim_1["yield_credited_gtex"] > 0
+    assert claim_1["claimed_gtex"] == claim_1["yield_credited_gtex"]
+    assert claim_1["operational_perks"]["already_claimed_today"] is True
+    assert claim_1["operational_perks"]["unclaimed_commercial_yield_gtex"] == 0
     bal_after_1 = ledger.balance(session, ledger.club_account(cp.id), ledger.GTEX)
     assert bal_after_1 == bal_before + Decimal(str(claim_1["yield_credited_gtex"]))
 
@@ -497,6 +504,9 @@ def test_interactive_3d_press_conference_qa_stances():
 
     assert ans_res["success"] is True
     assert ans_res["already_answered"] is False
+    assert "Tactical" in ans_res["media_headline"]
+    assert ans_res["quote"] == "We back our manager's tactical vision wholeheartedly."
+    assert ans_res["political_impact"]["board_confidence"] == "+5"
     assert ans_res["cinematic_event"]["press_conference_qa"]["answered"] is True
     assert ans_res["cinematic_event"]["press_conference_qa"]["selected_stance"] == "tactical_pragmatism"
 

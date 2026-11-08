@@ -111,6 +111,9 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
   const [dismissRoleTarget, setDismissRoleTarget] = useState<StaffFilledRoleItem | null>(null);
   const [dismissReason, setDismissReason] = useState<string>("");
 
+  // Rival Club Poaching Approach state
+  const [poachingEvent, setPoachingEvent] = useState<any | null>(null);
+
   // 1. Fetch Vacancies & Filled Roles
   const {
     data: vacanciesData,
@@ -198,6 +201,51 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
     },
     onError: (err) => {
       toast.error(errMsg(err) || "Failed to dismiss staff member");
+    },
+  });
+
+  // 5. Evaluate & Resolve Rival Club Poaching Approaches
+  const evaluatePoachingMutation = useMutation({
+    mutationFn: async (role: string) => {
+      const res = await api.post(
+        `/owner/clubs/${clubId}/living-world/staff-market/poaching/evaluate`,
+        { role, rival_club_name: "Continental Sporting FC" }
+      );
+      return res.data;
+    },
+    onSuccess: (data) => {
+      setPoachingEvent(data);
+      toast.warning(
+        `Rival Poaching Alert: ${data.rival_club_name} approached ${data.staff_name}!`
+      );
+    },
+    onError: (err) => {
+      toast.error(errMsg(err) || "Could not evaluate rival poaching approach");
+    },
+  });
+
+  const resolvePoachingMutation = useMutation({
+    mutationFn: async (params: { eventId: string; choice: string }) => {
+      const res = await api.post(
+        `/owner/clubs/${clubId}/living-world/staff-market/poaching/${params.eventId}/resolve`,
+        { choice: params.choice }
+      );
+      return res.data;
+    },
+    onSuccess: (data) => {
+      const resPayload = data?.resolution || data || {};
+      toast.success(
+        resPayload.retained
+          ? `Executive retained at the club (${resPayload.choice}).`
+          : `Released for ${Number(resPayload.buyout_credited_gtex || 0).toLocaleString()} GTEX buyout clause.`
+      );
+      setPoachingEvent(null);
+      queryClient.invalidateQueries({ queryKey: ["club-staff-vacancies", clubId] });
+      queryClient.invalidateQueries({ queryKey: ["club-staff-market", clubId] });
+      queryClient.invalidateQueries({ queryKey: ["club-briefing", clubId] });
+    },
+    onError: (err) => {
+      toast.error(errMsg(err) || "Failed to resolve rival poaching approach");
     },
   });
 
@@ -497,24 +545,121 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
                             </div>
                           </div>
 
-                          <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
+                          <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between gap-2">
                             <span className="text-[11px] text-slate-400">
                               Severance: ₦{Math.round(incumbent.salary_gtex * 0.5).toLocaleString()}
                             </span>
-                            <button
-                              type="button"
-                              data-testid={`dismiss-btn-${incumbent.role_key}`}
-                              onClick={() => setDismissRoleTarget(incumbent)}
-                              className="flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-xs font-medium text-rose-300 transition-all hover:bg-rose-500/20 hover:border-rose-500/50"
-                            >
-                              <UserMinus className="h-3.5 w-3.5" />
-                              <span>Dismiss</span>
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                data-testid={`evaluate-poaching-btn-${incumbent.role_key}`}
+                                disabled={evaluatePoachingMutation.isPending}
+                                onClick={() => evaluatePoachingMutation.mutate(incumbent.role_key)}
+                                className="flex items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-300 transition-all hover:bg-amber-500/20"
+                              >
+                                <Sparkles className="h-3.5 w-3.5" />
+                                <span>Rival Approach</span>
+                              </button>
+                              <button
+                                type="button"
+                                data-testid={`dismiss-btn-${incumbent.role_key}`}
+                                onClick={() => setDismissRoleTarget(incumbent)}
+                                className="flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-xs font-medium text-rose-300 transition-all hover:bg-rose-500/20 hover:border-rose-500/50"
+                              >
+                                <UserMinus className="h-3.5 w-3.5" />
+                                <span>Dismiss</span>
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))}
                     </div>
                   </div>
+
+                  {/* Rival Poaching Retention vs. Buyout Release Negotiation Dialog */}
+                  {poachingEvent && (
+                    <div
+                      data-testid="rival-poaching-resolution-dialog"
+                      className="rounded-2xl border border-amber-500/40 bg-amber-950/30 p-5 backdrop-blur-md animate-fade-in"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="h-5 w-5 text-amber-400" />
+                          <h4 className="text-base font-bold text-amber-200">
+                            Rival Poaching Approach: {poachingEvent.rival_club_name} Target {poachingEvent.staff_name}
+                          </h4>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPoachingEvent(null)}
+                          className="text-slate-400 hover:text-white"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+
+                      <p className="mt-2 text-xs text-slate-300 leading-relaxed">
+                        <strong className="text-white">{poachingEvent.rival_club_name}</strong> have tabled a{" "}
+                        <span className="font-mono font-bold text-amber-300">
+                          {Number(poachingEvent.rival_offered_salary_gtex || 0).toLocaleString()} GTEX/yr
+                        </span>{" "}
+                        contract for{" "}
+                        <strong className="text-white">
+                          {poachingEvent.staff_name} ({poachingEvent.role_label})
+                        </strong>{" "}
+                        with a{" "}
+                        <span className="font-mono font-bold text-emerald-300">
+                          {Number(poachingEvent.buyout_clause_gtex || 0).toLocaleString()} GTEX
+                        </span>{" "}
+                        buyout compensation offer.
+                      </p>
+
+                      <div className="mt-4 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          data-testid="poaching-choice-match_rival_offer"
+                          disabled={resolvePoachingMutation.isPending}
+                          onClick={() =>
+                            resolvePoachingMutation.mutate({
+                              eventId: poachingEvent.event_id,
+                              choice: "match_rival_offer",
+                            })
+                          }
+                          className="rounded-xl bg-emerald-500 hover:bg-emerald-400 px-3.5 py-2 text-xs font-black text-slate-950 transition-all"
+                        >
+                          Match Offer & Pay Loyalty Bonus
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="poaching-choice-promise_facility_upgrade"
+                          disabled={resolvePoachingMutation.isPending}
+                          onClick={() =>
+                            resolvePoachingMutation.mutate({
+                              eventId: poachingEvent.event_id,
+                              choice: "promise_facility_upgrade",
+                            })
+                          }
+                          className="rounded-xl border border-sky-500/40 bg-sky-500/15 hover:bg-sky-500/25 px-3.5 py-2 text-xs font-bold text-sky-200 transition-all"
+                        >
+                          Promise Sporting Project & Facilities
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="poaching-choice-accept_buyout_release"
+                          disabled={resolvePoachingMutation.isPending}
+                          onClick={() =>
+                            resolvePoachingMutation.mutate({
+                              eventId: poachingEvent.event_id,
+                              choice: "accept_buyout_release",
+                            })
+                          }
+                          className="rounded-xl border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 px-3.5 py-2 text-xs font-bold text-amber-200 transition-all"
+                        >
+                          Accept {Number(poachingEvent.buyout_clause_gtex || 0).toLocaleString()} GTEX Buyout & Release
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Inline Dismissal Confirmation Modal / Card */}
                   {dismissRoleTarget && (

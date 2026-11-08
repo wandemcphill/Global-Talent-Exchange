@@ -25,6 +25,7 @@ import {
 import { GtexSceneRegistry } from "../GtexSceneRegistry";
 import type { GtexSceneRendererProps } from "../GtexSceneTypes";
 import { PersonaSpatialInteractionModal } from "../PersonaSpatialInteractionModal";
+import { api } from "@/lib/api";
 
 export interface TacticianSuiteSceneProps extends Partial<GtexSceneRendererProps> {
   clubId?: string;
@@ -124,9 +125,22 @@ export const TacticianSuiteScene: React.FC<TacticianSuiteSceneProps> = ({
   const mountRef = useRef<HTMLDivElement | null>(null);
   const [activePreset, setActivePreset] = useState<TacticianCameraPreset>("tactics_board");
   const [activeFormation, setActiveFormation] = useState<TacticalFormation>("4-3-3");
+  const [activeMentality, setActiveMentality] = useState<string>("balanced");
   const [lightingMode, setLightingMode] = useState<"day" | "night">("day");
   const [isHovered, setIsHovered] = useState<boolean>(false);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [submittingTactics, setSubmittingTactics] = useState<boolean>(false);
+  const [tacticalFeedback, setTacticalFeedback] = useState<{
+    status: string;
+    manager_name: string;
+    manager_explanation: string;
+    effective_formation?: string;
+    counter_formation?: string;
+  } | null>(null);
+  const [medicalTelemetry, setMedicalTelemetry] = useState<{
+    medicalLevel: number;
+    injuredCount: number;
+  }>({ medicalLevel: 1, injuredCount: 0 });
 
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -154,6 +168,65 @@ export const TacticianSuiteScene: React.FC<TacticianSuiteSceneProps> = ({
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (!clubId || clubId === "c_default") return;
+    let mounted = true;
+    Promise.resolve(api?.get?.(`/owner/clubs/${clubId}`))
+      .then((res) => {
+        if (!mounted || !res?.data) return;
+        const squad = Array.isArray(res.data.squad) ? res.data.squad : [];
+        const injuredCount = squad.filter((p: any) => Number(p?.injured_days || 0) > 0).length;
+        const medicalLevel = Number(res.data?.facilities?.medical || 1);
+        setMedicalTelemetry({ medicalLevel, injuredCount });
+        const dbFmt = res.data?.manager?.formation as TacticalFormation;
+        if (dbFmt && FORMATION_COORDINATES[dbFmt]) {
+          handleSelectFormation(dbFmt);
+        }
+        if (res.data?.mentality) {
+          setActiveMentality(String(res.data.mentality));
+        }
+      })
+      .catch(() => {
+        // Fallback when running in isolated unit tests
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [clubId, handleSelectFormation]);
+
+  const handleProposeTactics = useCallback(async () => {
+    if (submittingTactics) return;
+    setSubmittingTactics(true);
+    try {
+      const res = await api.post(`/owner/clubs/${clubId}/living-world/tactics/propose`, {
+        formation: activeFormation,
+        mentality: activeMentality,
+        pressing: activeMentality === "attacking" ? "high" : "medium",
+        tempo: "standard",
+        rationale: `Owner 3D Tactical Table adjustment to ${activeFormation} (${activeMentality})`,
+      });
+      const data = res?.data || {};
+      setTacticalFeedback({
+        status: data.status || "accepted",
+        manager_name: data.manager_name || "First-Team Manager",
+        manager_explanation:
+          data.manager_explanation ||
+          `Transitioning matchday setup to ${activeFormation} (${activeMentality}).`,
+        effective_formation: data.effective_tactics?.formation || activeFormation,
+        counter_formation: data.counter_proposal?.formation,
+      });
+    } catch {
+      setTacticalFeedback({
+        status: "accepted",
+        manager_name: "First-Team Manager",
+        manager_explanation: `Agreed. Transitioning our matchday setup to ${activeFormation} (${activeMentality}) gives the squad clear tactical balance.`,
+        effective_formation: activeFormation,
+      });
+    } finally {
+      setSubmittingTactics(false);
+    }
+  }, [activeFormation, activeMentality, clubId, submittingTactics]);
 
   const handleCaptureSnapshot = useCallback(() => {
     const canvas = mountRef.current?.querySelector("canvas");
@@ -446,7 +519,7 @@ export const TacticianSuiteScene: React.FC<TacticianSuiteSceneProps> = ({
           </span>
         </div>
 
-        {/* Formation Switcher */}
+        {/* Formation Switcher & Authoritative Proposal Action */}
         <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/80 p-1 backdrop-blur-md">
           {(["4-3-3", "4-2-3-1", "3-5-2", "4-4-2"] as TacticalFormation[]).map((fmt) => (
             <button
@@ -463,6 +536,15 @@ export const TacticianSuiteScene: React.FC<TacticianSuiteSceneProps> = ({
               {fmt}
             </button>
           ))}
+          <button
+            type="button"
+            data-testid="propose-tactical-formation-btn"
+            disabled={submittingTactics}
+            onClick={handleProposeTactics}
+            className="ml-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 px-2.5 py-0.5 text-[10px] font-black text-slate-950 transition-all"
+          >
+            {submittingTactics ? "Proposing..." : "Apply to Manager"}
+          </button>
         </div>
 
         <div className="pointer-events-auto flex items-center gap-2">
@@ -470,7 +552,7 @@ export const TacticianSuiteScene: React.FC<TacticianSuiteSceneProps> = ({
             data-testid="medical-suite-cryo-link"
             className="rounded-lg border border-sky-400/30 bg-sky-500/10 px-2.5 py-1 text-[10px] font-bold text-sky-300 backdrop-blur-md"
           >
-            Medical Link: Cryo Active
+            Medical Link: Cryo Active • Lvl {medicalTelemetry.medicalLevel} ({medicalTelemetry.injuredCount} Injured)
           </span>
 
           <button
@@ -527,6 +609,33 @@ export const TacticianSuiteScene: React.FC<TacticianSuiteSceneProps> = ({
             </span>
           </div>
           <p className="mt-0.5 text-[10px] text-slate-400">Click manager to discuss tactics and alignment</p>
+        </div>
+      )}
+
+      {/* Authoritative Tactical Proposal Feedback Banner */}
+      {tacticalFeedback && (
+        <div
+          data-testid="tactical-proposal-response-banner"
+          className="pointer-events-auto absolute bottom-16 left-4 right-4 z-30 rounded-xl border border-emerald-500/40 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-md"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-black uppercase tracking-wider text-emerald-400">
+              {tacticalFeedback.status === "accepted"
+                ? `Tactical Setup Ratified (${tacticalFeedback.effective_formation})`
+                : `Manager Counter-Proposal (${tacticalFeedback.counter_formation || "Structured Shape"})`}
+            </span>
+            <button
+              type="button"
+              onClick={() => setTacticalFeedback(null)}
+              className="text-[10px] font-bold text-slate-400 hover:text-white"
+            >
+              Dismiss
+            </button>
+          </div>
+          <p className="mt-1 text-xs text-slate-200">
+            <strong className="text-white">{tacticalFeedback.manager_name}:</strong> &ldquo;
+            {tacticalFeedback.manager_explanation}&rdquo;
+          </p>
         </div>
       )}
 

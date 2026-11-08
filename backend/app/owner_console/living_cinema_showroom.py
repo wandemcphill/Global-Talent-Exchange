@@ -380,13 +380,29 @@ def compute_club_showroom_perks(session: Session, club_id: str) -> dict[str, Any
         )
 
     effective_yield_gtex = int(round(total_yield_base * sentiment_multiplier))
+    current_day = int((state.world_day if state else None) or 1)
+    idem_key = f"cinema:showroom_yield:{club_id}:day:{current_day}"
+    already_claimed_today = (
+        session.scalar(select(OwnerClubEvent.id).where(OwnerClubEvent.idempotency_key == idem_key)) is not None
+    )
+    unclaimed_yield_gtex = 0 if already_claimed_today else effective_yield_gtex
+    capped_wage_bonus = round(min(15.0, total_wage_bonus_pct), 1)
+    capped_recovery_days = min(2, total_recovery_days)
+    capped_morale_bonus = min(8, total_morale_bonus)
+
     return {
         "owned_distinct_assets": len(seen_keys),
-        "recruitment_wage_bonus_pct": round(min(15.0, total_wage_bonus_pct), 1),
-        "away_recovery_boost_days": min(2, total_recovery_days),
-        "squad_morale_floor_bonus": min(8, total_morale_bonus),
+        "recruitment_wage_bonus_pct": capped_wage_bonus,
+        "wage_recruitment_bonus_pct": capped_wage_bonus,
+        "away_recovery_boost_days": capped_recovery_days,
+        "away_recovery_days_bonus": capped_recovery_days,
+        "squad_morale_floor_bonus": capped_morale_bonus,
+        "squad_morale_floor": capped_morale_bonus,
         "fan_sentiment_multiplier": sentiment_multiplier,
         "matchday_commercial_yield_gtex": effective_yield_gtex,
+        "matchday_commercial_yield_rate": effective_yield_gtex,
+        "unclaimed_commercial_yield_gtex": unclaimed_yield_gtex,
+        "already_claimed_today": already_claimed_today,
         "vip_transport_asset": best_vip_transport,
         "owned_perk_breakdown": breakdown,
     }
@@ -980,6 +996,7 @@ def claim_showroom_commercial_yield(
             "already_claimed": True,
             "world_day": current_day,
             "yield_credited_gtex": yield_gtex,
+            "claimed_gtex": yield_gtex,
             "treasury_balance_gtex": float(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)),
             "operational_perks": perks,
         }
@@ -1021,14 +1038,16 @@ def claim_showroom_commercial_yield(
     )
     session.add(ev)
     session.flush()
+    updated_perks = compute_club_showroom_perks(session, club_id)
 
     return {
         "success": True,
         "already_claimed": False,
         "world_day": current_day,
         "yield_credited_gtex": yield_gtex,
+        "claimed_gtex": yield_gtex,
         "treasury_balance_gtex": float(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)),
-        "operational_perks": perks,
+        "operational_perks": updated_perks,
     }
 
 
@@ -1073,6 +1092,9 @@ def answer_cinematic_press_question(
             "success": True,
             "already_answered": True,
             "stance": qa.get("selected_stance"),
+            "media_headline": qa.get("media_headline", "Official Press Statement Published"),
+            "quote": qa.get("quote", "Statement on club sporting direction delivered to press pack."),
+            "political_impact": qa.get("political_impact", {}),
             "effects": qa.get("applied_effects", {}),
             "cinematic_event": _format_cinematic_event(ev, branding),
         }
@@ -1082,6 +1104,7 @@ def answer_cinematic_press_question(
     fan_sentiment = int(politics.get("supporter_confidence") or 62)
     board_conf = int(politics.get("board_confidence") or 68)
     effects: dict[str, int] = {}
+    subj_name = str(meta.get("subject_name") or "First-Team Manager")
 
     if stance == "championship_ambition":
         fan_sentiment = min(100, fan_sentiment + 6)
@@ -1094,13 +1117,20 @@ def answer_cinematic_press_question(
             part_a_name="Club Owner",
             part_b_type="staff",
             part_b_id="first_team_manager",
-            part_b_name=str(meta.get("subject_name") or "First-Team Manager"),
+            part_b_name=subj_name,
             delta_influence=4,
             delta_respect=3,
             delta_tension=2,
             reason="Press conference mandate: Immediate Championship Ambition",
         )
         effects = {"fan_sentiment_delta": 6, "board_confidence_delta": 4, "manager_influence_delta": 4}
+        media_headline = f"{branding['club_name']} Owner Sets Immediate Silverware Mandate for {subj_name}"
+        default_quote = f"{subj_name} is here to compete for major honours immediately—no excuses."
+        political_impact = {
+            "fan_sentiment": "+6",
+            "board_confidence": "+4",
+            "manager_influence": "+4",
+        }
     elif stance == "tactical_pragmatism":
         board_conf = min(100, board_conf + 5)
         fan_sentiment = min(100, fan_sentiment + 2)
@@ -1112,13 +1142,20 @@ def answer_cinematic_press_question(
             part_a_name="Club Owner",
             part_b_type="staff",
             part_b_id="first_team_manager",
-            part_b_name=str(meta.get("subject_name") or "First-Team Manager"),
+            part_b_name=subj_name,
             delta_trust=5,
             delta_alignment=6,
             delta_tension=-3,
             reason="Press conference mandate: Tactical Identity & Structural Stability",
         )
         effects = {"board_confidence_delta": 5, "manager_trust_delta": 5, "manager_alignment_delta": 6}
+        media_headline = f"{branding['club_name']} Backs {subj_name} with Full Tactical & Structural Authority"
+        default_quote = f"We are giving {subj_name} full authority to instil a disciplined, modern tactical system."
+        political_impact = {
+            "board_confidence": "+5",
+            "manager_trust": "+5",
+            "manager_alignment": "+6",
+        }
     else:
         fan_sentiment = min(100, fan_sentiment + 3)
         board_conf = min(100, board_conf + 3)
@@ -1136,7 +1173,15 @@ def answer_cinematic_press_question(
             reason="Press conference mandate: Academy Pathway & Long-Term Dynasty",
         )
         effects = {"hoyd_respect_delta": 6, "hoyd_alignment_delta": 5, "fan_sentiment_delta": 3}
+        media_headline = f"{branding['club_name']} Pledges Academy Pathway & Long-Term Dynasty Under {subj_name}"
+        default_quote = f"{branding['club_name']} will blend elite recruitment with our brightest academy wonderkids."
+        political_impact = {
+            "hoyd_respect": "+6",
+            "hoyd_alignment": "+5",
+            "fan_sentiment": "+3",
+        }
 
+    resolved_quote = custom_quote or default_quote
     politics["supporter_confidence"] = fan_sentiment
     politics["board_confidence"] = board_conf
     facs["_club_politics"] = politics
@@ -1146,6 +1191,9 @@ def answer_cinematic_press_question(
     qa["answered"] = True
     qa["selected_stance"] = stance
     qa["custom_quote"] = custom_quote
+    qa["media_headline"] = media_headline
+    qa["quote"] = resolved_quote
+    qa["political_impact"] = political_impact
     qa["applied_effects"] = effects
     meta["press_conference_qa"] = qa
     ev.consequences_json = meta
@@ -1156,6 +1204,9 @@ def answer_cinematic_press_question(
         "success": True,
         "already_answered": False,
         "stance": stance,
+        "media_headline": media_headline,
+        "quote": resolved_quote,
+        "political_impact": political_impact,
         "fan_sentiment_index": fan_sentiment,
         "board_confidence": board_conf,
         "effects": effects,
