@@ -275,7 +275,7 @@ def test_apply_relationship_delta_updates_new_dimensions_and_clamps():
     assert updated is not None
     assert updated.alignment == 80  # 65 + 15
     assert updated.influence == 60  # 70 - 10
-    assert updated.loyalty == 85    # 60 + 25
+    assert updated.loyalty == 85  # 60 + 25
 
     # 2. Check history logging
     hist = list(
@@ -322,9 +322,7 @@ def test_migration_0228_schema_upgrade_compatibility():
     test_engine = create_engine("sqlite:///:memory:")
     # Create baseline relationship tables without the 0228 columns
     with test_engine.begin() as conn:
-        conn.execute(
-            text(
-                """
+        conn.execute(text("""
                 CREATE TABLE owner_club_relationships (
                     id VARCHAR(36) PRIMARY KEY,
                     club_id VARCHAR(36) NOT NULL,
@@ -344,12 +342,8 @@ def test_migration_0228_schema_upgrade_compatibility():
                     created_at TIMESTAMP NOT NULL,
                     updated_at TIMESTAMP NOT NULL
                 );
-                """
-            )
-        )
-        conn.execute(
-            text(
-                """
+                """))
+        conn.execute(text("""
                 CREATE TABLE owner_club_relationship_history (
                     id VARCHAR(36) PRIMARY KEY,
                     relationship_id VARCHAR(36) NOT NULL,
@@ -364,14 +358,10 @@ def test_migration_0228_schema_upgrade_compatibility():
                     snapshot_json JSON NOT NULL DEFAULT '{}',
                     created_at TIMESTAMP NOT NULL
                 );
-                """
-            )
-        )
+                """))
 
         # Insert a legacy pre-0228 relationship
-        conn.execute(
-            text(
-                """
+        conn.execute(text("""
                 INSERT INTO owner_club_relationships (
                     id, club_id, pairing_key, participant_a_type, participant_a_id, participant_a_name,
                     participant_b_type, participant_b_id, participant_b_name, trust, respect, affinity,
@@ -381,13 +371,12 @@ def test_migration_0228_schema_upgrade_compatibility():
                     'staff', 'mgr-1', 'Manager', 55, 60, 50, 15, 'active', '{}',
                     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 );
-                """
-            )
-        )
+                """))
 
     # Now run the 0228 upgrade logic using mock Alembic op context
     from alembic.migration import MigrationContext
     from alembic.operations import Operations
+
     migration_0228 = importlib.import_module(
         "backend.migrations.versions.20261107_0228_living_world_stage1_relationship_dimensions"
         if False
