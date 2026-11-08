@@ -235,6 +235,15 @@ DEFAULT_STAFF_METRICS = {
         "influence": 60,
         "loyalty": 60,
     },
+    "club_president": {
+        "trust": 70,
+        "respect": 75,
+        "affinity": 60,
+        "tension": 10,
+        "alignment": 80,
+        "influence": 85,
+        "loyalty": 80,
+    },
 }
 
 STAFF_ROLE_LABELS = {
@@ -243,6 +252,7 @@ STAFF_ROLE_LABELS = {
     "head_of_youth_development": "Head of Youth Development",
     "medical_director": "Medical Director",
     "chief_scout": "Chief Scout",
+    "club_president": "Club President",
 }
 
 ALLOWED_ACTIONS_BY_EVENT_TYPE: dict[str, set[str]] = {
@@ -343,8 +353,14 @@ def resolve_club_staff_roster(state: OwnerClubState) -> dict[str, dict[str, Any]
             "is_default": False,
         }
 
-    # 2. Executive Department Heads
-    for role_key in ("general_manager", "head_of_youth_development", "medical_director", "chief_scout"):
+    # 2. Executive Department Heads & Board Leadership
+    for role_key in (
+        "general_manager",
+        "head_of_youth_development",
+        "medical_director",
+        "chief_scout",
+        "club_president",
+    ):
         role_label = STAFF_ROLE_LABELS[role_key]
         raw = exec_staff.get(role_key)
         is_appointed = bool(
@@ -361,6 +377,16 @@ def resolve_club_staff_roster(state: OwnerClubState) -> dict[str, dict[str, Any]
                 "status": "appointed",
                 "is_appointed": True,
                 "is_default": False,
+            }
+        elif role_key == "club_president":
+            roster["club_president"] = {
+                "role_key": "club_president",
+                "role_label": role_label,
+                "name": "Executive Board Representative",
+                "person_id": "club_president:board",
+                "status": "appointed",
+                "is_appointed": True,
+                "is_default": True,
             }
         else:
             roster[role_key] = {
@@ -759,16 +785,17 @@ def ensure_default_relationships(
 
     relationships: list[OwnerClubRelationship] = []
 
-    # 1. Owner <-> Appointed Staff Roles
+    # 1. Owner <-> Appointed Staff Roles & Board Leadership
     for role_key in (
         "first_team_manager",
         "general_manager",
         "head_of_youth_development",
         "medical_director",
         "chief_scout",
+        "club_president",
     ):
-        slot = roster[role_key]
-        if not slot["is_appointed"] or not slot["person_id"]:
+        slot = roster.get(role_key)
+        if not slot or not slot["is_appointed"] or not slot["person_id"]:
             continue
         metrics = DEFAULT_STAFF_METRICS[role_key]
         relationships.append(
@@ -2675,4 +2702,482 @@ def get_living_world_timeline(
         "limit": safe_limit,
         "offset": safe_offset,
         "items": paginated_items,
+    }
+
+
+PERSONA_INTERACTION_ACTIONS: dict[str, dict[str, Any]] = {
+    "align_strategy": {
+        "delta_alignment": 6,
+        "delta_influence": 3,
+        "delta_respect": 2,
+        "delta_trust": 2,
+        "delta_tension": -3,
+        "delta_affinity": 1,
+        "delta_loyalty": 2,
+        "action_label": "Align Strategic Vision",
+    },
+    "praise_leadership": {
+        "delta_alignment": 2,
+        "delta_influence": 1,
+        "delta_respect": 3,
+        "delta_trust": 5,
+        "delta_tension": -5,
+        "delta_affinity": 5,
+        "delta_loyalty": 6,
+        "action_label": "Praise Departmental Leadership",
+    },
+    "demand_accountability": {
+        "delta_alignment": 2,
+        "delta_influence": 4,
+        "delta_respect": 1,
+        "delta_trust": -2,
+        "delta_tension": 7,
+        "delta_affinity": -4,
+        "delta_loyalty": -3,
+        "action_label": "Demand Performance Accountability",
+    },
+    "request_briefing": {
+        "delta_alignment": 3,
+        "delta_influence": 1,
+        "delta_respect": 4,
+        "delta_trust": 3,
+        "delta_tension": -1,
+        "delta_affinity": 2,
+        "delta_loyalty": 2,
+        "action_label": "Request Operational Briefing",
+    },
+    "discuss_directive": {
+        "delta_alignment": 4,
+        "delta_influence": 3,
+        "delta_respect": 3,
+        "delta_trust": 2,
+        "delta_tension": 0,
+        "delta_affinity": 1,
+        "delta_loyalty": 2,
+        "action_label": "Review Active Directive",
+    },
+    "general_dialogue": {
+        "delta_alignment": 2,
+        "delta_influence": 1,
+        "delta_respect": 2,
+        "delta_trust": 2,
+        "delta_tension": -1,
+        "delta_affinity": 2,
+        "delta_loyalty": 1,
+        "action_label": "Executive Conversation",
+    },
+}
+
+PERSONA_DEPARTMENT_MAP: dict[str, str] = {
+    "first_team_manager": "manager",
+    "general_manager": "executive",
+    "head_of_youth_development": "academy",
+    "medical_director": "medical",
+    "chief_scout": "scouting",
+    "club_president": "executive",
+}
+
+
+def generate_persona_dialogue_reply(
+    persona_role: str,
+    persona_name: str,
+    action_type: str,
+    relationship: OwnerClubRelationship | None,
+    custom_message: str | None = None,
+) -> str:
+    tension = relationship.tension if relationship else 10
+    trust = relationship.trust if relationship else 60
+    alignment = getattr(relationship, "alignment", 65)
+
+    prefix = ""
+    if tension >= 60:
+        prefix = "I must be candid: there is tension between our priorities. That said, "
+    elif alignment >= 75 and trust >= 70:
+        prefix = "Owner, it is a pleasure working in lockstep with you. "
+
+    if persona_role in ("first_team_manager", "manager"):
+        if action_type == "align_strategy":
+            return (
+                prefix
+                + "When we share the same tactical philosophy, the squad executes with conviction on matchday. Our training sessions will reflect this vision."
+            )
+        elif action_type == "praise_leadership":
+            return (
+                prefix
+                + "Thank you for the vote of confidence. The dressing room is united, and we are ready to leave everything on the pitch."
+            )
+        elif action_type == "demand_accountability":
+            return (
+                prefix
+                + "Understood, Boss. I accept full responsibility for our standards. We will address the tactical lapses and raise training intensity immediately."
+            )
+        elif action_type == "request_briefing":
+            return (
+                prefix
+                + "Squad morale is steady. Our formation is drilled and the starting XI is physically prepared for our upcoming fixture."
+            )
+        elif action_type == "discuss_directive":
+            return (
+                prefix
+                + "I am monitoring our tactical directives closely and ensuring our matchday preparation hits the expected benchmarks."
+            )
+        return (
+            prefix
+            + "Message received, Boss. My coaching staff and I remain completely committed to delivering results on the pitch."
+        )
+
+    elif persona_role == "general_manager":
+        if action_type == "align_strategy":
+            return (
+                prefix
+                + "Aligning our recruitment and wage structures with our long-term sporting model guarantees sustainable competitive advantage."
+            )
+        elif action_type == "praise_leadership":
+            return (
+                prefix
+                + "Much appreciated, Director. I will continue streamlining our commercial and sporting operations to safeguard club stability."
+            )
+        elif action_type == "demand_accountability":
+            return (
+                prefix
+                + "Points noted. I will audit our departmental budgets and contract negotiations to ensure every milestone is met."
+            )
+        elif action_type == "request_briefing":
+            return (
+                prefix
+                + "Our treasury balance and wage headroom remain aligned with board targets. No immediate compliance or financial bottlenecks."
+            )
+        elif action_type == "discuss_directive":
+            return (
+                prefix
+                + "Our operational directives are in progress. I will report back as soon as the department hits the target metrics."
+            )
+        return (
+            prefix
+            + "Understood, Director. As General Manager, I'm maintaining cohesion across both commercial and sporting departments."
+        )
+
+    elif persona_role == "head_of_youth_development":
+        if action_type == "align_strategy":
+            return (
+                prefix
+                + "Developing homegrown stars requires patience and shared strategic purpose. Glad our development pathways are aligned."
+            )
+        elif action_type == "praise_leadership":
+            return (
+                prefix
+                + "Thank you, Owner. Our youth coaches work tirelessly; our prospects will be energized knowing the board backs them."
+            )
+        elif action_type == "demand_accountability":
+            return (
+                prefix
+                + "Understood, Boss. We will step up youth development standards and accelerate top talents into senior squad training."
+            )
+        elif action_type == "request_briefing":
+            return (
+                prefix
+                + "Our youth academy has several promising talents making significant strides in their technical and physical attributes."
+            )
+        elif action_type == "discuss_directive":
+            return (
+                prefix
+                + "We are tracking academy directive milestones closely and nurturing the next generation of first-team talent."
+            )
+        return (
+            prefix + "The academy pipeline is advancing smoothly. We are focused on developing the club's future core."
+        )
+
+    elif persona_role == "chief_scout":
+        if action_type == "align_strategy":
+            return (
+                prefix
+                + "Crystal clear, Boss. We will calibrate our scouting filters to identify player profiles matching your tactical and economic requirements."
+            )
+        elif action_type == "praise_leadership":
+            return (
+                prefix
+                + "Thank you! The recruitment team has identified high-ceiling targets that represent exceptional market value."
+            )
+        elif action_type == "demand_accountability":
+            return (
+                prefix
+                + "Understood. We will tighten our data verification and provide deeper tactical dossiers on every target."
+            )
+        elif action_type == "request_briefing":
+            return (
+                prefix
+                + "Scouting watchlists are actively monitored across all regions. Shortlists are prepared for upcoming recruitment windows."
+            )
+        elif action_type == "discuss_directive":
+            return prefix + "Recruitment directives are actively being worked by our scouting network in the field."
+        return prefix + "Our scouting network continues tracking standout talent across key markets."
+
+    elif persona_role == "medical_director":
+        if action_type == "align_strategy":
+            return (
+                prefix
+                + "A shared commitment to player wellness is vital. We will implement preventive recovery protocols across all squads."
+            )
+        elif action_type == "praise_leadership":
+            return (
+                prefix
+                + "Thank you, Owner. The physio team has been working around the clock to maximize squad match availability."
+            )
+        elif action_type == "demand_accountability":
+            return (
+                prefix
+                + "We take squad injury prevention very seriously. I will personally review individual workload thresholds and training loads."
+            )
+        elif action_type == "request_briefing":
+            return (
+                prefix
+                + "Squad conditioning is solid. Workload fatigue indicators are within acceptable medical tolerances."
+            )
+        elif action_type == "discuss_directive":
+            return prefix + "Medical protocols aligned with your directive are being actively administered."
+        return prefix + "Medical department report: player workloads and conditioning are closely monitored."
+
+    elif persona_role == "club_president":
+        if action_type == "align_strategy":
+            return (
+                prefix
+                + "The board stands firmly united behind this strategic direction. Together, we will build enduring prestige for the club."
+            )
+        elif action_type == "praise_leadership":
+            return (
+                prefix
+                + "Thank you. Our executive alignment is the foundation of institutional confidence and partner trust."
+            )
+        elif action_type == "demand_accountability":
+            return (
+                prefix
+                + "Duly noted. The executive committee will scrutinize performance milestones at our next convening."
+            )
+        elif action_type == "request_briefing":
+            return (
+                prefix
+                + "Governance, partner relationships, and investor confidence remain sound. The board is pleased with our trajectory."
+            )
+        elif action_type == "discuss_directive":
+            return prefix + "Executive directives are being coordinated with club stakeholders and department leads."
+        return prefix + "Thank you for the guidance. The board remains fully aligned with your vision."
+
+    return (
+        prefix
+        + f"Message received from executive leadership. We remain dedicated to {persona_name or 'the club'}'s success."
+    )
+
+
+def interact_with_persona(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    persona_role: str,
+    action_type: str,
+    dialogue_text: str | None = None,
+) -> dict[str, Any]:
+    """Execute a spatial persona interaction in the persistent 3D club environment.
+
+    Updates the bilateral relationship dimensions (alignment, influence, loyalty,
+    trust, respect, affinity, tension), persists durable relationship history,
+    and returns contextual dialogue feedback.
+    """
+    import secrets
+    from datetime import datetime, timezone
+
+    state = service.require_state(session, club_id, user_id)
+    canonical_role = "first_team_manager" if persona_role in ("manager", "first_team_manager") else persona_role
+    if canonical_role not in STAFF_ROLE_LABELS:
+        raise service.OwnerError(
+            "invalid_persona_role",
+            400,
+            f"Unsupported persona role '{persona_role}'. Allowed roles: {', '.join(STAFF_ROLE_LABELS.keys())}",
+        )
+
+    action_spec = PERSONA_INTERACTION_ACTIONS.get(action_type)
+    if not action_spec:
+        raise service.OwnerError(
+            "invalid_interaction_action",
+            400,
+            f"Unsupported interaction action '{action_type}'. Allowed actions: {', '.join(PERSONA_INTERACTION_ACTIONS.keys())}",
+        )
+
+    reconcile_staff_relationships(session, state)
+    roster = resolve_club_staff_roster(state)
+    slot = roster.get(canonical_role)
+    if not slot or not slot.get("is_appointed") or not slot.get("person_id"):
+        raise service.OwnerError(
+            "persona_vacant",
+            400,
+            f"Role '{STAFF_ROLE_LABELS.get(canonical_role, canonical_role)}' is currently vacant at this club.",
+        )
+
+    reason = f"Spatial interaction: {action_spec['action_label']}"
+    rel = apply_relationship_delta(
+        session,
+        club_id,
+        "owner",
+        "owner",
+        "Club Owner",
+        "staff",
+        slot["person_id"],
+        slot["name"],
+        delta_trust=action_spec["delta_trust"],
+        delta_respect=action_spec["delta_respect"],
+        delta_affinity=action_spec["delta_affinity"],
+        delta_tension=action_spec["delta_tension"],
+        delta_alignment=action_spec["delta_alignment"],
+        delta_influence=action_spec["delta_influence"],
+        delta_loyalty=action_spec["delta_loyalty"],
+        reason=reason,
+        world_day=state.world_day,
+    )
+
+    reply_text = generate_persona_dialogue_reply(
+        canonical_role,
+        slot["name"],
+        action_type,
+        rel,
+        custom_message=dialogue_text,
+    )
+
+    facs = dict(state.facilities_json or {})
+    now_iso = datetime.now(timezone.utc).isoformat()
+    history = list(facs.get("_staff_chat_history") or [])
+    user_msg_text = dialogue_text or action_spec["action_label"]
+    history.append(
+        {
+            "id": f"msg:{club_id}:{secrets.token_hex(4)}",
+            "role": canonical_role,
+            "sender": "Owner",
+            "sender_type": "owner",
+            "message": user_msg_text,
+            "topic": action_type,
+            "created_at": now_iso,
+        }
+    )
+    history.append(
+        {
+            "id": f"msg:{club_id}:{secrets.token_hex(4)}",
+            "role": canonical_role,
+            "sender": slot["name"],
+            "sender_type": "staff",
+            "message": reply_text,
+            "topic": action_type,
+            "created_at": now_iso,
+        }
+    )
+    facs["_staff_chat_history"] = history[-30:]
+    state.facilities_json = facs
+
+    return {
+        "success": True,
+        "action_type": action_type,
+        "action_label": action_spec["action_label"],
+        "persona": {
+            "role_key": canonical_role,
+            "role_label": slot["role_label"],
+            "name": slot["name"],
+            "person_id": slot["person_id"],
+            "is_appointed": True,
+            "department": PERSONA_DEPARTMENT_MAP.get(canonical_role, "executive"),
+        },
+        "relationship": format_relationship_dict(rel) if rel else None,
+        "delta_applied": {
+            "trust": action_spec["delta_trust"],
+            "respect": action_spec["delta_respect"],
+            "affinity": action_spec["delta_affinity"],
+            "tension": action_spec["delta_tension"],
+            "alignment": action_spec["delta_alignment"],
+            "influence": action_spec["delta_influence"],
+            "loyalty": action_spec["delta_loyalty"],
+        },
+        "dialogue_reply": reply_text,
+        "world_day": state.world_day,
+    }
+
+
+def get_persona_details(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    persona_role: str,
+) -> dict[str, Any]:
+    """Retrieve full persona identity, relationship dimensions, active directives, and history."""
+    state = service.require_state(session, club_id, user_id)
+    canonical_role = "first_team_manager" if persona_role in ("manager", "first_team_manager") else persona_role
+    if canonical_role not in STAFF_ROLE_LABELS:
+        raise service.OwnerError(
+            "invalid_persona_role",
+            400,
+            f"Unsupported persona role '{persona_role}'. Allowed roles: {', '.join(STAFF_ROLE_LABELS.keys())}",
+        )
+
+    reconcile_staff_relationships(session, state)
+    roster = resolve_club_staff_roster(state)
+    slot = roster.get(canonical_role)
+    if not slot:
+        raise service.OwnerError("persona_not_found", 404, f"Persona '{canonical_role}' not found.")
+
+    dept = PERSONA_DEPARTMENT_MAP.get(canonical_role, "executive")
+    active_directives = list(
+        session.scalars(
+            select(OwnerClubDirective).where(
+                OwnerClubDirective.club_id == club_id,
+                OwnerClubDirective.department == dept,
+                OwnerClubDirective.status == "active",
+            )
+        ).all()
+    )
+
+    rel_dict = None
+    recent_history: list[dict[str, Any]] = []
+    if slot["is_appointed"] and slot["person_id"]:
+        key = pairing_key(club_id, "owner", slot["person_id"])
+        rel = session.scalar(
+            select(OwnerClubRelationship).where(
+                OwnerClubRelationship.club_id == club_id,
+                OwnerClubRelationship.pairing_key == key,
+                OwnerClubRelationship.status == "active",
+            )
+        )
+        if rel:
+            rel_dict = format_relationship_dict(rel)
+            hist_rows = list(
+                session.scalars(
+                    select(OwnerClubRelationshipHistory)
+                    .where(OwnerClubRelationshipHistory.relationship_id == rel.id)
+                    .order_by(OwnerClubRelationshipHistory.created_at.desc())
+                    .limit(5)
+                ).all()
+            )
+            for h in hist_rows:
+                recent_history.append(
+                    {
+                        "id": h.id,
+                        "world_day": h.world_day,
+                        "reason": h.reason,
+                        "delta_alignment": h.delta_alignment,
+                        "delta_influence": h.delta_influence,
+                        "delta_loyalty": h.delta_loyalty,
+                        "delta_trust": h.delta_trust,
+                        "delta_tension": h.delta_tension,
+                        "created_at": h.created_at.isoformat() if h.created_at else None,
+                    }
+                )
+
+    return {
+        "club_id": club_id,
+        "persona": {
+            "role_key": canonical_role,
+            "role_label": slot["role_label"],
+            "name": slot["name"],
+            "person_id": slot["person_id"],
+            "is_appointed": slot["is_appointed"],
+            "department": dept,
+        },
+        "relationship": rel_dict,
+        "active_directives": [format_directive_dict(d) for d in active_directives],
+        "recent_history": recent_history,
+        "world_day": state.world_day,
     }

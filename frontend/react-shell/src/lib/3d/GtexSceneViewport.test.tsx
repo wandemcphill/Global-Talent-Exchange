@@ -200,7 +200,28 @@ describe("GtexSceneViewport", () => {
   });
 
   test("renders honest fallback for threejs scene when no renderer is registered", async () => {
-    // boardroom_meeting is registered as renderBackend: "threejs" with no CustomRenderer registered
+    // academy_training_pitch is registered as renderBackend: "threejs" with no CustomRenderer registered
+    await act(async () => {
+      root.render(
+        <GtexSceneViewport
+          sceneId="academy_training_pitch"
+          forceWebGL={true}
+        />
+      );
+    });
+
+    // Should NOT silently render stadium_sponsor; should render honest fallback
+    expect(container.textContent).toContain("Academy Youth Training Ground");
+    expect(container.textContent).toContain("3D COMPANION MODE (RENDERER PENDING)");
+    expect(container.textContent).toContain("Operating in companion mode");
+  });
+
+  test("renders dedicated Three.js renderer for boardroom_meeting when registered in Stage 2", async () => {
+    const MockBoardroomRenderer: React.FC<any> = () => (
+      <div data-testid="boardroom-3d-scene">Boardroom Suite</div>
+    );
+    GtexSceneRegistry.registerRenderer("boardroom_meeting", MockBoardroomRenderer);
+
     await act(async () => {
       root.render(
         <GtexSceneViewport
@@ -210,10 +231,8 @@ describe("GtexSceneViewport", () => {
       );
     });
 
-    // Should NOT silently render stadium_sponsor; should render honest fallback
-    expect(container.textContent).toContain("Executive Boardroom Suite");
-    expect(container.textContent).toContain("3D COMPANION MODE (RENDERER PENDING)");
-    expect(container.textContent).toContain("Operating in companion mode");
+    // Verify it renders the registered BoardroomScene custom renderer
+    expect(container.querySelector('[data-testid="boardroom-3d-scene"]')).not.toBeNull();
   });
 
   test("populates measured telemetry attributes and invokes onQualityTelemetryUpdate", async () => {

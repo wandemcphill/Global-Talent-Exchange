@@ -12,6 +12,9 @@ export interface LivingWorldRelationship {
   respect: number;
   affinity: number;
   tension: number;
+  alignment?: number;
+  influence?: number;
+  loyalty?: number;
   status: string;
   status_label: string;
   metadata?: Record<string, any>;
@@ -499,6 +502,72 @@ export const clubCreateDirectiveEndpoint = (clubId: string) =>
   `/owner/clubs/${encodeURIComponent(clubId)}/living-world/directives`;
 export const clubResolveEventEndpoint = (clubId: string, eventId: string) =>
   `/owner/clubs/${encodeURIComponent(clubId)}/living-world/events/${encodeURIComponent(eventId)}/resolve`;
+export const clubPersonaDetailsEndpoint = (clubId: string, personaRole: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/personas/${encodeURIComponent(personaRole)}`;
+export const clubPersonaInteractEndpoint = (clubId: string, personaRole: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/personas/${encodeURIComponent(personaRole)}/interact`;
+
+export type PersonaInteractionActionType =
+  | "align_strategy"
+  | "praise_leadership"
+  | "demand_accountability"
+  | "request_briefing"
+  | "discuss_directive"
+  | "general_dialogue";
+
+export interface PersonaProfile {
+  role_key: string;
+  role_label: string;
+  name: string;
+  person_id?: string | null;
+  is_appointed: boolean;
+  department: string;
+}
+
+export interface PersonaInteractionPayload {
+  action_type: PersonaInteractionActionType;
+  dialogue_text?: string;
+}
+
+export interface PersonaRelationshipHistoryItem {
+  id: string;
+  world_day: number;
+  reason: string;
+  delta_alignment: number;
+  delta_influence: number;
+  delta_loyalty: number;
+  delta_trust: number;
+  delta_tension: number;
+  created_at?: string;
+}
+
+export interface PersonaDetailsResponse {
+  club_id: string;
+  persona: PersonaProfile;
+  relationship: LivingWorldRelationship | null;
+  active_directives: LivingWorldDirective[];
+  recent_history: PersonaRelationshipHistoryItem[];
+  world_day: number;
+}
+
+export interface PersonaInteractionResponse {
+  success: boolean;
+  action_type: PersonaInteractionActionType;
+  action_label: string;
+  persona: PersonaProfile;
+  relationship: LivingWorldRelationship | null;
+  delta_applied: {
+    trust: number;
+    respect: number;
+    affinity: number;
+    tension: number;
+    alignment: number;
+    influence: number;
+    loyalty: number;
+  };
+  dialogue_reply: string;
+  world_day: number;
+}
 /** Resolve what the panel should show. With no published contract this is always `unavailable`. */
 export function useOwnerBriefing(): BriefingViewState {
   if (!OWNER_BRIEFING_ENDPOINT) return { status: "unavailable" };
