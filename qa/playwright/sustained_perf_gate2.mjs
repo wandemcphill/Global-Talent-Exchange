@@ -45,7 +45,12 @@ console.log(`======================================================\n`);
 
 const browser = await chromium.launch({
   headless: true,
-  args: ["--ignore-gpu-blocklist", "--enable-webgl", "--use-angle=default", "--enable-unsafe-swiftshader"],
+  args: [
+    "--ignore-gpu-blocklist",
+    "--enable-webgl",
+    "--use-angle=default",
+    "--enable-unsafe-swiftshader",
+  ],
 });
 
 const contextOptions = {
@@ -65,7 +70,10 @@ const page = await context.newPage();
 // 1. Real Login
 console.log(`Logging in via ${BASE}/login...`);
 await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
-await page.locator('input[type="email"], input[name="email"], input[type="text"]').first().fill(EMAIL);
+await page
+  .locator('input[type="email"], input[name="email"], input[type="text"]')
+  .first()
+  .fill(EMAIL);
 await page.locator('input[type="password"]').first().fill(PASSWORD);
 await page.locator('button[type="submit"]').first().click();
 await page.waitForURL(/\/app|\/onboarding/, { timeout: 60000 });
@@ -75,14 +83,15 @@ console.log(`Login successful: ${page.url()}`);
 console.log(`Navigating to match u2a-006-showcase with tier=${config.tier}...`);
 await page.goto(
   `${BASE}/app/match/u2a-006-showcase?live=1&dismissWalkout=1&duration=${DURATION}&speed=1&tier=${config.tier}`,
-  { waitUntil: "domcontentloaded" }
+  { waitUntil: "domcontentloaded" },
 );
 
 await page.waitForSelector('[data-testid="match-pitch-live-scene"] canvas', { timeout: 90000 });
 await page.waitForFunction(
-  () => window.__GTEX_BROADCAST_TELEMETRY__ && window.__GTEX_BROADCAST_TELEMETRY__.activeRigCount >= 22,
+  () =>
+    window.__GTEX_BROADCAST_TELEMETRY__ && window.__GTEX_BROADCAST_TELEMETRY__.activeRigCount >= 22,
   null,
-  { timeout: 90000 }
+  { timeout: 90000 },
 );
 console.log(`3D pitch canvas ready and 22 rigs active.`);
 
@@ -104,7 +113,9 @@ await page.evaluate(() => {
   };
   requestAnimationFrame(loop);
 
-  document.querySelector("canvas")?.addEventListener("webglcontextlost", () => window.__GATE2__.ctxLost++);
+  document
+    .querySelector("canvas")
+    ?.addEventListener("webglcontextlost", () => window.__GATE2__.ctxLost++);
 
   setInterval(() => {
     const t = window.__GTEX_BROADCAST_TELEMETRY__;
@@ -134,7 +145,9 @@ for (let elapsed = 0; elapsed < DURATION; elapsed += intervalSec) {
   const snap = await page.evaluate(() => {
     const d = window.__GATE2__.deltas;
     const recent = d.slice(-300);
-    const avgRecent = recent.length ? 1000 / (recent.reduce((a, b) => a + b, 0) / recent.length) : 0;
+    const avgRecent = recent.length
+      ? 1000 / (recent.reduce((a, b) => a + b, 0) / recent.length)
+      : 0;
     const t = window.__GTEX_BROADCAST_TELEMETRY__ || {};
     return {
       frames: d.length,
@@ -146,7 +159,9 @@ for (let elapsed = 0; elapsed < DURATION; elapsed += intervalSec) {
       stalls: window.__GATE2__.stalls.length,
     };
   });
-  console.log(`[${new Date().toISOString()}] Progress ${elapsed + intervalSec}/${DURATION}s | clock: ${snap.clock} | score: ${snap.score} | frames: ${snap.frames} | recentFps: ${snap.recentFps} | drawCalls: ${snap.drawCalls} | stalls: ${snap.stalls}`);
+  console.log(
+    `[${new Date().toISOString()}] Progress ${elapsed + intervalSec}/${DURATION}s | clock: ${snap.clock} | score: ${snap.score} | frames: ${snap.frames} | recentFps: ${snap.recentFps} | drawCalls: ${snap.drawCalls} | stalls: ${snap.stalls}`,
+  );
 }
 
 const totalWallSec = (Date.now() - startTime) / 1000;

@@ -22,10 +22,17 @@ const RUN_SECONDS = Number(process.env.BENCHMARK_SECONDS ?? 45);
 fs.mkdirSync(OUT, { recursive: true });
 
 async function runBenchmark(tier, withVideo, label) {
-  console.log(`\n=== Running ${label} (tier=${tier}, video=${withVideo}, duration=${RUN_SECONDS}s) ===`);
+  console.log(
+    `\n=== Running ${label} (tier=${tier}, video=${withVideo}, duration=${RUN_SECONDS}s) ===`,
+  );
   const browser = await chromium.launch({
     headless: true,
-    args: ["--ignore-gpu-blocklist", "--enable-webgl", "--use-angle=default", "--enable-unsafe-swiftshader"],
+    args: [
+      "--ignore-gpu-blocklist",
+      "--enable-webgl",
+      "--use-angle=default",
+      "--enable-unsafe-swiftshader",
+    ],
   });
 
   const contextOptions = {
@@ -44,7 +51,10 @@ async function runBenchmark(tier, withVideo, label) {
 
   // Login
   await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
-  await page.locator('input[type="email"], input[name="email"], input[type="text"]').first().fill(EMAIL);
+  await page
+    .locator('input[type="email"], input[name="email"], input[type="text"]')
+    .first()
+    .fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
   await page.locator('button[type="submit"]').first().click();
   await page.waitForURL(/\/app|\/onboarding/, { timeout: 60000 });
@@ -52,14 +62,16 @@ async function runBenchmark(tier, withVideo, label) {
   // Navigate to match with specific tier
   await page.goto(
     `${BASE}/app/match/u2a-006-showcase?live=1&dismissWalkout=1&duration=300&speed=1&tier=${tier}`,
-    { waitUntil: "domcontentloaded" }
+    { waitUntil: "domcontentloaded" },
   );
 
   await page.waitForSelector('[data-testid="match-pitch-live-scene"] canvas', { timeout: 90000 });
   await page.waitForFunction(
-    () => window.__GTEX_BROADCAST_TELEMETRY__ && window.__GTEX_BROADCAST_TELEMETRY__.activeRigCount >= 22,
+    () =>
+      window.__GTEX_BROADCAST_TELEMETRY__ &&
+      window.__GTEX_BROADCAST_TELEMETRY__.activeRigCount >= 22,
     null,
-    { timeout: 90000 }
+    { timeout: 90000 },
   );
 
   // Setup frame rate and telemetry capture
@@ -79,7 +91,9 @@ async function runBenchmark(tier, withVideo, label) {
       requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
-    document.querySelector("canvas")?.addEventListener("webglcontextlost", () => window.__PERF__.ctxLost++);
+    document
+      .querySelector("canvas")
+      ?.addEventListener("webglcontextlost", () => window.__PERF__.ctxLost++);
     setInterval(() => {
       const t = window.__GTEX_BROADCAST_TELEMETRY__;
       if (!t) return;
