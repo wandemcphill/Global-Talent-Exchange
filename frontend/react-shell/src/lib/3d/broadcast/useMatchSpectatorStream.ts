@@ -62,6 +62,8 @@ export interface UseMatchSpectatorStreamOptions {
   onViewerCountUpdate?: (viewerCount: number) => void;
   /** Callback triggered when connection recovers after a drop and a snapshot resync is required */
   onResyncRequired?: () => void;
+  /** Callback triggered when a gift event is broadcast across the match spectator stream */
+  onGiftReceived?: (gift: any) => void;
 }
 
 export interface UseMatchSpectatorStreamResult {
@@ -114,6 +116,7 @@ export function useMatchSpectatorStream(
     onScoreUpdate,
     onViewerCountUpdate,
     onResyncRequired,
+    onGiftReceived,
   } = options;
 
   const [connectionStatus, setConnectionStatus] = useState<SpectatorConnectionStatus>("disconnected");
@@ -151,6 +154,8 @@ export function useMatchSpectatorStream(
   onViewerCountRef.current = onViewerCountUpdate;
   const onResyncRef = useRef(onResyncRequired);
   onResyncRef.current = onResyncRequired;
+  const onGiftRef = useRef(onGiftReceived);
+  onGiftRef.current = onGiftReceived;
 
   // Resolve Canonical Match Key
   const canonicalId = resolveCanonicalMatchKey(matchId);
@@ -397,6 +402,21 @@ export function useMatchSpectatorStream(
               setRecentEvents((prev) => [ev, ...prev].slice(0, 20));
               if (onEventRef.current) {
                 onEventRef.current(ev);
+              }
+            }
+
+            if (
+              data.type === "gift_broadcast" ||
+              data.type === "gift_animation" ||
+              data.event_type === "gift_broadcast" ||
+              data.topic === "match_gift" ||
+              data.gift ||
+              data.payload?.gift_id ||
+              data.payload?.gift_key
+            ) {
+              const giftPayload = data.payload || data.data || data;
+              if (onGiftRef.current) {
+                onGiftRef.current(giftPayload);
               }
             }
           } catch {

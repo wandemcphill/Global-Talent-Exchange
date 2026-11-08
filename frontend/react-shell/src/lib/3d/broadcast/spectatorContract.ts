@@ -20,6 +20,12 @@ export interface SpectatorSafeTeamView {
   goalkeeper_color: string;
   coach_name?: string;
   crest_url?: string;
+  pattern_type?: string;
+  shorts_color?: string;
+  socks_color?: string;
+  sponsor_name?: string;
+  third_primary_color?: string;
+  third_secondary_color?: string;
 }
 
 export interface SpectatorSafePlayerTelemetry {
@@ -262,6 +268,12 @@ export function sanitizeForSpectator(
     goalkeeper_color: rawHome.goalkeeper_color || "#FFB800",
     coach_name: rawPres.home?.coach_name,
     crest_url: rawPres.home?.crest?.image_url,
+    pattern_type: rawHome.pattern_type || rawHome.jersey?.pattern || "solid",
+    shorts_color: rawHome.shorts_color || rawHome.jersey?.shorts_color,
+    socks_color: rawHome.socks_color || rawHome.jersey?.socks_color,
+    sponsor_name: rawHome.sponsor_name || rawHome.jersey?.sponsor_name,
+    third_primary_color: rawHome.third_primary_color,
+    third_secondary_color: rawHome.third_secondary_color,
   };
 
   const awayTeam: SpectatorSafeTeamView = {
@@ -275,6 +287,12 @@ export function sanitizeForSpectator(
     goalkeeper_color: rawAway.goalkeeper_color || "#EC4899",
     coach_name: rawPres.away?.coach_name,
     crest_url: rawPres.away?.crest?.image_url,
+    pattern_type: rawAway.pattern_type || rawAway.jersey?.pattern || "solid",
+    shorts_color: rawAway.shorts_color || rawAway.jersey?.shorts_color,
+    socks_color: rawAway.socks_color || rawAway.jersey?.socks_color,
+    sponsor_name: rawAway.sponsor_name || rawAway.jersey?.sponsor_name,
+    third_primary_color: rawAway.third_primary_color,
+    third_secondary_color: rawAway.third_secondary_color,
   };
 
   // Sanitize frames

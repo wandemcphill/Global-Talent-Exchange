@@ -110,6 +110,12 @@ export interface HumanoidKitConfig {
   skinToneHex?: string;
   hairColorHex?: string;
   hairStyle?: HairStyleVariant;
+  patternType?: "solid" | "stripes" | "hoops" | "sash" | "chevron" | "gradient" | string;
+  shortsColor?: string;
+  socksColor?: string;
+  crestUrl?: string;
+  sponsorName?: string;
+  playerName?: string;
 }
 
 export type AnimationLODLevel = "full" | "medium" | "far";
@@ -308,9 +314,9 @@ export function applyKitColorsToSkinnedGeometry(
   const jerseySecondary = new THREE.Color(config.secondaryColor || config.primaryColor);
   const jerseyTrim = new THREE.Color(config.accentColor || "#FFFFFF");
   const shortsColor = new THREE.Color(
-    config.isGoalkeeper ? config.goalkeeperColor : config.secondaryColor || config.primaryColor
+    config.shortsColor || (config.isGoalkeeper ? config.goalkeeperColor : config.secondaryColor || config.primaryColor)
   );
-  const socksColor = new THREE.Color(config.primaryColor);
+  const socksColor = new THREE.Color(config.socksColor || config.primaryColor);
   const glovesColor = config.isGoalkeeper ? new THREE.Color(config.accentColor || "#F8FAFC") : skinColor;
   const gkPaddingColor = jerseyPrimary.clone().multiplyScalar(0.72);
   const captainBandColor = new THREE.Color("#FACC15");
@@ -398,9 +404,35 @@ export function applyKitColorsToSkinnedGeometry(
           g = jerseySecondary.g * 0.92;
           b = jerseySecondary.b * 0.92;
         } else {
-          r = jerseyPrimary.r;
-          g = jerseyPrimary.g;
-          b = jerseyPrimary.b;
+          // Pattern-aware jersey torso shading
+          const isTorso = boneName === "Spine" || boneName === "Spine1" || boneName === "Spine2";
+          const pattern = config.patternType || "solid";
+          if (isTorso && pattern === "stripes") {
+            const isSec = Math.sin(bx * 0.45) > 0;
+            const c = isSec ? jerseySecondary : jerseyPrimary;
+            r = c.r; g = c.g; b = c.b;
+          } else if (isTorso && pattern === "hoops") {
+            const isSec = Math.sin(by * 0.35) > 0;
+            const c = isSec ? jerseySecondary : jerseyPrimary;
+            r = c.r; g = c.g; b = c.b;
+          } else if (isTorso && pattern === "sash") {
+            const onSash = Math.abs(bx - (by - 120) * 0.75) < 4.8;
+            const c = onSash ? jerseySecondary : jerseyPrimary;
+            r = c.r; g = c.g; b = c.b;
+          } else if (isTorso && pattern === "chevron") {
+            const onChev = Math.abs((by - 132) + absX * 0.6) < 4.2;
+            const c = onChev ? jerseySecondary : jerseyPrimary;
+            r = c.r; g = c.g; b = c.b;
+          } else if (isTorso && pattern === "gradient") {
+            const t = Math.max(0, Math.min(1, (by - 98) / 48));
+            r = THREE.MathUtils.lerp(jerseySecondary.r, jerseyPrimary.r, t);
+            g = THREE.MathUtils.lerp(jerseySecondary.g, jerseyPrimary.g, t);
+            b = THREE.MathUtils.lerp(jerseySecondary.b, jerseyPrimary.b, t);
+          } else {
+            r = jerseyPrimary.r;
+            g = jerseyPrimary.g;
+            b = jerseyPrimary.b;
+          }
         }
         break;
       }
@@ -901,6 +933,52 @@ function createShirtNumberTexture(shirtNumber: number, textColorHex: string): TH
 }
 
 // -----------------------------------------------------------------------------
+const brandingTextureCache = new Map<string, THREE.Texture>();
+
+function createWordmarkTexture(text: string, colorHex: string, fontSize = 32): THREE.Texture | null {
+  const key = `${text}_${colorHex}_${fontSize}`;
+  if (brandingTextureCache.has(key)) return brandingTextureCache.get(key)!;
+  try {
+    if (typeof document === "undefined") return null;
+    if (typeof navigator !== "undefined" && /jsdom/i.test(navigator.userAgent || "")) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 64;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.clearRect(0, 0, 256, 64);
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = colorHex || "#FFFFFF";
+    ctx.fillText(text.toUpperCase(), 128, 32);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.needsUpdate = true;
+    brandingTextureCache.set(key, tex);
+    return tex;
+  } catch {
+    return null;
+  }
+}
+
+function createCrestTexture(urlOrDataUri: string): THREE.Texture | null {
+  if (brandingTextureCache.has(urlOrDataUri)) return brandingTextureCache.get(urlOrDataUri)!;
+  try {
+    if (typeof document === "undefined") return null;
+    if (typeof navigator !== "undefined" && /jsdom/i.test(navigator.userAgent || "")) return null;
+    const img = new Image();
+    const tex = new THREE.Texture(img);
+    img.onload = () => {
+      tex.needsUpdate = true;
+    };
+    img.src = urlOrDataUri;
+    brandingTextureCache.set(urlOrDataUri, tex);
+    return tex;
+  } catch {
+    return null;
+  }
+}
+
 // 6. HumanoidFootballerRig Class (Per-Player SkinnedMesh + AnimationMixer)
 // -----------------------------------------------------------------------------
 
@@ -1137,6 +1215,61 @@ export class HumanoidFootballerRig {
     this.frontNumberMesh.name = `FrontChestNumberBadge_${this.kitConfig.shirtNumber}`;
     this.frontNumberMesh.position.set(0, 5.5, 16.4);
     spine2.add(this.frontNumberMesh);
+
+    // Front Chest Crest Badge (left breast placement)
+    if (this.kitConfig.crestUrl) {
+      const crestTex = createCrestTexture(this.kitConfig.crestUrl);
+      if (crestTex) {
+        const crestGeo = new THREE.PlaneGeometry(6.5, 6.5);
+        const crestMat = new THREE.MeshBasicMaterial({
+          map: crestTex,
+          transparent: true,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        });
+        const crestMesh = new THREE.Mesh(crestGeo, crestMat);
+        crestMesh.name = `ChestCrestBadge_${this.kitConfig.playerId}`;
+        crestMesh.position.set(-6.5, 6.0, 16.5);
+        spine2.add(crestMesh);
+      }
+    }
+
+    // Front Chest Sponsor Wordmark
+    const sponsorText = this.kitConfig.sponsorName || "GTEX";
+    const sponsorTex = createWordmarkTexture(sponsorText, this.kitConfig.accentColor || "#FFFFFF", 28);
+    if (sponsorTex) {
+      const spGeo = new THREE.PlaneGeometry(16, 4.5);
+      const spMat = new THREE.MeshBasicMaterial({
+        map: sponsorTex,
+        transparent: true,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const spMesh = new THREE.Mesh(spGeo, spMat);
+      spMesh.name = `ChestSponsorBadge_${this.kitConfig.playerId}`;
+      spMesh.position.set(0, 0.0, 16.6);
+      spine2.add(spMesh);
+    }
+
+    // Upper Back Player Name Text (above shirt number)
+    const nameText = this.kitConfig.playerName || this.kitConfig.label;
+    if (nameText) {
+      const nameTex = createWordmarkTexture(nameText, this.kitConfig.accentColor || "#FFFFFF", 24);
+      if (nameTex) {
+        const nameGeo = new THREE.PlaneGeometry(20, 5);
+        const nameMat = new THREE.MeshBasicMaterial({
+          map: nameTex,
+          transparent: true,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        });
+        const nameMesh = new THREE.Mesh(nameGeo, nameMat);
+        nameMesh.name = `BackNameBadge_${this.kitConfig.playerId}`;
+        nameMesh.position.set(0, 16.0, -16.8);
+        nameMesh.rotation.y = Math.PI;
+        spine2.add(nameMesh);
+      }
+    }
   }
 
   private setupAnimationMixer(mixerRoot: THREE.Object3D): void {

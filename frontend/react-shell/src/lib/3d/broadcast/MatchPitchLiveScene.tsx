@@ -594,7 +594,34 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       }
 
       const currentSafeView = safeViewRef.current;
+
+      // Kit Clash Detection (RGB euclidean distance < 65)
+      const homeColor = new THREE.Color(currentSafeView.home_team.primary_color || "#00E676");
+      const awayColor = new THREE.Color(currentSafeView.away_team.primary_color || "#3B82F6");
+      const dr = (homeColor.r - awayColor.r) * 255;
+      const dg = (homeColor.g - awayColor.g) * 255;
+      const db = (homeColor.b - awayColor.b) * 255;
+      const isClash = Math.sqrt(dr * dr + dg * dg + db * db) < 65;
+
       const teamView = side === "home" ? currentSafeView.home_team : currentSafeView.away_team;
+      let primaryColor = teamView.primary_color;
+      let secondaryColor = teamView.secondary_color;
+      let patternType = teamView.pattern_type;
+
+      if (side === "away" && isClash) {
+        // High-contrast away kit fallback to secondary, third kit, or contrasting palette
+        if (teamView.third_primary_color) {
+          primaryColor = teamView.third_primary_color;
+          secondaryColor = teamView.third_secondary_color || teamView.accent_color;
+        } else if (teamView.secondary_color) {
+          primaryColor = teamView.secondary_color;
+          secondaryColor = teamView.primary_color;
+        } else {
+          primaryColor = homeColor.r + homeColor.g + homeColor.b > 1.5 ? "#0f172a" : "#ffffff";
+          secondaryColor = "#94a3b8";
+        }
+      }
+
       const rig = new HumanoidFootballerRig({
         playerId,
         side,
@@ -602,10 +629,16 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         label,
         role,
         isGoalkeeper: isGK,
-        primaryColor: teamView.primary_color,
-        secondaryColor: teamView.secondary_color,
+        primaryColor,
+        secondaryColor,
         accentColor: teamView.accent_color,
         goalkeeperColor: teamView.goalkeeper_color,
+        patternType: (patternType as any) || "solid",
+        shortsColor: teamView.shorts_color,
+        socksColor: teamView.socks_color,
+        crestUrl: teamView.crest_url,
+        sponsorName: teamView.sponsor_name,
+        playerName: label,
       });
 
       playersGroup.add(rig.rootGroup);

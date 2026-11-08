@@ -300,20 +300,25 @@ class RealtimeHub:
             ]
         if event.name in {"match.gift", "gift.sent", "gift_sent"}:
             match_id = _optional_string(payload.get("match_id"))
-            club_id = _optional_string(payload.get("club_id"))
+            club_id = _optional_string(payload.get("club_id") or payload.get("recipient_club_id"))
             gift_name = _optional_string(payload.get("gift_name") or payload.get("gift_display_name")) or "Gift"
-            sender = _optional_string(payload.get("sender") or payload.get("sender_username")) or "Fan"
+            sender = _optional_string(payload.get("sender_display_name") or payload.get("sender") or payload.get("sender_username")) or "Fan"
+            recipient = _optional_string(payload.get("recipient_display_name") or payload.get("recipient")) or "Club"
             gift_payload = {
                 "type": "gift_animation",
                 "gift_code": payload.get("gift_code") or payload.get("gift_key"),
                 "gift_name": gift_name,
                 "sender": sender,
                 "sender_id": payload.get("sender_id") or payload.get("sender_user_id"),
+                "recipient": recipient,
+                "recipient_id": payload.get("recipient_id") or payload.get("recipient_user_id"),
                 "club_id": club_id,
                 "match_id": match_id,
-                "amount": payload.get("amount") or payload.get("cost"),
+                "amount": payload.get("amount") or payload.get("cost") or payload.get("gross_amount"),
+                "rarity": payload.get("rarity") or "common",
                 "animation_key": payload.get("animation_key") or "fan_chant",
                 "sound_key": payload.get("sound_key") or "crowd_cheer",
+                "duration_ms": int(payload.get("duration_ms") or 3000),
             }
             dispatches: list[RealtimeDispatch] = []
             if match_id:

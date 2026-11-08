@@ -427,6 +427,31 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
     ).all()
 
     owner = _owner_summary(session, club.owner_user_id)
+    # Club DNA & Recruitment Culture
+    dna_policy = None
+    try:
+        from app.services.club_governance_policy import ClubGovernancePolicyService
+        dna_policy = ClubGovernancePolicyService(session).get_or_create_policy(club.id)
+    except Exception:
+        pass
+
+    # Club Jerseys
+    jerseys_payload = None
+    try:
+        from app.club_identity.jerseys.service import ClubIdentityService
+        from app.club_identity.jerseys.sql_repository import SqlClubIdentityRepository
+        from dataclasses import asdict
+        identity = ClubIdentityService(SqlClubIdentityRepository(session)).get_identity(club.id)
+        if identity and identity.jersey_set:
+            jerseys_payload = {
+                "home": asdict(identity.jersey_set.home) if identity.jersey_set.home else None,
+                "away": asdict(identity.jersey_set.away) if identity.jersey_set.away else None,
+                "third": asdict(identity.jersey_set.third) if identity.jersey_set.third else None,
+                "goalkeeper": asdict(identity.jersey_set.goalkeeper) if identity.jersey_set.goalkeeper else None,
+            }
+    except Exception:
+        pass
+
     return {
         "club": {
             "id": club.id,
@@ -575,6 +600,18 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
                 else []
             )
         ),
+        "dna": {
+            "primary_philosophy": getattr(dna_policy, "primary_philosophy", "youth_development") if dna_policy else "youth_development",
+            "secondary_philosophies": getattr(dna_policy, "secondary_philosophies", []) if dna_policy else [],
+            "nationality_mode": getattr(dna_policy, "nationality_mode", "none") if dna_policy else "none",
+            "target_nationalities": getattr(dna_policy, "target_nationalities", []) if dna_policy else [],
+            "age_mode": getattr(dna_policy, "age_mode", "none") if dna_policy else "none",
+            "preferred_max_age": getattr(dna_policy, "preferred_max_age", None) if dna_policy else None,
+            "transfer_strategy": getattr(dna_policy, "transfer_strategy", "buy_young_develop_sell") if dna_policy else "buy_young_develop_sell",
+            "financial_philosophy": getattr(dna_policy, "financial_philosophy", "sustainable") if dna_policy else "sustainable",
+            "club_vision_narrative": getattr(dna_policy, "club_vision_narrative", None) if dna_policy else None,
+        },
+        "jerseys": jerseys_payload,
     }
 
 

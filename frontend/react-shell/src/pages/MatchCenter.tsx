@@ -49,14 +49,19 @@ import {
   useMatchCommercialInventory,
 } from "@/components/advertising/GtexMatchBroadcastAds";
 import type { PublicBrandAd } from "@/lib/commercial/api";
+import { CinematicGiftingEngine, type CinematicGiftEvent } from "@/lib/3d/gifting/CinematicGiftingEngine";
 
 const GIFTS = [
-  { code: "stadium_roar", name: "Stadium Roar", cost: 10 },
-  { code: "captains_armband", name: "Captain's Armband", cost: 20 },
-  { code: "home_end_banner", name: "Home End Banner", cost: 30 },
-  { code: "golden_boot", name: "Golden Boot", cost: 50 },
-  { code: "floodlights", name: "Floodlights", cost: 100 },
-  { code: "legendary_stadium", name: "Legendary Stadium", cost: 1000 },
+  { code: "stadium_roar", name: "Stadium Roar", cost: 10, rarity: "common" },
+  { code: "captains_armband", name: "Captain's Armband", cost: 20, rarity: "rare" },
+  { code: "home_end_banner", name: "Home End Banner", cost: 30, rarity: "rare" },
+  { code: "golden_boot", name: "Golden Boot", cost: 50, rarity: "epic" },
+  { code: "floodlights", name: "Floodlights", cost: 100, rarity: "epic" },
+  { code: "last_minute_winner", name: "Last-Minute Winner", cost: 250, rarity: "epic" },
+  { code: "stadium_wembley", name: "Wembley Stadium", cost: 1000, rarity: "legendary" },
+  { code: "paris_skyline", name: "Eiffel Tower Paris", cost: 1500, rarity: "legendary" },
+  { code: "ballon_dor", name: "Golden Ballon d'Or", cost: 5000, rarity: "mythic" },
+  { code: "private_jet", name: "Private Jet Flyby", cost: 10000, rarity: "mythic" },
 ];
 
 // Tactical Style Presets
@@ -196,23 +201,72 @@ function GiftRail({ match, clubId, onGiftSent }: any) {
   const [feed, setFeed] = useState<string[]>([]);
   const targets = [match.home_club_id, match.away_club_id].filter((c: string) => !c.startsWith("ai:"));
   const [target, setTarget] = useState(targets.includes(clubId) ? clubId : targets[0]);
+  const [catalog, setCatalog] = useState<any[]>(GIFTS);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get("/gifts/catalog")
+      .then((res) => {
+        if (!cancelled && Array.isArray(res.data) && res.data.length > 0) {
+          const items = res.data.map((item: any) => ({
+            code: item.gift_key || item.key || item.code,
+            name: item.display_name || item.name,
+            cost: Number(item.amount_fancoin || item.cost) || 10,
+            rarity: item.rarity || "legendary",
+            anim: item.animation_key,
+          }));
+          setCatalog(items);
+        }
+      })
+      .catch(() => {
+        // Fallback to static catalog on offline / error
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   if (!targets.length) return null;
+
   const send = async (g: any) => {
     try {
-      const { data } = await api.post("/owner/gifts/send", { club_id: target, gift_code: g.code, match_id: match.id });
-      setFeed((f) => [`${data.sender} sent ${g.name}`, ...f].slice(0, 5));
+      let data: any;
+      try {
+        const res = await api.post("/gifts/send", {
+          recipient_club_id: target,
+          gift_key: g.code,
+          match_id: match.id,
+          quantity: 1,
+        });
+        data = res.data;
+      } catch (err: any) {
+        // Fallback to legacy owner endpoint for test fixture compatibility
+        const res = await api.post("/owner/gifts/send", {
+          club_id: target,
+          gift_code: g.code,
+          match_id: match.id,
+        });
+        data = res.data;
+      }
+
+      const senderName = data.sender_display_name || data.sender || "You";
+      setFeed((f) => [`${senderName} sent ${g.name}`, ...f].slice(0, 5));
       refresh();
       onGiftSent?.({
-        sender: data.sender,
+        sender: senderName,
         name: g.name,
         code: g.code,
-        anim: data.broadcast?.animation_key || "fan_chant",
+        amount: g.cost,
+        rarity: g.rarity || data.rarity || "legendary",
+        anim: data.animation_key || data.broadcast?.animation_key || g.anim || "stadium_roar",
       });
       toast.success(`Gift sent: ${g.name}`);
     } catch (e) {
       toast.error(errMsg(e));
     }
   };
+
   return (
     <Panel eyebrow="Gift rail · Fan Coin" title="Back your club" testid="gift-rail">
       {targets.length > 1 && (
@@ -224,15 +278,15 @@ function GiftRail({ match, clubId, onGiftSent }: any) {
           ))}
         </select>
       )}
-      <div className="grid grid-cols-2 gap-2">
-        {GIFTS.map((g) => (
+      <div className="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
+        {catalog.map((g) => (
           <button
             key={g.code}
             data-testid={`gift-${g.code}`}
             onClick={() => send(g)}
             className="rounded-sm border border-amber-500/20 bg-amber-500/[0.04] px-3 py-2 text-left text-xs transition-colors hover:border-amber-400/60 hover:bg-amber-500/10"
           >
-            <span className="block font-semibold text-amber-200">{g.name}</span>
+            <span className="block font-semibold text-amber-200 truncate">{g.name}</span>
             <span className="gx-mono text-[10px] text-slate-400">{g.cost} FAN</span>
           </button>
         ))}
@@ -316,6 +370,7 @@ function Pitch2DView({
   pitchPlayers,
   ball,
   activeGift,
+  onGiftComplete,
   formation = "4-3-3",
   press = 65,
   line = 68,
@@ -349,7 +404,8 @@ function Pitch2DView({
     role?: string;
   }>;
   ball?: { x: number; y: number } | null;
-  activeGift?: { sender: string; name: string; code: string; anim?: string } | null;
+  activeGift?: any;
+  onGiftComplete?: () => void;
   formation?: string;
   press?: number;
   line?: number;
@@ -1060,40 +1116,24 @@ function Pitch2DView({
           </div>
         )}
 
-        {/* On-pitch Gift Celebration Animation */}
+        {/* On-pitch 3D Cinematic Gifting Engine */}
         {activeGift && (
-          <div
-            data-testid="on-pitch-gift-animation"
-            className="absolute inset-x-0 top-6 z-20 flex justify-center pointer-events-none animate-bounce"
-          >
-            <div className="flex items-center gap-3 rounded-full border border-amber-400/60 bg-gradient-to-r from-amber-950/95 via-slate-900/95 to-amber-950/95 px-5 py-2.5 shadow-2xl backdrop-blur-md">
-              <span className="text-2xl">
-                {activeGift.code === "flare"
-                  ? "🔥"
-                  : activeGift.code === "drum"
-                  ? "🥁"
-                  : activeGift.code === "banner"
-                  ? "🚩"
-                  : activeGift.code === "captains_armband"
-                  ? "🎖️"
-                  : activeGift.code === "golden_boot"
-                  ? "👟"
-                  : activeGift.code === "floodlights"
-                  ? "💡"
-                  : activeGift.code === "legendary_stadium"
-                  ? "🏟️"
-                  : "🎉"}
-              </span>
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-amber-300">
-                  {activeGift.name} Delivered!
-                </div>
-                <div className="text-[11px] text-amber-100/90">
-                  <span className="font-semibold text-emerald-400">{activeGift.sender}</span> backed the squad on pitch
-                </div>
-              </div>
-            </div>
-          </div>
+          <CinematicGiftingEngine
+            activeGift={
+              typeof activeGift === "object" && "gift_name" in activeGift
+                ? activeGift
+                : {
+                    gift_code: activeGift.code || "stadium_roar",
+                    gift_name: activeGift.name || "Match Gift",
+                    sender: activeGift.sender || "Supporter",
+                    amount: activeGift.cost || activeGift.amount || 10,
+                    rarity: activeGift.rarity || "legendary",
+                    animation_key: activeGift.anim || activeGift.code,
+                  }
+            }
+            onAnimationComplete={() => onGiftComplete?.()}
+            soundEnabled={true}
+          />
         )}
       </div>
 
@@ -2126,6 +2166,18 @@ export default function MatchCenter() {
     onResyncRequired: () => {
       refetchViewerData();
     },
+    onGiftReceived: (g: any) => {
+      setActiveGift({
+        gift_code: g.gift_code || g.gift_key || g.code || "stadium_roar",
+        gift_name: g.gift_name || g.name || "Gift Celebration",
+        sender: g.sender_display_name || g.sender || "Supporter",
+        recipient: g.recipient_display_name || g.recipient || "Squad",
+        amount: g.amount || g.cost || 10,
+        rarity: g.rarity || "legendary",
+        animation_key: g.animation_key || g.anim,
+        duration_ms: g.duration_ms || 4500,
+      });
+    },
   });
 
   // Clock & Playback Controls
@@ -2638,24 +2690,44 @@ export default function MatchCenter() {
 
             {/* 3D WebGL Live Match Broadcast Canvas or 2D Pitch Fallback */}
             {view3DBroadcast ? (
-              <MatchPitchLiveScene
-                matchViewState={viewerData || m}
-                isLive={Boolean(params.get("live"))}
-                viewerCount={spectatorStream.viewerCount}
-                qualityTier={(params.get("tier") as any) || (params.get("quality") as any) || "high"}
-                playbackSpeed={speed}
-                isPaused={isPaused}
-                liveFrame={spectatorStream.lastFrame}
-                liveEvents={spectatorStream.recentEvents}
-                liveScore={spectatorStream.latestScore}
-                tacticalConfig={authoritativeTactics}
-                isTheatreMode={isTheatreMode}
-                onToggleTheatreMode={() => setIsTheatreMode((t) => !t)}
-                onToggle2DCompanion={() => {
-                  setIsTheatreMode(false);
-                  setView3DBroadcast(false);
-                }}
-              />
+              <div className="relative">
+                <MatchPitchLiveScene
+                  matchViewState={viewerData || m}
+                  isLive={Boolean(params.get("live"))}
+                  viewerCount={spectatorStream.viewerCount}
+                  qualityTier={(params.get("tier") as any) || (params.get("quality") as any) || "high"}
+                  playbackSpeed={speed}
+                  isPaused={isPaused}
+                  liveFrame={spectatorStream.lastFrame}
+                  liveEvents={spectatorStream.recentEvents}
+                  liveScore={spectatorStream.latestScore}
+                  tacticalConfig={authoritativeTactics}
+                  isTheatreMode={isTheatreMode}
+                  onToggleTheatreMode={() => setIsTheatreMode((t) => !t)}
+                  onToggle2DCompanion={() => {
+                    setIsTheatreMode(false);
+                    setView3DBroadcast(false);
+                  }}
+                />
+                {activeGift && (
+                  <CinematicGiftingEngine
+                    activeGift={
+                      typeof activeGift === "object" && "gift_name" in activeGift
+                        ? activeGift
+                        : {
+                            gift_code: activeGift.code || "stadium_roar",
+                            gift_name: activeGift.name || "Match Gift",
+                            sender: activeGift.sender || "Supporter",
+                            amount: activeGift.cost || activeGift.amount || 10,
+                            rarity: activeGift.rarity || "legendary",
+                            animation_key: activeGift.anim || activeGift.code,
+                          }
+                    }
+                    onAnimationComplete={() => setActiveGift(null)}
+                    soundEnabled={true}
+                  />
+                )}
+              </div>
             ) : (
               <Pitch2DView
                 selectedPlayer={selectedPlayer}
@@ -2669,6 +2741,7 @@ export default function MatchCenter() {
                 pitchPlayers={liveState?.pitch_players}
                 ball={liveState?.ball}
                 activeGift={activeGift}
+                onGiftComplete={() => setActiveGift(null)}
                 formation={formation}
                 press={press}
                 line={line}
