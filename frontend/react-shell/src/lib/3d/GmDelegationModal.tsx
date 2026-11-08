@@ -211,7 +211,7 @@ export const GmDelegationModal: React.FC<GmDelegationModalProps> = ({
   const currentMode = overview?.canonical_mode || overview?.delegation_mode || "balanced";
   const controls: GmDelegationFinancialControls = {
     ...(overview?.financial_controls || {
-      max_expenditure_unapproved_gtex: 15000,
+      max_expenditure_unapproved_gtex: 10000,
       max_staff_salary_unapproved_gtex: 1500,
       max_contract_years_unapproved: 2,
       recruitment_budget_gtex: 100000,
