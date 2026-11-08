@@ -311,7 +311,11 @@ def get_gm_delegation_overview(session: Session, user_id: str, club_id: str) -> 
 
         # The matrix must never advertise autonomous authority for a workflow that
         # does not yet have an authoritative execution handler.
-        if not is_execution_supported or canonical_mode == "owner_managed":
+        if (
+            not is_execution_supported
+            or canonical_mode == "owner_managed"
+            or policy.is_suspended
+        ):
             authority_level = "owner_only"
             requires_approval = True
             responsible_role = "owner"
