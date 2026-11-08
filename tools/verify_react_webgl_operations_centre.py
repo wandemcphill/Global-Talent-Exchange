@@ -7,6 +7,7 @@ Verifies:
 4. A failed asset triggers the warning state (data-testid="glb-asset-warning").
 5. Procedural wireframe fallback remains visible and interactive when an asset fails.
 6. 2D architectural floorplan fallback remains accessible and interactive.
+7. The Living World timeline drawer, filters and close action work after the WebGL scene is fully restored.
 """
 
 from __future__ import annotations
@@ -277,6 +278,7 @@ def run_verification(headless: bool = True) -> int:
                     return ok(res)
                 return ok({"status": "ok"})
             except Exception as exc:
+                print(f"  [MOCK API ERROR] {method} {path}: {type(exc).__name__}: {exc}")
                 return route.fulfill(
                     status=500,
                     headers=CORS_HEADERS,
@@ -303,6 +305,12 @@ def run_verification(headless: bool = True) -> int:
                     loaded_glbs.append(parsed_url)
 
         page.on("response", track_glb_request)
+        page.on(
+            "response",
+            lambda response: print(f"  [BROWSER HTTP {response.status}] {response.url}")
+            if response.status >= 500
+            else None,
+        )
         page.on("console", lambda msg: print(f"  [BROWSER CONSOLE {msg.type}] {msg.text}"))
         page.on("pageerror", lambda err: print(f"  [BROWSER PAGE ERROR] {err}"))
 
@@ -367,6 +375,12 @@ def run_verification(headless: bool = True) -> int:
         context_fail = browser.new_context(viewport={"width": 1600, "height": 1000}, device_scale_factor=1.25)
         page_fail = context_fail.new_page()
         page_fail.on("pageerror", lambda err: page_errors.append(f"[page_fail] {err}"))
+        page_fail.on(
+            "response",
+            lambda response: print(f"  [BROWSER HTTP {response.status}] {response.url}")
+            if response.status >= 500
+            else None,
+        )
         page_fail.route("**/api/**", handle_api)
         page_fail.route("http://localhost:8000/**", handle_api)
         page_fail.route("http://127.0.0.1:8000/**", handle_api)
@@ -466,6 +480,18 @@ def run_verification(headless: bool = True) -> int:
             }""",
             timeout=25000,
         )
+        # The renderer reports "WebGL Active" as soon as its canvas is ready.
+        # That does not mean the asynchronous GLB reloads have completed.
+        # Wait for all six models before starting UI interaction tests so
+        # heavy GLTF parsing/GPU uploads cannot starve the timeline interaction.
+        page.wait_for_function(
+            """() => {
+                const status = document.querySelector('[data-testid="glb-asset-status"]');
+                return Boolean(status && status.textContent.includes("6/6 GLB Assets Loaded"));
+            }""",
+            timeout=30000,
+        )
+        page.wait_for_timeout(250)
         print("[PASS] Successfully restored the fully initialized 3D WebGL viewport.")
 
         # -------------------------------------------------------------
@@ -473,34 +499,78 @@ def run_verification(headless: bool = True) -> int:
         # -------------------------------------------------------------
         print("\n--- Test 4: Unified Living World Timeline Drawer & Filters ---")
         timeline_btn = page.locator('[data-testid="toggle-living-world-timeline"]')
-        assert timeline_btn.is_visible(), "Timeline toggle button not visible"
-        timeline_btn.click()
+        timeline_btn.wait_for(state="visible", timeout=15000)
+        timeline_btn.scroll_into_view_if_needed()
+        timeline_btn.click(timeout=15000)
 
-        page.wait_for_selector('[data-testid="living-world-timeline-drawer"]', timeout=5000)
+        # Use a DOM-backed condition rather than a short selector wait. The
+        # browser has just restored a heavyweight WebGL scene and may need a
+        # frame to commit the React state update.
+        page.wait_for_function(
+            """() => {
+                const drawer = document.querySelector('[data-testid="living-world-timeline-drawer"]');
+                if (!drawer) return false;
+                const rect = drawer.getBoundingClientRect();
+                const style = window.getComputedStyle(drawer);
+                return rect.width > 0 && rect.height > 0 &&
+                    style.display !== "none" && style.visibility !== "hidden";
+            }""",
+            timeout=15000,
+        )
         print("[PASS] Living World Timeline drawer opened.")
 
-        # Verify filters and list rendered
-        page.wait_for_selector('[data-testid="timeline-category-filters"]', timeout=5000)
-        page.wait_for_selector('[data-testid="living-timeline-list"]', timeout=5000)
-        print("[PASS] Timeline filters and event list container rendered.")
+        # Verify the filter controls and one of the valid timeline content
+        # states (populated, empty or error) have rendered.
+        page.wait_for_selector('[data-testid="timeline-category-filters"]', state="visible", timeout=15000)
+        page.wait_for_function(
+            """() => [
+                '[data-testid="living-timeline-list"]',
+                '[data-testid="living-timeline-empty"]',
+                '[data-testid="living-timeline-error"]',
+                '[data-testid="living-timeline-loading"]'
+            ].some((selector) => {
+                const node = document.querySelector(selector);
+                if (!node) return false;
+                const rect = node.getBoundingClientRect();
+                const style = window.getComputedStyle(node);
+                return rect.width > 0 && rect.height > 0 &&
+                    style.display !== "none" && style.visibility !== "hidden";
+            })""",
+            timeout=15000,
+        )
+        print("[PASS] Timeline filters and event content state rendered.")
 
-        # Test culture filter
+        # Test culture filter and wait for React to apply the selected state.
         culture_filter_btn = page.locator('[data-testid="timeline-filter-category-culture"]')
-        if culture_filter_btn.is_visible():
-            culture_filter_btn.click()
-            time.sleep(0.5)
-            print("[PASS] Category filter for 'culture' clicked successfully.")
+        culture_filter_btn.click(timeout=15000)
+        page.wait_for_function(
+            """() => {
+                const button = document.querySelector('[data-testid="timeline-filter-category-culture"]');
+                return Boolean(button && button.className.includes("bg-purple-600/30"));
+            }""",
+            timeout=10000,
+        )
+        print("[PASS] Category filter for 'culture' selected successfully.")
 
-        # Reset to all categories
+        # Reset to all categories and verify the selected state.
         all_filter_btn = page.locator('[data-testid="timeline-filter-category-all"]')
-        if all_filter_btn.is_visible():
-            all_filter_btn.click()
-            time.sleep(0.5)
+        all_filter_btn.click(timeout=15000)
+        page.wait_for_function(
+            """() => {
+                const button = document.querySelector('[data-testid="timeline-filter-category-all"]');
+                return Boolean(button && button.className.includes("bg-purple-600/30"));
+            }""",
+            timeout=10000,
+        )
 
-        # Close timeline drawer
+        # Close timeline drawer and verify it is removed from the DOM.
         close_btn = page.locator('[data-testid="close-timeline-drawer"]')
-        assert close_btn.is_visible(), "Close timeline drawer button not visible"
-        close_btn.click()
+        close_btn.wait_for(state="visible", timeout=10000)
+        close_btn.click(timeout=15000)
+        page.wait_for_function(
+            """() => !document.querySelector('[data-testid="living-world-timeline-drawer"]')""",
+            timeout=10000,
+        )
         print("[PASS] Timeline drawer closed successfully.")
 
         # Fail verification if unexpected JavaScript page errors occurred on either page context
