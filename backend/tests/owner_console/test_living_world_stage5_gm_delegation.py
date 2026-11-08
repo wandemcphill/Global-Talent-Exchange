@@ -32,7 +32,7 @@ from app.models.wallet import (
     LedgerTransaction,
 )
 from app.models.user import User
-from app.owner_console import ledger, living_gm_delegation, living_staff_market, router as owner_router
+from app.owner_console import delegation_service, ledger, living_gm_delegation, living_staff_market, router as owner_router
 from app.owner_console.delegation_service import DelegationError
 from app.owner_console.models import (
     OWNER_CONSOLE_TABLES,
