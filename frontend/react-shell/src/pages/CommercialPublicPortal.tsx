@@ -27,23 +27,21 @@ import {
   formatNairaMinor,
 } from "@/lib/commercial/api";
 
-type CommercialPublicPortalProps = {
-  initialTab?: "overview" | "brands" | "music" | "pricing";
-  /** Backward-compatible selector used by older portal callers. */
+export interface CommercialPublicPortalProps {
   division?: "overview" | "brands" | "music";
-};
+  initialTab?: "overview" | "brands" | "music" | "pricing" | "all" | string;
+}
 
 export default function CommercialPublicPortal({
-  initialTab,
   division,
+  initialTab,
 }: CommercialPublicPortalProps = {}) {
   const pathname = typeof window !== "undefined" ? window.location.pathname : "";
-  const selectedTab = initialTab ?? division;
-  const isPricingRoute = initialTab === "pricing" || pathname.endsWith("/pricing");
+  const tabFromProp = initialTab || division;
   const initialFocus =
-    selectedTab === "music" || pathname.includes("/music")
+    tabFromProp === "music" || pathname.includes("/music")
       ? "music"
-      : selectedTab === "brands" || pathname.includes("/brands")
+      : tabFromProp === "brands" || pathname.includes("/brands")
         ? "brand"
         : "all";
 
@@ -53,19 +51,10 @@ export default function CommercialPublicPortal({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (isPricingRoute) {
-      setActiveTab("all");
-      document
-        .getElementById("pricing-packages")
-        ?.scrollIntoView?.({ block: "start", behavior: "smooth" });
-    } else if (selectedTab === "music" || pathname.includes("/music")) {
-      setActiveTab("music");
-    } else if (selectedTab === "brands" || pathname.includes("/brands")) {
-      setActiveTab("brand");
-    } else {
-      setActiveTab("all");
-    }
-  }, [isPricingRoute, selectedTab, pathname]);
+    if (tabFromProp === "music" || pathname.includes("/music")) setActiveTab("music");
+    else if (tabFromProp === "brands" || pathname.includes("/brands")) setActiveTab("brand");
+    else setActiveTab("all");
+  }, [division, initialTab, tabFromProp, pathname]);
 
   useEffect(() => {
     let mounted = true;
