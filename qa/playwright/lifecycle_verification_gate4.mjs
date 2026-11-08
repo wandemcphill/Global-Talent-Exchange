@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * GTEX Matchday 3D — Gate 4: Renderer Lifecycle, Context Loss & Recovery Verification.
  *

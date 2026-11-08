@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * GTEX Matchday 3D — Performance Comparison & Quality Tier Benchmark.
  *

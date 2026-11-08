@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * GTEX Matchday 3D — continuous 300-second browser acceptance run (1920x1080).
  *
@@ -10,7 +11,7 @@
  *
  * Usage (from qa/playwright):
  *   $env:GTEX_ACC_BASE_URL='http://127.0.0.1:3100'
- *   $env:GTEX_E2E_EMAIL='seed.fan@gte.local'; $env:GTEX_E2E_PASSWORD='DemoPass123'
+ *   $env:GTEX_E2E_EMAIL='seed.fan@gte.local'; $env:GTEX_E2E_PASSWORD='DemoPass123' // pragma: allowlist secret
  *   node matchday_3d_acceptance.mjs [outDir] [durationSec]
  */
 import { chromium } from "@playwright/test";

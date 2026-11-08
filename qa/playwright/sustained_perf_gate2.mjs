@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * GTEX Matchday 3D — Gate 2: 300-Second Sustained Performance Benchmark.
  *
