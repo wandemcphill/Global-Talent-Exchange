@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ExternalLink, ShieldCheck, Sparkles, VolumeX } from "lucide-react";
+import { ExternalLink, Music2, ShieldCheck, Sparkles, VolumeX } from "lucide-react";
 import { api } from "@/lib/api";
 import { resolveCommercialMediaUrl } from "@/lib/commercial/api";
+import { GtexSponsoredMusicCard, useSponsoredMusic } from "@/lib/audio";
 
 export interface PublicBrandCampaign {
   id: string;
@@ -22,7 +23,7 @@ export interface PublicBrandCampaign {
 const sessionReportedEvents = new Set<string>();
 const sessionFrequencyCounts: Record<string, number> = {};
 
-function recordAdEvent(
+export function recordAdEvent(
   campaignId: string,
   eventType: "impression" | "viewable_impression" | "click",
   placement: string,
@@ -262,5 +263,158 @@ export function SilentMatchBroadcastPanel({
         </a>
       </div>
     </aside>
+  );
+}
+
+/**
+ * D. Stadium Pitchside Perimeter LED & Brand Sponsor Showcase.
+ * Connects the GTEX Commercial Network to Stadium presentations and Public Club Profiles.
+ */
+export function StadiumPerimeterLEDShowcase({
+  className = "",
+  stadiumName = "Arena",
+}: {
+  className?: string;
+  stadiumName?: string;
+}) {
+  const { perimeterAd, sponsorAd } = useMatchCommercialInventory();
+  const activeAd = perimeterAd || sponsorAd;
+  const placementKey = "stadium_perimeter";
+
+  useEffect(() => {
+    if (activeAd) {
+      recordAdEvent(activeAd.id, "impression", placementKey);
+    }
+  }, [activeAd]);
+
+  const logoSrc = activeAd ? resolveCommercialMediaUrl(activeAd.logo_url) : null;
+
+  return (
+    <div
+      data-testid="stadium-perimeter-led-showcase"
+      className={`relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/20 p-5 shadow-xl ${className}`}
+    >
+      <div className="flex items-center justify-between gap-3 text-[10px] font-bold uppercase tracking-wider">
+        <div className="flex items-center gap-1.5 text-emerald-400">
+          <Sparkles className="h-3.5 w-3.5" />
+          <span>Pitchside Partner Showcase • {stadiumName}</span>
+        </div>
+        <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[9px] font-mono font-bold text-emerald-300 border border-emerald-400/20">
+          Commercial Network
+        </span>
+      </div>
+
+      {activeAd ? (
+        <div className="mt-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            {logoSrc ? (
+              <img
+                src={logoSrc}
+                alt={activeAd.brand_name}
+                className="h-10 w-10 shrink-0 rounded-xl border border-white/10 bg-slate-950 p-1 object-contain"
+              />
+            ) : (
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 font-black">
+                {activeAd.brand_name.slice(0, 2).toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-white truncate">{activeAd.brand_name}</span>
+                <span className="text-[10px] font-medium text-emerald-300 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-400/20">
+                  Official Partner
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs font-semibold text-slate-200 line-clamp-1">{activeAd.headline}</p>
+              {activeAd.description && (
+                <p className="text-[11px] text-slate-400 line-clamp-1">{activeAd.description}</p>
+              )}
+            </div>
+          </div>
+
+          <a
+            href={activeAd.destination_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => recordAdEvent(activeAd.id, "click", placementKey)}
+            data-testid="stadium-perimeter-visit-btn"
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-3.5 py-2 text-xs font-bold text-slate-950 transition hover:opacity-95"
+          >
+            Visit Partner
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        </div>
+      ) : (
+        <div className="mt-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h4 className="text-sm font-bold text-slate-100">Official Stadium Advertising Space</h4>
+            <p className="mt-0.5 text-xs text-slate-400">
+              Deliver your brand directly to matchday supporters across active GTEX continental fixtures.
+            </p>
+          </div>
+          <a
+            href="/advertise"
+            data-testid="stadium-advertise-cta-btn"
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3.5 py-2 text-xs font-bold text-emerald-300 transition hover:bg-emerald-500/20"
+          >
+            Sponsor Arena
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * E. Stadium Matchday Soundscape & Artist Anthem Station.
+ * Connects GTEX sponsored music rotation directly to club stadium showcases.
+ */
+export function StadiumMatchdaySoundscape({
+  className = "",
+  clubName = "Club",
+}: {
+  className?: string;
+  clubName?: string;
+}) {
+  const { track, status } = useSponsoredMusic();
+  const hasTrack = Boolean(track && status !== "idle");
+
+  return (
+    <div
+      data-testid="stadium-matchday-soundscape"
+      className={`relative overflow-hidden rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950/20 p-5 shadow-xl ${className}`}
+    >
+      <div className="flex items-center justify-between gap-3 text-[10px] font-bold uppercase tracking-wider">
+        <div className="flex items-center gap-1.5 text-cyan-400">
+          <Music2 className="h-3.5 w-3.5" />
+          <span>Matchday Soundscape • {clubName} Anthem</span>
+        </div>
+        <span className="rounded-full bg-cyan-400/10 px-2 py-0.5 text-[9px] font-mono font-bold text-cyan-300 border border-cyan-400/20">
+          GTEX Audio
+        </span>
+      </div>
+
+      {hasTrack ? (
+        <GtexSponsoredMusicCard compact className="mt-3.5 border-white/10" />
+      ) : (
+        <div className="mt-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h4 className="text-sm font-bold text-slate-100">Matchday Soundscape & Artist Showcase</h4>
+            <p className="mt-0.5 text-xs text-slate-400">
+              Atmospheric stadium acoustics, certified artist tracks, and curated anthems during live fixtures.
+            </p>
+          </div>
+          <a
+            href="/advertise/music"
+            data-testid="soundscape-promote-cta-btn"
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-cyan-400/30 bg-cyan-500/10 px-3.5 py-2 text-xs font-bold text-cyan-300 transition hover:bg-cyan-500/20"
+          >
+            Promote Music
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        </div>
+      )}
+    </div>
   );
 }
