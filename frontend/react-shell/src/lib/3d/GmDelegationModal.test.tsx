@@ -67,6 +67,8 @@ const mockOverviewData = {
       department: "executive",
       requires_owner_approval: true,
       gm_can_execute: false,
+      execution_supported: true,
+      policy_suspended: false,
       delegation_level: "review_only",
     },
     {
@@ -76,8 +78,22 @@ const mockOverviewData = {
       category: "academy",
       department: "sporting",
       requires_owner_approval: false,
-      gm_can_execute: true,
-      delegation_level: "full_delegation",
+      gm_can_execute: false,
+      execution_supported: true,
+      policy_suspended: true,
+      delegation_level: "delegated_with_limits",
+    },
+    {
+      activity_key: "player_scouting",
+      label: "Player Scouting Missions",
+      description: "Owner-managed until the execution workflow is implemented.",
+      category: "sporting",
+      department: "sporting",
+      requires_owner_approval: true,
+      gm_can_execute: false,
+      execution_supported: false,
+      policy_suspended: false,
+      delegation_level: "owner_only",
     },
   ],
   pending_proposals: [
@@ -323,5 +339,26 @@ describe("GmDelegationModal Component", () => {
     expect(container.textContent).toContain("42,000 GTEX"); // total approved spend
     expect(container.textContent).toContain("Autonomous trial sanction executed within limit");
     expect(container.textContent).toContain("Good talent intake");
+  });
+
+
+  it("shows suspended and not-yet-implemented activities as non-executable", async () => {
+    renderModal({ initialTab: "matrix" });
+
+    await waitForCondition(() =>
+      Boolean(container.querySelector('[data-testid="toggle-activity-player_scouting"]'))
+    );
+
+    const suspendedButton = container.querySelector(
+      '[data-testid="toggle-activity-academy_recruitment"]'
+    ) as HTMLButtonElement;
+    const unsupportedButton = container.querySelector(
+      '[data-testid="toggle-activity-player_scouting"]'
+    ) as HTMLButtonElement;
+
+    expect(suspendedButton.disabled).toBe(true);
+    expect(unsupportedButton.disabled).toBe(true);
+    expect(container.textContent).toContain("GM Authority Suspended");
+    expect(container.textContent).toContain("Owner Only — Not Implemented");
   });
 });
