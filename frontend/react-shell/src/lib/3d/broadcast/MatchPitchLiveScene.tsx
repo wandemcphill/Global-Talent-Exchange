@@ -10,6 +10,7 @@
  * 5. CameraDirector cinematography executing the 6 canonical camera presets.
  * 6. TV-grade BroadcastOverlayHUD scorebug, minimap radar, and event banners.
  * 7. WebGL context-loss resilience and seamless 2D fallback.
+ * 8. Phase 2 Expansion: Tiered Stadiums, Weather & Atmospherics, 3D Touchline Managers, Spatial Audio.
  */
 
 import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
@@ -33,7 +34,16 @@ import {
 } from "./spectatorContract";
 import { GtexSceneRegistry, QUALITY_PROFILES } from "../GtexSceneRegistry";
 import type { DeviceQualityTier } from "../GtexSceneTypes";
-import { StadiumArenaEnvironment } from "./StadiumArenaEnvironment";
+import {
+  StadiumArenaEnvironment,
+  type StadiumTier,
+} from "./StadiumArenaEnvironment";
+import {
+  WeatherAtmosphereSystem,
+  type StadiumWeatherPreset,
+} from "./WeatherAtmosphereSystem";
+import { TouchlineManagerSystem } from "./TouchlineManagerSystem";
+import { StadiumAudioEngine } from "./StadiumAudioEngine";
 import {
   type StadiumLedCampaign,
   type StadiumAdImpressionEvent,
@@ -93,6 +103,14 @@ export interface MatchPitchLiveSceneProps {
   onToggleTheatreMode?: () => void;
   /** Callback when user changes graphics quality profile */
   onQualityTierChange?: (tier: DeviceQualityTier) => void;
+  /** Phase 2: Stadium architecture tier (1 = Community 12.5k, 2 = Regional 36k, 3 = Sovereign 68k) */
+  stadiumTier?: StadiumTier;
+  /** Callback when user changes stadium tier */
+  onStadiumTierChange?: (tier: StadiumTier) => void;
+  /** Phase 2: Dynamic matchday weather & atmospheric preset */
+  weatherPreset?: StadiumWeatherPreset;
+  /** Callback when user changes weather preset */
+  onWeatherPresetChange?: (preset: StadiumWeatherPreset) => void;
   /** Additional container CSS class */
   className?: string;
   /** Test identifier */
@@ -121,17 +139,26 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   isTheatreMode: externalTheatreMode,
   onToggleTheatreMode,
   onQualityTierChange,
+  stadiumTier: propStadiumTier = 3,
+  onStadiumTierChange,
+  weatherPreset: propWeatherPreset = "clear_night",
+  onWeatherPresetChange,
   className = "",
   testId = "match-pitch-live-scene",
 }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const stadiumArenaRef = useRef<StadiumArenaEnvironment | null>(null);
+  const weatherSystemRef = useRef<WeatherAtmosphereSystem | null>(null);
+  const touchlineManagerRef = useRef<TouchlineManagerSystem | null>(null);
+  const audioEngineRef = useRef<StadiumAudioEngine>(new StadiumAudioEngine({ initialMuted: true }));
   const [webglSupported, setWebglSupported] = useState<boolean>(true);
   const [contextLost, setContextLost] = useState<boolean>(false);
   const [cameraMode, setCameraMode] = useState<ManualCameraMode>("director_auto");
   const [is2DActive, setIs2DActive] = useState<boolean>(false);
   const [audioMuted, setAudioMuted] = useState<boolean>(true);
   const [qualityTier, setQualityTierState] = useState<DeviceQualityTier>(propQualityTier);
+  const [stadiumTier, setStadiumTierState] = useState<StadiumTier>(propStadiumTier);
+  const [weatherPreset, setWeatherPresetState] = useState<StadiumWeatherPreset>(propWeatherPreset);
   const [internalTheatreMode, setInternalTheatreMode] = useState<boolean>(false);
   const [minimalHud, setMinimalHud] = useState<boolean>(false);
   const [isReplayActive, setIsReplayActive] = useState<boolean>(false);
@@ -140,6 +167,9 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   const replayCursorTimeRef = useRef<number | null>(null);
   const replayEndTimeRef = useRef<number | null>(null);
   const lastCrowdEventIdRef = useRef<string | null>(null);
+  const lastBallStateRef = useRef<string>("idle");
+  const stadiumTierRef = useRef<StadiumTier>(propStadiumTier);
+  const weatherPresetRef = useRef<StadiumWeatherPreset>(propWeatherPreset);
 
   const isTheatreMode = externalTheatreMode ?? internalTheatreMode;
 
@@ -147,12 +177,44 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     setQualityTierState(propQualityTier);
   }, [propQualityTier]);
 
+  useEffect(() => {
+    setStadiumTierState(propStadiumTier);
+    stadiumTierRef.current = propStadiumTier;
+    stadiumArenaRef.current?.setStadiumTier(propStadiumTier);
+  }, [propStadiumTier]);
+
+  useEffect(() => {
+    setWeatherPresetState(propWeatherPreset);
+    weatherPresetRef.current = propWeatherPreset;
+    weatherSystemRef.current?.setPreset(propWeatherPreset);
+  }, [propWeatherPreset]);
+
   const handleSelectQualityTier = useCallback(
     (tier: "high" | "medium" | "low") => {
       setQualityTierState(tier);
       onQualityTierChange?.(tier);
     },
     [onQualityTierChange]
+  );
+
+  const handleSelectStadiumTier = useCallback(
+    (tier: StadiumTier) => {
+      setStadiumTierState(tier);
+      stadiumTierRef.current = tier;
+      stadiumArenaRef.current?.setStadiumTier(tier);
+      onStadiumTierChange?.(tier);
+    },
+    [onStadiumTierChange]
+  );
+
+  const handleSelectWeatherPreset = useCallback(
+    (preset: StadiumWeatherPreset) => {
+      setWeatherPresetState(preset);
+      weatherPresetRef.current = preset;
+      weatherSystemRef.current?.setPreset(preset);
+      onWeatherPresetChange?.(preset);
+    },
+    [onWeatherPresetChange]
   );
 
   const handleToggleTheatre = useCallback(() => {
@@ -212,6 +274,9 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
 
   useEffect(() => {
     interpolator.setTacticalConfig(tacticalConfig ?? null);
+    if (tacticalConfig) {
+      touchlineManagerRef.current?.notifyTacticalChange("both");
+    }
   }, [tacticalConfig, interpolator]);
 
   useEffect(() => {
@@ -269,8 +334,9 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     cameraDirector.setManualMode(cameraMode);
   }, [cameraMode, cameraDirector]);
 
-  // Coordinate Match Atmosphere Audio with central GtexAudioManager
+  // Coordinate Match Atmosphere Audio with central GtexAudioManager & StadiumAudioEngine
   useEffect(() => {
+    audioEngineRef.current.setMuted(audioMuted);
     if (!audioMuted) {
       gtexAudio.registerActiveChannelSource("ambience", "match_pitch_live_atmosphere");
     } else {
@@ -280,6 +346,12 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       gtexAudio.unregisterActiveChannelSource("ambience", "match_pitch_live_atmosphere");
     };
   }, [audioMuted]);
+
+  useEffect(() => {
+    return () => {
+      audioEngineRef.current.dispose();
+    };
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Three.js WebGL Scene Lifecycle
@@ -347,7 +419,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     canvasElement.addEventListener("webglcontextrestored", handleContextRestored);
 
     // -------------------------------------------------------------------------
-    // 2. Comprehensive Stadium & Pitch Environment (Milestone 2 Expansion)
+    // 2. Comprehensive Stadium & Pitch Environment (Milestone 2 + Phase 2)
     // -------------------------------------------------------------------------
     const hemiLight = new THREE.HemisphereLight(0xdbeafe, 0x1e5631, 1.15);
     scene.add(hemiLight);
@@ -375,6 +447,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       homeTeam: safeViewRef.current.home_team,
       awayTeam: safeViewRef.current.away_team,
       qualityTier,
+      stadiumTier: stadiumTierRef.current,
       stadiumName: safeViewRef.current.venue_name || "GTEX National Arena",
       competitionName: safeViewRef.current.competition_name || "GTEX PREMIER BROADCAST",
       matchId: safeViewRef.current.match_id,
@@ -388,6 +461,27 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       initialCampaigns: stadiumCampaigns,
     });
     stadiumArenaRef.current = stadiumArena;
+
+    // -------------------------------------------------------------------------
+    // 3. Phase 2: Weather & Atmospherics + 3D Touchline Managers & Bench
+    // -------------------------------------------------------------------------
+    const weatherSystem = new WeatherAtmosphereSystem(scene, {
+      initialPreset: weatherPresetRef.current,
+      qualityTier,
+      hemiLight,
+      keyLight,
+      fillLight,
+    });
+    const pitchMats = stadiumArena.getPitchMaterials();
+    weatherSystem.bindPitchMaterials(pitchMats.pitchTurfMat, pitchMats.pitchRunoffMat);
+    weatherSystemRef.current = weatherSystem;
+
+    const touchlineManagers = new TouchlineManagerSystem(scene, {
+      homeTeam: safeViewRef.current.home_team,
+      awayTeam: safeViewRef.current.away_team,
+      qualityTier,
+    });
+    touchlineManagerRef.current = touchlineManagers;
 
     const adNet = stadiumArena.getAdvertisingNetwork();
     if (safeViewRef.current.monetization) {
@@ -520,6 +614,15 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         setQualityTier: (tier: "high" | "medium" | "low") => {
           handleSelectQualityTier(tier);
         },
+        setStadiumTier: (tier: StadiumTier) => {
+          handleSelectStadiumTier(tier);
+        },
+        setWeatherPreset: (preset: StadiumWeatherPreset) => {
+          handleSelectWeatherPreset(preset);
+        },
+        triggerCrowdWave: () => {
+          stadiumArena.triggerCrowdWave();
+        },
         setTheatreMode: (enabled: boolean) => {
           setInternalTheatreMode(enabled);
         },
@@ -537,6 +640,9 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         },
         setTacticalConfig: (cfg: TacticalVisualConfig | null) => {
           interpolator.setTacticalConfig(cfg);
+          if (cfg) {
+            touchlineManagers.notifyTacticalChange("both");
+          }
         },
         setStadiumCampaigns: (campaigns: StadiumLedCampaign[]) => {
           stadiumArena.getAdvertisingNetwork().setCampaigns(campaigns);
@@ -552,6 +658,12 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
             impressions: net.getImpressionHistory(),
           };
         },
+        getPhase2Summary: () => ({
+          stadiumTier: stadiumArena.getStadiumTierProfile(),
+          weather: weatherSystem.getTelemetry(),
+          touchlineManagers: touchlineManagers.getSummary(),
+          spatialAudio: audioEngineRef.current.getTelemetry(),
+        }),
         resetTelemetry: () => {
           frameDeltaSamplesMs.length = 0;
           frameDeltaSumMs = 0;
@@ -631,8 +743,9 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       const sampleTime =
         replayCursorTimeRef.current !== null ? replayCursorTimeRef.current : localTime;
 
-      // Update stadium dynamics (slot-boundary LED ad rotation + instanced crowd motion)
+      // Update stadium dynamics (slot-boundary LED ad rotation + instanced crowd motion) and weather particles
       stadiumArena.update(deltaSec, localTime);
+      weatherSystem.update(deltaSec);
 
       // Query interpolated match state at sampleTime (replay cursor during replay, live cursor otherwise)
       const state = interpolator.interpolate(sampleTime);
@@ -697,6 +810,10 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           } else if (evType === "attack" || evType === "penalty") {
             stadiumArena.triggerCrowdReaction("attack", evSide);
           }
+
+          // Phase 2: Touchline manager reaction + spatial stadium audio cue
+          touchlineManagers.triggerEventReaction(evType, evSide);
+          audioEngineRef.current.handleMatchEvent(evType, evSide, state.ball.position3D);
         }
 
         // Update Camera first so LOD distance checks use the exact current camera pose
@@ -737,6 +854,35 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           ballMesh.rotation.x += deltaSec * 4.5;
           ballMesh.rotation.z -= deltaSec * 3.2;
         }
+
+        // Phase 2: Detect ball kick state transitions for 3D spatial ball-strike audio
+        if (state.ball.state !== lastBallStateRef.current) {
+          const prevBallState = lastBallStateRef.current;
+          lastBallStateRef.current = state.ball.state;
+          if (
+            (state.ball.state === "pass" ||
+              state.ball.state === "shot" ||
+              state.ball.state === "cross" ||
+              state.ball.state === "lob" ||
+              state.ball.state === "clearance") &&
+            prevBallState !== state.ball.state
+          ) {
+            audioEngineRef.current.playBallKick(
+              [bx, by, bz],
+              state.ball.state === "shot" ? 0.95 : 0.65
+            );
+          }
+        }
+
+        // Phase 2: Update Touchline Managers & Crowd Ambience Audio
+        touchlineManagers.update({
+          deltaSec,
+          ballPosition3D: [bx, by, bz],
+          cameraPosition3D: pose.position,
+          possessionSide: state.possession_side,
+          qualityTier,
+        });
+        audioEngineRef.current.updateCrowdAmbience(stadiumArena.getCrowdReactionState().intensity);
 
         // Update ball drop shadow
         ballShadowMesh.position.set(bx, 0.03, bz);
@@ -863,6 +1009,10 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
               observedStatesHistory: Array.from(observedStatesHistory),
               observedCameraPresetsHistory: Array.from(observedCameraPresetsHistory),
               crowdReaction: stadiumArena.getCrowdReactionState(),
+              stadiumTier: stadiumArena.getStadiumTierProfile(),
+              weather: weatherSystem.getTelemetry(),
+              touchlineManagers: touchlineManagers.getSummary(),
+              spatialAudio: audioEngineRef.current.getTelemetry(),
               adRotationCount: adNet.getRotationCount(),
               adImpressionCount: adNet.getImpressionHistory().length,
               activeAdCampaigns: adNet.getActiveCampaigns().map((c) => ({
@@ -910,10 +1060,14 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
 
       // Dispose Three.js objects
       stadiumArenaRef.current = null;
+      weatherSystemRef.current = null;
+      touchlineManagerRef.current = null;
       playerRigs.forEach((rig) => rig.dispose());
       playerRigs.clear();
       scene.clear();
       stadiumArena.dispose();
+      weatherSystem.dispose();
+      touchlineManagers.dispose();
       ballGeo.dispose();
       ballMat.dispose();
       shadowGeo.dispose();
@@ -925,7 +1079,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         }
       }
     };
-  }, [qualityTier, cameraDirector, interpolator, animationStateMachine, handleSelectQualityTier, is2DActive, adRotationIntervalSec, onAdImpressionRecorded]);
+  }, [qualityTier, cameraDirector, interpolator, animationStateMachine, handleSelectQualityTier, handleSelectStadiumTier, handleSelectWeatherPreset, is2DActive, adRotationIntervalSec, onAdImpressionRecorded]);
 
   // Resolve active HUD event from either timeline or live stream
   const activeHudEvent = useMemo(() => {
@@ -1053,6 +1207,10 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           onToggleAudio={() => setAudioMuted((m) => !m)}
           qualityTier={qualityTier}
           onSelectQualityTier={handleSelectQualityTier}
+          stadiumTier={stadiumTier}
+          onSelectStadiumTier={handleSelectStadiumTier}
+          weatherPreset={weatherPreset}
+          onSelectWeatherPreset={handleSelectWeatherPreset}
           isTheatreMode={isTheatreMode}
           onToggleTheatreMode={handleToggleTheatre}
           minimalHud={minimalHud}
@@ -1109,6 +1267,10 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           onToggleAudio={() => setAudioMuted((m) => !m)}
           qualityTier={qualityTier}
           onSelectQualityTier={handleSelectQualityTier}
+          stadiumTier={stadiumTier}
+          onSelectStadiumTier={handleSelectStadiumTier}
+          weatherPreset={weatherPreset}
+          onSelectWeatherPreset={handleSelectWeatherPreset}
           isTheatreMode={isTheatreMode}
           onToggleTheatreMode={handleToggleTheatre}
           minimalHud={minimalHud}

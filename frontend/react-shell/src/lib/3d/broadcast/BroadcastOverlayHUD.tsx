@@ -39,6 +39,11 @@ import {
   SpectatorSafeTeamView,
 } from "./spectatorContract";
 import type { DeviceQualityTier } from "../GtexSceneTypes";
+import type { StadiumTier } from "./StadiumArenaEnvironment";
+import {
+  type StadiumWeatherPreset,
+  STADIUM_WEATHER_PROFILES,
+} from "./WeatherAtmosphereSystem";
 
 export interface BroadcastOverlayHUDProps {
   matchState: InterpolatedMatchState | null;
@@ -61,6 +66,10 @@ export interface BroadcastOverlayHUDProps {
   onToggleAudio?: () => void;
   qualityTier?: DeviceQualityTier;
   onSelectQualityTier?: (tier: "high" | "medium" | "low") => void;
+  stadiumTier?: StadiumTier;
+  onSelectStadiumTier?: (tier: StadiumTier) => void;
+  weatherPreset?: StadiumWeatherPreset;
+  onSelectWeatherPreset?: (preset: StadiumWeatherPreset) => void;
   isTheatreMode?: boolean;
   onToggleTheatreMode?: () => void;
   minimalHud?: boolean;
@@ -122,6 +131,10 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
   onToggleAudio,
   qualityTier = "high",
   onSelectQualityTier,
+  stadiumTier = 3,
+  onSelectStadiumTier,
+  weatherPreset = "clear_night",
+  onSelectWeatherPreset,
   isTheatreMode = false,
   onToggleTheatreMode,
   minimalHud = false,
@@ -378,6 +391,53 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
                   LED: {activeSponsorName}
                 </span>
               )}
+            </div>
+          )}
+          {onSelectStadiumTier && !minimalHud && (
+            <div
+              data-testid="stadium-tier-selector"
+              className="hidden sm:flex items-center gap-0.5 rounded-lg border border-white/15 bg-slate-950/85 p-0.5 text-[10px] font-bold uppercase backdrop-blur-md"
+              title="Stadium Architecture Tier (T1 Community • T2 Regional • T3 Sovereign)"
+            >
+              <Shield className="size-3 text-emerald-400 mx-1" />
+              {([1, 2, 3] as const).map((tier) => (
+                <button
+                  key={tier}
+                  type="button"
+                  data-testid={`stadium-tier-${tier}`}
+                  onClick={() => onSelectStadiumTier(tier)}
+                  className={`rounded px-1.5 py-0.5 transition-colors ${
+                    stadiumTier === tier
+                      ? "bg-emerald-500 text-slate-950 font-black"
+                      : "text-slate-300 hover:bg-white/10"
+                  }`}
+                >
+                  T{tier}
+                </button>
+              ))}
+            </div>
+          )}
+          {onSelectWeatherPreset && !minimalHud && (
+            <div
+              data-testid="weather-preset-selector"
+              className="hidden lg:flex items-center gap-0.5 rounded-lg border border-white/15 bg-slate-950/85 p-0.5 text-[10px] font-bold uppercase backdrop-blur-md"
+              title="Matchday Weather & Atmosphere"
+            >
+              {(["clear_night", "clear_day", "rain", "snow", "mist"] as const).map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  data-testid={`weather-preset-${preset}`}
+                  onClick={() => onSelectWeatherPreset(preset)}
+                  className={`rounded px-1.5 py-0.5 transition-colors ${
+                    weatherPreset === preset
+                      ? "bg-cyan-400 text-slate-950 font-black"
+                      : "text-slate-300 hover:bg-white/10"
+                  }`}
+                >
+                  {STADIUM_WEATHER_PROFILES[preset].shortLabel}
+                </button>
+              ))}
             </div>
           )}
           {onSelectQualityTier && !minimalHud && (
@@ -733,6 +793,18 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
               }`}
             >
               CELEBRATE
+            </button>
+            <button
+              type="button"
+              data-testid="camera-mode-dugout_cam"
+              onClick={() => onSelectCameraMode("dugout_cam")}
+              className={`rounded-lg px-2 py-1 text-[11px] font-bold uppercase tracking-wider transition-colors ${
+                cameraMode === "dugout_cam"
+                  ? "bg-emerald-500 text-slate-950 shadow-sm"
+                  : "text-slate-300 hover:bg-white/10"
+              }`}
+            >
+              DUGOUT
             </button>
           </div>
 
