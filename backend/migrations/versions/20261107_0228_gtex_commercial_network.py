@@ -133,6 +133,14 @@ def upgrade() -> None:
             if col_name not in existing_cols:
                 op.add_column("brand_ad_campaigns", col_def)
 
+        existing_indexes = {idx["name"] for idx in inspector.get_indexes("brand_ad_campaigns")}
+        if "ix_brand_ad_campaigns_workspace" not in existing_indexes:
+            op.create_index(
+                "ix_brand_ad_campaigns_workspace",
+                "brand_ad_campaigns",
+                ["workspace_id", "status"],
+            )
+
         if bind.dialect.name == "postgresql":
             for constraint_name in ("valid_placement", "valid_status", "valid_pricing_model"):
                 op.execute(f"ALTER TABLE brand_ad_campaigns DROP CONSTRAINT IF EXISTS {constraint_name}")
@@ -161,5 +169,10 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if "brand_ad_campaigns" in inspector.get_table_names():
+        existing_indexes = {idx["name"] for idx in inspector.get_indexes("brand_ad_campaigns")}
+        if "ix_brand_ad_campaigns_workspace" in existing_indexes:
+            op.drop_index("ix_brand_ad_campaigns_workspace", table_name="brand_ad_campaigns")
     for table in reversed(_NEW_TABLES):
         table.drop(bind=bind, checkfirst=True)

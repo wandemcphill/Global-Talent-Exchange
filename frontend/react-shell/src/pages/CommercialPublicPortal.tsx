@@ -38,6 +38,7 @@ export default function CommercialPublicPortal({
 }: CommercialPublicPortalProps = {}) {
   const pathname = typeof window !== "undefined" ? window.location.pathname : "";
   const tabFromProp = initialTab || division;
+  const isPricingRoute = initialTab === "pricing" || pathname.endsWith("/pricing");
   const initialFocus =
     tabFromProp === "music" || pathname.includes("/music")
       ? "music"
@@ -51,10 +52,19 @@ export default function CommercialPublicPortal({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (tabFromProp === "music" || pathname.includes("/music")) setActiveTab("music");
-    else if (tabFromProp === "brands" || pathname.includes("/brands")) setActiveTab("brand");
-    else setActiveTab("all");
-  }, [division, initialTab, tabFromProp, pathname]);
+    if (isPricingRoute) {
+      setActiveTab("all");
+      document
+        .getElementById("pricing-packages")
+        ?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+    } else if (tabFromProp === "music" || pathname.includes("/music")) {
+      setActiveTab("music");
+    } else if (tabFromProp === "brands" || pathname.includes("/brands")) {
+      setActiveTab("brand");
+    } else {
+      setActiveTab("all");
+    }
+  }, [isPricingRoute, tabFromProp, pathname]);
 
   useEffect(() => {
     let mounted = true;

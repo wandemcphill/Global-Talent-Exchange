@@ -1,5 +1,7 @@
 # 3D Match Engine System Design
 
+> **Architecture Update (2026-11-07):** **React + Three.js + WebGL (`frontend/react-shell/src/lib/3d/broadcast/MatchPitchLiveScene.tsx`) is the canonical primary GTEX browser match experience**, consuming the authoritative `/match-viewer/{id}` and `/ws/spectate/{match_id}` contracts. Flutter serves as the 2D tactical and mobile companion, and Unity is preserved as a separate desktop/historical runtime. See [`docs/GTEX_WEBGL_MATCHDAY_3D_ARCHITECTURE.md`](../GTEX_WEBGL_MATCHDAY_3D_ARCHITECTURE.md) for full details.
+
 ## Scope
 
 This document defines the canonical GTEX "FIFA-like" match-engine architecture for deterministic football simulation, event streaming, and 3D client rendering.
