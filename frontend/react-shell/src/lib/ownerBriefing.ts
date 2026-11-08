@@ -813,6 +813,7 @@ export interface GmDelegationActivityItem {
   requires_owner_approval: boolean;
   gm_can_execute: boolean;
   execution_supported?: boolean;
+  policy_suspended?: boolean;
   expenditure_limit_gtex?: number;
   delegation_level: string;
 }
