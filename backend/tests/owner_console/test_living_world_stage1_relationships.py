@@ -96,7 +96,7 @@ def _seed_club(
             id=user_id,
             email=f"{user_id}@gtex.test",
             username=f"owner_{user_id}",
-            password_hash="synthetic_hash",
+            password_hash="synthetic_hash",  # pragma: allowlist secret
         )
         session.add(user)
         session.flush()
