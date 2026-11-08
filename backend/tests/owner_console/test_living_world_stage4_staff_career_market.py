@@ -28,7 +28,7 @@ from app.models.wallet import (
     LedgerTransaction,
 )
 from app.models.user import User
-from app.owner_console import living_staff_market, router as owner_router
+from app.owner_console import ledger, living_staff_market, router as owner_router
 from app.owner_console.models import (
     OWNER_CONSOLE_TABLES,
     OwnerClubState,
@@ -96,6 +96,17 @@ def _bootstrap_club(
     )
     session.add(state)
     session.flush()
+    ledger.record(
+        session,
+        event_type="test_club_funding",
+        source=ledger.PLATFORM_GRANTS,
+        destination=ledger.club_account(club_id),
+        currency=ledger.GTEX,
+        gross=2_000_000,
+        club_id=club_id,
+        user_id=user_id,
+        memo="Deterministic test-club treasury funding",
+    )
     return u, c, state
 
 
