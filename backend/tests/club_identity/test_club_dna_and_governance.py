@@ -245,3 +245,26 @@ def test_strict_age_policy_without_exceptions(session: Session, test_club: ClubP
     assert eval_over_21.is_eligible is False
     assert eval_over_21.exception_permitted is False
     assert "strictly prohibits signings over age 21" in (eval_over_21.violation_reason or "")
+
+
+def test_squad_dna_recommendations(session: Session, test_club: ClubProfile) -> None:
+    service = ClubGovernancePolicyService(session)
+    service.update_policy(
+        test_club.id,
+        {
+            "primary_philosophy": "academy_first",
+            "secondary_philosophies": ["selling_club"],
+            "nationality_mode": "exclusive",
+            "target_nationalities": ["FRA"],
+            "age_mode": "strict",
+            "preferred_max_age": 23,
+        },
+    )
+    recs = service.generate_squad_dna_recommendations(test_club.id)
+    assert recs["club_id"] == test_club.id
+    assert recs["recommended_formation"] == "4-3-3"
+    assert recs["target_u21_minutes_share_pct"] == 45
+    assert recs["academy_promotion_quota"] == 4
+    assert any("FRA" in d for d in recs["scouting_directives"])
+    assert any("showcase" in d.lower() for d in recs["tactical_directives"])
+

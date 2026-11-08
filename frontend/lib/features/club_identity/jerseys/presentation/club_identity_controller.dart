@@ -28,8 +28,11 @@ class ClubIdentityController extends ChangeNotifier {
   ClubIdentityDto? _saved;
   ClubIdentityDto? _draft;
   ClubIdentityDto? _optimisticBackup;
+  ClubDnaPolicyDto? _dna;
+  String? aiEditSummary;
 
   ClubIdentityDto? get identity => _draft;
+  ClubDnaPolicyDto? get dna => _dna;
 
   bool get hasIdentity => _draft != null;
 
@@ -277,6 +280,52 @@ class ClubIdentityController extends ChangeNotifier {
     _updateIdentity(current.copyWith(
       jerseySet: current.jerseySet.updateVariant(type, updated),
     ));
+  }
+
+  Future<void> loadDna() async {
+    try {
+      _dna = await _repository.fetchDna(clubId);
+      notifyListeners();
+    } catch (_) {
+      _dna ??= ClubDnaPolicyDto(clubId: clubId);
+      notifyListeners();
+    }
+  }
+
+  Future<void> saveDna(Map<String, dynamic> patch) async {
+    try {
+      _dna = await _repository.patchDna(clubId: clubId, patch: patch);
+      successMessage = 'Club DNA & recruitment philosophy saved.';
+      notifyListeners();
+    } catch (error) {
+      errorMessage = 'Could not save Club DNA. $error';
+      notifyListeners();
+    }
+  }
+
+  Future<void> applyConversationalEdit(
+    String instruction, {
+    JerseyType activeKit = JerseyType.home,
+  }) async {
+    final ClubIdentityDto? current = _draft;
+    if (current == null || instruction.trim().isEmpty) {
+      return;
+    }
+    try {
+      final JerseyVariantDto baseKit = current.jerseySet.variantFor(activeKit);
+      final StudioConversationalEditResultDto result =
+          await _repository.editStudioIdentity(
+            currentKit: baseKit.toJson(),
+            currentCrest: current.badgeProfile.toJson(),
+            instruction: instruction.trim(),
+          );
+      aiEditSummary = result.summary;
+      successMessage = result.summary;
+      notifyListeners();
+    } catch (error) {
+      errorMessage = 'Could not apply AI Studio edit. $error';
+      notifyListeners();
+    }
   }
 
   void _updateIdentity(ClubIdentityDto next) {

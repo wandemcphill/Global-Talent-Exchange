@@ -240,3 +240,11 @@ def approve_governance_exception(
         approved_at=exception.approved_at,
         metadata=dict(exception.metadata_json or {}),
     )
+
+
+@router.get("/{club_id}/dna/squad-alignment")
+def get_club_dna_squad_alignment(
+    club_id: str,
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return ClubGovernancePolicyService(session).generate_squad_dna_recommendations(club_id)

@@ -476,11 +476,22 @@ Color _rarityColor(String rarity) {
 IconData _giftIconFor(String key) {
   if (key.contains('whistle')) return Icons.sports;
   if (key.contains('chant')) return Icons.campaign_rounded;
-  if (key.contains('goal') || key.contains('boot')) return Icons.sports_soccer_rounded;
+  if (key.contains('stadium') || key.contains('maracana') || key.contains('wembley') || key.contains('san_siro') || key.contains('camp_nou')) {
+    return Icons.stadium_rounded;
+  }
+  if (key.contains('skyline') || key.contains('paris') || key.contains('new_york') || key.contains('rio') || key.contains('lagos')) {
+    return Icons.location_city_rounded;
+  }
+  if (key.contains('private_jet')) return Icons.flight_takeoff_rounded;
+  if (key.contains('superyacht')) return Icons.directions_boat_filled_rounded;
+  if (key.contains('trophy_lift')) return Icons.emoji_events_rounded;
+  if (key.contains('goal') || key.contains('boot') || key.contains('winner') || key.contains('bicycle') || key.contains('hat_trick')) {
+    return Icons.sports_soccer_rounded;
+  }
   if (key.contains('legend') || key.contains('award') || key.contains('dor')) return Icons.workspace_premium_rounded;
   if (key.contains('tactic') || key.contains('midfield')) return Icons.auto_awesome_motion_rounded;
   if (key.contains('trainer') || key.contains('manager')) return Icons.sports_handball_rounded;
-  if (key.contains('hands')) return Icons.back_hand_rounded;
+  if (key.contains('hands') || key.contains('save')) return Icons.back_hand_rounded;
   if (key.contains('player_of_the_match')) return Icons.stars_rounded;
   return Icons.card_giftcard_rounded;
 }

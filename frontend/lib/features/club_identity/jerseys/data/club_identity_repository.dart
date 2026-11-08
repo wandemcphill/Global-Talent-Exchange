@@ -28,6 +28,29 @@ abstract class ClubIdentityRepository {
   });
 
   Future<BadgeProfileDto> fetchBadge(String clubId);
+
+  Future<ClubDnaPolicyDto> fetchDna(String clubId) async {
+    return ClubDnaPolicyDto(clubId: clubId);
+  }
+
+  Future<ClubDnaPolicyDto> patchDna({
+    required String clubId,
+    required Map<String, dynamic> patch,
+  }) async {
+    return ClubDnaPolicyDto.fromJson(<String, dynamic>{'club_id': clubId, ...patch});
+  }
+
+  Future<StudioConversationalEditResultDto> editStudioIdentity({
+    required Map<String, dynamic> currentKit,
+    required Map<String, dynamic> currentCrest,
+    required String instruction,
+  }) async {
+    return StudioConversationalEditResultDto(
+      kit: currentKit,
+      crest: currentCrest,
+      summary: 'Applied studio instruction: $instruction',
+    );
+  }
 }
 
 class ClubIdentityApiRepository extends ClubIdentityRepository {
@@ -116,6 +139,59 @@ class ClubIdentityApiRepository extends ClubIdentityRepository {
         ),
       ),
       () => _requireFixtures().patchJerseys(clubId: clubId, patch: patch),
+    );
+  }
+
+  @override
+  Future<ClubDnaPolicyDto> fetchDna(String clubId) {
+    return _withFallback<ClubDnaPolicyDto>(
+      () async => ClubDnaPolicyDto.fromJson(
+        _asMap(await _request('GET', '/api/clubs/$clubId/dna')),
+      ),
+      () => _requireFixtures().fetchDna(clubId),
+    );
+  }
+
+  @override
+  Future<ClubDnaPolicyDto> patchDna({
+    required String clubId,
+    required Map<String, dynamic> patch,
+  }) {
+    return _withFallback<ClubDnaPolicyDto>(
+      () async => ClubDnaPolicyDto.fromJson(
+        _asMap(
+          await _request('PATCH', '/api/clubs/$clubId/dna', body: patch),
+        ),
+      ),
+      () => _requireFixtures().patchDna(clubId: clubId, patch: patch),
+    );
+  }
+
+  @override
+  Future<StudioConversationalEditResultDto> editStudioIdentity({
+    required Map<String, dynamic> currentKit,
+    required Map<String, dynamic> currentCrest,
+    required String instruction,
+  }) {
+    return _withFallback<StudioConversationalEditResultDto>(
+      () async => StudioConversationalEditResultDto.fromJson(
+        _asMap(
+          await _request(
+            'POST',
+            '/api/clubs/studio/edit',
+            body: <String, dynamic>{
+              'current_kit': currentKit,
+              'current_crest': currentCrest,
+              'instruction': instruction,
+            },
+          ),
+        ),
+      ),
+      () => _requireFixtures().editStudioIdentity(
+        currentKit: currentKit,
+        currentCrest: currentCrest,
+        instruction: instruction,
+      ),
     );
   }
 

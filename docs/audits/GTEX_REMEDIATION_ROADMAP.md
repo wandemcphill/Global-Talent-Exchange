@@ -216,3 +216,22 @@ Do not treat agent-reported local tests as CI results. Do not merge until the re
    - Standalone playable QA demo package harness for matchday and non-matchday 3D scenes.
    - Deterministic visual verification runbooks and telemetry logging.
 
+---
+
+## 5. Canonical Main Checkpoint (2026-11-08, `9aef6225`) — Stage 8, 3D Matchday Phases 2–4, Club Identity Studio, Club DNA & 3D Gifting Engine
+
+### Completed & Verified Remediations in This Wave
+
+1. **Club DNA & Transfer Governance Enforcement (`20261108_0230_club_dna_and_governance_policies`):**
+   - Implemented `ClubDNAPolicy` and `ClubGovernanceException` models and wired hard eligibility gates into `transfer_market/service.py` (`create_hub_offer`, `accept_hub_offer`, `place_bid`).
+   - Added AI Squad & Tactical Alignment advisor (`GET /api/clubs/{club_id}/dna/squad-alignment`) generating formation, U21 minute share targets, academy promotion quotas, and scouting directives from the club's DNA policy.
+2. **AI-Assisted Club Identity Studio & 3D Matchday Kit Clash Resolution:**
+   - Replaced flat onboarding with a 5-step conversational AI wizard (`Onboarding.tsx`) backed by `crest_svg_builder.py` and `ai_studio_service.py`.
+   - Built `ClubIdentityStudio.tsx` with a 360° Three.js mannequin turntable, camera presets, 4-kit wardrobe editor, and conversational prompt bar.
+   - Extended `HumanoidFootballerRig.ts` with bind-pose pattern shading (`stripes`, `hoops`, `sash`, `chevron`, `gradient`) and `MatchPitchLiveScene.tsx` with RGB Euclidean distance kit clash detection (`< 65`).
+3. **World of Football Cinematic 3D Gifting Engine & Web Audio Synthesizer:**
+   - Expanded canonical catalog (`backend/app/gift_engine/catalog.py` & Flutter `match_gift_api.dart`) from 14 to **31 World of Football gifts**.
+   - Replaced the legacy unmounted `/owner/gifts/send` call and 2D emoji banner in `MatchCenter.tsx` with canonical `/api/gifts/send` settlement, normalized WebSocket spectator stream events (`useMatchSpectatorStream.ts`), Three.js `CinematicGiftingEngine.tsx`, and procedural Web Audio synthesizer `GtexCelebrationAudioEngine.ts`.
+4. **Cross-Shell Parity & WebGL Verification Stability (PR #420, PR #422):**
+   - Synchronized Flutter `club_identity` repository, DTOs, controller, and `gtex_gifting_sheet.dart` with the new Club DNA, AI Studio, and 31-gift catalog contracts.
+   - Merged PR #420 (PBR Turf, Post-Processing, Asset Cache, Crowd Choreography, WebGPU Bridge) and PR #422 (WebGL Operations Centre verification stability).

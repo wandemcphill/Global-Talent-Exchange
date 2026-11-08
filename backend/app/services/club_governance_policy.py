@@ -486,3 +486,76 @@ class ClubGovernancePolicyService:
                 .order_by(ClubGovernanceException.approved_at.desc())
             ).all()
         )
+
+    def generate_squad_dna_recommendations(self, club_id: str) -> dict[str, Any]:
+        """Generate AI roster, academy promotion, and tactical alignment recommendations from Club DNA."""
+        policy = self.get_or_create_policy(club_id)
+        primary = (policy.primary_philosophy or "balanced").lower()
+        secondaries = [s.lower() for s in (policy.secondary_philosophies or [])]
+        all_phil = {primary, *secondaries}
+
+        if "youth_development" in all_phil or "academy_first" in all_phil:
+            formation = "4-3-3"
+            mentality = "High-Energy Positional Development"
+            u21_share = 45 if "academy_first" in all_phil else 38
+            academy_quota = 4 if "academy_first" in all_phil else 3
+        elif "superstar" in all_phil or "big_spending" in all_phil:
+            formation = "4-2-4"
+            mentality = "Galactico Attacking Dominance"
+            u21_share = 15
+            academy_quota = 1
+        elif "selling_club" in all_phil or "financially_sustainable" in all_phil:
+            formation = "3-4-3"
+            mentality = "High-Value Showcase Transition"
+            u21_share = 32
+            academy_quota = 2
+        else:
+            formation = "4-3-3"
+            mentality = "Balanced Tactical Control"
+            u21_share = 25
+            academy_quota = 2
+
+        scouting_directives: list[str] = []
+        if policy.nationality_mode == "exclusive" and policy.target_nationalities:
+            nats = ", ".join(policy.target_nationalities)
+            dual_str = " (dual-nationality eligible)" if policy.allow_dual_nationality else " (single nationality strict)"
+            scouting_directives.append(f"Enforce strict domestic recruitment restricted to {nats}{dual_str}.")
+        elif policy.nationality_mode == "preferred" and policy.target_nationalities:
+            nats = ", ".join(policy.target_nationalities)
+            scouting_directives.append(f"Prioritize scouting networks in {nats} (+25% recommendation weight).")
+        else:
+            scouting_directives.append("Maintain global scouting network across all FIFA confederations.")
+
+        if policy.age_mode != "none" and policy.preferred_max_age:
+            mode_label = "Strict hard ceiling" if policy.age_mode == "strict" else "Preferred target ceiling"
+            scouting_directives.append(
+                f"{mode_label} at U{policy.preferred_max_age}; focus transfer bids on high-upside prospects aged 17-{policy.preferred_max_age}."
+            )
+
+        tactical_directives: list[str] = [
+            f"Deploy {formation} ({mentality}) to maximize squad profile synergy.",
+            f"Target {u21_share}% matchday minutes allocation for U21 and academy-developed players.",
+            f"Promote at least {academy_quota} academy graduates into the first-team matchday rotation this season.",
+        ]
+        if "selling_club" in all_phil:
+            tactical_directives.append(
+                "Feature high-potential transfer-listed talents in continental showcase fixtures to maximize market valuation."
+            )
+
+        exceptions_count = len(self.list_exceptions(club_id))
+        compliance_score = max(70, 98 - exceptions_count * 4)
+
+        return {
+            "club_id": club_id,
+            "primary_philosophy": policy.primary_philosophy,
+            "secondary_philosophies": list(policy.secondary_philosophies or []),
+            "recommended_formation": formation,
+            "recommended_mentality": mentality,
+            "target_u21_minutes_share_pct": u21_share,
+            "academy_promotion_quota": academy_quota,
+            "dna_compliance_score": compliance_score,
+            "scouting_directives": scouting_directives,
+            "tactical_directives": tactical_directives,
+            "transfer_strategy": policy.transfer_strategy,
+            "financial_philosophy": policy.financial_philosophy,
+        }

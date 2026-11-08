@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import * as THREE from "three";
 import { Sparkles, Trophy, Shield, Volume2, VolumeX } from "lucide-react";
+import { GtexCelebrationAudioEngine } from "./GtexCelebrationAudioEngine";
 
 export interface CinematicGiftEvent {
   id?: string;
@@ -131,7 +132,15 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
 
   // Build 3D Gift Animation Stage based on activeGift
   useEffect(() => {
-    if (!activeGift || !sceneRef.current || prefersReducedMotion) return;
+    if (!activeGift) return;
+    if (soundEnabled) {
+      GtexCelebrationAudioEngine.playCelebrationCue(
+        activeGift.sound_key,
+        activeGift.gift_code || activeGift.animation_key,
+        activeGift.rarity
+      );
+    }
+    if (!sceneRef.current || prefersReducedMotion) return;
 
     const scene = sceneRef.current;
     // Clear previous active objects

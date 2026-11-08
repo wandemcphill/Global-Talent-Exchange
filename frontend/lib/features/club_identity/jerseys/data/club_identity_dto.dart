@@ -224,3 +224,102 @@ class ClubIdentityDto {
     };
   }
 }
+
+
+class ClubDnaPolicyDto {
+  const ClubDnaPolicyDto({
+    required this.clubId,
+    this.primaryPhilosophy = 'balanced',
+    this.secondaryPhilosophies = const <String>[],
+    this.nationalityMode = 'none',
+    this.targetNationalities = const <String>[],
+    this.allowDualNationality = true,
+    this.ageMode = 'none',
+    this.preferredMaxAge,
+    this.allowAgeExceptions = true,
+    this.transferStrategy = 'balanced',
+    this.financialPhilosophy = 'sustainable',
+    this.clubVisionNarrative,
+    this.metadata = const <String, dynamic>{},
+  });
+
+  final String clubId;
+  final String primaryPhilosophy;
+  final List<String> secondaryPhilosophies;
+  final String nationalityMode;
+  final List<String> targetNationalities;
+  final bool allowDualNationality;
+  final String ageMode;
+  final int? preferredMaxAge;
+  final bool allowAgeExceptions;
+  final String transferStrategy;
+  final String financialPhilosophy;
+  final String? clubVisionNarrative;
+  final Map<String, dynamic> metadata;
+
+  factory ClubDnaPolicyDto.fromJson(Map<String, dynamic> json) {
+    return ClubDnaPolicyDto(
+      clubId: json['club_id'] as String? ?? '',
+      primaryPhilosophy: json['primary_philosophy'] as String? ?? 'balanced',
+      secondaryPhilosophies: (json['secondary_philosophies'] as List<dynamic>? ?? const <dynamic>[])
+          .map((dynamic e) => e.toString())
+          .toList(growable: false),
+      nationalityMode: json['nationality_mode'] as String? ?? 'none',
+      targetNationalities: (json['target_nationalities'] as List<dynamic>? ?? const <dynamic>[])
+          .map((dynamic e) => e.toString())
+          .toList(growable: false),
+      allowDualNationality: json['allow_dual_nationality'] as bool? ?? true,
+      ageMode: json['age_mode'] as String? ?? 'none',
+      preferredMaxAge: (json['preferred_max_age'] as num?)?.toInt(),
+      allowAgeExceptions: json['allow_age_exceptions'] as bool? ?? true,
+      transferStrategy: json['transfer_strategy'] as String? ?? 'balanced',
+      financialPhilosophy: json['financial_philosophy'] as String? ?? 'sustainable',
+      clubVisionNarrative: json['club_vision_narrative'] as String?,
+      metadata: json['metadata'] is Map<String, dynamic>
+          ? Map<String, dynamic>.from(json['metadata'] as Map<String, dynamic>)
+          : const <String, dynamic>{},
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'club_id': clubId,
+      'primary_philosophy': primaryPhilosophy,
+      'secondary_philosophies': secondaryPhilosophies,
+      'nationality_mode': nationalityMode,
+      'target_nationalities': targetNationalities,
+      'allow_dual_nationality': allowDualNationality,
+      'age_mode': ageMode,
+      'preferred_max_age': preferredMaxAge,
+      'allow_age_exceptions': allowAgeExceptions,
+      'transfer_strategy': transferStrategy,
+      'financial_philosophy': financialPhilosophy,
+      'club_vision_narrative': clubVisionNarrative,
+      'metadata': metadata,
+    };
+  }
+}
+
+class StudioConversationalEditResultDto {
+  const StudioConversationalEditResultDto({
+    required this.kit,
+    required this.crest,
+    required this.summary,
+  });
+
+  final Map<String, dynamic> kit;
+  final Map<String, dynamic> crest;
+  final String summary;
+
+  factory StudioConversationalEditResultDto.fromJson(Map<String, dynamic> json) {
+    return StudioConversationalEditResultDto(
+      kit: json['kit'] is Map<String, dynamic>
+          ? Map<String, dynamic>.from(json['kit'] as Map<String, dynamic>)
+          : const <String, dynamic>{},
+      crest: json['crest'] is Map<String, dynamic>
+          ? Map<String, dynamic>.from(json['crest'] as Map<String, dynamic>)
+          : const <String, dynamic>{},
+      summary: json['summary'] as String? ?? 'Applied studio adjustments.',
+    );
+  }
+}
