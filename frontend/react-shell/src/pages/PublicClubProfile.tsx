@@ -29,6 +29,10 @@ import {
 import { toast } from "sonner";
 import { API, api } from "@/lib/api";
 import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
+import {
+  StadiumPerimeterLEDShowcase,
+  StadiumMatchdaySoundscape,
+} from "@/components/advertising/GtexMatchBroadcastAds";
 
 export type PublicPlayerSummary = {
   id: string;
@@ -536,6 +540,12 @@ export default function PublicClubProfile() {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Pitchside LED Perimeter & Matchday Soundscape Showcases */}
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <StadiumPerimeterLEDShowcase stadiumName={stadium?.name || club.home_venue_name || `${club.name} Stadium`} />
+            <StadiumMatchdaySoundscape clubName={club.name} />
           </div>
         </section>
 
