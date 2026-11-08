@@ -624,15 +624,25 @@ export const GmDelegationModal: React.FC<GmDelegationModalProps> = ({
                             </span>
                           </td>
                           <td className="px-4 py-3">
-                            {requiresApproval ? (
-                              <span className="flex items-center gap-1.5 text-amber-300 font-semibold">
+                            {act.execution_supported === false ? (
+                              <span className="flex items-center gap-1.5 text-slate-400 font-semibold">
                                 <Lock className="h-3.5 w-3.5" />
-                                <span>Escalates to Owner</span>
+                                <span>Owner Only — Not Implemented</span>
                               </span>
-                            ) : (
+                            ) : act.policy_suspended ? (
+                              <span className="flex items-center gap-1.5 text-rose-300 font-semibold">
+                                <Lock className="h-3.5 w-3.5" />
+                                <span>GM Authority Suspended</span>
+                              </span>
+                            ) : act.gm_can_execute ? (
                               <span className="flex items-center gap-1.5 text-emerald-300 font-semibold">
                                 <Unlock className="h-3.5 w-3.5" />
                                 <span>GM May Execute</span>
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1.5 text-amber-300 font-semibold">
+                                <Lock className="h-3.5 w-3.5" />
+                                <span>Escalates to Owner</span>
                               </span>
                             )}
                           </td>
@@ -643,10 +653,12 @@ export const GmDelegationModal: React.FC<GmDelegationModalProps> = ({
                               onClick={() =>
                                 handleToggleActivityApproval(act.activity_key, requiresApproval)
                               }
-                              disabled={act.execution_supported === false}
+                              disabled={act.execution_supported === false || act.policy_suspended === true || currentMode === "owner_managed"}
                               title={
                                 act.execution_supported === false
                                   ? "GM execution is not implemented for this activity yet."
+                                  : act.policy_suspended || currentMode === "owner_managed"
+                                  ? "Delegation is currently disabled by the owner or policy."
                                   : undefined
                               }
                               className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold border transition-all disabled:cursor-not-allowed disabled:opacity-40 ${
@@ -657,6 +669,8 @@ export const GmDelegationModal: React.FC<GmDelegationModalProps> = ({
                             >
                               {act.execution_supported === false
                                 ? "Owner Only"
+                                : act.policy_suspended
+                                ? "Suspended"
                                 : requiresApproval ? "Require Approval" : "Autonomous"}
                             </button>
                           </td>
