@@ -442,6 +442,12 @@ def run_verification(headless: bool = True) -> int:
         ), "Fallback mesh missing isFallbackWireframe"
         print("[PASS] Confirmed procedural wireframe mesh is added to Three.js scene with wireframe material.")
 
+        # Release the failure-injection browser context before the next
+        # WebGL test. Keeping two Three.js scenes alive can contend for GPU
+        # resources and starve browser-side React interactions in headless CI.
+        context_fail.close()
+        print("[INFO] Closed the isolated GLB-failure browser context.")
+
         # -------------------------------------------------------------
         # TEST 3: 2D Floorplan Fallback Switch & Navigation
         # -------------------------------------------------------------
@@ -585,7 +591,6 @@ def run_verification(headless: bool = True) -> int:
             return 1
         print("[PASS] Zero unhandled JavaScript page errors detected across all browser contexts.")
 
-        context_fail.close()
         context.close()
         browser.close()
         server.shutdown()
