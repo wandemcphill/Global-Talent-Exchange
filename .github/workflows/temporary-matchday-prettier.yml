@@ -1,0 +1,40 @@
+name: Temporary Matchday Prettier Fix
+on:
+  push:
+    branches:
+      - fix/u2a-m2-match-experience-acceptance-remediation
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out matchday PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/u2a-m2-match-experience-acceptance-remediation
+          persist-credentials: true
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install repository dependencies
+        run: npm ci --include=dev
+      - name: Format the four scripts flagged by Quality Gates
+        run: >-
+          npm exec -- prettier --write
+          qa/playwright/lifecycle_verification_gate4.mjs
+          qa/playwright/matchday_3d_acceptance.mjs
+          qa/playwright/matchday_perf_comparison.mjs
+          qa/playwright/sustained_perf_gate2.mjs
+      - name: Commit formatter changes
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add               qa/playwright/lifecycle_verification_gate4.mjs               qa/playwright/matchday_3d_acceptance.mjs               qa/playwright/matchday_perf_comparison.mjs               qa/playwright/sustained_perf_gate2.mjs
+            git commit -m "style: format matchday Playwright checks"
+            git push origin HEAD:fix/u2a-m2-match-experience-acceptance-remediation
+          else
+            echo "All four files already satisfy Prettier."
+          fi
