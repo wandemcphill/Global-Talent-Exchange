@@ -1,3 +1,5 @@
+/* eslint-disable no-console -- Console output is the CI smoke test's step-by-step report. */
+
 /**
  * GTEX Living Football World — Stage 1 Browser Smoke Verification
  * Tests the changed scene viewport under real Chromium (Playwright):
