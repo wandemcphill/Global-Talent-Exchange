@@ -190,11 +190,51 @@ DEPARTMENT_TO_ROLE_KEY = {
 }
 
 DEFAULT_STAFF_METRICS = {
-    "first_team_manager": {"trust": 55, "respect": 60, "affinity": 50, "tension": 15, "alignment": 65, "influence": 70, "loyalty": 60},
-    "general_manager": {"trust": 65, "respect": 65, "affinity": 60, "tension": 10, "alignment": 75, "influence": 75, "loyalty": 70},
-    "head_of_youth_development": {"trust": 60, "respect": 60, "affinity": 55, "tension": 10, "alignment": 70, "influence": 55, "loyalty": 75},
-    "medical_director": {"trust": 65, "respect": 70, "affinity": 55, "tension": 5, "alignment": 70, "influence": 50, "loyalty": 70},
-    "chief_scout": {"trust": 55, "respect": 55, "affinity": 50, "tension": 15, "alignment": 60, "influence": 60, "loyalty": 60},
+    "first_team_manager": {
+        "trust": 55,
+        "respect": 60,
+        "affinity": 50,
+        "tension": 15,
+        "alignment": 65,
+        "influence": 70,
+        "loyalty": 60,
+    },
+    "general_manager": {
+        "trust": 65,
+        "respect": 65,
+        "affinity": 60,
+        "tension": 10,
+        "alignment": 75,
+        "influence": 75,
+        "loyalty": 70,
+    },
+    "head_of_youth_development": {
+        "trust": 60,
+        "respect": 60,
+        "affinity": 55,
+        "tension": 10,
+        "alignment": 70,
+        "influence": 55,
+        "loyalty": 75,
+    },
+    "medical_director": {
+        "trust": 65,
+        "respect": 70,
+        "affinity": 55,
+        "tension": 5,
+        "alignment": 70,
+        "influence": 50,
+        "loyalty": 70,
+    },
+    "chief_scout": {
+        "trust": 55,
+        "respect": 55,
+        "affinity": 50,
+        "tension": 15,
+        "alignment": 60,
+        "influence": 60,
+        "loyalty": 60,
+    },
 }
 
 STAFF_ROLE_LABELS = {
