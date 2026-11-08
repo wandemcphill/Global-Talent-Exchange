@@ -27,16 +27,23 @@ import {
   formatNairaMinor,
 } from "@/lib/commercial/api";
 
-export default function CommercialPublicPortal({
-  division,
-}: {
+type CommercialPublicPortalProps = {
+  initialTab?: "overview" | "brands" | "music" | "pricing";
+  /** Backward-compatible selector used by older portal callers. */
   division?: "overview" | "brands" | "music";
-} = {}) {
+};
+
+export default function CommercialPublicPortal({
+  initialTab,
+  division,
+}: CommercialPublicPortalProps = {}) {
   const pathname = typeof window !== "undefined" ? window.location.pathname : "";
+  const selectedTab = initialTab ?? division;
+  const isPricingRoute = initialTab === "pricing" || pathname.endsWith("/pricing");
   const initialFocus =
-    division === "music" || pathname.includes("/music")
+    selectedTab === "music" || pathname.includes("/music")
       ? "music"
-      : division === "brands" || pathname.includes("/brands")
+      : selectedTab === "brands" || pathname.includes("/brands")
         ? "brand"
         : "all";
 
@@ -46,10 +53,19 @@ export default function CommercialPublicPortal({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (division === "music" || pathname.includes("/music")) setActiveTab("music");
-    else if (division === "brands" || pathname.includes("/brands")) setActiveTab("brand");
-    else setActiveTab("all");
-  }, [division, pathname]);
+    if (isPricingRoute) {
+      setActiveTab("all");
+      document
+        .getElementById("pricing-packages")
+        ?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+    } else if (selectedTab === "music" || pathname.includes("/music")) {
+      setActiveTab("music");
+    } else if (selectedTab === "brands" || pathname.includes("/brands")) {
+      setActiveTab("brand");
+    } else {
+      setActiveTab("all");
+    }
+  }, [isPricingRoute, selectedTab, pathname]);
 
   useEffect(() => {
     let mounted = true;
