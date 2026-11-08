@@ -3,6 +3,8 @@
 const { Queue, Worker: BullWorker } = require("bullmq");
 const IORedis = require("ioredis");
 const config = require("./config");
+const logger = require("./logger");
+const { captureException } = require("./observability");
 
 if (!config.redisUrl) {
   throw new Error(
@@ -14,8 +16,15 @@ const connection = new IORedis(config.redisUrl, {
   maxRetriesPerRequest: null,
 });
 
+connection.on("error", (error) => {
+  logger.warn("Redis connection error", {
+    event: "redis_connection_error",
+    reason: error.message,
+  });
+});
+
 function createQueue(name) {
-  return new Queue(name, {
+  const queue = new Queue(name, {
     connection,
     defaultJobOptions: {
       attempts: 3,
@@ -27,6 +36,16 @@ function createQueue(name) {
       removeOnFail: 10000,
     },
   });
+
+  queue.on("error", (error) => {
+    logger.warn("Queue error encountered", {
+      event: "queue_error",
+      queue: name,
+      reason: error.message,
+    });
+  });
+
+  return queue;
 }
 
 const leagueQueue = createQueue(config.queues.league);
@@ -36,10 +55,23 @@ const regenQueue = createQueue(config.queues.regen);
 const seasonQueue = createQueue(config.queues.season);
 
 function createWorker(name, processor) {
-  return new BullWorker(name, processor, {
+  const worker = new BullWorker(name, processor, {
     connection,
     concurrency: config.queues.concurrency,
   });
+
+  worker.on("error", (error) => {
+    captureException(error, {
+      tags: { queue: name },
+    });
+    logger.error("Worker error encountered", {
+      event: "worker_error",
+      queue: name,
+      reason: error.message,
+    });
+  });
+
+  return worker;
 }
 
 async function closeQueues(workers = []) {
