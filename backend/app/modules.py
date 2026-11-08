@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import copy
 import logging
 from threading import RLock
 from time import perf_counter
 
 from fastapi import APIRouter, FastAPI
+from fastapi.routing import APIRoute, APIWebSocketRoute
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
+from starlette.routing import Route, WebSocketRoute, compile_path
 
 from app.core.module import DomainModule, register_domain_modules
 
@@ -84,18 +87,51 @@ def _should_bypass_lazy_hydration(path: str) -> bool:
     return any(_path_matches_prefix(path, prefix) for prefix in LAZY_HYDRATION_BYPASS_PREFIXES)
 
 
+def _strip_api_prefix(path: str) -> str:
+    normalized = path.rstrip("/") if path != "/" else path
+    if normalized == "/api/v2" or normalized == "/api":
+        return ""
+    if path.startswith("/api/v2/"):
+        return path[len("/api/v2") :]
+    if path.startswith("/api/"):
+        return path[len("/api") :]
+    return path
+
+
+def _build_prefixed_router(source: APIRouter, prefix: str) -> APIRouter:
+    new_router = APIRouter()
+    for route in source.routes:
+        if isinstance(route, (APIRoute, APIWebSocketRoute, Route, WebSocketRoute)):
+            clean_path = _strip_api_prefix(route.path)
+            if clean_path and not clean_path.startswith("/"):
+                clean_path = "/" + clean_path
+            full_path = f"{prefix}{clean_path}" if clean_path else (prefix or "/")
+            if not full_path.startswith("/"):
+                full_path = "/" + full_path
+            cloned = copy.copy(route)
+            cloned.path = full_path
+            path_regex, path_format, param_convertors = compile_path(full_path)
+            cloned.path_regex = path_regex
+            cloned.path_format = path_format
+            cloned.param_convertors = param_convertors
+            new_router.routes.append(cloned)
+        else:
+            new_router.routes.append(route)
+    return new_router
+
+
 def _with_api_alias(router: APIRouter) -> APIRouter:
     wrapped_router = APIRouter()
-    wrapped_router.include_router(router)
-    wrapped_router.include_router(router, prefix="/api")
-    wrapped_router.include_router(router, prefix="/api/v2")
+    wrapped_router.include_router(_build_prefixed_router(router, ""))
+    wrapped_router.include_router(_build_prefixed_router(router, "/api"))
+    wrapped_router.include_router(_build_prefixed_router(router, "/api/v2"))
     return wrapped_router
 
 
 def _with_api_only(router: APIRouter) -> APIRouter:
     wrapped_router = APIRouter()
-    wrapped_router.include_router(router, prefix="/api")
-    wrapped_router.include_router(router, prefix="/api/v2")
+    wrapped_router.include_router(_build_prefixed_router(router, "/api"))
+    wrapped_router.include_router(_build_prefixed_router(router, "/api/v2"))
     return wrapped_router
 
 

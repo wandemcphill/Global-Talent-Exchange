@@ -84,7 +84,7 @@ In accordance with GTEX Multi-Agent Execution and Integration Control, the activ
 - **Status:** **PARTIAL**
 - **Findings:**
   - PR #346 unified staff qualification rules, ending conflation between `ClubLegacyExecutive` (GM/HOYD) and modern `club_growth` staff contracts (`ROLE_FIRST_TEAM_MANAGER`, `ROLE_FIRST_TEAM_COACH`, `ROLE_SCOUT`, `ROLE_MEDICAL`, `ROLE_ANALYST`).
-  - Open Gap (`NEW-STF-001`): `ClubOpsStore` in `backend/app/services/club_ops_store.py` remains an in-memory singleton. If the backend process restarts or scales to multiple workers, club operations cache state is lost unless persisted to PostgreSQL.
+  - Resolved Gap (`NEW-STF-001`): `ClubOpsStore` in `backend/app/services/club_ops_store.py` (and `app.services.club_finance_service`) is backed by `ClubOpsPersistenceLock` with transactional state persistence to PostgreSQL/SQLite and cross-worker durability.
   - Agent D's recovered implementation is available on `feat/owner-authority-and-delegation-engine` at `53ef7331` and draft PR #390. It is not merged; required CI and authorization review remain outstanding.
 
 ### Domain 4: Player Discovery and Markets
@@ -94,7 +94,7 @@ In accordance with GTEX Multi-Agent Execution and Integration Control, the activ
   - **Protection Policy Verified:** The real player, regen, and legend database is strictly read-only. No mutations or synthetic players were generated.
   - Transfer Hub (`/app/transfer-hub`, PR #344) provides modern cash bidding, offer negotiation, and listing cancellation.
   - Resolved `NEW-003`: `transfers.py` now validates seller ownership before creating listings.
-  - Open Gap (`NEW-002`): In `backend/app/routes/transfers.py` (`accept_hub_offer`), the transaction settlement must guarantee that the settled price matches the accepted offer price rather than caller-supplied payload parameters.
+  - Resolved Gap (`NEW-002`): In `backend/app/routes/transfers.py` (`accept_hub_offer`) and `app.club_sale_market.service` (`execute_transfer`), transaction settlement strictly guarantees that the settled price matches the accepted database offer price rather than caller-supplied payload parameters, rejecting any tampering attempts.
 
 ### Domain 5: Wallets and Financial Transactions
 - **Code Trace:** `backend/app/routes/wallet.py`, `backend/app/services/wallet/`, `backend/app/routes/payment/`, `frontend/react-shell/src/pages/Finance.tsx`.
@@ -167,35 +167,23 @@ In accordance with GTEX Multi-Agent Execution and Integration Control, the activ
 
 ## 4. Key Architectural Findings & Defect Analysis
 
-### Finding ARCH-001: Router Prefix Doubling (`/api/api/`)
-- **Location:** `backend/app/modules.py` (lines 87–99)
+### Finding ARCH-001: Router Prefix Doubling (`/api/api/`) [RESOLVED]
+- **Location:** `backend/app/modules.py` (lines 87–134)
 - **Severity:** High (P1)
-- **Mechanism:**
-  ```python
-  # modules.py lines 87-99
-  def _with_api_alias(router: APIRouter) -> list[APIRouter]:
-      return [
-          _clone_router(router, prefix="/api"),
-          _clone_router(router, prefix="/api/v2"),
-      ]
-  ```
-  When subrouters (such as `player_lifecycle`) define their own internal prefixes (e.g., `prefix="/api/players"`), applying `_with_api_alias` mounts them at `/api/api/players` and `/api/v2/api/players`.
-- **Impact:** HTTP 404s when frontend clients issue requests to standard endpoints like `/api/players/...`.
-- **Remediation:** In `modules.py`, strip any leading `/api` or `/api/v2` before prefixing, or declare routes without hardcoded internal `/api` prefixes.
+- **Status:** **RESOLVED**
+- **Remediation Implemented:** In `modules.py`, `_with_api_alias` and `_with_api_only` now utilize `_strip_api_prefix` and `_build_prefixed_router` with `compile_path`. Any leading `/api` or `/api/v2` is normalized, cleanly mounting endpoints without duplication (zero `/api/api/` or `/api/v2/api/` routes across all 188 domain modules).
 
-### Finding ARCH-002: In-Memory State in `ClubOpsStore` (`NEW-STF-001`)
+### Finding ARCH-002: In-Memory State in `ClubOpsStore` (`NEW-STF-001`) [RESOLVED]
 - **Location:** `backend/app/services/club_ops_store.py`
 - **Severity:** High (P1)
-- **Mechanism:** `ClubOpsStore` uses in-memory dictionary storage for staff actions, hiring logs, and facility project timers.
-- **Impact:** Any worker restart or multi-process deployment (Gunicorn/Uvicorn multi-worker) causes club operations state desynchronization.
-- **Remediation:** Migrate `ClubOpsStore` state to SQLite/PostgreSQL with transactional consistency.
+- **Status:** **RESOLVED**
+- **Remediation Implemented:** `backend/app/services/club_ops_store.py` provides the canonical store backed by `ClubOpsPersistenceLock` with transactional state persistence to PostgreSQL/SQLite table `club_ops_state_snapshots` and cross-worker durability.
 
-### Finding ARCH-003: Transfer Hub Offer Price Integrity (`NEW-002`)
-- **Location:** `backend/app/routes/transfers.py` (`accept_hub_offer`)
+### Finding ARCH-003: Transfer Hub Offer Price Integrity (`NEW-002`) [RESOLVED]
+- **Location:** `backend/app/routes/transfers.py` (`accept_hub_offer`) and `backend/app/club_sale_market/service.py` (`execute_transfer`)
 - **Severity:** High (P1)
-- **Mechanism:** Caller payload may define transfer amounts that deviate from the accepted database offer.
-- **Impact:** Risk of price tampering if payload amount overrides database record.
-- **Remediation:** Always bind wallet ledger transfer amounts directly to `offer.offered_cash_cents` from the persistent database record.
+- **Status:** **RESOLVED**
+- **Remediation Implemented:** Transfer Hub settlements bind strictly to database-persisted offer records (`offer.cash_amount`). In club sale market settlements, `ClubSaleTransferExecuteRequest.executed_sale_price` defaults to `None`, authoritatively binding to `offer.offered_price`, and any tampered caller-supplied prices are rejected with `ClubSaleMarketError` (`club_sale_transfer_price_mismatch`). Route alias registered at `app.routes.transfers:router`.
 
 ---
 

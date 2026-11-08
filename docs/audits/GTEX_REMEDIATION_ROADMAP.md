@@ -25,10 +25,10 @@ Nothing here is permission to merge without review. Each repair is an independen
 
 ```text
 0. Player Universe Data Protection — PERMANENT FREEZE: real players, regens, legends locked (NON-NEGOTIABLE)
-1. Critical Routing Architecture — ARCH-001: strip /api/api/ route prefix doubling in backend/app/modules.py
-2. State Persistence — NEW-STF-001: migrate ClubOpsStore in-memory singleton to SQLite/PostgreSQL
+1. Critical Routing Architecture — ARCH-001: strip /api/api/ route prefix doubling in backend/app/modules.py [RESOLVED]
+2. State Persistence — NEW-STF-001: migrate ClubOpsStore in-memory singleton to SQLite/PostgreSQL [RESOLVED]
 3. Settlement Correctness:
-   - NEW-002: bind transfer hub offer settlement to persistent database offer price
+   - NEW-002: bind transfer hub offer settlement to persistent database offer price [RESOLVED]
    - NAT-NEW-1: enforce squad rental provenance on national team registrations
    - NEW-JRW-001: database uniqueness & idempotency on daily challenge reward settlements
 4. Multi-Agent Integration Alignment:
@@ -59,18 +59,16 @@ Nothing here is permission to merge without review. Each repair is an independen
 - **Remaining:** Unify React `AuthPage.tsx` into a single normal-user registration form per Issue #228.
 
 ### PR-D — One Staff Record & Club Ops Persistence (FND-009, NEW-STF-001)
-- **Status:** **PARTIAL**.
-- **Completed:** PR #346 separated qualifications for First Team Managers, Coaches, Analysts, and Medical staff in `staff_role_policy.py`.
-- **Remaining Blocker (NEW-STF-001):** Migrate `ClubOpsStore` in `backend/app/services/club_ops_store.py` from an in-memory dictionary to persistent storage.
+- **Status:** **RESOLVED**.
+- **Completed:** PR #346 separated qualifications for First Team Managers, Coaches, Analysts, and Medical staff in `staff_role_policy.py`. `ClubOpsStore` in `backend/app/services/club_ops_store.py` (and `app.services.club_finance_service`) is backed by `ClubOpsPersistenceLock` providing transactional state persistence to SQLite/PostgreSQL with cross-worker synchronization.
 
 ### PR-E — Prestige Buy and Gift (FND-002, NEW-PRESTIGE-1, NEW-PRESTIGE-2)
 - **Status:** **RESOLVED IN CODE**.
 - **Completed:** `POST /owner/clubs/{id}/showroom/purchase` and `POST /owner/clubs/{id}/showroom/gift` implemented with idempotency keys in `owner_console/router.py`.
 
 ### PR-F — Market Lanes & Transfer Hub (FND-010, FND-011, NEW-002, NEW-003)
-- **Status:** **PARTIAL**.
-- **Completed:** PR #344 added `/app/transfer-hub` (`TransferHub.tsx`), wire cash offer settlement, and seller listing validation.
-- **Remaining Blocker (NEW-002):** In `backend/app/routes/transfers.py` (`accept_hub_offer`), ensure transfer settlement amounts cannot be overridden by caller payload parameters.
+- **Status:** **RESOLVED**.
+- **Completed:** PR #344 added `/app/transfer-hub` (`TransferHub.tsx`), wire cash offer settlement, and seller listing validation. Transfer and club sale settlements strictly bind to persistent database offer prices (`offer.offered_price` / `offer.cash_amount`), and tamper attempts with divergent caller-supplied prices are rejected (`ClubSaleMarketError` / `club_sale_transfer_price_mismatch`). Route alias registered at `app.routes.transfers:router`.
 
 ### PR-G — Inbox, Newsroom, Club HQ (FND-012, FND-015)
 - **Status:** **RESOLVED**.
