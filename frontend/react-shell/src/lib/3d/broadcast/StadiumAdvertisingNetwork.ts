@@ -19,6 +19,7 @@
 import * as THREE from "three";
 import axios from "axios";
 import { API } from "@/lib/api";
+import { resolveCommercialMediaUrl } from "@/lib/commercial/api";
 import type { GtexAdCampaign } from "@/components/advertising/GtexAdvertising";
 import type { SpectatorMonetizationView } from "./spectatorContract";
 
@@ -421,8 +422,8 @@ export class StadiumAdvertisingNetwork {
         status: "approved" as const,
         isApproved: true,
         isActive: true,
-        logoUrl: c.logo_url ?? null,
-        creativeUrl: c.creative_url ?? null,
+        logoUrl: resolveCommercialMediaUrl(c.logo_url) ?? null,
+        creativeUrl: resolveCommercialMediaUrl(c.creative_url) ?? null,
         destinationUrl: c.destination_url,
         primaryColor: palette.primary,
         accentColor: palette.accent,
@@ -483,7 +484,7 @@ export class StadiumAdvertisingNetwork {
           isApproved: true,
           isActive: true,
           clubId: typeof p.metadata?.club_id === "string" ? p.metadata.club_id : null,
-          creativeUrl: p.creative_url ?? null,
+          creativeUrl: resolveCommercialMediaUrl(p.creative_url) ?? null,
           primaryColor: palette.primary,
           accentColor: palette.accent,
           textColor: "#FFFFFF",
@@ -562,7 +563,8 @@ export class StadiumAdvertisingNetwork {
           },
           { timeout: 3000 }
         ),
-        axios.get(`${API}/public/ads/campaigns?limit=25`, { timeout: 3000 }),
+        // Strict stadium inventory: approved + paid + in-window + booked for `stadium_perimeter`.
+        axios.get(`${API}/v2/public/ads/stadium/inventory?limit=25`, { timeout: 3000 }),
       ]);
 
       if (this.isDisposed) return;
@@ -803,13 +805,14 @@ export class StadiumAdvertisingNetwork {
       if (this.enableImpressionPost && campaign.trackPublicBrandImpression && typeof window !== "undefined") {
         void axios
           .post(
-            `${API}/public/ads/events`,
+            `${API}/v2/public/ads/events`,
             {
               campaign_id: campaign.id,
               event_type: "impression",
               idempotency_key: event.idempotencyKey,
               metadata_json: {
-                placement: "stadium_led_perimeter",
+                placement: "stadium_perimeter",
+                surface: "stadium_led_perimeter",
                 match_id: this.matchContext.matchId || null,
                 slot_index: slotIndex,
                 rotation_index: rotIdx,

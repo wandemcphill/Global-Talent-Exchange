@@ -37,10 +37,10 @@ import { Btn, Chip, Loading, Panel } from "@/components/gtex/ui";
 import { Cinema3DStage, Cinema3DSceneType } from "@/components/gtex/Cinema3DStage";
 import { MatchPitchLiveScene } from "@/lib/3d/broadcast/MatchPitchLiveScene";
 import { useMatchSpectatorStream } from "@/lib/3d/broadcast/useMatchSpectatorStream";
+import { useMatchFullTimeGovernance } from "@/lib/3d/broadcast/useMatchFullTimeGovernance";
 import { loadFiveMinuteShowcaseFixture } from "@/lib/3d/broadcast/showcaseLoader";
 import { HolographicPlayerCard } from "@/components/gtex/ApexWidgets";
 import { MatchdayLineupBroadcast, useClubMatchdaySheet, type MatchdaySquadMember } from "@/components/gtex/MatchdayLineupBroadcast";
-import { useGtexAds } from "@/components/advertising/GtexAdvertising";
 import { mapAuthoritativeTactics } from "@/lib/3d/broadcast/authoritativeTactics";
 import { useSkin } from "@/lib/skin-engine";
 import {
@@ -1990,12 +1990,12 @@ function PostMatchAnalytics({
 
 export default function MatchCenter() {
   const { active: activeClub } = useActiveClub();
+  const refreshOwner = useRefreshOwner();
   const { id } = useParams();
   const [params] = useSearchParams();
   const clubId = params.get("club") || activeClub?.club_id || "";
   const { getModuleView, setModuleView } = useSkin();
   const matchView = getModuleView("match_center");
-  const { campaigns: partnerAdCampaigns } = useGtexAds("partner_showcase");
   // 3D WebGL Broadcast View vs 2D Tactical Pitch View Toggle & Full-Screen 16:9 Match Theatre
   const [view3DBroadcast, setView3DBroadcast] = useState<boolean>(true);
   const [isTheatreMode, setIsTheatreMode] = useState<boolean>(
@@ -2133,6 +2133,18 @@ export default function MatchCenter() {
   const [isPaused, setIsPaused] = useState(false);
   const [speed, setSpeed] = useState(Number(params.get("speed")) || 1.0);
   const [audioAtmosphere, setAudioAtmosphere] = useState(false);
+
+  // End-whistle -> Owner Authority governance (backend validates completion, ownership and idempotency).
+  const isMatchComplete = Boolean(
+    liveState?.phase === "full_time" || liveState?.status === "FT" || (liveState?.minute ?? localMinute) >= 90
+  );
+  useMatchFullTimeGovernance(
+    id,
+    spectatorStream.recentEvents,
+    Boolean(id && id !== "u2a-006-showcase" && isViewerAuthenticated),
+    isMatchComplete,
+    refreshOwner
+  );
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<"pitch" | "lineups" | "tactics" | "pre_match" | "post_match" | "commentary">("pitch");
@@ -2637,7 +2649,6 @@ export default function MatchCenter() {
                 liveEvents={spectatorStream.recentEvents}
                 liveScore={spectatorStream.latestScore}
                 tacticalConfig={authoritativeTactics}
-                publicBrandCampaigns={partnerAdCampaigns}
                 isTheatreMode={isTheatreMode}
                 onToggleTheatreMode={() => setIsTheatreMode((t) => !t)}
                 onToggle2DCompanion={() => {

@@ -239,6 +239,69 @@ describe("GTEX Master 3D Matchday — Stadium Advertising, Tactical Shaping, Cam
       expect(active[0].source).toBe("club_sponsor");
       net.dispose();
     });
+
+    test("fetches v2 stadium inventory and posts canonical stadium_perimeter impression telemetry", async () => {
+      const axios = require("axios");
+      const postSpy = jest.spyOn(axios, "post").mockResolvedValue({ data: {} });
+      const getSpy = jest.spyOn(axios, "get").mockResolvedValue({
+        data: {
+          campaigns: [
+            {
+              id: "camp-stadium-v2",
+              brand_name: "ECOWAS LOGISTICS",
+              headline: "PAN-AFRICAN FREIGHT",
+              description: "SPEED & SECURITY",
+              placement: "stadium_perimeter",
+              destination_url: "https://example.com/freight",
+              logo_url: "/api/v2/public/ads/media/asset-1",
+              creative_url: "/api/v2/public/ads/media/asset-2",
+              priority: 95,
+            },
+          ],
+        },
+      });
+
+      const net = new StadiumAdvertisingNetwork({
+        enableNetworkFetch: true,
+        enableImpressionPost: true,
+        minVisibleDwellSec: 0.1,
+      });
+
+      net.setMatchContext({ matchId: "match-v2-test" });
+      await net.fetchBackendSponsorshipPlacements();
+
+      expect(getSpy).toHaveBeenCalledWith(
+        expect.stringContaining("/v2/public/ads/stadium/inventory?limit=25"),
+        expect.any(Object)
+      );
+
+      const active = net.getActiveCampaigns();
+      const ecowas = active.find((c) => c.id === "camp-stadium-v2");
+      expect(ecowas).toBeDefined();
+      expect(ecowas?.logoUrl).toContain("/api/v2/public/ads/media/asset-1");
+      expect(ecowas?.creativeUrl).toContain("/api/v2/public/ads/media/asset-2");
+
+      // Trigger impression dwell
+      net.update(0.5, 0.5, 0.5, nowMs);
+
+      expect(postSpy).toHaveBeenCalledWith(
+        expect.stringContaining("/v2/public/ads/events"),
+        expect.objectContaining({
+          campaign_id: "camp-stadium-v2",
+          event_type: "impression",
+          metadata_json: expect.objectContaining({
+            placement: "stadium_perimeter",
+            surface: "stadium_led_perimeter",
+            match_id: "match-v2-test",
+          }),
+        }),
+        expect.any(Object)
+      );
+
+      postSpy.mockRestore();
+      getSpy.mockRestore();
+      net.dispose();
+    });
   });
 
   describe("Phase 3: SpatialInterpolator Tactical Visual Shaping", () => {
