@@ -231,6 +231,56 @@ describe("PublicClubProfile Component", () => {
 
     // 11. 3D Preview Stage
     expect(container.querySelector('[data-testid="mock-cinema-3d-stage"]')).not.toBeNull();
+
+    // 12. Commercial Network & Stadium Showcase Integration
+    expect(container.querySelector('[data-testid="stadium-perimeter-led-showcase"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="stadium-matchday-soundscape"]')).not.toBeNull();
+    expect(container.textContent).toContain("Pitchside Partner Showcase");
+    expect(container.textContent).toContain("Matchday Soundscape");
+  });
+
+  test("renders active Commercial Network stadium perimeter ad and tracks partner display", async () => {
+    (api.get as any).mockImplementation((url: string) => {
+      if (url.includes("/public/ads/campaigns")) {
+        return Promise.resolve({
+          data: {
+            campaigns: [
+              {
+                id: "camp-stadium-1",
+                brand_name: "Zenith Bank PLC",
+                headline: "Official Matchday Banking Partner",
+                description: "Powering African football across all 54 nations.",
+                placement: "stadium_perimeter",
+                placements: ["stadium_perimeter"],
+                destination_url: "https://zenithbank.example.com",
+                priority: 100,
+              },
+            ],
+          },
+        });
+      }
+      return Promise.resolve({ data: mockPublicDossier });
+    });
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <PublicClubProfile />
+        </QueryClientProvider>,
+      );
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60));
+    });
+
+    expect(container.textContent).toContain("Zenith Bank PLC");
+    expect(container.textContent).toContain("Official Matchday Banking Partner");
+    expect(container.querySelector('[data-testid="stadium-perimeter-visit-btn"]')).not.toBeNull();
   });
 
   test("renders 404 unlisted state when profile does not exist", async () => {
