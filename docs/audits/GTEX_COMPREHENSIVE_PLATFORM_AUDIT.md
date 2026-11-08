@@ -1,12 +1,12 @@
 # GTEX Comprehensive Platform Acceptance Audit
 
-**Document Version:** 3.0.0 (Comprehensive Multi-Agent Acceptance Audit)  
+**Document Version:** 3.1.0 (Comprehensive Multi-Agent Acceptance Audit)  
 **Issue:** [#267 (GTEX — Comprehensive Platform Acceptance Audit)](https://github.com/wandemcphill/Global-Talent-Exchange/issues/267)  
 **Target Repository:** `wandemcphill/Global-Talent-Exchange`  
-**Inspected Canonical Main SHA:** `74b917ec3d7166a3b81396fe4d895d2a4764b400`  
-**Previous Audit Baseline SHA:** `bb6d82a9b8b5867318f9a0baf19789cef5b25637` (2026-10-27)  
-**Delta:** 485 commits since baseline `bb6d82a9b8b5867318f9a0baf19789cef5b25637`  
-**Date:** 2026-11-07  
+**Inspected Canonical Main SHA:** `987de6c91a0937cbfbf5d4a4d62fef24f8d550e5`  
+**Previous Audit Baseline SHA:** `74b917ec3d7166a3b81396fe4d895d2a4764b400` (2026-11-07)  
+**Delta:** 178 commits since baseline `74b917ec` (663 commits ahead of initial baseline `bb6d82a9`)  
+**Date:** 2026-11-08  
 **Auditor:** Independent Senior QA & Architecture Auditor / Central Engineering Integration Session  
 **Player Universe Protection Status:** STRICTLY ENFORCED & LOCKED (Zero player/regen/legend records altered, synthetic records created, or imports executed)
 
@@ -29,16 +29,16 @@ Between the previous baseline snapshot at commit `bb6d82a9` (2026-10-27) and the
 8. **Stadium Arena & Humanoid Match Gameplay (PR #384, commit `a19893d4`):** Unit 2A Milestone 2 integrated 3D match arena, humanoid animation controllers, and simulation visualizers.
 
 ### Key Metrics Summary
-| Metric | Previous Baseline (`bb6d82a9`) | Current Canonical `main` (`a19893d4`) | Delta |
+| Metric | Previous Baseline (`bb6d82a9`) | Current Canonical `main` (`987de6c9`) | Delta |
 |---|---|---|---|
-| Total Screen Inventory Rows | 152 | 177 | +25 |
-| React Shell Unique Routes | 18 | 44 | +26 |
+| Total Screen Inventory Rows | 152 | 183 | +31 |
+| React Shell Unique Routes | 18 | 50 | +32 |
 | Flutter GoRoutes | 108 | 108 | Parity verified |
 | Flutter Registered Catalog Routes | 51 | 51 | Parity verified |
 | Total Hydrated FastAPI Routes | 4,210 | 5,055 | +845 routes |
-| User & System Roles Tracked | 30 | 30 | Updated statuses |
+| User & System Roles Tracked | 30 | 31 | +1 (`brand_advertiser`) |
 | Unresolved P0 Issues | 1 | 0 (All P0s mitigated) | -1 |
-| High-Priority P1 Architecture Gaps | 11 | 4 (Identified below) | -7 |
+| High-Priority P1 Architecture Gaps | 11 | 3 (Identified below) | -8 |
 
 ---
 
@@ -50,8 +50,8 @@ In accordance with GTEX Multi-Agent Execution and Integration Control, the activ
 |---|---|---|---|---|---|---|---|---|
 | **A** | Canonical Competitions & Match Engine | `feat/competition-engine-integration-352` | Issue #352 | `backend/app/services/competition_engine/`, `backend/app/routes/competitions.py` | Engine unit tests passing | **LOCKED (Verified)** | Must finalize unified contract with Agent B financial ledger for competition entry fees and prize distribution. | In Progress (Pre-PR verification) |
 | **B** | Financial Foundation & Double-Entry Ledger | `feat/financial-integrity-economic-foundation` | Issue #2 | `backend/app/services/wallet/`, `backend/app/models/financial_ledger.py` | Ledger balancing & idempotency tests passing | **LOCKED (Verified)** | Needs webhook idempotency integration with external Paystack sandbox. | In Progress (Integration testing) |
-| **C** | Ingestion Worker Operational Recovery | `fix/issue-136-player-ingestion-worker-recovery` | Issue #136 | `backend/app/workers/ingestion_worker.py`, `render.yaml` | Worker ping/healthcheck pass | **LOCKED (Verified)** | Worker run must execute against staging fixtures only; NEVER touch production player DB. | Ready for PR submission |
-| **D** | Owner Authority & Delegation Engine | `feat/owner-authority-and-delegation-engine` (`53ef7331`) | Draft PR #390 | `backend/app/owner_console/delegation_service.py`, `backend/app/owner_console/router.py`, migration `20261106_0227_owner_club_delegation_and_authority_engine`, React governance components | Agent-reported 19 backend tests; PR CI pending | **PENDING REVIEW** | Verify endpoint authorization, audit-log immutability, shared event-outbox use, frontend integration, and migration upgrade/downgrade. | Draft PR #390 / CI pending |
+| **C** | Ingestion Worker Operational Recovery | `fix/issue-136-player-ingestion-worker-recovery` | PR #407 / `987de6c9` | `services/player-ingestion/src/`, `render.yaml` | 18 CI workflows green; all 7 node tests pass | **LOCKED (Verified)** | Issue #136 resolved & closed. Live player universe protected. | **MERGED into main (PR #407)** |
+| **D** | Owner Authority & Delegation Engine | `feat/owner-authority-and-delegation-engine` | PR #390, PR #405 | `backend/app/owner_console/`, React governance components | Full delegation suite and matchday governance pass | **LOCKED (Verified)** | Integrated with matchday 3D full-time whistle events and gift rails. | **MERGED into main (PR #390, #405)** |
 | **E** | Club HQ & Public Club Profile | `feat/club-hq-public-profile-completion` | PR #343 / `250a9ea2` | `frontend/react-shell/src/pages/PublicClubPage.tsx`, `frontend/lib/screens/clubs/gtex_public_club_profile_screen_v2.dart` | Profile visual snapshot pass | **LOCKED (Verified)** | Privacy masking for financial ledger on public profiles requires strict backend serialization. | Merged / Polish stage |
 | **F** | Audio Foundation & Sponsored Music | `docs/audits/gtex-audio-foundation-jules-audit.md` | Commit `2028e03c` | `frontend/react-shell/src/lib/audio/`, `frontend/lib/services/audio_service.dart` | Audio playback state tests pass | **LOCKED (Verified)** | CDN asset licensing and volume persistence across route transitions. | Partially Merged |
 | **G** | Unity Windows Demonstration & Arena Gameplay | `gemini/unit-2a-milestone-2-arena-gameplay-readiness` | PR #384 / `a19893d4` | `backend/app/services/match_simulation/`, `unity/Assets/Scripts/` | Unity test harness & headless simulation pass | **LOCKED (Verified)** | Asset bundle streaming size optimization for low-bandwidth clients. | **MERGED into main** |
@@ -285,3 +285,41 @@ No production database writes, player/regen/legend modifications, player ingesti
 - **Player universe protection:** no production player, regen, legend, portrait or face-bank records were changed by the four integration merges or the follow-up remediation work.
 
 **Status language:** successful main CI establishes that the merged commit passed the configured automated gates. It does not establish provider-secret readiness, production transaction execution, complete competition reconciliation, Windows visual acceptance, or closure of Issue #267.
+
+---
+
+## 9. Comprehensive Platform Integration & Cross-Workstream Acceptance Checkpoint — 2026-11-08
+
+**Canonical main:** `987de6c91a0937cbfbf5d4a4d62fef24f8d550e5`  
+**Prior main before this integration sequence:** `74b917ec3d7166a3b81396fe4d895d2a4764b400`  
+**Delta:** 178 commits landed across canonical main since the 2026-11-07 checkpoint.  
+**Post-merge CI:** Quality Gates, Phase A Economic Regressions, GTEX React shell build, Cloudflare Pages deployment, React WebGL operations-centre verification, CI and Staging Deploy, Player Ingestion Deployment Contract, and Final Platform Certification completed green on all push/merge runs.
+
+### Merged Integration Set (PR #390 through PR #407)
+
+| PR | Workstream | Merge Commit | Acceptance & Verification Evidence |
+|---|---|---|---|
+| #390 | Owner Authority & Delegation Engine | `c84331c4` | Full organizational delegation policy engine, escalation cards, authority activity matrix, audit log immutability, and database migration `20261106_0227_owner_club_delegation_and_authority_engine`. All backend and React tests pass. |
+| #391 | M2 Match Experience Acceptance Remediation | `c70ed324` | Chronological event-frame ordering, 3D/2D presentation lifecycle, isolated fixture cleanup, and authoritative world-clock integration. Passed all 18 CI gates. |
+| #393 | Unity Windows Demo Package Architecture | `6634b297` | Standalone playable QA demo package harness, visual verification contracts, and cross-platform headless simulation integration. |
+| #395 | Global Competition Reconciliation Visibility | `1aeca870` | Read-only admin competition inventory, user-hosted competition isolation, ownership-enforced pre-match tactic submission, and historical match event preservation. |
+| #396 | Ingestion Pre-deploy Migrations & Idempotency | `443b696b` | Enforced idempotent schema migrations ahead of service startup on Render deployment targets. |
+| #397 | M2 Match Experience Mobile Locators Remediation | `8c860dfb` | Resolved mobile Flutter semantics locator timeouts without reducing acceptance assertion rigor. |
+| #398 | Living Football World Stage 1: Persona Dimensions | `b8fd0309` | Added spatial boardroom personas, relationship dimensions (`trust`, `influence`, `alignment`), and dynamic story feed generation. |
+| #399 | GTEX Commercial Network Platform: Ad Engine | `34a466c2` | High-throughput commercial ad engine, brand advertising campaigns, billing models (CPM/CPC/flat), and impression telemetry tracking. |
+| #400 | Render Blueprint Commercial Environment Variables | `adc06837` | Configured environment variables and secrets baseline for commercial ad platform services. |
+| #401 | CI Quality & React Shell Build Type Definitions | `3c69cd1e` | Reconciled TypeScript interface contracts across commercial and living-world React components, passing zero-warning ESLint and Prettier gates. |
+| #402 | Living Football World Stage 2: Spatial Interactions | `23791911` | Added interactive boardroom dilemma modals, persona dialogue trees, and spatial club HQ interactions. |
+| #403 | P7-FEV Release Browser Runtime Hardening | `4206efea` | Stabilized authenticated Playwright test harness, handling real browser login sequences without timeouts or flaky locators. |
+| #404 | Club HQ Commercial Network Integration | `051d8e44` | Connected live commercial sponsor slots into Club HQ dashboard, enabling club owners to review and activate sponsor campaigns. |
+| #405 | Matchday 3D Cross-Workstream Integrations | `2ff831f3` | Connected live commercial ad inventory to `StadiumAdvertisingNetwork` (`GET /v2/public/ads/stadium/inventory`), and bridged full-time matchday whistle events and fan gifts to Owner Authority delegation with governance controls (`useMatchFullTimeGovernance`). |
+| #406 | Living Football World Stage 3: Autonomous Decisions | `a7b98aef` | Integrated autonomous owner decision engine, world-clock-driven persona evolution, and automated governance escalations. |
+| #407 | Ingestion Worker Operational Recovery (Issue #136) | `987de6c9` | **PRODUCTION BLOCKER RESOLVED & CLOSED.** Fixed crashlooping on Render service `srv-da50r33m8hqs73b2nnt0` via `PGOPTIONS='-c default_transaction_read_only=off'` in blueprint envVars, registered PostgreSQL pool error and connect handlers, and attached error handlers to Redis connection, BullMQ Queues, and BullMQ Workers. All 18 CI checks passed; Issue #136 closed. |
+
+### Updated Status of Active Issues & Milestones
+
+1. **Issue #136 (Player Ingestion Worker Suspended in Render):** **CLOSED / VERIFIED.** Merged via PR #407. Real player ingestion continuity is preserved without synthetic mutations or fake data.
+2. **Issue #267 (GTEX Comprehensive Platform Acceptance Audit):** **UPDATED.** 183 screens and 31 roles cataloged; cross-workstream integrations verified; delivery of comprehensive documentation, screen inventory, and remediation roadmap.
+3. **Issue #2 (Economic Foundation & Ledger Hardening):** **ACTIVE PRIORITY.** Double-entry ledger is operational; hardening transaction idempotency, withdrawal processing boundaries, and treasury stability.
+4. **Issue #28 (Unity Windows 3D Demo Package):** **NEXT PRIORITY.** Standalone playable QA package for matchday and non-matchday 3D scenes.
+
