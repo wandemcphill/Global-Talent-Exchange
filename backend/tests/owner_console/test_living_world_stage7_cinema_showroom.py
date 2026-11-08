@@ -31,6 +31,7 @@ from app.models.wallet import (
     LedgerTransaction,
 )
 from app.owner_console import (
+    ledger,
     living_cinema_showroom,
     living_staff_market,
     router as owner_router,
@@ -158,6 +159,20 @@ def _bootstrap_club(
     )
     session.add_all([star_player, wonderkid_regen])
     session.flush()
+
+    # Seed candidates and a funded club treasury for authoritative settlement tests.
+    living_staff_market.ensure_staff_market_profiles(session)
+    ledger.record(
+        session,
+        event_type="test_club_funding",
+        source=ledger.PLATFORM_GRANTS,
+        destination=ledger.club_account(club_id),
+        currency=ledger.GTEX,
+        gross=2_000_000,
+        club_id=club_id,
+        user_id=user_id,
+        memo="Deterministic test-club treasury funding",
+    )
 
     return u, cp, state
 
