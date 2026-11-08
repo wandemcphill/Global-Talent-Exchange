@@ -1,11 +1,11 @@
 # GTEX Comprehensive Platform Acceptance Audit
 
-**Document Version:** 3.1.0 (Comprehensive Multi-Agent Acceptance Audit)  
+**Document Version:** 3.2.0 (Comprehensive Multi-Agent Acceptance Audit)  
 **Issue:** [#267 (GTEX — Comprehensive Platform Acceptance Audit)](https://github.com/wandemcphill/Global-Talent-Exchange/issues/267)  
 **Target Repository:** `wandemcphill/Global-Talent-Exchange`  
-**Inspected Canonical Main SHA:** `987de6c91a0937cbfbf5d4a4d62fef24f8d550e5`  
-**Previous Audit Baseline SHA:** `74b917ec3d7166a3b81396fe4d895d2a4764b400` (2026-11-07)  
-**Delta:** 178 commits since baseline `74b917ec` (663 commits ahead of initial baseline `bb6d82a9`)  
+**Inspected Canonical Main SHA:** `e074fd5072049e6f3df80f9bb1688177df98f828`  
+**Previous Audit Baseline SHA:** `987de6c91a0937cbfbf5d4a4d62fef24f8d550e5` (2026-11-08)  
+**Delta:** 12 PRs / 28 commits landed since baseline `987de6c9` (740+ commits ahead of initial baseline `bb6d82a9`)  
 **Date:** 2026-11-08  
 **Auditor:** Independent Senior QA & Architecture Auditor / Central Engineering Integration Session  
 **Player Universe Protection Status:** STRICTLY ENFORCED & LOCKED (Zero player/regen/legend records altered, synthetic records created, or imports executed)
@@ -310,4 +310,28 @@ No production database writes, player/regen/legend modifications, player ingesti
 2. **Issue #267 (GTEX Comprehensive Platform Acceptance Audit):** **UPDATED.** 183 screens and 31 roles cataloged; cross-workstream integrations verified; delivery of comprehensive documentation, screen inventory, and remediation roadmap.
 3. **Issue #2 (Economic Foundation & Ledger Hardening):** **ACTIVE PRIORITY.** Double-entry ledger is operational; hardening transaction idempotency, withdrawal processing boundaries, and treasury stability.
 4. **Issue #28 (Unity Windows 3D Demo Package):** **NEXT PRIORITY.** Standalone playable QA package for matchday and non-matchday 3D scenes.
+
+---
+
+## 10. Living Football World & Architecture Consolidation Checkpoint — 2026-11-08
+
+**Canonical main:** `e074fd5072049e6f3df80f9bb1688177df98f828`  
+**Prior main before this series:** `987de6c91a0937cbfbf5d4a4d62fef24f8d550e5`  
+**Delta:** 8 PRs integrated across canonical main since the Stage 3 checkpoint.  
+**Post-merge CI:** Quality Gates, Phase A Economic Regressions, GTEX React shell build, Cloudflare Pages deployment, React WebGL operations-centre verification, Playwright browser test suite (desktop, mobile, tablet), CI and Staging Deploy, Player Ingestion Deployment Contract, and Final Platform Certification passed on all merge heads.
+
+### Merged Integration Set (PR #408 through PR #415)
+
+| PR | Workstream | Merge Commit | Acceptance & Verification Summary |
+|---|---|---|---|
+| #408 | Living Football World Stage 4: Staff Market & Careers | `1c7e9231` | Universal staff career identity, free-agent pool, open vacancy lifecycle, poach fee calculations, and persistent employment contracts. |
+| #409 | Signup Flow Unification (Issue #228) | `5b78de19` | Unified React frontend registration into a single onboarding path; deferred creator/trader specialization to post-signup capability grants. Real Turnstile gating enforced. |
+| #410 | Documentation & Audit Refresh | `a9f24e10` | Updated comprehensive platform audit, role-feature matrix, and screen inventory for the 2026-11-08 checkpoint. |
+| #411 | Living Football World Stage 5: GM Delegation Engine | `b26116b8` | General Manager autonomous delegation engine, authority levels (`full_autonomy`, `recommend_only`, `owner_approval`), escalation cards, and owner control modals. |
+| #412 | Stage 5 Governance & Settlement Integrity | `4e56f756` | Enforced upfront ledger settlement as a hard requirement before staff hiring or contract creation; restricted autonomous execution strictly to implemented workflows; added audit logging for GM actions. |
+| #413 | Architecture Audit Remediation (ARCH-001, NEW-STF-001, NEW-002) | `a0468faf` | Stripped `/api/api/` route doubling across all 188 domain modules; migrated `ClubOpsStore` to database snapshot persistence with multi-worker concurrency lock; bound Transfer Hub settlements strictly to persistent database offer prices. |
+| #414 | Living Football World Stage 6: Politics & Consequences | `7c85e92e` | 4 distinct boardroom director personas with dynamic leverage; dressing-room squad factions and captain intermediary; medical return-to-play disputes; HOYD academy pathway politics; WebGL `ClubPoliticsModal`. |
+| #415 | Living Football World Stage 7: Cinema 3D & Showroom | `e074fd50` | 19 canonical cinematic event types, manager/staff arrival 3D sequences on confirmed appointment, Three.js WebGL `PrestigeShowroomScene` and `ManagerArrivalScene` with honest 2D fallback reporting. |
+
+**Protection Enforcement:** Zero player, regen, legend, or scouting database modifications executed across all pull requests. All tests run in isolated memory/scratch environments.
 

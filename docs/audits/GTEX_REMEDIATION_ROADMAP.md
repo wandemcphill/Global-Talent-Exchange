@@ -1,8 +1,8 @@
 # GTEX Remediation Roadmap
 
-**Current Review Baseline:** `main` `987de6c91a0937cbfbf5d4a4d62fef24f8d550e5` (2026-11-08).  
-**Historical Baselines:** `74b917ec` (2026-11-07), `bb6d82a9` (2026-10-27), and `45e29ef6` (2026-10-18).  
-**Primary Reference:** `docs/audits/GTEX_COMPREHENSIVE_PLATFORM_AUDIT.md` (Version 3.1.0).  
+**Current Review Baseline:** `main` `e074fd5072049e6f3df80f9bb1688177df98f828` (2026-11-08).  
+**Historical Baselines:** `987de6c9` (2026-11-08), `74b917ec` (2026-11-07), `bb6d82a9` (2026-10-27), and `45e29ef6` (2026-10-18).  
+**Primary Reference:** `docs/audits/GTEX_COMPREHENSIVE_PLATFORM_AUDIT.md` (Version 3.2.0).  
 **Player Universe Protection Policy:** STRICTLY ENFORCED & LOCKED (Zero player/regen/legend records altered, synthetic records created, or imports executed).
 
 Nothing here is permission to merge without review. Each repair is an independent, reviewable pull request. Do not initiate broad rewrites. Do not run live deposits, withdrawals, jackpot funding, or payouts to close a row.
@@ -54,9 +54,8 @@ Nothing here is permission to merge without review. Each repair is an independen
 - **Verification:** `club_sale_market`, dynasty, and identity routes are mounted via `backend/app/routes/clubs.py`.
 
 ### PR-C — Turnstile Enforcement & Signup Unification (FND-001, FND-005, NEW-AUTH-1)
-- **Status:** **PARTIALLY RESOLVED** (Security enforced; UI unification pending).
-- **Completed:** Server-side Turnstile verification is enforced on all signup paths; Flutter client renders Turnstile challenge widget; `MyClubs.tsx` supports dynamic geography.
-- **Remaining:** Unify React `AuthPage.tsx` into a single normal-user registration form per Issue #228.
+- **Status:** **RESOLVED** via merged PR [#409](https://github.com/wandemcphill/Global-Talent-Exchange/pull/409) (Issue #228).
+- **Completed:** Server-side Turnstile verification is enforced on all signup paths; Flutter client renders Turnstile challenge widget; `MyClubs.tsx` supports dynamic geography. React registration is unified into a single onboarding path, deferring creator/trader specialization to post-signup capability grants.
 
 ### PR-D — One Staff Record & Club Ops Persistence (FND-009, NEW-STF-001)
 - **Status:** **RESOLVED**.
