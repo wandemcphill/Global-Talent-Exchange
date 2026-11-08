@@ -27,9 +27,42 @@ KORAPAY_DEFAULT_BASE_URL = "https://api.korapay.com/merchant/api/v1"
 AMOUNT_QUANTUM = Decimal("0.0001")
 
 
+def _normalize_for_js(val: Any) -> Any:
+    if isinstance(val, dict):
+        # In ECMAScript/V8, integer index keys are iterated first in numeric ascending order,
+        # then non-integer string keys in insertion order.
+        int_keys = []
+        str_keys = []
+        for k in val.keys():
+            k_str = str(k)
+            if k_str.isdigit() and (len(k_str) == 1 or not k_str.startswith("0")) and int(k_str) < 2**32 - 1:
+                int_keys.append((int(k_str), k_str))
+            else:
+                str_keys.append(k_str)
+        int_keys.sort(key=lambda x: x[0])
+        ordered_keys = [k for _, k in int_keys] + str_keys
+        return {k: _normalize_for_js(val[k]) for k in ordered_keys}
+    elif isinstance(val, list):
+        return [_normalize_for_js(item) for item in val]
+    elif isinstance(val, float):
+        # In JavaScript JSON.stringify, floats with exact integer values (e.g. 250000.0) format as integers (250000)
+        if val.is_integer():
+            return int(val)
+        return val
+    return val
+
+
 def _js_json_stringify(value: Any) -> str:
-    """Format dict according to JavaScript JSON.stringify for KoraPay signature checks."""
-    return json.dumps(value, separators=(",", ":"), ensure_ascii=False)
+    """Format dict according to JavaScript JSON.stringify for KoraPay signature checks.
+    
+    Guarantees cross-language parity with Node.js JSON.stringify:
+    - Eliminates Python whitespace (separators=(',', ':'))
+    - Preserves literal UTF-8 Unicode characters (ensure_ascii=False)
+    - Normalizes integer-valued floats (250000.0 -> 250000)
+    - Orders numeric object keys in ascending order per ECMA-262
+    """
+    normalized = _normalize_for_js(value)
+    return json.dumps(normalized, separators=(",", ":"), ensure_ascii=False)
 
 
 class KoraPayProviderAdapter:
@@ -192,6 +225,8 @@ class KoraPayProviderAdapter:
             status = "success"
         elif status_raw in {"pending", "processing"}:
             status = "pending"
+        elif status_raw in {"reversed", "chargeback"}:
+            status = "reversed"
         else:
             status = "failed"
 

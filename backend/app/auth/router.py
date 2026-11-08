@@ -328,6 +328,18 @@ def _build_onboarding_bootstrap(
 ) -> SessionBootstrapOnboardingState:
     # Dedicated account types are exclusive lanes. Never add club-owner,
     # creator, or trader switching actions to another account's bootstrap.
+    if user.account_type == PublicAccountType.ADVERTISER or user.role == UserRole.ADVERTISER:
+        return SessionBootstrapOnboardingState(
+            has_club=False,
+            requires_club=False,
+            suggested_route="/advertiser/dashboard",
+            available_actions=[
+                "advertiser_dashboard",
+                "advertiser_campaigns",
+                "advertiser_billing",
+                "advertiser_reports",
+            ],
+        )
     if user.account_type == PublicAccountType.COIN_TRADER:
         return SessionBootstrapOnboardingState(
             has_club=False,

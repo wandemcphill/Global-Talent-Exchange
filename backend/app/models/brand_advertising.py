@@ -34,7 +34,7 @@ class BrandAdEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     campaign_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("brand_ad_campaigns.id", ondelete="CASCADE"), nullable=False
     )
-    event_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(96), nullable=False)
     user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     event_source: Mapped[str] = mapped_column(String(16), nullable=False, default="client", server_default="client")
@@ -49,10 +49,10 @@ class BrandAdReviewEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         String(36), ForeignKey("brand_ad_campaigns.id", ondelete="CASCADE"), nullable=False
     )
     actor_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
-    action: Mapped[str] = mapped_column(String(16), nullable=False)
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    from_status: Mapped[str] = mapped_column(String(16), nullable=False)
-    to_status: Mapped[str] = mapped_column(String(16), nullable=False)
+    from_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    to_status: Mapped[str] = mapped_column(String(32), nullable=False)
 
 
 __all__ = ["BrandAdvertiserProfile", "BrandAdEvent", "BrandAdReviewEvent"]

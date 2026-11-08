@@ -101,3 +101,5 @@ export function errMsg(e: any): string {
   if (code) return String(code).replace(/_/g, " ");
   return e?.message || "Something went wrong";
 }
+
+export const parseError = errMsg;

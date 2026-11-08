@@ -16,6 +16,12 @@ from app.ads_engine.brand_campaigns import (
     router as brand_campaigns_router,
     public_router as brand_campaigns_public_router,
 )
+from app.ads_engine.commercial_router import (
+    admin_commercial_router,
+    advertiser_router,
+    public_commercial_router,
+)
+from app.ads_engine.commercial_service import PLACEMENT_EQUIVALENCE_MAP
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.models.user import User
 
@@ -85,10 +91,13 @@ def get_sponsored_feed(
 router.include_router(ads_router)
 router.include_router(feed_router)
 router.include_router(brand_campaigns_router)
+router.include_router(advertiser_router)
+router.include_router(admin_commercial_router)
 
 
 public_router = APIRouter(prefix="/public/ads", tags=["public-ads"])
 public_router.include_router(brand_campaigns_public_router)
+public_router.include_router(public_commercial_router)
 
 
 def _is_safe_public_http_url(value: str | None) -> bool:
@@ -108,12 +117,25 @@ def _is_safe_public_http_url(value: str | None) -> bool:
         return False
 
 
+def _is_safe_public_media_url(value: str | None) -> bool:
+    if not isinstance(value, str) or not value.strip():
+        return False
+    cleaned = value.strip()
+    if cleaned.startswith(("/api/v2/public/ads/media/", "/public/ads/media/", "/api/public/ads/media/")):
+        return True
+    return _is_safe_public_http_url(cleaned)
+
+
 @public_router.get("/campaigns", response_model=PublicBrandAdCampaignsResponse)
 def get_public_brand_ad_campaigns(
     response: Response,
     placement: str | None = Query(
         default=None,
-        pattern="^(homepage_rail|homepage_hero|partner_showcase|auth_canvas)$",
+        pattern=(
+            "^(homepage_rail|homepage_hero|partner_showcase|auth_canvas|"
+            "public_homepage|login_page|registration_page|gtex_application|"
+            "sponsored_cards|match_sponsor_id|live_match_panel|halftime_sponsorship|stadium_perimeter)$"
+        ),
     ),
     limit: int = Query(default=60, ge=1, le=100),
     session: Session = Depends(get_session),
@@ -130,7 +152,7 @@ def get_public_brand_ad_campaigns(
         select(BrandAdCampaign)
         .where(
             BrandAdCampaign.campaign_type == "brand",
-            BrandAdCampaign.status == "approved",
+            BrandAdCampaign.status.in_(("approved", "active")),
             BrandAdCampaign.is_approved.is_(True),
             BrandAdCampaign.is_active.is_(True),
             BrandAdCampaign.start_at <= now,
@@ -141,10 +163,8 @@ def get_public_brand_ad_campaigns(
             BrandAdCampaign.start_at.asc(),
             BrandAdCampaign.id.asc(),
         )
-        .limit(limit)
+        .limit(limit * 2)
     )
-    if placement:
-        statement = statement.where(BrandAdCampaign.placement == placement)
 
     from decimal import Decimal
     from app.ads_engine.brand_campaigns import _estimated_spend, _event_counts
@@ -153,26 +173,48 @@ def get_public_brand_ad_campaigns(
     candidate_ids = [c.id for c in candidates]
     counts_by_campaign = _event_counts(session, candidate_ids) if candidate_ids else {}
 
+    equivalent_keys = set(PLACEMENT_EQUIVALENCE_MAP.get(placement, (placement,))) if placement else set()
+
     campaigns: list[PublicBrandAdCampaignView] = []
     for campaign in candidates:
+        if len(campaigns) >= limit:
+            break
         if not _is_safe_public_http_url(campaign.destination_url):
             continue
-        # Phase 5: Exclude budget-exhausted campaigns from live delivery
-        budget = Decimal(campaign.budget_amount or 0)
-        if budget > Decimal("0"):
-            spend = _estimated_spend(campaign, counts_by_campaign.get(campaign.id, {}))
-            if spend >= budget:
+        campaign_placements = list(campaign.placements_json or [])
+        if campaign.placement and campaign.placement not in campaign_placements:
+            campaign_placements.insert(0, campaign.placement)
+
+        if placement:
+            # Exact match on primary placement or multi-placement list, or new<->legacy equivalence when multi-placement
+            exact_match = (campaign.placement == placement) or (placement in (campaign.placements_json or []))
+            equiv_match = bool(campaign.placements_json) and bool(set(campaign_placements) & equivalent_keys)
+            if not (exact_match or equiv_match):
                 continue
+
+        # Phase 5: Exclude budget-exhausted legacy CPM/CPC campaigns from live delivery
+        if campaign.pricing_model in {"CPM", "CPC"}:
+            budget = Decimal(campaign.budget_amount or 0)
+            if budget > Decimal("0"):
+                spend = _estimated_spend(campaign, counts_by_campaign.get(campaign.id, {}))
+                if spend >= budget:
+                    continue
+
+        resolved_placement = placement if (placement and placement in (campaign.placements_json or [])) else campaign.placement
         campaigns.append(
             PublicBrandAdCampaignView(
                 id=campaign.id,
                 brand_name=campaign.brand_name,
                 headline=campaign.headline,
                 description=campaign.description or "",
-                placement=campaign.placement,
+                placement=resolved_placement,  # type: ignore[arg-type]
+                placements=campaign_placements,
                 destination_url=campaign.destination_url,
-                logo_url=campaign.logo_url if _is_safe_public_http_url(campaign.logo_url) else None,
-                creative_url=(campaign.creative_url if _is_safe_public_http_url(campaign.creative_url) else None),
+                logo_url=campaign.logo_url if _is_safe_public_media_url(campaign.logo_url) else None,
+                creative_url=(campaign.creative_url if _is_safe_public_media_url(campaign.creative_url) else None),
+                creative_media_type=campaign.creative_media_type,
+                is_silent_creative=True,
+                sponsored_label="Sponsored",
                 priority=campaign.priority,
             )
         )

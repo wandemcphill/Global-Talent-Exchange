@@ -9,6 +9,7 @@ type AuthState = {
   login: (email: string, password: string) => Promise<AuthResult>;
   signup: (payload: any) => Promise<AuthResult>;
   logout: () => void;
+  refresh?: () => Promise<any>;
 };
 
 const Ctx = createContext<AuthState>(null as any);
@@ -72,7 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
-  return <Ctx.Provider value={{ user, loading, login, signup, logout }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ user, loading, login, signup, logout, refresh: loadMe }}>{children}</Ctx.Provider>;
 }
 
 export const useAuth = () => useContext(Ctx);
