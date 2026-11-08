@@ -1413,7 +1413,9 @@ def postgres_engine(tmp_path):
             stderr=subprocess.DEVNULL,
         )
     except (subprocess.CalledProcessError, OSError):
-        pytest.skip("Local ephemeral initdb cluster creation failed; set GTE_TEST_POSTGRES_URL to test real PostgreSQL concurrency")
+        pytest.skip(
+            "Local ephemeral initdb cluster creation failed; set GTE_TEST_POSTGRES_URL to test real PostgreSQL concurrency"
+        )
     url = f"postgresql+psycopg://postgres@127.0.0.1:{port}/postgres"
     eng = create_engine(url, pool_size=5, max_overflow=5)
     try:
