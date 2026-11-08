@@ -57,7 +57,9 @@ class S3ObjectStorage(ObjectStorage):
     access_key_id: str | None = None
     secret_access_key: str | None = None
     session_token: str | None = None
-    local_cache_root: Path = field(default_factory=lambda: Path(os.getenv("GTE_STORAGE_CACHE_ROOT", "/tmp/gtex_storage_cache")))
+    local_cache_root: Path = field(
+        default_factory=lambda: Path(os.getenv("GTE_STORAGE_CACHE_ROOT", "/tmp/gtex_storage_cache"))
+    )
     timeout_seconds: float = 30.0
 
     def _sign_headers(
@@ -232,6 +234,7 @@ class S3ObjectStorage(ObjectStorage):
             if res.status_code != 200:
                 return []
             import xml.etree.ElementTree as ET
+
             root = ET.fromstring(res.text)
             keys: list[str] = []
             ns = {"s3": "http://s3.amazonaws.com/doc/2006-03-01/"}
@@ -259,6 +262,7 @@ class S3ObjectStorage(ObjectStorage):
             meta_header = res.headers.get("x-amz-meta-custom-meta")
             if meta_header:
                 from urllib.parse import unquote
+
                 return json.loads(unquote(meta_header))
             return {
                 "content_type": res.headers.get("content-type"),

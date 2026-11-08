@@ -6,17 +6,22 @@ import { parseError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { commercialApi } from "@/lib/commercial/api";
 
+export interface AdvertiserAuthPageProps {
+  mode?: "register" | "login";
+  initialMode?: "register" | "login";
+}
+
 export default function AdvertiserAuthPage({
   mode,
-}: {
-  mode?: "register" | "login";
-} = {}) {
+  initialMode,
+}: AdvertiserAuthPageProps = {}) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { refresh } = useAuth();
 
+  const activeMode = mode || initialMode;
   const pathname = typeof window !== "undefined" ? window.location.pathname : "";
-  const isRegister = mode ? mode === "register" : pathname.includes("/register");
+  const isRegister = activeMode ? activeMode === "register" : pathname.includes("/register");
   const initialType = (searchParams.get("type") as "business" | "agency" | "music") || "business";
 
   const [accountType, setAccountType] = useState<"business" | "agency" | "music">(

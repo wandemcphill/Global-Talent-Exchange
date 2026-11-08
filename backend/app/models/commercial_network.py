@@ -41,12 +41,8 @@ class AdvertiserWorkspace(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_advertiser_workspaces_type_status", "account_type", "status"),
     )
 
-    owner_user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
-    account_type: Mapped[str] = mapped_column(
-        String(24), nullable=False, default="business", server_default="business"
-    )
+    owner_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    account_type: Mapped[str] = mapped_column(String(24), nullable=False, default="business", server_default="business")
     company_name: Mapped[str] = mapped_column(String(180), nullable=False)
     contact_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
     contact_email: Mapped[str] = mapped_column(String(320), nullable=False)
@@ -55,14 +51,10 @@ class AdvertiserWorkspace(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     logo_asset_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     stage_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
     label_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    status: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="active", server_default="active"
-    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active", server_default="active")
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     suspended_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    default_currency: Mapped[str] = mapped_column(
-        String(3), nullable=False, default="NGN", server_default="NGN"
-    )
+    default_currency: Mapped[str] = mapped_column(String(3), nullable=False, default="NGN", server_default="NGN")
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
 
@@ -87,16 +79,12 @@ class AdvertiserWorkspaceMember(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     workspace_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("advertiser_workspaces.id", ondelete="CASCADE"), nullable=False
     )
-    user_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    )
+    user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     invited_email: Mapped[str] = mapped_column(String(320), nullable=False)
     role: Mapped[str] = mapped_column(
         String(32), nullable=False, default="campaign_manager", server_default="campaign_manager"
     )
-    status: Mapped[str] = mapped_column(
-        String(24), nullable=False, default="active", server_default="active"
-    )
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="active", server_default="active")
     permissions_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     invited_by_user_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
@@ -105,9 +93,7 @@ class AdvertiserClientBrand(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """Client brand managed by an advertising agency workspace."""
 
     __tablename__ = "advertiser_client_brands"
-    __table_args__ = (
-        Index("ix_advertiser_client_brands_workspace", "workspace_id", "is_active"),
-    )
+    __table_args__ = (Index("ix_advertiser_client_brands_workspace", "workspace_id", "is_active"),)
 
     workspace_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("advertiser_workspaces.id", ondelete="CASCADE"), nullable=False
@@ -144,21 +130,15 @@ class AdPlacementSpec(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Integer, nullable=False, default=26214400, server_default="26214400"
     )
     max_duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    requires_silent_media: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default=true()
-    )
+    requires_silent_media: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=true())
     # Nullable minor NGN (kobo) rate: None means pricing is not yet configured by an administrator.
-    weekly_rate_minor_ngn: Mapped[int | None] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), nullable=True)
+    weekly_rate_minor_ngn: Mapped[int | None] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), nullable=True
+    )
     is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=true())
-    delivery_surface_ready: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default=true()
-    )
-    frequency_cap_per_session: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=10, server_default="10"
-    )
-    rotation_interval_seconds: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=30, server_default="30"
-    )
+    delivery_surface_ready: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=true())
+    frequency_cap_per_session: Mapped[int] = mapped_column(Integer, nullable=False, default=10, server_default="10")
+    rotation_interval_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=30, server_default="30")
     priority_weight: Mapped[int] = mapped_column(Integer, nullable=False, default=100, server_default="100")
     device_compatibility_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
 
@@ -226,9 +206,7 @@ class AdvertiserMediaAsset(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     has_audio_track: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false())
     is_silent_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=true())
-    validation_status: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="valid", server_default="valid"
-    )
+    validation_status: Mapped[str] = mapped_column(String(32), nullable=False, default="valid", server_default="valid")
     validation_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     storage_provider: Mapped[str] = mapped_column(
         String(64), nullable=False, default="local_object_storage", server_default="local_object_storage"
@@ -271,13 +249,9 @@ class AdvertiserPaymentRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     provider: Mapped[str] = mapped_column(String(32), nullable=False, default="paystack", server_default="paystack")
     provider_reference: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    amount_minor_ngn: Mapped[int] = mapped_column(
-        BigInteger().with_variant(Integer, "sqlite"), nullable=False
-    )
+    amount_minor_ngn: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="NGN", server_default="NGN")
-    status: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="pending", server_default="pending"
-    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", server_default="pending")
     checkout_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     verification_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -304,18 +278,14 @@ class AdvertiserInvoice(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     payment_record_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("advertiser_payment_records.id", ondelete="SET NULL"), nullable=True
     )
-    subtotal_minor_ngn: Mapped[int] = mapped_column(
-        BigInteger().with_variant(Integer, "sqlite"), nullable=False
-    )
+    subtotal_minor_ngn: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), nullable=False)
     tax_minor_ngn: Mapped[int] = mapped_column(
         BigInteger().with_variant(Integer, "sqlite"), nullable=False, default=0, server_default="0"
     )
     discount_minor_ngn: Mapped[int] = mapped_column(
         BigInteger().with_variant(Integer, "sqlite"), nullable=False, default=0, server_default="0"
     )
-    total_minor_ngn: Mapped[int] = mapped_column(
-        BigInteger().with_variant(Integer, "sqlite"), nullable=False
-    )
+    total_minor_ngn: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="NGN", server_default="NGN")
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="issued", server_default="issued")
     issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -345,9 +315,7 @@ class AdvertiserSubscription(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     package_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     provider: Mapped[str] = mapped_column(String(32), nullable=False, default="paystack", server_default="paystack")
     provider_authorization_code: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    amount_minor_ngn: Mapped[int] = mapped_column(
-        BigInteger().with_variant(Integer, "sqlite"), nullable=False
-    )
+    amount_minor_ngn: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="NGN", server_default="NGN")
     billing_interval_days: Mapped[int] = mapped_column(Integer, nullable=False, default=30, server_default="30")
     status: Mapped[str] = mapped_column(
@@ -382,14 +350,10 @@ class AdvertiserRefundRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         String(36), ForeignKey("advertiser_workspaces.id", ondelete="RESTRICT"), nullable=False
     )
     campaign_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
-    amount_minor_ngn: Mapped[int] = mapped_column(
-        BigInteger().with_variant(Integer, "sqlite"), nullable=False
-    )
+    amount_minor_ngn: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="NGN", server_default="NGN")
     reason: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="completed", server_default="completed"
-    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="completed", server_default="completed")
     approved_by_user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
