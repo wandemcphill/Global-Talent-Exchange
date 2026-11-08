@@ -29,11 +29,11 @@ Nothing here is permission to merge without review. Each repair is an independen
 2. State Persistence — NEW-STF-001: migrate ClubOpsStore in-memory singleton to SQLite/PostgreSQL [RESOLVED]
 3. Settlement Correctness:
    - NEW-002: bind transfer hub offer settlement to persistent database offer price [RESOLVED]
-   - NAT-NEW-1: enforce squad rental provenance on national team registrations
-   - NEW-JRW-001: database uniqueness & idempotency on daily challenge reward settlements
+   - NAT-NEW-1: enforce squad rental provenance on national team registrations [RESOLVED]
+   - NEW-JRW-001: database uniqueness & idempotency on daily challenge reward settlements [RESOLVED]
 4. Multi-Agent Integration Alignment:
-   - Agent A (Issue #352): canonical competition engine integration & economic contract
-   - Agent B (Issue #2): double-entry financial ledger idempotency certification
+   - Agent A (Issue #352): canonical competition engine integration & economic contract [RESOLVED & VERIFIED]
+   - Agent B (Issue #2): double-entry financial ledger idempotency certification [RESOLVED & VERIFIED]
    - Agent C (Issue #136): ingestion worker recovery definition in render.yaml
    - Agent D: recovered remote branch is available in draft PR #390; run CI, authorization review, and migration checks before considering integration.
    - Agent I (PR #378): merge Campus GLB integrity reconciliation
