@@ -2158,6 +2158,10 @@ export default function MatchCenter() {
     return res.data?.ticket ?? null;
   }, []);
 
+  // Live Gifting Broadcast Animation State
+  const [activeGift, setActiveGift] = useState<any | null>(null);
+  const [lastGiftId, setLastGiftId] = useState<string | null>(null);
+
   const spectatorStream = useMatchSpectatorStream({
     matchId: id || "",
     enabled: Boolean(id && id !== "u2a-006-showcase" && (params.get("live") || view3DBroadcast)),
@@ -2220,10 +2224,6 @@ export default function MatchCenter() {
   const [line, setLine] = useState(68);
   const [tempo, setTempo] = useState(52);
   const [risk, setRisk] = useState(45);
-
-  // Live Gifting Broadcast Animation State
-  const [activeGift, setActiveGift] = useState<{ sender: string; name: string; code: string; anim?: string } | null>(null);
-  const [lastGiftId, setLastGiftId] = useState<string | null>(null);
 
   useEffect(() => {
     const recent = (liveState as any)?.recent_gifts;

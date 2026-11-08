@@ -15,6 +15,16 @@ export function useControlCenter() {
   });
 }
 
+export function useMyClubs() {
+  const query = useControlCenter();
+  const clubs: any[] = query.data?.clubs || [];
+  return {
+    ...query,
+    data: clubs,
+    clubs,
+  };
+}
+
 export function useActiveClub() {
   const { data } = useControlCenter();
   const [stored, setStored] = useState<string | null>(() => localStorage.getItem("gtex_active_club"));
