@@ -13,6 +13,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { useQuery } from "@tanstack/react-query";
 import {
   Building2,
   Sun,
@@ -23,11 +24,19 @@ import {
   Sparkles,
   ChevronRight,
   ShieldAlert,
+  Flame,
+  Scale,
 } from "lucide-react";
+import { api } from "@/lib/api";
 import { GtexSceneRegistry } from "../GtexSceneRegistry";
 import type { GtexSceneRendererProps } from "../GtexSceneTypes";
 import { PersonaSpatialInteractionModal } from "../PersonaSpatialInteractionModal";
-import type { PersonaInteractionResponse } from "@/lib/ownerBriefing";
+import { BoardroomDilemmaModal } from "../BoardroomDilemmaModal";
+import {
+  clubActiveDilemmaEndpoint,
+  type BoardroomDilemma,
+  type PersonaInteractionResponse,
+} from "@/lib/ownerBriefing";
 
 export interface BoardroomSceneProps extends Partial<GtexSceneRendererProps> {
   clubId?: string;
@@ -123,8 +132,24 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
   const [activePreset, setActivePreset] = useState<BoardroomCameraPreset>("overview");
   const [lightingMode, setLightingMode] = useState<"day" | "night">("day");
   const [hoveredPersona, setHoveredPersona] = useState<BoardroomPersonaConfig | null>(null);
+  const [isHoveringDilemma, setIsHoveringDilemma] = useState<boolean>(false);
   const [selectedPersonaRole, setSelectedPersonaRole] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [isDilemmaModalOpen, setIsDilemmaModalOpen] = useState<boolean>(false);
+
+  // Active Boardroom Dilemma Query
+  const { data: activeDilemma } = useQuery<BoardroomDilemma | null>({
+    queryKey: ["club-active-dilemma", clubId],
+    queryFn: async () => {
+      try {
+        const res = await api.get<BoardroomDilemma>(clubActiveDilemmaEndpoint(clubId));
+        return res.data;
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!clubId,
+  });
 
   // Three.js instances
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -147,6 +172,10 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
   const handleOpenPersonaInteraction = useCallback((roleKey: string) => {
     setSelectedPersonaRole(roleKey);
     setIsModalOpen(true);
+  }, []);
+
+  const handleOpenDilemmaModal = useCallback(() => {
+    setIsDilemmaModalOpen(true);
   }, []);
 
   useEffect(() => {
@@ -319,6 +348,67 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
     scene.add(tableGroup);
 
     // -----------------------------------------------------------------------
+    // 3D Holographic Dilemma Projector on Mahogany Table
+    // -----------------------------------------------------------------------
+    const dilemmaProjectorGroup = new THREE.Group();
+    dilemmaProjectorGroup.position.set(0, 1.49, 0);
+
+    const holoBaseGeo = new THREE.CylinderGeometry(0.55, 0.65, 0.12, 32);
+    const holoBaseMat = new THREE.MeshStandardMaterial({
+      color: 0x0f172a,
+      metalness: 0.85,
+      roughness: 0.25,
+    });
+    const holoBase = new THREE.Mesh(holoBaseGeo, holoBaseMat);
+    holoBase.castShadow = true;
+    holoBase.userData = { isRaycastTarget: true, isDilemmaTarget: true };
+    dilemmaProjectorGroup.add(holoBase);
+
+    // Emissive projector ring
+    const holoRingGeo = new THREE.RingGeometry(0.58, 0.72, 32);
+    const holoRingMat = new THREE.MeshBasicMaterial({
+      color: 0xf59e0b,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.85,
+    });
+    const holoRing = new THREE.Mesh(holoRingGeo, holoRingMat);
+    holoRing.rotation.x = -Math.PI / 2;
+    holoRing.position.y = 0.07;
+    dilemmaProjectorGroup.add(holoRing);
+
+    // Pulsing Hologram Beacon / Crystal
+    const beaconGeo = new THREE.OctahedronGeometry(0.38, 0);
+    const beaconMat = new THREE.MeshStandardMaterial({
+      color: 0xf59e0b,
+      emissive: 0xd97706,
+      emissiveIntensity: 0.7,
+      roughness: 0.2,
+      metalness: 0.4,
+      transparent: true,
+      opacity: 0.88,
+    });
+    const beaconMesh = new THREE.Mesh(beaconGeo, beaconMat);
+    beaconMesh.position.y = 0.6;
+    beaconMesh.name = "dilemmaBeacon";
+    beaconMesh.userData = { isRaycastTarget: true, isDilemmaTarget: true };
+    dilemmaProjectorGroup.add(beaconMesh);
+
+    // Downward Projector Light Beam
+    const beamGeo = new THREE.CylinderGeometry(0.08, 0.45, 0.6, 16, 1, true);
+    const beamMat = new THREE.MeshBasicMaterial({
+      color: 0xfbbf24,
+      transparent: true,
+      opacity: 0.25,
+      side: THREE.DoubleSide,
+    });
+    const beamMesh = new THREE.Mesh(beamGeo, beamMat);
+    beamMesh.position.y = 0.3;
+    dilemmaProjectorGroup.add(beamMesh);
+
+    scene.add(dilemmaProjectorGroup);
+
+    // -----------------------------------------------------------------------
     // Interactive Wall-Mounted Presentation Holographic Screen
     // -----------------------------------------------------------------------
     const screenGroup = new THREE.Group();
@@ -427,22 +517,40 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
           if (child.userData?.isRaycastTarget) targets.push(child);
         });
       });
+      dilemmaProjectorGroup.traverse((child) => {
+        if (child.userData?.isRaycastTarget) targets.push(child);
+      });
 
       const intersects = raycaster.intersectObjects(targets, false);
       if (intersects.length > 0) {
-        const hitRole = intersects[0].object.userData?.personaRole;
-        const cfg = BOARDROOM_PERSONAS.find((p) => p.roleKey === hitRole);
-        setHoveredPersona(cfg || null);
-        renderer.domElement.style.cursor = "pointer";
+        const hitObj = intersects[0].object;
+        if (hitObj.userData?.isDilemmaTarget) {
+          setIsHoveringDilemma(true);
+          setHoveredPersona(null);
+          renderer.domElement.style.cursor = "pointer";
+          personaGroupMap.forEach((grp) => {
+            const ring = grp.getObjectByName("selectionRing") as THREE.Mesh;
+            if (ring && ring.material instanceof THREE.MeshBasicMaterial) {
+              ring.material.opacity = 0;
+            }
+          });
+        } else {
+          setIsHoveringDilemma(false);
+          const hitRole = hitObj.userData?.personaRole;
+          const cfg = BOARDROOM_PERSONAS.find((p) => p.roleKey === hitRole);
+          setHoveredPersona(cfg || null);
+          renderer.domElement.style.cursor = "pointer";
 
-        // Highlight ring
-        personaGroupMap.forEach((grp, key) => {
-          const ring = grp.getObjectByName("selectionRing") as THREE.Mesh;
-          if (ring && ring.material instanceof THREE.MeshBasicMaterial) {
-            ring.material.opacity = key === hitRole ? 0.9 : 0;
-          }
-        });
+          // Highlight ring
+          personaGroupMap.forEach((grp, key) => {
+            const ring = grp.getObjectByName("selectionRing") as THREE.Mesh;
+            if (ring && ring.material instanceof THREE.MeshBasicMaterial) {
+              ring.material.opacity = key === hitRole ? 0.9 : 0;
+            }
+          });
+        }
       } else {
+        setIsHoveringDilemma(false);
         setHoveredPersona(null);
         renderer.domElement.style.cursor = "default";
         personaGroupMap.forEach((grp) => {
@@ -466,12 +574,20 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
           if (child.userData?.isRaycastTarget) targets.push(child);
         });
       });
+      dilemmaProjectorGroup.traverse((child) => {
+        if (child.userData?.isRaycastTarget) targets.push(child);
+      });
 
       const intersects = raycaster.intersectObjects(targets, false);
       if (intersects.length > 0) {
-        const hitRole = intersects[0].object.userData?.personaRole;
-        if (hitRole) {
-          handleOpenPersonaInteraction(hitRole);
+        const hitObj = intersects[0].object;
+        if (hitObj.userData?.isDilemmaTarget) {
+          handleOpenDilemmaModal();
+        } else {
+          const hitRole = hitObj.userData?.personaRole;
+          if (hitRole) {
+            handleOpenPersonaInteraction(hitRole);
+          }
         }
       }
     };
@@ -488,6 +604,13 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
     const animate = () => {
       animId = requestAnimationFrame(animate);
       const dt = clock.getDelta();
+
+      // Pulsing and spinning Dilemma Beacon
+      if (beaconMesh) {
+        beaconMesh.rotation.y += dt * 1.5;
+        beaconMesh.rotation.x += dt * 0.5;
+        beaconMesh.position.y = 0.6 + Math.sin(clock.getElapsedTime() * 3.0) * 0.06;
+      }
 
       // Camera interpolation to target preset
       if (isTransitioningRef.current) {
@@ -532,7 +655,7 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
         container.removeChild(renderer.domElement);
       }
     };
-  }, [activeQuality, lightingMode, handleOpenPersonaInteraction]);
+  }, [activeQuality, lightingMode, handleOpenPersonaInteraction, handleOpenDilemmaModal]);
 
   return (
     <div
@@ -544,15 +667,33 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
 
       {/* Top HUD Controls Bar */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between p-4">
-        {/* Title Badge */}
-        <div className="pointer-events-auto flex items-center gap-2 rounded-xl border border-white/10 bg-slate-950/80 px-3 py-1.5 backdrop-blur-md">
-          <Building2 className="h-4 w-4 text-emerald-400" />
-          <span className="text-xs font-bold uppercase tracking-wider text-white">
-            Executive Boardroom Suite
-          </span>
-          <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-mono text-emerald-300">
-            3D PERSISTENT
-          </span>
+        {/* Title Badge & Dilemma Pending Alert */}
+        <div className="flex items-center gap-2">
+          <div className="pointer-events-auto flex items-center gap-2 rounded-xl border border-white/10 bg-slate-950/80 px-3 py-1.5 backdrop-blur-md">
+            <Building2 className="h-4 w-4 text-emerald-400" />
+            <span className="text-xs font-bold uppercase tracking-wider text-white">
+              Executive Boardroom Suite
+            </span>
+            <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-mono text-emerald-300">
+              3D PERSISTENT
+            </span>
+          </div>
+
+          {/* Active Boardroom Dilemma Alert Pill */}
+          {activeDilemma && activeDilemma.status === "open" && (
+            <button
+              type="button"
+              data-testid="open-boardroom-dilemma-btn"
+              onClick={handleOpenDilemmaModal}
+              className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-amber-500/50 bg-amber-500/20 px-3 py-1.5 text-xs font-bold text-amber-300 backdrop-blur-md transition-all hover:bg-amber-500/30 animate-pulse shadow-lg shadow-amber-500/10"
+            >
+              <Flame className="h-3.5 w-3.5 text-amber-400" />
+              <span>Boardroom Dilemma</span>
+              <span className="rounded bg-amber-400/20 px-1.5 py-0.2 text-[9px] uppercase font-mono text-amber-200">
+                {activeDilemma.urgency || "ACTIVE"}
+              </span>
+            </button>
+          )}
         </div>
 
         {/* Lighting & Camera Presets */}
@@ -606,6 +747,27 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
         </div>
       )}
 
+      {/* Floating Dilemma Projector Hover Tooltip */}
+      {isHoveringDilemma && (
+        <div
+          data-testid="dilemma-hover-tooltip"
+          className="pointer-events-none absolute bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-xl border border-amber-500/40 bg-slate-950/90 px-4 py-2 text-center shadow-xl backdrop-blur-md animate-fade-in"
+        >
+          <div className="flex items-center gap-2">
+            <Scale className="h-3.5 w-3.5 text-amber-400" />
+            <span className="text-xs font-bold text-white">
+              {activeDilemma?.title || "Boardroom Strategic Dilemma"}
+            </span>
+            <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">
+              {activeDilemma?.urgency?.toUpperCase() || "PENDING"}
+            </span>
+          </div>
+          <p className="mt-0.5 text-[10px] text-slate-400">
+            Click holographic projector to convene emergency boardroom arbitration
+          </p>
+        </div>
+      )}
+
       {/* Bottom Persona Roster Quick-Select Bar */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-center justify-between border-t border-white/10 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent p-4">
         <div className="pointer-events-auto flex flex-wrap items-center gap-2">
@@ -637,6 +799,13 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
         onInteractionComplete={(res) => {
           // Additional custom callback handling if required
         }}
+      />
+
+      {/* Boardroom Dilemma Modal */}
+      <BoardroomDilemmaModal
+        clubId={clubId}
+        isOpen={isDilemmaModalOpen}
+        onClose={() => setIsDilemmaModalOpen(false)}
       />
     </div>
   );

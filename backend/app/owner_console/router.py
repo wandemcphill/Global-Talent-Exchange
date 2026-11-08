@@ -2347,3 +2347,94 @@ def post_living_world_persona_interact(
         )
 
     return _run(session, _op)
+
+
+# ---------- Stage 3: Autonomous Staff Decisions, Boardroom Dilemmas & Consequence Simulation ----------
+
+
+class ResolveLivingDilemmaRequest(BaseModel):
+    choice_id: str = Field(min_length=1, max_length=100)
+    decision_note: str | None = Field(default=None, max_length=600)
+
+
+class SimulateAutonomousDecisionsRequest(BaseModel):
+    dry_run: bool = Field(default=False)
+
+
+@router.get("/clubs/{club_id}/living-world/dilemmas/active")
+def get_living_world_active_dilemma(
+    club_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_club_world
+
+    def _op() -> dict[str, Any]:
+        return living_club_world.get_or_create_living_boardroom_dilemma(session, user.id, club_id)
+
+    return _run(session, _op)
+
+
+@router.post("/clubs/{club_id}/living-world/dilemmas/{dilemma_id}/resolve")
+def post_living_world_resolve_dilemma(
+    club_id: str,
+    dilemma_id: str,
+    payload: ResolveLivingDilemmaRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_club_world
+
+    def _op() -> dict[str, Any]:
+        return living_club_world.resolve_living_boardroom_dilemma(
+            session,
+            user.id,
+            club_id,
+            dilemma_id=dilemma_id,
+            choice_id=payload.choice_id,
+            decision_note=payload.decision_note,
+        )
+
+    return _run(session, _op)
+
+
+@router.post("/clubs/{club_id}/living-world/autonomous-decisions/simulate")
+def post_living_world_simulate_autonomous_decisions(
+    club_id: str,
+    payload: SimulateAutonomousDecisionsRequest | None = None,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_club_world
+
+    dry_run = payload.dry_run if payload else False
+
+    def _op() -> dict[str, Any]:
+        return living_club_world.simulate_autonomous_staff_decisions(
+            session,
+            user.id,
+            club_id,
+            dry_run=dry_run,
+        )
+
+    return _run(session, _op)
+
+
+@router.get("/clubs/{club_id}/living-world/delegated-decisions")
+def get_living_world_delegated_decisions_view(
+    club_id: str,
+    limit: int = 20,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_club_world
+
+    def _op() -> dict[str, Any]:
+        return living_club_world.get_delegated_decisions_history(
+            session,
+            user.id,
+            club_id,
+            limit=limit,
+        )
+
+    return _run(session, _op)

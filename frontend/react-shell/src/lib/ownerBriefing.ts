@@ -233,8 +233,12 @@ export interface BoardroomDilemmaChoice {
   choice_id: string;
   label: string;
   summary: string;
-  backed_role: string;
-  effects_preview: string;
+  backed_role?: string;
+  effects_preview?: string;
+  cost_gtex?: number;
+  projected_effects?: string[];
+  delta_role_a?: Record<string, number>;
+  delta_role_b?: Record<string, number>;
 }
 
 export interface BoardroomDilemma {
@@ -242,11 +246,17 @@ export interface BoardroomDilemma {
   title: string;
   conflict_summary: string;
   role_a: string;
+  role_a_label?: string;
+  role_a_name?: string;
   role_b: string;
+  role_b_label?: string;
+  role_b_name?: string;
+  urgency?: "routine" | "important" | "critical" | string;
   status: "open" | "resolved";
   selected_choice_id?: string | null;
   resolution_outcome?: string | null;
   choices: BoardroomDilemmaChoice[];
+  world_day?: number;
 }
 
 export type StaffBriefingSection = {
@@ -568,6 +578,90 @@ export interface PersonaInteractionResponse {
   dialogue_reply: string;
   world_day: number;
 }
+
+export interface DelegatedDecisionItem {
+  id: string;
+  world_day: number;
+  authority_level: string;
+  staff_role: string;
+  staff_name?: string | null;
+  category: string;
+  action_type: string;
+  title: string;
+  description: string;
+  cost_gtex: number;
+  status: string;
+  execution_status: string;
+  consequences: Record<string, any>;
+  escalation_reason?: string | null;
+  created_at?: string | null;
+  executed_at?: string | null;
+}
+
+export interface DelegatedDecisionsResponse {
+  club_id: string;
+  policy: {
+    authority_mode: string;
+    is_active: boolean;
+    budget_limit_gtex: number;
+    thresholds: Record<string, number>;
+  };
+  decisions: DelegatedDecisionItem[];
+  total_count: number;
+}
+
+export interface AutonomousSimulationResponse {
+  club_id: string;
+  world_day: number;
+  policy_mode: string;
+  decisions_evaluated: number;
+  decisions_executed: number;
+  decisions_escalated: number;
+  decisions_blocked: number;
+  results: Array<{
+    decision_id: string;
+    staff_role: string;
+    staff_name: string;
+    category: string;
+    action_type: string;
+    cost_gtex: number;
+    status: string;
+    execution_status: string;
+    consequences: Record<string, any>;
+  }>;
+}
+
+export interface ResolveDilemmaPayload {
+  choice_id: string;
+  decision_note?: string;
+}
+
+export interface ResolveDilemmaResponse {
+  success: boolean;
+  dilemma_id: string;
+  choice_id: string;
+  selected_choice: BoardroomDilemmaChoice;
+  narrative_outcome: string;
+  club_id: string;
+  world_day: number;
+  updated_relationships: {
+    role_a: LivingWorldRelationship | null;
+    role_b: LivingWorldRelationship | null;
+  };
+}
+
+export const clubActiveDilemmaEndpoint = (clubId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/dilemmas/active`;
+
+export const clubResolveDilemmaEndpoint = (clubId: string, dilemmaId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/dilemmas/${encodeURIComponent(dilemmaId)}/resolve`;
+
+export const clubSimulateAutonomousDecisionsEndpoint = (clubId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/autonomous-decisions/simulate`;
+
+export const clubDelegatedDecisionsEndpoint = (clubId: string, limit = 20) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/delegated-decisions?limit=${encodeURIComponent(limit)}`;
+
 /** Resolve what the panel should show. With no published contract this is always `unavailable`. */
 export function useOwnerBriefing(): BriefingViewState {
   if (!OWNER_BRIEFING_ENDPOINT) return { status: "unavailable" };

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import func, select, update
@@ -12,6 +13,9 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.models.base import utcnow
 from app.owner_console import engine, ledger, service
 from app.owner_console.models import (
+    ClubDelegatedDecision,
+    ClubDelegatedDecisionAuditLog,
+    ClubDelegationPolicy,
     OwnerClubDirective,
     OwnerClubEvent,
     OwnerClubRelationship,
@@ -3179,5 +3183,813 @@ def get_persona_details(
         "relationship": rel_dict,
         "active_directives": [format_directive_dict(d) for d in active_directives],
         "recent_history": recent_history,
+        "world_day": state.world_day,
+    }
+
+
+# ==============================================================================
+# GTEX Living Football World — Stage 3: Autonomous Staff Decisions & Dilemmas
+# ==============================================================================
+
+DEFAULT_DELEGATION_THRESHOLDS: dict[str, dict[str, Any]] = {
+    "first_team_manager": {"max_amount_gtex": 1000, "domain": "sporting"},
+    "general_manager": {"max_amount_gtex": 2500, "domain": "commercial"},
+    "head_of_youth_development": {"max_amount_gtex": 750, "domain": "academy"},
+    "medical_director": {"max_amount_gtex": 500, "domain": "medical"},
+    "club_president": {"max_amount_gtex": 5000, "domain": "executive"},
+    "finance_commercial_director": {"max_amount_gtex": 3000, "domain": "commercial"},
+}
+
+
+def get_or_create_delegation_policy(
+    session: Session,
+    club_id: str,
+    owner_user_id: str,
+) -> ClubDelegationPolicy:
+    """Retrieve or initialize the club's authoritative delegation policy."""
+    policy = session.scalar(select(ClubDelegationPolicy).where(ClubDelegationPolicy.club_id == club_id))
+    if policy is not None:
+        return policy
+
+    policy = ClubDelegationPolicy(
+        club_id=club_id,
+        owner_user_id=owner_user_id,
+        mode="balanced",
+        is_suspended=False,
+        financial_thresholds_json=DEFAULT_DELEGATION_THRESHOLDS,
+        activity_assignments_json={
+            "tactical_training": "first_team_manager",
+            "squad_workload": "first_team_manager",
+            "campus_maintenance": "general_manager",
+            "commercial_outreach": "general_manager",
+            "academy_drills": "head_of_youth_development",
+            "physio_protocols": "medical_director",
+            "governance_review": "club_president",
+        },
+        reserved_decisions_json=["hire_staff", "fire_staff", "stadium_major_expansion", "takeover_vote"],
+        temporary_overrides_json={},
+    )
+    session.add(policy)
+    session.flush()
+    return policy
+
+
+def simulate_autonomous_staff_decisions(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    *,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Autonomous staff decision simulation engine conditioned on 7 relationship metrics and delegation policy."""
+    state = service.require_state(session, club_id, user_id)
+    reconcile_staff_relationships(session, state)
+    roster = resolve_club_staff_roster(state)
+    policy = get_or_create_delegation_policy(session, club_id, user_id)
+    w_day = int(state.world_day or 1)
+
+    if policy.is_suspended:
+        return {
+            "club_id": club_id,
+            "world_day": w_day,
+            "policy_mode": policy.mode,
+            "is_suspended": True,
+            "suspension_reason": policy.suspension_reason or "Delegation policy suspended by owner.",
+            "simulated_count": 0,
+            "decisions": [],
+        }
+
+    facs = dict(state.facilities_json or {})
+    chat_messages = list(facs.get("chat_messages") or [])
+    squad_players = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
+
+    simulated_decisions: list[dict[str, Any]] = []
+
+    AUTONOMOUS_ACTIONS_SPEC = {
+        "first_team_manager": {
+            "activity_key": "squad_tactical_periodization",
+            "domain": "sporting",
+            "title": "Enacted High-Intensity Tactical Periodization",
+            "summary": "Implemented tactical pressing sessions to elevate squad cohesion and tactical adaptability.",
+            "cost_gtex": 250,
+            "deltas": {
+                "trust": 2,
+                "alignment": 2,
+                "respect": 1,
+                "tension": -1,
+                "loyalty": 1,
+                "influence": 1,
+                "affinity": 1,
+            },
+            "consequences": {"squad_morale": 3, "squad_fitness": 2},
+            "chat_reply": "I've structured a focused tactical pressing session today. The squad's discipline and shape are already looking sharper.",
+        },
+        "general_manager": {
+            "activity_key": "campus_operational_efficiency_audit",
+            "domain": "commercial",
+            "title": "Completed Campus Facility Preventative Servicing",
+            "summary": "Consolidated supplier vendor contracts and streamlined facility utilities to prevent wear-and-tear.",
+            "cost_gtex": 150,
+            "deltas": {
+                "trust": 2,
+                "alignment": 2,
+                "respect": 2,
+                "tension": -1,
+                "loyalty": 1,
+                "influence": 2,
+                "affinity": 1,
+            },
+            "consequences": {"treasury_rebate": 350, "facility_health": 2},
+            "chat_reply": "Reviewed and optimized our campus maintenance contracts today. Locked in 350 GTEX in operating efficiency.",
+        },
+        "head_of_youth_development": {
+            "activity_key": "academy_technical_clinic",
+            "domain": "academy",
+            "title": "Conducted Elite Academy Technical Clinic",
+            "summary": "Staged intensive ball-work and positional awareness clinics for high-potential academy prospects.",
+            "cost_gtex": 100,
+            "deltas": {
+                "trust": 3,
+                "alignment": 2,
+                "respect": 1,
+                "tension": 0,
+                "loyalty": 2,
+                "influence": 1,
+                "affinity": 2,
+            },
+            "consequences": {"regen_morale": 6, "academy_intake_bonus": 1},
+            "chat_reply": "Held an advanced technical clinic with our youth prospects today. Two of our academy scholars showed first-team trajectory.",
+        },
+        "medical_director": {
+            "activity_key": "cryotherapy_recovery_protocol",
+            "domain": "medical",
+            "title": "Administered Cryotherapy & Musculoskeletal Protocol",
+            "summary": "Completed squad biometric screening and personalized recovery protocols to minimize injury incidence.",
+            "cost_gtex": 200,
+            "deltas": {
+                "trust": 3,
+                "alignment": 2,
+                "respect": 2,
+                "tension": -2,
+                "loyalty": 1,
+                "influence": 1,
+                "affinity": 1,
+            },
+            "consequences": {"squad_fitness": 4, "heal_reduction_days": 1},
+            "chat_reply": "Completed squad recovery screenings. Advanced recovery protocols have reduced muscle strain risks across the roster.",
+        },
+        "club_president": {
+            "activity_key": "stakeholder_governance_briefing",
+            "domain": "executive",
+            "title": "Convened Stakeholder Governance & Commercial Review",
+            "summary": "Conducted executive governance meeting reinforcing the club's financial stability and competitive vision.",
+            "cost_gtex": 0,
+            "deltas": {
+                "trust": 2,
+                "alignment": 3,
+                "respect": 2,
+                "tension": -1,
+                "loyalty": 2,
+                "influence": 2,
+                "affinity": 1,
+            },
+            "consequences": {"prestige": 1},
+            "chat_reply": "Chaired our board governance briefing. Stakeholder confidence is steady and aligned behind our strategic vision.",
+        },
+        "finance_commercial_director": {
+            "activity_key": "commercial_sponsor_pipeline_refresh",
+            "domain": "commercial",
+            "title": "Refreshed Regional Commercial Sponsorship Pipeline",
+            "summary": "Activated inbound partner inquiries and expanded pitchside advertising packages for upcoming matchdays.",
+            "cost_gtex": 100,
+            "deltas": {
+                "trust": 2,
+                "alignment": 3,
+                "respect": 2,
+                "tension": -1,
+                "loyalty": 1,
+                "influence": 2,
+                "affinity": 1,
+            },
+            "consequences": {"treasury_rebate": 400},
+            "chat_reply": "Advanced commercial partner talks for pitchside broadcast packages. Secured an additional 400 GTEX pipeline boost.",
+        },
+    }
+
+    for role_key, spec in AUTONOMOUS_ACTIONS_SPEC.items():
+        slot = roster.get(role_key)
+        if not slot or not slot.get("is_appointed") or not slot.get("person_id"):
+            continue
+
+        staff_person_id = slot["person_id"]
+        staff_name = slot["name"]
+
+        key = pairing_key(club_id, "owner", staff_person_id)
+        rel = session.scalar(
+            select(OwnerClubRelationship).where(
+                OwnerClubRelationship.club_id == club_id,
+                OwnerClubRelationship.pairing_key == key,
+                OwnerClubRelationship.status == "active",
+            )
+        )
+
+        alignment = rel.alignment if rel else 60
+        tension = rel.tension if rel else 20
+        cost = spec["cost_gtex"]
+        threshold_info = (policy.financial_thresholds_json or {}).get(role_key) or {}
+        max_amount = threshold_info.get("max_amount_gtex", 1000)
+
+        is_alienated = tension >= 75 and alignment < 35
+        if is_alienated:
+            decision_status = "escalated"
+            exec_status = "blocked"
+            requires_approval = True
+            outcome_text = f"Action halted: {staff_name} escalated due to acute boardroom misalignment (Tension: {tension}, Alignment: {alignment})."
+            chat_msg = f"[{slot['role_label']}] {staff_name}: Strategic misalignment has reached an impasse. I require board intervention before executing further actions."
+        elif cost <= max_amount and policy.mode != "hands_on":
+            decision_status = "approved"
+            exec_status = "executed"
+            requires_approval = False
+            outcome_text = f"Executed autonomously under {policy.mode} delegation policy (Cost: {cost} GTEX)."
+            chat_msg = f"[{slot['role_label']}] {staff_name}: {spec['chat_reply']}"
+
+            if not dry_run:
+                cons = spec["consequences"]
+                if "squad_morale" in cons:
+                    for p in squad_players:
+                        p.morale = int(engine.clamp(p.morale + cons["squad_morale"], 0, 100))
+                if "regen_morale" in cons:
+                    for p in squad_players:
+                        if p.is_regen:
+                            p.morale = int(engine.clamp(p.morale + cons["regen_morale"], 0, 100))
+                if "squad_fitness" in cons:
+                    for p in squad_players:
+                        pers = dict(p.personality_json or {})
+                        pers["fitness"] = int(
+                            engine.clamp(int(pers.get("fitness", 90)) + cons["squad_fitness"], 0, 100)
+                        )
+                        p.personality_json = pers
+                if "prestige" in cons:
+                    state.prestige = int(engine.clamp(state.prestige + cons["prestige"], 0, 100))
+                    service.sync_club_prestige_to_reputation(session, club_id, state.prestige)
+                if "treasury_rebate" in cons:
+                    rebate = cons["treasury_rebate"]
+                    ledger.record(
+                        session,
+                        event_type="commercial_cost_rebate",
+                        source=ledger.PLATFORM_SPONSORS,
+                        destination=ledger.club_account(club_id),
+                        currency=ledger.GTEX,
+                        gross=rebate,
+                        club_id=club_id,
+                        user_id=user_id,
+                        related_type="delegated_decision",
+                        related_id=spec["activity_key"],
+                        memo=f"Autonomous action efficiency: {spec['title']}",
+                    )
+                if cost > 0:
+                    try:
+                        ledger.record(
+                            session,
+                            event_type="operating_expense",
+                            source=ledger.club_account(club_id),
+                            destination=ledger.WORLD_CLUBS,
+                            currency=ledger.GTEX,
+                            gross=cost,
+                            club_id=club_id,
+                            user_id=user_id,
+                            related_type="delegated_decision",
+                            related_id=spec["activity_key"],
+                            memo=f"Autonomous action expense: {spec['title']}",
+                            check_funds=False,
+                        )
+                    except Exception as e:
+                        logger.warning("Failed to record autonomous expense for %s: %s", club_id, e)
+
+                deltas = spec["deltas"]
+                apply_relationship_delta(
+                    session,
+                    club_id,
+                    "owner",
+                    "owner",
+                    "Club Owner",
+                    "staff",
+                    staff_person_id,
+                    staff_name,
+                    delta_trust=deltas["trust"],
+                    delta_respect=deltas["respect"],
+                    delta_affinity=deltas["affinity"],
+                    delta_tension=deltas["tension"],
+                    delta_alignment=deltas["alignment"],
+                    delta_influence=deltas["influence"],
+                    delta_loyalty=deltas["loyalty"],
+                    reason=f"Autonomous Action: {spec['title']}",
+                    world_day=w_day,
+                )
+        else:
+            decision_status = "pending_approval"
+            exec_status = "pending_execution"
+            requires_approval = True
+            outcome_text = f"Held for owner sign-off: cost {cost} GTEX exceeds delegated threshold ({max_amount} GTEX)."
+            chat_msg = f"[{slot['role_label']}] {staff_name}: I have prepared '{spec['title']}' for {cost} GTEX, awaiting your authorization."
+
+        if not dry_run:
+            decision_record = ClubDelegatedDecision(
+                club_id=club_id,
+                owner_user_id=user_id,
+                activity_key=spec["activity_key"],
+                domain=spec["domain"],
+                proposed_by_role=role_key,
+                proposed_by_staff_name=staff_name,
+                title=spec["title"],
+                summary=spec["summary"],
+                financial_amount_gtex=Decimal(str(cost)),
+                requires_owner_approval=requires_approval,
+                status=decision_status,
+                execution_status=exec_status,
+                decided_by_user_id=None if requires_approval else "staff_autonomous",
+                outcome_text=outcome_text,
+                payload_json={"world_day": w_day, "role_key": role_key, "consequences": spec["consequences"]},
+                staff_competence_rating=85,
+                staff_impact_json=spec["deltas"],
+            )
+            session.add(decision_record)
+            session.flush()
+
+            audit_log = ClubDelegatedDecisionAuditLog(
+                decision_id=decision_record.id,
+                club_id=club_id,
+                actor_id=staff_person_id,
+                action="execute_autonomous" if exec_status == "executed" else "escalate",
+                previous_status=None,
+                new_status=decision_status,
+                decision_note=outcome_text,
+                snapshot_json={"cost_gtex": cost, "mode": policy.mode},
+            )
+            session.add(audit_log)
+
+            chat_messages.append(
+                {
+                    "id": f"msg_auto_{role_key}_{w_day}",
+                    "sender": staff_name,
+                    "role": slot["role_label"],
+                    "message": chat_msg,
+                    "created_at": utcnow().isoformat(),
+                }
+            )
+
+        simulated_decisions.append(
+            {
+                "activity_key": spec["activity_key"],
+                "role_key": role_key,
+                "staff_name": staff_name,
+                "title": spec["title"],
+                "cost_gtex": cost,
+                "status": decision_status,
+                "execution_status": exec_status,
+                "outcome_text": outcome_text,
+            }
+        )
+
+    if not dry_run:
+        facs["chat_messages"] = chat_messages[-50:]
+        state.facilities_json = facs
+        session.flush()
+
+    return {
+        "club_id": club_id,
+        "world_day": w_day,
+        "policy_mode": policy.mode,
+        "is_suspended": False,
+        "simulated_count": len(simulated_decisions),
+        "decisions": simulated_decisions,
+    }
+
+
+def get_or_create_living_boardroom_dilemma(
+    session: Session,
+    user_id: str,
+    club_id: str,
+) -> dict[str, Any]:
+    """Retrieve or dynamically construct an active boardroom dilemma with multi-dimensional consequence simulation."""
+    state = service.require_state(session, club_id, user_id)
+    reconcile_staff_relationships(session, state)
+    roster = resolve_club_staff_roster(state)
+    w_day = int(state.world_day or 1)
+
+    facs = dict(state.facilities_json or {})
+    briefing = dict(facs.get("_daily_briefing") or {})
+    existing = briefing.get("boardroom_dilemma")
+    if existing and isinstance(existing, dict) and existing.get("status") == "open":
+        return existing
+
+    mgr_slot = roster.get("first_team_manager") or {}
+    gm_slot = roster.get("general_manager") or {}
+    mgr_name = mgr_slot.get("name") or "First-Team Manager"
+    gm_name = gm_slot.get("name") or "General Manager"
+
+    dilemma_id = f"dilemma_d{w_day}_mgr_gm_recruitment"
+    dilemma = {
+        "dilemma_id": dilemma_id,
+        "world_day": w_day,
+        "title": "Boardroom Clash: Winter Transfer War Chest vs Wage Discipline",
+        "conflict_summary": (
+            f"{mgr_name} ({mgr_slot.get('role_label', 'Manager')}) is petitioning the board for immediate "
+            f"recruitment capital to shore up tactical depth ahead of critical fixtures. Conversely, "
+            f"{gm_name} ({gm_slot.get('role_label', 'General Manager')}) warns that releasing emergency funds "
+            "will breach payroll discipline and endanger campus commercial expansion plans."
+        ),
+        "role_a": "first_team_manager",
+        "role_a_label": mgr_slot.get("role_label", "First-Team Manager"),
+        "role_a_name": mgr_name,
+        "role_b": "general_manager",
+        "role_b_label": gm_slot.get("role_label", "General Manager"),
+        "role_b_name": gm_name,
+        "urgency": "critical",
+        "status": "open",
+        "selected_choice_id": None,
+        "resolution_outcome": None,
+        "choices": [
+            {
+                "choice_id": "back_manager_recruitment",
+                "label": "Back First-Team Manager: Release Squad War Chest",
+                "summary": "Authorize 500 GTEX for urgent squad reinforcements. Bolsters squad morale and tactical depth but frustrates the General Manager.",
+                "cost_gtex": 500,
+                "projected_effects": [
+                    "+8 Squad Morale",
+                    "+10 Manager Trust & Alignment",
+                    "-8 GM Alignment, +10 GM Tension",
+                    "-500 GTEX Treasury",
+                ],
+                "delta_role_a": {
+                    "trust": 10,
+                    "respect": 6,
+                    "affinity": 6,
+                    "tension": -6,
+                    "alignment": 10,
+                    "influence": 4,
+                    "loyalty": 8,
+                },
+                "delta_role_b": {
+                    "trust": -6,
+                    "respect": -2,
+                    "affinity": -4,
+                    "tension": 10,
+                    "alignment": -8,
+                    "influence": -3,
+                    "loyalty": -4,
+                },
+            },
+            {
+                "choice_id": "enforce_gm_wage_discipline",
+                "label": "Back General Manager: Enforce Strict Wage Discipline",
+                "summary": "Uphold fiscal governance and reject emergency transfer requests. Generates operating efficiency rebates but risks manager frustration.",
+                "cost_gtex": 0,
+                "projected_effects": [
+                    "+400 GTEX Operating Rebate",
+                    "+10 GM Trust & Alignment",
+                    "-8 Manager Trust, +10 Manager Tension",
+                    "-3 Squad Morale",
+                ],
+                "delta_role_a": {
+                    "trust": -8,
+                    "respect": -3,
+                    "affinity": -4,
+                    "tension": 10,
+                    "alignment": -8,
+                    "influence": -3,
+                    "loyalty": -6,
+                },
+                "delta_role_b": {
+                    "trust": 10,
+                    "respect": 8,
+                    "affinity": 6,
+                    "tension": -6,
+                    "alignment": 10,
+                    "influence": 5,
+                    "loyalty": 8,
+                },
+            },
+            {
+                "choice_id": "ratify_performance_compromise",
+                "label": "Ratify Structured Performance-Linked Incentive Plan",
+                "summary": "Establish an incentive-driven squad bonus structure backed by modest treasury allocation (300 GTEX). Satisfies both leaders.",
+                "cost_gtex": 300,
+                "projected_effects": [
+                    "+4 Squad Morale",
+                    "+6 Manager Trust & Alignment",
+                    "+6 GM Trust & Alignment",
+                    "+1 Club Prestige",
+                    "-300 GTEX Treasury",
+                ],
+                "delta_role_a": {
+                    "trust": 6,
+                    "respect": 5,
+                    "affinity": 4,
+                    "tension": -4,
+                    "alignment": 6,
+                    "influence": 3,
+                    "loyalty": 5,
+                },
+                "delta_role_b": {
+                    "trust": 6,
+                    "respect": 5,
+                    "affinity": 4,
+                    "tension": -4,
+                    "alignment": 6,
+                    "influence": 3,
+                    "loyalty": 5,
+                },
+            },
+        ],
+    }
+
+    briefing["boardroom_dilemma"] = dilemma
+    facs["_daily_briefing"] = briefing
+    state.facilities_json = facs
+    session.flush()
+    return dilemma
+
+
+def resolve_living_boardroom_dilemma(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    dilemma_id: str,
+    choice_id: str,
+    decision_note: str | None = None,
+) -> dict[str, Any]:
+    """Authoritatively execute owner resolution on an active dilemma with full 7-metric consequence modeling."""
+    state = service.require_state(session, club_id, user_id)
+    reconcile_staff_relationships(session, state)
+    roster = resolve_club_staff_roster(state)
+    w_day = int(state.world_day or 1)
+
+    facs = dict(state.facilities_json or {})
+    briefing = dict(facs.get("_daily_briefing") or {})
+    dilemma = briefing.get("boardroom_dilemma")
+    if not dilemma or dilemma.get("dilemma_id") != dilemma_id:
+        active = get_or_create_living_boardroom_dilemma(session, user_id, club_id)
+        if active.get("dilemma_id") == dilemma_id:
+            dilemma = active
+        else:
+            raise service.OwnerError("dilemma_not_found", 404, f"Dilemma '{dilemma_id}' not found.")
+
+    if dilemma.get("status") == "resolved":
+        return {
+            "club_id": club_id,
+            "dilemma": dilemma,
+            "outcome": dilemma.get("resolution_outcome"),
+            "world_day": w_day,
+        }
+
+    choices = dilemma.get("choices") or []
+    chosen = next((c for c in choices if c.get("choice_id") == choice_id), None)
+    if not chosen:
+        raise service.OwnerError(
+            "invalid_choice_id",
+            400,
+            f"Invalid choice '{choice_id}'. Available choices: {[c['choice_id'] for c in choices]}",
+        )
+
+    role_a_key = dilemma["role_a"]
+    role_b_key = dilemma["role_b"]
+    slot_a = roster.get(role_a_key) or {}
+    slot_b = roster.get(role_b_key) or {}
+    name_a = slot_a.get("name") or dilemma.get("role_a_name", "Staff A")
+    name_b = slot_b.get("name") or dilemma.get("role_b_name", "Staff B")
+    id_a = slot_a.get("person_id") or role_a_key
+    id_b = slot_b.get("person_id") or role_b_key
+
+    delta_a = chosen.get("delta_role_a") or {}
+    apply_relationship_delta(
+        session,
+        club_id,
+        "owner",
+        "owner",
+        "Club Owner",
+        "staff",
+        id_a,
+        name_a,
+        delta_trust=delta_a.get("trust", 0),
+        delta_respect=delta_a.get("respect", 0),
+        delta_affinity=delta_a.get("affinity", 0),
+        delta_tension=delta_a.get("tension", 0),
+        delta_alignment=delta_a.get("alignment", 0),
+        delta_influence=delta_a.get("influence", 0),
+        delta_loyalty=delta_a.get("loyalty", 0),
+        reason=f"Boardroom Dilemma Choice: {chosen['label']}",
+        source_event_id=dilemma_id,
+        world_day=w_day,
+    )
+
+    delta_b = chosen.get("delta_role_b") or {}
+    apply_relationship_delta(
+        session,
+        club_id,
+        "owner",
+        "owner",
+        "Club Owner",
+        "staff",
+        id_b,
+        name_b,
+        delta_trust=delta_b.get("trust", 0),
+        delta_respect=delta_b.get("respect", 0),
+        delta_affinity=delta_b.get("affinity", 0),
+        delta_tension=delta_b.get("tension", 0),
+        delta_alignment=delta_b.get("alignment", 0),
+        delta_influence=delta_b.get("influence", 0),
+        delta_loyalty=delta_b.get("loyalty", 0),
+        reason=f"Boardroom Dilemma Choice: {chosen['label']}",
+        source_event_id=dilemma_id,
+        world_day=w_day,
+    )
+
+    cost = chosen.get("cost_gtex", 0)
+    if cost > 0:
+        try:
+            ledger.record(
+                session,
+                event_type="boardroom_dilemma_expense",
+                source=ledger.club_account(club_id),
+                destination=ledger.WORLD_CLUBS,
+                currency=ledger.GTEX,
+                gross=cost,
+                club_id=club_id,
+                user_id=user_id,
+                related_type="boardroom_dilemma",
+                related_id=dilemma_id,
+                memo=f"Boardroom dilemma execution: {chosen['label']}",
+                check_funds=False,
+            )
+        except Exception as e:
+            logger.warning("Failed to record dilemma expense for %s: %s", club_id, e)
+    elif choice_id == "enforce_gm_wage_discipline":
+        try:
+            ledger.record(
+                session,
+                event_type="commercial_cost_rebate",
+                source=ledger.PLATFORM_SPONSORS,
+                destination=ledger.club_account(club_id),
+                currency=ledger.GTEX,
+                gross=400,
+                club_id=club_id,
+                user_id=user_id,
+                related_type="boardroom_dilemma",
+                related_id=dilemma_id,
+                memo="Boardroom dilemma: GM wage cap efficiency rebate",
+            )
+        except Exception as e:
+            logger.warning("Failed to record dilemma rebate for %s: %s", club_id, e)
+
+    squad_players = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
+    if choice_id == "back_manager_recruitment":
+        for p in squad_players:
+            p.morale = int(engine.clamp(p.morale + 8, 0, 100))
+    elif choice_id == "enforce_gm_wage_discipline":
+        for p in squad_players:
+            p.morale = int(engine.clamp(p.morale - 3, 0, 100))
+    elif choice_id == "ratify_performance_compromise":
+        for p in squad_players:
+            p.morale = int(engine.clamp(p.morale + 4, 0, 100))
+        state.prestige = int(engine.clamp(state.prestige + 1, 0, 100))
+        service.sync_club_prestige_to_reputation(session, club_id, state.prestige)
+
+    delegated_dec = ClubDelegatedDecision(
+        club_id=club_id,
+        owner_user_id=user_id,
+        activity_key=f"dilemma_{dilemma_id}",
+        domain="executive",
+        proposed_by_role="boardroom",
+        proposed_by_staff_name="Boardroom Executive Council",
+        title=dilemma["title"],
+        summary=f"Ratified choice: {chosen['label']}. {decision_note or ''}".strip(),
+        financial_amount_gtex=Decimal(str(cost)),
+        requires_owner_approval=False,
+        status="resolved",
+        execution_status="executed",
+        decided_by_user_id=user_id,
+        decision_note=decision_note,
+        outcome_text=chosen["summary"],
+        payload_json={"choice_id": choice_id, "delta_role_a": delta_a, "delta_role_b": delta_b},
+    )
+    session.add(delegated_dec)
+    session.flush()
+
+    audit_log = ClubDelegatedDecisionAuditLog(
+        decision_id=delegated_dec.id,
+        club_id=club_id,
+        actor_id=user_id,
+        action="resolve_dilemma",
+        previous_status="open",
+        new_status="resolved",
+        decision_note=f"Owner ratified choice '{choice_id}': {chosen['label']}",
+        snapshot_json={"cost_gtex": cost},
+    )
+    session.add(audit_log)
+
+    chat_messages = list(facs.get("chat_messages") or [])
+    reaction_a = f"[{slot_a.get('role_label', 'Role A')}] {name_a}: " + (
+        "Thank you for recognizing the sporting reality and backing our recruitment priorities."
+        if choice_id == "back_manager_recruitment"
+        else (
+            "We will adapt, but limiting transfer resources puts our tactical margin for error on razor-thin ice."
+            if choice_id == "enforce_gm_wage_discipline"
+            else "The performance-linked incentive compromise gives us a workable path forward."
+        )
+    )
+    reaction_b = f"[{slot_b.get('role_label', 'Role B')}] {name_b}: " + (
+        "Our balance sheet and wage structure are preserved. Fiscal discipline will pay dividends long term."
+        if choice_id == "enforce_gm_wage_discipline"
+        else (
+            "I respect the board's decision, though we will need to tighten other operational overheads to absorb this cost."
+            if choice_id == "back_manager_recruitment"
+            else "A sensible middle ground that protects our liquidity while keeping squad motivation high."
+        )
+    )
+    chat_messages.append(
+        {
+            "id": f"msg_dil_{w_day}_a",
+            "sender": name_a,
+            "role": slot_a.get("role_label", "Staff"),
+            "message": reaction_a,
+            "created_at": utcnow().isoformat(),
+        }
+    )
+    chat_messages.append(
+        {
+            "id": f"msg_dil_{w_day}_b",
+            "sender": name_b,
+            "role": slot_b.get("role_label", "Staff"),
+            "message": reaction_b,
+            "created_at": utcnow().isoformat(),
+        }
+    )
+    facs["chat_messages"] = chat_messages[-50:]
+
+    dilemma["status"] = "resolved"
+    dilemma["selected_choice_id"] = choice_id
+    dilemma["resolution_outcome"] = f"Choice Ratified: {chosen['label']}. {chosen['summary']}"
+    briefing["boardroom_dilemma"] = dilemma
+    facs["_daily_briefing"] = briefing
+    state.facilities_json = facs
+    session.flush()
+
+    return {
+        "club_id": club_id,
+        "dilemma": dilemma,
+        "outcome": dilemma["resolution_outcome"],
+        "world_day": w_day,
+    }
+
+
+def get_delegated_decisions_history(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    *,
+    limit: int = 20,
+) -> dict[str, Any]:
+    """Retrieve history of delegated decisions and active policy for the club."""
+    state = service.require_state(session, club_id, user_id)
+    policy = get_or_create_delegation_policy(session, club_id, user_id)
+    decisions = list(
+        session.scalars(
+            select(ClubDelegatedDecision)
+            .where(ClubDelegatedDecision.club_id == club_id)
+            .order_by(ClubDelegatedDecision.created_at.desc())
+            .limit(limit)
+        ).all()
+    )
+    decision_dicts = [
+        {
+            "id": d.id,
+            "activity_key": d.activity_key,
+            "domain": d.domain,
+            "proposed_by_role": d.proposed_by_role,
+            "proposed_by_staff_name": d.proposed_by_staff_name,
+            "title": d.title,
+            "summary": d.summary,
+            "financial_amount_gtex": float(d.financial_amount_gtex or 0.0),
+            "requires_owner_approval": d.requires_owner_approval,
+            "status": d.status,
+            "execution_status": d.execution_status,
+            "decided_by_user_id": d.decided_by_user_id,
+            "decision_note": d.decision_note,
+            "outcome_text": d.outcome_text,
+            "created_at": d.created_at.isoformat() if d.created_at else None,
+            "resolved_at": d.resolved_at.isoformat() if d.resolved_at else None,
+        }
+        for d in decisions
+    ]
+    return {
+        "club_id": club_id,
+        "policy": {
+            "mode": policy.mode,
+            "is_suspended": policy.is_suspended,
+            "suspension_reason": policy.suspension_reason,
+            "financial_thresholds": policy.financial_thresholds_json,
+        },
+        "decisions": decision_dicts,
         "world_day": state.world_day,
     }
