@@ -73,7 +73,18 @@ describe("PrestigeShowroomScene", () => {
     expect(container.querySelector('[data-testid="showroom-ownership-badge"]')?.textContent).toContain(
       "Verified Owned"
     );
+    expect(container.querySelector('[data-testid="showroom-perk-active-badge"]')?.textContent).toContain(
+      "Perk Yield Active"
+    );
     expect(container.querySelector('[data-testid="showroom-render-mode-badge"]')).not.toBeNull();
+
+    const snapshotBtn = container.querySelector(
+      '[data-testid="capture-showroom-snapshot-btn"]'
+    ) as HTMLButtonElement;
+    expect(snapshotBtn).not.toBeNull();
+    await act(async () => {
+      snapshotBtn.click();
+    });
   });
 
   test("allows switching camera presets, livery finishes, and turntable rotation", async () => {
