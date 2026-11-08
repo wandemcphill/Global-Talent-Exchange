@@ -3,6 +3,7 @@ import { createRoot, Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BoardroomScene } from "./BoardroomScene";
 import { GtexSceneRegistry } from "../GtexSceneRegistry";
+import { api } from "@/lib/api";
 
 jest.mock("three/examples/jsm/controls/OrbitControls.js", () => {
   return {
@@ -150,6 +151,57 @@ describe("BoardroomScene", () => {
     });
 
     expect(document.querySelector('[data-testid="persona-spatial-modal"]')).not.toBeNull();
+  });
+
+  test("renders active boardroom dilemma alert and opens dilemma modal when clicked", async () => {
+    (api.get as jest.Mock).mockResolvedValue({
+      data: {
+        dilemma_id: "dil_test_99",
+        title: "Tactical Overhaul vs Stability",
+        conflict_summary: "Manager wants complete change of tactics, GM advises patience.",
+        role_a: "first_team_manager",
+        role_a_label: "First-Team Manager",
+        role_a_name: "Emmanuel Amuneke",
+        role_b: "general_manager",
+        role_b_label: "General Manager",
+        role_b_name: "Dayo Adeleke",
+        urgency: "critical",
+        status: "open",
+        choices: [
+          {
+            choice_id: "choice_a",
+            label: "Back Manager Overhaul",
+            summary: "Implement full tactical revamp.",
+            cost_gtex: 50000,
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <BoardroomScene clubId="c_lagos_boardroom" />
+        </QueryClientProvider>
+      );
+    });
+
+    // Wait for active dilemma query
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60));
+    });
+
+    const dilemmaBtn = container.querySelector(
+      '[data-testid="open-boardroom-dilemma-btn"]'
+    ) as HTMLButtonElement;
+    expect(dilemmaBtn).not.toBeNull();
+    expect(dilemmaBtn.textContent).toContain("Boardroom Dilemma");
+
+    await act(async () => {
+      dilemmaBtn.click();
+    });
+
+    expect(document.querySelector('[data-testid="boardroom-dilemma-modal"]')).not.toBeNull();
   });
 
   test("unmounts cleanly without WebGL memory leaks", async () => {
