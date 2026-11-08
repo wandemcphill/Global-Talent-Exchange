@@ -307,9 +307,9 @@ def run_verification(headless: bool = True) -> int:
         page.on("response", track_glb_request)
         page.on(
             "response",
-            lambda response: print(f"  [BROWSER HTTP {response.status}] {response.url}")
-            if response.status >= 500
-            else None,
+            lambda response: (
+                print(f"  [BROWSER HTTP {response.status}] {response.url}") if response.status >= 500 else None
+            ),
         )
         page.on("console", lambda msg: print(f"  [BROWSER CONSOLE {msg.type}] {msg.text}"))
         page.on("pageerror", lambda err: print(f"  [BROWSER PAGE ERROR] {err}"))
@@ -377,9 +377,9 @@ def run_verification(headless: bool = True) -> int:
         page_fail.on("pageerror", lambda err: page_errors.append(f"[page_fail] {err}"))
         page_fail.on(
             "response",
-            lambda response: print(f"  [BROWSER HTTP {response.status}] {response.url}")
-            if response.status >= 500
-            else None,
+            lambda response: (
+                print(f"  [BROWSER HTTP {response.status}] {response.url}") if response.status >= 500 else None
+            ),
         )
         page_fail.route("**/api/**", handle_api)
         page_fail.route("http://localhost:8000/**", handle_api)
