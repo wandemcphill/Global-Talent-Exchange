@@ -96,8 +96,8 @@ export default function App() {
               <Route path="/advertise/register" element={<Navigate to="/advertiser/register" replace />} />
 
               {/* Dedicated Commercial Advertiser Authentication Routes */}
-              <Route path="/advertiser/login" element={<AdvertiserAuthPage initialMode="login" />} />
-              <Route path="/advertiser/register" element={<AdvertiserAuthPage initialMode="register" />} />
+              <Route path="/advertiser/login" element={<AdvertiserAuthPage mode="login" />} />
+              <Route path="/advertiser/register" element={<AdvertiserAuthPage mode="register" />} />
 
               {/* Dedicated Independent Advertiser Workspace Management Portal */}
               <Route path="/advertiser" element={<Navigate to="/advertiser/dashboard" replace />} />
