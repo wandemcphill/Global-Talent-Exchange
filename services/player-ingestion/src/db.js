@@ -11,6 +11,22 @@ const pool = new Pool({
   ssl: config.databaseSsl ? { rejectUnauthorized: false } : false,
 });
 
+pool.on("error", (error) => {
+  logger.error("Unexpected error on idle database client", {
+    event: "database_pool_error",
+    reason: error.message,
+  });
+});
+
+pool.on("connect", (client) => {
+  client.query("SET default_transaction_read_only = off").catch((error) => {
+    logger.warn("Could not set default_transaction_read_only = off on connection", {
+      event: "db_read_only_reset_failed",
+      reason: error.message,
+    });
+  });
+});
+
 async function query(sql, params = []) {
   return pool.query(sql, params);
 }
@@ -62,6 +78,7 @@ async function closeDb() {
 module.exports = {
   close: closeDb,
   migrate,
+  pool,
   query,
   withTransaction,
 };
