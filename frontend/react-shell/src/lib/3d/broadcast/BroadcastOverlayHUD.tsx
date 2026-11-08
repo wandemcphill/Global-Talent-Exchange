@@ -28,6 +28,9 @@ import {
   ArrowRightLeft,
   AlertTriangle,
   Activity,
+  Film,
+  Radio,
+  Smartphone,
 } from "lucide-react";
 import { ManualCameraMode } from "./CameraDirector";
 import {
@@ -45,6 +48,8 @@ import {
   STADIUM_WEATHER_PROFILES,
 } from "./WeatherAtmosphereSystem";
 import type { BroadcastAROverlayMode } from "./BroadcastTacticalAROverlay";
+import type { ReplayStudioAngle } from "./ReplayDirectorStudio";
+import type { CommentaryCue, SpectatorReactionItem } from "./SpectatorImmersionLayer";
 
 export interface BroadcastOverlayHUDProps {
   matchState: InterpolatedMatchState | null;
@@ -73,6 +78,14 @@ export interface BroadcastOverlayHUDProps {
   onSelectWeatherPreset?: (preset: StadiumWeatherPreset) => void;
   arOverlayMode?: BroadcastAROverlayMode;
   onSelectArOverlayMode?: (mode: BroadcastAROverlayMode) => void;
+  replayStudioAngle?: ReplayStudioAngle;
+  onSelectReplayStudioAngle?: (angle: ReplayStudioAngle) => void;
+  commentaryCue?: CommentaryCue | null;
+  spectatorReactions?: readonly SpectatorReactionItem[];
+  watchPartyCheerMeter?: number;
+  hapticsEnabled?: boolean;
+  onToggleHaptics?: () => void;
+  onSendReaction?: (emoji: string) => void;
   isTheatreMode?: boolean;
   onToggleTheatreMode?: () => void;
   minimalHud?: boolean;
@@ -140,6 +153,14 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
   onSelectWeatherPreset,
   arOverlayMode = "off",
   onSelectArOverlayMode,
+  replayStudioAngle = "orbit_360",
+  onSelectReplayStudioAngle,
+  commentaryCue = null,
+  spectatorReactions = [],
+  watchPartyCheerMeter = 15,
+  hapticsEnabled = true,
+  onToggleHaptics,
+  onSendReaction,
   isTheatreMode = false,
   onToggleTheatreMode,
   minimalHud = false,
@@ -385,6 +406,15 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
               <span>{viewerCount >= 1000 ? `${(viewerCount / 1000).toFixed(1)}k` : viewerCount}</span>
             </div>
           )}
+          {typeof watchPartyCheerMeter === "number" && !minimalHud && (
+            <div
+              data-testid="watch-party-cheer-meter"
+              className="hidden md:flex items-center gap-1.5 rounded-lg border border-white/10 bg-slate-950/80 px-2 py-1 text-[10px] font-mono font-bold text-amber-300 backdrop-blur-md"
+              title="Watch-Party Crowd Energy"
+            >
+              <span>⚡ {watchPartyCheerMeter}%</span>
+            </div>
+          )}
           {!minimalHud && (
             <div className="hidden sm:block rounded-lg border border-white/10 bg-slate-950/80 px-3 py-1.5 text-xs font-semibold text-slate-300 backdrop-blur-md">
               <span className="text-emerald-400 font-bold">GTEX ARENA</span> · {matchLabel}
@@ -476,6 +506,38 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
               ))}
             </div>
           )}
+          {onSelectReplayStudioAngle && isReplayActive && !minimalHud && (
+            <div
+              data-testid="replay-studio-angle-selector"
+              className="flex items-center gap-0.5 rounded-lg border border-amber-400/40 bg-slate-950/90 p-0.5 text-[10px] font-bold uppercase backdrop-blur-md"
+              title="Cinematic Replay Angle"
+            >
+              <Film className="size-3 text-amber-400 mx-1" />
+              {(
+                [
+                  { angle: "orbit_360", label: "ORBIT" },
+                  { angle: "reverse_angle_pov", label: "REVERSE" },
+                  { angle: "spidercam_overhead", label: "SPIDER" },
+                  { angle: "goal_line_freeze", label: "LINE" },
+                  { angle: "wirecam_tracking", label: "WIRE" },
+                ] as const
+              ).map(({ angle, label }) => (
+                <button
+                  key={angle}
+                  type="button"
+                  data-testid={`replay-angle-${angle}`}
+                  onClick={() => onSelectReplayStudioAngle(angle)}
+                  className={`rounded px-1.5 py-0.5 transition-colors ${
+                    replayStudioAngle === angle
+                      ? "bg-amber-400 text-slate-950 font-black"
+                      : "text-amber-200 hover:bg-white/10"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           {onSelectQualityTier && !minimalHud && (
             <div
               data-testid="quality-profile-selector"
@@ -549,6 +611,17 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
                 <Maximize2 className="size-3.5 text-emerald-400" />
               )}
               <span>{isTheatreMode ? "EXIT THEATRE" : "THEATRE"}</span>
+            </button>
+          )}
+          {onToggleHaptics && (
+            <button
+              type="button"
+              data-testid="toggle-haptics-button"
+              onClick={onToggleHaptics}
+              className="flex size-8 items-center justify-center rounded-lg border border-white/10 bg-slate-950/80 text-white hover:bg-white/10 transition-colors"
+              title={hapticsEnabled ? "Mute Haptics" : "Enable Haptics"}
+            >
+              <Smartphone className={`size-4 ${hapticsEnabled ? "text-emerald-400" : "text-slate-500"}`} />
             </button>
           )}
           {onToggleAudio && (
@@ -645,7 +718,50 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
             </div>
           </div>
         )}
+
+        {/* Dynamic AI Commentary Subtitle Ticker */}
+        {commentaryCue && (
+          <div
+            data-testid="broadcast-commentary-ticker"
+            className="pointer-events-none mx-auto max-w-xl rounded-xl border border-white/20 bg-slate-950/90 px-4 py-2 text-center shadow-xl backdrop-blur-md transition-all"
+          >
+            <div className="flex items-center justify-between gap-3 pb-1 border-b border-white/10 text-[10px] font-mono">
+              <span className="font-bold uppercase tracking-wider text-amber-300">
+                🎙️ {commentaryCue.speaker}
+              </span>
+              <span className="rounded bg-white/10 px-1.5 py-0.2 text-[9px] font-black uppercase text-cyan-300">
+                {commentaryCue.tone}
+              </span>
+            </div>
+            <p className="pt-1.5 text-xs font-semibold italic text-slate-100">
+              "{commentaryCue.text}"
+            </p>
+          </div>
+        )}
       </div>
+
+      {/* Floating Watch-Party Emoji Reactions */}
+      {spectatorReactions && spectatorReactions.length > 0 && (
+        <div
+          data-testid="watch-party-reactions-container"
+          className="pointer-events-none absolute inset-x-0 bottom-24 top-20 overflow-hidden"
+        >
+          {spectatorReactions.map((rx) => (
+            <div
+              key={rx.id}
+              data-testid="spectator-reaction-item"
+              className="absolute animate-bounce text-2xl drop-shadow-lg"
+              style={{
+                left: `${rx.xPct}%`,
+                bottom: `${(1 - rx.remainingSec / 2.8) * 60 + 20}%`,
+                opacity: Math.min(1, rx.remainingSec * 1.5),
+              }}
+            >
+              {rx.emoji}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* =====================================================================
           3. BOTTOM ROW: Minimap Radar, Player Callout & 6-Mode Camera Switcher
@@ -855,6 +971,27 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
               WALKOUT
             </button>
           </div>
+
+          {/* Watch-Party Reaction Emoji Bar */}
+          {onSendReaction && !minimalHud && (
+            <div
+              data-testid="watch-party-reaction-bar"
+              className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-slate-950/80 p-0.5"
+            >
+              {(["🔥", "⚽", "👏", "😱"] as const).map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  data-testid={`send-reaction-${emoji}`}
+                  onClick={() => onSendReaction(emoji)}
+                  className="rounded px-1.5 py-0.5 text-xs hover:bg-white/15 transition-transform active:scale-125"
+                  title={`Send ${emoji}`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="h-4 w-px bg-white/20 mx-1" />
 
