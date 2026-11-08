@@ -2235,6 +2235,11 @@ class ResolveClubEventRequest(BaseModel):
     note: str | None = Field(default=None, max_length=1000)
 
 
+class PersonaInteractionRequest(BaseModel):
+    action_type: str = Field(min_length=1, max_length=64)
+    dialogue_text: str | None = Field(default=None, max_length=1000)
+
+
 @router.get("/clubs/{club_id}/living-world/timeline")
 def get_living_world_timeline_view(
     club_id: str,
@@ -2330,6 +2335,44 @@ def post_resolve_club_event(
             event_id=event_id,
             action=payload.action,
             resolution_note=payload.note,
+        )
+
+    return _run(session, _op)
+
+
+@router.get("/clubs/{club_id}/living-world/personas/{persona_role}")
+def get_living_world_persona_view(
+    club_id: str,
+    persona_role: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_club_world
+
+    def _op() -> dict[str, Any]:
+        return living_club_world.get_persona_details(session, user.id, club_id, persona_role=persona_role)
+
+    return _run(session, _op)
+
+
+@router.post("/clubs/{club_id}/living-world/personas/{persona_role}/interact")
+def post_living_world_persona_interact(
+    club_id: str,
+    persona_role: str,
+    payload: PersonaInteractionRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_club_world
+
+    def _op() -> dict[str, Any]:
+        return living_club_world.interact_with_persona(
+            session,
+            user.id,
+            club_id,
+            persona_role=persona_role,
+            action_type=payload.action_type,
+            dialogue_text=payload.dialogue_text,
         )
 
     return _run(session, _op)

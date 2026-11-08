@@ -21,6 +21,65 @@ export interface QualityProfile {
   description: string;
 }
 
+/**
+ * Real-time performance and quality telemetry measured from the viewport animation loop.
+ * Measured statistics reflect true rendering timing rather than declared quality targets.
+ */
+export interface QualityTelemetry {
+  /** Measured frames per second over the rolling sample window (0 until first sample window completes) */
+  measuredFps: number;
+  /** Instantaneous frame time in milliseconds (delta time) */
+  frameTimeMs: number;
+  /** Average frame time over the sample window in milliseconds */
+  averageFrameTimeMs: number;
+  /** 50th percentile (median) frame time in milliseconds */
+  p50FrameTimeMs: number;
+  /** 95th percentile frame time in milliseconds */
+  p95FrameTimeMs: number;
+  /** Number of frames sampled in the current window */
+  sampleCount: number;
+  /** Total elapsed time in milliseconds */
+  elapsedMs: number;
+  /** Whether WebGL context is currently lost */
+  isContextLost: boolean;
+  /** Active quality profile in effect */
+  activeProfile: QualityProfile;
+  /** Current effective quality tier */
+  qualityTier: DeviceQualityTier;
+}
+
+/**
+ * Standard contract for custom scene renderers registered in GtexSceneRegistry.
+ * Decouples individual 3D scene implementations from the viewport container.
+ */
+export interface GtexSceneRendererProps {
+  /** Scene identifier registered in GtexSceneRegistry */
+  sceneId: string;
+  /** Selected or active quality tier */
+  qualityTier: DeviceQualityTier;
+  /** Active quality profile settings */
+  activeQuality: QualityProfile;
+  /** Real-time quality telemetry (measured FPS, frame delta, context status) */
+  telemetry?: QualityTelemetry;
+  /** Optional auto-rotation flag */
+  autoRotate?: boolean;
+  /** Optional camera/stage control visibility */
+  showControls?: boolean;
+  /** Optional match viewer state for matchday broadcast scenes */
+  matchViewState?: MatchViewerContractInput;
+  /** Custom scene-specific property bag */
+  sceneProps?: Record<string, any>;
+  /** Container CSS class */
+  className?: string;
+  /** Test identifier */
+  testId?: string;
+  /** Quality tier change callback */
+  onQualityTierChange?: (tier: DeviceQualityTier) => void;
+  [key: string]: any;
+}
+
+export type GtexCustomSceneRenderer<P = any> = React.ComponentType<P>;
+
 export type SceneCategory =
   | "campus"
   | "cinema"
@@ -100,6 +159,12 @@ export interface GtexSceneViewportProps extends Partial<Cinema3DStageProps> {
   fallbackDescription?: string;
   /** Strongly typed match viewer contract input for live match broadcast scenes */
   matchViewState?: MatchViewerContractInput;
+  /** Optional telemetry observer callback reporting true measured FPS and frame timings */
+  onQualityTelemetryUpdate?: (telemetry: QualityTelemetry) => void;
+  /** Optional callback fired when adaptive quality adjustments trigger */
+  onQualityTierChange?: (tier: DeviceQualityTier) => void;
+  /** Custom scene-specific property bag forwarded to registered renderers */
+  sceneProps?: Record<string, any>;
   /** Direct custom 3D children if rendered in custom canvas mode */
   children?: React.ReactNode;
 }

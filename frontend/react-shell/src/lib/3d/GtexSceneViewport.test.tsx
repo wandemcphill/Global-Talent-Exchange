@@ -116,4 +116,145 @@ describe("GtexSceneViewport", () => {
     expect(container.textContent).toContain("Stadium Sponsorship & Naming Rights");
     expect(container.textContent).toContain("Immersive stadium floodlight overview");
   });
+
+  test("invokes registered non-matchday custom renderer without requiring matchViewState", async () => {
+    const NonMatchdayRenderer: React.FC<any> = (props) => (
+      <div data-testid="custom-campus-3d">
+        <span>Campus Custom 3D View</span>
+        <span data-testid="scene-id">{props.sceneId}</span>
+        <span data-testid="quality-tier">{props.qualityTier}</span>
+        <span data-testid="target-fps">{props.activeQuality?.targetFps}</span>
+      </div>
+    );
+
+    GtexSceneRegistry.registerRenderer("campus_builder", NonMatchdayRenderer);
+
+    await act(async () => {
+      root.render(
+        <GtexSceneViewport
+          sceneId="campus_builder"
+          forceWebGL={true}
+          qualityTier="high"
+        />
+      );
+    });
+
+    const rendered = container.querySelector('[data-testid="custom-campus-3d"]');
+    expect(rendered).not.toBeNull();
+    expect(container.querySelector('[data-testid="scene-id"]')?.textContent).toBe("campus_builder");
+    expect(container.querySelector('[data-testid="quality-tier"]')?.textContent).toBe("high");
+    expect(container.querySelector('[data-testid="target-fps"]')?.textContent).toBe("60");
+  });
+
+  test("passes scene-specific sceneProps to registered custom renderer", async () => {
+    const CustomBoardroomRenderer: React.FC<any> = (props) => (
+      <div data-testid="boardroom-3d">
+        <span data-testid="room-id">{props.sceneProps?.meetingRoomId}</span>
+        <span data-testid="agenda-topic">{props.sceneProps?.agendaTopic}</span>
+      </div>
+    );
+
+    GtexSceneRegistry.registerRenderer("boardroom_custom_test", CustomBoardroomRenderer);
+
+    await act(async () => {
+      root.render(
+        <GtexSceneViewport
+          sceneId="boardroom_custom_test"
+          forceWebGL={true}
+          sceneProps={{ meetingRoomId: "exec-suite-1", agendaTopic: "Tactical Review" }}
+        />
+      );
+    });
+
+    expect(container.querySelector('[data-testid="room-id"]')?.textContent).toBe("exec-suite-1");
+    expect(container.querySelector('[data-testid="agenda-topic"]')?.textContent).toBe("Tactical Review");
+  });
+
+  test("preserves matchday renderer adapter and passes matchViewState when present", async () => {
+    const MockMatchdayRenderer: React.FC<any> = (props) => (
+      <div data-testid="matchday-broadcast-3d">
+        <span>Match Broadcast Running</span>
+        <span data-testid="match-id">{props.matchViewState?.matchId}</span>
+        <span data-testid="broadcast-tier">{props.qualityTier}</span>
+      </div>
+    );
+
+    GtexSceneRegistry.registerRenderer("stadium_match_broadcast", MockMatchdayRenderer);
+
+    const mockViewState: any = { matchId: "match-world-99", homeClubName: "Lagos City" };
+
+    await act(async () => {
+      root.render(
+        <GtexSceneViewport
+          sceneId="stadium_match_broadcast"
+          forceWebGL={true}
+          qualityTier="ultra"
+          matchViewState={mockViewState}
+        />
+      );
+    });
+
+    expect(container.querySelector('[data-testid="matchday-broadcast-3d"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="match-id"]')?.textContent).toBe("match-world-99");
+    expect(container.querySelector('[data-testid="broadcast-tier"]')?.textContent).toBe("ultra");
+  });
+
+  test("renders honest fallback for threejs scene when no renderer is registered", async () => {
+    // academy_training_pitch is registered as renderBackend: "threejs" with no CustomRenderer registered
+    await act(async () => {
+      root.render(
+        <GtexSceneViewport
+          sceneId="academy_training_pitch"
+          forceWebGL={true}
+        />
+      );
+    });
+
+    // Should NOT silently render stadium_sponsor; should render honest fallback
+    expect(container.textContent).toContain("Academy Youth Training Ground");
+    expect(container.textContent).toContain("3D COMPANION MODE (RENDERER PENDING)");
+    expect(container.textContent).toContain("Operating in companion mode");
+  });
+
+  test("renders dedicated Three.js renderer for boardroom_meeting when registered in Stage 2", async () => {
+    const MockBoardroomRenderer: React.FC<any> = () => (
+      <div data-testid="boardroom-3d-scene">Boardroom Suite</div>
+    );
+    GtexSceneRegistry.registerRenderer("boardroom_meeting", MockBoardroomRenderer);
+
+    await act(async () => {
+      root.render(
+        <GtexSceneViewport
+          sceneId="boardroom_meeting"
+          forceWebGL={true}
+        />
+      );
+    });
+
+    // Verify it renders the registered BoardroomScene custom renderer
+    expect(container.querySelector('[data-testid="boardroom-3d-scene"]')).not.toBeNull();
+  });
+
+  test("populates measured telemetry attributes and invokes onQualityTelemetryUpdate", async () => {
+    let telemetryCaptured: any = null;
+
+    await act(async () => {
+      root.render(
+        <GtexSceneViewport
+          sceneId="stadium_sponsor"
+          forceWebGL={true}
+          qualityTier="high"
+          onQualityTelemetryUpdate={(t) => {
+            telemetryCaptured = t;
+          }}
+        />
+      );
+    });
+
+    const viewportEl = container.querySelector('[data-testid="gtex-scene-viewport"]');
+    expect(viewportEl).not.toBeNull();
+    expect(viewportEl?.hasAttribute("data-measured-fps")).toBe(true);
+    expect(viewportEl?.hasAttribute("data-frame-time-ms")).toBe(true);
+    expect(viewportEl?.getAttribute("data-context-lost")).toBe("false");
+  });
 });

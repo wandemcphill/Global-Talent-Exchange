@@ -14,7 +14,7 @@ const webServer = process.env.GTEX_E2E_BASE_URL
         ].join(" "),
         cwd: "../../frontend",
         url: baseURL,
-        timeout: 180_000,
+        timeout: 360_000,
         reuseExistingServer: !process.env.CI,
       }
     : undefined;

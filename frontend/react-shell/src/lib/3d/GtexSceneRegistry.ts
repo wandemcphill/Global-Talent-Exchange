@@ -8,6 +8,7 @@ import type React from "react";
 import {
   DeviceQualityTier,
   FallbackMode,
+  GtexCustomSceneRenderer,
   GtexSceneDescriptor,
   QualityProfile,
   SceneCategory,
@@ -351,6 +352,18 @@ const INITIAL_SCENE_CATALOG: GtexSceneDescriptor[] = [
     tags: ["boardroom", "gm", "owner", "executive", "budget"],
   },
   {
+    id: "tactician_suite",
+    title: "Manager Tactician War Room",
+    category: "club",
+    description: "Manager's tactical command center with glowing magnetic formation board and dugout tunnel view.",
+    renderBackend: "threejs",
+    defaultCamera: { position: [0, 2.4, 4.2], target: [0, 2.2, 0], fov: 40 },
+    requiredModels: [],
+    fallbackMode: "2d_diorama",
+    supportsInteraction: true,
+    tags: ["tactics", "manager", "formation", "war_room", "dugout"],
+  },
+  {
     id: "academy_training_pitch",
     title: "Academy Youth Training Ground",
     category: "academy",
@@ -405,16 +418,16 @@ const INITIAL_SCENE_CATALOG: GtexSceneDescriptor[] = [
 class SceneRegistryStore {
   private scenes = new Map<string, GtexSceneDescriptor>();
   private qualityOverride: DeviceQualityTier | null = null;
-  private customRenderers = new Map<string, React.ComponentType<any>>();
+  private customRenderers = new Map<string, GtexCustomSceneRenderer>();
 
   /** Register a custom component renderer for a scene ID (decoupling viewports from concrete scenes) */
-  public registerRenderer(sceneId: string, renderer: React.ComponentType<any>): void {
-    this.customRenderers.set(sceneId, renderer);
+  public registerRenderer<P = any>(sceneId: string, renderer: GtexCustomSceneRenderer<P>): void {
+    this.customRenderers.set(sceneId, renderer as GtexCustomSceneRenderer);
   }
 
   /** Retrieve a custom component renderer for a scene ID */
-  public getRenderer(sceneId: string): React.ComponentType<any> | undefined {
-    return this.customRenderers.get(sceneId);
+  public getRenderer<P = any>(sceneId: string): GtexCustomSceneRenderer<P> | undefined {
+    return this.customRenderers.get(sceneId) as GtexCustomSceneRenderer<P> | undefined;
   }
 
   /** Unregister a custom component renderer */
