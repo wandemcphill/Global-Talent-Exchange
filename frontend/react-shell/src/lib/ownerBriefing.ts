@@ -760,6 +760,7 @@ export interface StaffOfferResponse {
   reason?: string;
   counter_salary_gtex?: number;
   required_salary_gtex?: number;
+  cinematic_event?: CinematicEventPayload | null;
 }
 
 export interface StaffDismissPayload {
@@ -1127,6 +1128,136 @@ export const clubPoliticsEventRespondEndpoint = (clubId: string, eventId: string
 
 export const clubPoliticsMediaStatementEndpoint = (clubId: string) =>
   `/owner/clubs/${encodeURIComponent(clubId)}/living-world/politics/media/statement`;
+
+// ---------- Stage 7: Cinema 3D, Staff Arrivals & Prestige Showroom Engine ----------
+
+export interface CinematicEventPayload {
+  event_id: string;
+  club_id: string;
+  event_type: string;
+  scene_id: string;
+  render_backend: "threejs" | "cinema_volumetric" | string;
+  verified_transaction: boolean;
+  title: string;
+  description: string;
+  badge_text: string;
+  club_name: string;
+  primary_color: string;
+  secondary_color: string;
+  accent_color: string;
+  subject_id?: string | null;
+  subject_name?: string | null;
+  subject_role?: string | null;
+  subject_role_label?: string | null;
+  overall_rating?: number | null;
+  potential_rating?: number | null;
+  contract_id?: string | null;
+  contract_years?: number | null;
+  salary_gtex?: number | null;
+  asset_catalog_key?: string | null;
+  asset_category?: string | null;
+  mesh_archetype?: string | null;
+  sponsor_name?: string | null;
+  camera_sequence: string[];
+  world_day?: number | null;
+  created_at: string;
+}
+
+export interface Prestige3DCatalogItem {
+  catalog_key: string;
+  name: string;
+  category: string;
+  model: string;
+  price_gtex: number;
+  prestige_bonus: number;
+  min_prestige: number;
+  description: string;
+  specs: Record<string, any>;
+  can_gift_to_player: boolean;
+  can_gift_to_staff: boolean;
+  image_url: string;
+  high_res_image_url: string;
+  is_owned: boolean;
+  owned_count: number;
+  owned_instances: Array<{
+    asset_id: string;
+    catalog_key: string;
+    custom_name: string;
+    category: string;
+    price_gtex: number;
+    status: string;
+    gifted_to_player_id?: string | null;
+    gifted_to_player_name?: string | null;
+    created_at?: string | null;
+  }>;
+  webgl_3d: {
+    mesh_archetype:
+      | "private_jet"
+      | "hypercar"
+      | "luxury_suv"
+      | "club_bus"
+      | "tourbillon_watch"
+      | "vip_suite"
+      | "infrastructure"
+      | string;
+    scene_id: string;
+    model_path: string;
+    camera_presets: string[];
+    livery_options: string[];
+    dimensions_m: number[];
+  };
+}
+
+export interface CinemaShowroomOverviewResponse {
+  club_id: string;
+  club_name: string;
+  primary_color: string;
+  secondary_color: string;
+  accent_color: string;
+  world_day: number;
+  supported_event_types: Array<{
+    event_type: string;
+    scene_id: string;
+    render_backend: string;
+    title: string;
+    badge_text: string;
+    requires_verification: string;
+  }>;
+  recent_cinematics: CinematicEventPayload[];
+  prestige_3d_catalog: Prestige3DCatalogItem[];
+  owned_assets_count: number;
+  eligible_players: Array<{
+    id: string;
+    name: string;
+    position: string;
+    age: number;
+    rating: number;
+    potential: number;
+    morale: number;
+    is_regen: boolean;
+    portrait_url: string;
+  }>;
+  staff_roster: Record<string, any>;
+  active_sponsors: Array<Record<string, any>>;
+}
+
+export interface TriggerCinematicPayload {
+  event_type: string;
+  subject_id?: string;
+  catalog_key?: string;
+  custom_headline?: string;
+}
+
+export interface TriggerCinematicResponse {
+  success: boolean;
+  cinematic_event: CinematicEventPayload;
+}
+
+export const clubCinemaShowroomOverviewEndpoint = (clubId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/cinema-showroom/overview`;
+
+export const clubCinemaShowroomTriggerEndpoint = (clubId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/cinema-showroom/trigger`;
 
 /** Resolve what the panel should show. With no published contract this is always `unavailable`. */
 export function useOwnerBriefing(): BriefingViewState {

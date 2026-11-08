@@ -4,6 +4,31 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StaffEmploymentModal } from "./StaffEmploymentModal";
 import { api } from "@/lib/api";
 
+jest.mock("three/examples/jsm/controls/OrbitControls.js", () => {
+  return {
+    OrbitControls: class {
+      enableDamping = true;
+      dampingFactor = 0.05;
+      maxPolarAngle = 1;
+      minDistance = 1;
+      maxDistance = 100;
+      target = {
+        x: 0,
+        y: 0,
+        z: 0,
+        set: jest.fn(),
+        copy: jest.fn(),
+        lerp: jest.fn(),
+        distanceTo: jest.fn().mockReturnValue(0),
+      };
+      update = jest.fn();
+      dispose = jest.fn();
+      addEventListener = jest.fn();
+      removeEventListener = jest.fn();
+    },
+  };
+});
+
 jest.mock("@/lib/api", () => ({
   api: {
     get: jest.fn(),
@@ -159,6 +184,38 @@ describe("StaffEmploymentModal", () => {
             contract_id: "contract-new-1",
             assignment_id: "assignment-new-1",
             total_contract_fee: payload.offered_salary_gtex * 0.15,
+            cinematic_event: {
+              event_id: "evt_arrival_chidi_1",
+              event_type: "staff_signing",
+              category: "staff_arrival",
+              scene_type: "manager_arrival",
+              camera_preset: "convoy_tunnel_walkout",
+              lighting_preset: "stadium_floodlight_unveiling",
+              render_mode: "3d_webgl",
+              fallback_available: true,
+              fallback_label: "2D Broadcast Fallback Ready",
+              verified_source: true,
+              title: "Executive Appointment: Chidi Eze Joins as Head of Youth Development",
+              subtitle: "Head of Youth Development • 2-Year Contract • ₦85,000 GTEX/yr",
+              club_branding: {
+                club_id: "club-1",
+                club_name: "Lagos Atlantic FC",
+                primary_color: "#10b981",
+                secondary_color: "#f59e0b",
+                accent_color: "#0f172a",
+                stadium_name: "Atlantic Arena",
+              },
+              metadata: {
+                staff_name: "Chidi Eze",
+                role_key: "head_of_youth_development",
+                role_label: "Head of Youth Development",
+                rating: 78,
+                reputation: 74,
+                annual_salary_gtex: 85000,
+                contract_years: 2,
+                signing_fee_gtex: 12750,
+              },
+            },
           },
         });
       }
@@ -321,6 +378,63 @@ describe("StaffEmploymentModal", () => {
         success: true,
       })
     );
+
+    // Stage 7: Verify 3D Staff Arrival Cinematic Overlay is launched after confirmed appointment
+    expect(container.querySelector('[data-testid="staff-arrival-cinematic-overlay"]')).not.toBeNull();
+    expect(container.textContent).toContain(
+      "Executive Appointment: Chidi Eze Joins as Head of Youth Development"
+    );
+
+    const completeArrivalBtn = container.querySelector(
+      '[data-testid="complete-arrival-cinematic-btn"]'
+    ) as HTMLButtonElement;
+    expect(completeArrivalBtn).not.toBeNull();
+    act(() => {
+      completeArrivalBtn.click();
+    });
+    expect(container.querySelector('[data-testid="staff-arrival-cinematic-overlay"]')).toBeNull();
+  });
+
+  it("never triggers 3D arrival cinematic overlay when a contract offer is rejected", async () => {
+    (api.post as jest.Mock).mockImplementationOnce(() =>
+      Promise.resolve({
+        data: {
+          status: "rejected_salary",
+          success: false,
+          message: "Candidate rejected the wage package.",
+          counter_salary_gtex: 420000,
+          cinematic_event: null,
+        },
+      })
+    );
+
+    renderModal({ initialTab: "market" });
+    await waitForCondition(() =>
+      Boolean(container.querySelector('[data-testid="negotiate-offer-btn-prof-cand-2"]'))
+    );
+
+    const negotiateBtn = container.querySelector(
+      '[data-testid="negotiate-offer-btn-prof-cand-2"]'
+    ) as HTMLButtonElement;
+    act(() => {
+      negotiateBtn.click();
+    });
+
+    await waitForCondition(() =>
+      Boolean(container.querySelector('[data-testid="submit-contract-offer-btn"]'))
+    );
+
+    const submitBtn = container.querySelector(
+      '[data-testid="submit-contract-offer-btn"]'
+    ) as HTMLButtonElement;
+    act(() => {
+      submitBtn.click();
+    });
+
+    await waitForCondition(() =>
+      Boolean(container.querySelector('[data-testid="offer-result-banner"]'))
+    );
+    expect(container.querySelector('[data-testid="staff-arrival-cinematic-overlay"]')).toBeNull();
   });
 
   it("handles dismissal confirmation and dispatches dismissal mutation", async () => {

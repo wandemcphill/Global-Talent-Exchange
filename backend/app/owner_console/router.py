@@ -2779,3 +2779,58 @@ def post_living_world_politics_media_statement(
         )
 
     return _run(session, _op)
+
+
+# ==============================================================================
+# Living World Stage 7: Cinema 3D, Staff Arrivals & Prestige Showroom
+# ==============================================================================
+
+
+class TriggerClubCinematicRequest(BaseModel):
+    event_type: str = Field(min_length=1, max_length=64)
+    subject_id: str | None = Field(default=None, max_length=128)
+    catalog_key: str | None = Field(default=None, max_length=128)
+    custom_headline: str | None = Field(default=None, max_length=240)
+
+
+@router.get("/clubs/{club_id}/living-world/cinema-showroom/overview")
+def get_living_world_cinema_showroom_overview(
+    club_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_cinema_showroom
+
+    def _op() -> dict[str, Any]:
+        try:
+            return living_cinema_showroom.get_cinema_and_showroom_overview(session, user.id, club_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return _run(session, _op)
+
+
+@router.post("/clubs/{club_id}/living-world/cinema-showroom/trigger")
+def post_living_world_cinema_showroom_trigger(
+    club_id: str,
+    payload: TriggerClubCinematicRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_cinema_showroom
+
+    def _op() -> dict[str, Any]:
+        try:
+            return living_cinema_showroom.trigger_verified_club_cinematic(
+                session,
+                user.id,
+                club_id,
+                event_type=payload.event_type,
+                subject_id=payload.subject_id,
+                catalog_key=payload.catalog_key,
+                custom_headline=payload.custom_headline,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return _run(session, _op)
