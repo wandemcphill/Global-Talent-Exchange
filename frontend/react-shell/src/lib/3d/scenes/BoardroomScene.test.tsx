@@ -204,6 +204,28 @@ describe("BoardroomScene", () => {
     expect(document.querySelector('[data-testid="boardroom-dilemma-modal"]')).not.toBeNull();
   });
 
+  test("opens staff employment and market modal when clicking staff market HUD button", async () => {
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <BoardroomScene clubId="c_lagos_boardroom" />
+        </QueryClientProvider>
+      );
+    });
+
+    const staffMarketBtn = container.querySelector(
+      '[data-testid="open-staff-market-btn"]'
+    ) as HTMLButtonElement;
+    expect(staffMarketBtn).not.toBeNull();
+    expect(staffMarketBtn.textContent).toContain("Staff Market & Careers");
+
+    await act(async () => {
+      staffMarketBtn.click();
+    });
+
+    expect(document.querySelector('[data-testid="staff-employment-modal"]')).not.toBeNull();
+  });
+
   test("unmounts cleanly without WebGL memory leaks", async () => {
     await act(async () => {
       root.render(

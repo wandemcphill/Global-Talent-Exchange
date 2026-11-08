@@ -26,12 +26,14 @@ import {
   ShieldAlert,
   Flame,
   Scale,
+  Briefcase,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { GtexSceneRegistry } from "../GtexSceneRegistry";
 import type { GtexSceneRendererProps } from "../GtexSceneTypes";
 import { PersonaSpatialInteractionModal } from "../PersonaSpatialInteractionModal";
 import { BoardroomDilemmaModal } from "../BoardroomDilemmaModal";
+import { StaffEmploymentModal } from "../StaffEmploymentModal";
 import {
   clubActiveDilemmaEndpoint,
   type BoardroomDilemma,
@@ -136,6 +138,7 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
   const [selectedPersonaRole, setSelectedPersonaRole] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isDilemmaModalOpen, setIsDilemmaModalOpen] = useState<boolean>(false);
+  const [isStaffModalOpen, setIsStaffModalOpen] = useState<boolean>(false);
 
   // Active Boardroom Dilemma Query
   const { data: activeDilemma } = useQuery<BoardroomDilemma | null>({
@@ -694,6 +697,17 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
               </span>
             </button>
           )}
+
+          {/* Staff Market & Careers Action Button */}
+          <button
+            type="button"
+            data-testid="open-staff-market-btn"
+            onClick={() => setIsStaffModalOpen(true)}
+            className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-3 py-1.5 text-xs font-bold text-emerald-300 backdrop-blur-md transition-all hover:bg-emerald-500/30 shadow-lg shadow-emerald-500/10"
+          >
+            <Briefcase className="h-3.5 w-3.5 text-emerald-400" />
+            <span>Staff Market & Careers</span>
+          </button>
         </div>
 
         {/* Lighting & Camera Presets */}
@@ -806,6 +820,13 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
         clubId={clubId}
         isOpen={isDilemmaModalOpen}
         onClose={() => setIsDilemmaModalOpen(false)}
+      />
+
+      {/* Staff Employment & Career Market Modal */}
+      <StaffEmploymentModal
+        clubId={clubId}
+        isOpen={isStaffModalOpen}
+        onClose={() => setIsStaffModalOpen(false)}
       />
     </div>
   );

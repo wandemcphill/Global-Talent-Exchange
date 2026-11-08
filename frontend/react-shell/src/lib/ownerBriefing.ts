@@ -662,6 +662,146 @@ export const clubSimulateAutonomousDecisionsEndpoint = (clubId: string) =>
 export const clubDelegatedDecisionsEndpoint = (clubId: string, limit = 20) =>
   `/owner/clubs/${encodeURIComponent(clubId)}/living-world/delegated-decisions?limit=${encodeURIComponent(limit)}`;
 
+// ---------- Stage 4: Autonomous Staff Career & Professional Employment Market ----------
+
+export interface StaffCareerHistoryItem {
+  club_id: string;
+  club_name?: string;
+  role: string;
+  started_at?: string;
+  ended_at?: string;
+  status: "ongoing" | "dismissed" | "resigned" | "contract_expiry" | string;
+  contract_years?: number;
+  tenure_years?: number;
+  salary_gtex?: number;
+  reason_for_leaving?: string;
+  exit_reason?: string;
+  severance_paid?: number;
+  matches_managed?: number;
+  win_rate?: number;
+  win_rate_pct?: number;
+}
+
+export interface StaffMarketCandidate {
+  profile_id: string;
+  market_key: string;
+  staff_id: string;
+  name: string;
+  role_key: string;
+  role_label: string;
+  rating: number;
+  rarity: string;
+  skills: string[];
+  reputation: number;
+  experience_years: number;
+  temperament: string;
+  style: string;
+  ambition: number;
+  loyalty: number;
+  expected_salary_gtex: number;
+  min_prestige: number;
+  employment_status: "employed" | "unemployed" | "retired" | string;
+  current_club_id?: string | null;
+  can_attract: boolean;
+  interest_level: "very_high" | "interested" | "requires_premium" | "unlikely" | string;
+  career_history: StaffCareerHistoryItem[];
+}
+
+export interface StaffMarketPoolResponse {
+  club_id: string;
+  club_prestige: number;
+  total_count: number;
+  candidates: StaffMarketCandidate[];
+}
+
+export interface StaffVacancyItem {
+  role_key: string;
+  role_label: string;
+  is_urgent: boolean;
+  provisional_name: string;
+  recommended_min_rating: number;
+}
+
+export interface StaffFilledRoleItem {
+  role_key: string;
+  role_label: string;
+  incumbent_name: string;
+  staff_id: string;
+  appointed_at?: string;
+  salary_gtex: number;
+  mood: number;
+}
+
+export interface StaffVacanciesResponse {
+  club_id: string;
+  club_prestige: number;
+  vacancies_count: number;
+  vacancies: StaffVacancyItem[];
+  filled_roles: StaffFilledRoleItem[];
+}
+
+export interface StaffOfferSubmitPayload {
+  profile_id: string;
+  role?: string;
+  offered_salary_gtex?: number;
+  contract_years: number;
+  marquee_wage_premium?: boolean;
+  pitch_note?: string;
+}
+
+export interface StaffOfferResponse {
+  status: "accepted" | "rejected" | "counter_offer";
+  success: boolean;
+  message: string;
+  contract_id?: string;
+  assignment_id?: string;
+  appointed_staff?: Record<string, any>;
+  total_contract_fee?: number;
+  reason?: string;
+  counter_salary_gtex?: number;
+  required_salary_gtex?: number;
+}
+
+export interface StaffDismissPayload {
+  role: string;
+  reason?: string;
+}
+
+export interface StaffDismissResponse {
+  status: "dismissed";
+  success: boolean;
+  role: string;
+  staff_name: string;
+  severance_paid: number;
+  entered_free_agency: boolean;
+  profile_id?: string;
+}
+
+export const clubStaffMarketVacanciesEndpoint = (clubId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/staff-market/vacancies`;
+
+export const clubStaffMarketCandidatesEndpoint = (
+  clubId: string,
+  role?: string,
+  employmentStatus: string = "unemployed",
+  limit: number = 50
+) => {
+  const params = new URLSearchParams();
+  if (role) params.set("role", role);
+  if (employmentStatus) params.set("employment_status", employmentStatus);
+  params.set("limit", String(limit));
+  return `/owner/clubs/${encodeURIComponent(clubId)}/living-world/staff-market/candidates?${params.toString()}`;
+};
+
+export const clubStaffCandidateDossierEndpoint = (clubId: string, profileId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/staff-market/candidates/${encodeURIComponent(profileId)}`;
+
+export const clubStaffMarketOffersEndpoint = (clubId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/staff-market/offers`;
+
+export const clubStaffMarketDismissEndpoint = (clubId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/living-world/staff-market/dismiss`;
+
 /** Resolve what the panel should show. With no published contract this is always `unavailable`. */
 export function useOwnerBriefing(): BriefingViewState {
   if (!OWNER_BRIEFING_ENDPOINT) return { status: "unavailable" };
