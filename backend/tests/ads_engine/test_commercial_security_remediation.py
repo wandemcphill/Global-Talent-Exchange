@@ -1146,7 +1146,7 @@ def test_korapay_serialization_cross_language_vectors():
 
 def test_s3_production_safety_guard(tmp_path: Path, monkeypatch) -> None:
     client, session_factory, _ = _build_test_app(tmp_path, monkeypatch)
-    admin_token = _create_admin(session_factory, "adm-s3-guard", "admin_s3_guard@gtex.test", "adms3guard")
+    _create_admin(session_factory, "adm-s3-guard", "admin_s3_guard@gtex.test", "adms3guard")
 
     reg_res = client.post(
         "/api/v2/advertiser/auth/register",
