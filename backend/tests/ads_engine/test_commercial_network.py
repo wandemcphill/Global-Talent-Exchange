@@ -16,7 +16,7 @@ from sqlalchemy.pool import StaticPool
 from app.ads_engine.router import public_router as ads_public_router, router as ads_router
 from app.auth.dependencies import get_session
 from app.auth.router import router as auth_router
-from app.auth.security import create_access_token, hash_password
+from app.auth.security import hash_password
 from app.auth.service import AuthError, AuthService
 from app.models.access_control import Organization, OrganizationMembership
 from app.models.auth_session import AuthSession
