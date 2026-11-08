@@ -1,0 +1,432 @@
+/**
+ * GTEX Living Football Ecosystem — Stage 2 Persistent 3D Club Environments
+ * TacticianSuiteScene: Three.js Manager / Tactician War Room & Formation Board.
+ *
+ * Implements:
+ * 1. 3D Tactical War Room with glowing magnetic pitch formation board.
+ * 2. 3D First-Team Manager persona standing by the board.
+ * 3. Spatial raycasting and click interaction opening PersonaSpatialInteractionModal.
+ * 4. Cinematic camera presets (tactics_board, desk, overview, tunnel_view).
+ * 5. Robust lifecycle and WebGL memory cleanup.
+ */
+
+import React, { useEffect, useRef, useState, useCallback } from "react";
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import {
+  Users,
+  Sun,
+  Moon,
+  Sparkles,
+  Sliders,
+  Shield,
+  Layers,
+} from "lucide-react";
+import { GtexSceneRegistry } from "../GtexSceneRegistry";
+import type { GtexSceneRendererProps } from "../GtexSceneTypes";
+import { PersonaSpatialInteractionModal } from "../PersonaSpatialInteractionModal";
+
+export interface TacticianSuiteSceneProps extends Partial<GtexSceneRendererProps> {
+  clubId?: string;
+}
+
+export type TacticianCameraPreset = "tactics_board" | "desk" | "overview" | "tunnel_view";
+
+const CAMERA_PRESETS: Record<
+  TacticianCameraPreset,
+  { label: string; position: [number, number, number]; target: [number, number, number] }
+> = {
+  tactics_board: {
+    label: "Tactics Board",
+    position: [0, 2.4, 4.2],
+    target: [0, 2.2, 0],
+  },
+  desk: {
+    label: "Analysis Desk",
+    position: [-3.5, 2.8, 2.2],
+    target: [-4.2, 1.4, -2.5],
+  },
+  overview: {
+    label: "War Room",
+    position: [0, 5.5, 12],
+    target: [0, 1.8, 0],
+  },
+  tunnel_view: {
+    label: "Tunnel View",
+    position: [0, 3.5, -2],
+    target: [0, 2.5, -22],
+  },
+};
+
+export const TacticianSuiteScene: React.FC<TacticianSuiteSceneProps> = ({
+  clubId = "c_default",
+  qualityTier = "high",
+  activeQuality,
+  sceneProps,
+}) => {
+  const mountRef = useRef<HTMLDivElement | null>(null);
+  const [activePreset, setActivePreset] = useState<TacticianCameraPreset>("tactics_board");
+  const [lightingMode, setLightingMode] = useState<"day" | "night">("day");
+  const [isHovered, setIsHovered] = useState<boolean>(false);
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const controlsRef = useRef<OrbitControls | null>(null);
+  const cameraGoalPosRef = useRef<THREE.Vector3>(new THREE.Vector3(...CAMERA_PRESETS.tactics_board.position));
+  const cameraGoalTargetRef = useRef<THREE.Vector3>(new THREE.Vector3(...CAMERA_PRESETS.tactics_board.target));
+  const isTransitioningRef = useRef<boolean>(true);
+
+  const handleSelectPreset = useCallback((presetKey: TacticianCameraPreset) => {
+    setActivePreset(presetKey);
+    const target = CAMERA_PRESETS[presetKey];
+    cameraGoalPosRef.current.set(...target.position);
+    cameraGoalTargetRef.current.set(...target.target);
+    isTransitioningRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    const container = mountRef.current;
+    if (!container) return;
+
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        antialias: activeQuality?.antialias ?? true,
+        powerPreference: "high-performance",
+        preserveDrawingBuffer: true,
+      });
+    } catch {
+      return;
+    }
+
+    const width = Math.max(320, container.clientWidth || 960);
+    const height = Math.max(380, container.clientHeight || 540);
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, activeQuality?.pixelRatio || 1.5));
+    renderer.shadowMap.enabled = activeQuality?.shadowsEnabled ?? true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    container.innerHTML = "";
+    renderer.domElement.setAttribute("data-testid", "tactician-3d-canvas");
+    renderer.domElement.style.width = "100%";
+    renderer.domElement.style.height = "100%";
+    renderer.domElement.style.display = "block";
+    container.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    sceneRef.current = scene;
+    const isDay = lightingMode === "day";
+    scene.background = new THREE.Color(isDay ? 0x06111f : 0x020610);
+    scene.fog = new THREE.FogExp2(isDay ? 0x06111f : 0x020610, 0.012);
+
+    const camera = new THREE.PerspectiveCamera(40, width / height, 0.4, 180);
+    camera.position.copy(cameraGoalPosRef.current);
+    cameraRef.current = camera;
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.maxPolarAngle = Math.PI / 2 - 0.05;
+    controls.minDistance = 2.5;
+    controls.maxDistance = 30;
+    controls.target.copy(cameraGoalTargetRef.current);
+    controlsRef.current = controls;
+
+    controls.addEventListener("start", () => {
+      isTransitioningRef.current = false;
+    });
+
+    // Lighting
+    const hemiLight = new THREE.HemisphereLight(0xdbeafe, 0x0b1329, isDay ? 1.0 : 0.45);
+    scene.add(hemiLight);
+
+    const keyLight = new THREE.DirectionalLight(0xfffbeb, isDay ? 1.7 : 0.85);
+    keyLight.position.set(10, 18, 12);
+    keyLight.castShadow = activeQuality?.shadowsEnabled ?? true;
+    scene.add(keyLight);
+
+    const boardSpotlight = new THREE.SpotLight(0x38bdf8, 2.2, 14, Math.PI / 5, 0.4);
+    boardSpotlight.position.set(0, 5.5, 2.5);
+    boardSpotlight.target.position.set(0, 2.2, 0);
+    scene.add(boardSpotlight);
+    scene.add(boardSpotlight.target);
+
+    // Floor
+    const floorGeo = new THREE.PlaneGeometry(24, 28);
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.5 });
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    // -----------------------------------------------------------------------
+    // Interactive Magnetic Pitch Tactics Board (Z = 0)
+    // -----------------------------------------------------------------------
+    const boardGroup = new THREE.Group();
+    boardGroup.position.set(0, 2.2, 0);
+
+    const boardFrameGeo = new THREE.BoxGeometry(5.2, 3.2, 0.12);
+    const boardFrameMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8 });
+    const boardFrame = new THREE.Mesh(boardFrameGeo, boardFrameMat);
+    boardGroup.add(boardFrame);
+
+    const boardSurfaceGeo = new THREE.PlaneGeometry(5.0, 3.0);
+    const boardSurfaceMat = new THREE.MeshStandardMaterial({
+      color: 0x064e3b, // Tactical dark green pitch
+      roughness: 0.3,
+    });
+    const boardSurface = new THREE.Mesh(boardSurfaceGeo, boardSurfaceMat);
+    boardSurface.position.z = 0.07;
+    boardGroup.add(boardSurface);
+
+    // 4-3-3 Tactical Formation Magnets
+    const formationPositions: Array<[number, number]> = [
+      // GK
+      [0, -1.2],
+      // Defense
+      [-1.8, -0.6],
+      [-0.6, -0.6],
+      [0.6, -0.6],
+      [1.8, -0.6],
+      // Midfield
+      [-1.1, 0.1],
+      [0, 0.3],
+      [1.1, 0.1],
+      // Attack
+      [-1.6, 1.0],
+      [0, 1.15],
+      [1.6, 1.0],
+    ];
+
+    formationPositions.forEach(([mx, my]) => {
+      const magnetGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.06, 16);
+      const magnetMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.2 });
+      const magnet = new THREE.Mesh(magnetGeo, magnetMat);
+      magnet.rotation.x = Math.PI / 2;
+      magnet.position.set(mx, my, 0.1);
+      boardGroup.add(magnet);
+    });
+    scene.add(boardGroup);
+
+    // -----------------------------------------------------------------------
+    // 3D First-Team Manager Persona
+    // -----------------------------------------------------------------------
+    const managerGroup = new THREE.Group();
+    managerGroup.position.set(1.8, 0, 1.2);
+    managerGroup.rotation.y = -Math.PI / 4;
+
+    const mgrTorsoGeo = new THREE.BoxGeometry(0.7, 1.1, 0.45);
+    const mgrTorsoMat = new THREE.MeshStandardMaterial({ color: 0x097969, roughness: 0.5 });
+    const mgrTorso = new THREE.Mesh(mgrTorsoGeo, mgrTorsoMat);
+    mgrTorso.position.y = 1.35;
+    mgrTorso.castShadow = true;
+    mgrTorso.userData = { isManagerRaycast: true };
+    managerGroup.add(mgrTorso);
+
+    const mgrHeadGeo = new THREE.SphereGeometry(0.24, 20, 20);
+    const mgrHeadMat = new THREE.MeshStandardMaterial({ color: 0xd4a373, roughness: 0.7 });
+    const mgrHead = new THREE.Mesh(mgrHeadGeo, mgrHeadMat);
+    mgrHead.position.y = 2.1;
+    mgrHead.castShadow = true;
+    mgrHead.userData = { isManagerRaycast: true };
+    managerGroup.add(mgrHead);
+
+    const selRingGeo = new THREE.RingGeometry(0.65, 0.8, 32);
+    const selRingMat = new THREE.MeshBasicMaterial({
+      color: 0x10b981,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0,
+    });
+    const selRing = new THREE.Mesh(selRingGeo, selRingMat);
+    selRing.rotation.x = -Math.PI / 2;
+    selRing.position.y = 0.02;
+    selRing.name = "selRing";
+    managerGroup.add(selRing);
+    scene.add(managerGroup);
+
+    // -----------------------------------------------------------------------
+    // Raycasting
+    // -----------------------------------------------------------------------
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    const handlePointerMove = (evt: MouseEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const targets = [mgrTorso, mgrHead];
+      const intersects = raycaster.intersectObjects(targets, false);
+
+      if (intersects.length > 0) {
+        setIsHovered(true);
+        renderer.domElement.style.cursor = "pointer";
+        selRingMat.opacity = 0.9;
+      } else {
+        setIsHovered(false);
+        renderer.domElement.style.cursor = "default";
+        selRingMat.opacity = 0;
+      }
+    };
+
+    const handlePointerDown = (evt: MouseEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const targets = [mgrTorso, mgrHead];
+      const intersects = raycaster.intersectObjects(targets, false);
+      if (intersects.length > 0) {
+        setIsModalOpen(true);
+      }
+    };
+
+    renderer.domElement.addEventListener("mousemove", handlePointerMove);
+    renderer.domElement.addEventListener("pointerdown", handlePointerDown);
+
+    // Animation Loop
+    let animId: number;
+    const clock = new THREE.Clock();
+
+    const animate = () => {
+      animId = requestAnimationFrame(animate);
+      const dt = clock.getDelta();
+
+      if (isTransitioningRef.current) {
+        camera.position.lerp(cameraGoalPosRef.current, dt * 3.5);
+        controls.target.lerp(cameraGoalTargetRef.current, dt * 3.5);
+
+        if (
+          camera.position.distanceTo(cameraGoalPosRef.current) < 0.05 &&
+          controls.target.distanceTo(cameraGoalTargetRef.current) < 0.05
+        ) {
+          isTransitioningRef.current = false;
+        }
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const nw = Math.max(320, entry.contentRect.width);
+        const nh = Math.max(380, entry.contentRect.height);
+        camera.aspect = nw / nh;
+        camera.updateProjectionMatrix();
+        renderer.setSize(nw, nh);
+      }
+    });
+    resizeObserver.observe(container);
+
+    return () => {
+      cancelAnimationFrame(animId);
+      resizeObserver.disconnect();
+      renderer.domElement.removeEventListener("mousemove", handlePointerMove);
+      renderer.domElement.removeEventListener("pointerdown", handlePointerDown);
+      controls.dispose();
+      renderer.dispose();
+      scene.clear();
+      if (container.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement);
+      }
+    };
+  }, [activeQuality, lightingMode]);
+
+  return (
+    <div
+      data-testid="tactician-3d-scene"
+      className="relative h-full min-h-[520px] w-full overflow-hidden rounded-2xl border border-emerald-500/20 bg-slate-950"
+    >
+      <div ref={mountRef} className="h-full w-full" />
+
+      {/* Top HUD Controls */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between p-4">
+        <div className="pointer-events-auto flex items-center gap-2 rounded-xl border border-white/10 bg-slate-950/80 px-3 py-1.5 backdrop-blur-md">
+          <Sliders className="h-4 w-4 text-emerald-400" />
+          <span className="text-xs font-bold uppercase tracking-wider text-white">
+            Manager Tactician War Room
+          </span>
+          <span className="rounded bg-sky-500/20 px-1.5 py-0.5 text-[10px] font-mono text-sky-300">
+            FORMATION 4-3-3
+          </span>
+        </div>
+
+        <div className="pointer-events-auto flex items-center gap-2">
+          <button
+            type="button"
+            data-testid="toggle-tactician-lighting-btn"
+            onClick={() => setLightingMode((m) => (m === "day" ? "night" : "day"))}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-slate-950/80 text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+            title={`Switch to ${lightingMode === "day" ? "Night" : "Day"} Lighting`}
+          >
+            {lightingMode === "day" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4 text-amber-400" />}
+          </button>
+
+          <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/80 p-1 backdrop-blur-md">
+            {(Object.keys(CAMERA_PRESETS) as TacticianCameraPreset[]).map((pkey) => (
+              <button
+                key={pkey}
+                type="button"
+                data-testid={`camera-preset-${pkey}`}
+                onClick={() => handleSelectPreset(pkey)}
+                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
+                  activePreset === pkey
+                    ? "bg-emerald-500 text-slate-950 font-bold shadow-sm"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                {CAMERA_PRESETS[pkey].label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Floating Manager Hover Tooltip */}
+      {isHovered && (
+        <div
+          data-testid="manager-hover-tooltip"
+          className="pointer-events-none absolute bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-xl border border-emerald-500/40 bg-slate-950/90 px-4 py-2 text-center shadow-xl backdrop-blur-md animate-fade-in"
+        >
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
+            <span className="text-xs font-bold text-white">First-Team Manager</span>
+            <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">
+              Tactician Suite
+            </span>
+          </div>
+          <p className="mt-0.5 text-[10px] text-slate-400">Click manager to discuss tactics and alignment</p>
+        </div>
+      )}
+
+      {/* Bottom Action Pill */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-center justify-between border-t border-white/10 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent p-4">
+        <button
+          type="button"
+          data-testid="open-manager-dialogue-btn"
+          onClick={() => setIsModalOpen(true)}
+          className="pointer-events-auto flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-300 transition-all hover:bg-emerald-500/20"
+        >
+          <Users className="h-4 w-4" />
+          <span>Converse with Manager</span>
+        </button>
+      </div>
+
+      <PersonaSpatialInteractionModal
+        clubId={clubId}
+        personaRole="first_team_manager"
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+      />
+    </div>
+  );
+};
+
+// Register custom Three.js renderer in GtexSceneRegistry for tactician_suite
+GtexSceneRegistry.registerRenderer("tactician_suite", TacticianSuiteScene);

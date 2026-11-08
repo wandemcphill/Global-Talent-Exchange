@@ -352,6 +352,18 @@ const INITIAL_SCENE_CATALOG: GtexSceneDescriptor[] = [
     tags: ["boardroom", "gm", "owner", "executive", "budget"],
   },
   {
+    id: "tactician_suite",
+    title: "Manager Tactician War Room",
+    category: "club",
+    description: "Manager's tactical command center with glowing magnetic formation board and dugout tunnel view.",
+    renderBackend: "threejs",
+    defaultCamera: { position: [0, 2.4, 4.2], target: [0, 2.2, 0], fov: 40 },
+    requiredModels: [],
+    fallbackMode: "2d_diorama",
+    supportsInteraction: true,
+    tags: ["tactics", "manager", "formation", "war_room", "dugout"],
+  },
+  {
     id: "academy_training_pitch",
     title: "Academy Youth Training Ground",
     category: "academy",
