@@ -27,16 +27,21 @@ import {
   formatNairaMinor,
 } from "@/lib/commercial/api";
 
+export interface CommercialPublicPortalProps {
+  division?: "overview" | "brands" | "music";
+  initialTab?: "overview" | "brands" | "music" | "pricing" | "all" | string;
+}
+
 export default function CommercialPublicPortal({
   division,
-}: {
-  division?: "overview" | "brands" | "music";
-} = {}) {
+  initialTab,
+}: CommercialPublicPortalProps = {}) {
   const pathname = typeof window !== "undefined" ? window.location.pathname : "";
+  const tabFromProp = initialTab || division;
   const initialFocus =
-    division === "music" || pathname.includes("/music")
+    tabFromProp === "music" || pathname.includes("/music")
       ? "music"
-      : division === "brands" || pathname.includes("/brands")
+      : tabFromProp === "brands" || pathname.includes("/brands")
         ? "brand"
         : "all";
 
@@ -46,10 +51,10 @@ export default function CommercialPublicPortal({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (division === "music" || pathname.includes("/music")) setActiveTab("music");
-    else if (division === "brands" || pathname.includes("/brands")) setActiveTab("brand");
+    if (tabFromProp === "music" || pathname.includes("/music")) setActiveTab("music");
+    else if (tabFromProp === "brands" || pathname.includes("/brands")) setActiveTab("brand");
     else setActiveTab("all");
-  }, [division, pathname]);
+  }, [division, initialTab, tabFromProp, pathname]);
 
   useEffect(() => {
     let mounted = true;

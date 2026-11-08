@@ -89,15 +89,15 @@ export default function App() {
 
               {/* Dedicated GTEX Commercial Network Public Portal */}
               <Route path="/advertise" element={<CommercialPublicPortal />} />
-              <Route path="/advertise/music" element={<CommercialPublicPortal initialTab="music" />} />
-              <Route path="/advertise/brands" element={<CommercialPublicPortal initialTab="brands" />} />
+              <Route path="/advertise/music" element={<CommercialPublicPortal division="music" initialTab="music" />} />
+              <Route path="/advertise/brands" element={<CommercialPublicPortal division="brands" initialTab="brands" />} />
               <Route path="/advertise/pricing" element={<CommercialPublicPortal initialTab="pricing" />} />
               <Route path="/advertise/login" element={<Navigate to="/advertiser/login" replace />} />
               <Route path="/advertise/register" element={<Navigate to="/advertiser/register" replace />} />
 
               {/* Dedicated Commercial Advertiser Authentication Routes */}
-              <Route path="/advertiser/login" element={<AdvertiserAuthPage initialMode="login" />} />
-              <Route path="/advertiser/register" element={<AdvertiserAuthPage initialMode="register" />} />
+              <Route path="/advertiser/login" element={<AdvertiserAuthPage mode="login" initialMode="login" />} />
+              <Route path="/advertiser/register" element={<AdvertiserAuthPage mode="register" initialMode="register" />} />
 
               {/* Dedicated Independent Advertiser Workspace Management Portal */}
               <Route path="/advertiser" element={<Navigate to="/advertiser/dashboard" replace />} />
