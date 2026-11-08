@@ -836,7 +836,7 @@ def autopick_squad(
 
     current = squad(session, club_id)
     non_regens = [p for p in current if not p.is_regen]
-    desired_total = max(MIN_SQUAD, min(int(target_squad_size or MIN_SQUAD), 25))
+    desired_total = max(11, min(int(target_squad_size), 25)) if target_squad_size is not None else MIN_SQUAD
     slots_needed = desired_total - len(non_regens)
     if slots_needed <= 0:
         return {
@@ -967,6 +967,13 @@ def autopick_squad(
     }
     state.facilities_json = facs
     final_squad = squad(session, club_id)
+    if (
+        target_squad_size
+        and len(final_squad) >= int(target_squad_size)
+        and any(p.position.startswith("goal") for p in final_squad)
+    ):
+        has_custom_manager = bool(state.manager_json and not state.manager_json.get("is_default"))
+        state.stage = "competition" if has_custom_manager else "manager"
     return {
         "signed": signed_results,
         "signed_count": len(signed_results),

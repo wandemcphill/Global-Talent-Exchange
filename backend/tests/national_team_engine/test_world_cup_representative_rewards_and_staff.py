@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from pathlib import Path
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -14,7 +13,7 @@ from app.models import Base
 import app.models  # noqa: F401
 from app.models.club_growth import ClubStaffProfile
 from app.models.club_profile import ClubProfile
-from app.models.national_team import NationalTeamCompetition, NationalTeamCompetitionEntry, NationalTeamEntry
+from app.models.national_team import NationalTeamCompetition, NationalTeamEntry
 from app.models.user import User, UserRole
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
 from app.national_team_engine.competition_lifecycle_service import (
@@ -47,7 +46,7 @@ def _create_user(session, suffix: str, role: UserRole = UserRole.USER) -> User:
         email=f"{suffix}@example.com",
         username=f"user_{suffix}",
         display_name=f"User {suffix}",
-        password_hash="not-used",
+        password_hash="not-used",  # pragma: allowlist secret
         role=role,
     )
     session.add(user)
@@ -416,6 +415,8 @@ def test_club_staff_upfront_fan_coin_and_manager_first_tactical_autopick():
                 full_name=f"Tactical Player {idx}",
                 position=pos,
                 normalized_position=pos,
+                is_real_player=True,
+                is_tradable=True,
             )
             from app.models.base import utcnow
 

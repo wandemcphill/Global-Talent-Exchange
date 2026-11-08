@@ -936,6 +936,7 @@ DOMAIN_MODULES = (
     ),
     _module("match_viewer", router_path="app.routes.match_viewer:router", api_only=True),
     _module("club_identity", router_path="app.club_identity.jerseys.router:router"),
+    _module("club_dna", router_path="app.club_identity.dna_router:router"),
     _module("club_ops_admin", router_path="app.routes.admin_club_ops:router"),
     _module(
         "replay_archive",

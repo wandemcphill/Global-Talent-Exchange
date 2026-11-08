@@ -327,7 +327,7 @@ export default function PublicClubProfile() {
     );
   }
 
-  const { club, owner, stadium, facilities, academy, squad, staff, coach_buses, trophies } = data;
+  const { club, owner, stadium, facilities, academy, squad, staff, coach_buses, trophies, dna, jerseys } = data as any;
   const crest = crestSource(club.crest_url);
   const location = [club.city_name, club.region_name, club.country_code].filter(Boolean).join(" · ");
   const primary = club.primary_color || "#0F766E";
@@ -481,6 +481,116 @@ export default function PublicClubProfile() {
 
       {/* 3. MAIN CONTENT GRID */}
       <div className="mx-auto max-w-[1380px] px-5 py-12 sm:px-8 lg:px-12 lg:py-16 space-y-16">
+
+        {/* SECTION 0: CLUB DNA & CULTURE */}
+        <section aria-labelledby="dna-heading" className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="gx-eyebrow text-emerald-400">Club DNA & Recruitment Philosophy</p>
+              <h2 id="dna-heading" className="gx-display text-3xl font-bold uppercase text-white">
+                Football Culture & Governance
+              </h2>
+            </div>
+            <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-mono font-bold text-emerald-300 border border-emerald-500/20">
+              ENFORCED DNA
+            </span>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-3">
+            <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-6 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Primary Philosophy</span>
+                <h3 className="gx-display text-xl font-black uppercase text-emerald-300 mt-1">
+                  {(dna?.primary_philosophy || "youth_development").replace(/_/g, " ")}
+                </h3>
+                <p className="mt-2 text-xs text-slate-300">
+                  {dna?.vision_narrative || "Dedicated to building sporting success and enduring legacy through elite player development."}
+                </p>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-1.5 pt-3 border-t border-white/10">
+                {(dna?.secondary_philosophies || ["financially_sustainable"]).map((p: string) => (
+                  <span key={p} className="rounded bg-white/5 px-2 py-0.5 text-[10px] uppercase text-slate-300">
+                    {p.replace(/_/g, " ")}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-6 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Recruitment Rules</span>
+                <div className="mt-3 space-y-2.5 text-xs text-slate-200">
+                  <div className="flex items-center justify-between border-b border-white/5 pb-1.5">
+                    <span className="text-slate-400">Age Bracket:</span>
+                    <span className="font-semibold text-white">
+                      {dna?.age_mode === "preferred" && dna?.preferred_max_age ? `Under ${dna.preferred_max_age} (Exceptions Allowed)` : dna?.age_mode === "strict" ? `Strict U${dna.preferred_max_age}` : "All Ages Eligible"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between border-b border-white/5 pb-1.5">
+                    <span className="text-slate-400">Nationality Policy:</span>
+                    <span className="font-semibold text-white capitalize">
+                      {dna?.nationality_mode || "Global Scouting"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Dual-Nationalities:</span>
+                    <span className="font-semibold text-emerald-400">Eligible</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-6 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Economic Strategy</span>
+                <h3 className="gx-display text-xl font-black uppercase text-cyan-300 mt-1">
+                  {(dna?.transfer_strategy || "buy_young_develop_sell").replace(/_/g, " ")}
+                </h3>
+                <p className="mt-2 text-xs text-slate-300">
+                  Financial Model: <b className="text-white capitalize">{(dna?.financial_philosophy || "sustainable").replace(/_/g, " ")}</b>
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-white/10 text-[11px] text-slate-400">
+                Official GTEX Football Universe Club Charter
+              </div>
+            </div>
+          </div>
+
+          {/* Official Matchday Uniforms */}
+          {jerseys && (
+            <div className="mt-6 rounded-2xl border border-white/10 bg-slate-900/40 p-6">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Official Matchday Uniforms
+              </span>
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                {[
+                  { key: "home", label: "Home Kit", kit: jerseys.home },
+                  { key: "away", label: "Away Kit", kit: jerseys.away },
+                  { key: "third", label: "Third Kit", kit: jerseys.third },
+                ].map(({ key, label, kit }) => (
+                  <div key={key} className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/40 p-3">
+                    <div
+                      className="size-12 rounded-lg border border-white/20 shadow-inner flex items-center justify-center font-bold text-xs"
+                      style={{
+                        backgroundColor: kit?.primary_color || primary,
+                        color: kit?.secondary_color || secondary,
+                        borderColor: kit?.accent_color || accent,
+                      }}
+                    >
+                      {key.toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1 text-xs">
+                      <p className="font-bold uppercase text-white">{label}</p>
+                      <p className="text-[11px] text-slate-400 capitalize">
+                        {kit?.pattern_type || "solid"} pattern · {kit?.collar_style || "crew"} collar
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
 
         {/* SECTION A: STADIUM FEATURE */}
         <section aria-labelledby="stadium-heading">

@@ -78,6 +78,28 @@ describe("TacticianSuiteScene", () => {
     expect(container.querySelector('[data-testid="tactician-3d-scene"]')).not.toBeNull();
     expect(container.textContent).toContain("Manager Tactician War Room");
     expect(container.textContent).toContain("FORMATION 4-3-3");
+    expect(container.querySelector('[data-testid="medical-suite-cryo-link"]')?.textContent).toContain(
+      "Medical Link: Cryo Active"
+    );
+
+    // Switch tactical formation to 4-2-3-1
+    const fmtBtn = container.querySelector(
+      '[data-testid="formation-select-4-2-3-1"]'
+    ) as HTMLButtonElement;
+    expect(fmtBtn).not.toBeNull();
+    await act(async () => {
+      fmtBtn.click();
+    });
+    expect(container.textContent).toContain("FORMATION 4-2-3-1");
+
+    // Click Snapshot button
+    const snapshotBtn = container.querySelector(
+      '[data-testid="capture-tactician-snapshot-btn"]'
+    ) as HTMLButtonElement;
+    expect(snapshotBtn).not.toBeNull();
+    await act(async () => {
+      snapshotBtn.click();
+    });
   });
 
   test("switches camera presets smoothly", async () => {

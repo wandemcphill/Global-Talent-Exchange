@@ -36,6 +36,7 @@ import { Showroom } from "@/pages/Showroom";
 import ClubCampus from "@/pages/ClubCampus";
 import Jackpot from "@/pages/Jackpot";
 import AppearanceStudio from "@/pages/AppearanceStudio";
+import ClubIdentityStudio from "@/pages/ClubIdentityStudio";
 import { ClubAuthorityPage } from "@/pages/ClubAuthorityPage";
 import { SkinProvider } from "@/lib/skin-engine";
 import { ROUTER_BASENAME } from "@/lib/publicPath";
@@ -200,6 +201,9 @@ export default function App() {
                 <Route path="admin/advertising/pricing" element={<AdminAdvertising initialSection="pricing" />} />
                 <Route path="admin/advertising/payments" element={<AdminAdvertising initialSection="payments" />} />
                 <Route path="admin/advertising/analytics" element={<AdminAdvertising initialSection="analytics" />} />
+                <Route path="club/studio" element={<ClubIdentityStudio />} />
+                <Route path="clubs/:clubId/studio" element={<ClubIdentityStudio />} />
+                <Route path="settings/kit-studio" element={<ClubIdentityStudio />} />
                 <Route path="settings/appearance" element={<AppearanceStudio />} />
                 <Route path="appearance" element={<Navigate to="/app/settings/appearance" replace />} />
               </Route>

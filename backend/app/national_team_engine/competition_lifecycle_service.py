@@ -22,13 +22,21 @@ from app.ingestion.models import Country, Player
 from app.market.player_eligibility_policy import market_access_payload
 from app.models.admin_rules import AdminRewardRule
 from app.models.base import utcnow
-from app.models.national_team import NationalTeamCompetition, NationalTeamCompetitionEntry
+from app.models.national_team import (
+    NationalTeamCompetition,
+    NationalTeamCompetitionEntry,
+    NationalTeamEntry,
+)
 from app.models.national_team_tournament import RentalContract, RentalContractStatus
 from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.reward_settlement import RewardSettlement
 from app.models.user import User, UserRole
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
-from app.national_team_engine.competition_profiles import default_reward_structure_for, infer_competition_family, profile_for
+from app.national_team_engine.competition_profiles import (
+    default_reward_structure_for,
+    infer_competition_family,
+    profile_for,
+)
 from app.national_team_engine.tournament_service import NationalTeamTournamentService
 from app.reward_engine.service import RewardEngineError, RewardEngineService
 from app.wallets.service import LedgerPosting, WalletService
@@ -73,9 +81,7 @@ class NationalCompetitionLifecycleService:
         country_name = payload.country_name.strip()
         lifecycle_state = self._lifecycle_state(competition)
         locked_rep_ids = set(
-            lifecycle_state.get("qualified_entry_ids")
-            or lifecycle_state.get("representative_entry_ids")
-            or []
+            lifecycle_state.get("qualified_entry_ids") or lifecycle_state.get("representative_entry_ids") or []
         )
         if locked_rep_ids:
             country_rep = next(
@@ -145,9 +151,7 @@ class NationalCompetitionLifecycleService:
 
         country_code = payload.country_code.strip().upper()
         eligible_ids = set(
-            lifecycle_state.get("qualified_entry_ids")
-            or lifecycle_state.get("representative_entry_ids")
-            or []
+            lifecycle_state.get("qualified_entry_ids") or lifecycle_state.get("representative_entry_ids") or []
         )
         entry = self.session.scalar(
             select(NationalTeamCompetitionEntry).where(
@@ -547,8 +551,7 @@ class NationalCompetitionLifecycleService:
         profile = self._competition_profile(competition)
         metadata = dict(competition.metadata_json or {})
         reward_structure = dict(
-            metadata.get("reward_structure")
-            or default_reward_structure_for(profile["family"], profile["age_band"])
+            metadata.get("reward_structure") or default_reward_structure_for(profile["family"], profile["age_band"])
         )
         qual_guaranteed = self._normalize_amount(reward_structure.get("qualification_guaranteed_coin", "250.0000"))
         per_match = dict(reward_structure.get("per_match_coin") or {})
@@ -556,17 +559,14 @@ class NationalCompetitionLifecycleService:
         draw_coin = self._normalize_amount(per_match.get("draw", "60.0000"))
         loss_coin = self._normalize_amount(per_match.get("loss", "30.0000"))
         stage_prog = {
-            k: self._normalize_amount(v)
-            for k, v in dict(reward_structure.get("stage_progression_coin") or {}).items()
+            k: self._normalize_amount(v) for k, v in dict(reward_structure.get("stage_progression_coin") or {}).items()
         }
 
         lifecycle_state = self._lifecycle_state(competition)
         entries = self._ordered_entries(competition)
         entry_map = {e.id: e for e in entries}
         finals_ids = list(
-            lifecycle_state.get("qualified_entry_ids")
-            or lifecycle_state.get("representative_entry_ids")
-            or []
+            lifecycle_state.get("qualified_entry_ids") or lifecycle_state.get("representative_entry_ids") or []
         )
         tournament_result = dict((lifecycle_state.get("stage_results") or {}).get("tournament") or {})
         if not finals_ids and tournament_result:
@@ -646,12 +646,18 @@ class NationalCompetitionLifecycleService:
                     home_id = str(match.get("home_entry_id") or "")
                     away_id = str(match.get("away_entry_id") or "")
                     runner_up_id = away_id if winner_id == home_id else home_id
-                    if winner_id in payouts_by_entry and "champion" not in payouts_by_entry[winner_id]["stages_reached"]:
+                    if (
+                        winner_id in payouts_by_entry
+                        and "champion" not in payouts_by_entry[winner_id]["stages_reached"]
+                    ):
                         payouts_by_entry[winner_id]["stages_reached"].append("champion")
                         champ_bonus = stage_prog.get("champion", Decimal("0.0000"))
                         payouts_by_entry[winner_id]["stage_progression_coin"] += champ_bonus
                         payouts_by_entry[winner_id]["total_gross_coin"] += champ_bonus
-                    if runner_up_id in payouts_by_entry and "runner_up" not in payouts_by_entry[runner_up_id]["stages_reached"]:
+                    if (
+                        runner_up_id in payouts_by_entry
+                        and "runner_up" not in payouts_by_entry[runner_up_id]["stages_reached"]
+                    ):
                         payouts_by_entry[runner_up_id]["stages_reached"].append("runner_up")
                         ru_bonus = stage_prog.get("runner_up", Decimal("0.0000"))
                         payouts_by_entry[runner_up_id]["stage_progression_coin"] += ru_bonus
@@ -1247,18 +1253,33 @@ class NationalCompetitionLifecycleService:
         normalized: list[dict[str, Any]] = []
         country_tokens = self._country_identity_tokens(country_code)
 
+        raw_player_ids = [
+            (
+                str(item.get("player_id") or "").strip()
+                if isinstance(item, dict)
+                else str(getattr(item, "player_id", None) or "").strip()
+            )
+            for item in raw_squad
+        ]
+        valid_player_ids = [pid for pid in raw_player_ids if pid]
+        require_rental_provenance = bool(metadata.get("require_rental_provenance")) or bool(valid_player_ids)
         rented_player_ids: set[str] = set()
         if actor is not None:
-            raw_player_ids = [
-                (
-                    str(item.get("player_id") or "").strip()
-                    if isinstance(item, dict)
-                    else str(getattr(item, "player_id", None) or "").strip()
+            if not require_rental_provenance and self._has_tables(
+                "national_team_rental_contracts",
+                "national_team_entries",
+            ):
+                has_competition_rentals = bool(
+                    self.session.scalar(
+                        select(RentalContract.id).where(RentalContract.tournament_id == competition.id).limit(1)
+                    )
+                    or self.session.scalar(
+                        select(NationalTeamEntry.id).where(NationalTeamEntry.competition_id == competition.id).limit(1)
+                    )
                 )
-                for item in raw_squad
-            ]
-            valid_player_ids = [pid for pid in raw_player_ids if pid]
-            if valid_player_ids:
+                if has_competition_rentals:
+                    require_rental_provenance = True
+            if valid_player_ids and self._has_tables("national_team_rental_contracts"):
                 rental_now = utcnow()
                 rented_player_ids = set(
                     self.session.scalars(
@@ -1327,10 +1348,12 @@ class NationalCompetitionLifecycleService:
                             or " ".join(part for part in [player.first_name, player.last_name] if part)
                             or player.full_name
                         )
-                    if date_of_birth is None:
+                    if player.date_of_birth is not None:
                         date_of_birth = player.date_of_birth
-                    if overall_rating is None:
-                        overall_rating = self._player_rating(player)
+                        explicit_age = None
+                    elif date_of_birth is None:
+                        date_of_birth = player.date_of_birth
+                    overall_rating = self._player_rating(player)
                     if position is None:
                         position = player.normalized_position or player.position
                 elif national_seed is not None:
@@ -1344,16 +1367,22 @@ class NationalCompetitionLifecycleService:
                         )
                     if not player_name:
                         player_name = national_seed.display_name
-                    if explicit_age is None:
-                        explicit_age = self._seed_age(national_seed)
-                    if overall_rating is None:
-                        overall_rating = max(40, min(int(national_seed.current_rating), 99))
+                    seed_age = self._seed_age(national_seed)
+                    if seed_age is not None:
+                        explicit_age = seed_age
+                        date_of_birth = None
+                    overall_rating = max(40, min(int(national_seed.current_rating), 99))
                     if position is None:
                         position = national_seed.primary_position
                     metadata_json = {
                         **metadata_json,
                         **self._seed_market_metadata(national_seed),
                     }
+            elif actor is not None and require_rental_provenance:
+                raise NationalCompetitionLifecycleError(
+                    f"Squad player #{index} must reference an active rented player for this entry.",
+                    reason="player_not_rented",
+                )
             elif not player_name:
                 raise NationalCompetitionLifecycleError(
                     f"Squad player #{index} is missing a player name.",
@@ -1390,6 +1419,11 @@ class NationalCompetitionLifecycleService:
 
     @staticmethod
     def _player_rating(player: Player) -> int:
+        dna = dict(player.dna_profile or {}) if isinstance(player.dna_profile, dict) else {}
+        for key in ("gsi", "overall_rating", "rating"):
+            val = dna.get(key)
+            if isinstance(val, (int, float)) and int(val) > 0:
+                return max(40, min(int(val), 99))
         market_value = float(player.current_market_reference_value or player.market_value_eur or 0.0)
         if market_value >= 90_000_000:
             return 91

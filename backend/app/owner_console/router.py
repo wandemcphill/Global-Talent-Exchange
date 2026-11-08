@@ -2871,3 +2871,139 @@ def post_living_world_tactical_proposal(
             rationale=payload.rationale,
         ),
     )
+
+
+class AnswerCinematicPressQuestionRequest(BaseModel):
+    stance: str = Field(min_length=1, max_length=64)
+    custom_quote: str | None = Field(default=None, max_length=500)
+
+
+class EvaluateStaffPoachingRequest(BaseModel):
+    role: str = Field(default="first_team_manager", max_length=64)
+    rival_club_name: str = Field(default="Continental Sporting FC", max_length=120)
+
+
+class ResolveStaffPoachingRequest(BaseModel):
+    choice: str = Field(min_length=1, max_length=64)
+
+
+class MatchdayConsequenceBridgeRequest(BaseModel):
+    match_outcome: str = Field(default="win", max_length=16)
+    rushed_player_id: str | None = Field(default=None, max_length=64)
+    wonderkid_scorer_id: str | None = Field(default=None, max_length=64)
+    is_away_fixture: bool = Field(default=False)
+
+
+@router.post("/clubs/{club_id}/living-world/cinema-showroom/claim-yield")
+def post_living_world_showroom_claim_yield(
+    club_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_cinema_showroom
+
+    def _op() -> dict[str, Any]:
+        service.require_state(session, club_id, user.id)
+        try:
+            return living_cinema_showroom.claim_showroom_commercial_yield(session, user.id, club_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return _run(session, _op)
+
+
+@router.post("/clubs/{club_id}/living-world/cinema-showroom/{event_id}/press-question")
+def post_living_world_cinematic_press_question(
+    club_id: str,
+    event_id: str,
+    payload: AnswerCinematicPressQuestionRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_cinema_showroom
+
+    def _op() -> dict[str, Any]:
+        service.require_state(session, club_id, user.id)
+        try:
+            return living_cinema_showroom.answer_cinematic_press_question(
+                session,
+                user.id,
+                club_id,
+                event_id=event_id,
+                stance=payload.stance,
+                custom_quote=payload.custom_quote,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return _run(session, _op)
+
+
+@router.post("/clubs/{club_id}/living-world/staff-market/poaching/evaluate")
+def post_living_world_staff_poaching_evaluate(
+    club_id: str,
+    payload: EvaluateStaffPoachingRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_staff_market
+
+    return _run(
+        session,
+        lambda: living_staff_market.evaluate_external_poaching_approach(
+            session,
+            user.id,
+            club_id,
+            role=payload.role,
+            rival_club_name=payload.rival_club_name,
+        ),
+    )
+
+
+@router.post("/clubs/{club_id}/living-world/staff-market/poaching/{event_id}/resolve")
+def post_living_world_staff_poaching_resolve(
+    club_id: str,
+    event_id: str,
+    payload: ResolveStaffPoachingRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_staff_market
+
+    return _run(
+        session,
+        lambda: living_staff_market.resolve_external_poaching_approach(
+            session,
+            user.id,
+            club_id,
+            event_id=event_id,
+            choice=payload.choice,
+        ),
+    )
+
+
+@router.post("/clubs/{club_id}/living-world/politics/matchday-bridge")
+def post_living_world_politics_matchday_bridge(
+    club_id: str,
+    payload: MatchdayConsequenceBridgeRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_politics_engine
+
+    def _op() -> dict[str, Any]:
+        service.require_state(session, club_id, user.id)
+        try:
+            return living_politics_engine.process_matchday_consequence_bridge(
+                session,
+                user.id,
+                club_id,
+                match_outcome=payload.match_outcome,
+                rushed_player_id=payload.rushed_player_id,
+                wonderkid_scorer_id=payload.wonderkid_scorer_id,
+                is_away_fixture=payload.is_away_fixture,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return _run(session, _op)

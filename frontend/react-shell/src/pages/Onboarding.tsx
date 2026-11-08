@@ -805,11 +805,92 @@ function CompetitionStep({ clubId, onDone }: any) {
 }
 
 function CreateFirstClub({ onDone, onCancel }: any) {
+  const [wizardStep, setWizardStep] = useState<"name" | "philosophy" | "roster" | "studio" | "review">("name");
   const [name, setName] = useState("");
   const loc = useClubLocation();
   const [busy, setBusy] = useState(false);
+  const [aiGenerating, setAiGenerating] = useState(false);
+
+  // Philosophy & DNA settings
+  const [recruitmentFocus, setRecruitmentFocus] = useState("youth");
+  const [preferredAgeBracket, setPreferredAgeBracket] = useState("U23");
+  const [nationalityFocus, setNationalityFocus] = useState("preferred");
+  const [preferredStyle, setPreferredStyle] = useState("traditional");
+
+  // AI Studio recommendations
+  const [recommendation, setRecommendation] = useState<any>(null);
+  const [selectedCrestIdx, setSelectedCrestIdx] = useState(0);
+  const [selectedKitTab, setSelectedKitTab] = useState<"home" | "away" | "third" | "goalkeeper">("home");
+  const [kitSet, setKitSet] = useState<any>(null);
+  const [conversationalPrompt, setConversationalPrompt] = useState("");
+  const [aiEditSummary, setAiEditSummary] = useState("");
+
   const location = loc.validation;
   const clubName = name.trim();
+
+  // Call AI Studio Recommendation API
+  const handleGenerateIdentity = async () => {
+    if (clubName.length < 3) {
+      toast.error("Enter a club name with at least 3 characters.");
+      return;
+    }
+    setAiGenerating(true);
+    try {
+      const countryCode = "countryCode" in location ? location.countryCode : "FRA";
+      const cityName = "cityName" in location ? location.cityName : "Paris";
+      const { data } = await api.post("/clubs/studio/recommend", {
+        club_name: clubName,
+        country_code: countryCode,
+        city_name: cityName,
+        preferred_style: preferredStyle,
+        recruitment_focus: recruitmentFocus,
+        preferred_age_bracket: preferredAgeBracket,
+        nationality_focus: nationalityFocus,
+      });
+      setRecommendation(data);
+      setKitSet(data.kit_concepts);
+      setSelectedCrestIdx(0);
+      setWizardStep("studio");
+      toast.success("AI Club Identity & DNA Studio generated concepts!");
+    } catch (e) {
+      toast.error(errMsg(e));
+      setWizardStep("review");
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  // Conversational AI edit
+  const handleConversationalEdit = async () => {
+    if (!conversationalPrompt.trim() || !kitSet || !recommendation) return;
+    setAiGenerating(true);
+    try {
+      const currentKit = kitSet[selectedKitTab];
+      const currentCrest = recommendation.crest_concepts[selectedCrestIdx];
+      const { data } = await api.post("/clubs/studio/edit", {
+        current_kit: currentKit,
+        current_crest: currentCrest,
+        instruction: conversationalPrompt.trim(),
+      });
+      setKitSet((prev: any) => ({
+        ...prev,
+        [selectedKitTab]: { ...prev[selectedKitTab], ...data.kit },
+      }));
+      setRecommendation((prev: any) => {
+        const nextCrests = [...prev.crest_concepts];
+        nextCrests[selectedCrestIdx] = { ...nextCrests[selectedCrestIdx], ...data.crest };
+        return { ...prev, crest_concepts: nextCrests };
+      });
+      setAiEditSummary(data.summary);
+      setConversationalPrompt("");
+      toast.success(data.summary || "Design updated!");
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
   const create = async () => {
     if (clubName.length < 3) {
       toast.error("Enter a club name with at least 3 characters.");
@@ -823,15 +904,109 @@ function CreateFirstClub({ onDone, onCancel }: any) {
     setBusy(true);
     try {
       const slug = `${clubName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString(36).slice(-4)}`;
+      const activeCrest = recommendation?.crest_concepts?.[selectedCrestIdx];
+      const homeKit = kitSet?.home;
+
+      const primaryColor = activeCrest?.primary_color || homeKit?.primary_color || "#0F766E";
+      const secondaryColor = activeCrest?.secondary_color || homeKit?.secondary_color || "#F8FAFC";
+      const accentColor = activeCrest?.accent_color || homeKit?.accent_color || "#F59E0B";
+
+      const dnaPayload = recommendation ? {
+        primary_philosophy: recommendation.primary_philosophy,
+        secondary_philosophies: recommendation.secondary_philosophies,
+        nationality_mode: recommendation.nationality_mode,
+        target_nationalities: recommendation.target_nationalities,
+        allow_dual_nationality: true,
+        age_mode: recommendation.age_mode,
+        preferred_max_age: recommendation.preferred_max_age,
+        allow_age_exceptions: true,
+        transfer_strategy: recommendation.transfer_strategy,
+        financial_philosophy: recommendation.financial_philosophy,
+        club_vision_narrative: recommendation.vision_narrative,
+      } : {
+        primary_philosophy: recruitmentFocus === "academy" ? "academy_first" : recruitmentFocus === "selling" ? "selling_club" : "youth_development",
+        secondary_philosophies: ["financially_sustainable"],
+        nationality_mode: nationalityFocus,
+        target_nationalities: [],
+        allow_dual_nationality: true,
+        age_mode: preferredAgeBracket === "none" ? "none" : "preferred",
+        preferred_max_age: preferredAgeBracket === "none" ? null : parseInt(preferredAgeBracket.replace("U", ""), 10),
+        allow_age_exceptions: true,
+        transfer_strategy: "buy_young_develop_sell",
+        financial_philosophy: "sustainable",
+      };
+
+      const badgePayload = activeCrest ? {
+        shape: activeCrest.shape,
+        icon_family: activeCrest.icon_family,
+        primary_color: activeCrest.primary_color,
+        secondary_color: activeCrest.secondary_color,
+        accent_color: activeCrest.accent_color,
+        initials: activeCrest.initials,
+        trophy_star_count: activeCrest.trophy_stars,
+        badge_url: activeCrest.data_uri,
+      } : null;
+
+      const jerseyPayload = kitSet ? {
+        home: {
+          primary_color: kitSet.home.primary_color,
+          secondary_color: kitSet.home.secondary_color,
+          accent_color: kitSet.home.accent_color,
+          pattern_type: kitSet.home.pattern_type,
+          collar_style: kitSet.home.collar_style,
+          sleeve_style: kitSet.home.sleeve_style,
+          shorts_color: kitSet.home.shorts_color,
+          socks_color: kitSet.home.socks_color,
+          front_text: kitSet.home.front_text,
+        },
+        away: {
+          primary_color: kitSet.away.primary_color,
+          secondary_color: kitSet.away.secondary_color,
+          accent_color: kitSet.away.accent_color,
+          pattern_type: kitSet.away.pattern_type,
+          collar_style: kitSet.away.collar_style,
+          sleeve_style: kitSet.away.sleeve_style,
+          shorts_color: kitSet.away.shorts_color,
+          socks_color: kitSet.away.socks_color,
+          front_text: kitSet.away.front_text,
+        },
+        third: {
+          primary_color: kitSet.third.primary_color,
+          secondary_color: kitSet.third.secondary_color,
+          accent_color: kitSet.third.accent_color,
+          pattern_type: kitSet.third.pattern_type,
+          collar_style: kitSet.third.collar_style,
+          sleeve_style: kitSet.third.sleeve_style,
+          shorts_color: kitSet.third.shorts_color,
+          socks_color: kitSet.third.socks_color,
+          front_text: kitSet.third.front_text,
+        },
+        goalkeeper: {
+          primary_color: kitSet.goalkeeper.primary_color,
+          secondary_color: kitSet.goalkeeper.secondary_color,
+          accent_color: kitSet.goalkeeper.accent_color,
+          pattern_type: kitSet.goalkeeper.pattern_type,
+          collar_style: kitSet.goalkeeper.collar_style,
+          sleeve_style: kitSet.goalkeeper.sleeve_style,
+          shorts_color: kitSet.goalkeeper.shorts_color,
+          socks_color: kitSet.goalkeeper.socks_color,
+          front_text: kitSet.goalkeeper.front_text,
+        },
+      } : null;
+
       await api.post("/clubs", {
         club_name: clubName,
         slug,
-        short_name: clubName.slice(0, 12),
-        primary_color: "#0F766E",
-        secondary_color: "#F8FAFC",
-        accent_color: "#F59E0B",
+        short_name: (activeCrest?.initials || clubName.slice(0, 12)).toUpperCase(),
+        crest_asset_ref: activeCrest?.data_uri || null,
+        primary_color: primaryColor,
+        secondary_color: secondaryColor,
+        accent_color: accentColor,
         ...clubLocationPayload(validatedLocation),
         club_type: "community",
+        dna_policy: dnaPayload,
+        badge_profile: badgePayload,
+        jersey_set: jerseyPayload,
       });
       onDone();
     } catch (e) {
@@ -840,41 +1015,418 @@ function CreateFirstClub({ onDone, onCancel }: any) {
       setBusy(false);
     }
   };
+
   return (
     <div
-      className="gx-pitch-grid flex min-h-screen items-center justify-center bg-[#070B11] px-4"
+      className="gx-pitch-grid flex min-h-screen items-center justify-center bg-[#070B11] px-4 py-8"
       data-testid="create-first-club"
     >
-      <Panel eyebrow="First-club activation" title="Name your club" className="w-full max-w-lg">
-        <input
-          data-testid="first-club-name-input"
-          aria-label="Club name"
-          className="gx-input"
-          placeholder="Club name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <div className="mt-3">
-          <ClubLocationFields state={loc} testIdPrefix="first-club" disabled={busy} />
+      <div className="w-full max-w-2xl">
+        {/* Step Indicator Header */}
+        <div className="mb-4 flex items-center justify-between text-xs text-slate-400">
+          <span className="font-semibold uppercase tracking-wider text-emerald-400">
+            GTEX Club Identity & DNA Studio
+          </span>
+          <div className="flex items-center gap-1.5">
+            {["name", "philosophy", "roster", "studio", "review"].map((step, idx) => (
+              <span
+                key={step}
+                className={`h-1.5 w-6 rounded-full transition-colors ${
+                  wizardStep === step ? "bg-emerald-400" : "bg-white/10"
+                }`}
+              />
+            ))}
+          </div>
         </div>
-        <Btn
-          className="mt-4 w-full"
-          disabled={clubName.length < 3 || !location.valid || busy}
-          onClick={create}
-          data-testid="first-club-create-button"
-        >
-          Create club
-        </Btn>
-        <Btn
-          className="mt-2 w-full"
-          variant="ghost"
-          disabled={busy}
-          onClick={onCancel}
-          data-testid="skip-club-creation-button"
-        >
-          Not now — explore GTEX first
-        </Btn>
-      </Panel>
+
+        {/* Wizard Step 1: Club Name & Location */}
+        {wizardStep === "name" && (
+          <Panel eyebrow="Step 1 of 5 · Official Registry" title="Name your football club" className="w-full">
+            <p className="mb-4 text-xs text-slate-300">
+              Establish your club's legal name and home metropolitan region.
+            </p>
+            <input
+              data-testid="first-club-name-input"
+              aria-label="Club name"
+              className="gx-input text-base font-semibold"
+              placeholder="e.g., Olympique Belleville or Real Madrid"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <div className="mt-4">
+              <ClubLocationFields state={loc} testIdPrefix="first-club" disabled={busy} />
+            </div>
+
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+              <Btn
+                className="flex-1"
+                disabled={clubName.length < 3 || !location.valid || busy}
+                onClick={() => setWizardStep("philosophy")}
+                data-testid="first-club-next-philosophy"
+              >
+                Next: Football Philosophy & Culture →
+              </Btn>
+              <Btn
+                variant="ghost"
+                disabled={clubName.length < 3 || !location.valid || busy}
+                onClick={create}
+                data-testid="first-club-create-button"
+              >
+                Quick Create (Default Kit)
+              </Btn>
+            </div>
+            <Btn
+              className="mt-2 w-full"
+              variant="ghost"
+              disabled={busy}
+              onClick={onCancel}
+              data-testid="skip-club-creation-button"
+            >
+              Not now — explore GTEX first
+            </Btn>
+          </Panel>
+        )}
+
+        {/* Wizard Step 2: Philosophy & Recruitment Culture */}
+        {wizardStep === "philosophy" && (
+          <Panel eyebrow="Step 2 of 5 · Club DNA" title="Choose your football philosophy" className="w-full">
+            <p className="mb-4 text-xs text-slate-300">
+              Your recruitment culture shapes squad building, scouting algorithms, and transfer market policies.
+            </p>
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+              {[
+                { id: "youth", title: "Youth Development", desc: "Nurture prodigies with high potential and structured minutes." },
+                { id: "academy", title: "Academy-First", desc: "Organic domestic academy talent graduating into the first team." },
+                { id: "selling", title: "Selling Club", desc: "Discover undervalued gems, polish their market value, sell at high margins." },
+                { id: "superstars", title: "Superstar Club", desc: "Target high-profile global icons to compete at the absolute summit." },
+                { id: "sustainable", title: "Financially Sustainable", desc: "Data-driven scouting with prudent contracts and balanced budgets." },
+                { id: "balanced", title: "Balanced Approach", desc: "Blend youth academy prospects with proven domestic pros." },
+              ].map((phil) => (
+                <div
+                  key={phil.id}
+                  onClick={() => setRecruitmentFocus(phil.id)}
+                  className={`cursor-pointer rounded border p-3 transition-all ${
+                    recruitmentFocus === phil.id
+                      ? "border-emerald-500 bg-emerald-500/10 shadow-lg shadow-emerald-500/10"
+                      : "border-white/10 bg-slate-900/40 hover:border-white/20"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-white">{phil.title}</span>
+                    {recruitmentFocus === phil.id && <Check size={14} className="text-emerald-400" />}
+                  </div>
+                  <p className="mt-1 text-xs text-slate-400">{phil.desc}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 flex items-center justify-between">
+              <Btn variant="ghost" onClick={() => setWizardStep("name")}>
+                ← Back
+              </Btn>
+              <Btn onClick={() => setWizardStep("roster")}>
+                Next: Age & Nationality Policies →
+              </Btn>
+            </div>
+          </Panel>
+        )}
+
+        {/* Wizard Step 3: Roster Policy & Restrictions */}
+        {wizardStep === "roster" && (
+          <Panel eyebrow="Step 3 of 5 · Roster Governance" title="Define recruitment boundaries" className="w-full">
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                  Target Squad Age Profile
+                </label>
+                <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
+                  {["U18", "U21", "U23", "U25", "U27", "none"].map((age) => (
+                    <button
+                      type="button"
+                      key={age}
+                      onClick={() => setPreferredAgeBracket(age)}
+                      className={`rounded border py-2 text-xs font-semibold transition-colors ${
+                        preferredAgeBracket === age
+                          ? "border-emerald-500 bg-emerald-500/20 text-emerald-300"
+                          : "border-white/10 bg-slate-900/50 text-slate-400 hover:border-white/20"
+                      }`}
+                    >
+                      {age === "none" ? "All Ages" : age}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                  Nationality Recruitment Policy
+                </label>
+                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  {[
+                    { id: "preferred", label: "Preferred Domestic", desc: "Prioritizes domestic talent, allows foreign signings" },
+                    { id: "exclusive", label: "Exclusive Domestic", desc: "Restricted strictly to domestic & dual-nationals" },
+                    { id: "none", label: "Global Scouting", desc: "Zero geographic restrictions" },
+                  ].map((nat) => (
+                    <div
+                      key={nat.id}
+                      onClick={() => setNationalityFocus(nat.id)}
+                      className={`cursor-pointer rounded border p-2.5 text-xs transition-colors ${
+                        nationalityFocus === nat.id
+                          ? "border-emerald-500 bg-emerald-500/10 text-emerald-200"
+                          : "border-white/10 bg-slate-900/50 text-slate-400 hover:border-white/20"
+                      }`}
+                    >
+                      <p className="font-semibold text-white">{nat.label}</p>
+                      <p className="mt-1 text-[11px] text-slate-400">{nat.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                  Visual Crest Design Style
+                </label>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {[
+                    { id: "traditional", label: "Traditional", desc: "Classic shield & sovereign heritage" },
+                    { id: "modern", label: "Modern Roundel", desc: "Sleek roundel & athletic icons" },
+                    { id: "metallic", label: "Metallic Diamond", desc: "Rhombus badge with gold accents" },
+                  ].map((s) => (
+                    <button
+                      type="button"
+                      key={s.id}
+                      onClick={() => setPreferredStyle(s.id)}
+                      className={`rounded border p-2 text-left text-xs transition-colors ${
+                        preferredStyle === s.id
+                          ? "border-amber-400 bg-amber-400/10 text-amber-200"
+                          : "border-white/10 bg-slate-900/50 text-slate-400"
+                      }`}
+                    >
+                      <span className="block font-semibold text-white">{s.label}</span>
+                      <span className="text-[10px] text-slate-400">{s.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-between">
+              <Btn variant="ghost" onClick={() => setWizardStep("philosophy")}>
+                ← Back
+              </Btn>
+              <Btn
+                disabled={aiGenerating}
+                onClick={handleGenerateIdentity}
+                data-testid="generate-ai-studio-proposal"
+              >
+                {aiGenerating ? "Generating 3D Studio Concepts…" : "✨ Generate AI Studio Concepts →"}
+              </Btn>
+            </div>
+          </Panel>
+        )}
+
+        {/* Wizard Step 4: AI Crest & Kit Studio */}
+        {wizardStep === "studio" && recommendation && (
+          <Panel eyebrow="Step 4 of 5 · Studio Proposals" title="Select your club badge & uniforms" className="w-full">
+            {/* Vision Narrative Card */}
+            <div className="mb-5 rounded border border-emerald-500/30 bg-emerald-950/20 p-3.5 text-xs">
+              <div className="flex items-center gap-2 font-semibold text-emerald-300">
+                <Sparkles size={14} />
+                <span>AI Vision Charter</span>
+              </div>
+              <p className="mt-1 text-slate-300 italic">{recommendation.vision_narrative}</p>
+            </div>
+
+            {/* 3 Crest Concepts */}
+            <div className="mb-6">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                Choose Primary Club Crest (Vector SVG)
+              </label>
+              <div className="mt-2.5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {recommendation.crest_concepts.map((concept: any, idx: number) => (
+                  <div
+                    key={concept.concept_id}
+                    onClick={() => setSelectedCrestIdx(idx)}
+                    className={`cursor-pointer rounded border p-3 text-center transition-all ${
+                      selectedCrestIdx === idx
+                        ? "border-emerald-500 bg-emerald-500/15 ring-2 ring-emerald-500/30"
+                        : "border-white/10 bg-slate-900/40 hover:border-white/25"
+                    }`}
+                  >
+                    <div className="mx-auto flex h-24 w-24 items-center justify-center p-1">
+                      <img src={concept.data_uri} alt={concept.concept_id} className="h-full w-full object-contain" />
+                    </div>
+                    <p className="mt-2 text-xs font-semibold uppercase text-white">{concept.style} {concept.shape}</p>
+                    <p className="mt-1 text-[11px] text-slate-400 line-clamp-2">{concept.visual_meaning}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Kit Preview Tabs */}
+            {kitSet && (
+              <div className="mb-6">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                    Matchday Uniforms (4 Concept Kit Set)
+                  </label>
+                  <div className="flex gap-1 text-[11px]">
+                    {(["home", "away", "third", "goalkeeper"] as const).map((tab) => (
+                      <button
+                        type="button"
+                        key={tab}
+                        onClick={() => setSelectedKitTab(tab)}
+                        className={`rounded px-2.5 py-1 font-semibold uppercase transition-colors ${
+                          selectedKitTab === tab
+                            ? "bg-emerald-500 text-white"
+                            : "bg-slate-800 text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        {tab}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {kitSet[selectedKitTab] && (
+                  <div className="mt-2.5 flex items-center gap-4 rounded border border-white/10 bg-slate-900/60 p-4">
+                    <div
+                      className="flex h-20 w-20 shrink-0 items-center justify-center rounded-sm border border-white/20 shadow-inner"
+                      style={{
+                        backgroundColor: kitSet[selectedKitTab].primary_color,
+                        borderColor: kitSet[selectedKitTab].accent_color,
+                      }}
+                    >
+                      <span
+                        className="text-lg font-black tracking-widest"
+                        style={{ color: kitSet[selectedKitTab].secondary_color }}
+                      >
+                        {recommendation.short_code}
+                      </span>
+                    </div>
+
+                    <div className="min-w-0 flex-1 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold uppercase text-white">{selectedKitTab} Kit</span>
+                        <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-slate-300 uppercase">
+                          {kitSet[selectedKitTab].pattern_type} pattern
+                        </span>
+                        <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-slate-300 uppercase">
+                          {kitSet[selectedKitTab].collar_style} collar
+                        </span>
+                      </div>
+                      <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-400">
+                        <span>Colors:</span>
+                        <span className="h-3.5 w-3.5 rounded-full border border-white/30" style={{ backgroundColor: kitSet[selectedKitTab].primary_color }} title="Primary" />
+                        <span className="h-3.5 w-3.5 rounded-full border border-white/30" style={{ backgroundColor: kitSet[selectedKitTab].secondary_color }} title="Secondary" />
+                        <span className="h-3.5 w-3.5 rounded-full border border-white/30" style={{ backgroundColor: kitSet[selectedKitTab].accent_color }} title="Trim" />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Conversational Design Assistant */}
+            <div className="mb-4 rounded border border-white/10 bg-slate-950/50 p-3">
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                💬 Conversational AI Design Assistant
+              </label>
+              <div className="mt-2 flex gap-2">
+                <input
+                  className="gx-input flex-1 text-xs"
+                  placeholder="e.g., make the home kit vertical stripes and navy blue with gold trims"
+                  value={conversationalPrompt}
+                  onChange={(e) => setConversationalPrompt(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleConversationalEdit()}
+                />
+                <Btn
+                  variant="secondary"
+                  disabled={aiGenerating || !conversationalPrompt.trim()}
+                  onClick={handleConversationalEdit}
+                >
+                  Apply
+                </Btn>
+              </div>
+              {aiEditSummary && (
+                <p className="mt-1.5 text-[11px] text-emerald-400">✓ {aiEditSummary}</p>
+              )}
+            </div>
+
+            <div className="mt-6 flex items-center justify-between">
+              <Btn variant="ghost" onClick={() => setWizardStep("roster")}>
+                ← Back
+              </Btn>
+              <Btn onClick={() => setWizardStep("review")} data-testid="proceed-to-charter-review">
+                Review Founding Charter →
+              </Btn>
+            </div>
+          </Panel>
+        )}
+
+        {/* Wizard Step 5: Final Review & Activation */}
+        {wizardStep === "review" && (
+          <Panel eyebrow="Step 5 of 5 · Official Charter" title={`Founding Charter: ${clubName}`} className="w-full">
+            <div className="mb-5 space-y-3">
+              <div className="flex items-center gap-4 rounded border border-white/10 bg-slate-900/60 p-4">
+                {recommendation?.crest_concepts?.[selectedCrestIdx]?.data_uri && (
+                  <img
+                    src={recommendation.crest_concepts[selectedCrestIdx].data_uri}
+                    alt="Crest"
+                    className="h-16 w-16 object-contain"
+                  />
+                )}
+                <div>
+                  <h3 className="text-lg font-bold text-white">{clubName}</h3>
+                  <p className="text-xs text-slate-400">
+                    {recommendation?.vision_narrative || "Official GTEX Franchise"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded border border-white/10 bg-slate-950/50 p-3">
+                  <span className="text-[10px] uppercase text-slate-400">Philosophy</span>
+                  <p className="mt-0.5 font-semibold text-emerald-300 capitalize">
+                    {(recommendation?.primary_philosophy || recruitmentFocus).replace(/_/g, " ")}
+                  </p>
+                </div>
+                <div className="rounded border border-white/10 bg-slate-950/50 p-3">
+                  <span className="text-[10px] uppercase text-slate-400">Transfer Strategy</span>
+                  <p className="mt-0.5 font-semibold text-cyan-300 capitalize">
+                    {(recommendation?.transfer_strategy || "buy_young_develop_sell").replace(/_/g, " ")}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-slate-300">
+                <span className="font-semibold text-emerald-400">Owner Activation Package:</span>
+                <p className="mt-0.5 text-slate-400">
+                  Unlocks <b>100,000 GTX</b> launch grant in the club treasury plus <b>1,000 FAN</b> Fan Coin for gifting.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Btn
+                className="w-full"
+                disabled={clubName.length < 3 || !location.valid || busy}
+                onClick={create}
+                data-testid="first-club-create-button"
+              >
+                {busy ? "Sealing Founding Charter…" : "Seal Founding Charter & Acquire Club 🏆"}
+              </Btn>
+              <Btn
+                variant="ghost"
+                onClick={() => setWizardStep(recommendation ? "studio" : "name")}
+              >
+                ← Back to Studio Editor
+              </Btn>
+            </div>
+          </Panel>
+        )}
+      </div>
     </div>
   );
 }

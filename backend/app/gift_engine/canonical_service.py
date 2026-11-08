@@ -250,6 +250,9 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
         except SpendingControlViolation as exc:
             raise GiftEngineError(exc.detail, reason="spending_controls_blocked") from exc
 
+        sender_label = sender.display_name or sender.username or "A supporter"
+        recipient_label = recipient.display_name or recipient.username or "recipient"
+
         transaction = GiftTransaction(
             id=generate_uuid(),
             sender_user_id=sender.id,
@@ -290,6 +293,10 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                 "fee_policy_version": split.policy_version,
                 "recipient_profile_id": recipient.id,
                 "recipient_club_id": recipient_club_id,
+                "club_id": recipient_club_id,
+                "sender_display_name": sender_label,
+                "recipient_display_name": recipient_label,
+                "duration_ms": getattr(gift, "duration_ms", 3000),
                 "identity_semantics": "profile_is_canonical_sender_recipient_identity_club_is_context_only",
             },
         )

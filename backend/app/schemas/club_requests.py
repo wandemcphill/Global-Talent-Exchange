@@ -31,6 +31,9 @@ class ClubCreateRequest(CommonSchema):
     club_type: str | None = Field(default=None, max_length=40)
     visibility: ClubIdentityVisibility = ClubIdentityVisibility.PUBLIC
     founded_at: date | None = None
+    dna_policy: dict[str, Any] | None = None
+    badge_profile: dict[str, Any] | None = None
+    jersey_set: dict[str, Any] | None = None
 
 
 class ClubUpdateRequest(CommonSchema):

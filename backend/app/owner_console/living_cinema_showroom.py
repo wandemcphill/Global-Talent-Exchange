@@ -13,13 +13,15 @@ Implements:
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.club_profile import ClubProfile
-from app.owner_console import living_club_world, storytelling
+from app.owner_console import ledger, living_club_world, storytelling
 from app.owner_console.models import (
     OwnerClubEvent,
     OwnerClubState,
@@ -237,6 +239,200 @@ SHOWROOM_3D_MESH_ARCHETYPES: dict[str, dict[str, Any]] = {
     },
 }
 
+SHOWROOM_OPERATIONAL_PERKS: dict[str, dict[str, Any]] = {
+    "sovereign_900x_jet": {
+        "perk_label": "Intercontinental Aviation Advantage",
+        "recruitment_wage_bonus_pct": 6.0,
+        "away_recovery_boost_days": 1,
+        "squad_morale_floor_bonus": 2,
+        "matchday_commercial_yield_base_gtex": 180,
+        "vip_transport_tier": 3,
+    },
+    "gulfstream_g700_exec_jet": {
+        "perk_label": "Flagship Global Charter Advantage",
+        "recruitment_wage_bonus_pct": 7.5,
+        "away_recovery_boost_days": 1,
+        "squad_morale_floor_bonus": 2,
+        "matchday_commercial_yield_base_gtex": 220,
+        "vip_transport_tier": 4,
+    },
+    "vanguard_xii_coach": {
+        "perk_label": "First-Team Matchday Transit Recovery",
+        "recruitment_wage_bonus_pct": 2.0,
+        "away_recovery_boost_days": 1,
+        "squad_morale_floor_bonus": 3,
+        "matchday_commercial_yield_base_gtex": 65,
+        "vip_transport_tier": 1,
+    },
+    "executive_suv_command": {
+        "perk_label": "Executive Arrival & Convoy Security",
+        "recruitment_wage_bonus_pct": 3.0,
+        "away_recovery_boost_days": 0,
+        "squad_morale_floor_bonus": 1,
+        "matchday_commercial_yield_base_gtex": 55,
+        "vip_transport_tier": 2,
+    },
+    "veloce_gt9_hypercar": {
+        "perk_label": "Marquee Star Attraction & Brand Aura",
+        "recruitment_wage_bonus_pct": 4.0,
+        "away_recovery_boost_days": 0,
+        "squad_morale_floor_bonus": 2,
+        "matchday_commercial_yield_base_gtex": 95,
+        "vip_transport_tier": 2,
+    },
+    "chronos_tourbillon_watch": {
+        "perk_label": "Executive Honours & Loyalty Dividend",
+        "recruitment_wage_bonus_pct": 1.5,
+        "away_recovery_boost_days": 0,
+        "squad_morale_floor_bonus": 1,
+        "matchday_commercial_yield_base_gtex": 120,
+        "vip_transport_tier": 0,
+    },
+}
+
+
+def resolve_asset_operational_perk(catalog_key: str, category: str = "") -> dict[str, Any]:
+    if catalog_key in SHOWROOM_OPERATIONAL_PERKS:
+        return dict(SHOWROOM_OPERATIONAL_PERKS[catalog_key])
+    cat_lower = (category or "").lower()
+    if cat_lower in ("hospitality", "suite", "box"):
+        return {
+            "perk_label": "VIP Matchday Hospitality Yield",
+            "recruitment_wage_bonus_pct": 2.0,
+            "away_recovery_boost_days": 0,
+            "squad_morale_floor_bonus": 1,
+            "matchday_commercial_yield_base_gtex": 150,
+            "vip_transport_tier": 0,
+        }
+    return {
+        "perk_label": "Club Prestige & Commercial Aura",
+        "recruitment_wage_bonus_pct": 1.5,
+        "away_recovery_boost_days": 0,
+        "squad_morale_floor_bonus": 1,
+        "matchday_commercial_yield_base_gtex": 75,
+        "vip_transport_tier": 0,
+    }
+
+
+def compute_club_showroom_perks(session: Session, club_id: str) -> dict[str, Any]:
+    """
+    Computes the authoritative gameplay & operational perks granted by the club's
+    currently owned Prestige Showroom assets.
+    """
+    state = session.get(OwnerClubState, club_id)
+    owned_rows = list(
+        session.scalars(
+            select(OwnerShowroomAsset).where(
+                OwnerShowroomAsset.club_id == club_id,
+                OwnerShowroomAsset.status.in_(["active", "gifted"]),
+            )
+        ).all()
+    )
+    facs = dict((state.facilities_json if state else None) or {})
+    politics = dict(facs.get("_club_politics") or {})
+    fan_sentiment = int(politics.get("supporter_confidence") or 60)
+    sentiment_multiplier = round(max(0.6, min(1.75, fan_sentiment / 60.0)), 2)
+
+    total_wage_bonus_pct = 0.0
+    total_recovery_days = 0
+    total_morale_bonus = 0
+    total_yield_base = 0
+    best_vip_transport: dict[str, Any] | None = None
+    best_vip_tier = 0
+    breakdown: list[dict[str, Any]] = []
+
+    seen_keys: set[str] = set()
+    for row in owned_rows:
+        if row.catalog_key in seen_keys:
+            continue
+        seen_keys.add(row.catalog_key)
+        cat_item = storytelling.SHOWROOM_CATALOG.get(row.catalog_key, {})
+        perk = resolve_asset_operational_perk(row.catalog_key, row.category or cat_item.get("category", ""))
+        archetype = SHOWROOM_3D_MESH_ARCHETYPES.get(row.catalog_key, {"mesh_archetype": "luxury_object"})
+
+        total_wage_bonus_pct += float(perk["recruitment_wage_bonus_pct"])
+        total_recovery_days += int(perk["away_recovery_boost_days"])
+        total_morale_bonus += int(perk["squad_morale_floor_bonus"])
+        total_yield_base += int(perk["matchday_commercial_yield_base_gtex"])
+
+        tier = int(perk.get("vip_transport_tier", 0))
+        if tier > best_vip_tier:
+            best_vip_tier = tier
+            best_vip_transport = {
+                "asset_id": row.id,
+                "catalog_key": row.catalog_key,
+                "custom_name": row.custom_name or cat_item.get("name", row.catalog_key),
+                "mesh_archetype": archetype.get("mesh_archetype", "private_jet"),
+                "livery_applied": "club_home",
+            }
+
+        breakdown.append(
+            {
+                "asset_id": row.id,
+                "catalog_key": row.catalog_key,
+                "name": row.custom_name or cat_item.get("name", row.catalog_key),
+                "perk_label": perk["perk_label"],
+                "recruitment_wage_bonus_pct": perk["recruitment_wage_bonus_pct"],
+                "away_recovery_boost_days": perk["away_recovery_boost_days"],
+                "squad_morale_floor_bonus": perk["squad_morale_floor_bonus"],
+                "matchday_commercial_yield_base_gtex": perk["matchday_commercial_yield_base_gtex"],
+            }
+        )
+
+    effective_yield_gtex = int(round(total_yield_base * sentiment_multiplier))
+    return {
+        "owned_distinct_assets": len(seen_keys),
+        "recruitment_wage_bonus_pct": round(min(15.0, total_wage_bonus_pct), 1),
+        "away_recovery_boost_days": min(2, total_recovery_days),
+        "squad_morale_floor_bonus": min(8, total_morale_bonus),
+        "fan_sentiment_multiplier": sentiment_multiplier,
+        "matchday_commercial_yield_gtex": effective_yield_gtex,
+        "vip_transport_asset": best_vip_transport,
+        "owned_perk_breakdown": breakdown,
+    }
+
+
+def _build_press_conference_qa_prompt(
+    subject_name: str,
+    role_label: str,
+    club_name: str,
+) -> dict[str, Any]:
+    return {
+        "question_id": "unveiling_vision_q1",
+        "journalist_name": "Tunde Folawiyo (Continental Football Desk)",
+        "question_text": (
+            f"With {subject_name} officially unveiled as {role_label}, what immediate mandate is {club_name} "
+            f"setting for the dressing room and supporters?"
+        ),
+        "answered": False,
+        "selected_stance": None,
+        "options": [
+            {
+                "stance": "championship_ambition",
+                "label": "Declare Immediate Silverware Ambition",
+                "quote_preview": f"{subject_name} is here to compete for major honours immediately—no excuses.",
+                "effects_preview": {
+                    "fan_sentiment": "+6",
+                    "board_confidence": "+4",
+                    "influence": "+4",
+                    "tension": "+2",
+                },
+            },
+            {
+                "stance": "tactical_pragmatism",
+                "label": "Emphasize Tactical Identity & Structural Stability",
+                "quote_preview": f"We are giving {subject_name} full authority to instil a disciplined, modern tactical system.",
+                "effects_preview": {"board_confidence": "+5", "trust": "+5", "alignment": "+6", "tension": "-3"},
+            },
+            {
+                "stance": "youth_and_sustainability",
+                "label": "Champion Academy Pathway & Long-Term Dynasty",
+                "quote_preview": f"{club_name} will blend elite recruitment with our brightest academy wonderkids.",
+                "effects_preview": {"hoyd_respect": "+6", "gm_alignment": "+5", "fan_sentiment": "+3"},
+            },
+        ],
+    }
+
 
 def _resolve_club_branding(session: Session, club_id: str, state: OwnerClubState) -> dict[str, str]:
     cp = session.get(ClubProfile, club_id)
@@ -270,6 +466,7 @@ def record_staff_arrival_cinematic(
         raise ValueError(f"Club {club_id} not found")
 
     branding = _resolve_club_branding(session, club_id, state)
+    perks = compute_club_showroom_perks(session, club_id)
     role_key = str(appointed_staff.get("role") or "first_team_manager")
     role_label = str(appointed_staff.get("role_label") or role_key.replace("_", " ").title())
     staff_name = str(appointed_staff.get("name") or "Appointed Executive")
@@ -307,6 +504,8 @@ def record_staff_arrival_cinematic(
         "total_contract_fee_gtex": total_contract_fee,
         "tactical_style": style,
         "badge_text": "MANAGER UNVEILING" if is_manager else "EXECUTIVE SIGNING",
+        "vip_transport": perks.get("vip_transport_asset"),
+        "press_conference_qa": _build_press_conference_qa_prompt(staff_name, role_label, branding["club_name"]),
         "camera_sequence": [
             "tunnel_emergence",
             "press_flashbulbs",
@@ -378,6 +577,9 @@ def _format_cinematic_event(ev: OwnerClubEvent, branding: dict[str, str]) -> dic
         "asset_category": meta.get("asset_category"),
         "mesh_archetype": meta.get("mesh_archetype"),
         "sponsor_name": meta.get("sponsor_name"),
+        "vip_transport": meta.get("vip_transport"),
+        "medical_clearance_status": meta.get("medical_clearance_status"),
+        "press_conference_qa": meta.get("press_conference_qa"),
         "camera_sequence": meta.get("camera_sequence", ["hero_orbit", "detail_closeup", "wide_stage"]),
         "world_day": ev.world_day,
         "created_at": ev.created_at.isoformat() if ev.created_at else datetime.now(timezone.utc).isoformat(),
@@ -479,6 +681,7 @@ def get_cinema_and_showroom_overview(session: Session, user_id: str, club_id: st
                 "owned_count": len(instances),
                 "owned_instances": instances,
                 "webgl_3d": archetype_cfg,
+                "operational_perks": resolve_asset_operational_perk(key, item.get("category", "")),
             }
         )
 
@@ -515,6 +718,8 @@ def get_cinema_and_showroom_overview(session: Session, user_id: str, club_id: st
             }
         ]
 
+    active_perks = compute_club_showroom_perks(session, club_id)
+
     return {
         "club_id": club_id,
         "club_name": branding["club_name"],
@@ -526,6 +731,7 @@ def get_cinema_and_showroom_overview(session: Session, user_id: str, club_id: st
         "recent_cinematics": [_format_cinematic_event(ev, branding) for ev in cinema_events],
         "prestige_3d_catalog": prestige_3d_catalog,
         "owned_assets_count": len(owned_rows),
+        "active_operational_perks": active_perks,
         "eligible_players": eligible_players,
         "staff_roster": staff_roster,
         "active_sponsors": active_sponsors,
@@ -564,6 +770,7 @@ def trigger_verified_club_cinematic(
     spec = SUPPORTED_CINEMA_EVENT_TYPES[event_type]
     verification_kind = spec["requires_verification"]
     branding = _resolve_club_branding(session, club_id, state)
+    perks = compute_club_showroom_perks(session, club_id)
 
     meta_payload: dict[str, Any] = {
         "scene_id": spec["scene_id"],
@@ -594,6 +801,10 @@ def trigger_verified_club_cinematic(
                 "subject_role": role_key,
                 "subject_role_label": slot["role_label"],
                 "overall_rating": int((state.manager_json or {}).get("rating", 82)),
+                "vip_transport": perks.get("vip_transport_asset"),
+                "press_conference_qa": _build_press_conference_qa_prompt(
+                    slot["name"], slot["role_label"], branding["club_name"]
+                ),
                 "camera_sequence": [
                     "tunnel_emergence",
                     "press_flashbulbs",
@@ -607,7 +818,7 @@ def trigger_verified_club_cinematic(
             f"{branding['club_name']} present {slot['name']} ({slot['role_label']}) in an official 3D club unveiling."
         )
 
-    # B. Verify Canonical Squad Player / Regen
+    # B. Verify Canonical Squad Player / Regen (4-stage arrival & medical unveiling)
     elif verification_kind == "squad_player":
         player: OwnerSquadPlayer | None = None
         if subject_id:
@@ -621,22 +832,33 @@ def trigger_verified_club_cinematic(
         if player is None or player.club_id != club_id:
             raise ValueError(f"Cannot trigger '{event_type}' cinematic: canonical squad player not found in club.")
 
+        role_lbl = "Academy Wonderkid" if player.is_regen else f"First-Team {player.position}"
+        medical_status = "cleared" if int(player.injured_days or 0) == 0 else "monitored_rehab"
         meta_payload.update(
             {
                 "subject_id": player.id,
                 "subject_name": player.name,
                 "subject_role": player.position,
-                "subject_role_label": "Academy Wonderkid" if player.is_regen else f"First-Team {player.position}",
+                "subject_role_label": role_lbl,
                 "overall_rating": player.rating,
                 "potential_rating": player.potential,
                 "is_regen": bool(player.is_regen),
                 "portrait_url": storytelling.resolve_player_portrait_url(session, player.id, player.name),
+                "vip_transport": perks.get("vip_transport_asset"),
+                "medical_clearance_status": medical_status,
+                "press_conference_qa": _build_press_conference_qa_prompt(player.name, role_lbl, branding["club_name"]),
+                "camera_sequence": [
+                    "vip_transport_touchdown",
+                    "medical_clearance_scan",
+                    "boardroom_contract_signing",
+                    "tunnel_shirt_reveal",
+                ],
             }
         )
         title = custom_headline or f"Squad Unveiling: {player.name} ({player.position})"
         description = (
             f"{branding['club_name']} showcase {player.name} (OVR {player.rating}, POT {player.potential}) "
-            f"on the 3D presentation stage."
+            f"across the 4-stage 3D medical & stadium unveiling."
         )
 
     # C. Verify Owned Showroom Asset
@@ -721,5 +943,221 @@ def trigger_verified_club_cinematic(
 
     return {
         "success": True,
+        "cinematic_event": _format_cinematic_event(ev, branding),
+    }
+
+
+# ==============================================================================
+# 5. Claim Showroom Commercial Yield & Answer Live Press Conference Q&A
+# ==============================================================================
+
+
+def claim_showroom_commercial_yield(
+    session: Session,
+    user_id: str,
+    club_id: str,
+) -> dict[str, Any]:
+    """
+    Settles the recurring matchday commercial dividend generated by the club's owned
+    Prestige Showroom assets (VIP suites, private aviation, luxury fleet, timepieces)
+    into the club's authoritative GTEX treasury once per world_day.
+    """
+    state = session.get(OwnerClubState, club_id)
+    if state is None:
+        raise ValueError(f"Club {club_id} not found")
+
+    perks = compute_club_showroom_perks(session, club_id)
+    yield_gtex = int(perks.get("matchday_commercial_yield_gtex") or 0)
+    if yield_gtex <= 0:
+        raise ValueError("No active Prestige Showroom assets owned to generate commercial yield.")
+
+    current_day = int(state.world_day or 1)
+    idem_key = f"cinema:showroom_yield:{club_id}:day:{current_day}"
+    existing = session.scalar(select(OwnerClubEvent).where(OwnerClubEvent.idempotency_key == idem_key))
+    if existing is not None:
+        return {
+            "success": True,
+            "already_claimed": True,
+            "world_day": current_day,
+            "yield_credited_gtex": yield_gtex,
+            "treasury_balance_gtex": float(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)),
+            "operational_perks": perks,
+        }
+
+    ledger.record(
+        session,
+        event_type="showroom_commercial_yield",
+        source=ledger.WORLD_CLUBS,
+        destination=ledger.club_account(club_id),
+        currency=ledger.GTEX,
+        gross=Decimal(str(yield_gtex)),
+        club_id=club_id,
+        user_id=user_id,
+        related_type="showroom_yield",
+        related_id=f"{club_id}:day:{current_day}",
+        memo=f"Prestige Showroom Commercial & Hospitality Yield (Day {current_day})",
+        check_funds=False,
+    )
+
+    ev = OwnerClubEvent(
+        club_id=club_id,
+        category="commercial",
+        event_type="showroom_commercial_yield_claimed",
+        severity="info",
+        status="completed",
+        source_type="showroom_3d",
+        source_id=f"day:{current_day}",
+        title=f"Prestige Showroom Dividend Credited (+{yield_gtex:,} GTEX)",
+        description=(
+            f"Credited {yield_gtex:,} GTEX in commercial & VIP hospitality yield across "
+            f"{perks['owned_distinct_assets']} owned Prestige Showroom asset(s)."
+        ),
+        participants_json=[{"role": "owner", "user_id": user_id}],
+        world_day=current_day,
+        idempotency_key=idem_key,
+        actions_json=[],
+        consequences_json={"yield_credited_gtex": yield_gtex, "operational_perks": perks},
+        resolved_at=datetime.now(timezone.utc),
+    )
+    session.add(ev)
+    session.flush()
+
+    return {
+        "success": True,
+        "already_claimed": False,
+        "world_day": current_day,
+        "yield_credited_gtex": yield_gtex,
+        "treasury_balance_gtex": float(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)),
+        "operational_perks": perks,
+    }
+
+
+def answer_cinematic_press_question(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    *,
+    event_id: str,
+    stance: str,
+    custom_quote: str | None = None,
+) -> dict[str, Any]:
+    """
+    Processes an interactive press conference Q&A choice during a 3D Manager/Player Unveiling,
+    updating club politics (fan sentiment, board confidence) and executive relationships in real time.
+    """
+    state = session.get(OwnerClubState, club_id)
+    if state is None:
+        raise ValueError(f"Club {club_id} not found")
+
+    ev = session.get(OwnerClubEvent, event_id)
+    if ev is None or ev.club_id != club_id:
+        raise ValueError(f"Cinematic event {event_id} not found for club {club_id}")
+
+    valid_stances = {"championship_ambition", "tactical_pragmatism", "youth_and_sustainability"}
+    if stance not in valid_stances:
+        raise ValueError(f"Unsupported press conference stance '{stance}'. Expected one of {sorted(valid_stances)}.")
+
+    branding = _resolve_club_branding(session, club_id, state)
+    meta = dict(ev.consequences_json or {})
+    qa = dict(
+        meta.get("press_conference_qa")
+        or _build_press_conference_qa_prompt(
+            str(meta.get("subject_name") or "New Signing"),
+            str(meta.get("subject_role_label") or "First-Team Appointment"),
+            branding["club_name"],
+        )
+    )
+
+    if qa.get("answered"):
+        return {
+            "success": True,
+            "already_answered": True,
+            "stance": qa.get("selected_stance"),
+            "effects": qa.get("applied_effects", {}),
+            "cinematic_event": _format_cinematic_event(ev, branding),
+        }
+
+    facs = dict(state.facilities_json or {})
+    politics = dict(facs.get("_club_politics") or {})
+    fan_sentiment = int(politics.get("supporter_confidence") or 62)
+    board_conf = int(politics.get("board_confidence") or 68)
+    effects: dict[str, int] = {}
+
+    if stance == "championship_ambition":
+        fan_sentiment = min(100, fan_sentiment + 6)
+        board_conf = min(100, board_conf + 4)
+        living_club_world.apply_relationship_delta(
+            session,
+            club_id=club_id,
+            part_a_type="owner",
+            part_a_id="owner",
+            part_a_name="Club Owner",
+            part_b_type="staff",
+            part_b_id="first_team_manager",
+            part_b_name=str(meta.get("subject_name") or "First-Team Manager"),
+            delta_influence=4,
+            delta_respect=3,
+            delta_tension=2,
+            reason="Press conference mandate: Immediate Championship Ambition",
+        )
+        effects = {"fan_sentiment_delta": 6, "board_confidence_delta": 4, "manager_influence_delta": 4}
+    elif stance == "tactical_pragmatism":
+        board_conf = min(100, board_conf + 5)
+        fan_sentiment = min(100, fan_sentiment + 2)
+        living_club_world.apply_relationship_delta(
+            session,
+            club_id=club_id,
+            part_a_type="owner",
+            part_a_id="owner",
+            part_a_name="Club Owner",
+            part_b_type="staff",
+            part_b_id="first_team_manager",
+            part_b_name=str(meta.get("subject_name") or "First-Team Manager"),
+            delta_trust=5,
+            delta_alignment=6,
+            delta_tension=-3,
+            reason="Press conference mandate: Tactical Identity & Structural Stability",
+        )
+        effects = {"board_confidence_delta": 5, "manager_trust_delta": 5, "manager_alignment_delta": 6}
+    else:
+        fan_sentiment = min(100, fan_sentiment + 3)
+        board_conf = min(100, board_conf + 3)
+        living_club_world.apply_relationship_delta(
+            session,
+            club_id=club_id,
+            part_a_type="owner",
+            part_a_id="owner",
+            part_a_name="Club Owner",
+            part_b_type="staff",
+            part_b_id="head_of_youth_development",
+            part_b_name="Head of Youth Development",
+            delta_respect=6,
+            delta_alignment=5,
+            reason="Press conference mandate: Academy Pathway & Long-Term Dynasty",
+        )
+        effects = {"hoyd_respect_delta": 6, "hoyd_alignment_delta": 5, "fan_sentiment_delta": 3}
+
+    politics["supporter_confidence"] = fan_sentiment
+    politics["board_confidence"] = board_conf
+    facs["_club_politics"] = politics
+    state.facilities_json = facs
+    flag_modified(state, "facilities_json")
+
+    qa["answered"] = True
+    qa["selected_stance"] = stance
+    qa["custom_quote"] = custom_quote
+    qa["applied_effects"] = effects
+    meta["press_conference_qa"] = qa
+    ev.consequences_json = meta
+    flag_modified(ev, "consequences_json")
+    session.flush()
+
+    return {
+        "success": True,
+        "already_answered": False,
+        "stance": stance,
+        "fan_sentiment_index": fan_sentiment,
+        "board_confidence": board_conf,
+        "effects": effects,
         "cinematic_event": _format_cinematic_event(ev, branding),
     }

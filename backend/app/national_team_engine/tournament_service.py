@@ -1364,7 +1364,7 @@ class NationalTeamTournamentService:
             .outerjoin(InternalLeague, InternalLeague.id == Player.internal_league_id)
             .outerjoin(PlayerSummaryReadModel, PlayerSummaryReadModel.player_id == Player.id)
             .options(selectinload(Player.image_metadata))
-            .where(Player.is_tradable.is_(True))
+            .where(or_(Player.is_tradable.is_(True), Player.is_real_player.is_(False)))
         )
         if country_code:
             normalized_country_code = country_code.strip().upper()
