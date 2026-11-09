@@ -590,7 +590,7 @@ export class SpatialInterpolator {
       const roleUpper = (p.role || "").toUpperCase();
       const lineLower = (p.line || "").toLowerCase();
       const isGK = roleUpper === "GK" || roleUpper === "GOALKEEPER" || lineLower === "goalkeeper";
-      if (p.has_possession || p.player_id === ownerId || p.highlighted) {
+      if (isGK || p.has_possession || p.player_id === ownerId || p.highlighted) {
         continue;
       }
 
@@ -608,18 +608,6 @@ export class SpatialInterpolator {
             : "standard"
           : String(rawLine || "standard").toLowerCase();
 
-      // Goalkeeper sweeper movement when defensive line is high and team is in possession/pushing up
-      if (isGK) {
-        if ((lineSetting === "high" || lineSetting === "aggressive") && Math.abs(ballX) < 34) {
-          const sweeperPush = 3.2 * attackSign;
-          p.position3D[0] = Math.max(
-            PITCH_BOUNDS.minX + 2.0,
-            Math.min(PITCH_BOUNDS.maxX - 2.0, p.position3D[0] + sweeperPush)
-          );
-          p.tactical_instruction_marker = "sweeper_keeper";
-        }
-        continue;
-      }
 
       const rawPress = isHome ? tactics.homePressing : tactics.awayPressing;
       const pressSetting =
