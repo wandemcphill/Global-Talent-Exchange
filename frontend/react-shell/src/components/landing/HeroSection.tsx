@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { Shield, Sparkles, ArrowRightLeft, Trophy, ArrowRight, Globe } from "lucide-react";
+import { Shield, Sparkles, ArrowRightLeft, Trophy, ArrowRight, Globe, Megaphone } from "lucide-react";
 import { publicUrl } from "@/lib/publicPath";
 import { GtexLiveWorldPulse } from "./landingModels";
 
@@ -84,6 +84,15 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ pulse, onExplore }) =>
               <Globe size={18} className="text-[#38BDF8]" />
               <span>Explore the universe</span>
             </button>
+            <Link
+              to="/advertise"
+              data-testid="hero-advertise-cta"
+              className="flex items-center gap-2 rounded-lg border border-[#D4AF37]/50 bg-[#13233A]/80 px-5 py-3.5 font-['Barlow_Condensed'] text-base font-bold uppercase tracking-wider text-[#D4AF37] backdrop-blur-md transition-colors hover:border-[#D4AF37] hover:bg-[#D4AF37]/10 hover:text-[#F6E3A1]"
+              title="Brand advertising & music promotion without personal user account registration"
+            >
+              <Megaphone size={18} />
+              <span>Commercial & Ads</span>
+            </Link>
           </div>
 
           {/* Micro Badges */}
@@ -102,6 +111,15 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ pulse, onExplore }) =>
                 <span className="text-xs font-bold text-[#F2F4F8]">{badge.label}</span>
               </div>
             ))}
+            <Link
+              to="/advertise"
+              data-testid="hero-advertise-micro-badge"
+              className="flex items-center gap-2 rounded-md border border-[#D4AF37]/40 bg-[#D4AF37]/10 px-3 py-1.5 backdrop-blur-sm transition-colors hover:bg-[#D4AF37]/20"
+              title="Advertise on GTEX without creating a user account"
+            >
+              <Megaphone size={13} className="text-[#D4AF37]" />
+              <span className="text-xs font-bold text-[#E8C766]">Advertise • No Signup</span>
+            </Link>
           </div>
         </div>
       </div>

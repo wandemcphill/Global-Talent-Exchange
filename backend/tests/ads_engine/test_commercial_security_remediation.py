@@ -566,7 +566,7 @@ def test_exact_payment_reconciliation_all_states(tmp_path: Path, monkeypatch) ->
                 reason="Customer requested full campaign cancellation",
             ),
         )
-        assert ref_res.status == "completed"
+        assert ref_res.status == "pending_provider"
         assert rec.status == "refunded"
 
     # 1F. Attempting to verify a refunded transaction raises 409 Conflict

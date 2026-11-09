@@ -55,11 +55,13 @@ def _create_user(session, *, user_id: str, role: UserRole) -> User:
 
 
 def _create_trader(session, *, trader: User) -> CoinTraderProfile:
+    from datetime import datetime, timezone
     profile = CoinTraderProfile(
         user_id=trader.id,
         display_name="Test Coin Trader",
         status=CoinTraderProfileStatus.APPROVED.value,
         tier=CoinTraderTier.GOLD.value,
+        verified_at=datetime.now(timezone.utc),
         terms_json={},
         payment_methods_json=[],
         bank_accounts_json=[],

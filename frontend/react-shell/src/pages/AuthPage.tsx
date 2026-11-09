@@ -7,6 +7,7 @@ import { publicUrl } from "@/lib/publicPath";
 import { Btn, Loading } from "@/components/gtex/ui";
 import { TURNSTILE_SITE_KEY, TurnstileChallenge } from "@/components/gtex/TurnstileChallenge";
 import { GtexAuthAdvertisingPanel } from "@/components/advertising/GtexAdvertising";
+import { Building2, Megaphone, ArrowRight } from "lucide-react";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -114,6 +115,7 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
           <p className="text-sm leading-6 text-slate-300">
             You are signed in as <span className="font-semibold text-white">{user.username || user.email}</span>. Specialized creator, trading, and club ownership capabilities can be managed in your console.
           </p>
+
           <div className="pt-2">
             <Link
               to="/app"
@@ -151,12 +153,68 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
           </Link>
           <h1 className="gx-h2">{mode === "login" ? "Sign in" : "Create a GTEX account"}</h1>
 
+          {/* Corporate Advertiser & Brand Direct Access Notice */}
+          <div
+            data-testid="auth-corporate-advertiser-banner"
+            className="rounded-xl border border-[#D4AF37]/40 bg-[#13233A]/90 p-4 shadow-xl backdrop-blur-md"
+          >
+            <div className="flex items-start gap-3.5">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#D4AF37]/50 bg-[#D4AF37]/15 text-[#D4AF37]">
+                <Megaphone size={20} />
+              </div>
+              <div className="flex-1 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-1.5">
+                  <span className="font-['Barlow_Condensed'] text-base font-extrabold uppercase tracking-wide text-[#F2F4F8]">
+                    Looking to advertise or sponsor on GTEX?
+                  </span>
+                  <span className="rounded bg-[#D4AF37]/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#E8C766]">
+                    No Gamer Account Required
+                  </span>
+                </div>
+                <p className="mt-1 leading-relaxed text-[#9AA7BD]">
+                  Brands, corporations, and music artists do not need a personal player, creator, or coin trader account to advertise. You can configure and pay for ads directly, or use a dedicated corporate workspace.
+                </p>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2.5">
+                  <Link
+                    to="/advertise"
+                    data-testid="auth-direct-ad-cta"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-[#D4AF37] bg-[#D4AF37] px-3.5 py-1.5 font-['Barlow_Condensed'] text-xs font-black uppercase tracking-wider text-[#0B1626] transition hover:bg-[#E8C766]"
+                  >
+                    <span>Launch Advert Directly</span>
+                    <ArrowRight size={13} />
+                  </Link>
+                  {mode === "signup" ? (
+                    <Link
+                      to="/advertiser/register"
+                      data-testid="auth-advertiser-register-cta"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-[#22385A] bg-[#0B1626] px-3 py-1.5 text-xs font-semibold text-[#F2F4F8] transition hover:border-[#D4AF37]/60 hover:text-[#D4AF37]"
+                    >
+                      <Building2 size={13} className="text-[#D4AF37]" />
+                      <span>Corporate Workspace Signup</span>
+                    </Link>
+                  ) : (
+                    <Link
+                      to="/advertiser/login"
+                      data-testid="auth-advertiser-login-cta"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-[#22385A] bg-[#0B1626] px-3 py-1.5 text-xs font-semibold text-[#F2F4F8] transition hover:border-[#D4AF37]/60 hover:text-[#D4AF37]"
+                    >
+                      <Building2 size={13} className="text-[#D4AF37]" />
+                      <span>Advertiser Workspace Sign In</span>
+                    </Link>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {mode === "signup" && (
             <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 text-xs text-slate-300">
               <p className="font-semibold text-emerald-300">Unified GTEX Account</p>
               <p className="mt-1 leading-5 text-slate-400">
                 One account unlocks the full platform. You can claim or create clubs, apply for the Creator Program, or activate Coin Trader desks directly from your console after signup.
               </p>
+
               {requestedRole && (
                 <div className="mt-2 inline-flex items-center gap-1.5 rounded border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-medium text-emerald-300">
                   <span>Specialization intent:</span>
@@ -260,6 +318,13 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
               </>
             )}
           </p>
+
+          <div className="border-t border-[#22385A]/60 pt-3 text-center text-xs text-[#9AA7BD]">
+            <span>Representing a company or sponsor? </span>
+            <Link to="/advertise" className="font-semibold text-[#D4AF37] hover:underline">
+              Explore Commercial Ad Rates & Placement Options &rarr;
+            </Link>
+          </div>
         </form>
       </div>
     </div>

@@ -49,6 +49,7 @@ from app.wallets.service import InsufficientBalanceError, WalletService
 DECIMAL_QUANTUM = Decimal("0.0001")
 MIN_TOKEN_PRICE = Decimal("0.2500")
 BASE_TOKEN_PRICE = Decimal("1.0000")
+CLUB_TOKEN_PROTOCOL_FEE_BPS = 250  # 2.5% protocol spread on token buybacks to prevent arbitrage draining
 
 
 class ClubOwnershipError(ValueError):
@@ -238,9 +239,19 @@ class ClubOwnershipService:
         if holding is None or int(holding.tokens_owned) < quantity:
             raise ClubOwnershipError("You do not hold enough club tokens to sell that amount.")
 
-        unit_price = Decimal(token.price).quantize(DECIMAL_QUANTUM)
+        # Adjust fan demand downward to reflect liquidation pressure before executing sell price
+        self._adjust_fan_demand(token=token, quantity=quantity, direction="sell")
+        self._reprice_token(token=token, treasury=treasury)
+
+        circulating = max(int(token.circulating_supply), 1)
+        treasury_backing_per_token = (Decimal(treasury.balance_coin) / Decimal(circulating)).quantize(DECIMAL_QUANTUM)
+        unit_price = min(Decimal(token.price), treasury_backing_per_token).quantize(DECIMAL_QUANTUM)
+
         gross = (unit_price * Decimal(quantity)).quantize(DECIMAL_QUANTUM)
-        if Decimal(treasury.balance_coin) < gross:
+        protocol_fee = (gross * Decimal(CLUB_TOKEN_PROTOCOL_FEE_BPS) / Decimal("10000")).quantize(DECIMAL_QUANTUM)
+        net_payout = max(gross - protocol_fee, Decimal("0.0000"))
+
+        if Decimal(treasury.balance_coin) < net_payout:
             raise ClubOwnershipError("Club treasury liquidity is too low to buy back these tokens.")
 
         reference = f"club-token-sell:{club_id}:{seller.id}:{uuid4().hex}"
@@ -249,8 +260,8 @@ class ClubOwnershipService:
         self.wallet_service.append_transaction(
             self.session,
             postings=[
-                self._posting(seller_account, gross),
-                self._posting(club_account, -gross),
+                self._posting(seller_account, net_payout),
+                self._posting(club_account, -net_payout),
             ],
             reason=LedgerEntryReason.TRADE_SETTLEMENT,
             source_tag=LedgerSourceTag.CLUB_SALE_SALE,
@@ -260,7 +271,14 @@ class ClubOwnershipService:
             external_reference=reference,
             actor=seller,
             idempotency_key=reference,
-            metadata={"club_id": club_id, "quantity": quantity, "unit_price": str(unit_price)},
+            metadata={
+                "club_id": club_id,
+                "quantity": quantity,
+                "unit_price": str(unit_price),
+                "gross": str(gross),
+                "protocol_fee": str(protocol_fee),
+                "net_payout": str(net_payout),
+            },
         )
 
         holding.tokens_owned = int(holding.tokens_owned) - quantity
@@ -274,11 +292,10 @@ class ClubOwnershipService:
             reference_key=reference,
             entry_type="token_sale",
             direction="outflow",
-            amount=gross,
+            amount=net_payout,
             summary=f"{self._user_label(seller)} sold {quantity} club tokens.",
-            metadata={"seller_user_id": seller.id, "quantity": quantity, "unit_price": str(unit_price)},
+            metadata={"seller_user_id": seller.id, "quantity": quantity, "unit_price": str(unit_price), "protocol_fee": str(protocol_fee)},
         )
-        self._adjust_fan_demand(token=token, quantity=quantity, direction="sell")
         self._reprice_token(token=token, treasury=treasury)
         self.session.flush()
         return ClubTokenTradeResultView(
@@ -286,7 +303,7 @@ class ClubOwnershipService:
             direction="sell",
             quantity=quantity,
             unit_price=unit_price,
-            gross_amount_coin=gross,
+            gross_amount_coin=net_payout,
             token=self._token_view(token, treasury=treasury),
             holding=self._holding_view(holding),
             treasury=self._treasury_view(treasury),

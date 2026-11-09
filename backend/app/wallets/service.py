@@ -1690,6 +1690,7 @@ class WalletService:
         description: str,
         unit: LedgerUnit = LedgerUnit.COIN,
         source_tag: LedgerSourceTag | None = None,
+        idempotency_key: str | None = None,
     ) -> list[LedgerEntry]:
         released_amount = self._normalize_amount(amount)
         if released_amount <= Decimal("0.0000"):
@@ -1708,6 +1709,7 @@ class WalletService:
             reference=reference,
             description=description,
             actor=user,
+            idempotency_key=idempotency_key,
         )
 
     def settle_reserved_funds(
@@ -1721,6 +1723,7 @@ class WalletService:
         external_reference: str,
         unit: LedgerUnit = LedgerUnit.COIN,
         source_tag: LedgerSourceTag | None = None,
+        idempotency_key: str | None = None,
     ) -> list[LedgerEntry]:
         settled_amount = self._normalize_amount(amount)
         if settled_amount <= Decimal("0.0000"):
@@ -1740,6 +1743,7 @@ class WalletService:
             description=description,
             external_reference=external_reference,
             actor=user,
+            idempotency_key=idempotency_key,
         )
 
     def settle_available_funds(

@@ -11,6 +11,7 @@ import {
   Trophy,
   Users,
   ShieldCheck,
+  Megaphone,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { publicUrl } from "@/lib/publicPath";
@@ -144,8 +145,17 @@ export const GtexHomeNav: React.FC<GtexHomeNavProps> = ({
           ))}
         </nav>
 
-        {/* Auth Affordance & Primary Action */}
+        {/* Direct Advertiser Access & Auth Affordances */}
         <div className="flex items-center gap-3">
+          <Link
+            to="/advertise"
+            data-testid="landing-nav-advertise"
+            className="hidden sm:inline-flex items-center gap-1.5 rounded-md border border-[#D4AF37]/50 bg-[#D4AF37]/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-[#D4AF37] transition hover:bg-[#D4AF37]/20 hover:text-[#F6E3A1]"
+            title="Create an advert & pay directly without personal user/creator registration"
+          >
+            <Megaphone size={13} />
+            <span>Advertise</span>
+          </Link>
           <Link
             to={user ? "/app" : "/login"}
             data-testid="landing-login-link"
@@ -198,6 +208,42 @@ export const GtexHomeNav: React.FC<GtexHomeNavProps> = ({
                 <ArrowRight size={14} className="text-[#6B7A93]" />
               </button>
             ))}
+          </div>
+
+          {/* Mobile Commercial & Brand Direct Access */}
+          <div className="mt-5 rounded-xl border border-[#D4AF37]/30 bg-[#13233A]/80 p-3.5 shadow-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Megaphone size={16} className="text-[#D4AF37]" />
+                <span className="font-['Barlow_Condensed'] text-sm font-extrabold uppercase tracking-wider text-[#F2F4F8]">
+                  Corporate Brands & Sponsors
+                </span>
+              </div>
+              <span className="rounded bg-[#D4AF37]/20 px-1.5 py-0.5 text-[10px] font-bold text-[#E8C766]">
+                No user account needed
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] leading-relaxed text-[#9AA7BD]">
+              Launch ad campaigns across live matches, scoreboards, and music radio with direct payment.
+            </p>
+            <div className="mt-3 flex items-center gap-2">
+              <Link
+                to="/advertise"
+                onClick={() => setMobileMenuOpen(false)}
+                data-testid="mobile-nav-advertise-direct"
+                className="flex-1 rounded-md border border-[#D4AF37] bg-[#D4AF37] py-2 text-center text-xs font-black uppercase tracking-wider text-[#0B1626] transition hover:bg-[#E8C766]"
+              >
+                Launch Ad Directly &rarr;
+              </Link>
+              <Link
+                to="/advertiser/login"
+                onClick={() => setMobileMenuOpen(false)}
+                data-testid="mobile-nav-advertiser-login"
+                className="rounded-md border border-[#22385A] bg-[#0B1626] px-3 py-2 text-center text-xs font-semibold text-[#9AA7BD] hover:text-white"
+              >
+                Portal
+              </Link>
+            </div>
           </div>
 
           <div className="mt-6 flex flex-col gap-2 pt-4 border-t border-[#22385A]">

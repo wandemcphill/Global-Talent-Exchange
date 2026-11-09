@@ -75,7 +75,7 @@ def test_coin_trader_user_buy_roundtrip_moves_coin_once() -> None:
     try:
         buyer = _user(session, "coin-buyer", UserRole.USER)
         trader = _user(session, "coin-trader", UserRole.COIN_TRADER)
-        _seed_coin(session, trader, Decimal("100.0000"))
+        _seed_coin(session, trader, Decimal("500.0000"))
 
         settings = TreasurySettings(
             settings_key="default",
@@ -97,12 +97,14 @@ def test_coin_trader_user_buy_roundtrip_moves_coin_once() -> None:
         session.add(settings)
         session.flush()
 
+        from datetime import datetime, timezone
         profile = CoinTraderProfile(
             user_id=trader.id,
             display_name="Roundtrip Trader",
             country_code="NG",
             status=CoinTraderProfileStatus.APPROVED.value,
             tier=CoinTraderTier.GOLD.value,
+            verified_at=datetime.now(timezone.utc),
             terms_json={},
             payment_methods_json=[],
             bank_accounts_json=[],
@@ -119,8 +121,8 @@ def test_coin_trader_user_buy_roundtrip_moves_coin_once() -> None:
                 buy_rate_fiat=Decimal("950.0000"),
                 sell_rate_fiat=Decimal("1050.0000"),
                 min_coin_amount=Decimal("1.0000"),
-                max_coin_amount=Decimal("100.0000"),
-                available_liquidity=Decimal("100.0000"),
+                max_coin_amount=Decimal("500.0000"),
+                available_liquidity=Decimal("500.0000"),
                 is_active=True,
             )
         )
@@ -132,7 +134,7 @@ def test_coin_trader_user_buy_roundtrip_moves_coin_once() -> None:
                 trader_profile_id=profile.id,
                 direction=CoinTradeDirection.USER_BUYS,
                 coin_unit=LedgerUnit.COIN,
-                coin_amount=Decimal("10.0000"),
+                coin_amount=Decimal("200.0000"),
                 fiat_currency="NGN",
                 payment_method="bank_transfer",
                 idempotency_key="coin-p2p-roundtrip-01",
@@ -151,7 +153,7 @@ def test_coin_trader_user_buy_roundtrip_moves_coin_once() -> None:
         buyer_account = WalletService().get_user_account(session, buyer, LedgerUnit.COIN)
         trader_account = WalletService().get_user_account(session, trader, LedgerUnit.COIN)
         assert settled.status == "released"
-        assert WalletService().get_balance(session, buyer_account) == Decimal("10.0000")
-        assert WalletService().get_balance(session, trader_account) == Decimal("90.0000")
+        assert WalletService().get_balance(session, buyer_account) == Decimal("200.0000")
+        assert WalletService().get_balance(session, trader_account) == Decimal("300.0000")
     finally:
         session.close()

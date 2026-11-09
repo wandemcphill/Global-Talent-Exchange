@@ -31,7 +31,7 @@ from app.models.wallet import (
     LedgerUnit,
 )
 from app.notifications.service import NotificationEventMatrixService
-from app.wallets.service import LedgerPosting, WalletService
+from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 from app.coin_traders.governance import CoinTraderPricingGovernanceService
 from app.coin_traders.schemas import (
     CoinTraderAdminLiquidityRequest,
@@ -379,7 +379,7 @@ class CoinTraderService:
         return self.to_order_view(order)
 
     def confirm_and_release(self, order_id: str, *, actor: User) -> CoinTradeOrderView:
-        order = self._require_order(order_id)
+        order = self._require_order(order_id, for_update=True)
         profile = self._require_approved_profile(order.trader_profile_id)
         confirmer_user_id = profile.user_id if order.direction == CoinTradeDirection.USER_BUYS.value else order.user_id
         if actor.id != confirmer_user_id:
@@ -396,7 +396,7 @@ class CoinTraderService:
         return view
 
     def cancel_order(self, order_id: str, *, actor: User) -> CoinTradeOrderView:
-        order = self._require_participating_order(order_id, actor)
+        order = self._require_participating_order(order_id, actor, for_update=True)
         if order.status == CoinTradeOrderStatus.CREATED.value:
             order.status = CoinTradeOrderStatus.CANCELLED.value
             order.cancelled_at = utcnow()
@@ -699,6 +699,8 @@ class CoinTraderService:
             CoinTradeOrder.payment_window_expires_at.is_not(None),
             CoinTradeOrder.payment_window_expires_at <= current_time,
         )
+        if self._supports_row_locks(self.session):
+            statement = statement.with_for_update()
         stale_orders = list(self.session.scalars(statement).all())
         expired_views: list[CoinTradeOrderView] = []
         for order in stale_orders:
@@ -717,6 +719,7 @@ class CoinTraderService:
                 reference=f"coin-trade:{order.id}:expire-refund",
                 description="Coin trader order payment window expired escrow refund",
                 source_tag=LedgerSourceTag.COIN_TRADER_ESCROW_REFUND,
+                idempotency_key=f"coin-trade:{order.id}:refund",
             )
             order.ledger_refs_json = {
                 **dict(order.ledger_refs_json or {}),
@@ -818,6 +821,7 @@ class CoinTraderService:
             reference=f"coin-trade:{order.id}:release",
             description="Coin trader escrow release",
             actor=admin_actor or destination_user,
+            idempotency_key=f"coin-trade:{order.id}:release",
             metadata={"order_id": order.id, "direction": order.direction},
         )
         order.status = CoinTradeOrderStatus.RELEASED.value
@@ -850,6 +854,7 @@ class CoinTraderService:
             source_tag=(
                 LedgerSourceTag.COIN_TRADER_ADMIN_RESOLUTION if admin else LedgerSourceTag.COIN_TRADER_ESCROW_REFUND
             ),
+            idempotency_key=f"coin-trade:{order.id}:refund",
         )
         order.status = CoinTradeOrderStatus.ADMIN_REFUNDED.value if admin else CoinTradeOrderStatus.REFUNDED.value
         order.cancelled_at = utcnow()
@@ -882,6 +887,9 @@ class CoinTraderService:
         trader_account = self.wallet_service.get_user_account(self.session, trader_user, payload.coin_unit)
         platform_account = self.wallet_service.ensure_market_liquidity_account(self.session, payload.coin_unit)
         if flow == "issue":
+            pool_balance = self.wallet_service.get_balance(self.session, platform_account)
+            if pool_balance < amount:
+                raise InsufficientBalanceError("Liquidity pool balance is lower than the requested issue amount.")
             postings = [
                 LedgerPosting(account=platform_account, amount=-amount),
                 LedgerPosting(account=trader_account, amount=amount),
@@ -983,10 +991,19 @@ class CoinTraderService:
         }
         mismatched = any(metadata.get(key) != value for key, value in expected.items())
         if mismatched or transaction.reference != reference:
-            raise CoinTraderValidationError("Liquidity idempotency key was already used for a different transfer.")
+            raise CoinTraderValidationError("Liquidity idempotency key has already been used for a different transfer.")
 
-    def _require_participating_order(self, order_id: str, actor: User) -> CoinTradeOrder:
-        order = self._require_order(order_id)
+    @staticmethod
+    def _supports_row_locks(session: Session) -> bool:
+        bind = session.get_bind()
+        if bind is None:
+            return False
+        return bind.dialect.name != "sqlite"
+
+    def _require_participating_order(
+        self, order_id: str, actor: User, *, for_update: bool = False
+    ) -> CoinTradeOrder:
+        order = self._require_order(order_id, for_update=for_update)
         profile = self._require_profile(order.trader_profile_id)
         if actor.id not in {order.user_id, profile.user_id}:
             raise CoinTraderPermissionError("Only order participants can perform this action.")
@@ -1038,8 +1055,12 @@ class CoinTraderService:
             for table_name in ("notification_records", "notification_preferences", "users")
         )
 
-    def _require_order(self, order_id: str) -> CoinTradeOrder:
-        order = self.session.get(CoinTradeOrder, order_id)
+    def _require_order(self, order_id: str, *, for_update: bool = False) -> CoinTradeOrder:
+        order = self.session.get(
+            CoinTradeOrder,
+            order_id,
+            with_for_update=bool(for_update and self._supports_row_locks(self.session)),
+        )
         if order is None:
             raise CoinTraderNotFoundError(f"Coin trader order {order_id} was not found.")
         return order

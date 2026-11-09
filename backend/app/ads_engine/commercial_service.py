@@ -74,6 +74,21 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+def _vat_inclusive_minor(total_minor: int) -> int:
+    """VAT portion included in a VAT-inclusive total.
+
+    Rate comes from GTEX_ADS_VAT_PERCENT (default 0 until finance confirms; Nigerian VAT is 7.5).
+    """
+    try:
+        rate = Decimal(os.getenv("GTEX_ADS_VAT_PERCENT", "0"))
+    except Exception:
+        rate = Decimal("0")
+    if rate <= 0:
+        return 0
+    net = Decimal(total_minor) / (Decimal(1) + rate / Decimal(100))
+    return int((Decimal(total_minor) - net).to_integral_value())
+
+
 def _as_utc(value: datetime | None) -> datetime | None:
     if value is None:
         return None
@@ -1625,6 +1640,11 @@ class CommercialNetworkService:
         workspace = self.require_active_workspace(user)
         self.ensure_default_catalog()
 
+        if payload.client_brand_id:
+            client_brand = self.session.get(AdvertiserClientBrand, payload.client_brand_id)
+            if client_brand is None or client_brand.workspace_id != workspace.id or not client_brand.is_active:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client brand not found.")
+
         # Validate creative asset (must be uploaded image or silent video)
         creative_asset = self._require_valid_asset(
             payload.creative_asset_id,
@@ -1928,7 +1948,7 @@ class CommercialNetworkService:
 
     def activate_campaign_if_ready(self, campaign: BrandAdCampaign) -> bool:
         """System-calculated start and end dates upon creative approval + verified payment."""
-        is_paid = campaign.payment_status == "paid" or campaign.currency == "USD"
+        is_paid = campaign.payment_status == "paid"
         rights_ok = True if campaign.campaign_type != "music" else bool(campaign.music_rights_verified)
         workspace_ok = True
         if campaign.workspace_id:
@@ -1976,8 +1996,34 @@ class CommercialNetworkService:
         campaign = self.session.get(BrandAdCampaign, payload.campaign_id)
         if campaign is None or (campaign.workspace_id != workspace.id and campaign.advertiser_id != user.id):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found.")
+        existing_sub: AdvertiserSubscription | None = None
         if campaign.payment_status == "paid":
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Campaign has already been paid.")
+            if not campaign.is_subscription:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Campaign has already been paid.")
+            existing_sub = self.session.scalar(
+                select(AdvertiserSubscription)
+                .where(
+                    AdvertiserSubscription.campaign_id == campaign.id,
+                    AdvertiserSubscription.status.in_(["active", "paused", "past_due", "expired"]),
+                )
+                .order_by(AdvertiserSubscription.created_at.desc())
+            )
+            if existing_sub is None:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Campaign has already been paid.")
+
+        self._validate_callback_url(payload.callback_url)
+
+        # A single in-flight checkout per campaign: reuse it instead of creating a duplicate.
+        in_flight = self.session.scalar(
+            select(AdvertiserPaymentRecord)
+            .where(
+                AdvertiserPaymentRecord.campaign_id == campaign.id,
+                AdvertiserPaymentRecord.status == "pending",
+            )
+            .order_by(AdvertiserPaymentRecord.created_at.desc())
+        )
+        if in_flight is not None:
+            return self.serialize_payment(in_flight)
 
         amount_minor = int(campaign.price_minor_ngn or 0)
         if amount_minor <= 0:
@@ -1986,24 +2032,37 @@ class CommercialNetworkService:
                 detail="Commercial NGN pricing is not yet configured for the selected package or placement. An administrator must configure NGN pricing before payment initiation.",
             )
 
-        if campaign.is_subscription and not payload.subscription_consent_accepted:
+        if campaign.is_subscription and existing_sub is None and not payload.subscription_consent_accepted:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Explicit consent to recurring NGN subscription billing is required before checkout.",
             )
 
-        idem_key = (payload.idempotency_key or f"pay-{campaign.id}-{amount_minor}").strip()[:120]
+        attempt_count = (
+            self.session.scalar(
+                select(func.count())
+                .select_from(AdvertiserPaymentRecord)
+                .where(AdvertiserPaymentRecord.campaign_id == campaign.id)
+            )
+            or 0
+        )
+        idem_key = (payload.idempotency_key or f"pay-{campaign.id}-{amount_minor}-{attempt_count}").strip()[:120]
         existing_payment = self.session.scalar(
             select(AdvertiserPaymentRecord).where(AdvertiserPaymentRecord.idempotency_key == idem_key)
         )
-        if existing_payment is not None and existing_payment.status in {"pending", "paid"}:
-            return self.serialize_payment(existing_payment)
+        if existing_payment is not None:
+            if existing_payment.campaign_id != campaign.id or existing_payment.workspace_id != workspace.id:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Idempotency key already in use.")
+            if existing_payment.status in {"pending", "processing", "paid"}:
+                return self.serialize_payment(existing_payment)
+            # Prior attempt ended (failed/reversed/etc.): a retry gets a fresh unique key.
+            idem_key = f"{idem_key[:105]}-r{uuid4().hex[:8]}"
 
         reference = f"GTEX-ADV-NGN-{uuid4().hex[:12].upper()}"
         now = _utcnow()
 
-        subscription: AdvertiserSubscription | None = None
-        if campaign.is_subscription:
+        subscription: AdvertiserSubscription | None = existing_sub
+        if campaign.is_subscription and existing_sub is None:
             subscription = AdvertiserSubscription(
                 workspace_id=workspace.id,
                 campaign_id=campaign.id,
@@ -2067,7 +2126,7 @@ class CommercialNetworkService:
             logger.error("Gateway checkout initialization failed for %s: %s", payload.provider, ex)
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Failed to initialize checkout session with {payload.provider}: {ex}",
+                detail=f"Failed to initialize checkout session with {payload.provider}. Please try again later.",
             )
 
         payment = AdvertiserPaymentRecord(
@@ -2100,8 +2159,8 @@ class CommercialNetworkService:
             workspace_id=workspace.id,
             campaign_id=campaign.id,
             payment_record_id=payment.id,
-            subtotal_minor_ngn=amount_minor,
-            tax_minor_ngn=0,
+            subtotal_minor_ngn=amount_minor - _vat_inclusive_minor(amount_minor),
+            tax_minor_ngn=_vat_inclusive_minor(amount_minor),
             discount_minor_ngn=0,
             total_minor_ngn=amount_minor,
             currency="NGN",
@@ -2140,6 +2199,47 @@ class CommercialNetworkService:
         self.session.commit()
         self.session.refresh(payment)
         return self.serialize_payment(payment, invoice_number=invoice_number)
+
+    def _validate_callback_url(self, url: str | None) -> None:
+        """Only allow checkout redirects back to configured GTEX origins (prevents open redirect)."""
+        if not url:
+            return
+        from urllib.parse import urlparse
+
+        allowed = {
+            h.strip().lower()
+            for h in os.getenv("GTEX_ALLOWED_CALLBACK_HOSTS", "gtex.app,www.gtex.app,localhost,127.0.0.1").split(",")
+            if h.strip()
+        }
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").lower()
+        local = host in {"localhost", "127.0.0.1"}
+        if parsed.scheme not in ({"https", "http"} if local else {"https"}) or host not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="callback_url must be an https URL on an approved GTEX domain.",
+            )
+
+    def _apply_reversal_side_effects(self, payment: AdvertiserPaymentRecord) -> None:
+        """Keep campaign, invoice and subscription consistent after a reversal/chargeback."""
+        if payment.campaign_id:
+            campaign = self.session.get(BrandAdCampaign, payment.campaign_id)
+            if campaign is not None:
+                campaign.payment_status = "reversed"
+                campaign.is_active = False
+                campaign.status = "paused"
+        invoice = self.session.scalar(
+            select(AdvertiserInvoice).where(AdvertiserInvoice.payment_record_id == payment.id)
+        )
+        if invoice is not None and invoice.status == "paid":
+            invoice.status = "void"
+        if payment.subscription_id:
+            sub = self.session.get(AdvertiserSubscription, payment.subscription_id)
+            if sub is not None and sub.status != "cancelled":
+                sub.status = "cancelled"
+                sub.cancelled_at = _utcnow()
+                sub.cancellation_reason = "Payment reversed"
+                sub.next_billing_at = None
 
     def verify_payment_server_side(
         self,
@@ -2198,7 +2298,7 @@ class CommercialNetworkService:
             )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Failed to verify payment with gateway {payment.provider}: {ex}",
+                detail=f"Failed to verify payment with gateway {payment.provider}. Please try again later.",
             )
 
         # -------------------------------------------------------------
@@ -2210,12 +2310,7 @@ class CommercialNetworkService:
             payment.failure_reason = f"Payment was reversed by provider ({verification.status})."
             if provider_payload or verification.raw_payload:
                 payment.provider_payload_json = provider_payload or verification.raw_payload
-            if payment.campaign_id:
-                campaign = self.session.get(BrandAdCampaign, payment.campaign_id)
-                if campaign is not None:
-                    campaign.payment_status = "reversed"
-                    campaign.is_active = False
-                    campaign.status = "paused"
+            self._apply_reversal_side_effects(payment)
             self.session.commit()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -2402,9 +2497,12 @@ class CommercialNetworkService:
         if payment.subscription_id:
             sub = self.session.get(AdvertiserSubscription, payment.subscription_id)
             if sub is not None:
+                prev_end = _as_utc(sub.current_period_end)
+                # Renewal paid before expiry extends the existing period instead of overlapping it.
+                period_start = prev_end if (sub.status == "active" and prev_end and prev_end > now) else now
                 sub.status = "active"
-                sub.current_period_start = now
-                sub.current_period_end = now + timedelta(days=sub.billing_interval_days)
+                sub.current_period_start = period_start
+                sub.current_period_end = period_start + timedelta(days=sub.billing_interval_days)
                 sub.next_billing_at = sub.current_period_end
                 sub.grace_period_ends_at = None
 
@@ -2628,14 +2726,14 @@ class CommercialNetworkService:
             event_type=event_type,
             payment_reference=reference or None,
             signature_verified=True,
-            processed=True,
+            processed=False,
             payload_json=payload_dict,
         )
         if existing_event is None:
             self.session.add(webhook_row)
             self.session.flush()
 
-        if reference and event_type in {"charge.success", "payment_intent.succeeded", "transfer.success"}:
+        if reference and event_type in {"charge.success", "payment_intent.succeeded"}:
             try:
                 self.verify_payment_server_side(
                     reference=reference,
@@ -2662,12 +2760,7 @@ class CommercialNetworkService:
                 target_payment.status = "reversed"
                 target_payment.failure_reason = f"Payment reversed via webhook event '{event_type}'."
                 target_payment.provider_payload_json = payload_dict
-                if target_payment.campaign_id:
-                    campaign = self.session.get(BrandAdCampaign, target_payment.campaign_id)
-                    if campaign is not None:
-                        campaign.payment_status = "reversed"
-                        campaign.is_active = False
-                        campaign.status = "paused"
+                self._apply_reversal_side_effects(target_payment)
                 self.record_audit_log(
                     actor_user_id=None,
                     workspace_id=target_payment.workspace_id,
@@ -2724,6 +2817,7 @@ class CommercialNetworkService:
                     metadata_json={"reference": reference, "refund_minor": refund_amount_minor},
                 )
 
+        webhook_row.processed = True
         self.session.commit()
         return {"status": "processed", "event_id": event_id, "reference": reference}
 
@@ -2825,19 +2919,24 @@ class CommercialNetworkService:
             sub.cancellation_reason = payload.reason or "Cancelled by advertiser"
             sub.next_billing_at = None
         elif payload.action == "pause":
+            if sub.status != "active":
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only active subscriptions can be paused.")
             sub.status = "paused"
         elif payload.action == "resume":
+            # Resume never grants new paid time: only allowed inside an already-paid period.
+            period_end = _as_utc(sub.current_period_end)
+            if sub.status != "paused" or period_end is None or period_end <= now:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Subscription period has lapsed. Start a new payment to renew.",
+                )
             sub.status = "active"
         elif payload.action == "renew":
-            sub.status = "active"
-            sub.current_period_start = now
-            sub.current_period_end = now + timedelta(days=sub.billing_interval_days)
-            sub.next_billing_at = sub.current_period_end
-            campaign = self.session.get(BrandAdCampaign, sub.campaign_id)
-            if campaign is not None and campaign.is_approved:
-                campaign.end_at = sub.current_period_end
-                campaign.is_active = True
-                campaign.status = "active"
+            # Renewal requires a verified payment; time is only extended in verify_payment_server_side.
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail="Renewal requires payment. Initiate a new payment for this campaign.",
+            )
 
         self.record_audit_log(
             actor_user_id=user.id,
@@ -2888,13 +2987,27 @@ class CommercialNetworkService:
         if payment.status not in {"paid", "partially_refunded"}:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only paid transactions can be refunded.")
 
-        refund_amount = int(payload.amount_minor_ngn or payment.amount_minor_ngn)
-        if refund_amount > int(payment.amount_minor_ngn):
+        refund_amount = int(payload.amount_minor_ngn or 0)
+        already_refunded = int(
+            self.session.scalar(
+                select(func.coalesce(func.sum(AdvertiserRefundRecord.amount_minor_ngn), 0)).where(
+                    AdvertiserRefundRecord.payment_record_id == payment.id,
+                    AdvertiserRefundRecord.status != "failed",
+                )
+            )
+            or 0
+        )
+        remaining = int(payment.amount_minor_ngn) - already_refunded
+        if payload.amount_minor_ngn is None:
+            refund_amount = remaining
+        if refund_amount <= 0 or refund_amount > remaining:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Refund amount cannot exceed original payment amount.",
+                detail=f"Refund amount must be between 1 and the remaining refundable balance ({remaining} kobo).",
             )
 
+        # The provider adapters expose no refund API, so the money movement is performed
+        # out-of-band on the gateway dashboard. Record it honestly as pending, not completed.
         refund = AdvertiserRefundRecord(
             payment_record_id=payment.id,
             workspace_id=payment.workspace_id,
@@ -2902,13 +3015,26 @@ class CommercialNetworkService:
             amount_minor_ngn=refund_amount,
             currency="NGN",
             reason=payload.reason.strip(),
-            status="completed",
+            status="pending_provider",
             approved_by_user_id=finance_admin.id,
-            provider_refund_reference=f"RFD-{uuid4().hex[:10].upper()}",
+            provider_refund_reference=None,
         )
         self.session.add(refund)
 
-        payment.status = "refunded" if refund_amount == int(payment.amount_minor_ngn) else "partially_refunded"
+        payment.status = "refunded" if already_refunded + refund_amount >= int(payment.amount_minor_ngn) else "partially_refunded"
+        if payment.status == "refunded":
+            invoice = self.session.scalar(
+                select(AdvertiserInvoice).where(AdvertiserInvoice.payment_record_id == payment.id)
+            )
+            if invoice is not None:
+                invoice.status = "refunded"
+            if payment.subscription_id:
+                sub = self.session.get(AdvertiserSubscription, payment.subscription_id)
+                if sub is not None:
+                    sub.status = "cancelled"
+                    sub.cancelled_at = _utcnow()
+                    sub.cancellation_reason = "Payment refunded"
+                    sub.next_billing_at = None
         if payment.campaign_id and payment.status == "refunded":
             campaign = self.session.get(BrandAdCampaign, payment.campaign_id)
             if campaign is not None:
@@ -2965,11 +3091,21 @@ class CommercialNetworkService:
             campaign.reviewed_at = now
             campaign.reviewed_by_user_id = admin_user.id
             campaign.review_note = payload.note
-            if campaign.campaign_type == "music" and campaign.music_rights_declaration_accepted:
-                campaign.music_rights_verified = True
+            # Rights are NEVER inferred from the advertiser's own declaration;
+            # an admin must explicitly verify them via the "verify_rights" action.
             if not self.activate_campaign_if_ready(campaign):
                 campaign.status = "awaiting_payment" if campaign.payment_status != "paid" else "scheduled"
                 campaign.is_active = False
+        elif action == "verify_rights":
+            if campaign.campaign_type != "music" or not campaign.music_rights_declaration_accepted:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Only music campaigns with an accepted rights declaration can be rights-verified.",
+                )
+            campaign.music_rights_verified = True
+            campaign.review_note = payload.note
+            if campaign.is_approved:
+                self.activate_campaign_if_ready(campaign)
         elif action in {"reject", "request_changes"}:
             campaign.is_approved = False
             campaign.is_active = False

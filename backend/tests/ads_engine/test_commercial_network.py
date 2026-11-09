@@ -638,6 +638,13 @@ def test_full_brand_and_music_campaigns_ngn_billing_and_rbac(tmp_path: Path, mon
         headers=_auth_header(content_admin_token),
         json={"action": "approve"},
     )
+    # Rights are no longer auto-verified on approval; an explicit admin action is required.
+    rights_res = client.post(
+        f"/api/v2/admin/advertising/campaigns/{mc_data['id']}/moderate",
+        headers=_auth_header(content_admin_token),
+        json={"action": "verify_rights", "note": "Rights holder documents checked."},
+    )
+    assert rights_res.status_code == 200, rights_res.text
 
     # Check Music Rotation Feed
     rot_res = client.get("/api/v2/public/ads/music/rotation")
@@ -675,4 +682,4 @@ def test_full_brand_and_music_campaigns_ngn_billing_and_rbac(tmp_path: Path, mon
         json={"payment_record_id": payment_record["id"], "reason": "Approved finance refund"},
     )
     assert authorized_refund.status_code == 201, authorized_refund.text
-    assert authorized_refund.json()["status"] == "completed"
+    assert authorized_refund.json()["status"] == "pending_provider"

@@ -556,7 +556,9 @@ class AdminWorkspaceActionRequest(BaseModel):
 class AdminCampaignModerationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    action: Literal["approve", "reject", "request_changes", "pause", "resume", "suspend", "takedown", "archive"]
+    action: Literal[
+        "approve", "reject", "request_changes", "pause", "resume", "suspend", "takedown", "archive", "verify_rights"
+    ]
     note: str | None = Field(default=None, max_length=1000)
 
 
