@@ -45,6 +45,8 @@ CANONICAL_GSI_OVERRIDES = {
     "zinedine zidane": (95, 95),
     "ronaldinho": (95, 95),
     "alfredo di stéfano": (95, 95),
+    "neymar": (93, 93),
+    "neymar jr": (93, 93),
     "eric cantona": (91, 91),
     "éric cantona": (91, 91),
     "michael laudrup": (90, 90),
@@ -59,6 +61,8 @@ KNOWN_DUPLICATE_RETIREMENTS = {
     "55f70b9b-dae9-4a55-8721-ccf9bdaa0154": "b496213b-ff42-4feb-878f-55389ae7a50c",
     # Luis Figo duplicate
     "0704b985-6e51-49fc-bf74-45820da69183": "5220d191-0220-4d93-87c2-e47d15929d7d",
+    # Neymar duplicate -> Neymar Jr Legend (Age 20, GSI 93)
+    "f17a2b00-1781-4c57-b151-b7bad93bf227": "f6e920aa-77d5-4f52-8b39-e5f34e55b1ca",
 }
 
 # Known duplicate legendary profiles to deactivate
