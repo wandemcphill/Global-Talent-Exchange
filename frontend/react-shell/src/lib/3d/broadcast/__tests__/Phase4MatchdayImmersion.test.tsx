@@ -79,6 +79,96 @@ describe("GTEX 3D Matchday Phase 4 — Cinematic Replay Studio, Dynamic Turf Wea
       studio.dispose();
       expect(studio.getBookmarks().length).toBe(0);
     });
+
+    test("retains a rolling 22-player spatial transform buffer, offers two alternate angles, and computes tactical freeze-frames", () => {
+      const studio = new ReplayDirectorStudio({ maxSpatialFrames: 60 });
+
+      for (let step = 0; step < 5; step++) {
+        studio.recordSpatialFrame({
+          timestampSec: 10 + step * 0.5,
+          clockMinute: 12,
+          possessionSide: "home",
+          ball: {
+            position3D: [20 + step * 5, 0.2 * step, -2],
+            height: 0.2 * step,
+            state: "pass",
+            owner_player_id: "h-10",
+          },
+          players: [
+            {
+              player_id: "h-10",
+              team_id: "home",
+              side: "home",
+              shirt_number: 10,
+              label: "Bellingham",
+              role: "AM",
+              position3D: [20 + step * 4, 0, -2],
+              facingAngleRad: 0,
+              animation_state: "pass",
+              speed_ratio: 0.6,
+              has_possession: true,
+            },
+            {
+              player_id: "h-9",
+              team_id: "home",
+              side: "home",
+              shirt_number: 9,
+              label: "Osimhen",
+              role: "ST",
+              position3D: [32 + step * 3, 0, 4],
+              facingAngleRad: 0,
+              animation_state: "run",
+              speed_ratio: 0.8,
+              has_possession: false,
+            },
+            {
+              player_id: "a-4",
+              team_id: "away",
+              side: "away",
+              shirt_number: 4,
+              label: "Van Dijk",
+              role: "CB",
+              position3D: [38, 0, -4],
+              facingAngleRad: Math.PI,
+              animation_state: "jog",
+              speed_ratio: 0.4,
+              has_possession: false,
+            },
+            {
+              player_id: "a-5",
+              team_id: "away",
+              side: "away",
+              shirt_number: 5,
+              label: "Araujo",
+              role: "CB",
+              position3D: [39, 0, 6],
+              facingAngleRad: Math.PI,
+              animation_state: "jog",
+              speed_ratio: 0.4,
+              has_possession: false,
+            },
+          ],
+        });
+      }
+
+      expect(studio.getSpatialBufferLength()).toBe(5);
+
+      const sampledMid = studio.sampleReplayFrame(0.5);
+      expect(sampledMid).not.toBeNull();
+      expect(sampledMid?.ball.position3D[0]).toBeCloseTo(30, 1);
+      expect(sampledMid?.players.length).toBe(4);
+
+      const angleSelection = studio.selectAnglesForEvent("goal");
+      expect(angleSelection.primaryAngle).toBe("reverse_angle_pov");
+      expect(angleSelection.alternateAngles).toHaveLength(2);
+
+      const freeze = studio.computeTacticalFreezeFrame();
+      expect(freeze).not.toBeNull();
+      expect(freeze?.offsideLineX).toBeCloseTo(38.5, 1);
+      expect(freeze?.passLane?.recipientId).toBe("h-9");
+      expect(freeze?.shotVector?.estimatedXg).toBeGreaterThan(0);
+      expect(freeze?.defensiveShapePolygon).toHaveLength(2);
+    });
   });
 
   describe("2. Dynamic Pitch Turf Degradation & Ball Water Spray (PitchTurfDegradationSystem)", () => {

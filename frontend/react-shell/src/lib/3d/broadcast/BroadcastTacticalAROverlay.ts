@@ -41,6 +41,8 @@ export interface BroadcastAROverlaySummary {
   activeOffsideLineX: number;
   activePassingLaneCount: number;
   shotTrailSampleCount: number;
+  activePassRecipientId?: string | null;
+  activeTacticalInstruction?: string | null;
 }
 
 export interface BroadcastAROverlayOptions {
@@ -84,12 +86,16 @@ export class BroadcastTacticalAROverlay {
   private ballTrailMesh: THREE.Line;
   private ballTrailHistory: Array<[number, number, number]> = [];
   private carrierRingMesh: THREE.Mesh;
+  private recipientRingMesh: THREE.Mesh;
+  private instructionRingMesh: THREE.Mesh;
 
   // Telemetry state
   private homeDefensiveLineX: number = -28.0;
   private awayDefensiveLineX: number = 28.0;
   private activeOffsideLineX: number = 28.0;
   private activePassingLaneCount: number = 0;
+  private activePassRecipientId: string | null = null;
+  private activeTacticalInstruction: string | null = null;
 
   private disposables: Array<{ dispose: () => void }> = [];
 
@@ -217,6 +223,37 @@ export class BroadcastTacticalAROverlay {
     this.carrierRingMesh.position.y = 0.04;
     this.group.add(this.carrierRingMesh);
 
+    // 5. Subtle Pass Recipient & Tactical Instruction Readability Markers
+    const recipientRingGeo = new THREE.RingGeometry(0.92, 1.16, 24);
+    const recipientRingMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0.58,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const instructionRingGeo = new THREE.RingGeometry(1.25, 1.48, 24);
+    const instructionRingMat = new THREE.MeshBasicMaterial({
+      color: 0xfacc15,
+      transparent: true,
+      opacity: 0.5,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    this.disposables.push(recipientRingGeo, recipientRingMat, instructionRingGeo, instructionRingMat);
+
+    this.recipientRingMesh = new THREE.Mesh(recipientRingGeo, recipientRingMat);
+    this.recipientRingMesh.rotation.x = -Math.PI / 2;
+    this.recipientRingMesh.position.y = 0.042;
+    this.recipientRingMesh.visible = false;
+    this.group.add(this.recipientRingMesh);
+
+    this.instructionRingMesh = new THREE.Mesh(instructionRingGeo, instructionRingMat);
+    this.instructionRingMesh.rotation.x = -Math.PI / 2;
+    this.instructionRingMesh.position.y = 0.038;
+    this.instructionRingMesh.visible = false;
+    this.group.add(this.instructionRingMesh);
+
     this.applyModeVisibility();
   }
 
@@ -293,12 +330,26 @@ export class BroadcastTacticalAROverlay {
     const homeDefs: InterpolatedPlayerState[] = [];
     const awayDefs: InterpolatedPlayerState[] = [];
     let carrier: InterpolatedPlayerState | null = null;
+    this.activePassRecipientId = null;
+    this.activeTacticalInstruction = null;
+    this.recipientRingMesh.visible = false;
+    this.instructionRingMesh.visible = false;
 
     for (let i = 0; i < players.length; i++) {
       const p = players[i];
       if (p.active === false) continue;
       if (p.has_possession) {
         carrier = p;
+      }
+      if (p.is_pass_recipient || p.is_receiving_ball) {
+        this.activePassRecipientId = p.player_id;
+        this.recipientRingMesh.position.set(p.position3D[0], 0.042, p.position3D[2]);
+        this.recipientRingMesh.visible = true;
+      }
+      if (p.tactical_instruction_marker) {
+        this.activeTacticalInstruction = p.tactical_instruction_marker;
+        this.instructionRingMesh.position.set(p.position3D[0], 0.038, p.position3D[2]);
+        this.instructionRingMesh.visible = this.mode !== "off";
       }
       const role = p.role.toUpperCase();
       if (role === "GK") continue;
@@ -403,6 +454,8 @@ export class BroadcastTacticalAROverlay {
       activeOffsideLineX: this.activeOffsideLineX,
       activePassingLaneCount: this.activePassingLaneCount,
       shotTrailSampleCount: this.ballTrailHistory.length,
+      activePassRecipientId: this.activePassRecipientId,
+      activeTacticalInstruction: this.activeTacticalInstruction,
     };
   }
 

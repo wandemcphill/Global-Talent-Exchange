@@ -22,6 +22,13 @@ class GiftSendRequest(BaseModel):
     match_id: str | None = Field(default=None, max_length=64)
     competition_id: str | None = Field(default=None, max_length=64)
 
+    @field_validator("quantity")
+    @classmethod
+    def _validate_integer_quantity(cls, value: Decimal) -> Decimal:
+        if value != value.to_integral_value():
+            raise ValueError("Gift quantity must be a whole number.")
+        return value
+
 
 class GiftCatalogItemView(BaseModel):
     id: str
@@ -132,8 +139,8 @@ class GiftCatalogAdminUpsertRequest(BaseModel):
     display_name: str = Field(min_length=2, max_length=160)
     fallback_display_name: str | None = Field(default=None, max_length=160)
     description: str | None = Field(default=None, max_length=2000)
-    cost_amount: Decimal | None = Field(default=None, ge=0)
-    fancoin_price: Decimal | None = Field(default=None, ge=0)
+    cost_amount: Decimal | None = Field(default=None, gt=0)
+    fancoin_price: Decimal | None = Field(default=None, gt=0)
     currency: str = Field(default="credit", max_length=16)
     rarity: str = Field(default="common", max_length=32)
     tier: str = Field(default="standard", max_length=32)
@@ -170,8 +177,8 @@ class GiftCatalogAdminPatchRequest(BaseModel):
     display_name: str | None = Field(default=None, min_length=2, max_length=160)
     fallback_display_name: str | None = Field(default=None, max_length=160)
     description: str | None = Field(default=None, max_length=2000)
-    cost_amount: Decimal | None = Field(default=None, ge=0)
-    fancoin_price: Decimal | None = Field(default=None, ge=0)
+    cost_amount: Decimal | None = Field(default=None, gt=0)
+    fancoin_price: Decimal | None = Field(default=None, gt=0)
     currency: str | None = Field(default=None, max_length=16)
     rarity: str | None = Field(default=None, max_length=32)
     tier: str | None = Field(default=None, max_length=32)

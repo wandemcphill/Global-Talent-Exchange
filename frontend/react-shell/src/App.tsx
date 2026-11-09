@@ -14,7 +14,7 @@ import RegenWorld from "@/pages/RegenWorld";
 import RegenAwards from "@/pages/RegenAwards";
 import Competitions from "@/pages/Competitions";
 import CompetitionDetail from "@/pages/CompetitionDetail";
-import MatchCenter from "@/pages/MatchCenter";
+const MatchCenter = React.lazy(() => import("@/pages/MatchCenter"));
 import Squad from "@/pages/Squad";
 import Lineup from "@/pages/Lineup";
 import Academy from "@/pages/Academy";
@@ -22,21 +22,21 @@ import CreatorAccess from "@/pages/CreatorAccess";
 import CoinTraders from "@/pages/CoinTraders";
 import Finance from "@/pages/Finance";
 import InboxPage from "@/pages/Inbox";
-import Admin from "@/pages/Admin";
-import AdminAdvertising from "@/pages/AdminAdvertising";
-import CommercialPublicPortal from "@/pages/CommercialPublicPortal";
+const Admin = React.lazy(() => import("@/pages/Admin"));
+const AdminAdvertising = React.lazy(() => import("@/pages/AdminAdvertising"));
+const CommercialPublicPortal = React.lazy(() => import("@/pages/CommercialPublicPortal"));
 import AdvertiserAuthPage from "@/pages/AdvertiserAuthPage";
-import AdvertiserWorkspacePortal from "@/pages/AdvertiserWorkspacePortal";
+const AdvertiserWorkspacePortal = React.lazy(() => import("@/pages/AdvertiserWorkspacePortal"));
 import PaymentCallback from "@/pages/PaymentCallback";
 import NationalTeam from "@/pages/NationalTeam";
 import { ClubStory } from "@/pages/ClubStory";
 import PublicClubProfile from "@/pages/PublicClubProfile";
 import { Newsroom } from "@/pages/Newsroom";
-import { Showroom } from "@/pages/Showroom";
-import ClubCampus from "@/pages/ClubCampus";
+const Showroom = React.lazy(() => import("@/pages/Showroom").then((m) => ({ default: m.Showroom })));
+const ClubCampus = React.lazy(() => import("@/pages/ClubCampus"));
 import Jackpot from "@/pages/Jackpot";
 import AppearanceStudio from "@/pages/AppearanceStudio";
-import ClubIdentityStudio from "@/pages/ClubIdentityStudio";
+const ClubIdentityStudio = React.lazy(() => import("@/pages/ClubIdentityStudio"));
 import { ClubAuthorityPage } from "@/pages/ClubAuthorityPage";
 import { SkinProvider } from "@/lib/skin-engine";
 import { ROUTER_BASENAME } from "@/lib/publicPath";
@@ -77,6 +77,7 @@ export default function App() {
       <SkinProvider>
         <GtexAudioProvider>
           <BrowserRouter basename={ROUTER_BASENAME}>
+            <React.Suspense fallback={<Loading label="Loading GTEX 3D Studio..." />}>
             <Routes>
               {/* Public GTEX Consumer Routes */}
               <Route path="/" element={<GtexAdvertisingProvider><Landing /></GtexAdvertisingProvider>} />
@@ -209,6 +210,7 @@ export default function App() {
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            </React.Suspense>
           </BrowserRouter>
           <Toaster theme="dark" position="top-right" richColors />
         </GtexAudioProvider>

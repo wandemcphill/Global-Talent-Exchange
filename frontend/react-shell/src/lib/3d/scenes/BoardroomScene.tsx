@@ -13,6 +13,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { disposeScene } from "../disposeScene";
 import { useQuery } from "@tanstack/react-query";
 import {
   Building2,
@@ -608,9 +609,14 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
     // -----------------------------------------------------------------------
     let animId: number;
     let clock = new THREE.Clock();
+    const handleContextLost = (e: Event) => {
+      e.preventDefault();
+    };
+    renderer.domElement.addEventListener("webglcontextlost", handleContextLost, false);
 
     const animate = () => {
       animId = requestAnimationFrame(animate);
+      if (typeof document !== "undefined" && document.hidden) return;
       const dt = clock.getDelta();
 
       // Pulsing and spinning Dilemma Beacon
@@ -654,14 +660,11 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
     return () => {
       cancelAnimationFrame(animId);
       resizeObserver.disconnect();
+      renderer.domElement.removeEventListener("webglcontextlost", handleContextLost);
       renderer.domElement.removeEventListener("mousemove", handlePointerMove);
       renderer.domElement.removeEventListener("pointerdown", handlePointerDown);
       controls.dispose();
-      renderer.dispose();
-      scene.clear();
-      if (container.contains(renderer.domElement)) {
-        container.removeChild(renderer.domElement);
-      }
+      disposeScene(scene, renderer);
     };
   }, [activeQuality, lightingMode, handleOpenPersonaInteraction, handleOpenDilemmaModal]);
 

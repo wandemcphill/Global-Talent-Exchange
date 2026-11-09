@@ -23,6 +23,7 @@ import {
   Layers,
 } from "lucide-react";
 import { GtexSceneRegistry } from "../GtexSceneRegistry";
+import { disposeScene } from "../disposeScene";
 import type { GtexSceneRendererProps } from "../GtexSceneTypes";
 import { PersonaSpatialInteractionModal } from "../PersonaSpatialInteractionModal";
 import { api } from "@/lib/api";
@@ -453,9 +454,14 @@ export const TacticianSuiteScene: React.FC<TacticianSuiteSceneProps> = ({
     // Animation Loop
     let animId: number;
     const clock = new THREE.Clock();
+    const handleContextLost = (e: Event) => {
+      e.preventDefault();
+    };
+    renderer.domElement.addEventListener("webglcontextlost", handleContextLost, false);
 
     const animate = () => {
       animId = requestAnimationFrame(animate);
+      if (typeof document !== "undefined" && document.hidden) return;
       const dt = clock.getDelta();
 
       if (isTransitioningRef.current) {
@@ -489,14 +495,11 @@ export const TacticianSuiteScene: React.FC<TacticianSuiteSceneProps> = ({
     return () => {
       cancelAnimationFrame(animId);
       resizeObserver.disconnect();
+      renderer.domElement.removeEventListener("webglcontextlost", handleContextLost);
       renderer.domElement.removeEventListener("mousemove", handlePointerMove);
       renderer.domElement.removeEventListener("pointerdown", handlePointerDown);
       controls.dispose();
-      renderer.dispose();
-      scene.clear();
-      if (container.contains(renderer.domElement)) {
-        container.removeChild(renderer.domElement);
-      }
+      disposeScene(scene, renderer);
     };
   }, [activeQuality, lightingMode]);
 

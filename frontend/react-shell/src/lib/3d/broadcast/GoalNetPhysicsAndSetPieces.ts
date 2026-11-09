@@ -27,6 +27,8 @@ export interface GoalNetAndSetPieceSummary {
   homeNetRippleIntensity: number;
   awayNetRippleIntensity: number;
   lastNetImpactSide: "none" | "home" | "away";
+  woodworkVibrationIntensity?: number;
+  lastWoodworkImpactSide?: "none" | "home" | "away";
 }
 
 const GOAL_WIDTH = 7.32;
@@ -54,6 +56,8 @@ export class GoalNetPhysicsAndSetPieces {
   private awayImpactLocalZ: number = 0;
   private awayImpactLocalY: number = 1.2;
   private lastNetImpactSide: "none" | "home" | "away" = "none";
+  private woodworkVibrationIntensity: number = 0;
+  private lastWoodworkImpactSide: "none" | "home" | "away" = "none";
 
   private activeSetPiece: ActiveSetPieceType = "none";
   private setPieceTimerSec: number = 0;
@@ -158,6 +162,19 @@ export class GoalNetPhysicsAndSetPieces {
   }
 
   /**
+   * Triggers post/crossbar woodwork impact vibration and secondary net shimmer.
+   */
+  public triggerWoodworkImpact(
+    goalSide: "home" | "away",
+    impactPosition3D: [number, number, number] = [0, 2.4, 0],
+    force: number = 1.0
+  ): void {
+    this.lastWoodworkImpactSide = goalSide;
+    this.woodworkVibrationIntensity = Math.max(0.3, Math.min(1.5, force));
+    this.triggerGoalNetImpact(goalSide, impactPosition3D, force * 0.45);
+  }
+
+  /**
    * Activates set-piece vanishing foam spray or goal-net impact from match events.
    */
   public triggerMatchEvent(
@@ -167,7 +184,11 @@ export class GoalNetPhysicsAndSetPieces {
   ): void {
     const type = (eventType || "").toLowerCase();
 
-    if (type === "goal") {
+    if (type.includes("woodwork") || type.includes("crossbar") || type.includes("post")) {
+      const targetSide: "home" | "away" =
+        ballPosition3D[0] < 0 ? "home" : scoringOrAttackingSide === "home" ? "away" : "home";
+      this.triggerWoodworkImpact(targetSide, ballPosition3D, 1.15);
+    } else if (type === "goal") {
       // If Home scored, ball went into Away goal (+X), or determine from ball X coordinate
       const targetGoalSide: "home" | "away" =
         Math.abs(ballPosition3D[0]) > 10
@@ -217,8 +238,21 @@ export class GoalNetPhysicsAndSetPieces {
    * Advances goal-net spring-wave vertex displacements and vanishing spray decay.
    */
   public update(deltaSec: number, ballPosition3D: [number, number, number]): void {
-    // Auto-detect physical ball entry into either goal mouth
+    // Auto-detect physical ball entry into either goal mouth or post/crossbar contact
     const [bx, by, bz] = ballPosition3D;
+    if (Math.abs(Math.abs(bx) - HALF_PITCH_L) < 0.35) {
+      const nearPost = Math.abs(Math.abs(bz) - GOAL_WIDTH / 2) < 0.28 && by <= GOAL_HEIGHT + 0.15;
+      const nearCrossbar = Math.abs(bz) <= GOAL_WIDTH / 2 + 0.2 && Math.abs(by - GOAL_HEIGHT) < 0.24;
+      if ((nearPost || nearCrossbar) && this.woodworkVibrationIntensity < 0.2) {
+        this.triggerWoodworkImpact(bx < 0 ? "home" : "away", ballPosition3D, 0.95);
+      }
+    }
+    if (this.woodworkVibrationIntensity > 0.005) {
+      this.woodworkVibrationIntensity *= Math.exp(-deltaSec * 5.0);
+      if (this.woodworkVibrationIntensity <= 0.005) {
+        this.woodworkVibrationIntensity = 0;
+      }
+    }
     if (Math.abs(bx) > HALF_PITCH_L + 0.15 && Math.abs(bz) < GOAL_WIDTH / 2 && by < GOAL_HEIGHT) {
       const side = bx < 0 ? "home" : "away";
       if (side === "home" && this.homeRippleAmplitude < 0.15) {
@@ -324,6 +358,8 @@ export class GoalNetPhysicsAndSetPieces {
       homeNetRippleIntensity: Number(this.homeRippleAmplitude.toFixed(3)),
       awayNetRippleIntensity: Number(this.awayRippleAmplitude.toFixed(3)),
       lastNetImpactSide: this.lastNetImpactSide,
+      woodworkVibrationIntensity: Number(this.woodworkVibrationIntensity.toFixed(3)),
+      lastWoodworkImpactSide: this.lastWoodworkImpactSide,
     };
   }
 

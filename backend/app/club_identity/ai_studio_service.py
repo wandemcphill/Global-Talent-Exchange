@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -95,7 +96,8 @@ class ClubIdentityStudioService:
         norm_country = (country_code or "FRA").strip().upper()
         norm_city = city_name or "Metropolis"
 
-        # 1. Calibrate Club DNA based on user answers
+        # 1. Multi-dimensional Club DNA calibration (recruitment_focus + preferred_style + age + nationality)
+        style_norm = (preferred_style or "traditional").strip().lower()
         if recruitment_focus == "academy":
             primary_phil = DNAPhilosophy.ACADEMY_FIRST.value
             sec_phils = [DNAPhilosophy.YOUTH_DEVELOPMENT.value, DNAPhilosophy.FINANCIALLY_SUSTAINABLE.value]
@@ -120,12 +122,21 @@ class ClubIdentityStudioService:
             strat = TransferStrategy.BUY_UNDERVALUED.value
             fin = FinancialPhilosophy.SUSTAINABLE.value
             narrative = f"{club_name} balances sporting competitiveness with long-term fiscal discipline, emphasizing smart scouting, performance metrics, and sustainable squad building."
+        elif recruitment_focus == "balanced":
+            primary_phil = DNAPhilosophy.BALANCED.value
+            sec_phils = [DNAPhilosophy.FINANCIALLY_SUSTAINABLE.value, DNAPhilosophy.YOUTH_DEVELOPMENT.value]
+            strat = TransferStrategy.BUY_UNDERVALUED.value
+            fin = FinancialPhilosophy.BALANCED.value
+            narrative = f"{club_name} combines tactical versatility in {norm_city} with balanced squad age profiling and disciplined recruitment."
         else:  # youth (default)
             primary_phil = DNAPhilosophy.YOUTH_DEVELOPMENT.value
             sec_phils = [DNAPhilosophy.ACADEMY_FIRST.value, DNAPhilosophy.BALANCED.value]
             strat = TransferStrategy.BUY_YOUNG_DEVELOP_SELL.value
             fin = FinancialPhilosophy.BALANCED.value
             narrative = f"{club_name} is an ambitious football institution in {norm_city} focused on nurturing young domestic talent, developing agile squads, and building enduring club legacy."
+
+        if style_norm in {"modern", "attacking", "aggressive"} and DNAPhilosophy.SUPERSTAR.value not in sec_phils:
+            narrative += f" Styled with a {style_norm} visual and tactical identity ({preferred_age_bracket} core)."
 
         # Age settings
         age_map = {"U18": 18, "U21": 21, "U23": 23, "U25": 25, "U27": 27}
@@ -320,30 +331,72 @@ class ClubIdentityStudioService:
         updated_crest = dict(current_crest)
         changes_applied: list[str] = []
 
-        # Color changes
-        if "gold" in prompt and "blue" in prompt:
-            updated_kit["primary_color"] = "#0F172A"
-            updated_kit["secondary_color"] = "#1E3A8A"
-            updated_kit["accent_color"] = "#F59E0B"
-            updated_crest["primary_color"] = "#1E3A8A"
-            updated_crest["accent_color"] = "#F59E0B"
-            changes_applied.append("Set primary color to navy/dark blue and accents to gold.")
-        elif "black" in prompt:
-            updated_kit["primary_color"] = "#090D14"
-            updated_kit["shorts_color"] = "#090D14"
-            changes_applied.append("Switched kit base to carbon black.")
-        elif "green" in prompt or "emerald" in prompt:
-            updated_kit["primary_color"] = "#047857"
-            updated_crest["primary_color"] = "#047857"
-            changes_applied.append("Updated kit and crest primary tone to emerald green.")
-        elif "red" in prompt or "crimson" in prompt:
-            updated_kit["primary_color"] = "#991B1B"
-            updated_crest["primary_color"] = "#991B1B"
-            changes_applied.append("Updated kit and crest primary tone to crimson red.")
-        elif "white" in prompt:
-            updated_kit["primary_color"] = "#F8FAFC"
-            updated_kit["secondary_color"] = "#0F172A"
-            changes_applied.append("Updated primary color to clean white.")
+        # Strip negated color/style phrases (e.g. "not red", "no red", "without blue", "avoid crimson", "never white")
+        cleaned_prompt = re.sub(
+            r"\b(?:not|no|without|avoid|never|instead\s+of|drop|remove)\s+(?:any\s+)?[a-z#0-9_-]+(?:\s+or\s+[a-z#0-9_-]+)?",
+            " ",
+            prompt,
+        )
+
+        color_lexicon: list[tuple[tuple[str, ...], str, str]] = [
+            (("black", "obsidian", "carbon", "midnight"), "#090D14", "carbon black"),
+            (("emerald", "green", "forest", "mint"), "#047857", "emerald green"),
+            (("navy", "royal blue", "dark blue", "blue", "cobalt"), "#1E3A8A", "royal blue"),
+            (("sky", "cyan", "aqua", "light blue", "electric blue"), "#38BDF8", "sky blue"),
+            (("gold", "amber", "yellow", "champagne"), "#F59E0B", "championship gold"),
+            (("crimson", "red", "scarlet", "burgundy", "maroon"), "#991B1B", "crimson red"),
+            (("white", "pearl", "ivory", "snow"), "#F8FAFC", "clean pearl white"),
+            (("purple", "violet", "plum"), "#6D28D9", "royal violet"),
+            (("silver", "platinum", "grey", "gray", "slate"), "#94A3B8", "metallic silver"),
+            (("orange", "coral", "tangerine"), "#EA580C", "blazing orange"),
+            (("pink", "rose", "magenta"), "#E11D48", "electric rose"),
+        ]
+
+        # Extract ordered positive color mentions (supports 1, 2, or 3 colors like "black and green" or "gold and blue")
+        matched_colors: list[tuple[int, str, str]] = []
+        for aliases, hex_code, label in color_lexicon:
+            earliest_pos: int | None = None
+            for alias in aliases:
+                m = re.search(rf"\b{re.escape(alias)}\b", cleaned_prompt)
+                if m and (earliest_pos is None or m.start() < earliest_pos):
+                    earliest_pos = m.start()
+            if earliest_pos is not None:
+                matched_colors.append((earliest_pos, hex_code, label))
+
+        for hex_match in re.finditer(r"#[0-9a-f]{6}\b", cleaned_prompt):
+            matched_colors.append((hex_match.start(), hex_match.group(0).upper(), hex_match.group(0).upper()))
+
+        matched_colors.sort(key=lambda item: item[0])
+
+        if len(matched_colors) >= 2:
+            c1_hex, c1_label = matched_colors[0][1], matched_colors[0][2]
+            c2_hex, c2_label = matched_colors[1][1], matched_colors[1][2]
+            c3_hex = matched_colors[2][1] if len(matched_colors) >= 3 else c2_hex
+            if {c1_label, c2_label} == {"championship gold", "royal blue"}:
+                updated_kit["primary_color"] = "#0F172A"
+                updated_kit["secondary_color"] = "#1E3A8A"
+                updated_kit["accent_color"] = "#F59E0B"
+                updated_crest["primary_color"] = "#1E3A8A"
+                updated_crest["accent_color"] = "#F59E0B"
+            else:
+                updated_kit["primary_color"] = c1_hex
+                updated_kit["secondary_color"] = c2_hex
+                updated_kit["accent_color"] = c3_hex
+                updated_kit["shorts_color"] = c1_hex
+                updated_kit["socks_color"] = c2_hex
+                updated_crest["primary_color"] = c1_hex
+                updated_crest["secondary_color"] = c2_hex
+                updated_crest["accent_color"] = c3_hex
+            changes_applied.append(f"Applied {c1_label} primary with {c2_label} secondary/accent palette.")
+        elif len(matched_colors) == 1:
+            c1_hex, c1_label = matched_colors[0][1], matched_colors[0][2]
+            updated_kit["primary_color"] = c1_hex
+            updated_crest["primary_color"] = c1_hex
+            if c1_hex == "#F8FAFC":
+                updated_kit["secondary_color"] = "#0F172A"
+            elif c1_hex == "#090D14":
+                updated_kit["shorts_color"] = "#090D14"
+            changes_applied.append(f"Updated kit and crest primary color to {c1_label}.")
 
         # Pattern changes
         if "stripes" in prompt:

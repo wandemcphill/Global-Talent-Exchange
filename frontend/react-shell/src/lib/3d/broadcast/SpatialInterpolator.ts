@@ -86,6 +86,9 @@ export interface InterpolatedPlayerState {
   just_received_ball?: boolean;
   is_releasing_ball?: boolean;
   is_receiving_ball?: boolean;
+  is_pass_recipient?: boolean;
+  anticipation_pose?: "shot_windup" | "save_prep" | "first_touch_prep" | null;
+  tactical_instruction_marker?: string | null;
   stamina_pct?: number;
 }
 
@@ -94,6 +97,11 @@ export interface InterpolatedBallState {
   height: number;
   state: string;
   owner_player_id?: string | null;
+  target_player_id?: string | null;
+  contact_foot?: "left" | "right" | null;
+  ballistic_apex?: number;
+  bounce_offset?: number;
+  roll_friction_factor?: number;
   velocity?: [number, number, number];
   spin?: [number, number, number];
 }
@@ -349,6 +357,28 @@ export class SpatialInterpolator {
       const isReleasing = Boolean(ownedA && !ownedB && alpha < 0.55);
       const isReceiving = Boolean(!ownedA && ownedB && alpha >= 0.35 && alpha < 0.8);
       const justReceived = Boolean(!ownedA && ownedB && alpha >= 0.2 && alpha <= 0.9);
+      const isPassRecipient = Boolean(
+        !ownedA &&
+          ownedB &&
+          frameB.ball.owner_player_id &&
+          pB.player_id === frameB.ball.owner_player_id
+      );
+
+      // Short anticipation poses before shots, saves, and pass receptions so outcomes feel caused
+      const nextAnim = (pB.animation_state || "").toLowerCase();
+      const roleUpper = (pA.role || pB.role || "").toUpperCase();
+      let anticipationPose: "shot_windup" | "save_prep" | "first_touch_prep" | null = null;
+      if (alpha < 0.45 && (nextAnim === "shoot" || nextAnim === "volley")) {
+        anticipationPose = "shot_windup";
+      } else if (
+        alpha < 0.55 &&
+        (roleUpper === "GK" || roleUpper === "GOALKEEPER") &&
+        (nextAnim.includes("save") || nextAnim.includes("dive") || Math.abs(ballB3D[0]) >= 38)
+      ) {
+        anticipationPose = "save_prep";
+      } else if (isPassRecipient && alpha >= 0.35 && alpha < 0.82) {
+        anticipationPose = "first_touch_prep";
+      }
 
       interpolatedPlayers.push({
         player_id: pA.player_id,
@@ -375,6 +405,8 @@ export class SpatialInterpolator {
         just_received_ball: justReceived,
         is_releasing_ball: isReleasing,
         is_receiving_ball: isReceiving,
+        is_pass_recipient: isPassRecipient,
+        anticipation_pose: anticipationPose,
         stamina_pct: pB.stamina_pct ?? pA.stamina_pct,
       });
     }
@@ -404,7 +436,16 @@ export class SpatialInterpolator {
       }
     }
 
-    // Foot-to-ball dribble stride lead: prevent ground ball from clipping inside the carrier's ankles
+    // Controlled-foot dribble contact & released ballistic trajectory with bounce/friction/spin
+    let contactFoot: "left" | "right" | null = null;
+    let ballisticApex = 0;
+    let bounceOffset = 0;
+    let rollFrictionFactor = 1.0;
+    const targetPlayerId =
+      frameB.ball.owner_player_id && frameB.ball.owner_player_id !== frameA.ball.owner_player_id
+        ? frameB.ball.owner_player_id
+        : null;
+
     if (
       !isDirectionFlip &&
       frameA.ball.owner_player_id &&
@@ -413,21 +454,78 @@ export class SpatialInterpolator {
     ) {
       const carrier = interpolatedPlayers.find((p) => p.player_id === frameA.ball.owner_player_id);
       if (carrier) {
+        const strideWave = Math.sin(alpha * Math.PI * 2);
+        contactFoot = strideWave >= 0 ? "right" : "left";
         const dx = ballX - carrier.position3D[0];
         const dz = ballZ - carrier.position3D[2];
         const distToCarrier = Math.hypot(dx, dz);
-        if (distToCarrier < 0.36) {
-          const strideTouchLead = 0.38 + Math.sin(alpha * Math.PI * 2) * 0.11;
+        if (distToCarrier < 0.55) {
+          const strideTouchLead = 0.38 + strideWave * 0.11;
+          const lateralFootOffset = (contactFoot === "right" ? 0.14 : -0.14) * (1 - Math.abs(strideWave) * 0.4);
+          const forwardX = Math.cos(carrier.facingAngleRad);
+          const forwardZ = Math.sin(carrier.facingAngleRad);
+          const rightX = -forwardZ;
+          const rightZ = forwardX;
           ballX = Math.max(
             PITCH_BOUNDS.minX,
-            Math.min(PITCH_BOUNDS.maxX, carrier.position3D[0] + Math.cos(carrier.facingAngleRad) * strideTouchLead)
+            Math.min(
+              PITCH_BOUNDS.maxX,
+              carrier.position3D[0] + forwardX * strideTouchLead + rightX * lateralFootOffset
+            )
           );
           ballZ = Math.max(
             PITCH_BOUNDS.minZ,
-            Math.min(PITCH_BOUNDS.maxZ, carrier.position3D[2] + Math.sin(carrier.facingAngleRad) * strideTouchLead)
+            Math.min(
+              PITCH_BOUNDS.maxZ,
+              carrier.position3D[2] + forwardZ * strideTouchLead + rightZ * lateralFootOffset
+            )
           );
         }
       }
+    } else if (!isDirectionFlip && frameA.ball.owner_player_id && frameA.ball.owner_player_id !== frameB.ball.owner_player_id) {
+      // Blend from passer's controlled-foot contact point into a released ballistic trajectory
+      const passer = interpolatedPlayers.find((p) => p.player_id === frameA.ball.owner_player_id);
+      const passDist = Math.hypot(ballB3D[0] - ballA3D[0], ballB3D[2] - ballA3D[2]);
+      if (passer && alpha < 0.16) {
+        contactFoot = "right";
+        const footX = passer.position3D[0] + Math.cos(passer.facingAngleRad) * 0.42;
+        const footZ = passer.position3D[2] + Math.sin(passer.facingAngleRad) * 0.42;
+        const releaseBlend = alpha / 0.16;
+        ballX = footX * (1 - releaseBlend) + ballX * releaseBlend;
+        ballZ = footZ * (1 - releaseBlend) + ballZ * releaseBlend;
+      }
+      if (passDist > 12.0 && frameA.ball.height === 0 && frameB.ball.height === 0) {
+        ballisticApex = Math.min(3.6, (passDist - 12.0) * 0.11);
+        const parabola = 4 * alpha * (1 - alpha) * ballisticApex;
+        bounceOffset = alpha > 0.78 ? Math.abs(Math.sin(((alpha - 0.78) / 0.22) * Math.PI)) * 0.18 : 0;
+        ballY = Math.min(PITCH_BOUNDS.maxY, ballY + parabola + bounceOffset);
+      }
+    }
+
+    // Grass roll friction deceleration & derived velocity/spin vectors
+    if (ballY < 0.18 && (activeFrame.ball.state === "rolling" || activeFrame.ball.state === "pass")) {
+      rollFrictionFactor = Number(Math.exp(-0.95 * alpha).toFixed(3));
+    }
+    const safeDur = Math.max(0.05, duration);
+    const derivedVel: [number, number, number] = activeFrame.ball.velocity
+      ? [activeFrame.ball.velocity.x, activeFrame.ball.velocity.y, activeFrame.ball.velocity.z]
+      : [
+          ((ballB3D[0] - ballA3D[0]) / safeDur) * rollFrictionFactor,
+          (ballB3D[1] - ballA3D[1]) / safeDur,
+          ((ballB3D[2] - ballA3D[2]) / safeDur) * rollFrictionFactor,
+        ];
+    const horizontalSpeed = Math.hypot(derivedVel[0], derivedVel[2]);
+    const derivedSpin: [number, number, number] = activeFrame.ball.spin
+      ? [activeFrame.ball.spin.x, activeFrame.ball.spin.y, activeFrame.ball.spin.z]
+      : [
+          Number((derivedVel[2] * 1.4).toFixed(2)),
+          Number(((ballY > 0.6 ? 2.8 : 0.4) * Math.sign(derivedVel[0] || 1)).toFixed(2)),
+          Number((-derivedVel[0] * 1.4).toFixed(2)),
+        ];
+    if (horizontalSpeed < 0.01 && !activeFrame.ball.spin) {
+      derivedSpin[0] = 0;
+      derivedSpin[1] = 0;
+      derivedSpin[2] = 0;
     }
 
     const resultState: InterpolatedMatchState = {
@@ -456,12 +554,13 @@ export class SpatialInterpolator {
         height: ballY,
         state: activeFrame.ball.state,
         owner_player_id: activeFrame.ball.owner_player_id,
-        velocity: activeFrame.ball.velocity
-          ? [activeFrame.ball.velocity.x, activeFrame.ball.velocity.y, activeFrame.ball.velocity.z]
-          : undefined,
-        spin: activeFrame.ball.spin
-          ? [activeFrame.ball.spin.x, activeFrame.ball.spin.y, activeFrame.ball.spin.z]
-          : undefined,
+        target_player_id: targetPlayerId,
+        contact_foot: contactFoot,
+        ballistic_apex: ballisticApex,
+        bounce_offset: bounceOffset,
+        roll_friction_factor: rollFrictionFactor,
+        velocity: derivedVel,
+        spin: derivedSpin,
       },
     };
 
@@ -491,7 +590,7 @@ export class SpatialInterpolator {
       const roleUpper = (p.role || "").toUpperCase();
       const lineLower = (p.line || "").toLowerCase();
       const isGK = roleUpper === "GK" || roleUpper === "GOALKEEPER" || lineLower === "goalkeeper";
-      if (isGK || p.has_possession || p.player_id === ownerId || p.highlighted) {
+      if (p.has_possession || p.player_id === ownerId || p.highlighted) {
         continue;
       }
 
@@ -508,6 +607,19 @@ export class SpatialInterpolator {
             ? "low"
             : "standard"
           : String(rawLine || "standard").toLowerCase();
+
+      // Goalkeeper sweeper movement when defensive line is high and team is in possession/pushing up
+      if (isGK) {
+        if ((lineSetting === "high" || lineSetting === "aggressive") && Math.abs(ballX) < 34) {
+          const sweeperPush = 3.2 * attackSign;
+          p.position3D[0] = Math.max(
+            PITCH_BOUNDS.minX + 2.0,
+            Math.min(PITCH_BOUNDS.maxX - 2.0, p.position3D[0] + sweeperPush)
+          );
+          p.tactical_instruction_marker = "sweeper_keeper";
+        }
+        continue;
+      }
 
       const rawPress = isHome ? tactics.homePressing : tactics.awayPressing;
       const pressSetting =
@@ -569,7 +681,7 @@ export class SpatialInterpolator {
       let px = p.position3D[0] + depthOffsetM;
       let pz = p.position3D[2] * widthScale;
 
-      // 3. Pressing Intensity (Defending team closes down ball carrier)
+      // 3. Pressing Intensity & Off-Ball Runs (Counter / Build-from-Back readability)
       const isDefendingTeam = p.side !== state.possession_side;
       if (isDefendingTeam && (pressSetting === "high" || pressSetting === "intense" || (state.pressure_index ?? 0) >= 0.65)) {
         const distToBall = Math.hypot(ballX - px, ballZ - pz);
@@ -578,6 +690,20 @@ export class SpatialInterpolator {
           px += (ballX - px) * pull;
           pz += (ballZ - pz) * pull;
           p.speed_ratio = Math.min(1, p.speed_ratio + 0.12);
+          p.tactical_instruction_marker = "high_press";
+        }
+      } else if (!isDefendingTeam) {
+        const rawTempo = isHome ? tactics.homeTempo : tactics.awayTempo;
+        const fastTempo =
+          (typeof rawTempo === "number" && rawTempo >= 70) ||
+          String(rawTempo || "").toLowerCase() === "fast" ||
+          Boolean(state.transition_state?.includes("counter") || state.transition_state?.includes("break"));
+        if (fastTempo && isAttacker) {
+          px += 2.2 * attackSign;
+          p.tactical_instruction_marker = "channel_run";
+        } else if (state.possession_phase === "build_up" && !isDefender && !isAttacker) {
+          px -= 1.2 * attackSign;
+          p.tactical_instruction_marker = "build_up_pivot";
         }
       }
 

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 
 from app.core.events import DomainEvent
 from app.economy.conversion_service import EconomicConversionError, FanCoinGiftConversionService
@@ -14,10 +15,13 @@ from app.gift_engine.service import (
     GiftEngineError,
     GiftEngineService as LegacyGiftEngineService,
 )
-from app.models.base import generate_uuid
+from app.models.base import generate_uuid, utcnow
 from app.models.club_profile import ClubProfile
+from app.models.community_engine import LiveThread
+from app.models.competition_match import CompetitionMatch
 from app.models.economy_burn_event import EconomyBurnEvent
 from app.models.economy_config import GiftCatalogItem
+from app.models.fast_match import FastMatchSession, FastMatchSessionStatus
 from app.models.gift_combo_event import GiftComboEvent
 from app.models.gift_transaction import GiftTransaction
 from app.models.notification_record import NotificationRecord
@@ -26,6 +30,8 @@ from app.models.wallet import LedgerEntry, LedgerUnit
 from app.services.social_collusion_detection_service import SocialCollusionDetectionService
 from app.services.spending_control_service import SpendingControlService, SpendingControlViolation
 from app.wallets.service import InsufficientBalanceError
+
+ACTIVE_COMPETITION_MATCH_STATUSES = ("live", "in_progress", "halftime", "paused", "ready", "scheduled")
 
 
 class CanonicalGiftEngineService(LegacyGiftEngineService):
@@ -80,8 +86,194 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             )
         return club.owner_user_id, club.id
 
+    def _resolve_authoritative_match_context(
+        self,
+        *,
+        recipient_user_id: str,
+        recipient_club_id: str | None,
+        requested_scope: str,
+        raw_match_id: str | None,
+        raw_competition_id: str | None,
+        discussion_thread_id: str | None,
+    ) -> tuple[str, str | None, str | None]:
+        """Resolve and validate match/competition context on the server.
+
+        Ensures a caller cannot bypass match-scoped rate limiting by omitting
+        `source_scope="gtex_competition"` or `match_id` while gifting a club or
+        recipient participating in an active match or live match thread, and
+        validates explicit `match_id` / `competition_id` references against
+        persisted match state when present.
+        """
+        match_id = (raw_match_id or "").strip() or None
+        competition_id = (raw_competition_id or "").strip() or None
+        authoritative_scope = requested_scope
+
+        owned_club_ids = list(
+            self.session.scalars(
+                select(ClubProfile.id).where(ClubProfile.owner_user_id == recipient_user_id)
+            ).all()
+        )
+        candidate_club_ids = list(dict.fromkeys(([recipient_club_id] if recipient_club_id else []) + owned_club_ids))
+
+        # 1. Inspect discussion thread context if present
+        if discussion_thread_id:
+            thread = self.session.get(LiveThread, discussion_thread_id)
+            if thread is not None:
+                thread_meta = dict(thread.metadata_json or {})
+                thread_match_id = str(thread_meta.get("match_id") or "").strip() or None
+                thread_comp_id = (
+                    str(thread.competition_key or thread_meta.get("competition_id") or "").strip() or None
+                )
+                if thread_match_id and not match_id:
+                    match_id = thread_match_id
+                if thread_comp_id and not competition_id:
+                    competition_id = thread_comp_id
+                if thread_match_id or thread_comp_id or (thread.category or "").strip().lower() in {
+                    "match",
+                    "live_match",
+                    "competition",
+                }:
+                    authoritative_scope = "gtex_competition"
+
+        # 2. Validate explicit match_id against CompetitionMatch / FastMatchSession if persisted
+        if match_id:
+            comp_match = self.session.get(CompetitionMatch, match_id)
+            if comp_match is not None:
+                if competition_id and competition_id != comp_match.competition_id:
+                    raise GiftEngineError(
+                        "Match does not belong to the specified competition.",
+                        reason="invalid_match_context",
+                    )
+                if recipient_club_id and recipient_club_id not in {
+                    comp_match.home_club_id,
+                    comp_match.away_club_id,
+                }:
+                    raise GiftEngineError(
+                        "Recipient club does not participate in the specified match.",
+                        reason="invalid_match_context",
+                    )
+                participating_owners = list(
+                    self.session.scalars(
+                        select(ClubProfile.owner_user_id).where(
+                            ClubProfile.id.in_([comp_match.home_club_id, comp_match.away_club_id]),
+                            ClubProfile.owner_user_id.is_not(None),
+                        )
+                    ).all()
+                )
+                if participating_owners and recipient_user_id not in participating_owners:
+                    raise GiftEngineError(
+                        "Recipient profile does not participate in the specified match.",
+                        reason="invalid_match_context",
+                    )
+                match_id = comp_match.id
+                competition_id = comp_match.competition_id
+                return "gtex_competition", match_id, competition_id
+
+            fast_match = self.session.scalar(
+                select(FastMatchSession).where(
+                    or_(
+                        FastMatchSession.match_id == match_id,
+                        FastMatchSession.live_match_key == match_id,
+                    )
+                )
+            )
+            if fast_match is not None:
+                fast_clubs = {c for c in (fast_match.home_club_id, fast_match.away_club_id) if c}
+                if recipient_club_id and fast_clubs and recipient_club_id not in fast_clubs:
+                    raise GiftEngineError(
+                        "Recipient club does not participate in the specified match.",
+                        reason="invalid_match_context",
+                    )
+                fast_users = {u for u in (fast_match.user_id, fast_match.opponent_user_id) if u}
+                if fast_users and recipient_user_id not in fast_users and (
+                    not fast_clubs or not set(candidate_club_ids).intersection(fast_clubs)
+                ):
+                    raise GiftEngineError(
+                        "Recipient profile does not participate in the specified match.",
+                        reason="invalid_match_context",
+                    )
+                return "gtex_competition", fast_match.match_id, competition_id
+
+            return "gtex_competition", match_id, competition_id
+
+        # 3. Server-side inference when client omitted match_id: check active CompetitionMatch or FastMatchSession
+        if candidate_club_ids:
+            active_comp_match = self.session.scalar(
+                select(CompetitionMatch)
+                .where(
+                    or_(
+                        CompetitionMatch.home_club_id.in_(candidate_club_ids),
+                        CompetitionMatch.away_club_id.in_(candidate_club_ids),
+                    ),
+                    CompetitionMatch.status.in_(ACTIVE_COMPETITION_MATCH_STATUSES),
+                )
+                .order_by(CompetitionMatch.updated_at.desc())
+            )
+            if active_comp_match is not None:
+                if competition_id and competition_id != active_comp_match.competition_id:
+                    raise GiftEngineError(
+                        "Recipient's active match does not belong to the specified competition.",
+                        reason="invalid_match_context",
+                    )
+                return (
+                    "gtex_competition",
+                    active_comp_match.id,
+                    competition_id or active_comp_match.competition_id,
+                )
+
+        fast_filters = [
+            FastMatchSession.user_id == recipient_user_id,
+            FastMatchSession.opponent_user_id == recipient_user_id,
+        ]
+        if candidate_club_ids:
+            fast_filters.extend(
+                [
+                    FastMatchSession.home_club_id.in_(candidate_club_ids),
+                    FastMatchSession.away_club_id.in_(candidate_club_ids),
+                ]
+            )
+        active_fast_match = self.session.scalar(
+            select(FastMatchSession)
+            .where(
+                or_(*fast_filters),
+                FastMatchSession.status.in_((FastMatchSessionStatus.QUEUED, FastMatchSessionStatus.READY)),
+            )
+            .order_by(FastMatchSession.updated_at.desc())
+        )
+        if active_fast_match is not None:
+            return "gtex_competition", active_fast_match.match_id, competition_id
+
+        if competition_id:
+            authoritative_scope = "gtex_competition"
+
+        return authoritative_scope, match_id, competition_id
+
+    def _match_scope_gift_count(
+        self,
+        *,
+        sender_id: str,
+        recipient_id: str,
+        source_scope: str,
+        window_seconds: int,
+    ) -> int:
+        window_start = utcnow() - timedelta(seconds=window_seconds)
+        count = self.session.scalar(
+            select(func.count(GiftTransaction.id)).where(
+                GiftTransaction.sender_user_id == sender_id,
+                GiftTransaction.recipient_user_id == recipient_id,
+                or_(
+                    GiftTransaction.source_scope == source_scope,
+                    GiftTransaction.source_scope == "gtex_competition",
+                    GiftTransaction.match_id.is_not(None),
+                    GiftTransaction.competition_id.is_not(None),
+                ),
+                GiftTransaction.created_at >= window_start,
+            )
+        )
+        return int(count or 0)
+
     def send_gift(self, *, sender: User, **kwargs: Any):  # type: ignore[override]
-        requested_scope = self._normalize_scope(kwargs.get("source_scope"))
+        caller_scope = self._normalize_scope(kwargs.get("source_scope"))
         recipient_user_id, recipient_club_id = self._resolve_canonical_recipient_identity(
             recipient_user_id=kwargs.get("recipient_user_id"),
             recipient_club_id=kwargs.get("recipient_club_id"),
@@ -105,6 +297,15 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
         if recipient.id == sender.id:
             raise GiftEngineError("Users cannot send gifts to themselves.")
 
+        requested_scope, resolved_match_id, resolved_competition_id = self._resolve_authoritative_match_context(
+            recipient_user_id=recipient.id,
+            recipient_club_id=recipient_club_id,
+            requested_scope=caller_scope,
+            raw_match_id=kwargs.get("match_id"),
+            raw_competition_id=kwargs.get("competition_id"),
+            discussion_thread_id=str(discussion_thread_id) if discussion_thread_id else None,
+        )
+
         requested_gift_key = str(kwargs.get("gift_key") or "").strip()
         requested_catalog_item = self.session.scalar(
             select(GiftCatalogItem).where(GiftCatalogItem.key == requested_gift_key)
@@ -112,6 +313,8 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
         normalized_quantity = self._normalize_amount(kwargs.get("quantity"))
         if normalized_quantity <= Decimal("0.0000"):
             raise GiftEngineError("Gift quantity must be positive.")
+        if normalized_quantity != normalized_quantity.to_integral_value():
+            raise GiftEngineError("Gift quantity must be a whole number.", reason="invalid_gift_quantity")
 
         normalized_idempotency_key = kwargs.get("idempotency_key")
         normalized_idempotency_key = normalized_idempotency_key.strip() if normalized_idempotency_key else None
@@ -149,8 +352,8 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                     "chat_thread_id": chat_thread_id,
                     "discussion_thread_id": discussion_thread_id,
                     "discussion_reply_id": discussion_reply_id,
-                    "match_id": kwargs.get("match_id"),
-                    "competition_id": kwargs.get("competition_id"),
+                    "match_id": resolved_match_id,
+                    "competition_id": resolved_competition_id,
                     "note": kwargs.get("note"),
                 }
                 stored_identity = {
@@ -171,11 +374,6 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                 return existing_transaction
 
         if requested_scope == "gtex_competition":
-            # This anti-abuse control lived only in the legacy send_gift() this
-            # class overrides. Overriding the method dropped the check entirely
-            # rather than inheriting it, silently disabling match-scope gift
-            # rate limiting once the canonical conversion path became the
-            # runtime entrypoint.
             recent_pair_count = self._match_scope_gift_count(
                 sender_id=sender.id,
                 recipient_id=recipient.id,
@@ -265,8 +463,8 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             chat_thread_id=chat_thread_id,
             discussion_thread_id=discussion_thread_id,
             discussion_reply_id=discussion_reply_id,
-            match_id=kwargs.get("match_id"),
-            competition_id=kwargs.get("competition_id"),
+            match_id=resolved_match_id,
+            competition_id=resolved_competition_id,
             quantity=normalized_quantity,
             unit_price=unit_price,
             gross_amount=gross_amount,
@@ -484,8 +682,8 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                 "chat_thread_id": chat_thread_id,
                 "discussion_thread_id": discussion_thread_id,
                 "discussion_reply_id": discussion_reply_id,
-                "match_id": kwargs.get("match_id"),
-                "competition_id": kwargs.get("competition_id"),
+                "match_id": resolved_match_id,
+                "competition_id": resolved_competition_id,
                 "transaction_id": ledger_transaction_id,
                 "economic_conversion_id": conversion.id,
                 "fee_policy_rule_key": split.rule_key,

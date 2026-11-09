@@ -1054,7 +1054,7 @@ export class HumanoidFootballerRig {
       });
     }
 
-    // Soft ground contact shadow disc beneath player boots (avoids 217k-vertex SkinnedMesh shadow depth pass)
+    // Soft ground contact shadow disc beneath player boots (avoids per-rig 9,888-vertex SkinnedMesh shadow depth pass)
     const shadowGeo = new THREE.CircleGeometry(0.42, 16);
     const shadowMat = new THREE.MeshBasicMaterial({
       color: 0x040b06,

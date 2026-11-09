@@ -28,9 +28,9 @@ export interface DecoderPaths {
 
 /** Minimal shape of a decoded glTF (mirrors three's GLTF without importing jsm types). */
 export interface GltfLoadResult {
-  scene: unknown;
-  animations: unknown[];
-  [key: string]: unknown;
+  scene: any;
+  animations: any[];
+  [key: string]: any;
 }
 
 export type GltfParser = (buffer: ArrayBuffer, resourcePath: string) => Promise<GltfLoadResult>;
@@ -202,6 +202,10 @@ export class AssetStreamingCache {
     const resourcePath = url.substring(0, url.lastIndexOf("/") + 1);
     this.gltfDecodes++;
     return parser(buffer, resourcePath);
+  }
+
+  public async loadGltf(url: string, renderer?: unknown): Promise<GltfLoadResult> {
+    return this.loadGLTF(url, renderer);
   }
 
 
