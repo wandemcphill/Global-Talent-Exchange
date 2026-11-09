@@ -48,6 +48,12 @@ ARCHIVED_DUPLICATE_PLAYER_IDS = frozenset(
         "42e150d2-dafe-4fd4-8c96-6bf0844893a6",  # Vinicius Junior duplicate
         "0ce1de07-ad08-43da-b34b-875e3ce600fb",  # Jude Bellingham duplicate
         "63ce3e82-7695-40ea-89ee-908126c0c038",  # Michael Olise duplicate
+        "4db507e8-3e18-414b-9cbb-909b467ddfdf",  # Alexey Batrakov PSG fake duplicate
+        "b025a176-5a02-4749-bbd1-55fc7a97ae48",  # Vitinha duplicate
+        "41b9ae69-a1d2-43bb-a532-a50d2bb69a8b",  # Evanilson duplicate
+        "d0f413d3-138b-4a5f-94ad-963d33dfc2e9",  # Marquinhos duplicate
+        "52a13894-35bb-4aa4-afc3-568eb2260662",  # Taison duplicate
+        "a38bcc33-2b4b-4eea-aaec-e6ada32f4221",  # Taison Metalist duplicate
     }
 )
 REAL_PLAYER_POSITION_SEARCH_TERMS: dict[str, frozenset[str]] = {
