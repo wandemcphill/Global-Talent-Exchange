@@ -18,11 +18,12 @@ Enforces:
 
 from __future__ import annotations
 
+import argparse
 import json
 import logging
+import os
 import sys
 from datetime import datetime, timezone
-from pathlib import Path
 import psycopg
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -31,7 +32,9 @@ if hasattr(sys.stdout, "reconfigure"):
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("gtex_calibration")
 
-DB_URL = "postgresql://postgres.pdnjbgxfgaremxuhbmal:Desolamcphill89.@aws-1-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require"
+DEFAULT_DATABASE_URL = (
+    os.environ.get("GTE_DATABASE_URL") or os.environ.get("DATABASE_URL") or os.environ.get("SUPABASE_DATABASE_URL")
+)
 
 # Young wonderkids stuck at 64-72 GSI to upgrade to FC26/27 ratings
 WONDERKID_UPGRADES = {
@@ -190,9 +193,13 @@ LEGENDARY_PROFILES_TO_DEACTIVATE = [
 ]
 
 
-def run_calibrations_and_reconciliation():
+def run_calibrations_and_reconciliation(database_url: str | None = None):
+    db_url = database_url or DEFAULT_DATABASE_URL
+    if not db_url:
+        raise SystemExit("A database URL is required. Provide --database-url or set GTE_DATABASE_URL/DATABASE_URL.")
+
     logger.info("=== STARTING GTEX PLAYER CALIBRATIONS & MARKET RECONCILIATION ===")
-    conn = psycopg.connect(DB_URL)
+    conn = psycopg.connect(db_url)
     cur = conn.cursor()
     now = datetime.now(timezone.utc)
 
@@ -281,8 +288,7 @@ def run_calibrations_and_reconciliation():
             (json.dumps(s_suleiman_dna), now, s_suleiman_id),
         )
 
-        cur.execute(
-            """
+        cur.execute("""
             UPDATE players
             SET name = 'Sani Suleiman',
                 position = 'FW',
@@ -295,8 +301,7 @@ def run_calibrations_and_reconciliation():
                 passing = 72,
                 defending = 44
             WHERE player_id = 37635455
-        """
-        )
+        """)
 
         cur.execute(
             """
@@ -354,8 +359,7 @@ def run_calibrations_and_reconciliation():
             (json.dumps(a_yakubu_dna), now, a_yakubu_id),
         )
 
-        cur.execute(
-            """
+        cur.execute("""
             UPDATE players
             SET name = 'Adamu Yakubu',
                 overall = 78,
@@ -367,8 +371,7 @@ def run_calibrations_and_reconciliation():
                 defending = 78,
                 dribbling = 75
             WHERE player_id = 37659140
-        """
-        )
+        """)
 
         cur.execute(
             """
@@ -777,8 +780,7 @@ def run_calibrations_and_reconciliation():
         """,
             (now,),
         )
-        cur.execute(
-            """
+        cur.execute("""
             UPDATE player_summary_read_models
             SET player_name = 'Aleksandr Golovin',
                 summary_json = jsonb_set(
@@ -789,8 +791,7 @@ def run_calibrations_and_reconciliation():
                     '{potential_gsi}', '82'
                 )
             WHERE player_id = '5251e866-09c8-4e8d-a116-56a310f3a8f1'
-        """
-        )
+        """)
 
         # Roman Zobnin: Update club to Spartak Moskva, GSI 79
         cur.execute(
@@ -919,7 +920,9 @@ def run_calibrations_and_reconciliation():
         """,
             (now,),
         )
-        logger.info("Synced %d player summary read models with accurate circulating, total, and available shares.", cur.rowcount)
+        logger.info(
+            "Synced %d player summary read models with accurate circulating, total, and available shares.", cur.rowcount
+        )
 
         # Commit everything atomically
         conn.commit()
@@ -935,4 +938,13 @@ def run_calibrations_and_reconciliation():
 
 
 if __name__ == "__main__":
-    run_calibrations_and_reconciliation()
+    parser = argparse.ArgumentParser(
+        description="GTEX Player Calibration, Deduplication & Market Supply Reconciliation."
+    )
+    parser.add_argument(
+        "--database-url",
+        default=DEFAULT_DATABASE_URL,
+        help="Database connection URL. Defaults to GTE_DATABASE_URL or DATABASE_URL.",
+    )
+    args = parser.parse_args()
+    run_calibrations_and_reconciliation(database_url=args.database_url)
