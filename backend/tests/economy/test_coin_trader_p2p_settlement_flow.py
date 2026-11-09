@@ -98,6 +98,7 @@ def test_coin_trader_user_buy_roundtrip_moves_coin_once() -> None:
         session.flush()
 
         from datetime import datetime, timezone
+
         profile = CoinTraderProfile(
             user_id=trader.id,
             display_name="Roundtrip Trader",

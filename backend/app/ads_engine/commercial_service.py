@@ -2920,7 +2920,9 @@ class CommercialNetworkService:
             sub.next_billing_at = None
         elif payload.action == "pause":
             if sub.status != "active":
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only active subscriptions can be paused.")
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT, detail="Only active subscriptions can be paused."
+                )
             sub.status = "paused"
         elif payload.action == "resume":
             # Resume never grants new paid time: only allowed inside an already-paid period.
@@ -3021,7 +3023,9 @@ class CommercialNetworkService:
         )
         self.session.add(refund)
 
-        payment.status = "refunded" if already_refunded + refund_amount >= int(payment.amount_minor_ngn) else "partially_refunded"
+        payment.status = (
+            "refunded" if already_refunded + refund_amount >= int(payment.amount_minor_ngn) else "partially_refunded"
+        )
         if payment.status == "refunded":
             invoice = self.session.scalar(
                 select(AdvertiserInvoice).where(AdvertiserInvoice.payment_record_id == payment.id)

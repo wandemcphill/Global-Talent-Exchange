@@ -7,14 +7,23 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 import app.models  # noqa: F401
-from app.club_ownership.service import ClubOwnershipService, CLUB_TOKEN_PROTOCOL_FEE_BPS
+from app.club_ownership.service import ClubOwnershipService
 from app.coin_traders.service import CoinTraderService
-from app.coin_traders.schemas import CoinTradeOrderCreateRequest, CoinTraderAdminLiquidityRequest
+from app.coin_traders.schemas import CoinTraderAdminLiquidityRequest
 from app.models.base import Base
 from app.models.club_profile import ClubProfile
-from app.models.coin_trader import CoinTradeDirection, CoinTraderProfile, CoinTraderProfileStatus, CoinTraderRate, CoinTraderTier
+from app.models.coin_trader import (
+    CoinTraderProfile,
+    CoinTraderProfileStatus,
+    CoinTraderTier,
+)
 from app.models.user import KycStatus, PublicAccountType, User, UserRole
-from app.models.wallet import LedgerAccount, LedgerAccountKind, LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
+from app.models.wallet import (
+    LedgerEntryReason,
+    LedgerSourceTag,
+    LedgerTransactionType,
+    LedgerUnit,
+)
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 
@@ -48,7 +57,7 @@ def _seed_balance(session, wallet_service: WalletService, user: User, amount: De
 
 def test_club_token_buyback_anti_arbitrage_protection() -> None:
     """Verify that instant round-trip buy-and-sell of club tokens cannot drain the treasury.
-    
+
     The 2.5% protocol spread and demand-pressure adjustment ensure that round-tripping
     guarantees negative yield, protecting the club treasury from risk-free extraction.
     """
@@ -95,7 +104,9 @@ def test_club_token_buyback_anti_arbitrage_protection() -> None:
 
         # 3. Security invariant checks:
         # A) Round-trip return must be strictly negative (no risk-free profit or free tokens)
-        assert investor_balance_after_sell < initial_investor_coins, "Investor made profit or broke even on instant round-trip"
+        assert (
+            investor_balance_after_sell < initial_investor_coins
+        ), "Investor made profit or broke even on instant round-trip"
         # B) Club treasury retained liquidity surplus from protocol buyback fee
         assert treasury_after_sell > Decimal("0.0000"), "Club treasury was drained"
         # C) Net payout reflected protocol fee deduction
@@ -189,7 +200,9 @@ def test_coin_trader_idempotent_escrow_release_and_pool_protection() -> None:
         # 3. Idempotent replay: Replaying the exact same request returns existing transaction without double-debiting
         res2 = service.admin_issue_liquidity(profile.id, legit_req, admin=admin)
         assert res1.transaction_id == res2.transaction_id
-        assert wallet_service.get_balance(session, pool) == Decimal("50.0000"), "Pool double-debited on idempotency replay"
+        assert wallet_service.get_balance(session, pool) == Decimal(
+            "50.0000"
+        ), "Pool double-debited on idempotency replay"
     finally:
         session.close()
         engine.dispose()

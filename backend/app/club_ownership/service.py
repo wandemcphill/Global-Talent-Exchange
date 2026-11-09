@@ -294,7 +294,12 @@ class ClubOwnershipService:
             direction="outflow",
             amount=net_payout,
             summary=f"{self._user_label(seller)} sold {quantity} club tokens.",
-            metadata={"seller_user_id": seller.id, "quantity": quantity, "unit_price": str(unit_price), "protocol_fee": str(protocol_fee)},
+            metadata={
+                "seller_user_id": seller.id,
+                "quantity": quantity,
+                "unit_price": str(unit_price),
+                "protocol_fee": str(protocol_fee),
+            },
         )
         self._reprice_token(token=token, treasury=treasury)
         self.session.flush()

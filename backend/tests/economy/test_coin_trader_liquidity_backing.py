@@ -56,6 +56,7 @@ def _create_user(session, *, user_id: str, role: UserRole) -> User:
 
 def _create_trader(session, *, trader: User) -> CoinTraderProfile:
     from datetime import datetime, timezone
+
     profile = CoinTraderProfile(
         user_id=trader.id,
         display_name="Test Coin Trader",

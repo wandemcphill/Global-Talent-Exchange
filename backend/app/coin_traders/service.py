@@ -1000,9 +1000,7 @@ class CoinTraderService:
             return False
         return bind.dialect.name != "sqlite"
 
-    def _require_participating_order(
-        self, order_id: str, actor: User, *, for_update: bool = False
-    ) -> CoinTradeOrder:
+    def _require_participating_order(self, order_id: str, actor: User, *, for_update: bool = False) -> CoinTradeOrder:
         order = self._require_order(order_id, for_update=for_update)
         profile = self._require_profile(order.trader_profile_id)
         if actor.id not in {order.user_id, profile.user_id}:
