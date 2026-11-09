@@ -698,10 +698,13 @@ export class SpatialInterpolator {
           (typeof rawTempo === "number" && rawTempo >= 70) ||
           String(rawTempo || "").toLowerCase() === "fast" ||
           Boolean(state.transition_state?.includes("counter") || state.transition_state?.includes("break"));
+        const slowTempo =
+          (typeof rawTempo === "number" && rawTempo <= 30) ||
+          String(rawTempo || "").toLowerCase() === "slow";
         if (fastTempo && isAttacker) {
           px += 2.2 * attackSign;
           p.tactical_instruction_marker = "channel_run";
-        } else if (state.possession_phase === "build_up" && !isDefender && !isAttacker) {
+        } else if (slowTempo && state.possession_phase === "build_up" && !isDefender && !isAttacker) {
           px -= 1.2 * attackSign;
           p.tactical_instruction_marker = "build_up_pivot";
         }

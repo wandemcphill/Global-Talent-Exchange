@@ -199,7 +199,7 @@ def test_gift_controls_flag_near_limit_and_block_daily_sender_cap(session) -> No
             sender=sender,
             recipient_user_id=recipient.id,
             gift_key="flare",
-            quantity=Decimal("0.2000"),
+            quantity=Decimal("1.0000"),
         )
 
     audits = session.scalars(

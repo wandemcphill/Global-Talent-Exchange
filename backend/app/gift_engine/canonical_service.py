@@ -109,9 +109,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
         authoritative_scope = requested_scope
 
         owned_club_ids = list(
-            self.session.scalars(
-                select(ClubProfile.id).where(ClubProfile.owner_user_id == recipient_user_id)
-            ).all()
+            self.session.scalars(select(ClubProfile.id).where(ClubProfile.owner_user_id == recipient_user_id)).all()
         )
         candidate_club_ids = list(dict.fromkeys(([recipient_club_id] if recipient_club_id else []) + owned_club_ids))
 
@@ -121,18 +119,21 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             if thread is not None:
                 thread_meta = dict(thread.metadata_json or {})
                 thread_match_id = str(thread_meta.get("match_id") or "").strip() or None
-                thread_comp_id = (
-                    str(thread.competition_key or thread_meta.get("competition_id") or "").strip() or None
-                )
+                thread_comp_id = str(thread.competition_key or thread_meta.get("competition_id") or "").strip() or None
                 if thread_match_id and not match_id:
                     match_id = thread_match_id
                 if thread_comp_id and not competition_id:
                     competition_id = thread_comp_id
-                if thread_match_id or thread_comp_id or (thread.category or "").strip().lower() in {
-                    "match",
-                    "live_match",
-                    "competition",
-                }:
+                if (
+                    thread_match_id
+                    or thread_comp_id
+                    or (thread.category or "").strip().lower()
+                    in {
+                        "match",
+                        "live_match",
+                        "competition",
+                    }
+                ):
                     authoritative_scope = "gtex_competition"
 
         # 2. Validate explicit match_id against CompetitionMatch / FastMatchSession if persisted
@@ -185,8 +186,10 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                         reason="invalid_match_context",
                     )
                 fast_users = {u for u in (fast_match.user_id, fast_match.opponent_user_id) if u}
-                if fast_users and recipient_user_id not in fast_users and (
-                    not fast_clubs or not set(candidate_club_ids).intersection(fast_clubs)
+                if (
+                    fast_users
+                    and recipient_user_id not in fast_users
+                    and (not fast_clubs or not set(candidate_club_ids).intersection(fast_clubs))
                 ):
                     raise GiftEngineError(
                         "Recipient profile does not participate in the specified match.",
@@ -194,7 +197,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                     )
                 return "gtex_competition", fast_match.match_id, competition_id
 
-            return "gtex_competition", match_id, competition_id
+            return authoritative_scope, match_id, competition_id
 
         # 3. Server-side inference when client omitted match_id: check active CompetitionMatch or FastMatchSession
         if candidate_club_ids:
@@ -243,7 +246,11 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
         if active_fast_match is not None:
             return "gtex_competition", active_fast_match.match_id, competition_id
 
-        if competition_id:
+        if competition_id and any(
+            token in competition_id.lower() for token in {"gtex", "platform", "official", "national", "qualifier"}
+        ):
+            authoritative_scope = "gtex_competition"
+        elif competition_id and authoritative_scope != "user_hosted":
             authoritative_scope = "gtex_competition"
 
         return authoritative_scope, match_id, competition_id
@@ -349,6 +356,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                 request_identity = {
                     "quantity": normalized_quantity,
                     "source_scope": requested_scope,
+                    "caller_source_scope": caller_scope,
                     "chat_thread_id": chat_thread_id,
                     "discussion_thread_id": discussion_thread_id,
                     "discussion_reply_id": discussion_reply_id,
@@ -356,9 +364,11 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                     "competition_id": resolved_competition_id,
                     "note": kwargs.get("note"),
                 }
+                stored_meta = existing_transaction.metadata_json or {}
                 stored_identity = {
                     "quantity": self._normalize_amount(existing_transaction.quantity),
                     "source_scope": existing_transaction.source_scope,
+                    "caller_source_scope": stored_meta.get("caller_source_scope", existing_transaction.source_scope),
                     "chat_thread_id": existing_transaction.chat_thread_id,
                     "discussion_thread_id": existing_transaction.discussion_thread_id,
                     "discussion_reply_id": existing_transaction.discussion_reply_id,
@@ -485,6 +495,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                 "currency_label": "GTEX Coin",
                 "duration_ms": gift.duration_ms,
                 "currency_semantics": "fan_coin_gift_converted_to_gtex_coin",
+                "caller_source_scope": caller_scope,
                 "source_ledger_unit": LedgerUnit.CREDIT.value,
                 "destination_ledger_unit": LedgerUnit.COIN.value,
                 "fee_policy_rule_key": split.rule_key,
