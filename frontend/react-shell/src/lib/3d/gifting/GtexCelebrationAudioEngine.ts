@@ -39,6 +39,14 @@ export class GtexCelebrationAudioEngine {
     try {
       if (key.includes("jet") || key.includes("flyby")) {
         this.playJetFlyby(ctx, now);
+      } else if (key.includes("yacht") || key.includes("horn") || key.includes("goal_horn")) {
+        this.playStadiumHorn(ctx, now);
+        this.playStadiumRoar(ctx, now + 0.15, 2.8);
+      } else if (key.includes("var") || key.includes("subs") || key.includes("tactical")) {
+        this.playElectronicVarChime(ctx, now);
+      } else if (key.includes("firework") || key.includes("flare") || key.includes("dubai") || key.includes("tokyo")) {
+        this.playPyroFireworkBurst(ctx, now);
+        this.playStadiumRoar(ctx, now + 0.2, 2.5);
       } else if (
         key.includes("trophy") ||
         key.includes("ballon") ||
@@ -48,7 +56,7 @@ export class GtexCelebrationAudioEngine {
       ) {
         this.playBrassFanfare(ctx, now, true);
         this.playStadiumRoar(ctx, now, 3.2);
-      } else if (key.includes("whistle") || key.includes("winner") || key.includes("goal")) {
+      } else if (key.includes("whistle") || key.includes("winner") || key.includes("card") || key.includes("penalty")) {
         this.playRefereeWhistle(ctx, now);
         this.playStadiumRoar(ctx, now + 0.35, 2.8);
       } else if (key.includes("samba") || key.includes("rio") || key.includes("lagos") || key.includes("drum")) {
@@ -190,6 +198,56 @@ export class GtexCelebrationAudioEngine {
       gain.connect(ctx.destination);
       osc.start(t);
       osc.stop(t + 0.19);
+    });
+  }
+
+  private static playStadiumHorn(ctx: AudioContext, startTime: number): void {
+    [110, 164.81, 220].forEach((freq) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(freq, startTime);
+      gain.gain.setValueAtTime(0.001, startTime);
+      gain.gain.linearRampToValueAtTime(0.09, startTime + 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 1.45);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + 1.5);
+    });
+  }
+
+  private static playElectronicVarChime(ctx: AudioContext, startTime: number): void {
+    [880, 1174.66, 1318.51].forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const t = startTime + idx * 0.11;
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.linearRampToValueAtTime(0.08, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.3);
+    });
+  }
+
+  private static playPyroFireworkBurst(ctx: AudioContext, startTime: number): void {
+    [0, 0.28, 0.55].forEach((offset) => {
+      const t = startTime + offset;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(340, t);
+      osc.frequency.exponentialRampToValueAtTime(42, t + 0.32);
+      gain.gain.setValueAtTime(0.14, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.36);
     });
   }
 }

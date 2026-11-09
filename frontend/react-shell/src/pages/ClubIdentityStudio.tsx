@@ -18,6 +18,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
+import { disposeScene } from "@/lib/3d/disposeScene";
 import { useAuth } from "@/lib/auth";
 import { useMyClubs } from "@/lib/owner";
 import { Btn, Chip, Loading, Panel } from "@/components/gtex/ui";
@@ -239,18 +240,24 @@ export default function ClubIdentityStudio() {
     scene.add(mannequin);
 
     let animId: number;
+    const handleContextLost = (e: Event) => {
+      e.preventDefault();
+    };
+    renderer.domElement.addEventListener("webglcontextlost", handleContextLost, false);
+
     const render = () => {
-      renderer.render(scene, camera);
+      if (typeof document === "undefined" || !document.hidden) {
+        renderer.render(scene, camera);
+      }
       animId = requestAnimationFrame(render);
     };
     render();
 
     return () => {
       cancelAnimationFrame(animId);
-      if (rendererRef.current?.domElement) {
-        canvasMountRef.current?.removeChild(rendererRef.current.domElement);
-        rendererRef.current.dispose();
-      }
+      renderer.domElement.removeEventListener("webglcontextlost", handleContextLost);
+      disposeScene(scene, rendererRef.current);
+      rendererRef.current = null;
     };
   }, []);
 

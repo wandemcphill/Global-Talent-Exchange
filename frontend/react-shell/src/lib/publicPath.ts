@@ -35,5 +35,6 @@ export function publicUrl(path: string): string {
 }
 
 export const publicAssetPath = publicUrl;
+export const resolvePublicAssetPath = publicUrl;
 
 

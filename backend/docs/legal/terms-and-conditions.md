@@ -16,3 +16,8 @@ GTEX is a football fandom, club-building, competition, and digital player-card p
 ## Wallet & Withdrawals
 - Deposits, balances, and withdrawals are subject to region policy, KYC, and manual or automatic rail controls.
 - GTEX may place holds on suspicious transactions.
+
+## Contact & Headquarters
+- **Email**: omotundeoni@playgtex.app
+- **Phone / WhatsApp**: +234 806 993 8718
+- **Headquarters**: Lagos, Nigeria

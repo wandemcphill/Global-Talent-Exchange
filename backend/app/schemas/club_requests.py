@@ -20,7 +20,9 @@ class ClubCreateRequest(CommonSchema):
     secondary_color: str = Field(min_length=3, max_length=16)
     accent_color: str = Field(min_length=3, max_length=16)
     home_venue_name: str | None = Field(default=None, max_length=120)
-    country_code: str | None = Field(default=None, max_length=8, validation_alias=AliasChoices("country_code", "country"))
+    country_code: str | None = Field(
+        default=None, max_length=8, validation_alias=AliasChoices("country_code", "country")
+    )
     region_name: str | None = Field(
         default=None,
         max_length=120,
@@ -44,7 +46,9 @@ class ClubUpdateRequest(CommonSchema):
     secondary_color: str | None = Field(default=None, min_length=3, max_length=16)
     accent_color: str | None = Field(default=None, min_length=3, max_length=16)
     home_venue_name: str | None = Field(default=None, max_length=120)
-    country_code: str | None = Field(default=None, max_length=8, validation_alias=AliasChoices("country_code", "country"))
+    country_code: str | None = Field(
+        default=None, max_length=8, validation_alias=AliasChoices("country_code", "country")
+    )
     region_name: str | None = Field(
         default=None,
         max_length=120,

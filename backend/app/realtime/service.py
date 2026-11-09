@@ -302,7 +302,12 @@ class RealtimeHub:
             match_id = _optional_string(payload.get("match_id"))
             club_id = _optional_string(payload.get("club_id") or payload.get("recipient_club_id"))
             gift_name = _optional_string(payload.get("gift_name") or payload.get("gift_display_name")) or "Gift"
-            sender = _optional_string(payload.get("sender_display_name") or payload.get("sender") or payload.get("sender_username")) or "Fan"
+            sender = (
+                _optional_string(
+                    payload.get("sender_display_name") or payload.get("sender") or payload.get("sender_username")
+                )
+                or "Fan"
+            )
             recipient = _optional_string(payload.get("recipient_display_name") or payload.get("recipient")) or "Club"
             gift_payload = {
                 "type": "gift_animation",

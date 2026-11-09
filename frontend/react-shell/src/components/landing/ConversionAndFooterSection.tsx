@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { Building2, UserSearch, Users, ArrowRight, ShieldCheck } from "lucide-react";
+import { Building2, UserSearch, Users, ArrowRight, ShieldCheck, Mail, Phone, MapPin } from "lucide-react";
 
 export const ConversionAndFooterSection: React.FC = () => {
   return (
@@ -146,12 +146,38 @@ export const ConversionAndFooterSection: React.FC = () => {
             </div>
           </div>
 
-          <div className="mt-8 border-t border-[#22385A]/50 pt-8 text-[11px] leading-relaxed text-[#6B7A93]">
+          <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-[#22385A]/50 pt-6 text-xs text-[#9AA7BD]">
+            <a
+              href="mailto:omotundeoni@playgtex.app"
+              className="inline-flex items-center gap-2 transition-colors hover:text-[#D4AF37]"
+              data-testid="footer-contact-email"
+            >
+              <Mail size={14} className="text-[#D4AF37]" />
+              <span>omotundeoni@playgtex.app</span>
+            </a>
+            <a
+              href="tel:+2348069938718"
+              className="inline-flex items-center gap-2 transition-colors hover:text-[#36E38A]"
+              data-testid="footer-contact-phone"
+            >
+              <Phone size={14} className="text-[#36E38A]" />
+              <span>+234 806 993 8718</span>
+            </a>
+            <span
+              className="inline-flex items-center gap-2 text-[#9AA7BD]"
+              data-testid="footer-contact-location"
+            >
+              <MapPin size={14} className="text-[#38BDF8]" />
+              <span>Lagos, Nigeria</span>
+            </span>
+          </div>
+
+          <div className="mt-6 border-t border-[#22385A]/50 pt-6 text-[11px] leading-relaxed text-[#6B7A93]">
             <p>
               GTEX operates a simulated football universe. Sporting assets, development scores, and player values reflect in-game performance mechanics and do not constitute external securities or speculative investment contracts. Withdrawals require Tier 2 KYC and are subject to regulatory thresholds and anti-collusion fraud reviews.
             </p>
             <p className="mt-2">
-              © {new Date().getFullYear()} GTEX · Global Talent Exchange. All rights reserved.
+              © {new Date().getFullYear()} GTEX · Global Talent Exchange • Lagos, Nigeria. All rights reserved.
             </p>
           </div>
         </div>

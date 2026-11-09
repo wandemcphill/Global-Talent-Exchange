@@ -15,6 +15,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GtexSceneRegistry } from "../GtexSceneRegistry";
 import type { GtexSceneRendererProps } from "../GtexSceneTypes";
+import { AssetStreamingCache } from "../broadcast/AssetStreamingCache";
 
 export type ShowroomCameraPreset =
   | "exterior_front"
@@ -33,6 +34,7 @@ export interface PrestigeShowroomSceneProps extends Partial<GtexSceneRendererPro
   assetCategory?: string;
   meshArchetype?: string;
   modelName?: string;
+  modelPath?: string;
   priceGtex?: number | string;
   isOwned?: boolean;
   ownedCount?: number;
@@ -41,6 +43,37 @@ export interface PrestigeShowroomSceneProps extends Partial<GtexSceneRendererPro
   secondaryColor?: string;
   specs?: Record<string, any>;
   compact?: boolean;
+}
+
+const ARCHETYPE_GLB_PATHS: Record<string, string> = {
+  private_jet: "/assets/showroom/sovereign_900x_jet.glb",
+  gulfstream_jet: "/assets/showroom/gulfstream_g700_exec_jet.glb",
+  club_bus: "/assets/showroom/vanguard_xii_coach.glb",
+  tourbillon_watch: "/assets/showroom/chronos_tourbillon_watch.glb",
+  vip_suite: "/assets/showroom/royal_penthouse_box.glb",
+  luxury_suv: "/assets/showroom/executive_suv.glb",
+  hypercar: "/assets/showroom/veloce_gt9_hypercar.glb",
+  stadium: "/assets/showroom/arena_imperiale_stadium.glb",
+  campus: "/assets/showroom/apex_performance_campus.glb",
+};
+
+function resolveShowroomGlbPath(
+  archetype: string,
+  assetName?: string,
+  modelName?: string,
+  explicitPath?: string
+): string {
+  if (explicitPath) {
+    return explicitPath.startsWith("/") ? explicitPath : `/${explicitPath}`;
+  }
+  const label = `${assetName || ""} ${modelName || ""}`.toLowerCase();
+  if (label.includes("g700") || label.includes("gulfstream")) {
+    return ARCHETYPE_GLB_PATHS.gulfstream_jet;
+  }
+  if (label.includes("suv") || label.includes("convoy")) {
+    return ARCHETYPE_GLB_PATHS.luxury_suv;
+  }
+  return ARCHETYPE_GLB_PATHS[archetype] || ARCHETYPE_GLB_PATHS.hypercar;
 }
 
 const CAMERA_PRESETS: Record<
@@ -108,6 +141,53 @@ function resolveArchetype(category?: string, meshArchetype?: string): string {
   if (cat.includes("suite") || cat.includes("hospitality") || cat.includes("facility"))
     return "vip_suite";
   return "hypercar";
+}
+
+function getArchetypeGameplayUtility(archetype: string, specs?: Record<string, any>): {
+  prestigeBoost: string;
+  commercialPull: string;
+  squadImpact: string;
+} {
+  if (specs?.prestige_boost || specs?.commercial_pull || specs?.squad_impact) {
+    return {
+      prestigeBoost: String(specs.prestige_boost || "+120 Prestige"),
+      commercialPull: String(specs.commercial_pull || "+4.5% Sponsor Yield"),
+      squadImpact: String(specs.squad_impact || "+3% Squad Morale"),
+    };
+  }
+  switch (archetype) {
+    case "private_jet":
+    case "gulfstream_jet":
+      return {
+        prestigeBoost: "+350 Global Prestige",
+        commercialPull: "+8% Marquee Transfer Appeal",
+        squadImpact: "-18% Away Travel Fatigue",
+      };
+    case "club_bus":
+      return {
+        prestigeBoost: "+140 Club Prestige",
+        commercialPull: "+3% Regional Brand Reach",
+        squadImpact: "+5% Matchday Readiness",
+      };
+    case "tourbillon_watch":
+      return {
+        prestigeBoost: "+95 Executive Prestige",
+        commercialPull: "+4% VIP Hospitality Appeal",
+        squadImpact: "+2% Contract Renewal Goodwill",
+      };
+    case "vip_suite":
+      return {
+        prestigeBoost: "+220 Stadium Prestige",
+        commercialPull: "+9% Matchday VIP Box Revenue",
+        squadImpact: "+4% Board Confidence",
+      };
+    default:
+      return {
+        prestigeBoost: "+180 Sovereign Prestige",
+        commercialPull: "+5% Star Signing Aura",
+        squadImpact: "+3% Dressing Room Buzz",
+      };
+  }
 }
 
 function buildProceduralAssetMesh(
@@ -269,10 +349,12 @@ export const PrestigeShowroomScene: React.FC<PrestigeShowroomSceneProps> = ({
   assetCategory = "jet",
   meshArchetype,
   modelName = "Flagship Edition",
+  modelPath,
   priceGtex,
   isOwned = false,
   ownedCount = 0,
   clubName = "GTEX FC",
+  specs,
   compact = false,
   activeQuality,
 }) => {
@@ -293,6 +375,13 @@ export const PrestigeShowroomScene: React.FC<PrestigeShowroomSceneProps> = ({
   const isTransitioningRef = useRef<boolean>(false);
 
   const resolvedArchetype = resolveArchetype(assetCategory, meshArchetype);
+  const gameplayUtility = getArchetypeGameplayUtility(resolvedArchetype, specs);
+  const resolvedGlbUrl = resolveShowroomGlbPath(
+    resolvedArchetype,
+    assetName,
+    modelName,
+    modelPath
+  );
 
   const handleSelectCameraPreset = useCallback((preset: ShowroomCameraPreset) => {
     setActivePreset(preset);
@@ -403,19 +492,67 @@ export const PrestigeShowroomScene: React.FC<PrestigeShowroomSceneProps> = ({
     ledRing.position.y = 0.25;
     turntableGroup.add(ledRing);
 
-    const assetMesh = buildProceduralAssetMesh(
+    let activeAssetRoot: THREE.Object3D = buildProceduralAssetMesh(
       resolvedArchetype,
       palette.primaryHex,
       palette.accentHex
     );
-    turntableGroup.add(assetMesh);
+    turntableGroup.add(activeAssetRoot);
     scene.add(turntableGroup);
+
+    let cancelled = false;
+    const isJsdomTest =
+      typeof navigator !== "undefined" && /jsdom/i.test(navigator.userAgent || "");
+
+    if (!isJsdomTest && typeof fetch === "function" && resolvedGlbUrl) {
+      AssetStreamingCache.getInstance()
+        .loadGltf(resolvedGlbUrl, renderer)
+        .then((gltf) => {
+          if (cancelled || !gltf?.scene) return;
+          const glbRoot = gltf.scene.clone(true);
+          const box = new THREE.Box3().setFromObject(glbRoot);
+          const size = new THREE.Vector3();
+          const center = new THREE.Vector3();
+          box.getSize(size);
+          box.getCenter(center);
+          const maxDim = Math.max(size.x, size.y, size.z);
+          if (maxDim > 0.0001) {
+            const targetSpan = resolvedArchetype === "tourbillon_watch" ? 3.4 : 5.4;
+            const scale = targetSpan / maxDim;
+            glbRoot.scale.multiplyScalar(scale);
+            const scaledBox = new THREE.Box3().setFromObject(glbRoot);
+            const scaledCenter = new THREE.Vector3();
+            scaledBox.getCenter(scaledCenter);
+            glbRoot.position.x -= scaledCenter.x;
+            glbRoot.position.z -= scaledCenter.z;
+            glbRoot.position.y += 0.28 - scaledBox.min.y;
+          }
+          glbRoot.name = "prestigeAssetGlbRoot";
+          turntableGroup.remove(activeAssetRoot);
+          activeAssetRoot = glbRoot;
+          turntableGroup.add(glbRoot);
+        })
+        .catch(() => {
+          // Keep procedural fallback mesh when GLB fetch fails offline
+        });
+    }
+
+    const handleContextLost = (e: Event) => {
+      e.preventDefault();
+      setWebglActive(false);
+    };
+    const handleContextRestored = () => {
+      setWebglActive(true);
+    };
+    renderer.domElement.addEventListener("webglcontextlost", handleContextLost, false);
+    renderer.domElement.addEventListener("webglcontextrestored", handleContextRestored, false);
 
     let animId: number;
     const clock = new THREE.Clock();
 
     const animate = () => {
       animId = requestAnimationFrame(animate);
+      if (typeof document !== "undefined" && document.hidden) return;
       const dt = clock.getDelta();
 
       if (autoRotate) {
@@ -436,15 +573,28 @@ export const PrestigeShowroomScene: React.FC<PrestigeShowroomSceneProps> = ({
     animate();
 
     return () => {
+      cancelled = true;
       cancelAnimationFrame(animId);
+      renderer.domElement.removeEventListener("webglcontextlost", handleContextLost);
+      renderer.domElement.removeEventListener("webglcontextrestored", handleContextRestored);
       controls.dispose();
+      scene.traverse((obj) => {
+        const mesh = obj as THREE.Mesh;
+        if (mesh.geometry) mesh.geometry.dispose();
+        const mats = Array.isArray(mesh.material)
+          ? mesh.material
+          : mesh.material
+          ? [mesh.material]
+          : [];
+        mats.forEach((m) => m.dispose());
+      });
       renderer.dispose();
       scene.clear();
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }
     };
-  }, [activeQuality, activeLivery, autoRotate, compact, resolvedArchetype]);
+  }, [activeQuality, activeLivery, autoRotate, compact, resolvedArchetype, resolvedGlbUrl]);
 
   return (
     <div
@@ -547,6 +697,22 @@ export const PrestigeShowroomScene: React.FC<PrestigeShowroomSceneProps> = ({
             Zoom -
           </button>
         </div>
+      </div>
+
+      {/* Gameplay Utility & Club Modifier Strip */}
+      <div
+        data-testid="showroom-gameplay-utility-bar"
+        className="pointer-events-none absolute left-3 top-12 z-20 flex flex-wrap items-center gap-1.5"
+      >
+        <span className="rounded-md border border-amber-400/30 bg-slate-950/80 px-2 py-0.5 text-[10px] font-semibold text-amber-200 backdrop-blur-md">
+          {gameplayUtility.prestigeBoost}
+        </span>
+        <span className="rounded-md border border-cyan-400/30 bg-slate-950/80 px-2 py-0.5 text-[10px] font-semibold text-cyan-200 backdrop-blur-md">
+          {gameplayUtility.commercialPull}
+        </span>
+        <span className="rounded-md border border-emerald-400/30 bg-slate-950/80 px-2 py-0.5 text-[10px] font-semibold text-emerald-200 backdrop-blur-md">
+          {gameplayUtility.squadImpact}
+        </span>
       </div>
 
       {/* Bottom Camera Presets & Livery Customizer Bar */}

@@ -15,6 +15,9 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { api } from "@/lib/api";
 import { GtexSceneRegistry } from "../GtexSceneRegistry";
+import { disposeScene } from "../disposeScene";
+import { AssetStreamingCache } from "../broadcast/AssetStreamingCache";
+import { resolvePublicAssetPath } from "@/lib/publicPath";
 import type { GtexSceneRendererProps } from "../GtexSceneTypes";
 import type { CinematicEventPayload } from "@/lib/ownerBriefing";
 
@@ -407,6 +410,34 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
     }
     scene.add(vipVehicleGroup);
 
+    let cancelled = false;
+    if (typeof window !== "undefined" && !/jsdom/i.test(window.navigator?.userAgent || "")) {
+      const transportGlb =
+        vehicleArchetype === "private_jet"
+          ? "/assets/showroom/sovereign_900x_jet.glb"
+          : "/assets/showroom/vanguard_xii_coach.glb";
+      AssetStreamingCache.getInstance()
+        .loadGltf(resolvePublicAssetPath(transportGlb), renderer)
+        .then((gltf) => {
+          if (cancelled || !gltf?.scene) return;
+          const imported = gltf.scene.clone(true);
+          const box = new THREE.Box3().setFromObject(imported);
+          const size = new THREE.Vector3();
+          const center = new THREE.Vector3();
+          box.getSize(size);
+          box.getCenter(center);
+          const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+          const scale = 3.4 / maxDim;
+          imported.scale.setScalar(scale);
+          imported.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+          while (vipVehicleGroup.children.length > 0) {
+            vipVehicleGroup.remove(vipVehicleGroup.children[0]);
+          }
+          vipVehicleGroup.add(imported);
+        })
+        .catch(() => {});
+    }
+
     // 3D Humanoid Appointed Manager/Staff Figure (Center-Left) & Club Owner Figure (Center-Right)
     const figuresGroup = new THREE.Group();
     const buildHumanoid = (xPos: number, suitColor: number) => {
@@ -448,9 +479,19 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
 
     let animId: number;
     const clock = new THREE.Clock();
+    const handleContextLost = (e: Event) => {
+      e.preventDefault();
+      setWebglActive(false);
+    };
+    const handleContextRestored = () => {
+      setWebglActive(true);
+    };
+    renderer.domElement.addEventListener("webglcontextlost", handleContextLost, false);
+    renderer.domElement.addEventListener("webglcontextrestored", handleContextRestored, false);
 
     const animate = () => {
       animId = requestAnimationFrame(animate);
+      if (typeof document !== "undefined" && document.hidden) return;
       const dt = clock.getDelta();
 
       // Subtle breathing / presentation pose motion
@@ -471,13 +512,12 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
     animate();
 
     return () => {
+      cancelled = true;
       cancelAnimationFrame(animId);
+      renderer.domElement.removeEventListener("webglcontextlost", handleContextLost);
+      renderer.domElement.removeEventListener("webglcontextrestored", handleContextRestored);
       controls.dispose();
-      renderer.dispose();
-      scene.clear();
-      if (container.contains(renderer.domElement)) {
-        container.removeChild(renderer.domElement);
-      }
+      disposeScene(scene, renderer);
     };
   }, [activeQuality, resolvedPrimaryHex, resolvedSecondaryHex]);
 

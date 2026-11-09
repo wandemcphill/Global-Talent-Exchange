@@ -22,17 +22,17 @@ Enforces:
 from __future__ import annotations
 
 import csv
-import json
 import os
-import sys
 import unicodedata
 from datetime import date
 from collections import Counter
 
 VIRTUAL_DATE = date(2026, 11, 1)
 
+
 def calc_age(dob: date, ref: date = VIRTUAL_DATE) -> int:
     return ref.year - dob.year - ((ref.month, ref.day) < (dob.month, dob.day))
+
 
 def get_target_dob(orig_dob: date, target_age: int, ref: date = VIRTUAL_DATE) -> date:
     m, d = orig_dob.month, orig_dob.day
@@ -47,21 +47,22 @@ def get_target_dob(orig_dob: date, target_age: int, ref: date = VIRTUAL_DATE) ->
             return date(year, 2, 28)
     return date(year, m, d)
 
+
 def normalize(s: str) -> str:
     if not s:
         return ""
     s = unicodedata.normalize("NFKD", s)
     return "".join(c for c in s if not unicodedata.combining(c)).lower().strip()
 
+
 # High-priority exact slug mappings to avoid any name collisions
 SLUG_TARGET_AGES: dict[str, int] = {
     # Youngest Legends in Game (Age 20)
     "lionel-messi-7458500": 20,
     "cristiano-ronaldo-735216": 20,
-
+    "neymar-jr-legend": 20,
     # Oldest Legends in Game (Age 30)
     "alfredo-di-stfano-2002041145": 30,
-
     # 1980s Icons (Age 27)
     "diego-maradona-2002041118": 27,
     "zico-2002041190": 27,
@@ -69,7 +70,6 @@ SLUG_TARGET_AGES: dict[str, int] = {
     "ruud-gullit-2010704": 27,
     "franco-baresi-52": 27,
     "lothar-matthus-1270": 27,
-
     # 1990s Peak Icons (Age 25)
     "michael-laudrup-601710": 25,
     "brian-laudrup-2002042469": 25,
@@ -81,10 +81,9 @@ SLUG_TARGET_AGES: dict[str, int] = {
     "george-weah-2002041023": 25,
     "gabriel-batistuta-2002041146": 25,
     "alan-shearer-2002041341": 25,
-
     # 2000s Peak Icons (Age 24)
     "zinedine-zidane-8076": 24,
-    "ronaldo-707715": 24, # R9
+    "ronaldo-707715": 24,  # R9
     "thierry-henry-9888": 24,
     "ronaldinho-2002041199": 24,
     "rivaldo-2002041204": 24,
@@ -94,7 +93,6 @@ SLUG_TARGET_AGES: dict[str, int] = {
     "ral-11952": 24,
     "francesco-totti-2002042128": 24,
     "alessandro-del-piero-8074": 24,
-
     # Late 2000s / 2010 Peak Icons (Age 23)
     "steven-gerrard-108658": 23,
     "frank-lampard-2004697": 23,
@@ -109,7 +107,6 @@ SLUG_TARGET_AGES: dict[str, int] = {
     "wayne-rooney-5108390": 23,
     "arjen-robben-850881": 23,
     "franck-ribry-8426264": 23,
-
     # Active Veterans >= 35 (Age 21)
     "luka-modric-653054": 21,
     "karim-benzema-8435089": 21,
@@ -118,7 +115,6 @@ SLUG_TARGET_AGES: dict[str, int] = {
     "manuel-neuer-8718372": 21,
     "toni-kroos-156772": 21,
     "thomas-mller-35011448": 21,
-
     # Active Veterans >= 34 (Age 22)
     "mohamed-salah-98028755": 22,
 }
@@ -126,6 +122,7 @@ SLUG_TARGET_AGES: dict[str, int] = {
 SLUG_FACTUAL_DOB: dict[str, str] = {
     "lionel-messi-7458500": "1987-06-24",
     "cristiano-ronaldo-735216": "1985-02-05",
+    "neymar-jr-legend": "1992-02-05",
     "alfredo-di-stfano-2002041145": "1926-07-04",
     "diego-maradona-2002041118": "1960-10-30",
     "zico-2002041190": "1953-03-03",
@@ -177,6 +174,7 @@ SLUG_FACTUAL_DOB: dict[str, str] = {
     "mohamed-salah-98028755": "1992-06-15",
 }
 
+
 def load_ballondor_map() -> dict[str, int]:
     bd_map = {}
     csv_path = "C:/Users/ayomc/.gemini/antigravity/scratch/gtex_audit/GTEX_BallonDor_All_Legends.csv"
@@ -193,6 +191,7 @@ def load_ballondor_map() -> dict[str, int]:
                         if pid and pid != "NONE(unlinked_gtex_legend_prime_player)":
                             bd_map[pid] = min_y
     return bd_map
+
 
 def build_legend_updates(inventory_rows: list[dict[str, str]]) -> list[tuple[str, str, str | None, int]]:
     bd_map = load_ballondor_map()
@@ -258,6 +257,7 @@ def build_legend_updates(inventory_rows: list[dict[str, str]]) -> list[tuple[str
 
     return results
 
+
 def generate_batch_sql(updates: list[tuple[str, str, str | None, int]], batch_size: int = 500) -> list[str]:
     statements = []
     for i in range(0, len(updates), batch_size):
@@ -279,6 +279,7 @@ WHERE lp.id = v.id;
 """
         statements.append(sql.strip())
     return statements
+
 
 if __name__ == "__main__":
     csv_path = "C:/Users/ayomc/.gemini/antigravity/scratch/gtex_audit/GTEX_Production_Legend_Inventory.csv"

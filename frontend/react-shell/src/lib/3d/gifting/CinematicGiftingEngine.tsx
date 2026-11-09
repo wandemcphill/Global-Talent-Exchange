@@ -1,7 +1,29 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import { Sparkles, Trophy, Shield, Volume2, VolumeX } from "lucide-react";
+import { Sparkles, Trophy, Volume2, VolumeX } from "lucide-react";
 import { GtexCelebrationAudioEngine } from "./GtexCelebrationAudioEngine";
+import { AssetStreamingCache } from "../broadcast/AssetStreamingCache";
+import { resolvePublicAssetPath } from "@/lib/publicPath";
+
+function disposeObjectTree(objects: THREE.Object3D[], scene?: THREE.Scene | null): void {
+  objects.forEach((root) => {
+    if (scene) {
+      scene.remove(root);
+    }
+    root.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (mesh.geometry && typeof mesh.geometry.dispose === "function") {
+        mesh.geometry.dispose();
+      }
+      const mat = (mesh as any).material;
+      if (Array.isArray(mat)) {
+        mat.forEach((m) => m && typeof m.dispose === "function" && m.dispose());
+      } else if (mat && typeof mat.dispose === "function") {
+        mat.dispose();
+      }
+    });
+  });
+}
 
 export interface CinematicGiftEvent {
   id?: string;
@@ -42,8 +64,24 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
   const animationFrameRef = useRef<number | null>(null);
   const activeObjectsRef = useRef<THREE.Object3D[]>([]);
   const particleSystemRef = useRef<THREE.Points | null>(null);
+  const onCompleteRef = useRef(onAnimationComplete);
+  useEffect(() => {
+    onCompleteRef.current = onAnimationComplete;
+  }, [onAnimationComplete]);
 
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const giftInstanceKey = activeGift
+    ? String(
+        activeGift.id ||
+          `${activeGift.gift_code || ""}-${activeGift.animation_key || ""}-${activeGift.sender || ""}-${activeGift.amount ?? ""}`
+      )
+    : "";
+
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => {
+    if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+      return Boolean(window.matchMedia("(prefers-reduced-motion: reduce)")?.matches);
+    }
+    return false;
+  });
   const [contextLost, setContextLost] = useState(false);
 
   // Check reduced motion preference
@@ -121,6 +159,8 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
     return () => {
       window.removeEventListener("resize", handleResize);
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      disposeObjectTree(activeObjectsRef.current, sceneRef.current);
+      activeObjectsRef.current = [];
       if (rendererRef.current?.domElement) {
         rendererRef.current.domElement.removeEventListener("webglcontextlost", handleContextLost);
         rendererRef.current.domElement.removeEventListener("webglcontextrestored", handleContextRestored);
@@ -130,21 +170,33 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
     };
   }, [prefersReducedMotion]);
 
-  // Build 3D Gift Animation Stage based on activeGift
+  // Build 3D Gift Animation Stage based on activeGift (keyed by giftInstanceKey to prevent parent re-render restarts)
   useEffect(() => {
-    if (!activeGift) return;
-    if (soundEnabled) {
+    if (!activeGift || !giftInstanceKey) return;
+    const duration = activeGift.duration_ms || 4500;
+    const isReducedMotion =
+      prefersReducedMotion ||
+      (typeof window !== "undefined" &&
+        typeof window.matchMedia === "function" &&
+        Boolean(window.matchMedia("(prefers-reduced-motion: reduce)")?.matches));
+    if (soundEnabled && !isReducedMotion) {
       GtexCelebrationAudioEngine.playCelebrationCue(
         activeGift.sound_key,
         activeGift.gift_code || activeGift.animation_key,
         activeGift.rarity
       );
     }
-    if (!sceneRef.current || prefersReducedMotion) return;
+    if (!sceneRef.current || isReducedMotion) {
+      const fallbackTimer = setTimeout(() => {
+        onCompleteRef.current?.();
+      }, duration);
+      return () => clearTimeout(fallbackTimer);
+    }
 
+    let cancelled = false;
     const scene = sceneRef.current;
-    // Clear previous active objects
-    activeObjectsRef.current.forEach((obj) => scene.remove(obj));
+    // Clear and dispose previous active objects
+    disposeObjectTree(activeObjectsRef.current, scene);
     activeObjectsRef.current = [];
 
     const giftCode = (activeGift.gift_code || activeGift.animation_key || "").toLowerCase();
@@ -198,36 +250,47 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
     particleSystemRef.current = particles;
     activeObjectsRef.current.push(particles);
 
-    // 2. Specialty 3D Models
+    // 2. Specialty 3D Models covering all 31 World of Football gift archetypes
     const stageGroup = new THREE.Group();
 
-    if (giftCode.includes("maracana") || giftCode.includes("wembley") || giftCode.includes("stadium") || giftCode.includes("san_siro")) {
-      // 3D Stadium Colosseum & Pitch Reveal
+    if (
+      giftCode.includes("maracana") ||
+      giftCode.includes("wembley") ||
+      giftCode.includes("camp_nou") ||
+      giftCode.includes("stadium") ||
+      giftCode.includes("san_siro")
+    ) {
+      // 3D Stadium Colosseum & Pitch Reveal (with gold/tifo/flare theme variants)
+      const isGoldStadium = giftCode.includes("golden_stadium");
+      const isFlares = giftCode.includes("san_siro") || giftCode.includes("flare");
+      const bowlColor = isGoldStadium ? 0xd97706 : isFlares ? 0x7f1d1d : 0x1e293b;
       const bowlGeo = new THREE.CylinderGeometry(14, 11, 4, 32, 1, true);
       const bowlMat = new THREE.MeshStandardMaterial({
-        color: 0x1e293b,
-        metalness: 0.6,
-        roughness: 0.3,
+        color: bowlColor,
+        metalness: isGoldStadium ? 0.9 : 0.6,
+        roughness: isGoldStadium ? 0.2 : 0.3,
         side: THREE.DoubleSide,
       });
       const bowl = new THREE.Mesh(bowlGeo, bowlMat);
       bowl.position.y = 2;
       stageGroup.add(bowl);
 
-      // Emerald pitch inside bowl
       const pitchGeo = new THREE.PlaneGeometry(16, 11);
-      const pitchMat = new THREE.MeshStandardMaterial({ color: 0x059669, roughness: 0.6 });
+      const pitchMat = new THREE.MeshStandardMaterial({
+        color: isGoldStadium ? 0xf59e0b : 0x059669,
+        roughness: 0.6,
+      });
       const pitch = new THREE.Mesh(pitchGeo, pitchMat);
       pitch.rotation.x = -Math.PI / 2;
       pitch.position.y = 0.1;
       stageGroup.add(pitch);
 
-      // 4 Corner floodlight beams
+      const beamColor = isFlares ? 0xef4444 : isGoldStadium ? 0xfde047 : 0xfef08a;
       const beamGeo = new THREE.CylinderGeometry(0.2, 4.5, 24, 16);
       const beamMat = new THREE.MeshBasicMaterial({
-        color: 0xfef08a,
+        color: beamColor,
         transparent: true,
-        opacity: 0.35,
+        opacity: 0.38,
         blending: THREE.AdditiveBlending,
       });
       [
@@ -241,23 +304,59 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
         beam.rotation.x = bz > 0 ? -0.25 : 0.25;
         stageGroup.add(beam);
       });
-    } else if (giftCode.includes("paris")) {
-      // 3D Miniature Eiffel Tower
-      const towerBaseGeo = new THREE.CylinderGeometry(2, 6, 8, 4);
-      const towerBaseMat = new THREE.MeshStandardMaterial({ color: 0xb45309, metalness: 0.8, roughness: 0.2 });
+    } else if (
+      giftCode.includes("paris") ||
+      giftCode.includes("new_york") ||
+      giftCode.includes("rio") ||
+      giftCode.includes("lagos") ||
+      giftCode.includes("tokyo") ||
+      giftCode.includes("dubai") ||
+      giftCode.includes("skyline")
+    ) {
+      // World Skyline Architectural Silhouette & City Beacon
+      const isTokyo = giftCode.includes("tokyo");
+      const isDubai = giftCode.includes("dubai");
+      const isRio = giftCode.includes("rio");
+      const isLagos = giftCode.includes("lagos");
+      const primaryTowerHex = isTokyo
+        ? 0xd946ef
+        : isDubai
+        ? 0xf59e0b
+        : isRio
+        ? 0x10b981
+        : isLagos
+        ? 0x22c55e
+        : 0xb45309;
+      const beaconHex = isTokyo ? 0x38bdf8 : isDubai ? 0xfde047 : 0x38bdf8;
+
+      const towerBaseGeo = new THREE.CylinderGeometry(2, 5.5, 8, 6);
+      const towerBaseMat = new THREE.MeshStandardMaterial({
+        color: primaryTowerHex,
+        metalness: 0.8,
+        roughness: 0.22,
+      });
       const towerBase = new THREE.Mesh(towerBaseGeo, towerBaseMat);
       towerBase.position.y = 4;
       stageGroup.add(towerBase);
 
-      const spireGeo = new THREE.ConeGeometry(1.2, 10, 4);
+      const spireGeo = new THREE.ConeGeometry(1.4, 11, 6);
       const spire = new THREE.Mesh(spireGeo, towerBaseMat);
-      spire.position.y = 12;
+      spire.position.y = 12.5;
       stageGroup.add(spire);
 
-      // Beacon Light Sweeper
+      // Flanking skyline towers
+      [-5.5, 5.5].forEach((tx, idx) => {
+        const subTower = new THREE.Mesh(
+          new THREE.BoxGeometry(2.2, 6 + idx * 1.5, 2.2),
+          towerBaseMat
+        );
+        subTower.position.set(tx, 3 + idx * 0.75, -1.5);
+        stageGroup.add(subTower);
+      });
+
       const beaconGeo = new THREE.ConeGeometry(6, 28, 16);
       const beaconMat = new THREE.MeshBasicMaterial({
-        color: 0x38bdf8,
+        color: beaconHex,
         transparent: true,
         opacity: 0.45,
         blending: THREE.AdditiveBlending,
@@ -279,65 +378,218 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
       const wing = new THREE.Mesh(wingGeo, fuselageMat);
       wing.position.set(0, 6, -1);
       stageGroup.add(wing);
-    } else if (giftCode.includes("trophy") || giftCode.includes("winner") || giftCode.includes("ballon")) {
-      // 3D Champion Trophy / Golden Ball
-      const cupGeo = new THREE.CylinderGeometry(4.5, 2.0, 7, 24);
+    } else if (giftCode.includes("yacht")) {
+      // 3D Superyacht over illuminated marina water plane
+      const water = new THREE.Mesh(
+        new THREE.CylinderGeometry(11, 11, 0.4, 32),
+        new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.75, roughness: 0.18 })
+      );
+      water.position.y = 0.2;
+      stageGroup.add(water);
+
+      const hull = new THREE.Mesh(
+        new THREE.BoxGeometry(13, 2.2, 4.2),
+        new THREE.MeshStandardMaterial({ color: 0xf8fafc, metalness: 0.65, roughness: 0.22 })
+      );
+      hull.position.y = 1.6;
+      stageGroup.add(hull);
+
+      const deck = new THREE.Mesh(
+        new THREE.BoxGeometry(8.5, 1.8, 3.4),
+        new THREE.MeshStandardMaterial({ color: 0x38bdf8, metalness: 0.85, roughness: 0.15 })
+      );
+      deck.position.set(-0.5, 3.4, 0);
+      stageGroup.add(deck);
+    } else if (giftCode.includes("crown")) {
+      // 3D Sovereign Royal Crown with Gem Spires
+      const goldMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.95, roughness: 0.14 });
+      const rubyMat = new THREE.MeshStandardMaterial({ color: 0xe11d48, metalness: 0.5, roughness: 0.15 });
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(4.8, 4.4, 2.4, 24, 1, true), goldMat);
+      band.position.y = 5.0;
+      stageGroup.add(band);
+
+      for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2;
+        const spire = new THREE.Mesh(new THREE.ConeGeometry(0.85, 3.2, 8), goldMat);
+        spire.position.set(Math.cos(angle) * 4.5, 7.6, Math.sin(angle) * 4.5);
+        stageGroup.add(spire);
+
+        const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.55, 0), rubyMat);
+        gem.position.set(Math.cos(angle) * 4.6, 5.0, Math.sin(angle) * 4.6);
+        stageGroup.add(gem);
+      }
+    } else if (
+      giftCode.includes("trophy") ||
+      giftCode.includes("winner") ||
+      giftCode.includes("ballon") ||
+      giftCode.includes("boot") ||
+      giftCode.includes("glove") ||
+      giftCode.includes("puskas") ||
+      giftCode.includes("man_of_the_match") ||
+      giftCode.includes("manager_of_the_month")
+    ) {
+      // 3D Champion Trophy / Golden Boot / Golden Glove / Individual Award Pedestal
       const goldMat = new THREE.MeshStandardMaterial({
         color: 0xf59e0b,
         metalness: 0.95,
         roughness: 0.15,
       });
-      const cup = new THREE.Mesh(cupGeo, goldMat);
-      cup.position.y = 7;
-      stageGroup.add(cup);
-
       const pedestalGeo = new THREE.CylinderGeometry(5.5, 6.0, 3, 24);
       const marbleMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.4 });
       const pedestal = new THREE.Mesh(pedestalGeo, marbleMat);
       pedestal.position.y = 1.5;
       stageGroup.add(pedestal);
 
-      // Golden Football on top
-      const ballGeo = new THREE.SphereGeometry(2.4, 24, 24);
-      const ball = new THREE.Mesh(ballGeo, goldMat);
-      ball.position.y = 12.5;
-      stageGroup.add(ball);
-    } else {
-      // Classic Diamond Celebration Badge
-      const prismGeo = new THREE.OctahedronGeometry(4.5, 0);
-      const prismMat = new THREE.MeshStandardMaterial({
-        color: 0x10b981,
-        metalness: 0.8,
+      if (giftCode.includes("boot")) {
+        const bootShaft = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.6, 4.8, 16), goldMat);
+        bootShaft.position.set(-0.8, 5.4, 0);
+        stageGroup.add(bootShaft);
+        const bootFoot = new THREE.Mesh(new THREE.BoxGeometry(5.2, 1.8, 2.4), goldMat);
+        bootFoot.position.set(0.8, 3.9, 0);
+        stageGroup.add(bootFoot);
+      } else if (giftCode.includes("glove")) {
+        const palm = new THREE.Mesh(new THREE.BoxGeometry(3.8, 4.4, 1.2), goldMat);
+        palm.position.set(0, 5.5, 0);
+        stageGroup.add(palm);
+        [-1.4, -0.5, 0.5, 1.4].forEach((fx) => {
+          const finger = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 2.8, 12), goldMat);
+          finger.position.set(fx, 8.8, 0);
+          stageGroup.add(finger);
+        });
+      } else {
+        const cupGeo = new THREE.CylinderGeometry(4.5, 2.0, 7, 24);
+        const cup = new THREE.Mesh(cupGeo, goldMat);
+        cup.position.y = 7;
+        stageGroup.add(cup);
+
+        const ballGeo = new THREE.SphereGeometry(2.4, 24, 24);
+        const ball = new THREE.Mesh(ballGeo, goldMat);
+        ball.position.y = 12.5;
+        stageGroup.add(ball);
+      }
+    } else if (
+      giftCode.includes("yellow_card") ||
+      giftCode.includes("red_card") ||
+      giftCode.includes("var") ||
+      giftCode.includes("subs") ||
+      giftCode.includes("tactical")
+    ) {
+      // Match Official & Tactical Props (Cards, VAR Monitor, LED Substitution Board, Tactical Board)
+      const isRed = giftCode.includes("red_card");
+      const isYellow = giftCode.includes("yellow_card");
+      const cardColor = isRed ? 0xef4444 : isYellow ? 0xfacc15 : 0x0ea5e9;
+      const frameMat = new THREE.MeshStandardMaterial({
+        color: cardColor,
+        metalness: 0.7,
         roughness: 0.2,
-        wireframe: false,
       });
-      const prism = new THREE.Mesh(prismGeo, prismMat);
-      prism.position.y = 6;
-      stageGroup.add(prism);
+      const boardGeo =
+         isRed || isYellow
+          ? new THREE.BoxGeometry(5.5, 8.2, 0.45)
+          : new THREE.BoxGeometry(9.0, 5.8, 0.65);
+      const board = new THREE.Mesh(boardGeo, frameMat);
+      board.position.y = 6.5;
+      stageGroup.add(board);
+    } else {
+      // Pitch & Supporter Atmosphere (Goal Horn, Stadium Roar, Corner Flag, Captain's Armband, Home Banner, Floodlights)
+      const accentColor = giftCode.includes("horn") || giftCode.includes("roar") ? 0xf59e0b : 0x10b981;
+      const ringMat = new THREE.MeshStandardMaterial({
+        color: accentColor,
+        metalness: 0.85,
+        roughness: 0.2,
+      });
+      const torus = new THREE.Mesh(new THREE.TorusGeometry(4.2, 0.75, 16, 48), ringMat);
+      torus.position.y = 6.5;
+      stageGroup.add(torus);
+
+      const core = new THREE.Mesh(new THREE.OctahedronGeometry(2.6, 0), ringMat);
+      core.position.y = 6.5;
+      stageGroup.add(core);
     }
 
     scene.add(stageGroup);
     activeObjectsRef.current.push(stageGroup);
 
-    // Animation Loop
+    // Stream CC0 GLB upgrade when available (private_jet, superyacht, golden_stadium, trophy plinth)
+    const glbAssetPath =
+      giftCode.includes("jet") || giftCode.includes("flyby")
+        ? "/assets/showroom/sovereign_900x_jet.glb"
+        : giftCode.includes("yacht")
+        ? "/assets/showroom/superyacht.glb"
+        : giftCode.includes("golden_stadium")
+        ? "/assets/showroom/golden_stadium.glb"
+        : giftCode.includes("trophy") || giftCode.includes("winner") || giftCode.includes("ballon")
+        ? "/assets/showroom/trophy_plinth.glb"
+        : null;
+
+    if (glbAssetPath && typeof window !== "undefined" && !/jsdom/i.test(window.navigator?.userAgent || "")) {
+      const resolvedUrl = resolvePublicAssetPath(glbAssetPath);
+      AssetStreamingCache.getInstance()
+        .loadGltf(resolvedUrl, rendererRef.current || undefined)
+        .then((gltf) => {
+          if (cancelled || !gltf?.scene) return;
+          const imported = gltf.scene.clone(true);
+          const bbox = new THREE.Box3().setFromObject(imported);
+          const size = new THREE.Vector3();
+          const center = new THREE.Vector3();
+          bbox.getSize(size);
+          bbox.getCenter(center);
+          const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+          const targetExtent = giftCode.includes("trophy") || giftCode.includes("ballon") ? 6.0 : 16.0;
+          const scale = targetExtent / maxDim;
+          imported.scale.setScalar(scale);
+          imported.position.set(-center.x * scale, -bbox.min.y * scale + 2.0, -center.z * scale);
+
+          if (giftCode.includes("golden_stadium")) {
+            const goldOverride = new THREE.MeshStandardMaterial({
+              color: 0xf59e0b,
+              metalness: 0.9,
+              roughness: 0.2,
+            });
+            imported.traverse((child) => {
+              const mesh = child as THREE.Mesh;
+              if (mesh.isMesh) {
+                mesh.material = goldOverride;
+              }
+            });
+          }
+
+          if (!(giftCode.includes("trophy") || giftCode.includes("winner") || giftCode.includes("ballon"))) {
+            while (stageGroup.children.length > 0) {
+              const old = stageGroup.children[0];
+              stageGroup.remove(old);
+            }
+          }
+          stageGroup.add(imported);
+        })
+        .catch(() => {
+          // Retain procedural fallback silently
+        });
+    }
+
+    // Animation Loop (frame-rate independent via deltaSec)
     const startTime = performance.now();
-    const duration = activeGift.duration_ms || 4500;
+    let prevTime = startTime;
 
     const animate = (time: number) => {
+      if (cancelled) return;
       const elapsed = time - startTime;
+      const deltaSec = Math.min(Math.max((time - prevTime) / 1000, 0.001), 0.1);
+      prevTime = time;
+      const dtScale = deltaSec * 60;
       const progress = Math.min(elapsed / duration, 1.0);
 
       // Rotate stage group
       stageGroup.rotation.y = elapsed * 0.0012;
 
-      // Animate particles
+      // Animate particles with frame-rate independent velocity & gravity
       const posAttr = particleGeo.attributes.position as THREE.BufferAttribute;
       const pArr = posAttr.array as Float32Array;
       for (let i = 0; i < particleCount; i++) {
-        pArr[i * 3] += vels[i].x;
-        pArr[i * 3 + 1] += vels[i].y;
-        pArr[i * 3 + 2] += vels[i].z;
-        vels[i].y -= 0.006; // gravity
+        pArr[i * 3] += vels[i].x * dtScale;
+        pArr[i * 3 + 1] += vels[i].y * dtScale;
+        pArr[i * 3 + 2] += vels[i].z * dtScale;
+        vels[i].y -= 0.006 * dtScale; // gravity
 
         if (pArr[i * 3 + 1] < 0) {
           pArr[i * 3 + 1] = 0;
@@ -360,16 +612,17 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
       if (progress < 1.0) {
         animationFrameRef.current = requestAnimationFrame(animate);
       } else {
-        onAnimationComplete?.();
+        onCompleteRef.current?.();
       }
     };
 
     animationFrameRef.current = requestAnimationFrame(animate);
 
     return () => {
+      cancelled = true;
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [activeGift, prefersReducedMotion, onAnimationComplete]);
+  }, [giftInstanceKey, prefersReducedMotion, soundEnabled]);
 
   if (!activeGift) return null;
 

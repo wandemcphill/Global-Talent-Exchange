@@ -3,3 +3,8 @@
 GTEX provides reporting tools, moderation actions, account security controls, and published policy versions.
 
 Platform surfaces should disclose purchases, rewards handling, moderation, and data use in a way appropriate for app-store review.
+
+## Official Publisher & Support Contact
+- **Email**: omotundeoni@playgtex.app
+- **Phone / WhatsApp**: +234 806 993 8718
+- **Location**: Lagos, Nigeria

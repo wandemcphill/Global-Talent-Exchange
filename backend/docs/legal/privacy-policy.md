@@ -12,3 +12,8 @@ We may collect account data, device/session data, gameplay activity, wallet acti
 
 ## User Controls
 Users may review platform documents, accept new versions, and use reporting or support tools where available.
+
+## Contact & Data Protection Inquiries
+- **Email**: omotundeoni@playgtex.app
+- **Phone / WhatsApp**: +234 806 993 8718
+- **Headquarters**: Lagos, Nigeria

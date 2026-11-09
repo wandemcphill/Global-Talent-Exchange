@@ -197,4 +197,79 @@ describe("SpatialInterpolator", () => {
     expect(observedEventIds).toEqual(["event-1", "event-2", "event-3"]);
   });
 
+  test("attaches ball to controlled foot during dribbles and blends into a ballistic trajectory with recipient and anticipation markers on passes", () => {
+    const passStart: SpectatorSafeFrameView = {
+      ...frame0,
+      frame_id: "p-start",
+      time_seconds: 20.0,
+      players: [
+        {
+          ...frame0.players[0],
+          player_id: "passer-8",
+          position: { x: 40, y: 50 },
+          has_possession: true,
+          animation_state: "pass",
+        },
+        {
+          player_id: "runner-9",
+          team_id: "home",
+          side: "home",
+          shirt_number: 9,
+          label: "Osimhen",
+          role: "ST",
+          position: { x: 65, y: 42 },
+          facing: { x: 1, y: 0 },
+          speed_ratio: 0.75,
+          animation_state: "run",
+          has_possession: false,
+        },
+      ],
+      ball: {
+        position: { x: 40, y: 50 },
+        height: 0.0,
+        state: "pass",
+        owner_player_id: "passer-8",
+      },
+    };
+
+    const passEnd: SpectatorSafeFrameView = {
+      ...passStart,
+      frame_id: "p-end",
+      time_seconds: 22.0,
+      players: [
+        {
+          ...passStart.players[0],
+          position: { x: 43, y: 50 },
+          has_possession: false,
+          animation_state: "jog",
+        },
+        {
+          ...passStart.players[1],
+          position: { x: 70, y: 40 },
+          has_possession: true,
+          animation_state: "shoot",
+        },
+      ],
+      ball: {
+        position: { x: 70, y: 40 },
+        height: 0.0,
+        state: "pass",
+        owner_player_id: "runner-9",
+      },
+    };
+
+    const interpolator = new SpatialInterpolator([passStart, passEnd]);
+    const earlyRelease = interpolator.interpolate(20.2); // alpha = 0.1
+    expect(earlyRelease?.ball.contact_foot).toBe("right");
+    expect(earlyRelease?.ball.target_player_id).toBe("runner-9");
+    const runnerEarly = earlyRelease?.players.find((p) => p.player_id === "runner-9");
+    expect(runnerEarly?.is_pass_recipient).toBe(true);
+    expect(runnerEarly?.anticipation_pose).toBe("shot_windup");
+
+    const midFlight = interpolator.interpolate(21.0); // alpha = 0.5
+    expect(midFlight?.ball.ballistic_apex).toBeGreaterThan(0);
+    expect(midFlight?.ball.height).toBeGreaterThan(0.5);
+    expect(midFlight?.ball.spin).toBeDefined();
+  });
+
 });

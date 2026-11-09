@@ -856,6 +856,22 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     ballMesh.castShadow = false;
     ballGroup.add(ballMesh);
 
+    if (typeof window !== "undefined" && !/jsdom/i.test(window.navigator?.userAgent || "")) {
+      AssetStreamingCache.getInstance()
+        .loadGltf("/models/match/football_pbr.glb", renderer)
+        .then((gltf) => {
+          if (!gltf?.scene) return;
+          const pbrBall = gltf.scene.clone(true);
+          const box = new THREE.Box3().setFromObject(pbrBall);
+          const size = new THREE.Vector3();
+          box.getSize(size);
+          const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+          pbrBall.scale.setScalar((ballRadius * 2) / maxDim);
+          ballMesh.add(pbrBall);
+        })
+        .catch(() => {});
+    }
+
     // Ball Drop Shadow Disc on Turf
     const shadowGeo = new THREE.CircleGeometry(ballRadius * 1.4, 16);
     const shadowMat = new THREE.MeshBasicMaterial({
@@ -1091,6 +1107,16 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         observedCameraPresetsHistory.add(state.camera_preset);
         const activeEvent = animationStateMachine.getEventById(state.active_event_id);
 
+        if (replayCursorTimeRef.current === null) {
+          replayStudio.recordSpatialFrame({
+            timestampSec: localTime,
+            clockMinute: hudState?.clock_minute ?? state.clock_minute,
+            possessionSide: state.possession_side,
+            ball: state.ball,
+            players: state.players,
+          });
+        }
+
         // Update stadium jumbotron scoreboard and event-driven crowd reactions
         stadiumArena.updateScoreboard(
           hudState?.home_score ?? state.home_score,
@@ -1162,14 +1188,14 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
             clock: `${Math.floor(hudState?.clock_minute ?? state.clock_minute)}'`,
           });
 
-          // React WebGL Upgrades: Camera trauma impact shake & stadium crowd waves
+          // React WebGL Upgrades: Camera trauma impact shake restricted strictly to goals, woodwork, major saves & red cards
           if (evType === "goal") {
             crowdChoreography.triggerCameraTrauma(0.75);
             crowdChoreography.triggerCrowdWave("celebration", 14);
-          } else if (evType === "miss" || evType === "shot") {
-            crowdChoreography.triggerCameraTrauma(0.40);
-          } else if (evType === "foul" || evType === "red_card") {
-            crowdChoreography.triggerCameraTrauma(0.32);
+          } else if (evType === "woodwork" || evType === "crossbar" || evType === "post" || evType === "save") {
+            crowdChoreography.triggerCameraTrauma(0.42);
+          } else if (evType === "red_card") {
+            crowdChoreography.triggerCameraTrauma(0.35);
           } else if (evType === "attack") {
             crowdChoreography.triggerCrowdWave("la_ola", 10);
           }
@@ -1181,11 +1207,40 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           const replayProgress = Math.max(0, Math.min(1, 1 - (replayEndTimeRef.current - replayCursorTimeRef.current) / 8.0));
           pose = replayStudio.computeReplayPose(deltaSec, replayProgress, state.ball.position3D, scorerPos);
         } else {
+          const supportRunners = state.players
+            .filter(
+              (p) =>
+                p.active !== false &&
+                p.side === state.possession_side &&
+                !p.has_possession &&
+                p.role.toUpperCase() !== "GK"
+            )
+            .slice(0, 3)
+            .map((p) => p.position3D);
+          const arSummary = arOverlay.getSummary();
+          const defLineX =
+            state.possession_side === "home"
+              ? arSummary.awayDefensiveLineX
+              : arSummary.homeDefensiveLineX;
           pose = cameraDirector.update(
             deltaSec,
             state.camera_preset,
             state.ball.position3D,
-            scorerPos
+            scorerPos,
+            {
+              ballVelocity3D: state.ball.velocity ?? null,
+              eventType: activeEvent?.event_type ?? null,
+              shotProbability:
+                state.danger_zone === "central_box"
+                  ? 0.52
+                  : state.danger_zone === "wide_box"
+                  ? 0.32
+                  : state.danger_zone === "final_third"
+                  ? 0.18
+                  : 0.04,
+              supportRunnerPositions3D: supportRunners,
+              defensiveLineX: defLineX,
+            }
           );
         }
 

@@ -23,6 +23,9 @@ from app.models import (
     LedgerUnit,
     RevenueShareRule,
 )
+from app.models.club_profile import ClubProfile
+from app.models.competition_match import CompetitionMatch
+from app.models.fast_match import FastMatchSession, FastMatchSessionStatus
 from app.models.user import User
 from app.wallets.service import LedgerPosting, WalletService
 from backend.tests.support.economic_policy import seed_economic_policy
@@ -213,3 +216,129 @@ def test_send_gift_idempotency_conflicts_return_409_and_do_not_debit_again(
     assert session.scalar(select(func.count(EconomicConversion.id))) == conversion_count == 1
     assert session.scalar(select(func.count(GiftTransaction.id))) == gift_count == 1
     assert session.scalar(select(func.count(LedgerTransaction.id))) == ledger_count == 2
+
+
+def test_send_gift_rejects_fractional_quantities(
+    client: TestClient,
+    state: dict[str, User],
+) -> None:
+    recipient = state["recipient"]
+    response = client.post(
+        "/api/gift-engine/send",
+        json={
+            "recipient_user_id": recipient.id,
+            "gift_key": "fire",
+            "quantity": "1.5000",
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_server_derived_match_context_enforces_rate_limit_when_client_omits_scope_and_match_id(
+    client: TestClient,
+    state: dict[str, User],
+    session: Session,
+) -> None:
+    sender = state["current_user"]
+    recipient = state["recipient"]
+
+    club = ClubProfile(
+        id="club-live-match-1",
+        owner_user_id=recipient.id,
+        club_name="Lagos Sovereign FC",
+        short_name="LSFC",
+        slug="lagos-sovereign-fc",
+        country_code="NG",
+        primary_color="#10B981",
+        secondary_color="#F59E0B",
+        accent_color="#FFFFFF",
+    )
+    session.add(club)
+    session.add(
+        FastMatchSession(
+            user_id=recipient.id,
+            opponent_user_id=sender.id,
+            match_id="live-fast-match-001",
+            live_match_key="live-fast-match-key-001",
+            home_club_id=club.id,
+            status=FastMatchSessionStatus.READY,
+        )
+    )
+    session.commit()
+
+    # Client omits both `match_id` and `source_scope="gtex_competition"` (defaults to "user_hosted")
+    for idx in range(5):
+        res = client.post(
+            "/api/gift-engine/send",
+            json={
+                "recipient_user_id": recipient.id,
+                "gift_key": "fire",
+                "quantity": "1.0000",
+                "source_scope": "user_hosted",
+                "idempotency_key": f"server-derived-match-{idx}",
+            },
+        )
+        assert res.status_code == 200, res.text
+        body = res.json()
+        # Server must authoritatively resolve the active match context and upgrade source_scope
+        assert body["source_scope"] == "gtex_competition"
+        assert body["match_id"] == "live-fast-match-001"
+
+    # 6th gift within 60 seconds must be rate-limited even though client still sends source_scope="user_hosted"
+    sixth = client.post(
+        "/api/gift-engine/send",
+        json={
+            "recipient_user_id": recipient.id,
+            "gift_key": "fire",
+            "quantity": "1.0000",
+            "source_scope": "user_hosted",
+            "idempotency_key": "server-derived-match-5",
+        },
+    )
+    assert sixth.status_code == 409, sixth.text
+    assert "rate limited" in sixth.text.lower()
+
+
+def test_explicit_match_id_rejects_non_participating_recipient_club(
+    client: TestClient,
+    state: dict[str, User],
+    session: Session,
+) -> None:
+    recipient = state["recipient"]
+    outsider_club = ClubProfile(
+        id="club-outsider-99",
+        owner_user_id=recipient.id,
+        club_name="Outsider FC",
+        short_name="OFC",
+        slug="outsider-fc",
+        country_code="GB",
+        primary_color="#000000",
+        secondary_color="#FFFFFF",
+        accent_color="#F59E0B",
+    )
+    session.add(outsider_club)
+    session.add(
+        CompetitionMatch(
+            id="comp-match-valid-1",
+            competition_id="comp-001",
+            round_id="round-001",
+            round_number=1,
+            home_club_id="club-home-1",
+            away_club_id="club-away-2",
+            status="live",
+        )
+    )
+    session.commit()
+
+    res = client.post(
+        "/api/gift-engine/send",
+        json={
+            "recipient_user_id": recipient.id,
+            "recipient_club_id": outsider_club.id,
+            "gift_key": "fire",
+            "quantity": "1.0000",
+            "match_id": "comp-match-valid-1",
+        },
+    )
+    assert res.status_code == 400, res.text
+    assert "does not participate" in res.text.lower()

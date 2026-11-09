@@ -33,6 +33,7 @@ export interface PbrTurfSummary {
 export class PbrTurfShaderMaterial {
   public readonly material: THREE.MeshStandardMaterial;
   private isCompiled: boolean = false;
+  private loadedTextures: THREE.Texture[] = [];
 
   private uniforms = {
     uMoisture: { value: 0.0 },
@@ -62,6 +63,38 @@ export class PbrTurfShaderMaterial {
       metalness: 0.05,
       side: THREE.FrontSide,
     });
+
+    const isJsdomTest =
+      typeof navigator !== "undefined" && /jsdom/i.test(navigator.userAgent || "");
+    if (!isJsdomTest && typeof window !== "undefined") {
+      try {
+        const loader = new THREE.TextureLoader();
+        const configureTiling = (tex: THREE.Texture) => {
+          tex.wrapS = THREE.RepeatWrapping;
+          tex.wrapT = THREE.RepeatWrapping;
+          tex.repeat.set(24, 16);
+          this.loadedTextures.push(tex);
+        };
+        loader.load("/textures/turf/turf_albedo_1k.jpg", (tex) => {
+          configureTiling(tex);
+          this.material.map = tex;
+          this.material.needsUpdate = true;
+        });
+        loader.load("/textures/turf/turf_normal_1k.jpg", (tex) => {
+          configureTiling(tex);
+          this.material.normalMap = tex;
+          this.material.normalScale = new THREE.Vector2(0.45, 0.45);
+          this.material.needsUpdate = true;
+        });
+        loader.load("/textures/turf/turf_roughness_1k.jpg", (tex) => {
+          configureTiling(tex);
+          this.material.roughnessMap = tex;
+          this.material.needsUpdate = true;
+        });
+      } catch {
+        // Headless fallback keeps procedural shader parameters
+      }
+    }
 
     // Inject custom PBR mowing sheen and moisture shaders
     this.material.onBeforeCompile = (shader) => {
@@ -171,6 +204,8 @@ export class PbrTurfShaderMaterial {
   }
 
   public dispose(): void {
+    this.loadedTextures.forEach((tex) => tex.dispose());
+    this.loadedTextures = [];
     this.material.dispose();
   }
 }

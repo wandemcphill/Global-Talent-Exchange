@@ -608,11 +608,14 @@ class TransferMarketService:
             raise TransferMarketValidationError("Selling club cannot offer on its own listing.")
         self._require_club(resolved_bidder_club_id)
         from app.services.club_governance_policy import ClubGovernancePolicyService
+
         policy_eval = ClubGovernancePolicyService(self.session).evaluate_player_entity(
             resolved_bidder_club_id, listing.player_id
         )
         if not policy_eval.is_eligible:
-            raise TransferMarketValidationError(policy_eval.violation_reason or "Recruitment blocked by club governance policy.")
+            raise TransferMarketValidationError(
+                policy_eval.violation_reason or "Recruitment blocked by club governance policy."
+            )
         self._assert_bidder_can_fund(
             resolved_bidder_club_id, payload.cash_amount, subject="offer", player_or_id=listing.player_id
         )
@@ -688,11 +691,14 @@ class TransferMarketService:
                 "Loan and swap Transfer Hub offers cannot be accepted yet; only cash transfer offers settle."
             )
         from app.services.club_governance_policy import ClubGovernancePolicyService
+
         policy_eval = ClubGovernancePolicyService(self.session).evaluate_player_entity(
             offer.bidder_club_id, listing.player_id
         )
         if not policy_eval.is_eligible:
-            raise TransferMarketValidationError(policy_eval.violation_reason or "Recruitment blocked by club governance policy.")
+            raise TransferMarketValidationError(
+                policy_eval.violation_reason or "Recruitment blocked by club governance policy."
+            )
         self._assert_bidder_can_fund(
             offer.bidder_club_id, offer.cash_amount, subject="offer", player_or_id=listing.player_id
         )
@@ -901,11 +907,14 @@ class TransferMarketService:
         if amount <= current_highest:
             raise TransferMarketValidationError("Bid must exceed the current highest bid.")
         from app.services.club_governance_policy import ClubGovernancePolicyService
+
         policy_eval = ClubGovernancePolicyService(self.session).evaluate_player_entity(
             resolved_bidder_club_id, listing.player_id
         )
         if not policy_eval.is_eligible:
-            raise TransferMarketValidationError(policy_eval.violation_reason or "Recruitment blocked by club governance policy.")
+            raise TransferMarketValidationError(
+                policy_eval.violation_reason or "Recruitment blocked by club governance policy."
+            )
         self._assert_bidder_can_fund(resolved_bidder_club_id, amount, subject="bid", player_or_id=listing.player_id)
 
         previous_bidder_id = listing.highest_bidder_id

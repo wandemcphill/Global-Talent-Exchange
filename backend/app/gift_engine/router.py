@@ -425,7 +425,7 @@ def send_public_gift(
             gift_key=payload.gift_key,
             quantity=payload.quantity,
             note=payload.note,
-            source_scope="user_hosted",
+            source_scope=payload.source_scope,
             idempotency_key=payload.idempotency_key,
             chat_thread_id=payload.chat_thread_id,
             discussion_thread_id=payload.discussion_thread_id,

@@ -697,10 +697,14 @@ export default function CommercialPublicPortal({
               <p className="mt-1 text-xs text-slate-400">
                 Need multi-brand agency onboarding, custom stadium sponsorship packages, or NGN invoicing assistance?
                 Contact the GTEX Commercial Desk at{" "}
-                <a href="mailto:commercial@gtex.app" className="text-emerald-400 underline">
-                  commercial@gtex.app
-                </a>
-                .
+                <a href="mailto:omotundeoni@playgtex.app" className="text-emerald-400 underline">
+                  omotundeoni@playgtex.app
+                </a>{" "}
+                or call{" "}
+                <a href="tel:+2348069938718" className="text-emerald-400 underline">
+                  +234 806 993 8718
+                </a>{" "}
+                (Lagos, Nigeria).
               </p>
             </div>
             <div className="flex items-center gap-3">

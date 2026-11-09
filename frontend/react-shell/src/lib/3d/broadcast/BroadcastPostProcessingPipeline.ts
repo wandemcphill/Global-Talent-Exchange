@@ -167,9 +167,12 @@ const COMPOSITE_FRAGMENT = `
       color = mix(color, texture2D(tDofBlur, vUv).rgb, coc);
     }
 
-    // 3. Screen-space ambient occlusion (depth-only, 8 taps in a rotated ring)
+    // 3. Screen-space ambient occlusion (reconstructed normal gradient + 8-tap rotated hemisphere kernel)
     if (uSsaoEnabled > 0.5 && uHasDepth > 0.5 && rawDepth < 1.0) {
       float centerZ = linearDepth(rawDepth);
+      float dzdx = linearDepth(texture2D(tDepth, vUv + vec2(uTexelSize.x, 0.0)).r) - centerZ;
+      float dzdy = linearDepth(texture2D(tDepth, vUv + vec2(0.0, uTexelSize.y)).r) - centerZ;
+      vec3 surfNormal = normalize(vec3(-dzdx, -dzdy, max(0.05, centerZ * 0.02)));
       float radiusPx = clamp(18.0 / centerZ, 1.5, 14.0);
       float occlusion = 0.0;
       float angle = fract(sin(dot(vUv, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;
@@ -179,8 +182,10 @@ const COMPOSITE_FRAGMENT = `
         vec2 offset = vec2(cos(a), sin(a)) * r * uTexelSize;
         float sampleZ = linearDepth(texture2D(tDepth, vUv + offset).r);
         float diff = centerZ - sampleZ;
-        // Closer neighbours occlude; range check stops halos around silhouettes
-        occlusion += step(0.05, diff) * (1.0 - smoothstep(0.0, 1.5, diff));
+        vec3 sampleDir = normalize(vec3(cos(a) * r * 0.02, sin(a) * r * 0.02, max(0.0, diff)));
+        float normalWeight = clamp(dot(surfNormal, sampleDir), 0.15, 1.0);
+        // Closer neighbours in hemisphere occlude; range check prevents silhouette halos
+        occlusion += normalWeight * step(0.05, diff) * (1.0 - smoothstep(0.0, 1.5, diff));
       }
       color *= 1.0 - (occlusion / 8.0) * uSsaoStrength;
     }

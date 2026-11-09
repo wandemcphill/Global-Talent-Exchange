@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import * as THREE from "three";
+import { disposeScene } from "@/lib/3d/disposeScene";
 import {
   Camera,
   Film,
@@ -152,6 +154,8 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
     rotX: 8,
   });
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const webglMountRef = useRef<HTMLDivElement | null>(null);
+  const webglStageGroupRef = useRef<THREE.Group | null>(null);
 
   // Compute active livery palette based on user customizer toggle
   const activePrimary =
@@ -284,6 +288,83 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
       }
     };
   }, []);
+
+  // Genuine Three.js WebGL 3D Podium & Volumetric Ring Backdrop
+  useEffect(() => {
+    const container = webglMountRef.current;
+    if (!container) return;
+    if (typeof navigator !== "undefined" && /jsdom/i.test(navigator.userAgent || "")) return;
+
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: "low-power" });
+    } catch {
+      return;
+    }
+
+    const width = Math.max(320, container.clientWidth || 800);
+    const height = Math.max(220, container.clientHeight || (compact ? 285 : 370));
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    container.innerHTML = "";
+    container.appendChild(renderer.domElement);
+
+    const threeScene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 100);
+    camera.position.set(0, 3.2, 9.5);
+    camera.lookAt(0, 0.4, 0);
+
+    const ambient = new THREE.AmbientLight(0xffffff, 0.75);
+    threeScene.add(ambient);
+    const keyLight = new THREE.DirectionalLight(0xfde047, 1.4);
+    keyLight.position.set(5, 8, 6);
+    threeScene.add(keyLight);
+
+    const stageGroup = new THREE.Group();
+    webglStageGroupRef.current = stageGroup;
+
+    const ringOuter = new THREE.Mesh(
+      new THREE.TorusGeometry(3.2, 0.06, 16, 64),
+      new THREE.MeshStandardMaterial({ color: activePrimary, metalness: 0.85, roughness: 0.2 })
+    );
+    ringOuter.rotation.x = Math.PI / 2;
+    ringOuter.position.y = -1.35;
+    stageGroup.add(ringOuter);
+
+    const ringInner = new THREE.Mesh(
+      new THREE.TorusGeometry(2.3, 0.04, 12, 48),
+      new THREE.MeshStandardMaterial({ color: activeSecondary, metalness: 0.9, roughness: 0.18 })
+    );
+    ringInner.rotation.x = Math.PI / 2;
+    ringInner.position.y = -1.3;
+    stageGroup.add(ringInner);
+
+    threeScene.add(stageGroup);
+
+    let rafId = 0;
+    const renderLoop = () => {
+      rafId = requestAnimationFrame(renderLoop);
+      if (typeof document !== "undefined" && document.hidden) return;
+      renderer.render(threeScene, camera);
+    };
+    renderLoop();
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      webglStageGroupRef.current = null;
+      disposeScene(threeScene, renderer);
+      if (container.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement);
+      }
+    };
+  }, [activePrimary, activeSecondary, compact]);
+
+  useEffect(() => {
+    if (webglStageGroupRef.current) {
+      webglStageGroupRef.current.rotation.y = (rotY * Math.PI) / 180;
+      webglStageGroupRef.current.rotation.x = (rotX * 0.25 * Math.PI) / 180;
+    }
+  }, [rotY, rotX]);
 
   // Smooth orbital oscillation / 360 rotation + target interpolation
   useEffect(() => {
@@ -746,6 +827,12 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
           className="absolute inset-0 w-full h-full object-cover pointer-events-none"
         />
 
+        {/* Three.js WebGL 3D Stage Podium Ring Layer */}
+        <div
+          ref={webglMountRef}
+          data-testid="cinema-3d-webgl-layer"
+          className="absolute inset-0 w-full h-full pointer-events-none opacity-80"
+        />
         {/* Optional Pre-Rendered 3D Video Override Slot */}
         {videoUrl && mode === "motion_3d" && (
           <video

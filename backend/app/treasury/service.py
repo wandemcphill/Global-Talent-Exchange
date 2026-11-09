@@ -44,7 +44,7 @@ from app.wallets.providers.registry import (
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
-DEFAULT_WHATSAPP = "+2347000000000"
+DEFAULT_WHATSAPP = "+2348069938718"
 PROTECTED_APP_ENVS = {"production", "prod", "staging", "release"}
 PLACEHOLDER_TREASURY_BANK_NAME = "GTEX Treasury"
 PLACEHOLDER_TREASURY_ACCOUNT_NUMBER = "0000000000"

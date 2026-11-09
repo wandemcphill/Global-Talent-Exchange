@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -57,11 +57,11 @@ const GIFTS = [
   { code: "home_end_banner", name: "Home End Banner", cost: 30, rarity: "rare" },
   { code: "golden_boot", name: "Golden Boot", cost: 50, rarity: "epic" },
   { code: "floodlights", name: "Floodlights", cost: 100, rarity: "epic" },
-  { code: "last_minute_winner", name: "Last-Minute Winner", cost: 250, rarity: "epic" },
-  { code: "stadium_wembley", name: "Wembley Stadium", cost: 1000, rarity: "legendary" },
-  { code: "paris_skyline", name: "Eiffel Tower Paris", cost: 1500, rarity: "legendary" },
-  { code: "ballon_dor", name: "Golden Ballon d'Or", cost: 5000, rarity: "mythic" },
-  { code: "private_jet", name: "Private Jet Flyby", cost: 10000, rarity: "mythic" },
+  { code: "last_minute_winner", name: "Last-Minute Winner", cost: 350, rarity: "epic" },
+  { code: "paris_skyline", name: "Eiffel Tower Paris", cost: 750, rarity: "legendary" },
+  { code: "wembley_stadium", name: "Wembley Stadium", cost: 2500, rarity: "legendary" },
+  { code: "private_jet", name: "Private Jet Flyby", cost: 3500, rarity: "mythic" },
+  { code: "ballon_dor", name: "Golden Ballon d'Or", cost: 10000, rarity: "mythic" },
 ];
 
 // Tactical Style Presets
@@ -202,6 +202,7 @@ function GiftRail({ match, clubId, onGiftSent }: any) {
   const targets = [match.home_club_id, match.away_club_id].filter((c: string) => !c.startsWith("ai:"));
   const [target, setTarget] = useState(targets.includes(clubId) ? clubId : targets[0]);
   const [catalog, setCatalog] = useState<any[]>(GIFTS);
+  const [sendingCode, setSendingCode] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -212,7 +213,7 @@ function GiftRail({ match, clubId, onGiftSent }: any) {
           const items = res.data.map((item: any) => ({
             code: item.gift_key || item.key || item.code,
             name: item.display_name || item.name,
-            cost: Number(item.amount_fancoin || item.cost) || 10,
+            cost: Number(item.cost_amount ?? item.fancoin_price ?? item.amount_fancoin ?? item.cost) || 10,
             rarity: item.rarity || "legendary",
             anim: item.animation_key,
           }));
@@ -230,6 +231,12 @@ function GiftRail({ match, clubId, onGiftSent }: any) {
   if (!targets.length) return null;
 
   const send = async (g: any) => {
+    if (sendingCode) return;
+    setSendingCode(g.code);
+    const idempotencyKey =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `gift-${match.id}-${g.code}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     try {
       let data: any;
       try {
@@ -238,22 +245,31 @@ function GiftRail({ match, clubId, onGiftSent }: any) {
           gift_key: g.code,
           match_id: match.id,
           quantity: 1,
+          source_scope: "gtex_competition",
+          idempotency_key: idempotencyKey,
         });
         data = res.data;
       } catch (err: any) {
-        // Fallback to legacy owner endpoint for test fixture compatibility
+        const status = err?.response?.status;
+        if (status && ![404, 405].includes(status)) {
+          throw err;
+        }
+        // Fallback to legacy owner endpoint only when canonical endpoint is absent (404/405 or test mock)
         const res = await api.post("/owner/gifts/send", {
           club_id: target,
           gift_code: g.code,
           match_id: match.id,
+          idempotency_key: idempotencyKey,
         });
         data = res.data;
       }
 
       const senderName = data.sender_display_name || data.sender || "You";
+      const txId = data.id || data.transaction_id || idempotencyKey;
       setFeed((f) => [`${senderName} sent ${g.name}`, ...f].slice(0, 5));
       refresh();
       onGiftSent?.({
+        id: txId,
         sender: senderName,
         name: g.name,
         code: g.code,
@@ -264,6 +280,8 @@ function GiftRail({ match, clubId, onGiftSent }: any) {
       toast.success(`Gift sent: ${g.name}`);
     } catch (e) {
       toast.error(errMsg(e));
+    } finally {
+      setSendingCode(null);
     }
   };
 
@@ -2158,9 +2176,51 @@ export default function MatchCenter() {
     return res.data?.ticket ?? null;
   }, []);
 
-  // Live Gifting Broadcast Animation State
-  const [activeGift, setActiveGift] = useState<any | null>(null);
-  const [lastGiftId, setLastGiftId] = useState<string | null>(null);
+  // Live Gifting Broadcast Animation Queue (FIFO with Transaction-ID Deduplication)
+  const [giftQueue, setGiftQueue] = useState<any[]>([]);
+  const seenGiftIdsRef = useRef<Set<string>>(new Set());
+  const activeGift = giftQueue[0] ?? null;
+
+  const enqueueGift = useCallback((rawGift: any) => {
+    if (!rawGift) return;
+    const giftCode = rawGift.gift_code || rawGift.gift_key || rawGift.code || "stadium_roar";
+    const sender = rawGift.sender_display_name || rawGift.sender || "Supporter";
+    const amount = rawGift.amount ?? rawGift.cost ?? 10;
+    const dedupKey = String(
+      rawGift.id ||
+        rawGift.transaction_id ||
+        rawGift.idempotency_key ||
+        `${sender}-${giftCode}-${amount}-${rawGift.created_at || ""}`
+    );
+    if (seenGiftIdsRef.current.has(dedupKey)) {
+      return;
+    }
+    seenGiftIdsRef.current.add(dedupKey);
+    if (seenGiftIdsRef.current.size > 200) {
+      const oldest = seenGiftIdsRef.current.values().next().value;
+      if (oldest) seenGiftIdsRef.current.delete(oldest);
+    }
+    const normalized = {
+      id: dedupKey,
+      code: giftCode,
+      gift_code: giftCode,
+      name: rawGift.gift_name || rawGift.name || "Gift Celebration",
+      gift_name: rawGift.gift_name || rawGift.name || "Gift Celebration",
+      sender,
+      recipient: rawGift.recipient_display_name || rawGift.recipient || "Squad",
+      cost: amount,
+      amount,
+      rarity: rawGift.rarity || "legendary",
+      anim: rawGift.animation_key || rawGift.anim || giftCode,
+      animation_key: rawGift.animation_key || rawGift.anim || giftCode,
+      duration_ms: rawGift.duration_ms || 4500,
+    };
+    setGiftQueue((prev) => [...prev, normalized]);
+  }, []);
+
+  const handleGiftAnimationComplete = useCallback(() => {
+    setGiftQueue((prev) => prev.slice(1));
+  }, []);
 
   const spectatorStream = useMatchSpectatorStream({
     matchId: id || "",
@@ -2171,16 +2231,7 @@ export default function MatchCenter() {
       refetchViewerData();
     },
     onGiftReceived: (g: any) => {
-      setActiveGift({
-        gift_code: g.gift_code || g.gift_key || g.code || "stadium_roar",
-        gift_name: g.gift_name || g.name || "Gift Celebration",
-        sender: g.sender_display_name || g.sender || "Supporter",
-        recipient: g.recipient_display_name || g.recipient || "Squad",
-        amount: g.amount || g.cost || 10,
-        rarity: g.rarity || "legendary",
-        animation_key: g.animation_key || g.anim,
-        duration_ms: g.duration_ms || 4500,
-      });
+      enqueueGift(g);
     },
   });
 
@@ -2192,7 +2243,9 @@ export default function MatchCenter() {
 
   // End-whistle -> Owner Authority governance (backend validates completion, ownership and idempotency).
   const isMatchComplete = Boolean(
-    liveState?.phase === "full_time" || liveState?.status === "FT" || (liveState?.minute ?? localMinute) >= 90
+    liveState?.phase === "full_time" ||
+      liveState?.status === "FT" ||
+      (typeof liveState?.minute === "number" && liveState.minute >= 90)
   );
   useMatchFullTimeGovernance(
     id,
@@ -2227,22 +2280,11 @@ export default function MatchCenter() {
 
   useEffect(() => {
     const recent = (liveState as any)?.recent_gifts;
-    if (recent && recent.length > 0) {
+    if (Array.isArray(recent) && recent.length > 0) {
       const latest = recent[recent.length - 1];
-      const giftKey = `${latest.sender}-${latest.gift_code}-${latest.cost}`;
-      if (giftKey !== lastGiftId) {
-        setLastGiftId(giftKey);
-        setActiveGift({
-          sender: latest.sender,
-          name: latest.gift_name,
-          code: latest.gift_code,
-          anim: latest.animation_key,
-        });
-        const timer = setTimeout(() => setActiveGift(null), 4500);
-        return () => clearTimeout(timer);
-      }
+      enqueueGift(latest);
     }
-  }, [liveState, lastGiftId]);
+  }, [liveState, enqueueGift]);
 
   useEffect(() => {
     if (liveState || localMinute >= 120 || isPaused) return undefined;
@@ -2711,19 +2753,8 @@ export default function MatchCenter() {
                 />
                 {activeGift && (
                   <CinematicGiftingEngine
-                    activeGift={
-                      typeof activeGift === "object" && "gift_name" in activeGift
-                        ? activeGift
-                        : {
-                            gift_code: activeGift.code || "stadium_roar",
-                            gift_name: activeGift.name || "Match Gift",
-                            sender: activeGift.sender || "Supporter",
-                            amount: activeGift.cost || activeGift.amount || 10,
-                            rarity: activeGift.rarity || "legendary",
-                            animation_key: activeGift.anim || activeGift.code,
-                          }
-                    }
-                    onAnimationComplete={() => setActiveGift(null)}
+                    activeGift={activeGift}
+                    onAnimationComplete={handleGiftAnimationComplete}
                     soundEnabled={true}
                   />
                 )}
@@ -2741,7 +2772,7 @@ export default function MatchCenter() {
                 pitchPlayers={liveState?.pitch_players}
                 ball={liveState?.ball}
                 activeGift={activeGift}
-                onGiftComplete={() => setActiveGift(null)}
+                onGiftComplete={handleGiftAnimationComplete}
                 formation={formation}
                 press={press}
                 line={line}
@@ -2857,8 +2888,7 @@ export default function MatchCenter() {
           match={m}
           clubId={clubId}
           onGiftSent={(g: any) => {
-            setActiveGift(g);
-            setTimeout(() => setActiveGift(null), 4500);
+            enqueueGift(g);
           }}
         />
         <Link

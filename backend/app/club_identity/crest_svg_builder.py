@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import html
-from typing import Any
 
 
 def render_crest_svg(
@@ -45,7 +44,7 @@ def render_crest_svg(
 
     defs_markup = f"<defs>{''.join(defs)}</defs>"
     filter_attr = 'filter="url(#emboss)"' if style == "metallic" else 'filter="url(#soft_shadow)"'
-    border_color = 'url(#metal_grad)' if style == "metallic" else safe_accent
+    border_color = "url(#metal_grad)" if style == "metallic" else safe_accent
 
     # Badge geometry outlines (viewBox 0 0 200 240)
     shape_norm = shape.lower()

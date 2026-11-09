@@ -344,7 +344,15 @@ export default function AdvertiserAuthPage({
       </div>
 
       <div className="mx-auto text-center text-xs text-slate-500">
-        GTEX Commercial Network • Independent Advertiser Authentication • All Billing in Nigerian Naira (₦)
+        GTEX Commercial Network • Independent Advertiser Authentication • All Billing in Nigerian Naira (₦) •{" "}
+        <a href="mailto:omotundeoni@playgtex.app" className="text-slate-400 hover:text-emerald-400">
+          omotundeoni@playgtex.app
+        </a>{" "}
+        •{" "}
+        <a href="tel:+2348069938718" className="text-slate-400 hover:text-emerald-400">
+          +234 806 993 8718
+        </a>{" "}
+        • Lagos, Nigeria
       </div>
     </div>
   );

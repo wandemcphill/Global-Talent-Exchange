@@ -2120,7 +2120,7 @@ def load_email_config(environ: Mapping[str, str]) -> EmailConfig:
         provider=environ.get("EMAIL_PROVIDER", "brevo_smtp").strip().lower(),
         from_address=environ.get("EMAIL_FROM_ADDRESS", "noreply@example.com").strip(),
         from_name=environ.get("EMAIL_FROM_NAME", "GTEX").strip(),
-        reply_to=_normalized_optional_setting(environ.get("EMAIL_REPLY_TO", "support@example.com")),
+        reply_to=_normalized_optional_setting(environ.get("EMAIL_REPLY_TO", "omotundeoni@playgtex.app")),
         send_timeout_seconds=_get_int(environ, "EMAIL_SEND_TIMEOUT_SECONDS", 15),
         signup_confirmation_ttl_minutes=_get_int(environ, "EMAIL_CONFIRMATION_TTL_MINUTES", 1440),
         account_recovery_ttl_minutes=_get_int(environ, "ACCOUNT_RECOVERY_TTL_MINUTES", 30),
