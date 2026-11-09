@@ -3930,7 +3930,7 @@ final GteTreasurySettings _seedTreasurySettings = GteTreasurySettings(
   depositMode: GtePaymentMode.manual,
   withdrawalMode: GtePaymentMode.manual,
   maintenanceMessage: null,
-  whatsappNumber: '+2347000000000',
+  whatsappNumber: '+2348069938718',
   activeBankAccount: _seedTreasuryBankAccount,
   createdAt: DateTime.utc(2026, 3, 10, 9),
   updatedAt: DateTime.utc(2026, 3, 10, 9),

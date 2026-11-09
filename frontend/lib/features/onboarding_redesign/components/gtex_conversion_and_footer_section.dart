@@ -200,7 +200,7 @@ class GtexConversionAndFooterSection extends StatelessWidget {
                   children: const <Widget>[
                     Expanded(
                       child: Text(
-                        '© 2027 Global Talent Exchange (GTEX). All rights reserved. Age 18+ required for real-money transactions. In-game earnings reflect platform simulation rules and are not guaranteed returns.',
+                        '© 2027 Global Talent Exchange (GTEX) • Lagos, Nigeria • omotundeoni@playgtex.app • +234 806 993 8718. All rights reserved. Age 18+ required for real-money transactions. In-game earnings reflect platform simulation rules and are not guaranteed returns.',
                         style: TextStyle(
                           color: kTextTertiary,
                           fontSize: 11,
