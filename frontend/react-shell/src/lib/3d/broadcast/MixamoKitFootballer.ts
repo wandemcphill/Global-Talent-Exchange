@@ -10,7 +10,12 @@ import {
   FOOTBALL_ANIMATION_STATE_META,
   type FootballAnimationState,
 } from "./FootballAnimationStateMachine";
-import type { HumanoidKitConfig } from "./HumanoidFootballerRig";
+import {
+  resolvePlayerAppearanceProfile,
+  type AnimationLODLevel,
+  type HumanoidKitConfig,
+  type PlayerAppearanceProfile,
+} from "./HumanoidFootballerRig";
 import type { DeviceQualityTier } from "../GtexSceneTypes";
 
 export const MIXAMO_KIT_URL = "/models/footballer/gtex_home_kit_mixamo.glb";
@@ -95,16 +100,20 @@ export class MixamoKitFootballer {
   public readonly playerId: string;
   public readonly rootGroup: THREE.Group;
   public readonly options: HumanoidKitConfig;
+  public readonly appearanceProfile: PlayerAppearanceProfile;
   private readonly modelContainer: THREE.Group;
   private mixer: THREE.AnimationMixer | null = null;
   private readonly actions = new Map<FootballAnimationState, THREE.AnimationAction>();
   private currentState: FootballAnimationState = "idle";
   private timeInCurrentStateSec = 0;
+  private lodLevel: AnimationLODLevel = "full";
+  private shadowCastingEnabled = false;
   private disposed = false;
 
   constructor(kitConfig: HumanoidKitConfig) {
     this.playerId = kitConfig.playerId;
     this.options = kitConfig;
+    this.appearanceProfile = resolvePlayerAppearanceProfile(kitConfig);
     this.rootGroup = new THREE.Group();
     this.rootGroup.name = `MixamoKit_${kitConfig.playerId}`;
     this.modelContainer = new THREE.Group();
@@ -160,7 +169,21 @@ export class MixamoKitFootballer {
     return this.timeInCurrentStateSec;
   }
 
+  public get appearance(): PlayerAppearanceProfile {
+    return this.appearanceProfile;
+  }
+
+  public getLODLevel(): AnimationLODLevel {
+    return this.lodLevel;
+  }
+
   public setShadowCasting(enabled: boolean): void {
+    this.shadowCastingEnabled = enabled;
+    this.applyShadowCasting();
+  }
+
+  private applyShadowCasting(): void {
+    const enabled = this.shadowCastingEnabled && this.lodLevel !== "far";
     this.rootGroup.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (mesh.isMesh) mesh.castShadow = enabled;
@@ -179,9 +202,32 @@ export class MixamoKitFootballer {
     qualityTier?: DeviceQualityTier;
     angularVelocityRad?: number;
   }): void {
-    const { deltaSec, targetState, position3D, facingAngleRad, speedRatio } = params;
+    const { deltaSec, targetState, position3D, facingAngleRad, speedRatio, cameraPosition3D, hasPossession, qualityTier } = params;
     this.rootGroup.position.set(position3D[0], position3D[1], position3D[2]);
     this.rootGroup.rotation.y = Math.PI / 2 - facingAngleRad;
+
+    const camDist = Math.hypot(
+      cameraPosition3D[0] - position3D[0],
+      cameraPosition3D[1] - position3D[1],
+      cameraPosition3D[2] - position3D[2]
+    );
+    const stateMeta = FOOTBALL_ANIMATION_STATE_META[targetState];
+    const isPriorityActor =
+      hasPossession ||
+      stateMeta.category === "ball_interaction" ||
+      stateMeta.category === "goalkeeper_action" ||
+      stateMeta.category === "match_reaction";
+    const previousLod = this.lodLevel;
+    if (qualityTier === "low" && !isPriorityActor) {
+      this.lodLevel = camDist < 38 ? "medium" : "far";
+    } else if (isPriorityActor || camDist < 36) {
+      this.lodLevel = "full";
+    } else if (camDist < 64) {
+      this.lodLevel = "medium";
+    } else {
+      this.lodLevel = "far";
+    }
+    if (previousLod !== this.lodLevel) this.applyShadowCasting();
 
     if (targetState !== this.currentState) this.play(targetState, false);
     this.timeInCurrentStateSec += deltaSec;

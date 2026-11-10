@@ -25,11 +25,15 @@ export interface PlayerImpostorSummary {
   drawCallsSaved: number;
 }
 
-/** Camera distance beyond which a player becomes an impostor. */
+/**
+ * Camera distance beyond which a player becomes an impostor.
+ * High stays at 85 m: the closer broadcast camera is about 38 m away, so those
+ * bodies stay real meshes, and a player past 110 m still batches into the impostor.
+ */
 export const IMPOSTOR_DISTANCE_BY_TIER: Record<DeviceQualityTier, number> = {
   low: 48,
   medium: 78,
-  high: 110,
+  high: 85,
   ultra: Number.POSITIVE_INFINITY,
 };
 
