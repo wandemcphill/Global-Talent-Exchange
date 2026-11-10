@@ -22,6 +22,8 @@ module.exports = {
         ...(jestConfig.moduleNameMapper || {}),
         "^@/(.*)$": "<rootDir>/src/$1",
         "^three$": "<rootDir>/node_modules/three/build/three.cjs",
+        "^three/examples/jsm/utils/SkeletonUtils\\.js$":
+          "<rootDir>/src/test/skeletonUtilsJestMock.js",
       };
       return jestConfig;
     },
