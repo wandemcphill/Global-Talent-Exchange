@@ -278,7 +278,7 @@ function tintKitMaterials(root: THREE.Object3D, kit: HumanoidKitConfig): void {
     if (!mesh.isMesh) return;
     const source = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     mesh.material = source.map((material) => {
-      const tinted = material.clone();
+      const tinted = material.clone() as THREE.MeshStandardMaterial;
       const name = `${material.name} ${mesh.name}`.toLowerCase();
       if (name.includes("tshirt") || name.includes("shirt")) tinted.color = shirt.clone();
       else if (name.includes("short")) tinted.color = shorts.clone();
