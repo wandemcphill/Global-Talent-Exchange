@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { StadiumArenaEnvironment } from "./StadiumArenaEnvironment";
+import { isStadiumBowlPitchSurface, StadiumArenaEnvironment } from "./StadiumArenaEnvironment";
 import { FIFA_PITCH_DIMENSIONS } from "./matchCoordinates";
 
 describe("StadiumArenaEnvironment", () => {
@@ -73,6 +73,24 @@ describe("StadiumArenaEnvironment", () => {
     );
     expect(goals.length).toBe(2); // Left goal and Right goal
 
+    arena.dispose();
+  });
+
+  test("hides downloaded grass and pitch surfaces, and keeps the stand shell", () => {
+    expect(isStadiumBowlPitchSurface("Grass")).toBe(true);
+    expect(isStadiumBowlPitchSurface("Pitch")).toBe(true);
+    expect(isStadiumBowlPitchSurface("Pitch surround")).toBe(true);
+    expect(isStadiumBowlPitchSurface("Goals")).toBe(true);
+    expect(isStadiumBowlPitchSurface("Dugouts")).toBe(true);
+    expect(isStadiumBowlPitchSurface("Perimeter boards")).toBe(true);
+    expect(isStadiumBowlPitchSurface("Lower tier")).toBe(false);
+    expect(isStadiumBowlPitchSurface("Roof trusses")).toBe(true);
+    expect(isStadiumBowlPitchSurface("Floodlights")).toBe(false);
+    expect(isStadiumBowlPitchSurface("Gates")).toBe(false);
+
+    const arena = new StadiumArenaEnvironment(scene, { qualityTier: "high" });
+    const stands = arena.stadiumGroup.children.filter((child) => child.name.startsWith("Procedural_"));
+    expect(stands).toHaveLength(4);
     arena.dispose();
   });
 

@@ -25,6 +25,41 @@ function disposeObjectTree(objects: THREE.Object3D[], scene?: THREE.Scene | null
   });
 }
 
+export function resolveGiftModelPath(giftCode: string): string {
+  const code = giftCode.toLowerCase();
+  if (code.includes("jet") || code.includes("flyby")) return "/assets/showroom/sovereign_900x_jet.glb";
+  if (code.includes("yacht")) return "/assets/showroom/superyacht.glb";
+  if (code.includes("golden_stadium")) return "/assets/showroom/golden_stadium.glb";
+  if (code.includes("crown") || code.includes("watch")) return "/assets/showroom/chronos_tourbillon_watch.glb";
+  if (
+    code.includes("paris") ||
+    code.includes("new_york") ||
+    code.includes("rio") ||
+    code.includes("lagos") ||
+    code.includes("tokyo") ||
+    code.includes("dubai") ||
+    code.includes("skyline")
+  ) {
+    return "/assets/showroom/royal_penthouse_box.glb";
+  }
+  if (code.includes("bus") || code.includes("coach")) return "/assets/showroom/vanguard_xii_coach.glb";
+  if (code.includes("suv") || code.includes("hypercar")) return "/assets/showroom/executive_suv.glb";
+  if (code.includes("campus") || code.includes("facility")) return "/assets/showroom/apex_performance_campus.glb";
+  if (
+    code.includes("trophy") ||
+    code.includes("winner") ||
+    code.includes("ballon") ||
+    code.includes("boot") ||
+    code.includes("glove") ||
+    code.includes("puskas") ||
+    code.includes("man_of_the_match") ||
+    code.includes("manager_of_the_month")
+  ) {
+    return "/assets/showroom/trophy_plinth.glb";
+  }
+  return "/models/match/football-stadium.glb";
+}
+
 export interface CinematicGiftEvent {
   id?: string;
   type?: string;
@@ -511,16 +546,7 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
     activeObjectsRef.current.push(stageGroup);
 
     // Stream CC0 GLB upgrade when available (private_jet, superyacht, golden_stadium, trophy plinth)
-    const glbAssetPath =
-      giftCode.includes("jet") || giftCode.includes("flyby")
-        ? "/assets/showroom/sovereign_900x_jet.glb"
-        : giftCode.includes("yacht")
-        ? "/assets/showroom/superyacht.glb"
-        : giftCode.includes("golden_stadium")
-        ? "/assets/showroom/golden_stadium.glb"
-        : giftCode.includes("trophy") || giftCode.includes("winner") || giftCode.includes("ballon")
-        ? "/assets/showroom/trophy_plinth.glb"
-        : null;
+    const glbAssetPath = resolveGiftModelPath(giftCode);
 
     if (glbAssetPath && typeof window !== "undefined" && !/jsdom/i.test(window.navigator?.userAgent || "")) {
       const resolvedUrl = resolvePublicAssetPath(glbAssetPath);
@@ -554,11 +580,9 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
             });
           }
 
-          if (!(giftCode.includes("trophy") || giftCode.includes("winner") || giftCode.includes("ballon"))) {
-            while (stageGroup.children.length > 0) {
-              const old = stageGroup.children[0];
-              stageGroup.remove(old);
-            }
+          while (stageGroup.children.length > 0) {
+            const old = stageGroup.children[0];
+            stageGroup.remove(old);
           }
           stageGroup.add(imported);
         })

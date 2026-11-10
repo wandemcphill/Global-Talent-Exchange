@@ -12,6 +12,7 @@ import {
   type LineupPlayer,
 } from "@/pages/lineupModel";
 import { buildSilhouetteDataUri, posShort, sanitizeRealPlayerImage } from "./PlayerCard";
+import { KitPlayerPortrait } from "./KitPlayerPortrait";
 
 export interface MatchdaySquadMember {
   player_id: string;
@@ -837,6 +838,10 @@ export function MatchdayLineupBroadcast({
 
   return (
     <div className="space-y-4" data-testid="matchday-lineup-broadcast">
+      <KitPlayerPortrait
+        shirtNumber={myTarget.sheet.hero.shirt_number}
+        playerName={myTarget.sheet.hero.short_name}
+      />
       {/* Smart Matchday Lineup Suggestion Controls */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/25 bg-slate-950/75 px-4 py-3">
         <div className="flex flex-wrap items-center gap-2.5">

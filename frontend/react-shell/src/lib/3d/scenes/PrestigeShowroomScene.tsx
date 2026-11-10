@@ -16,6 +16,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GtexSceneRegistry } from "../GtexSceneRegistry";
 import type { GtexSceneRendererProps } from "../GtexSceneTypes";
 import { AssetStreamingCache } from "../broadcast/AssetStreamingCache";
+import { StadiumEnvironmentLighting } from "../broadcast/StadiumEnvironmentLighting";
 
 export type ShowroomCameraPreset =
   | "exterior_front"
@@ -47,13 +48,13 @@ export interface PrestigeShowroomSceneProps extends Partial<GtexSceneRendererPro
 
 const ARCHETYPE_GLB_PATHS: Record<string, string> = {
   private_jet: "/assets/showroom/sovereign_900x_jet.glb",
-  gulfstream_jet: "/assets/showroom/gulfstream_g700_exec_jet.glb",
+  gulfstream_jet: "/assets/showroom/sovereign_900x_jet.glb",
   club_bus: "/assets/showroom/vanguard_xii_coach.glb",
   tourbillon_watch: "/assets/showroom/chronos_tourbillon_watch.glb",
   vip_suite: "/assets/showroom/royal_penthouse_box.glb",
   luxury_suv: "/assets/showroom/executive_suv.glb",
   hypercar: "/assets/showroom/veloce_gt9_hypercar.glb",
-  stadium: "/assets/showroom/arena_imperiale_stadium.glb",
+  stadium: "/models/match/football-stadium.glb",
   campus: "/assets/showroom/apex_performance_campus.glb",
 };
 
@@ -68,7 +69,7 @@ function resolveShowroomGlbPath(
   }
   const label = `${assetName || ""} ${modelName || ""}`.toLowerCase();
   if (label.includes("g700") || label.includes("gulfstream")) {
-    return ARCHETYPE_GLB_PATHS.gulfstream_jet;
+    return ARCHETYPE_GLB_PATHS.private_jet;
   }
   if (label.includes("suv") || label.includes("convoy")) {
     return ARCHETYPE_GLB_PATHS.luxury_suv;
@@ -188,6 +189,103 @@ function getArchetypeGameplayUtility(archetype: string, specs?: Record<string, a
         squadImpact: "+3% Dressing Room Buzz",
       };
   }
+}
+
+const showroomTextureCache = new Map<string, Promise<THREE.Texture>>();
+
+function loadShowroomTexture(url: string): Promise<THREE.Texture> {
+  const cached = showroomTextureCache.get(url);
+  if (cached) return cached;
+  const pending = new Promise<THREE.Texture>((resolve, reject) => {
+    new THREE.TextureLoader().load(
+      url,
+      (texture) => {
+        texture.colorSpace = url.includes("normal") ? THREE.LinearSRGBColorSpace : THREE.SRGBColorSpace;
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        resolve(texture);
+      },
+      undefined,
+      reject
+    );
+  });
+  showroomTextureCache.set(url, pending);
+  return pending;
+}
+
+function projectBoxUvs(geometry: THREE.BufferGeometry): void {
+  const position = geometry.getAttribute("position");
+  const normal = geometry.getAttribute("normal");
+  if (!position || geometry.getAttribute("uv")) return;
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox;
+  if (!box) return;
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  const uvs = new Float32Array(position.count * 2);
+  for (let i = 0; i < position.count; i++) {
+    const x = (position.getX(i) - box.min.x) / Math.max(size.x, 0.001);
+    const y = (position.getY(i) - box.min.y) / Math.max(size.y, 0.001);
+    const z = (position.getZ(i) - box.min.z) / Math.max(size.z, 0.001);
+    const nx = normal ? Math.abs(normal.getX(i)) : 0;
+    const ny = normal ? Math.abs(normal.getY(i)) : 1;
+    const nz = normal ? Math.abs(normal.getZ(i)) : 0;
+    if (ny >= nx && ny >= nz) {
+      uvs[i * 2] = x;
+      uvs[i * 2 + 1] = z;
+    } else if (nx >= nz) {
+      uvs[i * 2] = z;
+      uvs[i * 2 + 1] = y;
+    } else {
+      uvs[i * 2] = x;
+      uvs[i * 2 + 1] = y;
+    }
+  }
+  geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+}
+
+async function dressShowroomMaterials(root: THREE.Object3D): Promise<void> {
+  const [metalColor, metalRough, metalMetal, metalNormal, concreteColor, concreteRough, asphaltColor, asphaltRough] =
+    await Promise.all([
+      loadShowroomTexture("/textures/showroom/metal_diffuse.jpg"),
+      loadShowroomTexture("/textures/showroom/metal_rough.jpg"),
+      loadShowroomTexture("/textures/showroom/metal_metal.jpg"),
+      loadShowroomTexture("/textures/showroom/metal_normal.jpg"),
+      loadShowroomTexture("/textures/showroom/concrete_diffuse.jpg"),
+      loadShowroomTexture("/textures/showroom/concrete_rough.jpg"),
+      loadShowroomTexture("/textures/showroom/asphalt_diffuse.jpg"),
+      loadShowroomTexture("/textures/showroom/asphalt_rough.jpg"),
+    ]);
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    if (mesh.geometry && !mesh.geometry.getAttribute("uv")) projectBoxUvs(mesh.geometry);
+    const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    list.forEach((material) => {
+      const standard = material as THREE.MeshStandardMaterial;
+      if (!standard || !standard.isMeshStandardMaterial || standard.map) return;
+      const name = `${standard.name} ${mesh.name}`.toLowerCase();
+      if (name.includes("glass") || name.includes("window")) {
+        standard.roughness = 0.08;
+        standard.metalness = 0.15;
+        standard.envMapIntensity = 1.4;
+        return;
+      }
+      const ground = name.includes("grass") || name.includes("ground") || name.includes("road") || name.includes("tire") || name.includes("rubber");
+      const stone = name.includes("concrete") || name.includes("campus") || name.includes("wall") || name.includes("building");
+      standard.map = ground ? asphaltColor : stone ? concreteColor : metalColor;
+      standard.roughnessMap = ground ? asphaltRough : stone ? concreteRough : metalRough;
+      if (!ground && !stone) {
+        standard.metalnessMap = metalMetal;
+        standard.normalMap = metalNormal;
+        standard.metalness = 0.85;
+      } else {
+        standard.metalness = 0.04;
+      }
+      standard.roughness = ground ? 0.86 : 0.45;
+      standard.needsUpdate = true;
+    });
+  });
 }
 
 function buildProceduralAssetMesh(
@@ -468,6 +566,10 @@ export const PrestigeShowroomScene: React.FC<PrestigeShowroomSceneProps> = ({
     const rimLight = new THREE.PointLight(0x38bdf8, 1.6, 22);
     rimLight.position.set(-7, 6, -8);
     scene.add(rimLight);
+    const showroomLighting = new StadiumEnvironmentLighting(renderer, scene, "high");
+    if (typeof navigator === "undefined" || !/jsdom/i.test(navigator.userAgent || "")) {
+      void showroomLighting.loadPolyHaven();
+    }
 
     // Obsidian Turntable Pedestal & Glowing Ring
     const turntableGroup = new THREE.Group();
@@ -528,6 +630,7 @@ export const PrestigeShowroomScene: React.FC<PrestigeShowroomSceneProps> = ({
             glbRoot.position.y += 0.28 - scaledBox.min.y;
           }
           glbRoot.name = "prestigeAssetGlbRoot";
+          void dressShowroomMaterials(glbRoot);
           turntableGroup.remove(activeAssetRoot);
           activeAssetRoot = glbRoot;
           turntableGroup.add(glbRoot);
@@ -574,6 +677,7 @@ export const PrestigeShowroomScene: React.FC<PrestigeShowroomSceneProps> = ({
 
     return () => {
       cancelled = true;
+      showroomLighting.dispose();
       cancelAnimationFrame(animId);
       renderer.domElement.removeEventListener("webglcontextlost", handleContextLost);
       renderer.domElement.removeEventListener("webglcontextrestored", handleContextRestored);

@@ -35,6 +35,7 @@ import { api, errMsg, tokens } from "@/lib/api";
 import { useActiveClub, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Loading, Panel } from "@/components/gtex/ui";
 import { Cinema3DStage, Cinema3DSceneType } from "@/components/gtex/Cinema3DStage";
+import { PressRoomStage } from "@/components/gtex/PressRoomStage";
 import { MatchPitchLiveScene } from "@/lib/3d/broadcast/MatchPitchLiveScene";
 import { useMatchSpectatorStream } from "@/lib/3d/broadcast/useMatchSpectatorStream";
 import { useMatchFullTimeGovernance } from "@/lib/3d/broadcast/useMatchFullTimeGovernance";
@@ -1750,8 +1751,6 @@ function PostMatchAnalytics({
   const [rewardsClaimed, setRewardsClaimed] = useState(false);
   const [claimingRewards, setClaimingRewards] = useState(false);
   const [show3DMotmStage, setShow3DMotmStage] = useState(true);
-  const [show3DPressRoom, setShow3DPressRoom] = useState(false);
-
   const motm = postMatch?.motm;
   const shotMap: Array<{
     minute: number;
@@ -1952,30 +1951,12 @@ function PostMatchAnalytics({
 
       {/* Simulated Media Reaction + 3D Press Room Studio Toggle */}
       <Panel eyebrow="AI Simulation · Press Room" title="Simulated Media Reaction (Press Room Briefing)" testid="press-conference">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-[11px] text-slate-400">
-            Post-match reactions are dynamically simulated from pitch actions and match statistics.
-          </p>
-          <button
-            onClick={() => setShow3DPressRoom(!show3DPressRoom)}
-            className="rounded-sm border border-cyan-400/40 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-cyan-300 hover:bg-cyan-500/20"
-          >
-            {show3DPressRoom ? "HIDE 3D PRESS STUDIO" : "OPEN 3D PRESS STUDIO CAM"}
-          </button>
+        <div className="mb-4">
+          <PressRoomStage
+            clubName={match.home_name}
+            scoreLine={`FT ${homeScore} - ${awayScore}`}
+          />
         </div>
-
-        {show3DPressRoom && (
-          <div className="mb-4 overflow-hidden rounded-lg">
-            <Cinema3DStage
-              scene="club_announcement"
-              title={`${match.home_name} PRESS ROOM`}
-              subtitle={`Post-Match Media Desk · FT ${homeScore} - ${awayScore}`}
-              badgeText="GTEX WIRE STUDIO 3D"
-              clubName={match.home_name}
-              compact
-            />
-          </div>
-        )}
 
         <div className="space-y-4">
           {questions.map((q, qIdx) => (

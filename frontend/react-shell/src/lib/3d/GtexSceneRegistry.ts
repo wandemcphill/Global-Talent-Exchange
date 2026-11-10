@@ -399,7 +399,7 @@ const INITIAL_SCENE_CATALOG: GtexSceneDescriptor[] = [
     renderBackend: "threejs",
     defaultCamera: { position: [0, 6, 20], target: [0, 2, 0], fov: 38 },
     requiredModels: [
-      "/assets/showroom/gulfstream_g700_exec_jet.glb",
+      "/assets/showroom/sovereign_900x_jet.glb",
       "/assets/showroom/sovereign_900x_jet.glb",
       "/assets/showroom/veloce_gt9_hypercar.glb",
       "/assets/showroom/executive_suv.glb",

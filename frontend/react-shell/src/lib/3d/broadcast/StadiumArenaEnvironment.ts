@@ -37,6 +37,25 @@ import {
   type StadiumAdvertisingNetworkOptions,
   type StadiumLedCampaign,
 } from "./StadiumAdvertisingNetwork";
+import { AssetStreamingCache } from "./AssetStreamingCache";
+
+/**
+ * Parts of the downloaded bowl that duplicate the live pitch:
+ * turf, markings, goals, dugouts, and the LED perimeter.
+ * The bowl keeps the stands, roof shell, floodlights, and concourse.
+ * Roof trusses are hidden because the broadcast camera sits inside that steel.
+ */
+export function isStadiumBowlPitchSurface(name: string): boolean {
+  const normalized = name.toLowerCase();
+  return (
+    normalized.includes("grass") ||
+    normalized.includes("pitch") ||
+    normalized.includes("goal") ||
+    normalized === "dugouts" ||
+    normalized.includes("perimeter") ||
+    normalized.includes("truss")
+  );
+}
 
 export type StadiumCrowdReactionType =
   | "calm"
@@ -126,6 +145,7 @@ interface SupporterInstanceMeta {
   phase: number;
   angleRad: number;
   side: "home" | "away" | "neutral";
+  scale: number;
 }
 
 export class StadiumArenaEnvironment {
@@ -172,6 +192,8 @@ export class StadiumArenaEnvironment {
   private crowdWaveTimerSec: number = 0;
   private elapsedSec: number = 0;
   private disposables: Array<{ dispose: () => void }> = [];
+  private disposed = false;
+  private broadcastBowl: THREE.Object3D | null = null;
 
   constructor(scene: THREE.Scene, options: StadiumArenaOptions = {}) {
     this.qualityTier = options.qualityTier || "high";
@@ -899,6 +921,7 @@ export class StadiumArenaEnvironment {
     // A. West Grandstand (Main Stand: positioned behind the TV broadcast camera gantry at z = 56 so it never occludes the pitch)
     const buildWestMainStand = () => {
       const standGroup = new THREE.Group();
+      standGroup.name = "Procedural_West_Stand";
       standGroup.position.set(0, 0, halfW + 34);
 
       const lowerGeo = new THREE.BoxGeometry(FIFA_PITCH_DIMENSIONS.length + 10, 6, 12);
@@ -936,6 +959,7 @@ export class StadiumArenaEnvironment {
     // B. East Stand (Opposite Stand: 2-Tier Rake + Roof + Corner Broadcast Jumbotrons)
     const buildEastStand = () => {
       const standGroup = new THREE.Group();
+      standGroup.name = "Procedural_East_Stand";
       standGroup.position.set(0, 0, -(halfW + 16));
 
       const lowerGeo = new THREE.BoxGeometry(FIFA_PITCH_DIMENSIONS.length + 10, 6, 12);
@@ -983,6 +1007,7 @@ export class StadiumArenaEnvironment {
     // C. North Stand (Home End / The Kop)
     const buildNorthKopStand = () => {
       const standGroup = new THREE.Group();
+      standGroup.name = "Procedural_North_Stand";
       standGroup.position.set(-(halfL + 16), 0, 0);
 
       const kopGeo = new THREE.BoxGeometry(14, 12, FIFA_PITCH_DIMENSIONS.width + 12);
@@ -1005,6 +1030,7 @@ export class StadiumArenaEnvironment {
     // D. South Stand (Away End + Scoreboard Tower)
     const buildSouthAwayStand = () => {
       const standGroup = new THREE.Group();
+      standGroup.name = "Procedural_South_Stand";
       standGroup.position.set(halfL + 16, 0, 0);
 
       const awayGeo = new THREE.BoxGeometry(14, 11, FIFA_PITCH_DIMENSIONS.width + 12);
@@ -1276,18 +1302,22 @@ export class StadiumArenaEnvironment {
 
     // West Stand Crowd (Predominantly Home, behind broadcast gantry)
     const westCrowdLower = new THREE.Mesh(crowdBlockGeo, homeCrowdMat);
+    westCrowdLower.visible = false;
     westCrowdLower.position.set(0, 5.5, halfW + 30);
     this.crowdGroup.add(westCrowdLower);
 
     // East Stand Crowd (Home & General Spectators)
     const eastCrowdLower = new THREE.Mesh(crowdBlockGeo, homeCrowdMat);
+    eastCrowdLower.visible = false;
     eastCrowdLower.position.set(0, 5.5, -(halfW + 15));
     this.crowdGroup.add(eastCrowdLower);
 
     if (this.qualityTier !== "low") {
       const westCrowdUpper = new THREE.Mesh(crowdBlockGeo, neutralCrowdMat);
+      westCrowdUpper.visible = false;
       westCrowdUpper.position.set(0, 16.5, halfW + 40);
       const eastCrowdUpper = new THREE.Mesh(crowdBlockGeo, homeCrowdMat);
+      eastCrowdUpper.visible = false;
       eastCrowdUpper.position.set(0, 13.5, -(halfW + 21));
       this.crowdGroup.add(westCrowdUpper, eastCrowdUpper);
       this.upperTierObjects.push(westCrowdUpper, eastCrowdUpper);
@@ -1297,6 +1327,7 @@ export class StadiumArenaEnvironment {
     const kopCrowdGeo = new THREE.BoxGeometry(3.0, 7.0, FIFA_PITCH_DIMENSIONS.width + 4);
     this.disposables.push(kopCrowdGeo);
     const kopCrowd = new THREE.Mesh(kopCrowdGeo, homeCrowdMat);
+    kopCrowd.visible = false;
     kopCrowd.position.set(-(halfL + 15), 8, 0);
     this.crowdGroup.add(kopCrowd);
 
@@ -1304,6 +1335,7 @@ export class StadiumArenaEnvironment {
     const awayCrowdGeo = new THREE.BoxGeometry(3.0, 6.0, FIFA_PITCH_DIMENSIONS.width + 4);
     this.disposables.push(awayCrowdGeo);
     const awayCrowd = new THREE.Mesh(awayCrowdGeo, awayCrowdMat);
+    awayCrowd.visible = false;
     awayCrowd.position.set(halfL + 15, 7.5, 0);
     this.crowdGroup.add(awayCrowd);
 
@@ -1317,8 +1349,8 @@ export class StadiumArenaEnvironment {
 
     // Instanced 3D Supporter Crowd (1 single GPU draw call for hundreds of reactive supporters)
     const supporterCount = this.qualityTier === "low" ? 240 : 720;
-    const supGeo = new THREE.BoxGeometry(0.52, 1.25, 0.42);
-    const supMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const supGeo = createSpectatorGeometry();
+    const supMat = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
     this.disposables.push(supGeo, supMat);
 
     const instanced = new THREE.InstancedMesh(supGeo, supMat, supporterCount);
@@ -1375,7 +1407,8 @@ export class StadiumArenaEnvironment {
 
       const phase = (i * 1.37) % (Math.PI * 2);
       const angleRad = Math.atan2(bz, bx);
-      this.supporterMeta.push({ baseX: bx, baseY: by, baseZ: bz, rotY, phase, angleRad, side });
+      const scale = 0.9 + (i % 6) * 0.035;
+      this.supporterMeta.push({ baseX: bx, baseY: by, baseZ: bz, rotY, phase, angleRad, side, scale });
 
       dummyMatrix.makeRotationY(rotY);
       dummyMatrix.setPosition(bx, by, bz);
@@ -1577,7 +1610,9 @@ export class StadiumArenaEnvironment {
           if (Number.isFinite(extra)) bounce += Math.max(0, Math.min(1.5, extra));
         }
 
+        spectatorScale.set(meta.scale, meta.scale, meta.scale);
         mat4.makeRotationY(meta.rotY);
+        mat4.scale(spectatorScale);
         mat4.setPosition(meta.baseX, meta.baseY + bounce, meta.baseZ);
         this.supporterMesh.setMatrixAt(i, mat4);
       }
@@ -1588,7 +1623,140 @@ export class StadiumArenaEnvironment {
   // ---------------------------------------------------------------------------
   // Resource Cleanup & Memory Management
   // ---------------------------------------------------------------------------
+  /**
+   * Replaces the box stands and floodlight masts with the downloaded stadium bowl.
+   * The GTEX pitch, goals, markings, ad boards, dugouts, and crowd stay in place.
+   * Grass and pitch meshes inside the bowl stay hidden so they do not cover the 105×68 pitch.
+   */
+  public async loadBroadcastBowl(url: string, renderer?: unknown): Promise<boolean> {
+    let scene: THREE.Object3D | null = null;
+    try {
+      const gltf = await AssetStreamingCache.getInstance().loadGltf(url, renderer);
+      scene = gltf?.scene ?? null;
+    } catch {
+      return false;
+    }
+    if (!scene || this.disposed) {
+      if (scene) disposeObject3D(scene);
+      return false;
+    }
+
+    scene.name = "Broadcast_Stadium_Bowl";
+    scene.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (mesh.isMesh) {
+        mesh.castShadow = false;
+        mesh.receiveShadow = true;
+      }
+    });
+
+    scene.updateMatrixWorld(true);
+    const measured = new THREE.Box3().setFromObject(scene);
+    const measuredSize = new THREE.Vector3();
+    measured.getSize(measuredSize);
+    if (measuredSize.z > measuredSize.x) scene.rotation.y = Math.PI / 2;
+    scene.updateMatrixWorld(true);
+    const pitchSurface = scene.getObjectByName("Pitch");
+    if (pitchSurface) {
+      const pitchBounds = new THREE.Box3().setFromObject(pitchSurface);
+      const pitchSize = new THREE.Vector3();
+      pitchBounds.getSize(pitchSize);
+      if (pitchSize.x > 1 && pitchSize.z > 1) {
+        const fitX = FIFA_PITCH_DIMENSIONS.length / pitchSize.x;
+        scene.scale.set(fitX, fitX, FIFA_PITCH_DIMENSIONS.width / pitchSize.z);
+      }
+    }
+    scene.traverse((obj) => {
+      if (isStadiumBowlPitchSurface(obj.name)) obj.visible = false;
+    });
+    scene.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(scene);
+    const center = new THREE.Vector3();
+    bounds.getCenter(center);
+    scene.position.x -= center.x;
+    scene.position.z -= center.z;
+    scene.position.y -= bounds.min.y;
+
+    if (this.broadcastBowl) {
+      this.stadiumGroup.remove(this.broadcastBowl);
+      disposeObject3D(this.broadcastBowl);
+    }
+    this.broadcastBowl = scene;
+    this.stadiumGroup.add(scene);
+    this.stadiumGroup.updateMatrixWorld(true);
+    scene.traverse((obj) => {
+      obj.matrixAutoUpdate = false;
+    });
+
+    this.stadiumGroup.children.forEach((child) => {
+      if (child === scene) return;
+      if (child.name.startsWith("Procedural_") || child.name === "Sovereign_Corner_Tower") {
+        child.visible = false;
+      }
+    });
+    this.lightingGroup.visible = false;
+    this.seatCrowdInBroadcastBowl();
+    return true;
+  }
+
+  /** Moves the supporter blocks into the lower tier of the loaded bowl. */
+  private seatCrowdInBroadcastBowl(): void {
+    const halfL = FIFA_PITCH_DIMENSIONS.length / 2;
+    const halfW = FIFA_PITCH_DIMENSIONS.width / 2;
+    const count = this.supporterMeta.length;
+    this.supporterMeta.forEach((meta, i) => {
+      if (i < count * 0.4) {
+        const row = i % 7;
+        const col = Math.floor(i / 7);
+        const maxCols = Math.max(1, Math.floor((count * 0.4) / 7));
+        meta.baseX = -halfL * 0.86 + (col / maxCols) * (FIFA_PITCH_DIMENSIONS.length * 0.86);
+        meta.baseY = 1.8 + row * 1.05;
+        meta.baseZ = -(halfW + 7 + row * 1.05);
+        meta.rotY = Math.PI;
+      } else if (i < count * 0.7) {
+        const idx = i - Math.floor(count * 0.4);
+        const row = idx % 6;
+        const col = Math.floor(idx / 6);
+        const maxCols = Math.max(1, Math.floor((count * 0.3) / 6));
+        meta.baseX = -halfL * 0.86 + (col / maxCols) * (FIFA_PITCH_DIMENSIONS.length * 0.86);
+        meta.baseY = 1.8 + row * 1.05;
+        meta.baseZ = halfW + 7 + row * 1.05;
+        meta.rotY = 0;
+      } else if (i < count * 0.85) {
+        const idx = i - Math.floor(count * 0.7);
+        const row = idx % 5;
+        const col = Math.floor(idx / 5);
+        const maxCols = Math.max(1, Math.floor((count * 0.15) / 5));
+        meta.baseX = -(halfL + 7 + row * 1.05);
+        meta.baseY = 1.8 + row * 1.05;
+        meta.baseZ = -halfW * 0.8 + (col / maxCols) * (FIFA_PITCH_DIMENSIONS.width * 0.8);
+        meta.rotY = Math.PI / 2;
+      } else {
+        const idx = i - Math.floor(count * 0.85);
+        const row = idx % 5;
+        const col = Math.floor(idx / 5);
+        const maxCols = Math.max(1, Math.floor((count * 0.15) / 5));
+        meta.baseX = halfL + 7 + row * 1.05;
+        meta.baseY = 1.8 + row * 1.05;
+        meta.baseZ = -halfW * 0.8 + (col / maxCols) * (FIFA_PITCH_DIMENSIONS.width * 0.8);
+        meta.rotY = -Math.PI / 2;
+      }
+    });
+
+    this.crowdGroup.children.forEach((child) => {
+      if (child === this.supporterMesh) return;
+      const position = child.position;
+      if (Math.abs(position.x) > halfL) position.x = Math.sign(position.x) * (halfL + 12);
+      if (Math.abs(position.z) > halfW) position.z = Math.sign(position.z) * (halfW + 14);
+      position.y = Math.min(position.y, 9);
+      child.updateMatrix();
+    });
+  }
+
   public dispose(): void {
+    this.disposed = true;
+    if (this.broadcastBowl) disposeObject3D(this.broadcastBowl);
+    this.broadcastBowl = null;
     this.adNetwork.dispose();
     this.disposables.forEach((item) => {
       try {
@@ -1600,4 +1768,78 @@ export class StadiumArenaEnvironment {
     this.disposables = [];
     this.group.clear();
   }
+}
+
+const spectatorScale = new THREE.Vector3();
+
+function createSpectatorGeometry(): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  const add = (geo: THREE.BufferGeometry, x: number, y: number, z: number, color: THREE.Color) => {
+    const solid = geo.index ? geo.toNonIndexed() : geo;
+    if (solid !== geo) geo.dispose();
+    solid.translate(x, y, z);
+    geo = solid;
+    const colors = new Float32Array(geo.getAttribute("position").count * 3);
+    for (let i = 0; i < colors.length; i += 3) {
+      colors[i] = color.r;
+      colors[i + 1] = color.g;
+      colors[i + 2] = color.b;
+    }
+    geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    parts.push(geo);
+  };
+  const skin = new THREE.Color(0xf0c7a4);
+  const cloth = new THREE.Color(0xffffff);
+  add(new THREE.BoxGeometry(0.34, 0.46, 0.18), 0, 1.08, 0, cloth);
+  add(new THREE.SphereGeometry(0.13, 8, 6), 0, 1.46, 0, skin);
+  add(new THREE.BoxGeometry(0.11, 0.46, 0.12), -0.09, 0.48, 0, cloth);
+  add(new THREE.BoxGeometry(0.11, 0.46, 0.12), 0.09, 0.48, 0, cloth);
+  add(new THREE.BoxGeometry(0.09, 0.38, 0.1), -0.24, 1.12, 0, cloth);
+  add(new THREE.BoxGeometry(0.09, 0.38, 0.1), 0.24, 1.12, 0, cloth);
+  const merged = mergePositionNormalColor(parts);
+  parts.forEach((geo) => geo.dispose());
+  return merged;
+}
+
+function mergePositionNormalColor(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
+  let count = 0;
+  parts.forEach((geo) => {
+    count += geo.getAttribute("position").count;
+  });
+  const position = new Float32Array(count * 3);
+  const normal = new Float32Array(count * 3);
+  const color = new Float32Array(count * 3);
+  let offset = 0;
+  parts.forEach((geo) => {
+    const pos = geo.getAttribute("position");
+    const nrm = geo.getAttribute("normal");
+    const col = geo.getAttribute("color");
+    position.set(pos.array as Float32Array, offset * 3);
+    normal.set(nrm.array as Float32Array, offset * 3);
+    color.set(col.array as Float32Array, offset * 3);
+    offset += pos.count;
+  });
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(position, 3));
+  geometry.setAttribute("normal", new THREE.BufferAttribute(normal, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(color, 3));
+  return geometry;
+}
+
+function disposeObject3D(root: THREE.Object3D): void {
+  const materials = new Set<THREE.Material>();
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    mesh.geometry?.dispose();
+    const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    list.forEach((material) => {
+      if (material && !materials.has(material)) materials.add(material);
+    });
+  });
+  materials.forEach((material) => {
+    const textured = material as THREE.Material & { map?: THREE.Texture | null };
+    textured.map?.dispose();
+    material.dispose();
+  });
 }

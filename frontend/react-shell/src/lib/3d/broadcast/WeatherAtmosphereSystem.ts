@@ -435,7 +435,9 @@ export class WeatherAtmosphereSystem {
     const profile = STADIUM_WEATHER_PROFILES[preset] || STADIUM_WEATHER_PROFILES.clear_night;
 
     // 1. Update Sky Background & Atmospheric Fog
-    this.scene.background = new THREE.Color(profile.skyBackgroundHex);
+    if (!(this.scene.background instanceof THREE.Texture)) {
+      this.scene.background = new THREE.Color(profile.skyBackgroundHex);
+    }
     const fogDensity =
       this.qualityTier === "low" ? profile.fogDensity * 0.82 : profile.fogDensity;
     this.scene.fog = new THREE.FogExp2(profile.fogColorHex, fogDensity);

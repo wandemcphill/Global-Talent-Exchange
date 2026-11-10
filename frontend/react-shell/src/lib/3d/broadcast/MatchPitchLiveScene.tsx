@@ -70,7 +70,7 @@ import { PbrTurfShaderMaterial } from "./PbrTurfShaderMaterial";
 import { AssetStreamingCache } from "./AssetStreamingCache";
 import { CrowdChoreographyAndImpactSystem } from "./CrowdChoreographyAndImpactSystem";
 import { WebGpuCapabilityBridge } from "./WebGpuCapabilityBridge";
-import { StadiumEnvironmentLighting } from "./StadiumEnvironmentLighting";
+import { polyHavenUrlForWeather, StadiumEnvironmentLighting } from "./StadiumEnvironmentLighting";
 import { DynamicShadowRig } from "./DynamicShadowRig";
 import { PlayerImpostorLodSystem, type ImpostorCandidate } from "./PlayerImpostorLodSystem";
 import { AdaptiveQualityGovernor, type AdaptiveQualityDecision } from "./AdaptiveQualityGovernor";
@@ -80,6 +80,7 @@ import {
 } from "./StadiumAdvertisingNetwork";
 import type { GtexAdCampaign } from "@/components/advertising/GtexAdvertising";
 import { HumanoidFootballerRig } from "./HumanoidFootballerRig";
+import { MixamoKitFootballer } from "./MixamoKitFootballer";
 import { FootballAnimationStateMachine } from "./FootballAnimationStateMachine";
 import { gtexAudio } from "@/lib/audio";
 
@@ -202,6 +203,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
 }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const stadiumArenaRef = useRef<StadiumArenaEnvironment | null>(null);
+  const stadiumEnvLightingRef = useRef<StadiumEnvironmentLighting | null>(null);
   const weatherSystemRef = useRef<WeatherAtmosphereSystem | null>(null);
   const touchlineManagerRef = useRef<TouchlineManagerSystem | null>(null);
   const matchOfficialsRef = useRef<MatchOfficialsSystem | null>(null);
@@ -270,6 +272,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     setWeatherPresetState(propWeatherPreset);
     weatherPresetRef.current = propWeatherPreset;
     weatherSystemRef.current?.setPreset(propWeatherPreset);
+    void stadiumEnvLightingRef.current?.loadPolyHaven(polyHavenUrlForWeather(propWeatherPreset));
   }, [propWeatherPreset]);
 
   useEffect(() => {
@@ -315,6 +318,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       setWeatherPresetState(preset);
       weatherPresetRef.current = preset;
       weatherSystemRef.current?.setPreset(preset);
+      void stadiumEnvLightingRef.current?.loadPolyHaven(polyHavenUrlForWeather(preset));
       onWeatherPresetChange?.(preset);
     },
     [onWeatherPresetChange]
@@ -610,6 +614,9 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       initialCampaigns: stadiumCampaigns,
     });
     stadiumArenaRef.current = stadiumArena;
+    if (typeof window !== "undefined" && !/jsdom/i.test(window.navigator?.userAgent || "")) {
+      void stadiumArena.loadBroadcastBowl("/models/match/football-stadium.glb", renderer);
+    }
 
     // -------------------------------------------------------------------------
     // 3. Phase 2: Weather & Atmospherics + 3D Touchline Managers & Bench
@@ -707,6 +714,10 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
 
     // Image-based lighting, ball-following soft shadows, distant-player impostors
     const stadiumEnvLighting = new StadiumEnvironmentLighting(renderer, scene, qualityTier);
+    stadiumEnvLightingRef.current = stadiumEnvLighting;
+    if (typeof window !== "undefined" && !/jsdom/i.test(window.navigator?.userAgent || "")) {
+      void stadiumEnvLighting.loadPolyHaven(polyHavenUrlForWeather(weatherPresetRef.current));
+    }
     const shadowRig = new DynamicShadowRig(renderer, keyLight, qualityTier);
     const shadowsOn = shadowRig.getSummary().enabled;
     const playerImpostors = new PlayerImpostorLodSystem(scene, qualityTier);
@@ -771,7 +782,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     playersGroup.name = "HumanoidPlayersGroup";
     scene.add(playersGroup);
 
-    const playerRigs = new Map<string, HumanoidFootballerRig>();
+    const playerRigs = new Map<string, HumanoidFootballerRig | MixamoKitFootballer>();
 
     const getOrCreatePlayerRig = (
       playerId: string,
@@ -780,7 +791,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       label: string = "Player",
       role: string = "MID",
       isGK: boolean = false
-    ): HumanoidFootballerRig => {
+    ): HumanoidFootballerRig | MixamoKitFootballer => {
       if (playerRigs.has(playerId)) {
         return playerRigs.get(playerId)!;
       }
@@ -814,7 +825,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         }
       }
 
-      const rig = new HumanoidFootballerRig({
+      const kitConfig = {
         playerId,
         side,
         shirtNumber: shirtNum,
@@ -831,7 +842,12 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         crestUrl: teamView.crest_url,
         sponsorName: teamView.sponsor_name,
         playerName: label,
-      });
+      };
+      const useMixamoKit =
+        typeof window !== "undefined" && !/jsdom/i.test(window.navigator?.userAgent || "");
+      const rig = useMixamoKit
+        ? new MixamoKitFootballer(kitConfig)
+        : new HumanoidFootballerRig(kitConfig);
 
       playersGroup.add(rig.rootGroup);
       rig.setShadowCasting(shadowsOn);
@@ -1602,6 +1618,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       pbrTurf.dispose();
       crowdChoreography.dispose();
       stadiumArena.setExternalCrowdOffsetFn(null);
+      stadiumEnvLightingRef.current = null;
       stadiumEnvLighting.dispose();
       playerImpostors.dispose();
       qualityGovernorRef.current = null;

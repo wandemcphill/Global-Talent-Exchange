@@ -6,11 +6,17 @@
  * floodlight banks on four masts, warm stand glow) and prefilters it with
  * PMREMGenerator into `scene.environment`. Every MeshStandardMaterial (kits, ball,
  * PBR turf) then gets physically plausible reflections and ambient fill without
- * loading an HDR file. Pure Three.js core — no RoomEnvironment/RGBELoader imports.
+ * The procedural dome is immediate. A Poly Haven HDR replaces it when the file loads.
  */
 
 import * as THREE from "three";
 import type { DeviceQualityTier } from "../GtexSceneTypes";
+
+export function polyHavenUrlForWeather(preset: string): string {
+  if (preset === "clear_day") return "/textures/env/kloofendal_43d_clear_puresky_2k.hdr";
+  if (preset === "snow" || preset === "mist") return "/textures/env/overcast_industrial_courtyard_2k.hdr";
+  return "/textures/env/modern_buildings_night_2k.hdr";
+}
 
 export interface StadiumEnvironmentSummary {
   isActive: boolean;
@@ -20,6 +26,8 @@ export interface StadiumEnvironmentSummary {
 
 export class StadiumEnvironmentLighting {
   private envTarget: THREE.WebGLRenderTarget | null = null;
+  private hdrTexture: THREE.Texture | null = null;
+  private hdrRequest = 0;
   private readonly disposables: Array<{ dispose: () => void }> = [];
   private intensity = 1;
   private floodlightBoost = 1;
@@ -114,6 +122,41 @@ export class StadiumEnvironmentLighting {
     });
   }
 
+  /** Replaces the procedural dome with a Poly Haven HDR when it loads. */
+  public async loadPolyHaven(url = polyHavenUrlForWeather("clear_night")): Promise<boolean> {
+    const request = ++this.hdrRequest;
+    try {
+      const { RGBELoader } = await import("three/examples/jsm/loaders/RGBELoader.js");
+      const hdr = await new RGBELoader().loadAsync(url);
+      if (request !== this.hdrRequest) {
+        hdr.dispose();
+        return false;
+      }
+      hdr.mapping = THREE.EquirectangularReflectionMapping;
+      const pmrem = new THREE.PMREMGenerator(this.renderer);
+      const next = pmrem.fromEquirectangular(hdr);
+      pmrem.dispose();
+      if (request !== this.hdrRequest) {
+        hdr.dispose();
+        next.dispose();
+        return false;
+      }
+      const previous = this.envTarget;
+      const previousHdr = this.hdrTexture;
+      this.envTarget = next;
+      this.hdrTexture = hdr;
+      this.scene.environment = next.texture;
+      this.scene.background = hdr;
+      previous?.dispose();
+      previousHdr?.dispose();
+      this.isActive = true;
+      this.setIntensity(this.intensity);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /** Weather hook: rain dims the sky but wet surfaces reflect floodlights harder. */
   public setFloodlightBoost(boost: number): void {
     this.floodlightBoost = Math.max(0.2, Math.min(2.5, boost));
@@ -128,6 +171,11 @@ export class StadiumEnvironmentLighting {
     if (this.scene.environment === this.envTarget?.texture) {
       this.scene.environment = null;
     }
+    if (this.scene.background === this.hdrTexture) {
+      this.scene.background = null;
+    }
+    this.hdrTexture?.dispose();
+    this.hdrTexture = null;
     this.envTarget?.dispose();
     this.envTarget = null;
     this.disposables.forEach((d) => d.dispose());

@@ -403,9 +403,9 @@ export class CameraDirector {
     if (this.manualMode === "broadcast_main") {
       const trackingX = clamp(this.deadZoneAnchorX * 0.62, -32, 32);
       this.targetPose = {
-        position: [trackingX, 30, 58],
-        target: [framedX * 0.45, predictedBallY * 0.25, framedZ * 0.25],
-        fov: 42 + tacticalFovBonus,
+        position: [trackingX, 16, 34],
+        target: [framedX * 0.55, Math.max(1.05, predictedBallY), framedZ * 0.4],
+        fov: 32 + tacticalFovBonus * 0.5,
         roll: 0,
       };
     } else if (this.manualMode === "tactical_high") {
@@ -546,9 +546,9 @@ export class CameraDirector {
         default: {
           const trackingX = clamp(this.deadZoneAnchorX * 0.62, -32, 32);
           this.targetPose = {
-            position: [trackingX, 30, 58],
-            target: [framedX * 0.45, predictedBallY * 0.25, framedZ * 0.25],
-            fov: 42 + tacticalFovBonus,
+            position: [trackingX, 16, 34],
+            target: [framedX * 0.55, Math.max(1.05, predictedBallY), framedZ * 0.4],
+            fov: 32 + tacticalFovBonus * 0.5,
             roll: 0,
           };
           break;

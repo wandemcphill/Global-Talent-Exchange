@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { disposeScene } from "@/lib/3d/disposeScene";
+import { AssetStreamingCache } from "@/lib/3d/broadcast/AssetStreamingCache";
+import { isStadiumBowlPitchSurface } from "@/lib/3d/broadcast/StadiumArenaEnvironment";
+import { StadiumEnvironmentLighting } from "@/lib/3d/broadcast/StadiumEnvironmentLighting";
 import {
   Camera,
   Film,
@@ -341,6 +344,68 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
 
     threeScene.add(stageGroup);
 
+    let cancelled = false;
+    const playerScenes = new Set<Cinema3DSceneType>([
+      "signing_walkout",
+      "wonderkid_emergence",
+      "manager_arrival",
+      "competition_final",
+      "negotiation_table",
+      "build_a_son",
+    ]);
+    const stadiumScenes = new Set<Cinema3DSceneType>([
+      "signing_walkout",
+      "stadium_sponsor",
+      "stadium_ad_display",
+      "facility_upgrade",
+      "academy_upgrade",
+      "club_announcement",
+      "competition_final",
+      "world_gala",
+    ]);
+    const cache = AssetStreamingCache.getInstance();
+    if (playerScenes.has(scene)) {
+      void cache.loadGltf("/models/footballer/gtex_home_kit_mixamo.glb", renderer).then((gltf) => {
+        if (cancelled || !gltf?.scene) return;
+        const player = gltf.scene.clone(true);
+        const box = new THREE.Box3().setFromObject(player);
+        const height = Math.max(box.max.y - box.min.y, 0.001);
+        player.scale.setScalar(1.7 / height);
+        player.position.y = -box.min.y * (1.7 / height);
+        const shirt = new THREE.Color(activePrimary);
+        player.traverse((obj) => {
+          const mesh = obj as THREE.Mesh;
+          if (!mesh.isMesh) return;
+          const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          mesh.material = list.map((material) => {
+            const tinted = material.clone() as THREE.MeshStandardMaterial;
+            const name = material.name.toLowerCase();
+            if (name.includes("tshirt") || name.includes("shirt")) tinted.color = shirt;
+            return tinted;
+          });
+        });
+        stageGroup.add(player);
+      });
+    }
+    if (stadiumScenes.has(scene)) {
+      void cache.loadGltf("/models/match/football-stadium.glb", renderer).then((gltf) => {
+        if (cancelled || !gltf?.scene) return;
+        const bowl = gltf.scene.clone(true);
+        bowl.traverse((obj) => {
+          if (isStadiumBowlPitchSurface(obj.name)) obj.visible = false;
+        });
+        const box = new THREE.Box3().setFromObject(bowl);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const span = Math.max(size.x, size.z, 0.001);
+        bowl.scale.setScalar(7.5 / span);
+        bowl.position.y = -1.15;
+        stageGroup.add(bowl);
+      });
+    }
+    const cinemaLighting = new StadiumEnvironmentLighting(renderer, threeScene, "high");
+    void cinemaLighting.loadPolyHaven();
+
     let rafId = 0;
     const renderLoop = () => {
       rafId = requestAnimationFrame(renderLoop);
@@ -350,14 +415,16 @@ export const Cinema3DStage: React.FC<Cinema3DStageProps> = ({
     renderLoop();
 
     return () => {
+      cancelled = true;
       cancelAnimationFrame(rafId);
       webglStageGroupRef.current = null;
+      cinemaLighting.dispose();
       disposeScene(threeScene, renderer);
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }
     };
-  }, [activePrimary, activeSecondary, compact]);
+  }, [activePrimary, activeSecondary, compact, scene]);
 
   useEffect(() => {
     if (webglStageGroupRef.current) {

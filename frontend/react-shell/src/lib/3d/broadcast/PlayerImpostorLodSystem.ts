@@ -27,9 +27,9 @@ export interface PlayerImpostorSummary {
 
 /** Camera distance beyond which a player becomes an impostor. */
 export const IMPOSTOR_DISTANCE_BY_TIER: Record<DeviceQualityTier, number> = {
-  low: 38,
-  medium: 55,
-  high: 85,
+  low: 48,
+  medium: 78,
+  high: 110,
   ultra: Number.POSITIVE_INFINITY,
 };
 
