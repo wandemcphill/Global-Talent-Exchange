@@ -132,27 +132,27 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
 
   // Initialize Three.js scene
   useEffect(() => {
-    if (!mountRef.current || prefersReducedMotion) return;
+    const mount = mountRef.current;
+    if (!mount || prefersReducedMotion) return;
 
-    const width = mountRef.current.clientWidth || 800;
-    const height = mountRef.current.clientHeight || 450;
+    const width = mount.clientWidth || 800;
+    const height = mount.clientHeight || 450;
 
     const scene = new THREE.Scene();
     sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-    camera.position.set(0, 15, 35);
-    camera.lookAt(0, 4, 0);
+    const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 1000);
+    camera.position.set(6, 6.2, 16);
+    camera.lookAt(0, 3.2, 0);
     cameraRef.current = camera;
 
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: "high-performance" });
+      renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: true });
       renderer.setSize(width, height);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.shadowMap.enabled = false;
       rendererRef.current = renderer;
-      mountRef.current.appendChild(renderer.domElement);
     } catch {
       setContextLost(true);
       return;
@@ -168,6 +168,8 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
     };
     renderer.domElement.addEventListener("webglcontextlost", handleContextLost, false);
     renderer.domElement.addEventListener("webglcontextrestored", handleContextRestored, false);
+    mount.querySelectorAll("canvas").forEach((node) => node.remove());
+    mount.appendChild(renderer.domElement);
 
     // Global ambient and key lights
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
@@ -181,6 +183,16 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
     rimLight.position.set(-20, 10, -15);
     scene.add(rimLight);
 
+    scene.background = new THREE.Color(0x071018);
+    const stageFloor = new THREE.Mesh(
+      new THREE.CircleGeometry(12, 48),
+      new THREE.MeshStandardMaterial({ color: 0x0c1218, roughness: 0.55, metalness: 0.35 })
+    );
+    stageFloor.rotation.x = -Math.PI / 2;
+    stageFloor.position.y = 0.02;
+    scene.add(stageFloor);
+    activeObjectsRef.current.push(stageFloor);
+
     const handleResize = () => {
       if (!mountRef.current || !rendererRef.current || !cameraRef.current) return;
       const w = mountRef.current.clientWidth;
@@ -193,15 +205,11 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
 
     return () => {
       window.removeEventListener("resize", handleResize);
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-      disposeObjectTree(activeObjectsRef.current, sceneRef.current);
-      activeObjectsRef.current = [];
-      if (rendererRef.current?.domElement) {
-        rendererRef.current.domElement.removeEventListener("webglcontextlost", handleContextLost);
-        rendererRef.current.domElement.removeEventListener("webglcontextrestored", handleContextRestored);
-        rendererRef.current.dispose();
-        mountRef.current?.removeChild(rendererRef.current.domElement);
-      }
+      renderer.domElement.removeEventListener("webglcontextlost", handleContextLost);
+      renderer.domElement.removeEventListener("webglcontextrestored", handleContextRestored);
+      renderer.dispose();
+      renderer.domElement.remove();
+      if (rendererRef.current === renderer) rendererRef.current = null;
     };
   }, [prefersReducedMotion]);
 
@@ -624,9 +632,10 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
 
       // Camera gentle dynamic pan
       if (cameraRef.current) {
-        cameraRef.current.position.x = Math.sin(elapsed * 0.0008) * 6;
-        cameraRef.current.position.y = 12 + Math.cos(elapsed * 0.0008) * 3;
-        cameraRef.current.lookAt(0, 5, 0);
+        cameraRef.current.position.x = Math.sin(elapsed * 0.00045) * 4;
+        cameraRef.current.position.y = 6.2;
+        cameraRef.current.position.z = 16;
+        cameraRef.current.lookAt(0, 3.2, 0);
       }
 
       if (rendererRef.current && sceneRef.current && cameraRef.current) {

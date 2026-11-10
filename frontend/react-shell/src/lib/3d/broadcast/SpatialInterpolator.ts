@@ -460,8 +460,8 @@ export class SpatialInterpolator {
         const dz = ballZ - carrier.position3D[2];
         const distToCarrier = Math.hypot(dx, dz);
         if (distToCarrier < 0.55) {
-          const strideTouchLead = 0.38 + strideWave * 0.11;
-          const lateralFootOffset = (contactFoot === "right" ? 0.14 : -0.14) * (1 - Math.abs(strideWave) * 0.4);
+          const strideTouchLead = 0.28 + strideWave * 0.04;
+          const lateralFootOffset = (contactFoot === "right" ? 0.08 : -0.08) * (1 - Math.abs(strideWave) * 0.35);
           const forwardX = Math.cos(carrier.facingAngleRad);
           const forwardZ = Math.sin(carrier.facingAngleRad);
           const rightX = -forwardZ;

@@ -403,9 +403,9 @@ export class CameraDirector {
     if (this.manualMode === "broadcast_main") {
       const trackingX = clamp(this.deadZoneAnchorX * 0.62, -32, 32);
       this.targetPose = {
-        position: [trackingX, 16, 34],
-        target: [framedX * 0.55, Math.max(1.05, predictedBallY), framedZ * 0.4],
-        fov: 32 + tacticalFovBonus * 0.5,
+        position: [trackingX, 3.4, 11],
+        target: [framedX, Math.max(1.05, predictedBallY), framedZ],
+        fov: 28 + tacticalFovBonus * 0.25,
         roll: 0,
       };
     } else if (this.manualMode === "tactical_high") {
@@ -484,11 +484,11 @@ export class CameraDirector {
 
       switch (grammar.preset) {
         case "attack_push": {
-          const forwardLead = framedX > 0 ? 12 : -12;
+          const forwardLead = framedX > 0 ? 8 : -8;
           this.targetPose = {
-            position: [framedX * 0.7 + forwardLead, 22, 42],
-            target: [framedX + forwardLead * 0.5, predictedBallY * 0.5, framedZ * 0.7],
-            fov: 36 + tacticalFovBonus * 0.5,
+            position: [framedX * 0.55 + forwardLead * 0.4, 3.8, 11],
+            target: [framedX + forwardLead * 0.35, Math.max(1.05, predictedBallY), framedZ],
+            fov: 28 + tacticalFovBonus * 0.25,
             roll: clamp(-this.estimatedBallVel3D[0] * 0.0012, -0.018, 0.018),
           };
           break;
@@ -497,8 +497,8 @@ export class CameraDirector {
         case "box_zoom": {
           const boxSide = framedX >= 0 ? 1 : -1;
           this.targetPose = {
-            position: [boxSide * 38, 14, 26],
-            target: [boxSide * 46, Math.max(1, predictedBallY), framedZ * 0.5],
+            position: [boxSide * 28, 5.4, 12],
+            target: [boxSide * 40, Math.max(1.05, predictedBallY), framedZ * 0.45],
             fov: 30,
             roll: 0,
           };
@@ -546,9 +546,9 @@ export class CameraDirector {
         default: {
           const trackingX = clamp(this.deadZoneAnchorX * 0.62, -32, 32);
           this.targetPose = {
-            position: [trackingX, 16, 34],
-            target: [framedX * 0.55, Math.max(1.05, predictedBallY), framedZ * 0.4],
-            fov: 32 + tacticalFovBonus * 0.5,
+            position: [trackingX, 3.4, 11],
+            target: [framedX, Math.max(1.05, predictedBallY), framedZ],
+            fov: 28 + tacticalFovBonus * 0.25,
             roll: 0,
           };
           break;

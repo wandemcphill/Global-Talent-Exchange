@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
+import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { AssetStreamingCache } from "@/lib/3d/broadcast/AssetStreamingCache";
-import { MIXAMO_KIT_URL } from "@/lib/3d/broadcast/MixamoKitFootballer";
+import { attachKitIdle, MIXAMO_KIT_URL } from "@/lib/3d/broadcast/MixamoKitFootballer";
 import { StadiumEnvironmentLighting } from "@/lib/3d/broadcast/StadiumEnvironmentLighting";
 
 /**
@@ -26,7 +27,7 @@ export function PressRoomStage({
 
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     } catch {
       return;
     }
@@ -37,9 +38,9 @@ export function PressRoomStage({
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(36, width / height, 0.1, 40);
-    camera.position.set(0, 1.45, 4.4);
-    camera.lookAt(0, 1.15, 0);
+    const camera = new THREE.PerspectiveCamera(28, width / height, 0.08, 40);
+    camera.position.set(0.15, 1.42, 3.35);
+    camera.lookAt(0, 1.18, -0.55);
     scene.add(new THREE.HemisphereLight(0xdbeafe, 0x1e293b, 0.8));
     const key = new THREE.DirectionalLight(0xfff7ed, 1.6);
     key.position.set(2, 4, 3);
@@ -77,39 +78,56 @@ export function PressRoomStage({
     void lighting.loadPolyHaven();
 
     let cancelled = false;
+    let mixer: THREE.AnimationMixer | null = null;
     void AssetStreamingCache.getInstance()
       .loadGltf(MIXAMO_KIT_URL, renderer)
-      .then((gltf) => {
+      .then(async (gltf) => {
         if (cancelled || !gltf?.scene) return;
-        const person = gltf.scene.clone(true);
+        const person = cloneSkinned(gltf.scene);
         const shirt = new THREE.Color(primaryColor);
         person.traverse((obj) => {
           const mesh = obj as THREE.Mesh;
           if (!mesh.isMesh) return;
           const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-          mesh.material = list.map((material) => {
-            const tinted = material.clone() as THREE.MeshStandardMaterial;
-            if (material.name.toLowerCase().includes("shirt") || material.name.toLowerCase().includes("tshirt")) {
-              tinted.color = shirt;
+          const tinted = list.map((material) => {
+            const next = material.clone() as THREE.MeshStandardMaterial;
+            const name = material.name.toLowerCase();
+            const cloth = name.includes("shirt") || name.includes("tshirt") || name.includes("short") || name.includes("leg");
+            if (name.includes("shirt") || name.includes("tshirt")) next.color = shirt;
+            else if (name.includes("short")) next.color = new THREE.Color("#e6e6e6");
+            else if (name.includes("leg")) next.color = shirt;
+            if (cloth) {
+              next.map = null;
+              next.metalness = 0.02;
+              next.roughness = 0.58;
             }
-            return tinted;
+            return next;
           });
+          mesh.material = tinted.length === 1 ? tinted[0] : tinted;
         });
+        person.updateMatrixWorld(true);
         const box = new THREE.Box3().setFromObject(person);
-        const heightSpan = Math.max(box.max.y - box.min.y, 0.001);
-        const scale = 1.72 / heightSpan;
+        const heightSpan = box.max.y - box.min.y;
+        const scale = heightSpan >= 1.2 && heightSpan <= 2.6 ? 1 : heightSpan > 2.6 ? 1.75 / heightSpan : 1;
         person.scale.setScalar(scale);
-        person.position.y = -box.min.y * scale;
-        person.position.z = -0.15;
+        person.updateMatrixWorld(true);
+        const placed = new THREE.Box3().setFromObject(person);
+        person.position.y = Number.isFinite(placed.min.y) ? -placed.min.y : 0;
+        person.position.z = -0.7;
         scene.add(person);
+        mixer = await attachKitIdle(person);
       });
 
     let raf = 0;
-    const loop = () => {
+    let last = performance.now();
+    const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
+      const delta = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      mixer?.update(delta);
       renderer.render(scene, camera);
     };
-    loop();
+    loop(last);
 
     return () => {
       cancelled = true;

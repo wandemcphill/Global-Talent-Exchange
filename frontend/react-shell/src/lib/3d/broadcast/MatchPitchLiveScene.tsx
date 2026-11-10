@@ -861,13 +861,17 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     const ballGroup = new THREE.Group();
     scene.add(ballGroup);
 
-    const ballRadius = 0.22;
+    // Size-5 football: 68–70 cm circumference, about 21.6 cm across.
+    const ballRadius = 0.108;
+    let ballLift = ballRadius;
     const ballGeo = new THREE.SphereGeometry(ballRadius, 16, 16);
     const ballMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      roughness: 0.2,
-      metalness: 0.1,
+      color: 0xf4f4f4,
+      roughness: 0.55,
+      metalness: 0.02,
+      envMapIntensity: 0.2,
     });
+    ballMat.userData.gtexFixedEnv = 0.2;
     const ballMesh = new THREE.Mesh(ballGeo, ballMat);
     ballMesh.castShadow = false;
     ballGroup.add(ballMesh);
@@ -878,12 +882,39 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         .then((gltf) => {
           if (!gltf?.scene) return;
           const pbrBall = gltf.scene.clone(true);
+          pbrBall.traverse((obj) => {
+            if (/deflated/i.test(obj.name)) obj.visible = false;
+          });
+          pbrBall.updateMatrixWorld(true);
           const box = new THREE.Box3().setFromObject(pbrBall);
           const size = new THREE.Vector3();
           box.getSize(size);
-          const maxDim = Math.max(size.x, size.y, size.z, 0.001);
-          pbrBall.scale.setScalar((ballRadius * 2) / maxDim);
+          const diameter = Math.max(size.x, size.y, size.z, 0.001);
+          pbrBall.scale.multiplyScalar((ballRadius * 2) / diameter);
+          pbrBall.updateMatrixWorld(true);
+          const fitted = new THREE.Box3().setFromObject(pbrBall);
+          const center = new THREE.Vector3();
+          fitted.getCenter(center);
+          pbrBall.position.x -= center.x;
+          pbrBall.position.z -= center.z;
+          pbrBall.position.y -= fitted.min.y;
+          ballLift = 0;
+          pbrBall.traverse((obj) => {
+            const mesh = obj as THREE.Mesh;
+            if (!mesh.isMesh) return;
+            const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            mats.forEach((material) => {
+              const standard = material as THREE.MeshStandardMaterial;
+              if (!standard.isMeshStandardMaterial) return;
+              standard.envMapIntensity = 0.25;
+              standard.userData.gtexFixedEnv = 0.25;
+              standard.roughness = Math.max(standard.roughness ?? 0.4, 0.4);
+            });
+          });
           ballMesh.add(pbrBall);
+          // Drop the white placeholder. An opacity change does not recompile the
+          // opaque shader, so the sphere stayed on top of the textured ball.
+          (ballMesh as THREE.Mesh).geometry = new THREE.BufferGeometry();
         })
         .catch(() => {});
     }
@@ -926,6 +957,11 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         setCameraMode: (mode: ManualCameraMode) => {
           setCameraMode(mode);
         },
+        getCamera: () => ({
+          mode: cameraDirector.getManualMode(),
+          position: [camera.position.x, camera.position.y, camera.position.z],
+          fov: camera.fov,
+        }),
         setQualityTier: (tier: "high" | "medium" | "low") => {
           handleSelectQualityTier(tier);
         },
@@ -1277,21 +1313,24 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         );
         if (ballOwner && state.ball.state === "controlled" && by < 0.25) {
           const distToOwner = Math.hypot(bx - ballOwner.position3D[0], bz - ballOwner.position3D[2]);
-          if (distToOwner < 0.35) {
-            const strideLead = 0.42 + Math.sin(localTime * 9.5) * 0.08 * ballOwner.speed_ratio;
-            bx = ballOwner.position3D[0] + Math.cos(ballOwner.facingAngleRad) * strideLead;
-            bz = ballOwner.position3D[2] + Math.sin(ballOwner.facingAngleRad) * strideLead;
+          if (distToOwner < 0.16) {
+            const strideLead = 0.28 + Math.sin(localTime * 6.5) * 0.04;
+            const lateral = Math.cos(localTime * 6.5) * 0.07;
+            const forwardX = Math.cos(ballOwner.facingAngleRad);
+            const forwardZ = Math.sin(ballOwner.facingAngleRad);
+            bx = ballOwner.position3D[0] + forwardX * strideLead - forwardZ * lateral;
+            bz = ballOwner.position3D[2] + forwardZ * strideLead + forwardX * lateral;
           }
         }
 
-        ballMesh.position.set(bx, by + ballRadius, bz);
+        ballMesh.position.set(bx, by + ballLift, bz);
         if (state.ball.spin) {
-          ballMesh.rotation.x += state.ball.spin[0] * deltaSec * 8.0;
-          ballMesh.rotation.y += state.ball.spin[1] * deltaSec * 8.0;
-          ballMesh.rotation.z += state.ball.spin[2] * deltaSec * 8.0;
+          ballMesh.rotation.x += state.ball.spin[0] * deltaSec * 2.4;
+          ballMesh.rotation.y += state.ball.spin[1] * deltaSec * 2.4;
+          ballMesh.rotation.z += state.ball.spin[2] * deltaSec * 2.4;
         } else if (state.ball.state !== "idle") {
-          ballMesh.rotation.x += deltaSec * 4.5;
-          ballMesh.rotation.z -= deltaSec * 3.2;
+          ballMesh.rotation.x += deltaSec * 2.2;
+          ballMesh.rotation.z -= deltaSec * 1.6;
         }
 
         // Phase 2: Detect ball kick state transitions for 3D spatial ball-strike audio
@@ -1450,7 +1489,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           camera.position.z - bz
         );
         postProcessing.setDepthOfField(replayActiveNow, ballDist, replayActiveNow ? 10 : 18);
-        postProcessing.setMotionBlur(true, replayActiveNow ? 1.0 : 0.5);
+        postProcessing.setMotionBlur(true, replayActiveNow ? 0.35 : 0.08);
       }
 
       if (renderer) {

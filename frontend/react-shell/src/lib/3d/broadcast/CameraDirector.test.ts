@@ -22,7 +22,7 @@ describe("CameraDirector", () => {
 
     // After 2 seconds of tracking, camera settles near broadcast height
     const pose2 = director.update(2.0, "broadcast", [35, 0, 10]);
-    expect(pose2.position[1]).toBeCloseTo(16, 0); // Closer gantry so a player reads at broadcast size
+    expect(pose2.position[1]).toBeCloseTo(3.4, 0); // Sideline height so a player fills the frame
     // Sideline camera should have moved positive along X following ball at X: 35
     expect(pose2.position[0]).toBeGreaterThan(pose1.position[0]);
   });

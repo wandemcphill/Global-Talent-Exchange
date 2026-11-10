@@ -275,9 +275,9 @@ export class BroadcastPostProcessingPipeline {
   private isHdr = false;
   private hasDepth = false;
 
-  private bloomStrength = 0.55;
-  private bloomRadius = 0.38;
-  private bloomThreshold = 0.85;
+  private bloomStrength = 0.28;
+  private bloomRadius = 0.32;
+  private bloomThreshold = 0.97;
   private focusDistance = 30;
   private focusRange = 18;
   private motionBlurStrength = 0.6;

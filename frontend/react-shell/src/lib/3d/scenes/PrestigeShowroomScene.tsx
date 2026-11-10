@@ -245,17 +245,12 @@ function projectBoxUvs(geometry: THREE.BufferGeometry): void {
 }
 
 async function dressShowroomMaterials(root: THREE.Object3D): Promise<void> {
-  const [metalColor, metalRough, metalMetal, metalNormal, concreteColor, concreteRough, asphaltColor, asphaltRough] =
-    await Promise.all([
-      loadShowroomTexture("/textures/showroom/metal_diffuse.jpg"),
-      loadShowroomTexture("/textures/showroom/metal_rough.jpg"),
-      loadShowroomTexture("/textures/showroom/metal_metal.jpg"),
-      loadShowroomTexture("/textures/showroom/metal_normal.jpg"),
-      loadShowroomTexture("/textures/showroom/concrete_diffuse.jpg"),
-      loadShowroomTexture("/textures/showroom/concrete_rough.jpg"),
-      loadShowroomTexture("/textures/showroom/asphalt_diffuse.jpg"),
-      loadShowroomTexture("/textures/showroom/asphalt_rough.jpg"),
-    ]);
+  const [concreteColor, concreteRough, asphaltColor, asphaltRough] = await Promise.all([
+    loadShowroomTexture("/textures/showroom/concrete_diffuse.jpg"),
+    loadShowroomTexture("/textures/showroom/concrete_rough.jpg"),
+    loadShowroomTexture("/textures/showroom/asphalt_diffuse.jpg"),
+    loadShowroomTexture("/textures/showroom/asphalt_rough.jpg"),
+  ]);
   root.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
     if (!mesh.isMesh) return;
@@ -273,16 +268,23 @@ async function dressShowroomMaterials(root: THREE.Object3D): Promise<void> {
       }
       const ground = name.includes("grass") || name.includes("ground") || name.includes("road") || name.includes("tire") || name.includes("rubber");
       const stone = name.includes("concrete") || name.includes("campus") || name.includes("wall") || name.includes("building");
-      standard.map = ground ? asphaltColor : stone ? concreteColor : metalColor;
-      standard.roughnessMap = ground ? asphaltRough : stone ? concreteRough : metalRough;
-      if (!ground && !stone) {
-        standard.metalnessMap = metalMetal;
-        standard.normalMap = metalNormal;
-        standard.metalness = 0.85;
-      } else {
+      if (ground || stone) {
+        standard.map = ground ? asphaltColor : concreteColor;
+        standard.roughnessMap = ground ? asphaltRough : concreteRough;
         standard.metalness = 0.04;
+        standard.roughness = ground ? 0.86 : 0.62;
+      } else {
+        standard.map = null;
+        standard.roughnessMap = null;
+        standard.metalnessMap = null;
+        standard.normalMap = null;
+        if (standard.color.r > 0.85 && standard.color.g > 0.85 && standard.color.b > 0.85) {
+          standard.color.set(0x1c2838);
+        }
+        standard.metalness = 0.62;
+        standard.roughness = 0.28;
+        standard.envMapIntensity = 1.35;
       }
-      standard.roughness = ground ? 0.86 : 0.45;
       standard.needsUpdate = true;
     });
   });

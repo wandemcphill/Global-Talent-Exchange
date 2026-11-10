@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
+import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { AssetStreamingCache } from "@/lib/3d/broadcast/AssetStreamingCache";
 import { MIXAMO_KIT_URL } from "@/lib/3d/broadcast/MixamoKitFootballer";
 
@@ -48,17 +49,18 @@ export function KitPlayerPortrait({
       .loadGltf(MIXAMO_KIT_URL, renderer)
       .then((gltf) => {
         if (cancelled || !gltf?.scene) return;
-        player = gltf.scene.clone(true);
+        player = cloneSkinned(gltf.scene);
         player.traverse((obj) => {
           const mesh = obj as THREE.Mesh;
           if (!mesh.isMesh) return;
           const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-          mesh.material = list.map((material) => {
-            const tinted = material.clone() as THREE.MeshStandardMaterial;
+          const tinted = list.map((material) => {
+            const next = material.clone() as THREE.MeshStandardMaterial;
             const name = `${material.name}`.toLowerCase();
-            if (name.includes("tshirt") || name.includes("shirt")) tinted.color = new THREE.Color(primaryColor);
-            return tinted;
+            if (name.includes("tshirt") || name.includes("shirt")) next.color = new THREE.Color(primaryColor);
+            return next;
           });
+          mesh.material = tinted.length === 1 ? tinted[0] : tinted;
         });
         const box = new THREE.Box3().setFromObject(player);
         const height = Math.max(box.max.y - box.min.y, 0.001);

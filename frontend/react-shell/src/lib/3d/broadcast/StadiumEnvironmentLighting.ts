@@ -116,7 +116,12 @@ export class StadiumEnvironmentLighting {
       const mats = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
       mats.forEach((m) => {
         if ((m as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
-          (m as THREE.MeshStandardMaterial).envMapIntensity = this.intensity * this.floodlightBoost;
+          const standard = m as THREE.MeshStandardMaterial;
+          // Cloth and the match ball pin their own reflection so the night HDR
+          // cannot wash a shirt back to mint or blow the ball out to white.
+          const pinned = standard.userData?.gtexFixedEnv;
+          standard.envMapIntensity =
+            typeof pinned === "number" ? pinned : this.intensity * this.floodlightBoost;
         }
       });
     });
