@@ -84,6 +84,28 @@ import { MixamoKitFootballer } from "./MixamoKitFootballer";
 import { FootballAnimationStateMachine } from "./FootballAnimationStateMachine";
 import { gtexAudio } from "@/lib/audio";
 
+/**
+ * Grass-coloured shirts disappear on the pitch. When the primary colour sits in
+ * the green band, the team plays in its secondary colour and keeps green as trim.
+ */
+export function pitchSafeShirt(
+  primary: string | undefined,
+  secondary: string | undefined,
+): { primary: string; secondary: string } {
+  const fallbackPrimary = primary || "#00E676";
+  const fallbackSecondary = secondary || "";
+  const isGrass = (hex: string): boolean => {
+    if (!hex) return false;
+    const hsl = { h: 0, s: 0, l: 0 };
+    new THREE.Color(hex).getHSL(hsl, THREE.SRGBColorSpace);
+    return hsl.h > 0.22 && hsl.h < 0.48 && hsl.s > 0.3 && hsl.l > 0.18 && hsl.l < 0.75;
+  };
+  if (!isGrass(fallbackPrimary) || !fallbackSecondary || isGrass(fallbackSecondary)) {
+    return { primary: fallbackPrimary, secondary: fallbackSecondary || fallbackPrimary };
+  }
+  return { primary: fallbackSecondary, secondary: fallbackPrimary };
+}
+
 export interface SpectatorLiveScoreUpdate {
   home_score: number;
   away_score: number;
@@ -799,16 +821,22 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       const currentSafeView = safeViewRef.current;
 
       // Kit Clash Detection (RGB euclidean distance < 65)
-      const homeColor = new THREE.Color(currentSafeView.home_team.primary_color || "#00E676");
-      const awayColor = new THREE.Color(currentSafeView.away_team.primary_color || "#3B82F6");
+      const homeColor = new THREE.Color(
+        pitchSafeShirt(currentSafeView.home_team.primary_color, currentSafeView.home_team.secondary_color).primary || "#00E676",
+      );
+      const awayColor = new THREE.Color(
+        pitchSafeShirt(currentSafeView.away_team.primary_color, currentSafeView.away_team.secondary_color).primary || "#3B82F6",
+      );
       const dr = (homeColor.r - awayColor.r) * 255;
       const dg = (homeColor.g - awayColor.g) * 255;
       const db = (homeColor.b - awayColor.b) * 255;
       const isClash = Math.sqrt(dr * dr + dg * dg + db * db) < 65;
 
       const teamView = side === "home" ? currentSafeView.home_team : currentSafeView.away_team;
-      let primaryColor = teamView.primary_color;
-      let secondaryColor = teamView.secondary_color;
+      // A green shirt vanishes on a green pitch. Play in the change colours.
+      const safeKit = pitchSafeShirt(teamView.primary_color, teamView.secondary_color);
+      let primaryColor = safeKit.primary;
+      let secondaryColor = safeKit.secondary;
       let patternType = teamView.pattern_type;
 
       if (side === "away" && isClash) {

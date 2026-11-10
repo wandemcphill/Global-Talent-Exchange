@@ -1353,7 +1353,7 @@ export class StadiumArenaEnvironment {
     this.crowdGroup.add(eastTifo);
 
     // Instanced 3D Supporter Crowd (1 single GPU draw call for hundreds of reactive supporters)
-    const supporterCount = this.qualityTier === "low" ? 240 : 720;
+    const supporterCount = this.qualityTier === "low" ? 360 : 1200;
     const supGeo = createSpectatorGeometry();
     const supMat = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
     this.disposables.push(supGeo, supMat);
@@ -1652,6 +1652,18 @@ export class StadiumArenaEnvironment {
       if (mesh.isMesh) {
         mesh.castShadow = false;
         mesh.receiveShadow = true;
+        // Bare concrete reads as a white wall under the night HDR and hides the crowd.
+        const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        list.forEach((material, index) => {
+          if (!/concrete/i.test(material?.name || "")) return;
+          const next = material.clone() as THREE.MeshStandardMaterial;
+          next.color.multiplyScalar(0.42);
+          next.roughness = 0.95;
+          next.envMapIntensity = 0.25;
+          next.userData.gtexFixedEnv = 0.25;
+          if (Array.isArray(mesh.material)) mesh.material[index] = next;
+          else mesh.material = next;
+        });
       }
     });
 
