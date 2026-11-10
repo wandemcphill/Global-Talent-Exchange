@@ -57,12 +57,16 @@ export class PbrTurfShaderMaterial {
       this.uniforms.uWear.value = options.wearFactor;
     }
 
+    const grass = baseColor.clone().lerp(new THREE.Color("#2fbf4e"), 0.72);
+    grass.lerp(stripeColor, 0.12);
     this.material = new THREE.MeshStandardMaterial({
-      color: baseColor,
-      roughness: 0.82,
-      metalness: 0.05,
+      color: grass,
+      roughness: 0.92,
+      metalness: 0,
+      envMapIntensity: 0.08,
       side: THREE.FrontSide,
     });
+    this.material.userData.gtexFixedEnv = 0.08;
 
     const isJsdomTest =
       typeof navigator !== "undefined" && /jsdom/i.test(navigator.userAgent || "");
@@ -153,8 +157,11 @@ export class PbrTurfShaderMaterial {
         "#include <color_fragment>",
         `
         #include <color_fragment>
-        // Apply alternating subtle mowing tone
-        float stripeFactor = (mod(floor(vWorldPos.x / uStripeWidth), 2.0) > 0.5) ? 1.08 : 0.94;
+        // Pull a pale or yellow albedo into broadcast grass, then stripe it.
+        float luma = dot(diffuseColor.rgb, vec3(0.25, 0.62, 0.13));
+        vec3 grass = vec3(0.04, 0.34, 0.08) + luma * vec3(0.22, 0.95, 0.18);
+        diffuseColor.rgb = mix(diffuseColor.rgb, grass, 0.82);
+        float stripeFactor = (mod(floor(vWorldPos.x / uStripeWidth), 2.0) > 0.5) ? 1.12 : 0.86;
         diffuseColor.rgb *= stripeFactor;
 
         // Darken albedo when wet with rain

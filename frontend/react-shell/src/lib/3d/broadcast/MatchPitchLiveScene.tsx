@@ -936,6 +936,8 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     // -------------------------------------------------------------------------
     let animationFrameId: number;
     let lastTimestamp = performance.now();
+    let heldAtEndSec = 0;
+    let lastEndTime = -1;
     const frameDeltaSamplesMs: number[] = [];
     let frameDeltaSumMs = 0;
     let telemetryTick = 0;
@@ -1099,8 +1101,21 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         });
         localTimeRef.current += timelineDelta;
         const endTime = interpolator.getEndTime();
-        if (endTime > 0 && localTimeRef.current > endTime) {
-          localTimeRef.current = isLiveRef.current ? endTime : interpolator.getStartTime();
+        if (endTime > lastEndTime + 0.01) {
+          lastEndTime = endTime;
+          heldAtEndSec = 0;
+        }
+        if (endTime > 0 && localTimeRef.current >= endTime - 0.001) {
+          localTimeRef.current = endTime;
+          heldAtEndSec += deltaSec;
+          // A finished buffer used to pin every player on the last frame.
+          // A live feed that is still adding frames keeps its end moving, so it does not restart.
+          if (heldAtEndSec > 1.4) {
+            localTimeRef.current = interpolator.getStartTime();
+            heldAtEndSec = 0;
+          }
+        } else {
+          heldAtEndSec = 0;
         }
         onTimeUpdateRef.current?.(localTimeRef.current);
 

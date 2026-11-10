@@ -411,9 +411,11 @@ export class SpatialInterpolator {
       });
     }
 
-    // Personal-space collision avoidance pass: prevent humanoid player meshes from clipping through each other
-    const MIN_SEPARATION_M = 0.78;
-    for (let iter = 0; iter < 2; iter++) {
+    // Keep bodies from occupying the same ground. A carrier stays on the ball
+    // and the other player steps around him, instead of both snapping through.
+    const MIN_SEPARATION_M = 1.15;
+    const carrierId = frameA.ball.owner_player_id || frameB.ball.owner_player_id;
+    for (let iter = 0; iter < 5; iter++) {
       for (let i = 0; i < interpolatedPlayers.length; i++) {
         const pi = interpolatedPlayers[i];
         if (pi.active === false) continue;
@@ -423,15 +425,18 @@ export class SpatialInterpolator {
           const dx = pj.position3D[0] - pi.position3D[0];
           const dz = pj.position3D[2] - pi.position3D[2];
           const dist = Math.hypot(dx, dz);
-          if (dist < MIN_SEPARATION_M) {
-            const overlap = (MIN_SEPARATION_M - dist) * 0.5;
-            const nx = dist > 0.001 ? dx / dist : Math.cos((i + j) * 1.1);
-            const nz = dist > 0.001 ? dz / dist : Math.sin((i + j) * 1.1);
-            pi.position3D[0] = Math.max(PITCH_BOUNDS.minX, Math.min(PITCH_BOUNDS.maxX, pi.position3D[0] - nx * overlap));
-            pi.position3D[2] = Math.max(PITCH_BOUNDS.minZ, Math.min(PITCH_BOUNDS.maxZ, pi.position3D[2] - nz * overlap));
-            pj.position3D[0] = Math.max(PITCH_BOUNDS.minX, Math.min(PITCH_BOUNDS.maxX, pj.position3D[0] + nx * overlap));
-            pj.position3D[2] = Math.max(PITCH_BOUNDS.minZ, Math.min(PITCH_BOUNDS.maxZ, pj.position3D[2] + nz * overlap));
-          }
+          if (dist >= MIN_SEPARATION_M) continue;
+          const overlap = MIN_SEPARATION_M - dist;
+          const nx = dist > 0.04 ? dx / dist : Math.cos((i * 2 + j) * 1.7);
+          const nz = dist > 0.04 ? dz / dist : Math.sin((i * 2 + j) * 1.7);
+          const iCarries = pi.player_id === carrierId;
+          const jCarries = pj.player_id === carrierId;
+          const pushI = jCarries ? 0.15 : iCarries ? 0.85 : 0.5;
+          const pushJ = iCarries ? 0.15 : jCarries ? 0.85 : 0.5;
+          pi.position3D[0] = Math.max(PITCH_BOUNDS.minX, Math.min(PITCH_BOUNDS.maxX, pi.position3D[0] - nx * overlap * pushI));
+          pi.position3D[2] = Math.max(PITCH_BOUNDS.minZ, Math.min(PITCH_BOUNDS.maxZ, pi.position3D[2] - nz * overlap * pushI));
+          pj.position3D[0] = Math.max(PITCH_BOUNDS.minX, Math.min(PITCH_BOUNDS.maxX, pj.position3D[0] + nx * overlap * pushJ));
+          pj.position3D[2] = Math.max(PITCH_BOUNDS.minZ, Math.min(PITCH_BOUNDS.maxZ, pj.position3D[2] + nz * overlap * pushJ));
         }
       }
     }

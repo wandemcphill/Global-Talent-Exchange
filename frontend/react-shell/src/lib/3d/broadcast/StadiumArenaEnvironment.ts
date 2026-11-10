@@ -328,7 +328,7 @@ export class StadiumArenaEnvironment {
     // A. Pitch Ground Turf (105m x 68m)
     const pitchGeo = new THREE.PlaneGeometry(pLength, pWidth, 1, 1);
     const pitchMat = new THREE.MeshLambertMaterial({
-      color: 0x154726,
+      color: 0x168a36,
       side: THREE.DoubleSide,
     });
     this.pitchTurfMat = pitchMat;
@@ -360,9 +360,9 @@ export class StadiumArenaEnvironment {
       if (i % 2 === 0) {
         const stripeGeo = new THREE.PlaneGeometry(stripeWidth, pWidth);
         const stripeMat = new THREE.MeshBasicMaterial({
-          color: 0x19522c,
+          color: 0x22b84a,
           transparent: true,
-          opacity: 0.38,
+          opacity: 0.46,
         });
         this.disposables.push(stripeGeo, stripeMat);
         const stripeMesh = new THREE.Mesh(stripeGeo, stripeMat);
@@ -772,23 +772,28 @@ export class StadiumArenaEnvironment {
   private buildPerimeterAdBoards(): void {
     const halfL = FIFA_PITCH_DIMENSIONS.length / 2;
     const halfW = FIFA_PITCH_DIMENSIONS.width / 2;
-    const boardH = 1.38;
+    const boardH = 2.15;
     const offsetSide = halfW + 3.2;
     const offsetGoal = halfL + 4.8;
 
+    const touchlineLen = FIFA_PITCH_DIMENSIONS.length + 8;
     const baseTexture = this.adNetwork.getTexture();
     this.adTouchlineTexture = baseTexture;
-    this.adTouchlineTexture.repeat.set(3, 1);
+    this.adTouchlineTexture.anisotropy = 16;
+    // The ribbon is many times wider than the 8:1 canvas. Repeat so a letter
+    // stays square instead of being smeared along the touchline.
+    const tileAspect = 2048 / 256;
+    this.adTouchlineTexture.repeat.set(touchlineLen / boardH / tileAspect, 1);
 
     const ledScreenMat = new THREE.MeshBasicMaterial({
       map: this.adTouchlineTexture,
       side: THREE.DoubleSide,
+      toneMapped: false,
     });
     const cabinetFrameMat = new THREE.MeshLambertMaterial({ color: 0x090d16 });
     this.disposables.push(ledScreenMat, cabinetFrameMat);
 
     // A. Far Touchline Broadcast LED Board (z = -offsetSide, facing +Z toward main broadcast camera at [0, 25, 58])
-    const touchlineLen = FIFA_PITCH_DIMENSIONS.length + 8;
     const backingGeo = new THREE.BoxGeometry(touchlineLen, boardH, 0.28);
     const screenGeo = new THREE.PlaneGeometry(touchlineLen, boardH - 0.08);
     this.disposables.push(backingGeo, screenGeo);

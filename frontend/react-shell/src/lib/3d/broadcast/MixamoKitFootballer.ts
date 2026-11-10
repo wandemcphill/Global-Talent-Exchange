@@ -173,6 +173,8 @@ export class MixamoKitFootballer {
   private timeInCurrentStateSec = 0;
   private lastPosition: [number, number, number] | null = null;
   private smoothedSpeed = 0;
+  private stillSec = 0;
+  private lastMovingGait: FootballAnimationState = "jog";
   private lodLevel: AnimationLODLevel = "full";
   private shadowCastingEnabled = false;
   private disposed = false;
@@ -308,9 +310,21 @@ export class MixamoKitFootballer {
     }
     if (previousLod !== this.lodLevel) this.applyShadowCasting();
 
-    const visualState = GAIT_FROM_TRAVEL.has(targetState)
-      ? gaitForGroundSpeed(this.smoothedSpeed, hasPossession)
-      : targetState;
+    let visualState = targetState;
+    if (GAIT_FROM_TRAVEL.has(targetState)) {
+      if (this.smoothedSpeed >= 0.4) {
+        this.stillSec = 0;
+        visualState = gaitForGroundSpeed(this.smoothedSpeed, hasPossession);
+        this.lastMovingGait = visualState;
+      } else {
+        this.stillSec += deltaSec;
+        // Keep the stride through a short stop so the run does not cut to a statue.
+        visualState =
+          this.stillSec < 0.7
+            ? this.lastMovingGait
+            : gaitForGroundSpeed(0, hasPossession);
+      }
+    }
     if (visualState !== this.currentState) this.play(visualState, false);
     this.timeInCurrentStateSec += deltaSec;
 

@@ -842,12 +842,6 @@ export class StadiumAdvertisingNetwork {
     this.drawCampaignPanel(ctx, this.currentPair[0], 0, 0, panelW, H);
     this.drawCampaignPanel(ctx, this.currentPair[1], panelW, 0, panelW, H);
 
-    // Subtle LED scanline / matrix overlay for authentic broadcast stadium ribbon look
-    ctx.fillStyle = "rgba(0, 0, 0, 0.14)";
-    for (let y = 0; y < H; y += 6) {
-      ctx.fillRect(0, y, W, 1.5);
-    }
-
     // Center divider pillar between LED cabinets
     ctx.fillStyle = "#020617";
     ctx.fillRect(panelW - 4, 0, 8, H);
@@ -874,12 +868,8 @@ export class StadiumAdvertisingNetwork {
     const accent = campaign.accentColor || palette.accent;
     const textCol = campaign.textColor || "#FFFFFF";
 
-    // High-contrast LED cabinet background gradient
-    const bgGrad = ctx.createLinearGradient(x, y, x + w, y + h);
-    bgGrad.addColorStop(0, primary);
-    bgGrad.addColorStop(0.72, "#070D19");
-    bgGrad.addColorStop(1, primary);
-    ctx.fillStyle = bgGrad;
+    // Solid cabinet colour. A fade to black was swallowing the type at pitch distance.
+    ctx.fillStyle = primary;
     ctx.fillRect(x, y, w, h);
 
     // Top and bottom illuminated LED rails
@@ -942,26 +932,26 @@ export class StadiumAdvertisingNetwork {
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
     const brandTitle = campaign.brandName.toUpperCase().slice(0, 26);
-    ctx.font = "900 72px 'Outfit', 'Inter', system-ui, sans-serif";
+    ctx.font = "900 118px 'Outfit', 'Inter', system-ui, sans-serif";
     ctx.strokeStyle = "rgba(0, 0, 0, 0.85)";
     ctx.lineWidth = 6;
-    ctx.strokeText(brandTitle, x + 208, y + 122);
+    ctx.strokeText(brandTitle, x + 208, y + 128);
     ctx.fillStyle = textCol;
-    ctx.fillText(brandTitle, x + 208, y + 122);
+    ctx.fillText(brandTitle, x + 208, y + 128);
 
     // Campaign Headline / Slogan
     const headlineText = (campaign.headline || "OFFICIAL GTEX BROADCAST PARTNER")
       .toUpperCase()
       .slice(0, 44);
-    ctx.font = "800 38px 'Inter', system-ui, sans-serif";
+    ctx.font = "800 64px 'Inter', system-ui, sans-serif";
     ctx.fillStyle = accent === "#0B132B" || accent === "#0F172A" ? "#FDE047" : accent;
-    ctx.fillText(headlineText, x + 210, y + 186);
+    ctx.fillText(headlineText, x + 210, y + 200);
 
     // Sub-tagline
     const taglineText = (campaign.tagline || "GTEX LIVE STADIUM NETWORK").toUpperCase().slice(0, 52);
     ctx.font = "700 22px 'JetBrains Mono', monospace";
     ctx.fillStyle = "rgba(226, 232, 240, 0.9)";
-    ctx.fillText(taglineText, x + 210, y + 226);
+    ctx.fillText(taglineText, x + 210, y + 240);
   }
 
   private drawBrandMonogram(
