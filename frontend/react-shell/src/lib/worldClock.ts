@@ -119,6 +119,14 @@ export function formatProgressionRate(rate: number): string {
   return `${Number(rate.toFixed(4))}x`;
 }
 
+/** Human length of one 365-day game season at this clock speed. */
+export function formatSeasonInHumanWeeks(rate: number): string {
+  if (!Number.isFinite(rate) || rate <= 0) return "";
+  const weeks = Math.round((365 / rate / 7) * 10) / 10;
+  const label = Number.isInteger(weeks) ? String(weeks) : weeks.toFixed(1);
+  return `about ${label} weeks`;
+}
+
 export const WORLD_CLOCK_QUERY_KEY = ["world-clock"] as const;
 
 /**

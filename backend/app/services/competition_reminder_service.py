@@ -22,7 +22,9 @@ class CompetitionReminderService:
     session: Session
 
     def dispatch_due_reminders(self, *, now: datetime | None = None) -> int:
-        resolved_now = _as_utc(now or datetime.now(timezone.utc))
+        from app.services.world_clock_service import WorldClockService
+
+        resolved_now = _as_utc(now or WorldClockService(self.session).now_virtual())
         created = 0
         competitions = self.session.scalars(
             select(Competition).where(Competition.scheduled_start_at.is_not(None))

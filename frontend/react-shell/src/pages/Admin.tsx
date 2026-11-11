@@ -307,7 +307,7 @@ export default function Admin() {
         <div className="grid gap-4 text-sm leading-relaxed text-slate-300 md:grid-cols-2">
           <div>
             <p className="font-bold text-white">The game clock is already running</p>
-            <p className="mt-1">It started on 30 October 2026. Use the buttons under this note to pause it, start it again, or change the speed. 1 means one game day is one real day. A season is 12 months, so a young player does not age a year until a new season is opened. Matches begin when this clock reaches their kickoff. On a brand-new database the clock begins the first time the site asks for the time. To open on a chosen date, set the virtual start date before that first request. Changing it later does not rewind a clock that has already started.</p>
+            <p className="mt-1">One season is about 11 weeks. The game year still has 365 game days and 12 career months. You can start the clock once. After that it cannot be paused or sped up. Matches begin when this clock reaches their kickoff. A young player ages one year when a new season opens. Real players and legends age with the human calendar.</p>
           </div>
           <div>
             <p className="font-bold text-white">How to create coin</p>

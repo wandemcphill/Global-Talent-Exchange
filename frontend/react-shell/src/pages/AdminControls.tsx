@@ -70,41 +70,23 @@ const READONLY_KEYS = new Set(["id", "created_at", "updated_at", "updated_by", "
 export function GameClockPanel() {
   const act = useAct();
   const { data: clock, refetch } = useAdminGet<any>("world-clock", "/world/clock");
-  const [speed, setSpeed] = useState(clock?.progression_rate != null ? String(clock.progression_rate) : "1");
-  useEffect(() => {
-    if (clock?.progression_rate != null) setSpeed(String(clock.progression_rate));
-  }, [clock?.progression_rate]);
-  const paused = Boolean(clock?.is_paused);
+  const started = Boolean(clock?.officially_started);
   return (
-    <Panel eyebrow="Game clock" title="Pause the world, start it again, or change the speed" testid="admin-game-clock">
+    <Panel eyebrow="Game clock" title="Start the game clock" testid="admin-game-clock">
       <p className="mb-3 text-sm leading-relaxed text-slate-400">
-        The clock is {paused ? "paused" : "running"}. Game date {clock?.world_date || "—"}. Speed {clock?.progression_rate ?? "—"} means that many game seconds pass for each real second. 1 is a normal day. Young players age when a new season opens, and a season is {clock?.virtual_months_per_season ?? 12} months of this clock.
+        {started
+          ? `The clock is running. Game date ${clock?.world_date || "—"}. One season is about 11 weeks. It cannot be paused or sped up.`
+          : "The clock has not started. Press Start the clock once. After that it cannot be paused or sped up. One season is about 11 weeks."}
       </p>
-      <div className="flex flex-wrap items-end gap-2">
-        <Btn
-          variant="secondary"
-          data-testid="admin-pause-clock-btn"
-          onClick={() => act(() => api.post("/admin/world/clock/pause"), "Game clock paused").then(() => refetch())}
-        >
-          Pause the clock
-        </Btn>
-        <Btn
-          data-testid="admin-resume-clock-btn"
-          onClick={() => act(() => api.post("/admin/world/clock/resume"), "Game clock running again").then(() => refetch())}
-        >
-          Start the clock again
-        </Btn>
-        <Field name="Game speed" type="number" value={speed} onChange={setSpeed} testid="admin-clock-speed-input" />
+      {started ? null : (
         <Btn
           variant="gold"
-          data-testid="admin-save-clock-speed-btn"
-          onClick={() =>
-            act(() => api.post("/admin/world/clock/speed", { progression_rate: Number(speed) }), "Game speed saved").then(() => refetch())
-          }
+          data-testid="admin-start-clock-btn"
+          onClick={() => act(() => api.post("/admin/world/clock/start"), "Game clock started").then(() => refetch())}
         >
-          Save the speed
+          Start the clock
         </Btn>
-      </div>
+      )}
     </Panel>
   );
 }

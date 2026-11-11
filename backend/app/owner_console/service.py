@@ -760,7 +760,10 @@ def sign_market_player(session: Session, user_id: str, club_id: str, player_id: 
             raise OwnerError(str(exc), 402) from exc
     age = 24
     if player.date_of_birth:
-        age = max(16, now().year - player.date_of_birth.year)
+        from app.services.player_aging import age_years, aging_date_for_player
+
+        aged = age_years(player.date_of_birth, aging_date_for_player(player, session))
+        age = max(16, aged if aged is not None else 16)
     signed = OwnerSquadPlayer(
         club_id=club_id,
         player_ref=player_id,
@@ -2255,6 +2258,16 @@ def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
     }
 
 
+def _retire_due_regens(session: Session) -> int:
+    try:
+        from app.regen_career.policy_service import RegenCareerPolicyService
+
+        return RegenCareerPolicyService(session).retire_eligible()
+    except Exception:
+        logger.exception("owner_console.regen_retirement_failed")
+        return 0
+
+
 def _owner_tick_supports_row_locks(session: Session) -> bool:
     bind = session.get_bind()
     dialect = getattr(bind, "dialect", None)
@@ -2302,6 +2315,9 @@ def process_due_owner_world_ticks(
 
     states = list(session.scalars(stmt).all())
     if not states:
+        regens_retired = (
+            _retire_due_regens(session) if clock_state.officially_started and not clock_state.is_paused else 0
+        )
         return {
             "target_world_date": target_date.isoformat(),
             "clubs_considered": 0,
@@ -2309,6 +2325,7 @@ def process_due_owner_world_ticks(
             "clubs_backlogged": 0,
             "ticks_failed": 0,
             "clock_paused": bool(clock_state.is_paused),
+            "regens_retired": regens_retired,
             **({"tick_results": []} if include_details else {}),
         }
 
@@ -2392,6 +2409,7 @@ def process_due_owner_world_ticks(
             clubs_backlogged += 1
 
     session.flush()
+    regens_retired = _retire_due_regens(session)
     return {
         "target_world_date": target_date.isoformat(),
         "clubs_considered": len(states),
@@ -2400,6 +2418,7 @@ def process_due_owner_world_ticks(
         "ticks_failed": ticks_failed,
         "legacy_anchors_created": anchored,
         "clock_paused": False,
+        "regens_retired": regens_retired,
         **({"tick_results": tick_results} if include_details else {}),
     }
 

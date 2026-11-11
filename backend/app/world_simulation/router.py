@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_admin, get_session
 from app.models.world_clock import WorldClockState
-from app.services.world_clock_service import DEFAULT_CLOCK_ID, WorldClockService, _as_utc
+from app.services.world_clock_service import DEFAULT_CLOCK_ID, WorldClockLocked, WorldClockService, _as_utc
 from app.models.user import User
 from app.world_simulation.schemas import (
     ClubWorldContextView,
@@ -52,20 +52,34 @@ def get_world_clock(session: Session = Depends(get_session)) -> WorldClockView:
 
 def _clock_view(clock: WorldClockService, state: WorldClockState) -> WorldClockView:
     world_time = clock.now_virtual()
-    years = max(1, (world_time.year - _as_utc(state.virtual_start_time).year) + 1)
-    season_number = max(1, int((world_time - _as_utc(state.virtual_start_time)).days // 365) + 1)
     return WorldClockView(
         clock_id=state.id,
         world_time=world_time,
         world_date=world_time.date(),
         virtual_start_time=_as_utc(state.virtual_start_time),
-        gtex_years_running=years,
-        current_season_number=season_number,
-        current_season_label=f"GTEX Year {years} · Season {season_number}",
+        gtex_years_running=clock.gtex_years_running(),
+        current_season_number=clock.current_season_number(),
+        current_season_label=clock.current_season_label(),
         is_paused=bool(state.is_paused),
+        officially_started=bool(state.officially_started),
         progression_rate=float(state.progression_rate or 1.0),
         virtual_months_per_season=int(state.virtual_months_per_season or 12),
     )
+
+
+@admin_router.post("/clock/start", response_model=WorldClockView)
+def start_world_clock(
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_admin),
+) -> WorldClockView:
+    """Start the game clock once. After this it cannot be paused or sped up."""
+    clock = WorldClockService(session)
+    try:
+        state = clock.start()
+    except WorldClockLocked as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    session.commit()
+    return _clock_view(clock, state)
 
 
 @admin_router.post("/clock/pause", response_model=WorldClockView)
@@ -73,11 +87,7 @@ def pause_world_clock(
     session: Session = Depends(get_session),
     _: User = Depends(get_current_admin),
 ) -> WorldClockView:
-    """Freeze game time. Matches and birthdays wait until the clock starts again."""
-    clock = WorldClockService(session)
-    state = clock.pause()
-    session.commit()
-    return _clock_view(clock, state)
+    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The game clock cannot be paused.")
 
 
 @admin_router.post("/clock/resume", response_model=WorldClockView)
@@ -85,11 +95,10 @@ def resume_world_clock(
     session: Session = Depends(get_session),
     _: User = Depends(get_current_admin),
 ) -> WorldClockView:
-    """Start the clock again from the moment it was paused."""
-    clock = WorldClockService(session)
-    state = clock.resume()
-    session.commit()
-    return _clock_view(clock, state)
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="The game clock cannot be paused or restarted.",
+    )
 
 
 @admin_router.post("/clock/speed", response_model=WorldClockView)
@@ -98,14 +107,10 @@ def set_world_clock_speed(
     session: Session = Depends(get_session),
     _: User = Depends(get_current_admin),
 ) -> WorldClockView:
-    """Set how many game seconds pass for each real second. 1 is normal speed."""
-    clock = WorldClockService(session)
-    try:
-        state = clock.set_rate(float(payload.progression_rate))
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    session.commit()
-    return _clock_view(clock, state)
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="The game clock speed is fixed. One season is about 11 weeks.",
+    )
 
 
 def get_service(session: Session = Depends(get_session)) -> FootballWorldService:

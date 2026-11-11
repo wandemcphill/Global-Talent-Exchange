@@ -184,6 +184,9 @@ def _policy_sync(
             regen.status = "retired"
             player.is_tradable = False
             player.current_club_profile_id = None
+            from app.market.lifecycle_status import sync_player_lifecycle_and_market_status
+
+            sync_player_lifecycle_and_market_status(self.session, player, is_retired=True)
             if not state.get("retired_on"):
                 state["retired_on"] = reference_on.isoformat()
                 self._record_event(
@@ -228,7 +231,10 @@ def _policy_sync(
     legacy_plan = _retirement_legacy_plan(regen, player.id, state)
     if legacy_plan is not None:
         state["legacy_intake_plan"] = legacy_plan
-        bridge_result = RegenRetirementAcademyBridge(self.session).consume(state=state)
+        try:
+            bridge_result = RegenRetirementAcademyBridge(self.session).consume(state=state)
+        except ValueError:
+            bridge_result = None
         if bridge_result is not None:
             state["legacy_intake_plan"] = {
                 **legacy_plan,

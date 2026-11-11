@@ -216,7 +216,7 @@ class _GtexWorldClockPanelState extends State<GtexWorldClockPanel> {
                 ),
                 GtexStatusChip(
                   key: const Key('world-clock-season-length'),
-                  label: '${c.virtualMonthsPerSeason} months per game season',
+                  label: '${c.virtualMonthsPerSeason} game months, ${c.displaySeasonWeeks}',
                   color: GtexColors.gold,
                 ),
                 GtexStatusChip(

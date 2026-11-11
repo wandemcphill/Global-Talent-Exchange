@@ -1060,13 +1060,22 @@ class NationalTeamTournamentService:
             return "olympics"
         return "senior"
 
-    @staticmethod
-    def _competition_reference_date(competition: NationalTeamCompetition | None) -> date:
+    def _competition_reference_date(self, competition: NationalTeamCompetition | None) -> date:
         if competition is not None and competition.kickoff_at is not None:
             return competition.kickoff_at.date()
         if competition is not None and competition.entry_closes_at is not None:
             return competition.entry_closes_at.date()
-        return utcnow().date()
+        from app.services.world_clock_service import WorldClockService
+
+        return WorldClockService(self.session).now_virtual().date()
+
+    def _age_on(self, player: Player, competition_date: date | None) -> date:
+        from app.services.player_aging import is_regen_player
+        from app.services.world_clock_service import WorldClockService
+
+        if is_regen_player(player):
+            return competition_date or WorldClockService(self.session).now_virtual().date()
+        return date.today()
 
     @classmethod
     def _age_band_limit(cls, competition: NationalTeamCompetition | None) -> int | None:
@@ -1330,7 +1339,7 @@ class NationalTeamTournamentService:
             "nationality": country_name,
             "country_code": country_alpha2 or country_fifa or country_alpha3,
             "country_tokens": country_tokens,
-            "age": _player_age(player, today=reference_date),
+            "age": _player_age(player, today=self._age_on(player, reference_date)),
             "gsi": gsi,
             "base_value_coin": base_value_coin,
             "loan_price_coin": self._loan_price_coin(gsi=gsi, source_bucket=source_bucket),

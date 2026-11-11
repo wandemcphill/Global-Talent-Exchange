@@ -325,7 +325,9 @@ class RegenCreationService:
                     "regen_creation_order_id": order.id,
                     "request_type": order.request_type.value,
                     "parent_player_id": order.parent_player_id,
-                    "pricing_version": (order.metadata_json or {}).get("pricing_snapshot", {}).get("pricing_version", "v1"),
+                    "pricing_version": (order.metadata_json or {})
+                    .get("pricing_snapshot", {})
+                    .get("pricing_version", "v1"),
                     "wallet_unit": "coin",
                     "generated_player_id": order.generated_player_id,
                 },
@@ -396,7 +398,11 @@ class RegenCreationService:
         order.metadata_json = metadata
 
     def _verify_and_mark_korapay_paid(self, order: RegenCreationOrder) -> None:
-        if order.status in {RegenCreationOrderStatus.PAID, RegenCreationOrderStatus.GENERATING, RegenCreationOrderStatus.GENERATED}:
+        if order.status in {
+            RegenCreationOrderStatus.PAID,
+            RegenCreationOrderStatus.GENERATING,
+            RegenCreationOrderStatus.GENERATED,
+        }:
             return
         if not provider_live_deposit_ready("korapay"):
             raise RegenCreationPaymentError("KoraPay is not configured for live deposits.")
@@ -562,7 +568,7 @@ class RegenCreationService:
             short_name=generated_regen.display_name,
             position=generated_regen.primary_position,
             normalized_position=self._normalized_position(generated_regen.primary_position),
-            date_of_birth=date.today() - timedelta(days=generated_regen.age * 365),
+            date_of_birth=self._regen_birth_date(generated_regen.age),
             preferred_foot="right",
             market_value_eur=float(generated_regen.current_gsi) * 12_500.0,
             profile_completeness_score=0.98,
@@ -907,6 +913,11 @@ class RegenCreationService:
                         return str(candidate).strip().upper()
         assert self.settings is not None
         return self.settings.regen_generation.default_country_code
+
+    def _regen_birth_date(self, age: int) -> date:
+        from app.services.player_aging import world_date
+
+        return world_date(self.session) - timedelta(days=int(age) * 365)
 
     def _used_names_for_club(self, club_id: str) -> set[str]:
         names = self.session.scalars(select(Player.full_name).where(Player.current_club_profile_id == club_id)).all()

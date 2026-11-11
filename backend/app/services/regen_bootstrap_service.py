@@ -97,7 +97,7 @@ class RegenBootstrapService:
                 short_name=generated.display_name,
                 position=generated.primary_position,
                 normalized_position=_normalized_position(generated.primary_position),
-                date_of_birth=date.today() - timedelta(days=generated.age * 365),
+                date_of_birth=self._regen_birth_date(generated.age),
                 preferred_foot="right",
                 shirt_number=None,
                 market_value_eur=float(generated.current_gsi) * 12_500.0,
@@ -441,6 +441,11 @@ class RegenBootstrapService:
         self.session.add(tier)
         self.session.flush()
         return tier
+
+    def _regen_birth_date(self, age: int) -> date:
+        from app.services.player_aging import world_date
+
+        return world_date(self.session) - timedelta(days=int(age) * 365)
 
     def _season_label(self) -> str:
         today = date.today()

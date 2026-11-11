@@ -597,7 +597,9 @@ class CompetitionLifecycleService:
         )
         if schedule_job is not None and schedule_job.schedule_plan_json:
             return CompetitionSchedulePlan.model_validate(schedule_job.schedule_plan_json)
-        start_date = (competition.scheduled_start_at or datetime.now(timezone.utc)).date()
+        from app.services.world_clock_service import WorldClockService
+
+        start_date = (competition.scheduled_start_at or WorldClockService(self.session).now_virtual()).date()
         preview = self.schedule_service.preview(
             competition=competition,
             rule_set=rule_set,

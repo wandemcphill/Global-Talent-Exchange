@@ -1522,9 +1522,13 @@ class NationalCompetitionLifecycleService(ScheduledResolutionMixin):
             "entry_rewards": serialized,
         }
 
-    @staticmethod
-    def _validate_submission_window(competition: NationalTeamCompetition) -> None:
-        now = utcnow()
+    def _world_now(self) -> datetime:
+        from app.services.world_clock_service import WorldClockService
+
+        return WorldClockService(self.session).now_virtual()
+
+    def _validate_submission_window(self, competition: NationalTeamCompetition) -> None:
+        now = self._world_now()
         entry_opens_at = NationalCompetitionLifecycleService._as_utc_datetime(competition.entry_opens_at)
         entry_closes_at = NationalCompetitionLifecycleService._as_utc_datetime(competition.entry_closes_at)
         if entry_opens_at is not None and entry_opens_at > now:
@@ -1689,7 +1693,7 @@ class NationalCompetitionLifecycleService(ScheduledResolutionMixin):
         require_rental_provenance = True
         rented_player_ids: set[str] = set()
         if actor is not None and valid_player_ids and self._has_tables("national_team_rental_contracts"):
-            rental_now = utcnow()
+            rental_now = self._world_now()
             rented_player_ids = set(
                 self.session.scalars(
                     select(RentalContract.player_id).where(
@@ -1798,6 +1802,7 @@ class NationalCompetitionLifecycleService(ScheduledResolutionMixin):
                 date_of_birth=date_of_birth,
                 explicit_age=explicit_age,
                 competition=competition,
+                player=player,
             )
             self._validate_age_band(
                 competition=competition,
@@ -1859,6 +1864,7 @@ class NationalCompetitionLifecycleService(ScheduledResolutionMixin):
         date_of_birth,
         explicit_age: int | None,
         competition: NationalTeamCompetition,
+        player: Player | None = None,
     ) -> int | None:
         if explicit_age is not None:
             return int(explicit_age)
@@ -1866,7 +1872,7 @@ class NationalCompetitionLifecycleService(ScheduledResolutionMixin):
             return None
         if isinstance(date_of_birth, str):
             date_of_birth = date.fromisoformat(date_of_birth)
-        reference_date = self._reference_date(competition)
+        reference_date = self._reference_date(competition, player=player)
         return self._calculate_age(date_of_birth, reference_date)
 
     @staticmethod
@@ -1875,13 +1881,16 @@ class NationalCompetitionLifecycleService(ScheduledResolutionMixin):
         birthday_passed = (reference_date.month, reference_date.day) >= (date_of_birth.month, date_of_birth.day)
         return years if birthday_passed else years - 1
 
-    @staticmethod
-    def _reference_date(competition: NationalTeamCompetition) -> date:
+    def _reference_date(self, competition: NationalTeamCompetition, *, player: Player | None = None) -> date:
+        from app.services.player_aging import is_regen_player
+
+        if player is not None and not is_regen_player(player):
+            return date.today()
         if competition.kickoff_at is not None:
             return competition.kickoff_at.date()
         if competition.entry_closes_at is not None:
             return competition.entry_closes_at.date()
-        return utcnow().date()
+        return self._world_now().date()
 
     @staticmethod
     def _validate_age_band(

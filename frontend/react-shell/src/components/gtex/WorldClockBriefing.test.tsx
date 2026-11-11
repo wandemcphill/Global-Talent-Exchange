@@ -34,7 +34,7 @@ describe("WorldClockView", () => {
     expect(out).toContain("09:05 UTC");
     expect(out).toContain("Running");
     expect(out).toContain("6x");
-    expect(out).toContain("12 months per game season");
+    expect(out).toContain("12 game months, about 8.7 weeks");
     expect(out).toContain('dateTime="2031-03-14"');
   });
 

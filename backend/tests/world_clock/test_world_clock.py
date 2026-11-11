@@ -11,7 +11,8 @@ from app.models.world_clock import WorldClockState
 from app.regen_career.policy_service import RegenCareerPolicyService
 from app.regen_universe.models import RegenSeason
 from app.regen_universe.service import RegenUniverseService
-from app.services.world_clock_service import DEFAULT_CLOCK_ID, WorldClockService
+from app.services.world_clock_pace import DEFAULT_PROGRESSION_RATE
+from app.services.world_clock_service import DEFAULT_CLOCK_ID, WorldClockLocked, WorldClockService
 
 
 @pytest.fixture(scope="module")
@@ -58,8 +59,9 @@ def test_clock_persistence_and_deterministic_progression(session_factory) -> Non
         clock = WorldClockService(session)
         state = clock.get_or_create_state()
         assert state.id == DEFAULT_CLOCK_ID
-        assert state.progression_rate == 1.0
-        assert state.is_paused is False
+        assert state.progression_rate == DEFAULT_PROGRESSION_RATE
+        assert state.officially_started is False
+        assert state.is_paused is True
         assert state.virtual_months_per_season == 12
         session.commit()
 
@@ -83,6 +85,7 @@ def test_progression_rate_scaling(session_factory) -> None:
         state.epoch_real_utc = now_real - timedelta(seconds=100)
         state.virtual_start_time = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
         state.progression_rate = 10.0  # 10x speed
+        state.officially_started = True
         state.is_paused = False
         state.paused_at_virtual_time = None
         session.commit()
@@ -95,31 +98,29 @@ def test_progression_rate_scaling(session_factory) -> None:
         assert v_time >= expected_min
 
 
-def test_clock_pausing_and_resumption(session_factory) -> None:
+def test_clock_starts_once_and_then_cannot_be_paused_or_sped_up(session_factory) -> None:
     with session_factory() as session:
         clock = WorldClockService(session)
-        # Reset to 1.0x
-        clock.set_rate(1.0)
-        paused_state = clock.pause()
-        assert paused_state.is_paused is True
-        frozen_time = paused_state.paused_at_virtual_time
-        assert frozen_time is not None
+        state = clock.get_or_create_state()
+        state.officially_started = False
+        state.is_paused = True
+        state.paused_at_virtual_time = state.virtual_start_time
+        session.flush()
+        frozen = clock.now_virtual()
+        with pytest.raises(WorldClockLocked):
+            clock.pause()
+        with pytest.raises(WorldClockLocked):
+            clock.set_rate(2.0)
+        started = clock.start()
+        assert started.officially_started is True
+        assert started.is_paused is False
+        assert started.progression_rate == DEFAULT_PROGRESSION_RATE
+        assert clock.now_virtual() >= frozen
+        with pytest.raises(WorldClockLocked):
+            clock.start()
+        with pytest.raises(WorldClockLocked):
+            clock.pause()
         session.commit()
-
-    # In a separate session, virtual time remains frozen
-    with session_factory() as session:
-        clock = WorldClockService(session)
-        assert clock.now_virtual() == frozen_time
-
-        # Resume clock
-        resumed_state = clock.resume()
-        assert resumed_state.is_paused is False
-        assert resumed_state.paused_at_virtual_time is None
-        session.commit()
-
-    with session_factory() as session:
-        clock = WorldClockService(session)
-        assert clock.now_virtual() >= frozen_time
 
 
 def test_new_and_seeded_seasons_satisfy_virtual_age_contract(session_factory) -> None:

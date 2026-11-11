@@ -5,7 +5,7 @@ import '../../data/gte_authed_api.dart';
 import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_surface_panel.dart';
 
-/// Pause the game clock, start it again, change its speed, and fund one named cup.
+/// Start the game clock once, and fund one named cup.
 class GtexAdminClockAndPrize extends StatefulWidget {
   const GtexAdminClockAndPrize({super.key, required this.api});
 
@@ -16,13 +16,12 @@ class GtexAdminClockAndPrize extends StatefulWidget {
 }
 
 class _GtexAdminClockAndPrizeState extends State<GtexAdminClockAndPrize> {
-  final TextEditingController _speed = TextEditingController(text: '1');
   final TextEditingController _first = TextEditingController();
   final TextEditingController _second = TextEditingController();
   final TextEditingController _third = TextEditingController();
   List<Map<String, dynamic>> _cups = <Map<String, dynamic>>[];
   String? _cupId;
-  bool _paused = false;
+  bool _started = false;
   String _worldDate = '—';
   bool _busy = false;
 
@@ -34,7 +33,6 @@ class _GtexAdminClockAndPrizeState extends State<GtexAdminClockAndPrize> {
 
   @override
   void dispose() {
-    _speed.dispose();
     _first.dispose();
     _second.dispose();
     _third.dispose();
@@ -52,9 +50,8 @@ class _GtexAdminClockAndPrizeState extends State<GtexAdminClockAndPrize> {
         return;
       }
       setState(() {
-        _paused = clock['is_paused'] == true;
+        _started = clock['officially_started'] == true;
         _worldDate = clock['world_date']?.toString() ?? '—';
-        _speed.text = clock['progression_rate']?.toString() ?? '1';
         _cups = cups;
         _cupId ??= cups.isEmpty ? null : cups.first['id']?.toString();
         _fillPrize();
@@ -114,45 +111,16 @@ class _GtexAdminClockAndPrizeState extends State<GtexAdminClockAndPrize> {
           const Text('Game clock and cup prize', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
           const SizedBox(height: 8),
           Text(
-            _paused
-                ? 'The game clock is paused. Game date $_worldDate. Start it again when you want matches and ages to move.'
-                : 'The game clock is running. Game date $_worldDate. Speed 1 means one game day is one real day.',
+            _started
+                ? 'The game clock is running. Game date $_worldDate. One season is about 11 weeks. It cannot be paused or sped up.'
+                : 'The game clock has not started. Start it once. After that it cannot be paused or sped up. One season is about 11 weeks.',
           ),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: <Widget>[
-              FilledButton(
-                onPressed: _busy ? null : () => _run(() => widget.api.post('/api/admin/world/clock/pause'), 'Game clock paused'),
-                child: const Text('Pause the clock'),
-              ),
-              FilledButton(
-                onPressed: _busy ? null : () => _run(() => widget.api.post('/api/admin/world/clock/resume'), 'Game clock running again'),
-                child: const Text('Start the clock again'),
-              ),
-              SizedBox(
-                width: 140,
-                child: TextField(
-                  controller: _speed,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Game speed'),
-                ),
-              ),
-              FilledButton(
-                onPressed: _busy
-                    ? null
-                    : () => _run(
-                          () => widget.api.post(
-                            '/api/admin/world/clock/speed',
-                            body: <String, Object?>{'progression_rate': double.tryParse(_speed.text.trim()) ?? 1},
-                          ),
-                          'Game speed saved',
-                        ),
-                child: const Text('Save the speed'),
-              ),
-            ],
-          ),
+          if (!_started)
+            FilledButton(
+              onPressed: _busy ? null : () => _run(() => widget.api.post('/api/admin/world/clock/start'), 'Game clock started'),
+              child: const Text('Start the clock'),
+            ),
           const SizedBox(height: 18),
           const Text(
             'Pick a cup and type what 1st, 2nd and 3rd win. The coin is held for that cup. Entry stays free.',

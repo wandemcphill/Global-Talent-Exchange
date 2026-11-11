@@ -4,7 +4,7 @@
 
 GTEX has one persisted world clock in `world_clock_state` (the `default` row). Its persisted real-world epoch, virtual start time, progression rate, pause state, and months-per-season setting are shared by API and worker processes. A process restart must not reset this clock.
 
-`GTE_WORLD_CLOCK_PROGRESSION_RATE` controls virtual seconds per real second. The current default is `1.0` (one-to-one elapsed time); this is a configuration default, **not** a claim that GTEX has an accelerated time economy. No accelerated rate or season-length rule should be introduced without an authoritative product decision.
+The season pace is fixed at `365/77` (about 4.7403). A season remains 365 game days and 12 career months, and that year passes in 11 human weeks. A new clock stays still until an admin starts it. Starting it once locks that pace. The clock cannot be paused, restarted, or sped up after that. Regen age follows this clock. Real players and legends age on the human calendar. Competitions compare kickoff, entry windows, and invite expiry to this clock.
 
 When `GTE_WORLD_CLOCK_VIRTUAL_START_DATE` is unset, a newly initialized clock anchors to the current UTC instant. That keeps newly scheduled calendar-date fixtures comparable to the virtual clock under the one-to-one default. If an explicit ISO date is supplied, the new virtual clock starts at midnight UTC on that date. That override is intentional: operators must ensure competition kickoff dates use the same virtual calendar before enabling execution. Existing persisted clock rows are not silently rewritten when configuration changes.
 

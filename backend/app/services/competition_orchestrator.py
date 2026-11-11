@@ -628,7 +628,7 @@ class CompetitionOrchestrator:
                 Competition.status.in_([CompetitionStatus.OPEN.value, CompetitionStatus.OPEN_FOR_JOIN.value])
             )
         if starts:
-            now = datetime.now(timezone.utc)
+            now = self._world_now()
             normalized_starts = starts.strip().lower()
             if normalized_starts == "online_now":
                 stmt = stmt.where(Competition.online_now.is_(True))
@@ -1638,7 +1638,7 @@ class CompetitionOrchestrator:
             return None
         rule_set = self._rule_set(competition.id)
         participant_count = max(self._participant_count(competition.id), rule_set.min_participants)
-        start_date = payload.start_date or (competition.scheduled_start_at or datetime.now(timezone.utc)).date()
+        start_date = payload.start_date or (competition.scheduled_start_at or self._world_now()).date()
         preview = self.lifecycle_service.schedule_service.preview(
             competition=competition,
             rule_set=rule_set,
@@ -1670,7 +1670,7 @@ class CompetitionOrchestrator:
             return None
         rule_set = self._rule_set(competition.id)
         participant_count = max(self._participant_count(competition.id), rule_set.min_participants)
-        start_date = payload.start_date or (competition.scheduled_start_at or datetime.now(timezone.utc)).date()
+        start_date = payload.start_date or (competition.scheduled_start_at or self._world_now()).date()
         job = self.lifecycle_service.schedule_service.create_job(
             competition=competition,
             rule_set=rule_set,
@@ -1970,6 +1970,11 @@ class CompetitionOrchestrator:
             return ()
         return self.fee_service.build_payouts(prize_pool=prize_pool, payout_structure=tuple(payouts))
 
+    def _world_now(self) -> datetime:
+        from app.services.world_clock_service import WorldClockService
+
+        return WorldClockService(self.session).now_virtual()
+
     def _participant_count(self, competition_id: str) -> int:
         return int(
             self.session.scalar(select(func.count()).where(CompetitionParticipant.competition_id == competition_id))
@@ -2195,10 +2200,11 @@ class CompetitionOrchestrator:
             already_joined=already_joined,
             invite_valid=invite_valid,
             scheduled_start_at=competition.scheduled_start_at,
+            now=self._world_now(),
         )
         registration_deadline = _as_utc(getattr(competition, "registration_deadline", None))
         if join_decision.eligible and not already_joined and registration_deadline is not None:
-            if datetime.now(timezone.utc) >= registration_deadline:
+            if self._world_now() >= registration_deadline:
                 return JoinDecision(eligible=False, reason="registration_closed")
         if (
             join_decision.eligible
@@ -2657,7 +2663,7 @@ class CompetitionOrchestrator:
         if invite is None or invite.competition_id != competition_id:
             return None
         expires_at = _as_utc(invite.expires_at)
-        if expires_at and datetime.now(timezone.utc) >= expires_at:
+        if expires_at and self._world_now() >= expires_at:
             return None
         if invite.club_id and club_id and invite.club_id != club_id:
             return None

@@ -19,6 +19,7 @@ class WorldClockView(BaseModel):
     world_time: datetime
     world_date: date
     is_paused: bool
+    officially_started: bool = False
     progression_rate: float = Field(gt=0)
     virtual_months_per_season: int = Field(ge=1)
     virtual_start_time: datetime | None = None

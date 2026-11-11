@@ -156,6 +156,14 @@ class WorldClock {
   }
 
   String get displaySeasonBadge => currentSeasonLabel;
+
+  /// Human length of one 365-day game season at this clock speed.
+  String get displaySeasonWeeks {
+    if (progressionRate <= 0) return '';
+    final double rounded = (365 / progressionRate / 7 * 10).round() / 10;
+    final String label = rounded == rounded.roundToDouble() ? rounded.toStringAsFixed(0) : rounded.toStringAsFixed(1);
+    return 'about $label weeks';
+  }
 }
 
 enum BriefingTargetType { decision, clubHistory, matchResult }

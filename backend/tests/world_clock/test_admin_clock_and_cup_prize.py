@@ -13,6 +13,7 @@ from app.models.national_team import NationalTeamCompetition
 from app.models.user import User, UserRole
 from app.models.wallet import LedgerAccount
 from app.national_team_engine.named_cup_prize import cup_prize_account_code, set_named_cup_prize
+from app.services.world_clock_pace import DEFAULT_PROGRESSION_RATE, GAME_SEASON_VIRTUAL_DAYS, SEASON_LENGTH_REAL_DAYS
 from app.national_team_engine.router import admin_router as national_admin_router
 from app.world_simulation.router import admin_router as world_admin_router
 
@@ -27,7 +28,12 @@ def _db():
     return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)()
 
 
-def test_admin_can_pause_resume_and_change_clock_speed() -> None:
+def test_default_speed_makes_one_season_eleven_weeks() -> None:
+    assert SEASON_LENGTH_REAL_DAYS == 11 * 7
+    assert DEFAULT_PROGRESSION_RATE * SEASON_LENGTH_REAL_DAYS == GAME_SEASON_VIRTUAL_DAYS
+
+
+def test_admin_can_only_start_the_clock() -> None:
     session = _db()
     admin = User(
         id="admin-clock",
@@ -49,17 +55,17 @@ def test_admin_can_pause_resume_and_change_clock_speed() -> None:
     app.dependency_overrides[get_current_admin] = lambda: admin
     client = TestClient(app)
 
-    paused = client.post("/admin/world/clock/pause")
-    assert paused.status_code == 200, paused.text
-    assert paused.json()["is_paused"] is True
+    started = client.post("/admin/world/clock/start")
+    assert started.status_code == 200, started.text
+    assert started.json()["officially_started"] is True
+    assert started.json()["is_paused"] is False
 
-    running = client.post("/admin/world/clock/resume")
-    assert running.status_code == 200, running.text
-    assert running.json()["is_paused"] is False
+    again = client.post("/admin/world/clock/start")
+    assert again.status_code == 409
 
-    faster = client.post("/admin/world/clock/speed", json={"progression_rate": 2})
-    assert faster.status_code == 200, faster.text
-    assert faster.json()["progression_rate"] == 2
+    assert client.post("/admin/world/clock/pause").status_code == 409
+    assert client.post("/admin/world/clock/resume").status_code == 409
+    assert client.post("/admin/world/clock/speed", json={"progression_rate": 2}).status_code == 409
 
     rejected = client.post("/admin/world/clock/speed", json={"progression_rate": 0})
     assert rejected.status_code == 422

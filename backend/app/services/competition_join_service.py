@@ -34,6 +34,7 @@ class CompetitionJoinService:
         already_joined: bool,
         invite_valid: bool,
         scheduled_start_at: datetime | None = None,
+        now: datetime | None = None,
     ) -> JoinDecision:
         if already_joined:
             return JoinDecision(eligible=True, reason="already_joined", requires_invite=False)
@@ -43,7 +44,10 @@ class CompetitionJoinService:
             start_at = (
                 scheduled_start_at if scheduled_start_at.tzinfo else scheduled_start_at.replace(tzinfo=timezone.utc)
             )
-            if datetime.now(timezone.utc) >= start_at.astimezone(timezone.utc):
+            current = now or datetime.now(timezone.utc)
+            if current.tzinfo is None:
+                current = current.replace(tzinfo=timezone.utc)
+            if current.astimezone(timezone.utc) >= start_at.astimezone(timezone.utc):
                 return JoinDecision(eligible=False, reason="competition_started", requires_invite=False)
         if participant_count >= capacity:
             return JoinDecision(eligible=False, reason="competition_full", requires_invite=False)

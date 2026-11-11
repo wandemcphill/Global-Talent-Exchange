@@ -1118,29 +1118,19 @@ class RealPlayerUniverseQueryService:
         return boundary
 
     def _player_display_age(self, player: Player, fallback_dob):
-        source_provider = str(getattr(player, "source_provider", "") or "").strip().lower()
-        tier = str(getattr(player, "real_player_tier", "") or "").strip().lower()
-        is_legend = (
-            bool(getattr(player, "legendary_profile_id", None))
-            or source_provider in {"gtex_legend", "gtex_legend_prime"}
-            or tier in {"legend", "legendary", "icon", "immortal", "world_class", "hero"}
-        )
-        if is_legend:
-            dna = player.dna_profile if isinstance(player.dna_profile, dict) else {}
-            for key in ("game_age", "gtex_age", "peak_age"):
-                try:
-                    candidate = int(dna.get(key))
-                except (TypeError, ValueError):
-                    continue
-                if 18 <= candidate <= 35:
-                    return candidate
-            dob = player.date_of_birth or fallback_dob
-            if dob is not None:
-                calc_age = self._player_age(dob)
-                if calc_age is not None and 18 <= calc_age <= 35:
-                    return calc_age
-            return 28
-        return self._player_age(fallback_dob)
+        from app.services.player_aging import age_years, aging_date_for_player
+
+        dob = getattr(player, "date_of_birth", None) or fallback_dob
+        age = age_years(dob, aging_date_for_player(player, self.session))
+        if age is not None:
+            return age
+        dna = player.dna_profile if isinstance(player.dna_profile, dict) else {}
+        for key in ("game_age", "gtex_age", "peak_age"):
+            try:
+                return int(dna.get(key))
+            except (TypeError, ValueError):
+                continue
+        return None
 
     def _player_age(self, date_of_birth):
         if date_of_birth is None or self.today is None:
@@ -1663,11 +1653,22 @@ class RealPlayerUniverseQueryService:
         return func.coalesce(RealPlayerProfile.height_cm, Player.height_cm)
 
     def _age_expr(self):
+        from app.services.player_aging import HUMAN_TIERS, LEGEND_SOURCES, LEGEND_TIERS, REGEN_SOURCES, world_date
+
         birth_date = func.coalesce(Player.date_of_birth, RealPlayerProfile.date_of_birth)
+        human = date.today()
+        virtual = world_date(self.session)
+        tier = func.lower(func.coalesce(Player.real_player_tier, ""))
+        source = func.lower(func.coalesce(Player.source_provider, ""))
+        regen = and_(
+            Player.legendary_profile_id.is_(None),
+            source.notin_(tuple(LEGEND_SOURCES)),
+            tier.notin_(tuple(LEGEND_TIERS | HUMAN_TIERS)),
+            or_(tier == "regen", source.in_(tuple(REGEN_SOURCES)), Player.is_real_player.is_(False)),
+        )
         bind = self.session.get_bind()
         if bind is not None and bind.dialect.name == "postgresql":
-            return cast(func.extract("year", func.age(literal(self.today), birth_date)), Integer)
-        return cast(
-            (func.julianday(literal(self.today.isoformat())) - func.julianday(birth_date)) / 365.2425,
-            Integer,
-        )
+            reference = case((regen, literal(virtual)), else_=literal(human))
+            return cast(func.extract("year", func.age(reference, birth_date)), Integer)
+        reference = case((regen, literal(virtual.isoformat())), else_=literal(human.isoformat()))
+        return cast((func.julianday(reference) - func.julianday(birth_date)) / 365.2425, Integer)

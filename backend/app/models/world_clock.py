@@ -17,6 +17,7 @@ class WorldClockState(TimestampMixin, Base):
     virtual_start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     progression_rate: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
     is_paused: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    officially_started: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     paused_at_virtual_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     virtual_months_per_season: Mapped[int] = mapped_column(Integer, nullable=False, default=12)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)

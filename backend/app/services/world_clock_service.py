@@ -11,10 +11,15 @@ from app.core.config import Settings, get_settings
 from app.models.base import utcnow
 from app.models.world_clock import WorldClockState
 from app.regen_universe.models import RegenSeason
+from app.services.world_clock_pace import DEFAULT_PROGRESSION_RATE, GAME_SEASON_VIRTUAL_DAYS
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_CLOCK_ID = "default"
+
+
+class WorldClockLocked(RuntimeError):
+    """The clock can be started once. After that its pace cannot be changed."""
 
 
 def _as_utc(value: datetime | None) -> datetime:
@@ -43,7 +48,9 @@ class WorldClockService:
         if state is None:
             now_real = utcnow()
             settings = self._get_settings()
-            rate = float(getattr(settings, "world_clock_progression_rate", 1.0) or 1.0)
+            rate = float(
+                getattr(settings, "world_clock_progression_rate", DEFAULT_PROGRESSION_RATE) or DEFAULT_PROGRESSION_RATE
+            )
             start_date_str = str(getattr(settings, "world_clock_virtual_start_date", "") or "").strip()
             months_per_season = int(getattr(settings, "world_clock_virtual_months_per_season", 12) or 12)
             if start_date_str:
@@ -68,8 +75,9 @@ class WorldClockService:
                 epoch_real_utc=now_real,
                 virtual_start_time=virtual_start,
                 progression_rate=rate,
-                is_paused=False,
-                paused_at_virtual_time=None,
+                is_paused=True,
+                officially_started=False,
+                paused_at_virtual_time=virtual_start,
                 virtual_months_per_season=months_per_season,
                 metadata_json={
                     "canonical": True,
@@ -85,6 +93,8 @@ class WorldClockService:
 
     def now_virtual(self) -> datetime:
         state = self.get_or_create_state()
+        if not state.officially_started:
+            return _as_utc(state.paused_at_virtual_time or state.virtual_start_time)
         if state.is_paused and state.paused_at_virtual_time is not None:
             return _as_utc(state.paused_at_virtual_time)
         now_real = utcnow()
@@ -105,7 +115,7 @@ class WorldClockService:
         state = self.get_or_create_state()
         v_now = self.now_virtual()
         v_start = _as_utc(state.virtual_start_time)
-        return max(1, int((v_now - v_start).days // 365) + 1)
+        return max(1, int((v_now - v_start).days // GAME_SEASON_VIRTUAL_DAYS) + 1)
 
     def current_season_label(self) -> str:
         return f"GTEX Year {self.gtex_years_running()} · Season {self.current_season_number()}"
@@ -115,6 +125,8 @@ class WorldClockService:
 
     def to_virtual_time(self, real_utc: datetime) -> datetime:
         state = self.get_or_create_state()
+        if not state.officially_started:
+            return _as_utc(state.paused_at_virtual_time or state.virtual_start_time)
         real_utc = _as_utc(real_utc)
         epoch = _as_utc(state.epoch_real_utc)
         start = _as_utc(state.virtual_start_time)
@@ -139,39 +151,33 @@ class WorldClockService:
         months_per_season = state.virtual_months_per_season or 12
         return max(0, (int(season_number) - 1) * months_per_season)
 
-    def pause(self) -> WorldClockState:
+    def start(self) -> WorldClockState:
+        """Start the clock once, at the fixed season pace. It cannot be stopped after this."""
         state = self.get_or_create_state()
-        if not state.is_paused:
-            current_virtual = self.now_virtual()
-            state.is_paused = True
-            state.paused_at_virtual_time = current_virtual
-            self.session.flush()
-        return state
-
-    def resume(self) -> WorldClockState:
-        state = self.get_or_create_state()
-        if state.is_paused:
-            now_real = utcnow()
-            state.epoch_real_utc = now_real
-            state.virtual_start_time = _as_utc(state.paused_at_virtual_time or state.virtual_start_time)
-            state.is_paused = False
-            state.paused_at_virtual_time = None
-            self.session.flush()
-        return state
-
-    def set_rate(self, new_rate: float) -> WorldClockState:
-        if new_rate <= 0:
-            raise ValueError("World clock progression rate must be strictly positive.")
-        state = self.get_or_create_state()
-        current_virtual = self.now_virtual()
+        if state.officially_started:
+            raise WorldClockLocked("The game clock is already running. It cannot be paused or sped up.")
+        frozen = self.now_virtual()
         now_real = utcnow()
         state.epoch_real_utc = now_real
-        state.virtual_start_time = current_virtual
-        state.progression_rate = float(new_rate)
-        if state.is_paused:
-            state.paused_at_virtual_time = current_virtual
+        state.virtual_start_time = frozen
+        state.progression_rate = float(DEFAULT_PROGRESSION_RATE)
+        state.is_paused = False
+        state.paused_at_virtual_time = None
+        state.officially_started = True
         self.session.flush()
         return state
+
+    def pause(self) -> WorldClockState:
+        """Pause is not available. The clock runs until an admin starts it, then it keeps going."""
+        raise WorldClockLocked("The game clock cannot be paused.")
+
+    def resume(self) -> WorldClockState:
+        """Resume is not available. Start the clock once; after that it keeps its own pace."""
+        raise WorldClockLocked("The game clock cannot be paused or restarted.")
+
+    def set_rate(self, new_rate: float) -> WorldClockState:
+        """Speed is fixed. One season is 365 game days and passes in 11 human weeks."""
+        raise WorldClockLocked("The game clock speed is fixed. One season is about 11 weeks.")
 
     def backfill_existing_seasons(self) -> int:
         """Ensure all existing RegenSeason records contain the required virtual_age_month_index."""
@@ -188,4 +194,4 @@ class WorldClockService:
         return updated_count
 
 
-__all__ = ["DEFAULT_CLOCK_ID", "WorldClockService"]
+__all__ = ["DEFAULT_CLOCK_ID", "WorldClockLocked", "WorldClockService"]

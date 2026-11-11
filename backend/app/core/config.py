@@ -226,8 +226,9 @@ class SettingsSource(BaseModel):
         validation_alias="GTE_KAFKA_SIMULATION_CONSUMER_ENABLED",
     )
     world_clock_progression_rate: float = Field(
-        default=1.0,
+        default=365 / 77,
         validation_alias="GTE_WORLD_CLOCK_PROGRESSION_RATE",
+        description="Game seconds per real second. 365/77 makes one 365-day season last 11 weeks.",
     )
     # Empty means anchor the new virtual clock to current UTC time; an explicit ISO date is an intentional game-calendar override.
     world_clock_virtual_start_date: str = Field(

@@ -2,6 +2,7 @@ import React from "react";
 import { Clock, PauseCircle, PlayCircle, AlertTriangle, CalendarDays } from "lucide-react";
 import {
   formatProgressionRate,
+  formatSeasonInHumanWeeks,
   formatWorldDate,
   formatWorldTime,
   useWorldClock,
@@ -93,7 +94,7 @@ export function WorldClockView({ state }: { state: WorldClockViewState }) {
             <div>
               <dt className="uppercase tracking-wider text-slate-400">How long a season lasts</dt>
               <dd className="gx-mono mt-1 text-sm text-white" data-testid="world-clock-season-length">
-                {state.clock.virtualMonthsPerSeason} months per game season
+                {state.clock.virtualMonthsPerSeason} game months, {formatSeasonInHumanWeeks(state.clock.progressionRate)}
               </dd>
             </div>
             <div>

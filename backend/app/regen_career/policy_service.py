@@ -28,6 +28,7 @@ _SEASON_NUMBER_RE = re.compile(r"(?:season|s)[ _-]?(\d+)$", re.IGNORECASE)
 
 class RegenLineagePolicyError(ValueError):
     """Raised when lineage policy invariants fail."""
+
     pass
 
 
@@ -66,9 +67,8 @@ class RegenCareerPolicyContext:
 class RegenCareerPolicyService:
     """Repository adapter for the tested Phase 6C retirement policy.
 
-    This service is read-only. It converts existing GTEX records into the
-    policy input and returns an auditable assessment. It intentionally does
-    not retire players or mutate lifecycle state yet.
+    `assess` reports the decision. `retire_eligible` applies it: a regen whose
+    pressure crosses the line is retired on the GTEX world clock.
     """
 
     def __init__(self, session: Session, *, clock: RegenCareerClock | None = None) -> None:
@@ -98,9 +98,26 @@ class RegenCareerPolicyService:
         if regen is None:
             raise ValueError(f"Player {player_id} is not a regen")
 
+        from app.models.world_clock import WorldClockState
+        from app.services.world_clock_service import WorldClockService
+
+        clock_state = self.session.get(WorldClockState, "default")
+        world = WorldClockService(self.session) if clock_state is not None else None
         generation_season_number = self._generation_season_number(regen.id)
-        current = current_season_number or self._current_season_number(reference_on=reference_on)
+        if (
+            current_season_number is None
+            and clock_state is not None
+            and clock_state.officially_started
+            and world is not None
+        ):
+            current = world.current_season_number()
+        else:
+            current = current_season_number or self._current_season_number(reference_on=reference_on)
         mapping = dict(season_virtual_month_index or self._season_virtual_month_index())
+        if clock_state is not None and clock_state.officially_started:
+            months = int(clock_state.virtual_months_per_season or 12)
+            mapping.setdefault(current, (int(current) - 1) * months)
+            mapping.setdefault(generation_season_number, (int(generation_season_number) - 1) * months)
         virtual_age_months = self.clock.virtual_age_months_from_seasons(
             generation_season_number=generation_season_number,
             current_season_number=current,
@@ -113,7 +130,7 @@ class RegenCareerPolicyService:
             if willingness_to_continue is not None
             else self._willingness_from_personality(personality)
         )
-        effective_date = reference_on or date.today()
+        effective_date = reference_on or (world.now_virtual().date() if world is not None else date.today())
         active_contract = self._active_contract(player_id=player_id, reference_on=effective_date)
         active_injuries = self._active_injury_count(player_id=player_id, reference_on=effective_date)
 
@@ -228,6 +245,58 @@ class RegenCareerPolicyService:
             and injury.expected_return_on >= reference_on
         )
 
+    def retire_eligible(self, *, limit: int = 80) -> int:
+        """Retire regens the running world clock says are ready.
+
+        Real players and legends are not in this pass. A regen is retired only
+        when the career decision itself says so.
+        """
+        from datetime import timedelta
+
+        from app.models.world_clock import WorldClockState
+        from app.services.player_aging import is_regen_player
+        from app.services.player_lifecycle_service import PlayerLifecycleService
+        from app.services.world_clock_service import WorldClockService
+
+        clock_state = self.session.get(WorldClockState, "default")
+        if clock_state is None or not clock_state.officially_started or clock_state.is_paused:
+            return 0
+        reference_on = WorldClockService(self.session).now_virtual().date()
+        cutoff = reference_on - timedelta(days=34 * 365)
+        rows = list(
+            self.session.scalars(
+                select(RegenProfile)
+                .join(Player, Player.id == RegenProfile.player_id)
+                .where(
+                    RegenProfile.status != "retired",
+                    Player.date_of_birth.is_not(None),
+                    Player.date_of_birth <= cutoff,
+                )
+                .limit(max(1, int(limit)))
+            ).all()
+        )
+        lifecycle = PlayerLifecycleService(self.session)
+        retired = 0
+        for regen in rows:
+            player = self.session.get(Player, regen.player_id)
+            if player is None or not is_regen_player(player) or regen.status == "retired":
+                continue
+            try:
+                contract_summary = lifecycle.get_contract_summary(player.id, on_date=reference_on)
+                bids = lifecycle.list_player_transfer_bids(player.id)
+                lifecycle._sync_regen_state(
+                    player,
+                    regen,
+                    reference_on=reference_on,
+                    contract_summary=contract_summary,
+                    bids=bids,
+                )
+            except Exception:
+                continue
+            if regen.status == "retired":
+                retired += 1
+        return retired
+
     @staticmethod
     def _willingness_from_personality(personality: Mapping[str, float]) -> float:
         ambition = float(personality.get("ambition", 0.5))
@@ -236,4 +305,9 @@ class RegenCareerPolicyService:
         return max(0.0, min(1.0, (ambition * 0.35) + (resilience * 0.35) + (loyalty * 0.30)))
 
 
-__all__ = ["RegenCareerPolicyContext", "RegenCareerPolicyService", "RegenLineagePolicyError", "_extract_season_start_year"]
+__all__ = [
+    "RegenCareerPolicyContext",
+    "RegenCareerPolicyService",
+    "RegenLineagePolicyError",
+    "_extract_season_start_year",
+]
