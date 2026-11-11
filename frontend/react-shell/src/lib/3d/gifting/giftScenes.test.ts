@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { createGiftDirector, frameGiftShot } from "./giftScenes";
 import { detectGiftQuality } from "./giftQuality";
 
-describe("gifting 2.0 scenes", () => {
+describe("asset-led cinematic gifting scenes", () => {
   const quality = detectGiftQuality(1440, 8);
 
   function stage(shot: string, giftCode: string, rarity = "common") {
@@ -18,77 +18,110 @@ describe("gifting 2.0 scenes", () => {
     });
   }
 
-  test("paris is a lattice tower and the eight shots do not share one camera", () => {
-    const paris = stage("city", "paris_skyline");
-    expect(paris.root.getObjectByName("eiffel-lattice")).toBeTruthy();
-    paris.dispose();
+  function meshes(root: THREE.Object3D): THREE.Mesh[] {
+    const found: THREE.Mesh[] = [];
+    root.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (mesh.isMesh) found.push(mesh);
+    });
+    return found;
+  }
 
-    const parisStart = frameGiftShot("city", 0);
-    const parisEnd = frameGiftShot("city", 1);
-    expect(parisEnd.position[2]).toBeGreaterThan(parisStart.position[2]);
+  test("city uses an authored architecture asset instead of a procedural landmark", () => {
+    const city = stage("city", "paris_skyline");
+    const hero = city.root.getObjectByName("gift-city-hero");
+    expect(hero).toBeTruthy();
+    expect(hero?.userData.assetPath).toBe("/assets/showroom/royal_penthouse_box.glb");
+    expect(city.root.getObjectByName("eiffel-lattice")).toBeFalsy();
+    expect(meshes(city.root)).toHaveLength(0);
+
+    const start = frameGiftShot("city", 0);
+    const finish = frameGiftShot("city", 1);
+    expect(finish.position[2]).toBeLessThan(start.position[2]);
 
     const bicycle = frameGiftShot("bicycle", 0.4);
     const winner = frameGiftShot("last_minute", 0.4);
     expect(bicycle.position[0]).not.toBeCloseTo(winner.position[0], 0);
-    expect(frameGiftShot("stadium", 0, [0, 0, 0], "golden_stadium").position[1]).toBeGreaterThan(
-      frameGiftShot("stadium", 0, [0, 0, 0], "maracana_stadium").position[1]
-    );
+    city.dispose();
   });
 
-  test("bicycle and last-minute winner are different stories", () => {
+  test("stadium scenes resolve to licensed authored GLB models", () => {
+    const maracana = stage("stadium", "maracana_stadium");
+    const golden = stage("stadium", "golden_stadium");
+    expect(maracana.root.getObjectByName("gift-stadium-hero")?.userData.assetPath)
+      .toBe("/assets/showroom/arena_imperiale_stadium.glb");
+    expect(golden.root.getObjectByName("gift-stadium-hero")?.userData.assetPath)
+      .toBe("/assets/showroom/golden_stadium.glb");
+    expect(meshes(maracana.root)).toHaveLength(0);
+    expect(meshes(golden.root)).toHaveLength(0);
+    maracana.dispose();
+    golden.dispose();
+  });
+
+  test("jet and yacht scenes contain their authored hero assets, not primitive props", () => {
+    const jet = stage("jet", "private_jet");
+    const yacht = stage("yacht", "superyacht");
+    expect(jet.root.getObjectByName("gift-aircraft")?.userData.assetPath)
+      .toBe("/assets/showroom/sovereign_900x_jet.glb");
+    expect(jet.root.getObjectByName("runway")).toBeFalsy();
+    expect(jet.root.getObjectByName("jet-primitive")).toBeFalsy();
+    expect(meshes(jet.root)).toHaveLength(0);
+
+    expect(yacht.root.getObjectByName("gift-yacht")?.userData.assetPath)
+      .toBe("/assets/showroom/superyacht.glb");
+    expect(yacht.root.getObjectByName("gift-ocean-surface")).toBeTruthy();
+    expect(meshes(yacht.root)).toHaveLength(1);
+    jet.dispose();
+    yacht.dispose();
+  });
+
+  test("bicycle and last-minute winner use the real animated footballer pipeline", () => {
     const kick = stage("bicycle", "bicycle_kick");
     const winner = stage("last_minute", "last_minute_winner");
-    expect(kick.root.getObjectByName("bicycle-pitch")).toBeTruthy();
-    expect(kick.root.getObjectByName("winner-clock")).toBeFalsy();
-    expect(winner.root.getObjectByName("winner-clock")).toBeTruthy();
-    expect(winner.root.getObjectByName("match-goal")).toBeTruthy();
+    expect(kick.root.getObjectByName("gift-match-stadium")?.userData.assetPath)
+      .toBe("/models/match/football-stadium.glb");
+    expect(kick.root.getObjectByName("match-goal")?.userData.assetPath)
+      .toBe("/models/match/goal_frame.glb");
+    expect(kick.root.getObjectByName("gift-ball")?.userData.assetPath)
+      .toBe("/models/match/football_pbr.glb");
+    expect(kick.root.getObjectByName("gift-player")).toBeTruthy();
+    expect(winner.root.getObjectByName("gift-player")).toBeTruthy();
+    expect(winner.root.getObjectByName("gift-celebrant")).toBeTruthy();
+
+    // Streaming is deliberately disabled in this unit test, so no fake mesh
+    // fallback is permitted to appear in place of the licensed scene assets.
+    expect(meshes(kick.root)).toHaveLength(0);
+    expect(meshes(winner.root)).toHaveLength(0);
+    kick.update(0.84, 1 / 60, new THREE.PerspectiveCamera(38, 1, 0.1, 400));
+    winner.update(0.84, 1 / 60, new THREE.PerspectiveCamera(38, 1, 0.1, 400));
     kick.dispose();
     winner.dispose();
   });
 
-  test("goal scenes orient the net across the mouth and add a visible crowd rig", () => {
-    const scene = stage("last_minute", "last_minute_winner");
-    const goal = scene.root.getObjectByName("match-goal");
-    const net = goal?.getObjectByName("goal-net") as import("three").Mesh | undefined;
-    expect(net).toBeTruthy();
-    expect(net?.rotation.y).toBeCloseTo(Math.PI / 2);
-    expect(scene.root.getObjectByName("stadium-crowd-heads")).toBeTruthy();
-    const arms = scene.root.getObjectByName("stadium-crowd-arms") as THREE.InstancedMesh;
-    expect(arms).toBeTruthy();
-
-    const beforeNet = new Float32Array((net!.geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array);
-    const beforeArms = new Float32Array(arms.instanceMatrix.array as Float32Array);
-    scene.update(0.84, 1 / 60, new THREE.PerspectiveCamera(38, 1, 0.1, 400));
-    const afterNet = net!.geometry.getAttribute("position") as THREE.BufferAttribute;
-    expect(Array.from(afterNet.array as Float32Array).some((value, index) => value !== beforeNet[index])).toBe(true);
-    expect(Array.from(arms.instanceMatrix.array as Float32Array).some((value, index) => value !== beforeArms[index])).toBe(true);
-    scene.dispose();
-  });
-
-  test("rarity controls add distinct cinematic staging without affecting common gifts", () => {
+  test("rarity is expressed through lighting rather than floating geometric ornaments", () => {
     const common = stage("stadium", "maracana_stadium", "common");
     const mythic = stage("stadium", "golden_stadium", "mythic");
-    expect(common.root.getObjectByName("gift-rarity-mythic")).toBeFalsy();
-    expect(mythic.root.getObjectByName("gift-rarity-mythic")).toBeTruthy();
-    expect(mythic.root.getObjectByName("gift-rarity-vertical-gate")).toBeTruthy();
-    expect(mythic.root.getObjectByName("gift-rarity-gem-8")).toBeTruthy();
+    const commonLight = common.root.getObjectByName("gift-rarity-light") as THREE.PointLight;
+    const mythicLight = mythic.root.getObjectByName("gift-rarity-light") as THREE.PointLight;
+    expect(commonLight).toBeTruthy();
+    expect(mythicLight).toBeTruthy();
+    expect(mythicLight.color.getHex()).not.toBe(commonLight.color.getHex());
+    expect(mythic.root.getObjectByName("gift-rarity-ring-1")).toBeFalsy();
+    expect(mythic.root.getObjectByName("gift-rarity-gem-1")).toBeFalsy();
+
     mythic.update(0.5, 1 / 60, new THREE.PerspectiveCamera(38, 1, 0.1, 400));
     common.dispose();
     mythic.dispose();
   });
 
-  test("ballon d'or is a trophy stage with a ball, and the jet has a runway", () => {
+  test("awards use the real trophy plinth and gold match-ball assets", () => {
     const trophy = stage("trophy", "ballon_dor");
-    const jet = stage("jet", "private_jet");
-    const yacht = stage("yacht", "superyacht");
+    const award = trophy.root.getObjectByName("ballon-dor-stage");
+    expect(award?.userData.assetPath).toBe("/assets/showroom/trophy_plinth.glb");
     expect(trophy.root.getObjectByName("ballon-dor-ball")).toBeTruthy();
-    expect(trophy.root.getObjectByName("ballon-dor-stage")).toBeTruthy();
-    expect(trophy.root.getObjectByName("ballon-dor-support")).toBeTruthy();
-    expect(trophy.root.getObjectByName("ballon-dor-orbit")).toBeTruthy();
-    expect(jet.root.getObjectByName("runway")).toBeTruthy();
-    expect(yacht.root.getObjectByName("ocean")).toBeTruthy();
+    expect(trophy.root.getObjectByName("ballon-dor-support")).toBeFalsy();
+    expect(trophy.root.getObjectByName("ballon-dor-orbit")).toBeFalsy();
+    expect(meshes(trophy.root)).toHaveLength(0);
     trophy.dispose();
-    jet.dispose();
-    yacht.dispose();
   });
 });
