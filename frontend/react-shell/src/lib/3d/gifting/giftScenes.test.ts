@@ -75,6 +75,27 @@ describe("asset-led cinematic gifting scenes", () => {
     yacht.dispose();
   });
 
+  test("coach, vehicle and facility gifts use their exact showroom GLBs", () => {
+    const coach = stage("coach", "vanguard_xii_coach");
+    const vehicle = stage("vehicle", "veloce_gt9_hypercar");
+    const facility = stage("facility", "apex_performance_campus");
+    expect(coach.root.getObjectByName("gift-coach")?.userData.assetPath)
+      .toBe("/assets/showroom/vanguard_xii_coach.glb");
+    expect(vehicle.root.getObjectByName("gift-vehicle")?.userData.assetPath)
+      .toBe("/assets/showroom/veloce_gt9_hypercar.glb");
+    expect(facility.root.getObjectByName("gift-facility")?.userData.assetPath)
+      .toBe("/assets/showroom/apex_performance_campus.glb");
+    expect(meshes(coach.root)).toHaveLength(0);
+    expect(meshes(vehicle.root)).toHaveLength(0);
+    expect(meshes(facility.root)).toHaveLength(0);
+    coach.update(0.6, 1 / 60, new THREE.PerspectiveCamera(38, 1, 0.1, 400));
+    vehicle.update(0.6, 1 / 60, new THREE.PerspectiveCamera(38, 1, 0.1, 400));
+    facility.update(0.6, 1 / 60, new THREE.PerspectiveCamera(38, 1, 0.1, 400));
+    coach.dispose();
+    vehicle.dispose();
+    facility.dispose();
+  });
+
   test("bicycle and last-minute winner use the real animated footballer pipeline", () => {
     const kick = stage("bicycle", "bicycle_kick");
     const winner = stage("last_minute", "last_minute_winner");
