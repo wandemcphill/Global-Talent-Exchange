@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { isStadiumBowlPitchSurface, StadiumArenaEnvironment } from "./StadiumArenaEnvironment";
+import { broadcastLedRepeat, isStadiumBowlPitchSurface, StadiumArenaEnvironment } from "./StadiumArenaEnvironment";
 import { FIFA_PITCH_DIMENSIONS } from "./matchCoordinates";
 
 describe("StadiumArenaEnvironment", () => {
@@ -74,6 +74,15 @@ describe("StadiumArenaEnvironment", () => {
     expect(goals.length).toBe(2); // Left goal and Right goal
 
     arena.dispose();
+  });
+
+  test("keeps LED lettering square on short boards and the long touchline", () => {
+    const touchline = broadcastLedRepeat(113, 2.07);
+    const near = broadcastLedRepeat(44.5, 2.07);
+    const goal = broadcastLedRepeat(74, 2.07);
+    expect(near).toBeLessThan(touchline);
+    expect(goal).toBeLessThan(touchline);
+    expect(near).toBeGreaterThan(1);
   });
 
   test("hides downloaded grass and pitch surfaces, and keeps the stand shell", () => {

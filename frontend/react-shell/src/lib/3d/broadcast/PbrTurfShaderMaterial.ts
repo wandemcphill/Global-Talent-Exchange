@@ -73,25 +73,30 @@ export class PbrTurfShaderMaterial {
     if (!isJsdomTest && typeof window !== "undefined") {
       try {
         const loader = new THREE.TextureLoader();
-        const configureTiling = (tex: THREE.Texture) => {
+        const configureTiling = (tex: THREE.Texture, srgb: boolean) => {
           tex.wrapS = THREE.RepeatWrapping;
           tex.wrapT = THREE.RepeatWrapping;
-          tex.repeat.set(24, 16);
+          if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
+          tex.anisotropy = 8;
+          tex.magFilter = THREE.LinearFilter;
+          tex.minFilter = THREE.LinearMipmapLinearFilter;
+          // ~13m tiles. 24×16 repeats turned the 1k photo into broadcast-camera noise.
+          tex.repeat.set(8, 5);
           this.loadedTextures.push(tex);
         };
         loader.load("/textures/turf/turf_albedo_1k.jpg", (tex) => {
-          configureTiling(tex);
+          configureTiling(tex, true);
           this.material.map = tex;
           this.material.needsUpdate = true;
         });
         loader.load("/textures/turf/turf_normal_1k.jpg", (tex) => {
-          configureTiling(tex);
+          configureTiling(tex, false);
           this.material.normalMap = tex;
-          this.material.normalScale = new THREE.Vector2(0.45, 0.45);
+          this.material.normalScale = new THREE.Vector2(0.28, 0.28);
           this.material.needsUpdate = true;
         });
         loader.load("/textures/turf/turf_roughness_1k.jpg", (tex) => {
-          configureTiling(tex);
+          configureTiling(tex, false);
           this.material.roughnessMap = tex;
           this.material.needsUpdate = true;
         });
@@ -149,7 +154,7 @@ export class PbrTurfShaderMaterial {
         float grassSheen = dot(viewDir, uLightDir) * 0.12 * (isAltStripe > 0.5 ? 1.0 : -1.0);
 
         // Wet turf becomes darker and more specular/glossy
-        roughnessFactor = clamp(roughnessFactor - uMoisture * 0.38 + grassSheen, 0.25, 0.95);
+        roughnessFactor = clamp(roughnessFactor - uMoisture * 0.22 + grassSheen * 0.35, 0.46, 0.96);
         `
       );
 
@@ -157,11 +162,11 @@ export class PbrTurfShaderMaterial {
         "#include <color_fragment>",
         `
         #include <color_fragment>
-        // Pull a pale or yellow albedo into broadcast grass, then stripe it.
+        // Grade the photo toward broadcast green. A hard neon mix was hiding the texture.
         float luma = dot(diffuseColor.rgb, vec3(0.25, 0.62, 0.13));
-        vec3 grass = vec3(0.04, 0.34, 0.08) + luma * vec3(0.22, 0.95, 0.18);
-        diffuseColor.rgb = mix(diffuseColor.rgb, grass, 0.82);
-        float stripeFactor = (mod(floor(vWorldPos.x / uStripeWidth), 2.0) > 0.5) ? 1.12 : 0.86;
+        vec3 broadcastGrass = vec3(0.045, 0.26, 0.065) * (0.85 + luma * 0.5);
+        diffuseColor.rgb = mix(diffuseColor.rgb, broadcastGrass, 0.34);
+        float stripeFactor = (mod(floor(vWorldPos.x / uStripeWidth), 2.0) > 0.5) ? 1.06 : 0.94;
         diffuseColor.rgb *= stripeFactor;
 
         // Darken albedo when wet with rain
@@ -175,7 +180,7 @@ export class PbrTurfShaderMaterial {
                           + clamp(1.0 - distFromCenter / 12.0, 0.0, 0.6);
 
         vec3 mudColor = vec3(0.18, 0.13, 0.08);
-        diffuseColor.rgb = mix(diffuseColor.rgb, mudColor, clamp(uWear * trafficZone * 0.75, 0.0, 0.65));
+        diffuseColor.rgb = mix(diffuseColor.rgb, mudColor, clamp(uWear * trafficZone * 0.28, 0.0, 0.22));
         `
       );
 

@@ -401,11 +401,11 @@ export class CameraDirector {
 
     // 1. Check if user selected manual camera override
     if (this.manualMode === "broadcast_main") {
-      const trackingX = clamp(this.deadZoneAnchorX * 0.62, -32, 32);
+      const trackingX = clamp(this.deadZoneAnchorX * 0.55, -38, 38);
       this.targetPose = {
-        position: [trackingX, 3.4, 11],
-        target: [framedX, Math.max(1.05, predictedBallY), framedZ],
-        fov: 28 + tacticalFovBonus * 0.25,
+        position: [trackingX, 18.5, 52],
+        target: [framedX * 0.92, Math.max(0.55, predictedBallY * 0.4), framedZ * 0.45],
+        fov: 34 + tacticalFovBonus * 0.15,
         roll: 0,
       };
     } else if (this.manualMode === "tactical_high") {
@@ -486,10 +486,10 @@ export class CameraDirector {
         case "attack_push": {
           const forwardLead = framedX > 0 ? 8 : -8;
           this.targetPose = {
-            position: [framedX * 0.55 + forwardLead * 0.4, 3.8, 11],
-            target: [framedX + forwardLead * 0.35, Math.max(1.05, predictedBallY), framedZ],
-            fov: 28 + tacticalFovBonus * 0.25,
-            roll: clamp(-this.estimatedBallVel3D[0] * 0.0012, -0.018, 0.018),
+            position: [clamp(framedX * 0.48 + forwardLead * 0.25, -42, 42), 12.5, 44],
+            target: [framedX + forwardLead * 0.2, Math.max(0.85, predictedBallY), framedZ * 0.65],
+            fov: 30 + tacticalFovBonus * 0.15,
+            roll: clamp(-this.estimatedBallVel3D[0] * 0.0006, -0.012, 0.012),
           };
           break;
         }
@@ -497,9 +497,9 @@ export class CameraDirector {
         case "box_zoom": {
           const boxSide = framedX >= 0 ? 1 : -1;
           this.targetPose = {
-            position: [boxSide * 28, 5.4, 12],
-            target: [boxSide * 40, Math.max(1.05, predictedBallY), framedZ * 0.45],
-            fov: 30,
+            position: [boxSide * 44, 10.5, 38],
+            target: [boxSide * 42, Math.max(0.9, predictedBallY), framedZ * 0.4],
+            fov: 27,
             roll: 0,
           };
           break;
@@ -544,11 +544,11 @@ export class CameraDirector {
 
         case "broadcast":
         default: {
-          const trackingX = clamp(this.deadZoneAnchorX * 0.62, -32, 32);
+          const trackingX = clamp(this.deadZoneAnchorX * 0.55, -38, 38);
           this.targetPose = {
-            position: [trackingX, 3.4, 11],
-            target: [framedX, Math.max(1.05, predictedBallY), framedZ],
-            fov: 28 + tacticalFovBonus * 0.25,
+            position: [trackingX, 18.5, 52],
+            target: [framedX * 0.92, Math.max(0.55, predictedBallY * 0.4), framedZ * 0.45],
+            fov: 34 + tacticalFovBonus * 0.15,
             roll: 0,
           };
           break;

@@ -21,8 +21,8 @@ export interface DynamicShadowSummary {
 
 const TIER_SETTINGS: Record<DeviceQualityTier, { enabled: boolean; mapSize: number; halfExtent: number; hz: number }> = {
   low: { enabled: false, mapSize: 512, halfExtent: 30, hz: 0 },
-  medium: { enabled: false, mapSize: 1024, halfExtent: 30, hz: 0 },
-  high: { enabled: true, mapSize: 2048, halfExtent: 28, hz: 30 },
+  medium: { enabled: true, mapSize: 1024, halfExtent: 40, hz: 12 },
+  high: { enabled: true, mapSize: 2048, halfExtent: 36, hz: 30 },
   ultra: { enabled: true, mapSize: 4096, halfExtent: 34, hz: 60 },
 };
 

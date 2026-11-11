@@ -554,24 +554,27 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
 
     // 1. Scene, Camera, Renderer
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color("#07101e");
-    scene.fog = new THREE.FogExp2("#07101e", 0.0022);
+    scene.background = new THREE.Color("#0c1830");
+    scene.fog = new THREE.FogExp2("#0c1830", 0.0016);
 
     const camera = new THREE.PerspectiveCamera(38, width / height, 0.5, 300);
     camera.position.set(0, 32, 55);
     camera.lookAt(0, 0, 0);
 
+    const pixelCap =
+      qualityTier === "ultra" ? 2 : qualityTier === "high" ? 1.5 : qualityTier === "medium" ? 1.25 : 1;
     let renderer: THREE.WebGLRenderer | null = null;
     try {
       renderer = new THREE.WebGLRenderer({
-        antialias: qualityTier === "high" || qualityTier === "ultra",
+        antialias: qualityTier !== "low",
         powerPreference: "high-performance",
       });
       renderer.setSize(width, height);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, qualityTier === "ultra" ? 1.5 : 1.0));
-      if (qualityTier === "high" || qualityTier === "ultra") {
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, pixelCap));
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      if (qualityTier !== "low") {
         renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.BasicShadowMap;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         renderer.shadowMap.autoUpdate = false;
         renderer.shadowMap.needsUpdate = true;
       }
@@ -713,6 +716,8 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     const postProcessing = new BroadcastPostProcessingPipeline(renderer, scene, camera, {
       qualityTier,
       bloomEnabled,
+      bloomStrength: 0.1,
+      bloomThreshold: 0.94,
     });
     postProcessingRef.current = postProcessing;
 
@@ -746,7 +751,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     const impostorCandidatesScratch: ImpostorCandidate[] = [];
 
     // Adaptive quality: hardware report caps the tier, frame times drive resolution + post-FX
-    const basePixelRatio = Math.min(window.devicePixelRatio || 1, qualityTier === "ultra" ? 1.5 : 1.0);
+    const basePixelRatio = Math.min(window.devicePixelRatio || 1, pixelCap);
     const qualityGovernor = new AdaptiveQualityGovernor(qualityTier);
     if (userLockedQualityRef.current) qualityGovernor.lock(qualityTier);
     qualityGovernorRef.current = qualityGovernor;
@@ -1361,26 +1366,33 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         const ballOwner = state.players.find(
           (p) => p.has_possession || state.ball.owner_player_id === p.player_id
         );
-        if (ballOwner && state.ball.state === "controlled" && by < 0.25) {
-          const distToOwner = Math.hypot(bx - ballOwner.position3D[0], bz - ballOwner.position3D[2]);
-          if (distToOwner < 0.16) {
-            const strideLead = 0.28 + Math.sin(localTime * 6.5) * 0.04;
-            const lateral = Math.cos(localTime * 6.5) * 0.07;
-            const forwardX = Math.cos(ballOwner.facingAngleRad);
-            const forwardZ = Math.sin(ballOwner.facingAngleRad);
-            bx = ballOwner.position3D[0] + forwardX * strideLead - forwardZ * lateral;
-            bz = ballOwner.position3D[2] + forwardZ * strideLead + forwardX * lateral;
+        if (ballOwner && state.ball.state === "controlled") {
+          const forwardX = Math.cos(ballOwner.facingAngleRad);
+          const forwardZ = Math.sin(ballOwner.facingAngleRad);
+          const stride = 0.36 + Math.sin(localTime * 6.2) * 0.035;
+          const lateral = Math.cos(localTime * 6.2) * 0.05;
+          const footX = ballOwner.position3D[0] + forwardX * stride - forwardZ * lateral;
+          const footZ = ballOwner.position3D[2] + forwardZ * stride + forwardX * lateral;
+          const gap = Math.hypot(bx - footX, bz - footZ);
+          // Close a small visual gap to the controlling foot. Passes and shots stay on the authoritative arc.
+          if (gap < 1.15 && gap > 0.001) {
+            const pull = Math.min(0.42, gap * 0.55);
+            bx += ((footX - bx) / gap) * pull;
+            bz += ((footZ - bz) / gap) * pull;
+            by = Math.min(by, 0.1);
           }
         }
+        if (by < 0) by = 0;
 
         ballMesh.position.set(bx, by + ballLift, bz);
+        const ballVelocity = state.ball.velocity;
         if (state.ball.spin) {
           ballMesh.rotation.x += state.ball.spin[0] * deltaSec * 2.4;
           ballMesh.rotation.y += state.ball.spin[1] * deltaSec * 2.4;
           ballMesh.rotation.z += state.ball.spin[2] * deltaSec * 2.4;
-        } else if (state.ball.state !== "idle") {
-          ballMesh.rotation.x += deltaSec * 2.2;
-          ballMesh.rotation.z -= deltaSec * 1.6;
+        } else if (ballVelocity && state.ball.state !== "controlled" && state.ball.state !== "idle") {
+          ballMesh.rotation.z -= (ballVelocity[0] / ballRadius) * deltaSec;
+          ballMesh.rotation.x += (ballVelocity[2] / ballRadius) * deltaSec;
         }
 
         // Phase 2: Detect ball kick state transitions for 3D spatial ball-strike audio
@@ -1539,7 +1551,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           camera.position.z - bz
         );
         postProcessing.setDepthOfField(replayActiveNow, ballDist, replayActiveNow ? 10 : 18);
-        postProcessing.setMotionBlur(true, replayActiveNow ? 0.35 : 0.08);
+        postProcessing.setMotionBlur(replayActiveNow, replayActiveNow ? 0.28 : 0);
       }
 
       if (renderer) {

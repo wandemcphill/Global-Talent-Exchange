@@ -127,18 +127,7 @@ export default function GiftCapturePage() {
       <div
         aria-hidden
         className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(ellipse at 50% 78%, #14532d 0%, #052e16 38%, #020617 78%)",
-        }}
-      />
-      <div
-        aria-hidden
-        className="absolute inset-x-0 bottom-0 h-[46%]"
-        style={{
-          backgroundImage:
-            "repeating-linear-gradient(90deg, rgba(255,255,255,0.04) 0 48px, rgba(0,0,0,0.08) 48px 96px)",
-        }}
+        style={{ background: "#07111f" }}
       />
       <CinematicGiftingEngine
         activeGift={activeGift}

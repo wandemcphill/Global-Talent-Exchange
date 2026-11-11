@@ -31,9 +31,9 @@ export interface PlayerImpostorSummary {
  * bodies stay real meshes, and a player past 110 m still batches into the impostor.
  */
 export const IMPOSTOR_DISTANCE_BY_TIER: Record<DeviceQualityTier, number> = {
-  low: 48,
-  medium: 78,
-  high: 85,
+  low: 70,
+  medium: 92,
+  high: 100,
   ultra: Number.POSITIVE_INFINITY,
 };
 

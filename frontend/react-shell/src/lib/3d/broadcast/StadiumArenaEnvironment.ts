@@ -45,6 +45,19 @@ import { AssetStreamingCache } from "./AssetStreamingCache";
  * The bowl keeps the stands, roof shell, floodlights, and concourse.
  * Roof trusses are hidden because the broadcast camera sits inside that steel.
  */
+/** How many times an 8:1 LED creative repeats along a board so letters stay square. */
+export function broadcastLedRepeat(lengthM: number, heightM: number, tileAspect = 8): number {
+  return lengthM / Math.max(heightM, 0.2) / tileAspect;
+}
+
+function stampLedRepeat(geo: THREE.BufferGeometry, lengthM: number, heightM: number): void {
+  const repeatX = broadcastLedRepeat(lengthM, heightM);
+  const uv = geo.getAttribute("uv");
+  if (!uv) return;
+  for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * repeatX);
+  uv.needsUpdate = true;
+}
+
 export function isStadiumBowlPitchSurface(name: string): boolean {
   const normalized = name.toLowerCase();
   return (
@@ -146,6 +159,8 @@ interface SupporterInstanceMeta {
   angleRad: number;
   side: "home" | "away" | "neutral";
   scale: number;
+  slot: number;
+  slotIndex: number;
 }
 
 export class StadiumArenaEnvironment {
@@ -179,6 +194,7 @@ export class StadiumArenaEnvironment {
   private awayCrowdMat: THREE.MeshLambertMaterial | null = null;
   private bannerMat: THREE.MeshBasicMaterial | null = null;
   private supporterMesh: THREE.InstancedMesh | null = null;
+  private supporterMeshes: THREE.InstancedMesh[] = [];
   private supporterMeta: SupporterInstanceMeta[] = [];
   private upperTierObjects: THREE.Object3D[] = [];
   private vipSkyboxObjects: THREE.Object3D[] = [];
@@ -353,24 +369,7 @@ export class StadiumArenaEnvironment {
     runoffMesh.receiveShadow = true;
     this.pitchGroup.add(runoffMesh);
 
-    // C. Mowing Stripes (10 alternating turf stripes)
-    const stripeCount = 10;
-    const stripeWidth = pLength / stripeCount;
-    for (let i = 0; i < stripeCount; i++) {
-      if (i % 2 === 0) {
-        const stripeGeo = new THREE.PlaneGeometry(stripeWidth, pWidth);
-        const stripeMat = new THREE.MeshBasicMaterial({
-          color: 0x22b84a,
-          transparent: true,
-          opacity: 0.46,
-        });
-        this.disposables.push(stripeGeo, stripeMat);
-        const stripeMesh = new THREE.Mesh(stripeGeo, stripeMat);
-        stripeMesh.rotation.x = -Math.PI / 2;
-        stripeMesh.position.set(-halfL + stripeWidth * (i + 0.5), 0.008, 0);
-        this.pitchGroup.add(stripeMesh);
-      }
-    }
+    // Mowing stripes live in the turf shader. Extra neon planes read as giant patches.
 
     // D. White Chalk Lines
     const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
@@ -382,8 +381,37 @@ export class StadiumArenaEnvironment {
       this.disposables.push(g);
       const m = new THREE.Mesh(g, lineMat);
       m.rotation.x = -Math.PI / 2;
-      m.position.set(x, 0.015, z);
+      m.position.set(x, 0.02, z);
       this.pitchGroup.add(m);
+    };
+
+    const addChalkRibbon = (pts: THREE.Vector3[], width = 0.12, closed = false) => {
+      if (pts.length < 2) return;
+      const path = closed ? [...pts, pts[0].clone()] : pts;
+      const positions: number[] = [];
+      const y = 0.022;
+      for (let i = 0; i < path.length - 1; i++) {
+        const a = path[i];
+        const b = path[i + 1];
+        const dx = b.x - a.x;
+        const dz = b.z - a.z;
+        const len = Math.hypot(dx, dz) || 1;
+        const nx = (-dz / len) * (width * 0.5);
+        const nz = (dx / len) * (width * 0.5);
+        positions.push(
+          a.x + nx, y, a.z + nz,
+          a.x - nx, y, a.z - nz,
+          b.x + nx, y, b.z + nz,
+          a.x - nx, y, a.z - nz,
+          b.x - nx, y, b.z - nz,
+          b.x + nx, y, b.z + nz
+        );
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+      geo.computeVertexNormals();
+      this.disposables.push(geo);
+      this.pitchGroup.add(new THREE.Mesh(geo, lineMat));
     };
 
     // Touchlines & Goal lines
@@ -395,14 +423,8 @@ export class StadiumArenaEnvironment {
 
     // Center Circle (radius 9.15m) & Center Spot
     const circleCurve = new THREE.EllipseCurve(0, 0, 9.15, 9.15, 0, 2 * Math.PI, false, 0);
-    const circlePts = circleCurve.getPoints(64);
-    const circleGeo = new THREE.BufferGeometry().setFromPoints(
-      circlePts.map((p) => new THREE.Vector3(p.x, 0.016, p.y))
-    );
-    const circleLineMat = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
-    this.disposables.push(circleGeo, circleLineMat);
-    const circleLine = new THREE.Line(circleGeo, circleLineMat);
-    this.pitchGroup.add(circleLine);
+    const circlePts = circleCurve.getPoints(72);
+    addChalkRibbon(circlePts.map((p) => new THREE.Vector3(p.x, 0, p.y)), 0.12, true);
 
     // Center spot disc
     const spotGeo = new THREE.CircleGeometry(0.24, 16);
@@ -445,13 +467,8 @@ export class StadiumArenaEnvironment {
       const startAngle = isLeft ? -Math.PI * 0.29 : Math.PI - Math.PI * 0.29;
       const endAngle = isLeft ? Math.PI * 0.29 : Math.PI + Math.PI * 0.29;
       const arcCurve = new THREE.EllipseCurve(spotX, 0, 9.15, 9.15, startAngle, endAngle, false, 0);
-      const arcPts = arcCurve.getPoints(24);
-      const arcGeo = new THREE.BufferGeometry().setFromPoints(
-        arcPts.map((p) => new THREE.Vector3(p.x, 0.016, p.y))
-      );
-      this.disposables.push(arcGeo);
-      const arcLine = new THREE.Line(arcGeo, circleLineMat);
-      this.pitchGroup.add(arcLine);
+      const arcPts = arcCurve.getPoints(28);
+      addChalkRibbon(arcPts.map((p) => new THREE.Vector3(p.x, 0, p.y)), 0.12);
     };
 
     buildBoxMarkings(true);
@@ -466,13 +483,8 @@ export class StadiumArenaEnvironment {
     ];
     cornerCorners.forEach((c) => {
       const cCurve = new THREE.EllipseCurve(c.x, c.z, 1.0, 1.0, c.start, c.end, false, 0);
-      const cPts = cCurve.getPoints(12);
-      const cGeo = new THREE.BufferGeometry().setFromPoints(
-        cPts.map((p) => new THREE.Vector3(p.x, 0.016, p.y))
-      );
-      this.disposables.push(cGeo);
-      const cLine = new THREE.Line(cGeo, circleLineMat);
-      this.pitchGroup.add(cLine);
+      const cPts = cCurve.getPoints(14);
+      addChalkRibbon(cPts.map((p) => new THREE.Vector3(p.x, 0, p.y)), 0.1);
     });
   }
 
@@ -780,10 +792,12 @@ export class StadiumArenaEnvironment {
     const baseTexture = this.adNetwork.getTexture();
     this.adTouchlineTexture = baseTexture;
     this.adTouchlineTexture.anisotropy = 16;
-    // The ribbon is many times wider than the 8:1 canvas. Repeat so a letter
-    // stays square instead of being smeared along the touchline.
-    const tileAspect = 2048 / 256;
-    this.adTouchlineTexture.repeat.set(touchlineLen / boardH / tileAspect, 1);
+    this.adTouchlineTexture.magFilter = THREE.LinearFilter;
+    this.adTouchlineTexture.minFilter = THREE.LinearMipmapLinearFilter;
+    this.adTouchlineTexture.generateMipmaps = true;
+    // Repeat is baked into each board's UVs. A shared repeat stretched the
+    // touchline creative across the shorter goal and near-side boards.
+    this.adTouchlineTexture.repeat.set(1, 1);
 
     const ledScreenMat = new THREE.MeshBasicMaterial({
       map: this.adTouchlineTexture,
@@ -796,6 +810,7 @@ export class StadiumArenaEnvironment {
     // A. Far Touchline Broadcast LED Board (z = -offsetSide, facing +Z toward main broadcast camera at [0, 25, 58])
     const backingGeo = new THREE.BoxGeometry(touchlineLen, boardH, 0.28);
     const screenGeo = new THREE.PlaneGeometry(touchlineLen, boardH - 0.08);
+    stampLedRepeat(screenGeo, touchlineLen, boardH - 0.08);
     this.disposables.push(backingGeo, screenGeo);
 
     const farBacking = new THREE.Mesh(backingGeo, cabinetFrameMat);
@@ -812,6 +827,7 @@ export class StadiumArenaEnvironment {
     const nearSegLen = halfL - 8;
     const nearBackingGeo = new THREE.BoxGeometry(nearSegLen, boardH, 0.26);
     const nearScreenGeo = new THREE.PlaneGeometry(nearSegLen, boardH - 0.08);
+    stampLedRepeat(nearScreenGeo, nearSegLen, boardH - 0.08);
     this.disposables.push(nearBackingGeo, nearScreenGeo);
 
     const leftNearBacking = new THREE.Mesh(nearBackingGeo, cabinetFrameMat);
@@ -831,6 +847,7 @@ export class StadiumArenaEnvironment {
     const goalLen = FIFA_PITCH_DIMENSIONS.width + 6;
     const goalBackingGeo = new THREE.BoxGeometry(0.28, boardH, goalLen);
     const goalScreenGeo = new THREE.PlaneGeometry(goalLen, boardH - 0.08);
+    stampLedRepeat(goalScreenGeo, goalLen, boardH - 0.08);
     this.disposables.push(goalBackingGeo, goalScreenGeo);
 
     const leftGoalBacking = new THREE.Mesh(goalBackingGeo, cabinetFrameMat);
@@ -849,6 +866,7 @@ export class StadiumArenaEnvironment {
 
     // D. East Stand Mid-Tier Broadcast Fascia LED Ribbon (directly visible in TV Wide & Broadcast shots)
     const fasciaRibbonGeo = new THREE.PlaneGeometry(touchlineLen + 4, 1.55);
+    stampLedRepeat(fasciaRibbonGeo, touchlineLen + 4, 1.55);
     this.disposables.push(fasciaRibbonGeo);
     const eastFasciaRibbon = new THREE.Mesh(fasciaRibbonGeo, ledScreenMat);
     eastFasciaRibbon.position.set(0, 6.8, -(halfW + 9.85));
@@ -1354,15 +1372,25 @@ export class StadiumArenaEnvironment {
 
     // Instanced 3D Supporter Crowd (1 single GPU draw call for hundreds of reactive supporters)
     const supporterCount = this.qualityTier === "low" ? 360 : 1200;
-    const supGeo = createSpectatorGeometry();
+    const armPoses = [0.08, 0.5, 1];
+    const poseGeos = armPoses.map((lift) => createSpectatorGeometry(lift));
     const supMat = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
     patchSpectatorMaterial(supMat);
-    this.disposables.push(supGeo, supMat);
-
-    const instanced = new THREE.InstancedMesh(supGeo, supMat, supporterCount);
-    instanced.name = "Instanced_Supporter_Crowd";
-    instanced.castShadow = false;
-    instanced.receiveShadow = false;
+    this.disposables.push(supMat, ...poseGeos);
+    const poseCounts = [0, 0, 0];
+    for (let i = 0; i < supporterCount; i++) poseCounts[i % armPoses.length] += 1;
+    const poseMeshes = poseCounts.map(
+      (count, slot) => new THREE.InstancedMesh(poseGeos[slot], supMat, count)
+    );
+    const poseWrite = [0, 0, 0];
+    this.supporterMeshes = poseMeshes;
+    this.supporterMesh = poseMeshes[0];
+    poseMeshes.forEach((mesh, slot) => {
+      mesh.name = `Instanced_Supporter_Crowd_${slot}`;
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      mesh.frustumCulled = false;
+    });
 
     const dummyMatrix = new THREE.Matrix4();
     const color = new THREE.Color();
@@ -1413,12 +1441,30 @@ export class StadiumArenaEnvironment {
 
       const phase = (i * 1.37) % (Math.PI * 2);
       const angleRad = Math.atan2(bz, bx);
-      const scale = 0.9 + (i % 6) * 0.035;
-      this.supporterMeta.push({ baseX: bx, baseY: by, baseZ: bz, rotY, phase, angleRad, side, scale });
+      const scale = 0.86 + (i % 9) * 0.03;
+      const slot = i % poseMeshes.length;
+      const slotIndex = poseWrite[slot]++;
+      const seatJitter = ((i * 17) % 5) * 0.16 - 0.32;
+      if (Math.abs(rotY) < 0.2 || Math.abs(rotY - Math.PI) < 0.2) bx += seatJitter;
+      else bz += seatJitter;
+      by += ((i * 13) % 4) * 0.045;
+      this.supporterMeta.push({
+        baseX: bx,
+        baseY: by,
+        baseZ: bz,
+        rotY,
+        phase,
+        angleRad,
+        side,
+        scale,
+        slot,
+        slotIndex,
+      });
 
       dummyMatrix.makeRotationY(rotY);
+      dummyMatrix.scale(new THREE.Vector3(scale, scale, scale));
       dummyMatrix.setPosition(bx, by, bz);
-      instanced.setMatrixAt(i, dummyMatrix);
+      poseMeshes[slot].setMatrixAt(slotIndex, dummyMatrix);
 
       if (side === "home") {
         color.copy(i % 3 === 0 ? homeSecondary : i % 5 === 0 ? accentColor : homeColor);
@@ -1427,15 +1473,14 @@ export class StadiumArenaEnvironment {
       } else {
         color.setHex(i % 2 === 0 ? 0xe2e8f0 : 0x64748b);
       }
-      instanced.setColorAt(i, color);
+      poseMeshes[slot].setColorAt(slotIndex, color);
     }
 
-    instanced.instanceMatrix.needsUpdate = true;
-    if (instanced.instanceColor) {
-      instanced.instanceColor.needsUpdate = true;
-    }
-    this.supporterMesh = instanced;
-    this.crowdGroup.add(instanced);
+    poseMeshes.forEach((mesh) => {
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      this.crowdGroup.add(mesh);
+    });
   }
 
   /**
@@ -1563,7 +1608,7 @@ export class StadiumArenaEnvironment {
     });
 
     // Atmospheric Stadium Skybox Dusk Fog
-    scene.fog = new THREE.FogExp2(0x060a14, this.qualityTier === "low" ? 0.005 : 0.0065);
+    scene.fog = new THREE.FogExp2(0x0c1830, this.qualityTier === "low" ? 0.0022 : 0.0018);
   }
 
   // ---------------------------------------------------------------------------
@@ -1589,7 +1634,7 @@ export class StadiumArenaEnvironment {
     }
 
     // 3. Animate instanced supporters (jumping wave during excitement, subtle sway in open play)
-    if (this.supporterMesh && this.supporterMeta.length > 0) {
+    if (this.supporterMeshes.length > 0 && this.supporterMeta.length > 0) {
       const mat4 = new THREE.Matrix4();
       const freq = this.crowdReactionIntensity > 0.5 ? 11.5 : 4.2;
       const amp = 0.06 + this.crowdReactionIntensity * 0.42;
@@ -1620,9 +1665,12 @@ export class StadiumArenaEnvironment {
         mat4.makeRotationY(meta.rotY);
         mat4.scale(spectatorScale);
         mat4.setPosition(meta.baseX, meta.baseY + bounce, meta.baseZ);
-        this.supporterMesh.setMatrixAt(i, mat4);
+        const mesh = this.supporterMeshes[meta.slot];
+        if (mesh) mesh.setMatrixAt(meta.slotIndex, mat4);
       }
-      this.supporterMesh.instanceMatrix.needsUpdate = true;
+      this.supporterMeshes.forEach((mesh) => {
+        mesh.instanceMatrix.needsUpdate = true;
+      });
     }
   }
 
@@ -1728,8 +1776,8 @@ export class StadiumArenaEnvironment {
         const col = Math.floor(i / 7);
         const maxCols = Math.max(1, Math.floor((count * 0.4) / 7));
         meta.baseX = -halfL * 0.86 + (col / maxCols) * (FIFA_PITCH_DIMENSIONS.length * 0.86);
-        meta.baseY = 1.8 + row * 1.05;
-        meta.baseZ = -(halfW + 7 + row * 1.05);
+        meta.baseY = 2.6 + row * 1.35;
+        meta.baseZ = -(halfW + 9 + row * 1.45);
         meta.rotY = 0;
       } else if (i < count * 0.7) {
         const idx = i - Math.floor(count * 0.4);
@@ -1737,16 +1785,16 @@ export class StadiumArenaEnvironment {
         const col = Math.floor(idx / 6);
         const maxCols = Math.max(1, Math.floor((count * 0.3) / 6));
         meta.baseX = -halfL * 0.86 + (col / maxCols) * (FIFA_PITCH_DIMENSIONS.length * 0.86);
-        meta.baseY = 1.8 + row * 1.05;
-        meta.baseZ = halfW + 7 + row * 1.05;
+        meta.baseY = 2.6 + row * 1.35;
+        meta.baseZ = halfW + 9 + row * 1.45;
         meta.rotY = Math.PI;
       } else if (i < count * 0.85) {
         const idx = i - Math.floor(count * 0.7);
         const row = idx % 5;
         const col = Math.floor(idx / 5);
         const maxCols = Math.max(1, Math.floor((count * 0.15) / 5));
-        meta.baseX = -(halfL + 7 + row * 1.05);
-        meta.baseY = 1.8 + row * 1.05;
+        meta.baseX = -(halfL + 9 + row * 1.4);
+        meta.baseY = 2.6 + row * 1.35;
         meta.baseZ = -halfW * 0.8 + (col / maxCols) * (FIFA_PITCH_DIMENSIONS.width * 0.8);
         meta.rotY = Math.PI / 2;
       } else {
@@ -1754,15 +1802,15 @@ export class StadiumArenaEnvironment {
         const row = idx % 5;
         const col = Math.floor(idx / 5);
         const maxCols = Math.max(1, Math.floor((count * 0.15) / 5));
-        meta.baseX = halfL + 7 + row * 1.05;
-        meta.baseY = 1.8 + row * 1.05;
+        meta.baseX = halfL + 9 + row * 1.4;
+        meta.baseY = 2.6 + row * 1.35;
         meta.baseZ = -halfW * 0.8 + (col / maxCols) * (FIFA_PITCH_DIMENSIONS.width * 0.8);
         meta.rotY = -Math.PI / 2;
       }
     });
 
     this.crowdGroup.children.forEach((child) => {
-      if (child === this.supporterMesh) return;
+      if (this.supporterMeshes.includes(child as THREE.InstancedMesh)) return;
       const position = child.position;
       if (Math.abs(position.x) > halfL) position.x = Math.sign(position.x) * (halfL + 12);
       if (Math.abs(position.z) > halfW) position.z = Math.sign(position.z) * (halfW + 14);
@@ -1798,7 +1846,7 @@ const SPECTATOR_PART = { cloth: 0, skin: 1, hair: 2, trousers: 3 } as const;
  * as if cheering. About 230 triangles, so the whole crowd stays a single draw call.
  * The figure faces +Z.
  */
-function createSpectatorGeometry(): THREE.BufferGeometry {
+function createSpectatorGeometry(armLift = 1): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = [];
   const add = (geo: THREE.BufferGeometry, part: number) => {
     const solid = geo.index ? geo.toNonIndexed() : geo;
@@ -1834,7 +1882,7 @@ function createSpectatorGeometry(): THREE.BufferGeometry {
 
     // Upper arm hangs from the shoulder and swings out, the forearm bends back up.
     const shoulder = new THREE.Vector3(side * 0.2, 1.12, 0);
-    const swing = side * 0.55;
+    const swing = side * (0.12 + armLift * 0.5);
     const upper = new THREE.CylinderGeometry(0.048, 0.042, 0.3, 5, 1);
     upper.translate(0, -0.15, 0);
     upper.rotateZ(swing);
@@ -1843,7 +1891,7 @@ function createSpectatorGeometry(): THREE.BufferGeometry {
 
     const fore = new THREE.CylinderGeometry(0.04, 0.036, 0.27, 5, 1);
     fore.translate(0, -0.135, 0);
-    fore.rotateZ(-side * 1.45);
+    fore.rotateZ(-side * (0.28 + armLift * 1.2));
     fore.translate(0, -0.3, 0);
     fore.rotateZ(swing);
     fore.translate(shoulder.x, shoulder.y, shoulder.z);

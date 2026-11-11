@@ -152,18 +152,36 @@ export class AssetStreamingCache {
       throw new Error(`fetch unavailable; cannot load 3D asset ${url}`);
     }
     this.networkFetches++;
-    const res = await fetch(url);
-    if (!res || !res.ok) {
-      throw new Error(`Failed to fetch 3D asset from ${url}: HTTP ${res ? res.status : "n/a"}`);
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 90000);
+        const res = await fetch(url, { cache: "no-store", signal: controller.signal }).finally(() => clearTimeout(timer));
+        if (!res || !res.ok) {
+          const status = res ? res.status : 0;
+          const error = new Error(`Failed to fetch 3D asset from ${url}: HTTP ${status || "n/a"}`);
+          // A missing file will not appear on the next attempt. Retry only transport and server failures.
+          if (status >= 400 && status < 500) {
+            (error as Error & { permanent?: boolean }).permanent = true;
+          }
+          throw error;
+        }
+        const buffer = await res.arrayBuffer();
+        this.memoryCache.set(url, buffer);
+        this.totalBytesCached += buffer.byteLength;
+        if (db) {
+          this.writeToDb(db, url, buffer).catch(() => {});
+        }
+        onProgress?.(100);
+        return buffer;
+      } catch (error) {
+        lastError = error;
+        if ((error as { permanent?: boolean }).permanent) break;
+        await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+      }
     }
-    const buffer = await res.arrayBuffer();
-    this.memoryCache.set(url, buffer);
-    this.totalBytesCached += buffer.byteLength;
-    if (db) {
-      this.writeToDb(db, url, buffer).catch(() => {});
-    }
-    onProgress?.(100);
-    return buffer;
+    throw lastError instanceof Error ? lastError : new Error(`Failed to fetch 3D asset from ${url}`);
   }
 
   // ---------------------------------------------------------------------------

@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { Trophy } from "lucide-react";
 import { GtexCelebrationAudioEngine } from "./GtexCelebrationAudioEngine";
-import { AssetStreamingCache } from "../broadcast/AssetStreamingCache";
+import { createGiftDirector } from "./giftScenes";
+import { detectGiftQuality } from "./giftQuality";
 import { resolvePublicAssetPath } from "@/lib/publicPath";
 
 function disposeObjectTree(objects: THREE.Object3D[], scene?: THREE.Scene | null): void {
@@ -544,6 +545,9 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
       )
     : "";
 
+  const [visualReady, setVisualReady] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const mutedRef = useRef(false);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => {
     if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
       return Boolean(window.matchMedia("(prefers-reduced-motion: reduce)")?.matches);
@@ -567,22 +571,32 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
 
     const width = mount.clientWidth || 800;
     const height = mount.clientHeight || 450;
+    const quality = detectGiftQuality(width, navigator.hardwareConcurrency || 8);
     const scene = new THREE.Scene();
-    scene.background = null;
+    scene.background = new THREE.Color(0x07111f);
     sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 400);
     camera.position.set(0, 6.2, 16);
     camera.lookAt(0, 3.2, 0);
     cameraRef.current = camera;
 
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: false });
+      renderer = new THREE.WebGLRenderer({
+        alpha: false,
+        antialias: quality.antialias,
+        powerPreference: "high-performance",
+        preserveDrawingBuffer: false,
+      });
       renderer.setSize(width, height);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
-      renderer.setClearColor(0x000000, 0);
-      renderer.shadowMap.enabled = false;
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.pixelRatioCap));
+      renderer.setClearColor(0x07111f, 1);
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.12;
+      renderer.shadowMap.enabled = quality.shadows;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       rendererRef.current = renderer;
     } catch {
       setContextLost(true);
@@ -599,15 +613,33 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
     mount.querySelectorAll("canvas").forEach((node) => node.remove());
     mount.appendChild(renderer.domElement);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.72));
-    const dirLight = new THREE.DirectionalLight(0xfff3d6, 1.6);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.18));
+    const dirLight = new THREE.DirectionalLight(0xfff3d6, 0.85);
     dirLight.name = "gift-key";
-    dirLight.position.set(15, 30, 20);
+    dirLight.position.set(12, 24, 14);
+    dirLight.castShadow = quality.shadows;
+    dirLight.shadow.mapSize.set(1024, 1024);
+    dirLight.shadow.camera.near = 0.5;
+    dirLight.shadow.camera.far = 80;
+    const shadowCam = dirLight.shadow.camera as THREE.OrthographicCamera;
+    shadowCam.left = -18;
+    shadowCam.right = 18;
+    shadowCam.top = 18;
+    shadowCam.bottom = -18;
     scene.add(dirLight);
     keyLightRef.current = dirLight;
-    const rimLight = new THREE.DirectionalLight(0x38bdf8, 1.1);
-    rimLight.position.set(-20, 10, -15);
-    scene.add(rimLight);
+    try {
+      void import("three/examples/jsm/environments/RoomEnvironment.js").then(({ RoomEnvironment }) => {
+        if (!rendererRef.current || rendererRef.current !== renderer) return;
+        const pmrem = new THREE.PMREMGenerator(renderer);
+        const envTarget = pmrem.fromScene(new RoomEnvironment(), 0.04);
+        pmrem.dispose();
+        scene.environment = envTarget.texture;
+        scene.userData.giftEnv = envTarget;
+      });
+    } catch {
+      // Headless contexts keep the hemisphere and key light.
+    }
 
     const handleResize = () => {
       if (!mountRef.current || !rendererRef.current || !cameraRef.current) return;
@@ -623,6 +655,11 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
       window.removeEventListener("resize", handleResize);
       renderer.domElement.removeEventListener("webglcontextlost", handleContextLost);
       renderer.domElement.removeEventListener("webglcontextrestored", handleContextRestored);
+      const envTarget = scene.userData.giftEnv as THREE.WebGLRenderTarget | undefined;
+      if (envTarget) {
+        if (scene.environment === envTarget.texture) scene.environment = null;
+        envTarget.dispose();
+      }
       renderer.dispose();
       renderer.domElement.remove();
       if (rendererRef.current === renderer) rendererRef.current = null;
@@ -641,7 +678,7 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
       (typeof window !== "undefined" &&
         typeof window.matchMedia === "function" &&
         Boolean(window.matchMedia("(prefers-reduced-motion: reduce)")?.matches));
-    if (soundEnabled && !isReducedMotion) {
+    if (soundEnabled && !mutedRef.current && !isReducedMotion) {
       GtexCelebrationAudioEngine.playCelebrationCue(activeGift.sound_key, activeGift.gift_code || activeGift.animation_key, activeGift.rarity);
     }
     if (!sceneRef.current || isReducedMotion) {
@@ -653,164 +690,82 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
     const scene = sceneRef.current;
     disposeObjectTree(activeObjectsRef.current, scene);
     activeObjectsRef.current = [];
+    setVisualReady(false);
 
-    const rarity = (activeGift.rarity || "common").toLowerCase();
-    const particleCount = rarity === "mythic" ? 350 : rarity === "legendary" ? 220 : 120;
-    const particleGeo = new THREE.BufferGeometry();
-    const pos = new Float32Array(particleCount * 3);
-    const colors = new Float32Array(particleCount * 3);
-    const vels: THREE.Vector3[] = [];
-    const palette =
-      shot === "city"
-        ? [0x93c5fd, 0xfde047, 0xffffff]
-        : shot === "stadium" || shot === "golden_goal"
-          ? [0xfde047, 0xf59e0b, 0xffffff]
-          : shot === "jet"
-            ? [0xe2e8f0, 0x38bdf8, 0xffffff]
-            : [0xf59e0b, 0x10b981, 0x38bdf8, 0xffffff];
-    for (let i = 0; i < particleCount; i++) {
-      pos[i * 3] = (Math.random() - 0.5) * 8;
-      pos[i * 3 + 1] = Math.random() * 4 + 2;
-      pos[i * 3 + 2] = (Math.random() - 0.5) * 8;
-      const color = new THREE.Color(palette[i % palette.length]);
-      colors[i * 3] = color.r;
-      colors[i * 3 + 1] = color.g;
-      colors[i * 3 + 2] = color.b;
-      vels.push(new THREE.Vector3((Math.random() - 0.5) * 0.28, Math.random() * 0.35 + 0.12, (Math.random() - 0.5) * 0.28));
+    const width = mountRef.current?.clientWidth || 1280;
+    const quality = detectGiftQuality(width, navigator.hardwareConcurrency || 8);
+    const canStream = typeof window !== "undefined" && !/jsdom/i.test(window.navigator?.userAgent || "");
+    let assetsReady = false;
+    const openedAt = performance.now();
+    const startTime = { value: 0 };
+    let prevTime = openedAt;
+    let animate: ((time: number) => void) | null = null;
+    const director = createGiftDirector({
+      shot,
+      giftCode,
+      quality,
+      canStream,
+      resolveUrl: resolvePublicAssetPath,
+      isCancelled: () => cancelled,
+      onReady: () => {
+        assetsReady = true;
+        startTime.value = 0;
+        const shell = mountRef.current?.parentElement;
+        if (shell) shell.setAttribute("data-gift-progress", "0.000");
+        if (!cancelled && animate && animationFrameRef.current == null) {
+          prevTime = performance.now();
+          animationFrameRef.current = requestAnimationFrame(animate);
+        }
+        if (!cancelled) setVisualReady(true);
+      },
+    });
+    scene.add(director.root);
+    scene.background = director.background;
+    if (rendererRef.current) {
+      rendererRef.current.setClearColor(director.background, 1);
+      rendererRef.current.toneMappingExposure = director.exposure;
     }
-    particleGeo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    particleGeo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    const particles = new THREE.Points(
-      particleGeo,
-      new THREE.PointsMaterial({ size: 0.45, vertexColors: true, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending })
-    );
-    scene.add(particles);
-    activeObjectsRef.current.push(particles);
+    const dramatic = shot === "trophy" || shot === "jet" || shot === "yacht" || shot === "bicycle" || shot === "last_minute";
+    if (keyLightRef.current) keyLightRef.current.castShadow = Boolean(quality.shadows && dramatic);
 
-    const stageGroup = new THREE.Group();
-    const hero = new THREE.Group();
-    hero.name = "gift-hero";
-    stageGroup.add(hero);
-    if (shot === "card") addBoard(hero, 0xf59e0b, false);
-    else if (shot === "tactics") addBoard(hero, 0x0ea5e9, true);
-    else if (shot === "crown") {
-      addBoard(hero, 0x0ea5e9, true);
-      addCrown(hero);
-    } else if (shot === "trophy") addTrophy(hero);
-    else if (shot === "boot") addBoot(hero);
-    else if (shot === "glove" || shot === "save") addGlove(hero);
-    else if (shot === "stadium" || shot === "golden_goal") addStadium(hero, shot === "golden_goal" ? "golden_goal" : giftCode);
-    else if (shot === "city") addCity(hero, giftCode);
-    else if (shot === "jet") addJet(hero);
-    else if (shot === "yacht") addYacht(hero);
-    else if (shot === "goal" || shot === "last_minute" || shot === "bicycle" || shot === "hat_trick") addAtmosphere(hero, 0xf59e0b);
-    else addAtmosphere(hero, giftCode.includes("horn") || giftCode.includes("roar") ? 0xf59e0b : 0x10b981);
-
-    const ballShots: GiftShotId[] = ["goal", "last_minute", "bicycle", "golden_goal", "hat_trick", "save"];
-    const ball = ballShots.includes(shot) ? makeBall(shot === "golden_goal" ? 0xfde047 : 0xf8fafc) : null;
-    if (ball) stageGroup.add(ball);
-
-    scene.add(stageGroup);
-    activeObjectsRef.current.push(stageGroup);
-
-    const modelPath = streamedModelFor(shot, giftCode);
-    if (modelPath && typeof window !== "undefined" && !/jsdom/i.test(window.navigator?.userAgent || "")) {
-      AssetStreamingCache.getInstance()
-        .loadGltf(resolvePublicAssetPath(modelPath), rendererRef.current || undefined)
-        .then((gltf) => {
-          if (cancelled || !gltf?.scene) return;
-          const imported = gltf.scene.clone(true);
-          imported.traverse((child) => {
-            const mesh = child as THREE.Mesh;
-            if (!mesh.isMesh) return;
-            if (mesh.geometry) mesh.geometry = mesh.geometry.clone();
-            if (Array.isArray(mesh.material)) mesh.material = mesh.material.map((material) => material.clone());
-            else if (mesh.material) mesh.material = mesh.material.clone();
-          });
-          const bbox = new THREE.Box3().setFromObject(imported);
-          const size = new THREE.Vector3();
-          const center = new THREE.Vector3();
-          bbox.getSize(size);
-          bbox.getCenter(center);
-          const maxDim = Math.max(size.x, size.y, size.z, 0.001);
-          const scale = (shot === "yacht" ? 14 : 16) / maxDim;
-          imported.scale.setScalar(scale);
-          imported.position.set(-center.x * scale, -bbox.min.y * scale, -center.z * scale);
-          if (shot === "stadium") {
-            imported.traverse((child) => {
-              const mesh = child as THREE.Mesh;
-              const material = mesh.material as THREE.MeshStandardMaterial;
-              if (mesh.isMesh && material && "emissive" in material && !Array.isArray(mesh.material)) {
-                material.emissive = new THREE.Color(0xf59e0b);
-                material.emissiveIntensity = 0.22;
-              }
-            });
-          }
-          detachImportedHero(hero, shot);
-          hero.add(imported);
-        })
-        .catch(() => {
-          // Keep the procedural sculpture.
-        });
-    }
-
-    const startTime = performance.now();
-    let prevTime = startTime;
-    const animate = (time: number) => {
+    const animateFrame = (time: number) => {
       if (cancelled) return;
-      const elapsed = time - startTime;
       const deltaSec = Math.min(Math.max((time - prevTime) / 1000, 0.001), 0.1);
       prevTime = time;
-      const dtScale = deltaSec * 60;
-      const progress = Math.min(elapsed / duration, 1);
-
-      if (shot === "jet") {
-        const glide = smoothstep(progress);
-        hero.position.set(lerp(-18, 18, glide), 6 + Math.sin(progress * Math.PI) * 1.4, 0);
-        hero.rotation.set(0.08, Math.PI / 2, Math.sin(progress * Math.PI) * -0.35);
-      } else if (shot === "yacht") {
-        hero.position.set(lerp(-8, 8, smoothstep(progress)), 0, 0);
-        hero.rotation.set(0, 0.2, 0);
-      } else {
-        hero.position.set(0, 0, 0);
-        hero.rotation.y = Math.sin(progress * Math.PI) * (shot === "city" || shot === "stadium" ? 0.22 : 0.4);
-      }
-      if (ball) placeBall(ball, shot, progress);
-      if (cameraRef.current) placeCamera(cameraRef.current, shot, progress, hero);
-      if (keyLightRef.current) {
-        const hit = progress > 0.22 && progress < 0.72 ? Math.sin(((progress - 0.22) / 0.5) * Math.PI) : 0;
-        keyLightRef.current.intensity = 1.5 + hit * 2.2;
-      }
-      const fade = progress < 0.72 ? 1 : 1 - smoothstep((progress - 0.72) / 0.28);
-      if (fade < 1) fadeTree(stageGroup, fade);
-
-      const posAttr = particleGeo.attributes.position as THREE.BufferAttribute;
-      const positions = posAttr.array as Float32Array;
-      for (let i = 0; i < particleCount; i++) {
-        positions[i * 3] += vels[i].x * dtScale;
-        positions[i * 3 + 1] += vels[i].y * dtScale;
-        positions[i * 3 + 2] += vels[i].z * dtScale;
-        vels[i].y -= 0.006 * dtScale;
-        if (positions[i * 3 + 1] < 0) {
-          positions[i * 3 + 1] = 0;
-          vels[i].y = -vels[i].y * 0.4;
+      if (!startTime.value) {
+        const waiting = !assetsReady && time - openedAt < 70000;
+        if (waiting) {
+          if (cameraRef.current) director.update(0, deltaSec, cameraRef.current);
+          if (rendererRef.current && cameraRef.current) rendererRef.current.render(scene, cameraRef.current);
+          animationFrameRef.current = requestAnimationFrame(animateFrame);
+          return;
         }
+        startTime.value = time;
       }
-      posAttr.needsUpdate = true;
-      if (rendererRef.current && sceneRef.current && cameraRef.current) {
-        rendererRef.current.render(sceneRef.current, cameraRef.current);
+      const holdAt = Number(new URLSearchParams(window.location.search).get("at"));
+      let progress = Math.min((time - startTime.value) / duration, 1);
+      const holding = Number.isFinite(holdAt) && holdAt > 0 && holdAt < 1;
+      if (holding && progress > holdAt) progress = holdAt;
+      if (cameraRef.current) director.update(progress, deltaSec, cameraRef.current);
+      const shell = mountRef.current?.parentElement;
+      if (shell) shell.setAttribute("data-gift-progress", progress.toFixed(3));
+      if (rendererRef.current && cameraRef.current) rendererRef.current.render(scene, cameraRef.current);
+      if (progress < 1 || holding) animationFrameRef.current = requestAnimationFrame(animateFrame);
+      else {
+        animationFrameRef.current = null;
+        onCompleteRef.current?.();
       }
-      if (progress < 1) animationFrameRef.current = requestAnimationFrame(animate);
-      else onCompleteRef.current?.();
     };
-    animationFrameRef.current = requestAnimationFrame(animate);
+    animate = animateFrame;
+    animationFrameRef.current = requestAnimationFrame(animateFrame);
 
     return () => {
       cancelled = true;
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-      disposeObjectTree(activeObjectsRef.current, scene);
-      activeObjectsRef.current = [];
+      scene.remove(director.root);
+      director.dispose();
     };
+
   }, [giftInstanceKey, prefersReducedMotion, soundEnabled]);
 
   if (!activeGift) return null;
@@ -829,11 +784,25 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
     <div
       data-testid="on-pitch-gift-animation"
       data-webgl-context={contextLost ? "lost" : "ready"}
-      className={`absolute inset-0 z-30 pointer-events-none flex flex-col items-center justify-start overflow-hidden p-6 ${className}`}
+      data-gift-visual={visualReady ? "ready" : "loading"}
+      data-gift-shot={resolveGiftShot(activeGift.animation_key, activeGift.gift_code)}
+      className={`absolute inset-0 z-30 pointer-events-none flex flex-col items-center justify-start overflow-hidden p-4 sm:p-6 ${className}`}
     >
       <div ref={mountRef} className="absolute inset-0 pointer-events-none" />
-      <div className="relative z-40 mt-2 flex flex-col items-center">
-        <div className={`flex items-center gap-4 rounded-full border px-6 py-2.5 ${rarityColor}`}>
+      <button
+        type="button"
+        data-testid="gift-mute"
+        className="pointer-events-auto absolute right-3 top-3 z-50 rounded-full border border-white/20 bg-black/55 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white"
+        onClick={() => {
+          mutedRef.current = !mutedRef.current;
+          setMuted(mutedRef.current);
+          GtexCelebrationAudioEngine.setMuted(mutedRef.current);
+        }}
+      >
+        {muted ? "Sound off" : "Sound on"}
+      </button>
+      <div className="relative z-40 mt-2 flex max-w-[92vw] flex-col items-center">
+        <div className={`flex items-center gap-3 rounded-full border px-4 py-2 sm:gap-4 sm:px-6 sm:py-2.5 ${rarityColor}`}>
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black/40 text-amber-300">
             <Trophy size={20} />
           </div>

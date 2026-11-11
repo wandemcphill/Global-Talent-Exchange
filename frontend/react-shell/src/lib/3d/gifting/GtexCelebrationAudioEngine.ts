@@ -81,7 +81,17 @@ export class GtexCelebrationAudioEngine {
   /**
    * Plays a procedural celebration soundscape tailored to the gift's sound_key.
    */
+  private static muted = false;
+
+  public static setMuted(muted: boolean): void {
+    this.muted = muted;
+    if (!this.ctx) return;
+    if (muted && this.ctx.state === "running") this.ctx.suspend().catch(() => undefined);
+    if (!muted && this.ctx.state === "suspended") this.ctx.resume().catch(() => undefined);
+  }
+
   public static playCelebrationCue(soundKey?: string, giftCode?: string, rarity?: string): void {
+    if (this.muted) return;
     const ctx = this.getContext();
     if (!ctx) return;
     const cue = resolveCelebrationCue(soundKey, giftCode, rarity);

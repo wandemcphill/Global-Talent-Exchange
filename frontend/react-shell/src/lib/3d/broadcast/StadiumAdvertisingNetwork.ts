@@ -335,7 +335,10 @@ export class StadiumAdvertisingNetwork {
     this.texture.wrapS = THREE.RepeatWrapping;
     this.texture.wrapT = THREE.ClampToEdgeWrapping;
     this.texture.colorSpace = THREE.SRGBColorSpace;
-    this.texture.anisotropy = 8;
+    this.texture.anisotropy = 16;
+    this.texture.magFilter = THREE.LinearFilter;
+    this.texture.minFilter = THREE.LinearMipmapLinearFilter;
+    this.texture.generateMipmaps = true;
     this.texture.needsUpdate = true;
   }
 
