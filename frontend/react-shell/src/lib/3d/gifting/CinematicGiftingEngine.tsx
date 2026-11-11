@@ -319,7 +319,7 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
           import("three/examples/jsm/postprocessing/OutputPass.js"),
         ])
           .then(([composerModule, renderModule, bloomModule, outputModule]) => {
-            if (rendererRef.current !== renderer || !renderer.domElement.isConnected) return;
+            if (rendererRef.current !== renderer) return;
             const composer = new composerModule.EffectComposer(renderer);
             composer.setPixelRatio(renderer.getPixelRatio());
             composer.setSize(width, height);
