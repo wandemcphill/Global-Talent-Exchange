@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import { createGiftDirector, frameGiftShot } from "./giftScenes";
 import { detectGiftQuality } from "./giftQuality";
 
@@ -52,7 +53,15 @@ describe("gifting 2.0 scenes", () => {
     expect(net).toBeTruthy();
     expect(net?.rotation.y).toBeCloseTo(Math.PI / 2);
     expect(scene.root.getObjectByName("stadium-crowd-heads")).toBeTruthy();
-    expect(scene.root.getObjectByName("stadium-crowd-arms")).toBeTruthy();
+    const arms = scene.root.getObjectByName("stadium-crowd-arms") as THREE.InstancedMesh;
+    expect(arms).toBeTruthy();
+
+    const beforeNet = new Float32Array((net!.geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array);
+    const beforeArms = new Float32Array(arms.instanceMatrix.array as Float32Array);
+    scene.update(0.84, 1 / 60, new THREE.PerspectiveCamera(38, 1, 0.1, 400));
+    const afterNet = net!.geometry.getAttribute("position") as THREE.BufferAttribute;
+    expect(Array.from(afterNet.array as Float32Array).some((value, index) => value !== beforeNet[index])).toBe(true);
+    expect(Array.from(arms.instanceMatrix.array as Float32Array).some((value, index) => value !== beforeArms[index])).toBe(true);
     scene.dispose();
   });
 
@@ -63,6 +72,7 @@ describe("gifting 2.0 scenes", () => {
     expect(mythic.root.getObjectByName("gift-rarity-mythic")).toBeTruthy();
     expect(mythic.root.getObjectByName("gift-rarity-vertical-gate")).toBeTruthy();
     expect(mythic.root.getObjectByName("gift-rarity-gem-8")).toBeTruthy();
+    mythic.update(0.5, 1 / 60, new THREE.PerspectiveCamera(38, 1, 0.1, 400));
     common.dispose();
     mythic.dispose();
   });
