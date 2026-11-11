@@ -466,9 +466,9 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
       data-webgl-context={contextLost ? "lost" : "ready"}
       data-gift-visual={visualReady ? "ready" : "loading"}
       data-gift-shot={resolveGiftShot(activeGift.animation_key, activeGift.gift_code)}
-      className={\`absolute inset-0 z-30 pointer-events-none flex flex-col items-center justify-end overflow-hidden \${className}\`}
+      className={`absolute inset-0 z-30 pointer-events-none flex flex-col items-center justify-end overflow-hidden ${className}`}
     >
-      <style>{\`
+      <style>{`
         @keyframes gtex-gift-caption-in {
           from { opacity: 0; transform: translate3d(0, 18px, 0); filter: blur(8px); }
           to { opacity: 1; transform: translate3d(0, 0, 0); filter: blur(0); }
@@ -496,7 +496,7 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
         @media (prefers-reduced-motion: reduce) {
           .gtex-gift-caption, .gtex-gift-caption-rule, .gtex-gift-lens { animation: none; }
         }
-      \`}</style>
+      `}</style>
       <div ref={mountRef} className="absolute inset-0 pointer-events-none" />
       <div
         aria-hidden
@@ -533,7 +533,7 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
             <span
               aria-hidden
               className="gtex-gift-caption-rule h-px w-8 sm:w-12"
-              style={{ background: \`linear-gradient(90deg, transparent, \${rarityAccent})\` }}
+              style={{ background: `linear-gradient(90deg, transparent, ${rarityAccent})` }}
             />
             <span
               className="text-[10px] font-semibold uppercase tracking-[.34em] sm:text-xs"
@@ -544,7 +544,7 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
             <span
               aria-hidden
               className="gtex-gift-caption-rule h-px w-8 sm:w-12"
-              style={{ background: \`linear-gradient(90deg, \${rarityAccent}, transparent)\` }}
+              style={{ background: `linear-gradient(90deg, ${rarityAccent}, transparent)` }}
             />
           </div>
           <div className="mt-3 text-2xl font-black leading-tight tracking-[-.035em] text-white sm:mt-4 sm:text-4xl">
@@ -560,7 +560,7 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
             {combo > 1 ? (
               <>
                 <span aria-hidden className="h-1 w-1 rounded-full bg-white/40" />
-                <span data-testid="gift-combo-count">{\`COMBO ×\${combo}\`}</span>
+                <span data-testid="gift-combo-count">{`COMBO ×${combo}`}</span>
               </>
             ) : null}
           </div>
