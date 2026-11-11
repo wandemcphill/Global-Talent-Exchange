@@ -13,6 +13,7 @@ from app.gift_engine.canonical_service import GiftEngineService
 from app.models import (
     Base,
     ClubRankingEvent,
+    EventOutbox,
     GiftAbuseFlag,
     GiftStats,
     GiftTransaction,
@@ -157,6 +158,15 @@ def test_award_catalog_seeds_ballon_dor_and_sends_mythic_discussion_gift(session
     assert transaction.recipient_user_id == recipient.id
     assert transaction.animation_key == "ballon_dor"
     assert transaction.sound_key == "stadium_ceremony_roar"
+    gift_events = session.scalars(select(EventOutbox).where(EventOutbox.event_type == "gift_sent")).all()
+    assert gift_events
+    broadcast_payload = gift_events[-1].payload_json
+    assert broadcast_payload["gift_code"] == "ballon_dor"
+    assert broadcast_payload["duration_ms"] == 8000
+    assert broadcast_payload["combo_count"] == 1
+    assert broadcast_payload["sound_key"] == "stadium_ceremony_roar"
+    assert transaction.metadata_json["combo_count"] == 1
+    assert transaction.metadata_json["duration_ms"] == 8000
     assert transaction.wallet_debit_ledger_id is not None
     assert transaction.wallet_credit_ledger_id is not None
     assert transaction.platform_fee_ledger_id is not None

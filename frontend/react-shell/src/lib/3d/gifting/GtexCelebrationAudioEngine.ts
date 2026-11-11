@@ -1,10 +1,62 @@
 /**
  * GTEX World of Football — Procedural Web Audio Celebration Synthesizer
  *
- * Synthesizes zero-latency broadcast soundscapes for all 31 canonical World of Football
- * gifts using the browser's native Web Audio API. Requires no external MP3 assets and
- * gracefully degrades in headless/muted environments.
+ * Synthesizes zero-latency broadcast soundscapes for the canonical gift catalog
+ * using the browser's native Web Audio API. Requires no external audio files.
  */
+
+const SOUND_CUES: Record<string, string> = {
+  whistle_pop: "whistle",
+  training_whistle_rise: "whistle",
+  crowd_chant: "chant",
+  san_siro_curva_chant: "chant",
+  crowd_roar: "chant",
+  crowd_cheer: "chant",
+  goal_roar: "goal_roar",
+  net_ripple_roar: "goal_roar",
+  stadium_award_roar: "goal_roar",
+  wembley_arch_roar: "goal_roar",
+  card_reveal_riser: "card_reveal",
+  mvp_card_hit: "card_reveal",
+  tactics_board_ping: "board_ping",
+  tactics_crown_hit: "crown_hit",
+  dugout_spotlight: "swell",
+  passing_lines_swell: "swell",
+  bicycle_kick_whoosh: "whoosh",
+  keeper_save_snap: "snap",
+  golden_goal_explosion: "explosion",
+  hat_trick_fireworks: "fireworks",
+  maracana_samba_cheer: "drums",
+  rio_carnival_beat: "drums",
+  lagos_afrobeats_pulse: "drums",
+  camp_nou_hymn_swell: "ceremony",
+  celestial_stadium_choir: "ceremony",
+  stadium_ceremony_roar: "ceremony",
+  paris_lights_twinkle: "twinkle",
+  nyc_harbor_horn: "harbor_horn",
+  yacht_harbor_chime: "harbor_chime",
+  jet_turbine_flyby: "jet",
+};
+
+const CODE_CUES: Record<string, string> = {
+  private_jet: "jet",
+  superyacht: "harbor_chime",
+  ballon_dor: "ceremony",
+  whistle_blow: "whistle",
+  maracana_stadium: "drums",
+  rio_skyline: "drums",
+  lagos_skyline: "drums",
+  paris_skyline: "twinkle",
+  new_york_skyline: "harbor_horn",
+};
+
+export function resolveCelebrationCue(soundKey?: string, giftCode?: string, _rarity?: string): string {
+  const sound = (soundKey || "").trim().toLowerCase();
+  const code = (giftCode || "").trim().toLowerCase();
+  if (sound && SOUND_CUES[sound]) return SOUND_CUES[sound];
+  if (!sound && CODE_CUES[code]) return CODE_CUES[code];
+  return "fallback";
+}
 
 export class GtexCelebrationAudioEngine {
   private static ctx: AudioContext | null = null;
@@ -27,48 +79,91 @@ export class GtexCelebrationAudioEngine {
   }
 
   /**
-   * Plays a procedural celebration soundscape tailored to the gift's sound_key or gift_code.
+   * Plays a procedural celebration soundscape tailored to the gift's sound_key.
    */
   public static playCelebrationCue(soundKey?: string, giftCode?: string, rarity?: string): void {
     const ctx = this.getContext();
     if (!ctx) return;
-
-    const key = `${soundKey || ""} ${giftCode || ""}`.toLowerCase();
+    const cue = resolveCelebrationCue(soundKey, giftCode, rarity);
     const now = ctx.currentTime;
 
     try {
-      if (key.includes("jet") || key.includes("flyby")) {
-        this.playJetFlyby(ctx, now);
-      } else if (key.includes("yacht") || key.includes("horn") || key.includes("goal_horn")) {
-        this.playStadiumHorn(ctx, now);
-        this.playStadiumRoar(ctx, now + 0.15, 2.8);
-      } else if (key.includes("var") || key.includes("subs") || key.includes("tactical")) {
-        this.playElectronicVarChime(ctx, now);
-      } else if (key.includes("firework") || key.includes("flare") || key.includes("dubai") || key.includes("tokyo")) {
-        this.playPyroFireworkBurst(ctx, now);
-        this.playStadiumRoar(ctx, now + 0.2, 2.5);
-      } else if (
-        key.includes("trophy") ||
-        key.includes("ballon") ||
-        key.includes("anthem") ||
-        key.includes("crown") ||
-        rarity === "mythic"
-      ) {
-        this.playBrassFanfare(ctx, now, true);
-        this.playStadiumRoar(ctx, now, 3.2);
-      } else if (key.includes("whistle") || key.includes("winner") || key.includes("card") || key.includes("penalty")) {
-        this.playRefereeWhistle(ctx, now);
-        this.playStadiumRoar(ctx, now + 0.35, 2.8);
-      } else if (key.includes("samba") || key.includes("rio") || key.includes("lagos") || key.includes("drum")) {
-        this.playRhythmicDrums(ctx, now);
-        this.playStadiumRoar(ctx, now + 0.2, 2.2);
-      } else {
-        this.playBrassFanfare(ctx, now, false);
-        this.playStadiumRoar(ctx, now, 2.4);
+      this.playCue(ctx, now, cue);
+      if ((rarity || "").toLowerCase() === "mythic" && cue !== "ceremony") {
+        this.playCeremony(ctx, now + 0.05);
       }
     } catch {
       // Ignore Web Audio autoplay restriction errors
     }
+  }
+
+  private static playCue(ctx: AudioContext, startTime: number, cue: string): void {
+    switch (cue) {
+      case "whistle":
+        this.playRefereeWhistle(ctx, startTime);
+        break;
+      case "chant":
+        this.playStadiumRoar(ctx, startTime, 2.4);
+        break;
+      case "goal_roar":
+        this.playStadiumHorn(ctx, startTime);
+        this.playStadiumRoar(ctx, startTime + 0.12, 2.6);
+        break;
+      case "card_reveal":
+        this.playCardReveal(ctx, startTime);
+        break;
+      case "board_ping":
+        this.playElectronicVarChime(ctx, startTime);
+        break;
+      case "crown_hit":
+        this.playCrownHit(ctx, startTime);
+        break;
+      case "swell":
+        this.playBrassFanfare(ctx, startTime, false);
+        break;
+      case "whoosh":
+        this.playWhoosh(ctx, startTime);
+        break;
+      case "snap":
+        this.playSnap(ctx, startTime);
+        break;
+      case "explosion":
+        this.playPyroFireworkBurst(ctx, startTime);
+        this.playStadiumRoar(ctx, startTime + 0.08, 1.8);
+        break;
+      case "fireworks":
+        this.playPyroFireworkBurst(ctx, startTime);
+        this.playPyroFireworkBurst(ctx, startTime + 0.7);
+        break;
+      case "drums":
+        this.playRhythmicDrums(ctx, startTime);
+        this.playStadiumRoar(ctx, startTime + 0.15, 2.2);
+        break;
+      case "ceremony":
+        this.playCeremony(ctx, startTime);
+        break;
+      case "twinkle":
+        this.playTwinkle(ctx, startTime);
+        break;
+      case "harbor_horn":
+        this.playStadiumHorn(ctx, startTime);
+        break;
+      case "harbor_chime":
+        this.playHarborChime(ctx, startTime);
+        break;
+      case "jet":
+        this.playJetFlyby(ctx, startTime);
+        break;
+      default:
+        this.playBrassFanfare(ctx, startTime, false);
+        this.playStadiumRoar(ctx, startTime, 1.6);
+        break;
+    }
+  }
+
+  private static playCeremony(ctx: AudioContext, startTime: number): void {
+    this.playBrassFanfare(ctx, startTime, true);
+    this.playStadiumRoar(ctx, startTime, 3.0);
   }
 
   private static playStadiumRoar(ctx: AudioContext, startTime: number, durationSec: number): void {
@@ -162,6 +257,110 @@ export class GtexCelebrationAudioEngine {
 
     noise.start(startTime);
     noise.stop(startTime + duration);
+  }
+
+  private static playWhoosh(ctx: AudioContext, startTime: number): void {
+    const duration = 0.9;
+    const sampleRate = ctx.sampleRate || 44100;
+    const buffer = ctx.createBuffer(1, Math.floor(sampleRate * duration), sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.Q.value = 0.8;
+    filter.frequency.setValueAtTime(240, startTime);
+    filter.frequency.exponentialRampToValueAtTime(1800, startTime + duration);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.001, startTime);
+    gain.gain.linearRampToValueAtTime(0.16, startTime + 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    noise.start(startTime);
+    noise.stop(startTime + duration);
+  }
+
+  private static playSnap(ctx: AudioContext, startTime: number): void {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "square";
+    osc.frequency.setValueAtTime(980, startTime);
+    osc.frequency.exponentialRampToValueAtTime(180, startTime + 0.08);
+    gain.gain.setValueAtTime(0.12, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.09);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(startTime);
+    osc.stop(startTime + 0.1);
+  }
+
+  private static playCardReveal(ctx: AudioContext, startTime: number): void {
+    [392, 523.25, 659.25, 783.99].forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const t = startTime + idx * 0.09;
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.linearRampToValueAtTime(0.07, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.36);
+    });
+  }
+
+  private static playCrownHit(ctx: AudioContext, startTime: number): void {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(220, startTime);
+    osc.frequency.exponentialRampToValueAtTime(880, startTime + 0.12);
+    gain.gain.setValueAtTime(0.1, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.28);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(startTime);
+    osc.stop(startTime + 0.3);
+    this.playElectronicVarChime(ctx, startTime + 0.16);
+  }
+
+  private static playTwinkle(ctx: AudioContext, startTime: number): void {
+    [1046, 1318, 1568, 2093].forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const t = startTime + idx * 0.18;
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.linearRampToValueAtTime(0.05, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.42);
+    });
+  }
+
+  private static playHarborChime(ctx: AudioContext, startTime: number): void {
+    [523.25, 659.25, 783.99].forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const t = startTime + idx * 0.22;
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.linearRampToValueAtTime(0.06, t + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 1.1);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 1.15);
+    });
   }
 
   private static playRefereeWhistle(ctx: AudioContext, startTime: number): void {

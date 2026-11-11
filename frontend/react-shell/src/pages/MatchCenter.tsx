@@ -215,8 +215,11 @@ function GiftRail({ match, clubId, onGiftSent }: any) {
             code: item.gift_key || item.key || item.code,
             name: item.display_name || item.name,
             cost: Number(item.cost_amount ?? item.fancoin_price ?? item.amount_fancoin ?? item.cost) || 10,
-            rarity: item.rarity || "legendary",
+            rarity: item.rarity || "common",
             anim: item.animation_key,
+            animation_key: item.animation_key,
+            sound_key: item.sound_key,
+            duration_ms: item.duration_ms,
           }));
           setCatalog(items);
         }
@@ -269,14 +272,21 @@ function GiftRail({ match, clubId, onGiftSent }: any) {
       const txId = data.id || data.transaction_id || idempotencyKey;
       setFeed((f) => [`${senderName} sent ${g.name}`, ...f].slice(0, 5));
       refresh();
+      const broadcast = data.broadcast || data.animation_payload || {};
       onGiftSent?.({
         id: txId,
         sender: senderName,
         name: g.name,
+        gift_name: g.name,
         code: g.code,
+        gift_code: g.code,
         amount: g.cost,
-        rarity: g.rarity || data.rarity || "legendary",
-        anim: data.animation_key || data.broadcast?.animation_key || g.anim || "stadium_roar",
+        rarity: data.rarity || broadcast.rarity || g.rarity || "common",
+        anim: data.animation_key || broadcast.animation_key || g.anim || g.code,
+        animation_key: data.animation_key || broadcast.animation_key || g.animation_key || g.anim || g.code,
+        sound_key: data.sound_key || broadcast.sound_key || g.sound_key,
+        duration_ms: data.duration_ms || broadcast.duration_ms || g.duration_ms,
+        combo_count: data.combo_count || broadcast.combo_count || 1,
       });
       toast.success(`Gift sent: ${g.name}`);
     } catch (e) {
@@ -1146,8 +1156,11 @@ function Pitch2DView({
                     gift_name: activeGift.name || "Match Gift",
                     sender: activeGift.sender || "Supporter",
                     amount: activeGift.cost || activeGift.amount || 10,
-                    rarity: activeGift.rarity || "legendary",
+                    rarity: activeGift.rarity || "common",
                     animation_key: activeGift.anim || activeGift.code,
+                    sound_key: activeGift.sound_key,
+                    duration_ms: activeGift.duration_ms,
+                    combo_count: activeGift.combo_count,
                   }
             }
             onAnimationComplete={() => onGiftComplete?.()}
@@ -2191,10 +2204,12 @@ export default function MatchCenter() {
       recipient: rawGift.recipient_display_name || rawGift.recipient || "Squad",
       cost: amount,
       amount,
-      rarity: rawGift.rarity || "legendary",
+      rarity: rawGift.rarity || "common",
       anim: rawGift.animation_key || rawGift.anim || giftCode,
       animation_key: rawGift.animation_key || rawGift.anim || giftCode,
-      duration_ms: rawGift.duration_ms || 4500,
+      sound_key: rawGift.sound_key || rawGift.broadcast?.sound_key || rawGift.animation_payload?.sound_key,
+      duration_ms: rawGift.duration_ms || rawGift.broadcast?.duration_ms || rawGift.animation_payload?.duration_ms || 4500,
+      combo_count: Number(rawGift.combo_count ?? rawGift.broadcast?.combo_count ?? rawGift.animation_payload?.combo_count ?? 1) || 1,
     };
     setGiftQueue((prev) => [...prev, normalized]);
   }, []);

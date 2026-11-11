@@ -189,6 +189,7 @@ def _map_transaction(item: GiftTransaction) -> GiftTransactionView:
             "amount": str(item.gross_amount),
             "currency_label": "Fan Coin" if item.ledger_unit.value == "credit" else "GTEX Coin",
             "duration_ms": gift_item.duration_ms,
+            "combo_count": int((item.metadata_json or {}).get("combo_count") or 1),
             "chat_thread_id": item.chat_thread_id,
             "discussion_thread_id": item.discussion_thread_id,
             "match_id": item.match_id,

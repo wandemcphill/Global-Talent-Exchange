@@ -309,6 +309,16 @@ class RealtimeHub:
                 or "Fan"
             )
             recipient = _optional_string(payload.get("recipient_display_name") or payload.get("recipient")) or "Club"
+            raw_duration = payload.get("duration_ms")
+            try:
+                duration_ms = int(raw_duration) if raw_duration not in (None, "") else 3000
+            except (TypeError, ValueError):
+                duration_ms = 3000
+            raw_combo = payload.get("combo_count")
+            try:
+                combo_count = int(raw_combo) if raw_combo not in (None, "") else 1
+            except (TypeError, ValueError):
+                combo_count = 1
             gift_payload = {
                 "type": "gift_animation",
                 "gift_code": payload.get("gift_code") or payload.get("gift_key"),
@@ -323,7 +333,8 @@ class RealtimeHub:
                 "rarity": payload.get("rarity") or "common",
                 "animation_key": payload.get("animation_key") or "fan_chant",
                 "sound_key": payload.get("sound_key") or "crowd_cheer",
-                "duration_ms": int(payload.get("duration_ms") or 3000),
+                "duration_ms": duration_ms,
+                "combo_count": combo_count,
             }
             dispatches: list[RealtimeDispatch] = []
             if match_id:

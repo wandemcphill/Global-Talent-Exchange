@@ -16,6 +16,7 @@ import Competitions from "@/pages/Competitions";
 import CompetitionDetail from "@/pages/CompetitionDetail";
 const MatchCenter = React.lazy(() => import("@/pages/MatchCenter"));
 const VisualReviewPage = React.lazy(() => import("@/pages/VisualReviewPage"));
+const GiftCapturePage = React.lazy(() => import("@/pages/GiftCapturePage"));
 import Squad from "@/pages/Squad";
 import Lineup from "@/pages/Lineup";
 import Academy from "@/pages/Academy";
@@ -82,6 +83,7 @@ export default function App() {
             <Routes>
               {/* Public GTEX Consumer Routes */}
               <Route path="/visual-review" element={<VisualReviewPage />} />
+              <Route path="/gift-capture" element={<GiftCapturePage />} />
               <Route path="/" element={<GtexAdvertisingProvider><Landing /></GtexAdvertisingProvider>} />
               <Route path="/login" element={<GtexAdvertisingProvider><AuthPage mode="login" /></GtexAdvertisingProvider>} />
               <Route path="/signup" element={<GtexAdvertisingProvider><AuthPage mode="signup" /></GtexAdvertisingProvider>} />
