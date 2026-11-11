@@ -8,7 +8,7 @@ describe("resolveGiftModelPath", () => {
       ["superyacht", "/assets/showroom/superyacht.glb"],
       ["golden_stadium", "/assets/showroom/golden_stadium.glb"],
       ["chronos_tourbillon_watch", "/assets/showroom/chronos_tourbillon_watch.glb"],
-      ["dubai_skyline", "/assets/showroom/royal_penthouse_box.glb"],
+      ["royal_penthouse", "/assets/showroom/royal_penthouse_box.glb"],
       ["club_coach", "/assets/showroom/vanguard_xii_coach.glb"],
       ["gulfstream_g700", "/assets/showroom/gulfstream_g700_exec_jet.glb"],
       ["veloce_gt9_hypercar", "/assets/showroom/veloce_gt9_hypercar.glb"],
@@ -25,6 +25,8 @@ describe("resolveGiftModelPath", () => {
   test("unsupported hero gifts do not borrow unrelated trophy, watch or stadium models", () => {
     const codes = [
       "sovereign_crown",
+      "paris_skyline",
+      "dubai_skyline",
       "golden_boot",
       "golden_boot_king",
       "safe_hands_award",
