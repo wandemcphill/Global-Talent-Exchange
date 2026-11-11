@@ -98,6 +98,11 @@ def upgrade() -> None:
             "national_team_flag_bearers",
             ["source_competition_id"],
         )
+        op.create_index(
+            "ix_national_team_flag_bearers_season_label",
+            "national_team_flag_bearers",
+            ["season_label"],
+        )
 
     if "national_team_result_memories" not in tables:
         op.create_table(

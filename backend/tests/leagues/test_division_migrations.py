@@ -58,6 +58,7 @@ def test_foundation_migrations_upgrade_on_temporary_sqlite(tmp_path) -> None:
     )
     migration_0233 = importlib.import_module("migrations.versions.20261110_0233_division_season_memory")
     migration_0234 = importlib.import_module("migrations.versions.20261110_0234_champions_league_played_matches")
+    migration_0235 = importlib.import_module("migrations.versions.20261111_0235_flag_bearer_season_label_index")
 
     with engine.begin() as connection:
         connection.execute(text("INSERT INTO users (id) VALUES ('user-1')"))
@@ -74,12 +75,15 @@ def test_foundation_migrations_upgrade_on_temporary_sqlite(tmp_path) -> None:
         _upgrade(migration_0232, connection)
         _upgrade(migration_0233, connection)
         _upgrade(migration_0234, connection)
+        _upgrade(migration_0235, connection)
 
         inspector = inspect(connection)
         tables = set(inspector.get_table_names())
         assert "national_team_flag_bearers" in tables
         assert "national_team_result_memories" in tables
         assert "champions_league_played_matches" in tables
+        flag_indexes = {index["name"] for index in inspector.get_indexes("national_team_flag_bearers")}
+        assert "ix_national_team_flag_bearers_season_label" in flag_indexes
 
         ranking_columns = {column["name"] for column in inspector.get_columns("national_team_country_rankings")}
         assert {"age_band", "competition_family"} <= ranking_columns
